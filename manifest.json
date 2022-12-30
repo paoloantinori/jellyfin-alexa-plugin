@@ -6,6 +6,15 @@
         "description": "Use your Alexa devices to control and play your media.",
         "owner": "infinityofspace",
         "overview": "Alexa skill plugin for Jellyfin",
-        "versions": []
+        "versions": [
+            {
+                "version": "0.1",
+                "checksum": "333ce294a7f0d90635ef30a024741cef",
+                "sourceUrl": "https://github.com/infinityofspace/jellyfin-alexa-plugin/releases/download/0.1/AlexaSkill_0.1.zip",
+                "changelog": "See for more details: https://github.com/infinityofspace/jellyfin-alexa-plugin/releases",
+                "targetAbi": "10.8.0.0",
+                "timestamp": "2022-12-30 13:08:29"
+            }
+        ]
     }
 ]
