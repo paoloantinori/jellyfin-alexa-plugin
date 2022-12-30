@@ -42,6 +42,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Alexa/InteractionModel/model_de_DE.json" />
+    <EmbeddedResource Include="Alexa/InteractionModel/model_it_IT.json" />
     <EmbeddedResource Include="Alexa/InteractionModel/model_en_US.json" />
   </ItemGroup>
 

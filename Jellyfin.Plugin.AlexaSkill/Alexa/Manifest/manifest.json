@@ -38,6 +38,16 @@
 						"Alexa sage Jellyfin Player spiele meine Playlist 'Beste Musik'"
 					],
 					"description": "Spiele Medien von deinem Jellyfin Server.\n\nQuellcode: https://github.com/infinityofspace/jellyfin-alexa-plugin"
+				},
+				"it-IT": {
+					"name": "Jellyfin",
+					"summary": "Riproduci tracce dal tuo Jellyfin Server",
+					"examplePhrases": [
+						"Alexa chiedi Jellyfin Player di riprodurre la mia musica preferita.",
+						"Alexa chiedi Jellyfin Player di riprodurre tracce di 'Artista'",
+						"Alexa chiedi Jellyfin Player di riprodurre la mia playlist di 'Rilassamento'"
+					],
+					"description": "Riproduci tracce dal tuo Jellyfin Server.\n\nCodice: https://github.com/infinityofspace/jellyfin-alexa-plugin"
 				}
 			},
 			"testingInstructions": ""
