@@ -1,0 +1,309 @@
+{
+    "languageModel": {
+        "invocationName": "jellyfin",
+        "intents": [
+            {
+                "name": "AMAZON.CancelIntent"
+            },
+            {
+                "name": "AMAZON.HelpIntent"
+            },
+            {
+                "name": "AMAZON.StopIntent"
+            },
+            {
+                "name": "AMAZON.FallbackIntent"
+            },
+            {
+                "name": "AMAZON.PauseIntent"
+            },
+            {
+                "name": "AMAZON.ResumeIntent"
+            },
+            {
+                "name": "AMAZON.NextIntent"
+            },
+            {
+                "name": "AMAZON.PreviousIntent"
+            },
+            {
+                "name": "AMAZON.YesIntent"
+            },
+            {
+                "name": "AMAZON.NoIntent"
+            },
+            {
+                "name": "LoopAllOffIntent",
+                "samples": [
+                    "Disattiva ripetizione",
+                    "Spegni ripetizione",
+                    "Smetti di ripetere"
+                ]
+            },
+            {
+                "name": "LoopAllOnIntent",
+                "samples": [
+                    "Modalitá ripetizione",
+                    "Attiva ripetizione",
+                    "Ripetizione continua"
+                ]
+            },
+            {
+                "name": "RepeatSingleOnIntent",
+                "samples": [
+                    "Ripeti la traccia",
+                    "Ripeti la canzone",
+                    "Ripeti il video",
+                    "Ripeti questa",
+                    "Rimettila un'altra volta",
+                    "Rimettila"
+                ]
+            },
+            {
+                "name": "AMAZON.ShuffleOnIntent"
+            },
+            {
+                "name": "AMAZON.ShuffleOffIntent"
+            },
+            {
+                "name": "AMAZON.StartOverIntent",
+                "samples": [
+                    "Riparti dall'inizio",
+                    "Riprendi dall'inizio",
+                    "Ricomincia"
+                ]
+            },
+            {
+                "name": "PlayChannelIntent",
+                "samples": [
+                    "Metti il canale {channel}",
+                    "Metti la radio {channel}",
+                    "Metti la stazione {channel}"
+                ],
+                "slots": [
+                    {
+                        "name": "channel",
+                        "type": "AMAZON.SearchQuery"
+                    }
+                ]
+            },
+            {
+                "name": "PlaySongIntent",
+                "samples": [
+                    "Suona la canzone {song}",
+                    "Metti la canzone {song}",
+                    "Riproduci la canzone {song}",
+                    "Suona la traccia {song}",
+                    "Metti la traccia {song}",
+                    "Riproduci la traccia {song}",
+                    "Suona il brano {song}",
+                    "Metti il brano {song}",
+                    "Riproduci il brano {song}",
+                    "Suona la canzone {song} di {musician}",
+                    "Metti la canzone {song} di {musician}",
+                    "Riproduci la canzone {song} di {musician}"
+                ],
+                "slots": [
+                    {
+                        "name": "song",
+                        "type": "AMAZON.MusicRecording"
+                    },
+                    {
+                        "name": "musician",
+                        "type": "AMAZON.Musician"
+                    }
+                ]
+            },
+            {
+                "name": "PlayAlbumIntent",
+                "samples": [
+                    "Metti il disco {album}",
+                    "Metti l'album {album}",
+                    "Suona il disco {album}",
+                    "Suona l'album {album}",
+                    "Riproduci il disco {album}",
+                    "Riproduci l'album {album}",
+                    "Metti il disco {album} di {musician}",
+                    "Metti l'album {album} di {musician}",
+                    "Suona il disco {album} di {musician}",
+                    "Suona l'album {album} di {musician}",
+                    "Riproduci il disco {album} di {musician}",
+                    "Riproduci l'album {album} di {musician}"
+                ],
+                "slots": [
+                    {
+                        "name": "album",
+                        "type": "AMAZON.MusicRecording"
+                    },
+                    {
+                        "name": "musician",
+                        "type": "AMAZON.Musician"
+                    }
+                ]
+            },
+            {
+                "name": "PlayVideoIntent",
+                "samples": [
+                    "Riproduci il video {title}",
+                    "Metti il video {title}",
+                ],
+                "slots": [
+                    {
+                        "name": "title",
+                        "type": "AMAZON.SearchQuery"
+                    }
+                ]
+            },
+            {
+                "name": "PlayArtistSongsIntent",
+                "samples": [
+                    "Suona canzoni di {musician}",
+                    "Metti canzoni di {musician}",
+                    "Riproduci canzoni di {musician}",
+                    "Suona musica di {musician}",
+                    "Metti musica di {musician}",
+                    "Riproduci musica di {musician}",
+                    "Suona qualcosa di {musician}",
+                    "Metti qualcosa di {musician}",
+                    "Riproduci qualcosa di {musician}"
+                ],
+                "slots": [
+                    {
+                        "name": "musician",
+                        "type": "AMAZON.Musician"
+                    }
+                ]
+            },
+            {
+                "name": "PlayLastAddedIntent",
+                "samples": [
+                    "Riproduci l'ultima {media_type} aggiunta",
+                    "Suona l'ultima {media_type} aggiunta",
+                    "Riproduci nuove tracce",
+                    "Riproduci tracce recenti"
+                ],
+                "slots": [
+                    {
+                        "name": "media_type",
+                        "type": "MediaType"
+                    }
+                ]
+            },
+            {
+                "name": "PlayPlaylistIntent",
+                "samples": [
+                    "Metti la playlist {playlist}",
+                    "Suona la playlist {playlist}",
+                    "Riproduci la playlist {playlist}"
+                ],
+                "slots": [
+                        {
+                        "name": "playlist",
+                        "type": "AMAZON.SearchQuery"
+                    }
+                ]
+            },
+            {
+                "name": "PlayFavoritesIntent",
+                "samples": [
+                    "Suona il mio {media_type} preferito",
+                    "Suona la mia {media_type} preferita",
+                    "Suona i miei {media_type} preferiti",
+                    "Suona le mie {media_type} preferite",
+                    "Suona i miei preferiti",
+                    "Suona le miei preferite"
+                ],
+                "slots": [
+                    {
+                        "name": "media_type",
+                        "type": "MediaType"
+                    }
+                ]
+            },
+            {
+                "name": "MarkFavoriteIntent",
+                "samples": [
+                    "Mi piace",
+                    "Adoro",
+                    "Mi piace questa",
+                    "Mi piace questo",
+                    "Mi piace questo video",
+                    "Mi piace questa canzone",
+                    "Mi piace questa musica",
+                    "Aggiungi il video ai miei preferiti",
+                    "Aggiungi la traccia ai miei preferiti",
+                    "Aggiungi la canzone ai miei preferiti"
+                ]
+            },
+            {
+                "name": "UnmarkFavoriteIntent",
+                "samples": [
+                    "Non mi piace",
+                    "Non mi piace questa",
+                    "Non mi piace questo",
+                    "Non mi piace questo video",
+                    "Non mi piace questa canzone",
+                    "Non mi piace questa musica",
+                    "Rimuovilo dai miei preferiti",
+                    "Rimuovila dai miei preferiti",
+                    "Rimuovi il video dai miei preferiti",
+                    "Rimuovi la canzone dai miei preferiti",
+                    "Rimuovi la traccia dai miei preferiti"                    
+                ]
+            },
+            {
+                "name": "MediaInfoIntent",
+                "samples": [
+                    "Qual'è il nome di questa canzone",
+                    "Qual'è il nome di questa traccia",
+                    "Chi è",
+                    "Chi sono",
+                    "Di chi è questa",
+                    "Di chi è questa canzone",
+                    "Di chi è  questa traccia",
+                    "Come si chiama questa canzone",
+                    "Come si chiama questa traccia",
+                    "Come si chiama questo video",
+                    "Qual'è il nome di questo video",
+                    "Qual'è il nome di questa musica",
+                    "Qual'è il titolo di questa canzone",
+                    "Qual'è il titolo di questa traccia",
+                    "Qual'è il titolo di questo video",
+                    "Cosa stai suonando",
+                    "Chi è il cantante",
+                    "Chi suona"
+                ]
+            }
+        ],
+        "types": [
+            {
+                "name": "MediaType",
+                "values": [
+                    {
+                        "id": "media",
+                        "name": {
+                            "value": "media"
+                        }
+                    },
+                    {
+                        "id": "video",
+                        "name": {
+                            "value": "video"
+                        }
+                    },
+                    {
+                        "id": "audio",
+                        "name": {
+                            "value": "Audio",
+                            "synonyms": [
+                                "music",
+                                "song"
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}
+  
