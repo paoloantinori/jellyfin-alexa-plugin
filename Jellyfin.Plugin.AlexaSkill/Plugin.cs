@@ -73,7 +73,8 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public Collection<SkillInteractionModel> SkillInteractionModels { get; } = new Collection<SkillInteractionModel>()
     {
         new SkillInteractionModel("Jellyfin.Plugin.AlexaSkill.Alexa.InteractionModel.model_en_US.json", "en-US"),
-        new SkillInteractionModel("Jellyfin.Plugin.AlexaSkill.Alexa.InteractionModel.model_de_DE.json", "de-DE")
+        new SkillInteractionModel("Jellyfin.Plugin.AlexaSkill.Alexa.InteractionModel.model_de_DE.json", "de-DE"),
+        new SkillInteractionModel("Jellyfin.Plugin.AlexaSkill.Alexa.InteractionModel.model_it_IT.json", "it-IT")
     };
 
     /// <summary>
