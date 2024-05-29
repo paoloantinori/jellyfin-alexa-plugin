@@ -94,7 +94,8 @@
             {
                 "name": "AMAZON.ShuffleOffIntent",
                 "samples": [
-                    "Disattiva riproduzione casuale"
+                    "Disattiva riproduzione casuale",
+                    "Disattiva riproduzione a caso"
                 ]
             },
             {
