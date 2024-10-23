@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET.Management.AccountLinking;
 using Alexa.NET.Management.Skills;
@@ -12,6 +13,7 @@ using Jellyfin.Plugin.AlexaSkill.Controller;
 using Jellyfin.Plugin.AlexaSkill.Entities;
 using MediaBrowser.Controller.Plugins;
 using MediaBrowser.Controller.Session;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.AlexaSkill.EntryPoints;
@@ -19,7 +21,7 @@ namespace Jellyfin.Plugin.AlexaSkill.EntryPoints;
 /// <summary>
 /// Setup the skill and update or create the skill in the Alexa cloud if it is outdated.
 /// </summary>
-public class SkillStartup : IServerEntryPoint
+public class SkillStartup : IHostedService, IDisposable
 {
     private readonly ILogger<SkillStartup> _logger;
     private readonly ISessionManager _sessionManager;
@@ -79,7 +81,7 @@ public class SkillStartup : IServerEntryPoint
     }
 
     /// <inheritdoc />
-    public async Task RunAsync()
+    public async Task StartAsync(CancellationToken cancellationToken)
     {
         _logger.LogInformation("Skill version (local): v{0}", Util.GetVersion());
 
@@ -164,6 +166,11 @@ public class SkillStartup : IServerEntryPoint
                     }
                 }
             }
-        }).ConfigureAwait(false);
+        }, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task StopAsync(CancellationToken cancellationToken)
+    {
+        // TODO: Is there a way to stop the task?
     }
 }
