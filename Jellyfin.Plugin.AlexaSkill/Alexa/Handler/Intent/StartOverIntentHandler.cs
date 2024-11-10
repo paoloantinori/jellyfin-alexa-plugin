@@ -11,11 +11,11 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
 /// <summary>
-/// Handler for AMAZON.ResumeIntent intents and resume directive.
+/// Handler for AMAZON.StartOverIntent intents and resume directive.
 /// </summary>
-public class ResumeIntentHandler : BaseHandler
+public class StartOverIntentHandler : BaseHandler
 {
-    public ResumeIntentHandler(
+    public StartOverIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
@@ -26,11 +26,11 @@ public class ResumeIntentHandler : BaseHandler
     public override bool CanHandle(Request request)
     {
         IntentRequest? intentRequest = request as IntentRequest;
-        return intentRequest != null && string.Equals(intentRequest.Intent.Name, "AMAZON.ResumeIntent", System.StringComparison.Ordinal);
+        return intentRequest != null && string.Equals(intentRequest.Intent.Name, "AMAZON.StartOverIntent", System.StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// Pause any currently playing media.
+    /// Restart any currently playing media.
     /// </summary>
     /// <param name="request">The skill request which should be handled.</param>
     /// <param name="context">The context of the skill intent request.</param>
@@ -45,9 +45,8 @@ public class ResumeIntentHandler : BaseHandler
         }
 
         string item_id = session.FullNowPlayingItem.Id.ToString();
-
-        int offset = session.PlayState == null ? 0 : (int)(session.PlayState?.PositionTicks ?? 0 * 10000);
-
-        return ResponseBuilder.AudioPlayerPlay(PlayBehavior.Enqueue, GetStreamUrl(item_id, user), item_id, item_id, offset);
+        return ResponseBuilder.AudioPlayerPlay(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, 0);
     }
 }
+
+
