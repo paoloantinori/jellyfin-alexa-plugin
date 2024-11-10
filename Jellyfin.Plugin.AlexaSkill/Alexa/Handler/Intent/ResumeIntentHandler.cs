@@ -1,3 +1,4 @@
+using System;
 using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
@@ -44,9 +45,24 @@ public class ResumeIntentHandler : BaseHandler
             return ResponseBuilder.Tell("There is no media currently playing.");
         }
 
-        string item_id = session.FullNowPlayingItem.Id.ToString();
+        if (string.Equals(context.AudioPlayer.PlayerActivity, "PLAYING"))
+        {
+            return ResponseBuilder.Empty();
+        }
 
-        int offset = session.PlayState == null ? 0 : (int)(session.PlayState?.PositionTicks ?? 0 * 10000);
+        // TODO: Should context or session be preferred?
+
+        string item_id = context.AudioPlayer?.Token ?? session.FullNowPlayingItem.Id.ToString();
+
+        int offset = 0;
+        if (context.AudioPlayer != null && context.AudioPlayer.OffsetInMilliseconds > 0)
+        {
+            offset = (int)context.AudioPlayer.OffsetInMilliseconds;
+        }
+        else if (session.PlayState != null)
+        {
+            offset = (int)TimeSpan.FromTicks(session.PlayState?.PositionTicks ?? 0).TotalMilliseconds;
+        }
 
         return ResponseBuilder.AudioPlayerPlay(PlayBehavior.Enqueue, GetStreamUrl(item_id, user), item_id, item_id, offset);
     }
