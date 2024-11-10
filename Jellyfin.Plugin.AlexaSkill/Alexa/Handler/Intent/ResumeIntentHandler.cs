@@ -50,15 +50,15 @@ public class ResumeIntentHandler : BaseHandler
     /// <returns>Emptry skill response.</returns>
     public override SkillResponse Handle(Request request, Context context, Entities.User user, SessionInfo session)
     {
-        if (session.FullNowPlayingItem == null)
+        if (session?.FullNowPlayingItem == null)
         {
             return ResponseBuilder.Tell("There is no media currently playing.");
         }
 
         string item_id = session.FullNowPlayingItem.Id.ToString();
 
-        int offset = session.PlayState == null ? 0 : (int)(session.PlayState.PositionTicks * 10000);
+        int offset = session.PlayState == null ? 0 : (int)(session.PlayState?.PositionTicks ?? 0 * 10000);
 
-        return ResponseBuilder.AudioPlayerPlay(PlayBehavior.Enqueue, GetStreamUrl(item_id, user), item_id, offset);
+        return ResponseBuilder.AudioPlayerPlay(PlayBehavior.Enqueue, GetStreamUrl(item_id, user), item_id, item_id, offset);
     }
 }
