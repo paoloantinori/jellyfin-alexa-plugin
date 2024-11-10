@@ -72,12 +72,12 @@ public class AlexaSkillController : ControllerBase
             new PlayArtistSongsIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
             new PlayAlbumIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
 
-            new PlaybackFailedEventHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
-            new PlaybackFinishedEventHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
-            new PlaybackNearlyFinishedEventHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
-            new PlaybackStartedEventHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
-            new PlaybackStoppedEventHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
-            new SessionEndedRequestHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
+            new PlaybackFailedEventHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
+            new PlaybackFinishedEventHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
+            new PlaybackNearlyFinishedEventHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, loggerFactory),
+            new PlaybackStartedEventHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
+            new PlaybackStoppedEventHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
+            new SessionEndedRequestHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
 
             new ExceptionHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
             new FallbackIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory)

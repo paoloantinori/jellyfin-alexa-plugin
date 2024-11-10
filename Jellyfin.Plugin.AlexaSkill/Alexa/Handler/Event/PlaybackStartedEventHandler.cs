@@ -19,26 +19,17 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 public class PlaybackStartedEventHandler : BaseHandler
 #pragma warning restore CA1711
 {
-    private ILibraryManager _libraryManager;
-    private IUserManager _userManager;
-
     /// <summary>
     /// Initializes a new instance of the <see cref="PlaybackStartedEventHandler"/> class.
     /// </summary>
     /// <param name="sessionManager">Instance of the <see cref="ISessionManager"/> interface.</param>
     /// <param name="config">The plugin configuration.</param>
-    /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
-    /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
     public PlaybackStartedEventHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
-        ILibraryManager libraryManager,
-        IUserManager userManager,
         ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
     {
-        _libraryManager = libraryManager;
-        _userManager = userManager;
     }
 
     /// <inheritdoc/>
@@ -60,12 +51,13 @@ public class PlaybackStartedEventHandler : BaseHandler
     {
         AudioPlayerRequest req = (AudioPlayerRequest)request;
 
-        BaseItem item = _libraryManager.GetItemById(new Guid(req.Token));
-
+        long startTicks = TimeSpan.FromMilliseconds(req.OffsetInMilliseconds).Ticks;
         PlaybackStartInfo playbackStartInfo = new PlaybackStartInfo
         {
             SessionId = session.Id,
-            ItemId = item.Id
+            ItemId = new Guid(req.Token),
+            PositionTicks = startTicks,
+            PlaybackStartTimeTicks = startTicks,
         };
         SessionManager.OnPlaybackStart(playbackStartInfo).ConfigureAwait(false);
 
