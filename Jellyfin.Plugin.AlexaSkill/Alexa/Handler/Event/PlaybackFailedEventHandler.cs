@@ -47,7 +47,7 @@ public class PlaybackFailedEventHandler : BaseHandler
         {
             SessionId = session.Id,
             ItemId = new Guid(req.Token),
-            Failed = true
+            Failed = true,
         };
         SessionManager.OnPlaybackStopped(playbackStopInfo).ConfigureAwait(false);
 

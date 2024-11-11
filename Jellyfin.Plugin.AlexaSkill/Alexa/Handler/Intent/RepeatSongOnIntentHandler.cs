@@ -12,20 +12,9 @@ using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
-/// <summary>
-/// Handler for PlaybackStarted events.
-/// </summary>
-#pragma warning disable CA1711
-public class PlaybackStartedEventHandler : BaseHandler
-#pragma warning restore CA1711
+public class LoopSongOnIntentHandler : BaseHandler
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="PlaybackStartedEventHandler"/> class.
-    /// </summary>
-    /// <param name="sessionManager">Instance of the <see cref="ISessionManager"/> interface.</param>
-    /// <param name="config">The plugin configuration.</param>
-    /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
-    public PlaybackStartedEventHandler(
+    public LoopSongOnIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
@@ -35,8 +24,8 @@ public class PlaybackStartedEventHandler : BaseHandler
     /// <inheritdoc/>
     public override bool CanHandle(Request request)
     {
-        AudioPlayerRequest? audioPlayerRequest = request as AudioPlayerRequest;
-        return audioPlayerRequest != null && audioPlayerRequest.AudioRequestType == AudioRequestType.PlaybackStarted;
+        IntentRequest? intentRequest = request as IntentRequest;
+        return intentRequest != null && string.Equals(intentRequest.Intent.Name, "LoopSongOnIntent");
     }
 
     /// <summary>
@@ -49,19 +38,19 @@ public class PlaybackStartedEventHandler : BaseHandler
     /// <returns>Empty response.</returns>
     public override SkillResponse Handle(Request request, Context context, Entities.User user, SessionInfo session)
     {
-        AudioPlayerRequest req = (AudioPlayerRequest)request;
+        PlaybackState requestState = context.AudioPlayer;
 
-        long startTicks = TimeSpan.FromMilliseconds(req.OffsetInMilliseconds).Ticks;
-        PlaybackStartInfo playbackStartInfo = new PlaybackStartInfo
+        long positionTicks = TimeSpan.FromMilliseconds(requestState.OffsetInMilliseconds).Ticks;
+        PlaybackProgressInfo info = new PlaybackProgressInfo
         {
             SessionId = session.Id,
-            ItemId = new Guid(req.Token),
+            ItemId = new Guid(requestState.Token),
             PlaybackOrder = session.PlayState.PlaybackOrder,
-            RepeatMode = session.PlayState.RepeatMode,
-            PositionTicks = startTicks,
-            PlaybackStartTimeTicks = startTicks,
+            PositionTicks = positionTicks,
+            RepeatMode = RepeatMode.RepeatOne,
         };
-        SessionManager.OnPlaybackStart(playbackStartInfo).ConfigureAwait(false);
+
+        SessionManager.OnPlaybackProgress(info, true).ConfigureAwait(false);
 
         return ResponseBuilder.Empty();
     }

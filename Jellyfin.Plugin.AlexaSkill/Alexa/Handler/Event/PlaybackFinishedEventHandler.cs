@@ -11,19 +11,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
-/// <summary>
-/// Handler for PlaybackFinished events.
-/// </summary>
-#pragma warning disable CA1711
 public class PlaybackFinishedEventHandler : BaseHandler
-#pragma warning restore CA1711
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="PlaybackFinishedEventHandler"/> class.
-    /// </summary>
-    /// <param name="sessionManager">Instance of the <see cref="ISessionManager"/> interface.</param>
-    /// <param name="config">The plugin configuration.</param>
-    /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
     public PlaybackFinishedEventHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
