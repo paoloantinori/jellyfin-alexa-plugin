@@ -33,23 +33,19 @@
                 "name": "AMAZON.NoIntent"
             },
             {
-                "name": "LoopAllOffIntent",
-                "samples": [
-                    "Loop off"
-                ]
+                "name": "AMAZON.LoopOnIntent"
             },
             {
-                "name": "LoopAllOnIntent",
-                "samples": [
-                    "Loop on"
-                ]
+                "name": "AMAZON.LoopOffIntent"
             },
             {
-                "name": "RepeatSingleOnIntent",
+                "name": "LoopSongOnIntent",
                 "samples": [
+                    "loop this song",
+                    "loop this song forever",
                     "Repeat the song",
-                    "Repeat the video",
-                    "Repeat that"
+                    "Repeat this song",
+                    "Repeat this song forever",
                 ]
             },
             {
@@ -59,11 +55,7 @@
                 "name": "AMAZON.ShuffleOffIntent"
             },
             {
-                "name": "AMAZON.StartOverIntent",
-                "samples": [
-                    "Repeat from beginning",
-                    "Start over"
-                ]
+                "name": "AMAZON.StartOverIntent"
             },
             {
                 "name": "PlayChannelIntent",
