@@ -72,7 +72,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
 
         if (next_item_id == null)
         {
-            return ResponseBuilder.AudioPlayerStop();
+            return ResponseBuilder.Empty();
         }
 
         BaseItem item = _libraryManager.GetItemById((Guid)next_item_id);
