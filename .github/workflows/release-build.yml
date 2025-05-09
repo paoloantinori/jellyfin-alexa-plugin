@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: get the tag name
         id: get_tag
@@ -24,10 +24,10 @@ jobs:
       - name: Check if tag and project version matches
         run: if ! diff <(echo "${{ steps.get_tag.outputs.TAG }}" ) <(echo "${{ steps.version.outputs.VERSION }}"); then exit -1; fi
 
-      - name: Setup .NET Core SDK 6.0
-        uses: actions/setup-dotnet@v3
+      - name: Setup .NET Core SDK 8.0
+        uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 6.0.x
+          dotnet-version: 8.x
 
       - uses: actions/setup-python@v4
         with:
@@ -42,7 +42,7 @@ jobs:
       - name: Create zip
         run: |
           mkdir -p archive/Jellyfin.Plugin.AlexaSkill
-          cp -r Jellyfin.Plugin.AlexaSkill/bin/Release/net6.0/publish/* archive/Jellyfin.Plugin.AlexaSkill
+          cp -r Jellyfin.Plugin.AlexaSkill/bin/Release/net8.0/publish/* archive/Jellyfin.Plugin.AlexaSkill
           cd archive && zip -r AlexaSkill_${{ steps.version.outputs.VERSION }}.zip Jellyfin.Plugin.AlexaSkill
 
       - name: Create github release
