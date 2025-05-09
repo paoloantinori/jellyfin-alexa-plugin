@@ -9,11 +9,19 @@
         "versions": [
             {
                 "version": "0.1",
+<<<<<<< HEAD
                 "checksum": "333ce294a7f0d90635ef30a024741cef",
                 "sourceUrl": "https://github.com/infinityofspace/jellyfin-alexa-plugin/releases/download/0.1/AlexaSkill_0.1.zip",
                 "changelog": "See for more details: https://github.com/infinityofspace/jellyfin-alexa-plugin/releases",
                 "targetAbi": "10.8.0.0",
                 "timestamp": "2022-12-30 13:08:29"
+=======
+                "checksum": "971f42c0cacd6705fe64923f69399943",
+                "sourceUrl": "https://github.com/infinityofspace/jellyfin-alexa-plugin/releases/download/0.1/AlexaSkill_0.1.zip",
+                "changelog": "See for more details: https://github.com/infinityofspace/jellyfin-alexa-plugin/releases",
+                "targetAbi": "10.8.0.0",
+                "timestamp": "2024-10-22 23:50:22"
+>>>>>>> 5653370ed154a9c31262c70bc0acb6458dafa261
             }
         ]
     }

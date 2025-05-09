@@ -4,7 +4,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
-using Jellyfin.Plugin.AlexaSkill.Data;
+using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
@@ -20,25 +20,21 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
 #pragma warning restore CA1711
 {
     private ILibraryManager _libraryManager;
-    private IUserManager _userManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PlaybackNearlyFinishedEventHandler"/> class.
     /// </summary>
     /// <param name="sessionManager">Instance of the <see cref="ISessionManager"/> interface.</param>
-    /// <param name="dbRepo">Instance of the <see cref="DbRepo"/> interface.</param>
+    /// <param name="config">The plugin configuration.</param>
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
-    /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
     public PlaybackNearlyFinishedEventHandler(
         ISessionManager sessionManager,
-        DbRepo dbRepo,
+        PluginConfiguration config,
         ILibraryManager libraryManager,
-        IUserManager userManager,
-        ILoggerFactory loggerFactory) : base(sessionManager, dbRepo, loggerFactory)
+        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
-        _userManager = userManager;
     }
 
     /// <inheritdoc/>
@@ -58,10 +54,12 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     /// <returns>Next item in the queue or end of playback queue.</returns>
     public override SkillResponse Handle(Request request, Context context, Entities.User user, SessionInfo session)
     {
+        AudioPlayerRequest req = (AudioPlayerRequest)request;
+
         Guid? next_item_id = null;
         for (int i = 0; i < session.NowPlayingQueue.Count; i++)
         {
-            if (session.NowPlayingQueue[i].Id == session.NowPlayingItem?.Id)
+            if (session.NowPlayingQueue[i].Id == session.FullNowPlayingItem?.Id)
             {
                 if (i + 1 < session.NowPlayingQueue.Count)
                 {
@@ -74,14 +72,14 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
 
         if (next_item_id == null)
         {
-            return ResponseBuilder.AudioPlayerStop();
+            return ResponseBuilder.Empty();
         }
 
         BaseItem item = _libraryManager.GetItemById((Guid)next_item_id);
 
         string item_id = item.Id.ToString();
-        string audioUrl = new Uri(new Uri(Plugin.Instance!.Configuration.ServerAddress), "/Audio/" + item_id + "/universal").ToString();
+        string audioUrl = new Uri(new Uri(Plugin.Instance!.Configuration.ServerAddress), "Audio/" + item_id + "/universal").ToString();
 
-        return ResponseBuilder.AudioPlayerPlay(PlayBehavior.ReplaceAll, audioUrl, item_id);
+        return ResponseBuilder.AudioPlayerPlay(PlayBehavior.Enqueue, audioUrl, item_id, req.Token, 0);
     }
 }

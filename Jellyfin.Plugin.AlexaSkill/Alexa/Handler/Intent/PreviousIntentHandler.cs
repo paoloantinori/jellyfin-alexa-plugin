@@ -3,7 +3,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
-using Jellyfin.Plugin.AlexaSkill.Data;
+using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
@@ -22,14 +22,14 @@ public class PreviousIntentHandler : BaseHandler
     /// Initializes a new instance of the <see cref="PreviousIntentHandler"/> class.
     /// </summary>
     /// <param name="sessionManager">Session manager instance.</param>
-    /// <param name="dbRepo">The database repository instance.</param>
+    /// <param name="config">The plugin configuration.</param>
     /// <param name="libraryManager">The library manager instance.</param>
     /// <param name="loggerFactory">Logger factory instance.</param>
     public PreviousIntentHandler(
         ISessionManager sessionManager,
-        DbRepo dbRepo,
+        PluginConfiguration config,
         ILibraryManager libraryManager,
-        ILoggerFactory loggerFactory) : base(sessionManager, dbRepo, loggerFactory)
+        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
     }
@@ -53,7 +53,7 @@ public class PreviousIntentHandler : BaseHandler
     /// <returns>A play directive of the previous item in the queue or empty response if the queue is empty.</returns>
     public override SkillResponse Handle(Request request, Context context, Entities.User user, SessionInfo session)
     {
-        // check if we have any media in the queue and the is currently something playing
+        // check if we have any media in the queue and there is currently something playing
         if (session.NowPlayingQueue.Count == 0 || session.FullNowPlayingItem == null)
         {
             return ResponseBuilder.Empty();
@@ -64,13 +64,14 @@ public class PreviousIntentHandler : BaseHandler
         {
             if (session.NowPlayingQueue[i].Id == session.FullNowPlayingItem.Id)
             {
-                System.Guid prevItemId = session.NowPlayingQueue[i + 1].Id;
-                string item_id = session.NowPlayingQueue[i + 1].Id.ToString();
+                System.Guid prevItemId = session.NowPlayingQueue[i - 1].Id;
+                string item_id = session.NowPlayingQueue[i - 1].Id.ToString();
                 BaseItem prevItem = _libraryManager.GetItemById(prevItemId);
 
+                string previousItemId = session.NowPlayingQueue[i - 1].Id.ToString();
                 session.FullNowPlayingItem = prevItem;
 
-                return ResponseBuilder.AudioPlayerPlay(PlayBehavior.Enqueue, GetStreamUrl(item_id, user), item_id);
+                return ResponseBuilder.AudioPlayerPlay(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id);
             }
         }
 

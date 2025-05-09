@@ -4,7 +4,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
-using Jellyfin.Plugin.AlexaSkill.Data;
+using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
@@ -25,16 +25,16 @@ public class PlayFavoritesIntentHandler : BaseHandler
     /// Initializes a new instance of the <see cref="PlayFavoritesIntentHandler"/> class.
     /// </summary>
     /// <param name="sessionManager">Instance of the <see cref="ISessionManager"/> interface.</param>
-    /// <param name="dbRepo">Instance of the <see cref="DbRepo"/> interface.</param>
+    /// <param name="config">The plugin configuration.</param>
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
     public PlayFavoritesIntentHandler(
         ISessionManager sessionManager,
-        DbRepo dbRepo,
+        PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
-        ILoggerFactory loggerFactory) : base(sessionManager, dbRepo, loggerFactory)
+        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
@@ -85,10 +85,10 @@ public class PlayFavoritesIntentHandler : BaseHandler
 
         session.NowPlayingQueue = queueItems;
 
-        BaseItem prevItem = _libraryManager.GetItemById(queueItems[0].Id);
-        session.FullNowPlayingItem = prevItem;
+        BaseItem firstItem = _libraryManager.GetItemById(queueItems[0].Id);
+        session.FullNowPlayingItem = firstItem;
 
-        string item_id = prevItem.Id.ToString();
+        string item_id = firstItem.Id.ToString();
 
         return ResponseBuilder.AudioPlayerPlay(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id);
     }
