@@ -102,6 +102,7 @@ The skill has support for the following languages:
 
 - English
 - German (no localized Alexa responses)
+- Italian (no localized Alexa responses)
 
 ## Skill speech examples
 
