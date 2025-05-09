@@ -1,9 +1,10 @@
+using System;
 using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
-using Jellyfin.Plugin.AlexaSkill.Data;
+using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
@@ -15,22 +16,11 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public class ResumeIntentHandler : BaseHandler
 {
-    private ILibraryManager _libraryManager;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ResumeIntentHandler"/> class.
-    /// </summary>
-    /// <param name="sessionManager">Session manager instance.</param>
-    /// <param name="dbRepo">The database repository instance.</param>
-    /// <param name="libraryManager">The library manager instance.</param>
-    /// <param name="loggerFactory">Logger factory instance.</param>
     public ResumeIntentHandler(
         ISessionManager sessionManager,
-        DbRepo dbRepo,
-        ILibraryManager libraryManager,
-        ILoggerFactory loggerFactory) : base(sessionManager, dbRepo, loggerFactory)
+        PluginConfiguration config,
+        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
     {
-        _libraryManager = libraryManager;
     }
 
     /// <inheritdoc/>
@@ -50,13 +40,30 @@ public class ResumeIntentHandler : BaseHandler
     /// <returns>Emptry skill response.</returns>
     public override SkillResponse Handle(Request request, Context context, Entities.User user, SessionInfo session)
     {
-        if (session.FullNowPlayingItem == null)
+        if (session?.FullNowPlayingItem == null)
         {
             return ResponseBuilder.Tell("There is no media currently playing.");
         }
 
-        string item_id = session.FullNowPlayingItem.Id.ToString();
+        if (string.Equals(context.AudioPlayer.PlayerActivity, "PLAYING"))
+        {
+            return ResponseBuilder.Empty();
+        }
 
-        return ResponseBuilder.AudioPlayerPlay(PlayBehavior.Enqueue, GetStreamUrl(item_id, user), item_id);
+        // TODO: Should context or session be preferred?
+
+        string item_id = context.AudioPlayer?.Token ?? session.FullNowPlayingItem.Id.ToString();
+
+        int offset = 0;
+        if (context.AudioPlayer != null && context.AudioPlayer.OffsetInMilliseconds > 0)
+        {
+            offset = (int)context.AudioPlayer.OffsetInMilliseconds;
+        }
+        else if (session.PlayState != null)
+        {
+            offset = (int)TimeSpan.FromTicks(session.PlayState?.PositionTicks ?? 0).TotalMilliseconds;
+        }
+
+        return ResponseBuilder.AudioPlayerPlay(PlayBehavior.Enqueue, GetStreamUrl(item_id, user), item_id, item_id, offset);
     }
 }

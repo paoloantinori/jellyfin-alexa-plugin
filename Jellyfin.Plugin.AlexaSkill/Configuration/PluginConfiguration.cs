@@ -1,8 +1,8 @@
 using System;
+using System.Collections.Generic;
 using Alexa.NET.Management;
-using Alexa.NET.Management.Api;
-using Jellyfin.Plugin.AlexaSkill.Alexa.InteractionModel;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Manifest;
+using Jellyfin.Plugin.AlexaSkill.Entities;
 using MediaBrowser.Model.Plugins;
 
 namespace Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -14,7 +14,6 @@ public class PluginConfiguration : BasePluginConfiguration
 {
     private SslCertificateType sslCertType;
     private string serverAddress;
-    private string invocationName;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PluginConfiguration"/> class.
@@ -22,16 +21,14 @@ public class PluginConfiguration : BasePluginConfiguration
     public PluginConfiguration()
     {
         // set default options here
-        sslCertType = SslCertificateType.Trusted;
-        invocationName = "jellyfin player";
-        SmapiClientId = string.Empty;
-        SmapiClientSecret = string.Empty;
-        SmapiRefreshToken = string.Empty;
-        VendorId = string.Empty;
-        SkillId = string.Empty;
+        sslCertType = SslCertificateType.Wildcard;
+        LwaClientId = string.Empty;
+        LwaClientSecret = string.Empty;
 
         serverAddress = string.Empty;
         AccountLinkingClientId = Guid.NewGuid().ToString();
+
+        Users = new List<User>();
     }
 
     /// <summary>
@@ -42,8 +39,16 @@ public class PluginConfiguration : BasePluginConfiguration
         get => sslCertType;
         set
         {
-            Plugin.Instance!.Skill.SetApiEndpoint(serverAddress, value);
             sslCertType = value;
+
+            if (Plugin.Instance!.ManifestSkill == null)
+            {
+                Plugin.Instance.ManifestSkill = new ManifestSkill("Jellyfin.Plugin.AlexaSkill.Alexa.Manifest.manifest.json", ServerAddress, value);
+            }
+            else
+            {
+                Plugin.Instance.ManifestSkill.SetApiEndpoint(ServerAddress, value);
+            }
         }
     }
 
@@ -55,76 +60,90 @@ public class PluginConfiguration : BasePluginConfiguration
         get => serverAddress;
         set
         {
-            Plugin.Instance!.Skill.SetApiEndpoint(value, sslCertType);
             serverAddress = value;
-        }
-    }
 
-    /// <summary>
-    /// Gets or sets the custom invocation name of the skill.
-    /// </summary>
-    public string InvocationName
-    {
-        get => invocationName;
-        set
-        {
-            foreach (SkillInteractionModel model in Plugin.Instance!.SkillInteractionModels)
+            if (Plugin.Instance!.ManifestSkill == null)
             {
-                model.InteractionModel.Language.InvocationName = value;
+                Plugin.Instance.ManifestSkill = new ManifestSkill("Jellyfin.Plugin.AlexaSkill.Alexa.Manifest.manifest.json", value, SslCertType);
             }
-
-            invocationName = value;
-        }
-    }
-
-    /// <summary>
-    /// Gets or sets the client id for SMAPI.
-    /// </summary>
-    public string SmapiClientId { get; set; }
-
-    /// <summary>
-    /// Gets or sets the client secret for SMAPI.
-    /// </summary>
-    public string SmapiClientSecret { get; set; }
-
-    /// <summary>
-    /// Gets or sets the refresh token for SMAPI.
-    /// </summary>
-    public string SmapiRefreshToken { get; set; }
-
-    /// <summary>
-    /// Gets or sets the vendor id of the user.
-    /// </summary>
-    public string VendorId { get; set; }
-
-    /// <summary>
-    /// Gets or sets the id of the Alexa skill.
-    /// </summary>
-    public string SkillId { get; set; }
-
-    /// <summary>
-    /// Gets the current version of the local skill.
-    /// </summary>
-    public string SkillVersion { get => "v" + Util.GetVersion(); }
-
-    /// <summary>
-    /// Gets the current version of the skill in the Alexa cloud.
-    /// </summary>
-    public string SkillVersionCloud
-    {
-        get
-        {
-            if (string.IsNullOrEmpty(SkillId))
+            else
             {
-                return string.Empty;
+                Plugin.Instance.ManifestSkill.SetApiEndpoint(value, SslCertType);
             }
-
-            return new ManifestSkill(Plugin.Instance!.SmapiManagement.Skills.Get(SkillId, SkillStage.Development).Result.Manifest).GetVersionTag();
         }
     }
+
+    /// <summary>
+    /// Gets or sets the client id for LWA.
+    /// </summary>
+    public string LwaClientId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the client secret for LWA.
+    /// </summary>
+    public string LwaClientSecret { get; set; }
 
     /// <summary>
     /// Gets or sets the account linking client id.
     /// </summary>
     public string AccountLinkingClientId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the list of users.
+    /// </summary>
+    public List<User> Users { get; set; }
+
+    /// <summary>
+    /// Add a user to the list of users.
+    /// </summary>
+    /// <param name="user">The user to add.</param>
+    public void AddUser(User user)
+    {
+        // check if the user is already inside the list
+        foreach (User u in Users)
+        {
+            if (user.Id == u.Id)
+            {
+                throw new ArgumentException("User already inside list");
+            }
+        }
+
+        Users.Add(user);
+    }
+
+    /// <summary>
+    /// Get the user by its guid.
+    /// </summary>
+    /// <param name="guid">The guid of the user.</param>
+    /// <returns>Instance of the <see cref="User"/> class or null if the user was not found.</returns>
+    public User? GetUserById(Guid guid)
+    {
+        foreach (User u in Users)
+        {
+            if (guid == u.Id)
+            {
+                return u;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Delete the user with the given guid.
+    /// </summary>
+    /// <param name="guid">The guid of the user.</param>
+    /// <returns>True if the user was deleted, false otherwise.</returns>
+    public bool DeleteUser(Guid guid)
+    {
+        foreach (User u in Users)
+        {
+            if (guid == u.Id)
+            {
+                return Users.Remove(u);
+            }
+        }
+
+        return false;
+    }
 }
