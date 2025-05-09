@@ -8,9 +8,9 @@
         "overview": "Alexa skill plugin for Jellyfin",
         "versions": [
             {
-                "version": "0.1",
+                "version": "0.1.0.0",
                 "checksum": "971f42c0cacd6705fe64923f69399943",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.1/AlexaSkill_0.1.zip",
+                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.1.0.0/AlexaSkill_0.1.0.0.zip",
                 "changelog": "See for more details: https://github.com/paoloantinori/jellyfin-alexa-plugin/releases",
                 "targetAbi": "10.8.0.0",
                 "timestamp": "2024-10-22 23:50:22"
