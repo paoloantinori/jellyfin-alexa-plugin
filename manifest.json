@@ -7,6 +7,14 @@
         "owner": "infinityofspace",
         "overview": "Alexa skill plugin for Jellyfin",
         "versions": [
+            {
+                "version": "0.1.0.0",
+                "checksum": "38441f0d50590e95abd756e2b005cc71",
+                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.1.0.0/AlexaSkill_0.1.0.0.zip",
+                "changelog": "See for more details: https://github.com/paoloantinori/jellyfin-alexa-plugin/releases",
+                "targetAbi": "10.8.0.0",
+                "timestamp": "2025-05-09 15:57:09"
+            }
         ]
     }
 ]
