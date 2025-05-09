@@ -20,8 +20,8 @@ with open(sys.argv[2], "rb") as f:
 new_version_info = {
     "version": version,
     "checksum": checksum.hexdigest(),
-    "sourceUrl": f"https://github.com/infinityofspace/jellyfin-alexa-plugin/releases/download/{version}/AlexaSkill_{version}.zip",
-    "changelog": "See for more details: https://github.com/infinityofspace/jellyfin-alexa-plugin/releases",
+    "sourceUrl": f"https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/{version}/AlexaSkill_{version}.zip",
+    "changelog": "See for more details: https://github.com/paoloantinori/jellyfin-alexa-plugin/releases",
     "targetAbi": "10.8.0.0",
     "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 }
