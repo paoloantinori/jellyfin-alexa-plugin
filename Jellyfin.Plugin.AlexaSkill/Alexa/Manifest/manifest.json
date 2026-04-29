@@ -17,20 +17,20 @@
 			"name": "jellyfin",
 			"category": "STREAMING_SERVICE",
 			"distributionCountries": [],
-			"isAvailableWorldwide": false,
+			"isAvailableWorldwide": true,
 			"locales": {
 				"en-US": {
 					"name": "Jellyfin",
 					"summary": "Play media from your Jellyfin server",
 					"examplePhrases": [
-						"Alexa ask Jellyfin Player play my favorite music",
-						"Alexa ask Jellyfin Player play songs from 'Artist'",
-						"Alexa ask Jellyfin Player play my playlist 'Best Music'"
+						"Alexa ask jellyfin play my favorite music",
+						"Alexa ask jellyfin play songs from Artist",
+						"Alexa ask jellyfin play my playlist Best Music"
 					],
 					"description": "Play media from your Jellyfin server.\n\nSource: https://github.com/infinityofspace/jellyfin-alexa-plugin"
 				}
 			},
-			"testingInstructions": ""
+			"testingInstructions": "Say 'Alexa ask jellyfin play my favorite music' or 'Alexa ask jellyfin what's playing'"
 		}
 	}
 }
