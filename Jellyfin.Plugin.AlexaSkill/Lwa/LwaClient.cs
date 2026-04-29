@@ -69,7 +69,9 @@ public static class LwaClient
         }
         else
         {
-            return null;
+            string errorContent = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            throw new HttpRequestException(
+                $"Device authorization request failed with status {response.StatusCode}: {errorContent}");
         }
     }
 
@@ -119,11 +121,11 @@ public static class LwaClient
             }
             else
             {
-                return null;
+                throw new InvalidOperationException($"LWA device token polling failed: {json?.GetValueOrDefault("error", "unknown error")}");
             }
         }
 
-        return null;
+        throw new TimeoutException("LWA device authorization timed out before user completed login.");
     }
 
     /// <summary>
@@ -167,7 +169,9 @@ public static class LwaClient
         }
         else
         {
-            return null;
+            string errorContent = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            throw new HttpRequestException(
+                $"Token refresh failed with status {response.StatusCode}: {errorContent}");
         }
     }
 }

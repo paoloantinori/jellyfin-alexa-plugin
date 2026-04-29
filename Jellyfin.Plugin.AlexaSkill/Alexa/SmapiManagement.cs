@@ -1,3 +1,4 @@
+using System;
 using System.Collections.ObjectModel;
 using System.Threading;
 using Alexa.NET.Management;
@@ -7,6 +8,7 @@ using Alexa.NET.Management.Skills;
 using Jellyfin.Plugin.AlexaSkill.Alexa.InteractionModel;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Manifest;
 using Jellyfin.Plugin.AlexaSkill.Lwa;
+using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa;
 
@@ -15,15 +17,18 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa;
 /// </summary>
 public class SmapiManagement : ManagementApi
 {
-    private DeviceToken deviceToken;
+    private readonly DeviceToken _deviceToken;
+    private readonly ILogger _logger;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SmapiManagement"/> class.
     /// </summary>
     /// <param name="smapiDeviceToken">The smapi device token.</param>
-    public SmapiManagement(DeviceToken smapiDeviceToken) : base(smapiDeviceToken.AccessToken)
+    /// <param name="loggerFactory">The logger factory.</param>
+    public SmapiManagement(DeviceToken smapiDeviceToken, ILoggerFactory loggerFactory) : base(smapiDeviceToken.AccessToken)
     {
-        deviceToken = smapiDeviceToken;
+        _deviceToken = smapiDeviceToken;
+        _logger = loggerFactory.CreateLogger<SmapiManagement>();
     }
 
     /// <summary>
@@ -36,17 +41,21 @@ public class SmapiManagement : ManagementApi
     /// <returns>The id of the created skill.</returns>
     public string CreateSkill(ManifestSkill manifestSkill, Collection<SkillInteractionModel> interactionModels, string endpointUri, string clientId)
     {
-        VendorResponse vendor = this.Vendors.Get().Result;
+        _logger.LogInformation("Creating new skill...");
 
+        VendorResponse vendor = this.Vendors.Get().Result;
         string vendorId = vendor.Vendors[0].Id;
 
         SkillId skillId = this.Skills.Create(vendorId, manifestSkill).Result;
+        _logger.LogInformation("Skill creation initiated: {SkillId}", skillId.Id);
 
         // wait until the skill is created
         while (this.GetSkillStatus(skillId.Id).Manifest.LastModified.Status == SkillStatusState.IN_PROGRESS)
         {
             Thread.Sleep(1000);
         }
+
+        _logger.LogInformation("Skill manifest processed, updating account linking and interaction models");
 
         this.UpdateAccountLinkData(skillId.Id, endpointUri, clientId);
 
@@ -55,6 +64,7 @@ public class SmapiManagement : ManagementApi
             this.InteractionModel.Update(skillId.Id, SkillStage.Development, interactionModel.Locale, interactionModel);
         }
 
+        _logger.LogInformation("Skill created successfully: {SkillId}", skillId.Id);
         return skillId.Id;
     }
 
@@ -66,9 +76,11 @@ public class SmapiManagement : ManagementApi
     /// <param name="interactionModels">The new interaction models.</param>
     public void UpdateSkill(string skillId, ManifestSkill manifestSkill, Collection<SkillInteractionModel> interactionModels)
     {
+        _logger.LogInformation("Updating skill {SkillId}...", skillId);
+
         _ = this.Skills.Update(skillId, SkillStage.Development, manifestSkill);
 
-        // wait until the skill is created
+        // wait until the skill update is processed
         while (this.GetSkillStatus(skillId).Manifest.LastModified.Status == SkillStatusState.IN_PROGRESS)
         {
             Thread.Sleep(1000);
@@ -78,6 +90,8 @@ public class SmapiManagement : ManagementApi
         {
             this.InteractionModel.Update(skillId, SkillStage.Development, interactionModel.Locale, interactionModel);
         }
+
+        _logger.LogInformation("Skill updated successfully: {SkillId}", skillId);
     }
 
     /// <summary>
@@ -87,7 +101,17 @@ public class SmapiManagement : ManagementApi
     /// <returns>The skill.</returns>
     public ManifestSkill GetSkill(string skillId)
     {
-        return new ManifestSkill(this.Skills.Get(skillId, SkillStage.Development).Result.Manifest);
+        _logger.LogDebug("Getting skill {SkillId}", skillId);
+
+        try
+        {
+            return new ManifestSkill(this.Skills.Get(skillId, SkillStage.Development).Result.Manifest);
+        }
+        catch (AggregateException ex)
+        {
+            _logger.LogError(ex, "Failed to get skill {SkillId}", skillId);
+            throw;
+        }
     }
 
     /// <summary>
@@ -96,7 +120,18 @@ public class SmapiManagement : ManagementApi
     /// <param name="skillId">The id of the skill to delete.</param>
     public void DeleteSkill(string skillId)
     {
-        this.Skills.Delete(skillId).Wait();
+        _logger.LogInformation("Deleting skill {SkillId}...", skillId);
+
+        try
+        {
+            this.Skills.Delete(skillId).Wait();
+            _logger.LogInformation("Skill deleted: {SkillId}", skillId);
+        }
+        catch (AggregateException ex)
+        {
+            _logger.LogError(ex, "Failed to delete skill {SkillId}", skillId);
+            throw;
+        }
     }
 
     /// <summary>
@@ -106,7 +141,17 @@ public class SmapiManagement : ManagementApi
     /// <returns>The AccountLinking data.</returns>
     public AccountLinkData GetAccountLinkData(string skillId)
     {
-        return this.AccountLinking.Get(skillId, SkillStage.Development).Result;
+        _logger.LogDebug("Getting account link data for skill {SkillId}", skillId);
+
+        try
+        {
+            return this.AccountLinking.Get(skillId, SkillStage.Development).Result;
+        }
+        catch (AggregateException ex)
+        {
+            _logger.LogError(ex, "Failed to get account link data for skill {SkillId}", skillId);
+            throw;
+        }
     }
 
     /// <summary>
@@ -117,6 +162,8 @@ public class SmapiManagement : ManagementApi
     /// <param name="clientId">The client id.</param>
     public void UpdateAccountLinkData(string skillId, string endpointUri, string clientId)
     {
+        _logger.LogDebug("Updating account link data for skill {SkillId}", skillId);
+
         AccountLinkData accountLinkData = new AccountLinkData()
         {
             Type = AccountLinkType.IMPLICIT,

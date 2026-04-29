@@ -35,6 +35,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         Instance = this;
 
         UserManager = userManager;
+        LoggerFactory = loggerFactory;
 
         ILogger<Plugin> logger = loggerFactory.CreateLogger<Plugin>();
     }
@@ -59,6 +60,11 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     /// Gets the dictionary of device ids to session tokens.
     /// </summary>
     public IUserManager UserManager { get; private set; }
+
+    /// <summary>
+    /// Gets the logger factory.
+    /// </summary>
+    public ILoggerFactory LoggerFactory { get; private set; }
 
     /// <summary>
     /// Gets the dictionary of device ids to session tokens.
