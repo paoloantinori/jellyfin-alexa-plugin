@@ -107,6 +107,11 @@ public class AlexaSkillController : ControllerBase
         [FromQuery(Name = "state")] string state,
         [FromQuery(Name = "error")] string? error)
     {
+        if (string.IsNullOrWhiteSpace(redirectUri) || string.IsNullOrWhiteSpace(state) || string.IsNullOrWhiteSpace(clientId))
+        {
+            return BadRequest("Missing required parameters: client_id, redirect_uri, and state are required.");
+        }
+
         bool valid_redirect_uri = false;
         foreach (string url in Config.ValidRedirectUrls)
         {
@@ -174,6 +179,11 @@ public class AlexaSkillController : ControllerBase
         [FromQuery(Name = "redirect_uri")] string redirectUri,
         [FromQuery(Name = "state")] string state)
     {
+        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+        {
+            return BadRequest("Username and password are required.");
+        }
+
         if (!csrfTokenHandler.ValidateCsrfToken(csrfToken))
         {
             return Unauthorized();
@@ -252,9 +262,16 @@ public class AlexaSkillController : ControllerBase
     [Consumes("application/json")]
     public ActionResult HandleIntentRequest([FromBody] dynamic json)
     {
-        SkillRequest req = JsonConvert.DeserializeObject<SkillRequest>(json.ToString());
+        SkillRequest? req = JsonConvert.DeserializeObject<SkillRequest>(json.ToString());
+        if (req?.Context?.System?.User?.AccessToken == null)
+        {
+            return BadRequest("Invalid skill request: missing access token.");
+        }
 
-        Guid userId = new Guid(req.Context.System.User.AccessToken);
+        if (!Guid.TryParse(req.Context.System.User.AccessToken, out Guid userId))
+        {
+            return BadRequest("Invalid access token format.");
+        }
         Entities.User? user = Plugin.Instance!.Configuration.GetUserById(userId);
         if (user == null)
         {
