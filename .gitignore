@@ -6,6 +6,28 @@ obj/
 .idea/
 .env
 
+# Visual Studio
+.vs/
+*.user
+*.userosscache
+*.suo
+*.cache
+
+# Build artifacts
+*.orig
+*.bak
+packages/
+tools/
+
+# Logs
+logs/
+*.log
+
+# Coverage
+coverage/
+*.coverage
+*.coveragexml
+TestResults/
 
 jellyfin_data
 test_media

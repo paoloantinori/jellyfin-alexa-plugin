@@ -1,5 +1,8 @@
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Jellyfin.Plugin.AlexaSkill", "Jellyfin.Plugin.AlexaSkill\Jellyfin.Plugin.AlexaSkill.csproj", "{C5DF7DE0-8777-4B3C-A70D-5C3DAE359C9E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Jellyfin.Plugin.AlexaSkill.Tests", "Jellyfin.Plugin.AlexaSkill.Tests\Jellyfin.Plugin.AlexaSkill.Tests.csproj", "{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -11,5 +14,9 @@ Global
 		{C5DF7DE0-8777-4B3C-A70D-5C3DAE359C9E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C5DF7DE0-8777-4B3C-A70D-5C3DAE359C9E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C5DF7DE0-8777-4B3C-A70D-5C3DAE359C9E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
