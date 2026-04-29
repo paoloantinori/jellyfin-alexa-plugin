@@ -48,6 +48,10 @@ public class LWAController : ControllerBase
     [HttpGet]
     public ActionResult GetLwaDeviceTokenRequestPage([FromQuery(Name = "token")] string token)
     {
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return BadRequest("Token parameter is required.");
+        }
         var assembly = typeof(Util).Assembly;
         string page;
 
