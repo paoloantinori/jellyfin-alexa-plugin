@@ -73,7 +73,7 @@ public class User
                 return null;
             }
 
-            return new SmapiManagement(this.SmapiDeviceToken);
+            return new SmapiManagement(this.SmapiDeviceToken, Plugin.Instance!.LoggerFactory);
         }
     }
 }
