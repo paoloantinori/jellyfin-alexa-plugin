@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Web;
 using Jellyfin.Plugin.AlexaSkill.Controller.Handler;
 using Jellyfin.Plugin.AlexaSkill.Entities;
@@ -168,12 +169,42 @@ public class ConfigurationController : ControllerBase
             return new JsonResult(new { error = "Could not find user" }, StatusCode(404));
         }
 
+        string? skillId = pluginUser.UserSkill?.SkillId;
         Plugin.Instance!.Configuration.DeleteUser(pluginUser.Id);
         Plugin.Instance!.SaveConfiguration();
 
-        // TODO: Delete skill in the cloud when there are no other users with the same skill
+        if (!string.IsNullOrEmpty(skillId))
+        {
+            bool otherUsersWithSameSkill = Plugin.Instance!.Configuration.Users.Any(u =>
+                u.UserSkill?.SkillId == skillId);
+
+            if (!otherUsersWithSameSkill)
+            {
+                TryDeleteCloudSkill(pluginUser, skillId);
+            }
+        }
 
         return new OkResult();
+    }
+
+    private void TryDeleteCloudSkill(Jellyfin.Plugin.AlexaSkill.Entities.User user, string skillId)
+    {
+        try
+        {
+            var smapi = user.SmapiManagement;
+            if (smapi == null)
+            {
+                _logger.LogWarning("Cannot delete skill {SkillId} from cloud: no SMAPI management for user {UserId}", skillId, user.Id);
+                return;
+            }
+
+            smapi.DeleteSkill(skillId);
+            _logger.LogInformation("Deleted cloud skill {SkillId} (last user removed)", skillId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete cloud skill {SkillId}. User was removed locally but skill still exists in the cloud.", skillId);
+        }
     }
 
     /// <summary>
