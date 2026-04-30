@@ -4,6 +4,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -57,6 +58,8 @@ public class PlayFavoritesIntentHandler : BaseHandler
     /// <returns>Play directive of the last added items.</returns>
     public override SkillResponse Handle(Request request, Context context, Entities.User user, SessionInfo session)
     {
+        string locale = GetLocale(request);
+
         InternalItemsQuery query = new InternalItemsQuery()
         {
             User = _userManager.GetUserById(session.UserId),
@@ -68,7 +71,7 @@ public class PlayFavoritesIntentHandler : BaseHandler
 
         if (favoriteItems.Count == 0)
         {
-            return ResponseBuilder.Tell("No favorite items found.");
+            return ResponseBuilder.Tell(ResponseStrings.Get("NoFavoriteItems", locale));
         }
 
         List<QueueItem> queueItems = new List<QueueItem>();

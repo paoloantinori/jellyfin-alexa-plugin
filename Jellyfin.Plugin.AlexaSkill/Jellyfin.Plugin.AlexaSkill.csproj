@@ -11,6 +11,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>Jellyfin.Plugin.AlexaSkill.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Jellyfin.Controller" Version="10.11.8">
       <ExcludeAssets>runtime</ExcludeAssets>
     </PackageReference>
@@ -42,6 +48,11 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Alexa/InteractionModel/model_en-US.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Alexa/Locale/en-US.json" />
+    <EmbeddedResource Include="Alexa/Locale/it-IT.json" />
   </ItemGroup>
 
   <ItemGroup>

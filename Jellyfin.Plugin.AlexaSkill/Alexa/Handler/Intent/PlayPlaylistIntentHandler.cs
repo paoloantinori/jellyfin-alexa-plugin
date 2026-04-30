@@ -5,6 +5,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -61,6 +62,7 @@ public class PlayPlaylistIntentHandler : BaseHandler
     /// <returns>Play directive of the playlist.</returns>
     public override SkillResponse Handle(Request request, Context context, Entities.User user, SessionInfo session)
     {
+        string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
 
         string playlistName = intentRequest.Intent.Slots["playlist"].Value;
@@ -81,7 +83,7 @@ public class PlayPlaylistIntentHandler : BaseHandler
 
         if (playlists.TotalRecordCount == 0)
         {
-            return ResponseBuilder.Tell("Could not find a playlist with the name " + playlistName);
+            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundPlaylist", locale, playlistName));
         }
 
         BaseItem playlist = playlists.Items[0];
@@ -97,7 +99,7 @@ public class PlayPlaylistIntentHandler : BaseHandler
 
         if (playlistItems.Count == 0)
         {
-            return ResponseBuilder.Tell("The playlist is empty.");
+            return ResponseBuilder.Tell(ResponseStrings.Get("PlaylistEmpty", locale));
         }
 
         List<QueueItem> queueItems = new List<QueueItem>();

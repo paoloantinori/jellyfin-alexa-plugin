@@ -6,6 +6,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -61,6 +62,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
     /// <returns>A skill response.</returns>
     public override SkillResponse Handle(Request request, Context context, Entities.User user, SessionInfo session)
     {
+        string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
         string musician = intentRequest.Intent.Slots["musician"].Value;
 
@@ -75,7 +77,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         });
         if (artists.Count == 0)
         {
-            return ResponseBuilder.Tell(FormattableString.Invariant($"Sorry, I couldn't find any artists with the name {musician}."));
+            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundArtist", locale, musician));
         }
 
         // Get all songs with the artists
@@ -89,7 +91,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         });
         if (artistsItems.Count == 0)
         {
-            return ResponseBuilder.Tell(FormattableString.Invariant($"There are no songs with the artist {musician}."));
+            return ResponseBuilder.Tell(ResponseStrings.Get("NoSongsForArtist", locale, musician));
         }
 
         List<QueueItem> queueItems = new List<QueueItem>();

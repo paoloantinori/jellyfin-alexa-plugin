@@ -6,6 +6,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -61,6 +62,7 @@ public class PlaySongIntentHandler : BaseHandler
     /// <returns>A skill response.</returns>
     public override SkillResponse Handle(Request request, Context context, Entities.User user, SessionInfo session)
     {
+        string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
         string songQuery = intentRequest.Intent.Slots["song"].Value;
         string? musicianQuery = intentRequest.Intent.Slots["musician"].Value;
@@ -80,7 +82,7 @@ public class PlaySongIntentHandler : BaseHandler
             });
             if (artists.Count == 0)
             {
-                return ResponseBuilder.Tell(FormattableString.Invariant($"Sorry, I couldn't find any song by the artist {musicianQuery}."));
+                return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByArtist", locale, musicianQuery));
             }
 
             foreach (BaseItem artist in artists)
@@ -100,11 +102,11 @@ public class PlaySongIntentHandler : BaseHandler
         });
         if (songs.Count == 0 && musicianQuery != null)
         {
-            return ResponseBuilder.Tell(FormattableString.Invariant($"Sorry, I couldn't find any songs with the name {songQuery} by {musicianQuery}."));
+            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByNameAndArtist", locale, songQuery, musicianQuery));
         }
         else if (songs.Count == 0)
         {
-            return ResponseBuilder.Tell(FormattableString.Invariant($"Sorry, I couldn't find any songs with the name {songQuery}."));
+            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByName", locale, songQuery));
         }
 
         List<QueueItem> queueItems = new List<QueueItem>();

@@ -6,6 +6,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -46,12 +47,13 @@ public class PlayVideoIntentHandler : BaseHandler
     /// <inheritdoc/>
     public override SkillResponse Handle(Request request, Context context, Entities.User user, SessionInfo session)
     {
+        string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
         string? titleQuery = intentRequest.Intent.Slots?.TryGetValue("title", out var slot) == true ? slot.Value : null;
 
         if (string.IsNullOrWhiteSpace(titleQuery))
         {
-            return ResponseBuilder.Tell("I didn't catch the video title. Please try again.");
+            return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchVideoTitle", locale));
         }
 
         Jellyfin.Database.Implementations.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
@@ -67,7 +69,7 @@ public class PlayVideoIntentHandler : BaseHandler
 
         if (videos.Count == 0)
         {
-            return ResponseBuilder.Tell(FormattableString.Invariant($"Sorry, I couldn't find any video with the title {titleQuery}."));
+            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundVideo", locale, titleQuery));
         }
 
         BaseItem video = videos[0];

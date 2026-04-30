@@ -3,6 +3,7 @@ using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
@@ -51,6 +52,6 @@ public class PlaybackFailedEventHandler : BaseHandler
         };
         SessionManager.OnPlaybackStopped(playbackStopInfo).ConfigureAwait(false);
 
-        return ResponseBuilder.Tell("Something went wrong while playing your media. Please try again.");
+        return ResponseBuilder.Tell(ResponseStrings.Get("PlaybackFailed", GetLocale(request)));
     }
 }

@@ -6,6 +6,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -46,12 +47,13 @@ public class PlayChannelIntentHandler : BaseHandler
     /// <inheritdoc/>
     public override SkillResponse Handle(Request request, Context context, Entities.User user, SessionInfo session)
     {
+        string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
         string? channelQuery = intentRequest.Intent.Slots?.TryGetValue("channel", out var slot) == true ? slot.Value : null;
 
         if (string.IsNullOrWhiteSpace(channelQuery))
         {
-            return ResponseBuilder.Tell("I didn't catch the channel name. Please try again.");
+            return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchChannelName", locale));
         }
 
         Jellyfin.Database.Implementations.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
@@ -67,7 +69,7 @@ public class PlayChannelIntentHandler : BaseHandler
 
         if (channels.Count == 0)
         {
-            return ResponseBuilder.Tell(FormattableString.Invariant($"Sorry, I couldn't find any channel named {channelQuery}."));
+            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundChannel", locale, channelQuery));
         }
 
         BaseItem channel = channels[0];

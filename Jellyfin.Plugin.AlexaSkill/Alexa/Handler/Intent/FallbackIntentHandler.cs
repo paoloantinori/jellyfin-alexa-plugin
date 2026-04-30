@@ -2,6 +2,7 @@ using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
@@ -40,6 +41,6 @@ public class FallbackIntentHandler : BaseHandler
     /// <returns>Notification about an error.</returns>
     public override SkillResponse Handle(Request request, Context context, Entities.User user, SessionInfo session)
     {
-        return ResponseBuilder.Tell("I could not understand that, please try again.");
+        return ResponseBuilder.Tell(ResponseStrings.Get("CouldNotUnderstand", GetLocale(request)));
     }
 }
