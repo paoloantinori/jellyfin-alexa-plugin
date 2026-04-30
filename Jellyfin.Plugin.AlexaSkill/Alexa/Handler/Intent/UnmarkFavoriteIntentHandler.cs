@@ -5,9 +5,9 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Library;
-using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Dto;
+using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
@@ -17,26 +17,21 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public class UnmarkFavoriteIntentHandler : BaseHandler
 {
-    private IUserDataRepository _userDataRepository;
-    private IUserManager _userManager;
+    private readonly IUserDataManager _userDataManager;
+    private readonly IUserManager _userManager;
+    private readonly ILibraryManager _libraryManager;
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="UnmarkFavoriteIntentHandler"/> class.
-    /// </summary>
-    /// <param name="sessionManager">Instance of the <see cref="ISessionManager"/> interface.</param>
-    /// <param name="config">The plugin configuration.</param>
-    /// <param name="userDataRepository">Instance of the <see cref="IUserDataRepository"/> interface.</param>
-    /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
-    /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
     public UnmarkFavoriteIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
-        IUserDataRepository userDataRepository,
+        IUserDataManager userDataManager,
         IUserManager userManager,
+        ILibraryManager libraryManager,
         ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
     {
-        _userDataRepository = userDataRepository;
+        _userDataManager = userDataManager;
         _userManager = userManager;
+        _libraryManager = libraryManager;
     }
 
     /// <inheritdoc/>
@@ -46,29 +41,24 @@ public class UnmarkFavoriteIntentHandler : BaseHandler
         return intentRequest != null && string.Equals(intentRequest.Intent.Name, "UnmarkFavoriteIntent", System.StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// Remove the currently playing media from the favorite list.
-    /// </summary>
-    /// <param name="request">The skill request which should be handled.</param>
-    /// <param name="context">The context of the skill intent request.</param>
-    /// <param name="user">The user instance.</param>
-    /// <param name="session">The session instance.</param>
-    /// <returns>Confirmation statement that the media was removed from the favorites list or error message when the media can not be found.</returns>
     public override SkillResponse Handle(Request request, Context context, Entities.User user, SessionInfo session)
     {
-        BaseItemDto item = session.NowPlayingItem;
+        BaseItemDto? item = session.NowPlayingItem;
         if (item == null)
         {
             return ResponseBuilder.Tell("Sorry I could not find the media.");
         }
 
         var jellyfinUser = _userManager.GetUserById(user.Id);
+        var baseItem = _libraryManager.GetItemById(item.Id);
+        if (baseItem == null)
+        {
+            return ResponseBuilder.Tell("Sorry I could not find the media.");
+        }
 
-        var data = _userDataRepository.GetUserData(jellyfinUser.InternalId, item.Id.ToString());
-
-        data.IsFavorite = true;
-
-        _userDataRepository.SaveUserData(jellyfinUser.InternalId, item.Id.ToString(), data, CancellationToken.None);
+        var data = _userDataManager.GetUserData(jellyfinUser, baseItem);
+        data.IsFavorite = false;
+        _userDataManager.SaveUserData(jellyfinUser, baseItem, data, UserDataSaveReason.UpdateUserRating, CancellationToken.None);
 
         return ResponseBuilder.Tell("Media removed from the favorites list.");
     }

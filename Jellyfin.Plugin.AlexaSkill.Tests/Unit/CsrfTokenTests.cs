@@ -1,3 +1,5 @@
+using System;
+using Jellyfin.Plugin.AlexaSkill.Controller.Handler;
 using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;

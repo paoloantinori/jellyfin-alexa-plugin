@@ -54,9 +54,9 @@ public class PlayVideoIntentHandler : BaseHandler
             return ResponseBuilder.Tell("I didn't catch the video title. Please try again.");
         }
 
-        Jellyfin.Data.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
 
-        List<BaseItem> videos = _libraryManager.GetItemList(new InternalItemsQuery()
+        IReadOnlyList<BaseItem> videos = _libraryManager.GetItemList(new InternalItemsQuery()
         {
             User = jellyfinUser,
             Recursive = true,

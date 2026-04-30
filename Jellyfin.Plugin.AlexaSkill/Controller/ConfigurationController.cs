@@ -116,7 +116,7 @@ public class ConfigurationController : ControllerBase
             return new JsonResult(new { error = "Invalid invocation name" }) { StatusCode = 400 };
         }
 
-        Jellyfin.Data.Entities.User jellyfinUser = _userManager.GetUserByName(username);
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser = _userManager.GetUserByName(username);
         if (jellyfinUser == null)
         {
             return new JsonResult(new { error = "Could not find jellyfin user" }) { StatusCode = 404 };

@@ -64,9 +64,9 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         IntentRequest intentRequest = (IntentRequest)request;
         string musician = intentRequest.Intent.Slots["musician"].Value;
 
-        Jellyfin.Data.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
 
-        List<BaseItem> artists = _libraryManager.GetItemList(new InternalItemsQuery()
+        IReadOnlyList<BaseItem> artists = _libraryManager.GetItemList(new InternalItemsQuery()
         {
             Recursive = true,
             SearchTerm = musician,

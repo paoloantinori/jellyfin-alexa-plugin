@@ -1,13 +1,15 @@
 using System;
 using System.Collections.Generic;
-using Alexa.NET;
-using Alexa.NET.Request;
-using Alexa.NET.Request.Type;
-using Alexa.NET.Response;
+using global::Alexa.NET;
+using global::Alexa.NET.Request;
+using global::Alexa.NET.Request.Type;
+using global::Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
+using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
@@ -30,6 +32,7 @@ public class PlayVideoIntentHandlerTests
         _libraryManagerMock = new Mock<ILibraryManager>();
         _userManagerMock = new Mock<IUserManager>();
         _config = new PluginConfiguration();
+        TestHelpers.SetServerAddress(_config, "http://localhost:8096");
         _loggerFactory = LoggerFactory.Create(b => { });
     }
 
@@ -41,6 +44,11 @@ public class PlayVideoIntentHandlerTests
             _libraryManagerMock.Object,
             _userManagerMock.Object,
             _loggerFactory);
+    }
+
+    private SessionInfo CreateSession()
+    {
+        return new SessionInfo(_sessionManagerMock.Object, _loggerFactory.CreateLogger<SessionInfo>());
     }
 
     private static IntentRequest CreatePlayVideoRequest(string? title = "The Matrix")
@@ -65,9 +73,9 @@ public class PlayVideoIntentHandlerTests
     {
         return new Context
         {
-            System = new Alexa.NET.Request.System
+            System = new global::Alexa.NET.Request.AlexaSystem
             {
-                User = new Alexa.NET.Request.User
+                User = new global::Alexa.NET.Request.User
                 {
                     AccessToken = Guid.NewGuid().ToString()
                 },
@@ -76,11 +84,9 @@ public class PlayVideoIntentHandlerTests
         };
     }
 
-    private static Mock<BaseItem> CreateMockBaseItem(string name, Guid? id = null)
+    private static BaseItem CreateTestItem(string name, Guid? id = null)
     {
-        var item = new Mock<BaseItem>();
-        item.Setup(i => i.Name).Returns(name);
-        item.Setup(i => i.Id).Returns(id ?? Guid.NewGuid());
+        var item = new Movie { Name = name, Id = id ?? Guid.NewGuid() };
         return item;
     }
 
@@ -109,7 +115,7 @@ public class PlayVideoIntentHandlerTests
             }
         };
 
-        var response = handler.Handle(request, CreateContext(), TestHelpers.CreateTestUser(), new SessionInfo());
+        var response = handler.Handle(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession());
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
 
         Assert.Contains("didn't catch", speech.Text);
@@ -123,7 +129,7 @@ public class PlayVideoIntentHandlerTests
             CreatePlayVideoRequest(""),
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            new SessionInfo());
+            CreateSession());
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
 
         Assert.Contains("didn't catch", speech.Text);
@@ -141,7 +147,7 @@ public class PlayVideoIntentHandlerTests
             CreatePlayVideoRequest("Unknown Movie"),
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            new SessionInfo());
+            CreateSession());
 
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
         Assert.Contains("couldn't find", speech.Text);
@@ -150,18 +156,18 @@ public class PlayVideoIntentHandlerTests
     [Fact]
     public void Handle_FoundMovie_ReturnsVideoAppDirective()
     {
-        var movie = CreateMockBaseItem("The Matrix");
+        var movie = CreateTestItem("The Matrix");
 
         _libraryManagerMock
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns(new List<BaseItem> { movie.Object });
+            .Returns(new List<BaseItem> { movie });
 
         var handler = CreateHandler();
         var response = handler.Handle(
             CreatePlayVideoRequest("The Matrix"),
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            new SessionInfo());
+            CreateSession());
 
         Assert.Null(response.Response.OutputSpeech);
         Assert.NotNull(response.Response.Directives);
@@ -172,19 +178,19 @@ public class PlayVideoIntentHandlerTests
     [Fact]
     public void Handle_FoundMultipleResults_ReturnsFirstMatch()
     {
-        var movie1 = CreateMockBaseItem("The Matrix");
-        var movie2 = CreateMockBaseItem("The Matrix Reloaded");
+        var movie1 = CreateTestItem("The Matrix");
+        var movie2 = CreateTestItem("The Matrix Reloaded");
 
         _libraryManagerMock
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns(new List<BaseItem> { movie1.Object, movie2.Object });
+            .Returns(new List<BaseItem> { movie1, movie2 });
 
         var handler = CreateHandler();
         var response = handler.Handle(
             CreatePlayVideoRequest("The Matrix"),
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            new SessionInfo());
+            CreateSession());
 
         Assert.NotNull(response.Response.Directives);
         Assert.Single(response.Response.Directives);
@@ -198,7 +204,7 @@ public class PlayVideoIntentHandlerTests
             CreatePlayVideoRequest(null),
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            new SessionInfo());
+            CreateSession());
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
 
         Assert.Contains("didn't catch", speech.Text);
@@ -214,7 +220,7 @@ public class PlayVideoIntentHandlerTests
             CreatePlayVideoRequest(title),
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            new SessionInfo());
+            CreateSession());
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
 
         Assert.Contains("didn't catch", speech.Text);
@@ -224,18 +230,18 @@ public class PlayVideoIntentHandlerTests
     public void Handle_FoundMovie_DirectiveContainsSourceAndMetadata()
     {
         var id = Guid.NewGuid();
-        var movie = CreateMockBaseItem("The Matrix", id);
+        var movie = CreateTestItem("The Matrix", id);
 
         _libraryManagerMock
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns(new List<BaseItem> { movie.Object });
+            .Returns(new List<BaseItem> { movie });
 
         var handler = CreateHandler();
         var response = handler.Handle(
             CreatePlayVideoRequest("The Matrix"),
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            new SessionInfo());
+            CreateSession());
 
         var directive = Assert.IsType<VideoAppLaunchDirective>(response.Response.Directives[0]);
         Assert.NotNull(directive.VideoItem);
@@ -249,12 +255,12 @@ public class PlayVideoIntentHandlerTests
     public void Handle_FoundMovie_SetsSessionQueue()
     {
         var id = Guid.NewGuid();
-        var movie = CreateMockBaseItem("The Matrix", id);
-        var session = new SessionInfo();
+        var movie = CreateTestItem("The Matrix", id);
+        var session = CreateSession();
 
         _libraryManagerMock
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns(new List<BaseItem> { movie.Object });
+            .Returns(new List<BaseItem> { movie });
 
         var handler = CreateHandler();
         handler.Handle(CreatePlayVideoRequest("The Matrix"), CreateContext(), TestHelpers.CreateTestUser(), session);
@@ -276,18 +282,18 @@ public class PlayVideoIntentHandlerTests
     [Fact]
     public void Handle_VideoResponse_EndsSession()
     {
-        var movie = CreateMockBaseItem("Test Video");
+        var movie = CreateTestItem("Test Video");
 
         _libraryManagerMock
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns(new List<BaseItem> { movie.Object });
+            .Returns(new List<BaseItem> { movie });
 
         var handler = CreateHandler();
         var response = handler.Handle(
             CreatePlayVideoRequest("Test Video"),
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            new SessionInfo());
+            CreateSession());
 
         Assert.True(response.Response.ShouldEndSession);
     }

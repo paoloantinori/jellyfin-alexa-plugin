@@ -47,6 +47,7 @@ public class AlexaSkillController : ControllerBase
         IUserManager userManager,
         ISessionManager sessionManager,
         ILibraryManager libraryManager,
+        IUserDataManager userDataManager,
         ILoggerFactory loggerFactory)
     {
         _userManager = userManager;
@@ -79,6 +80,9 @@ public class AlexaSkillController : ControllerBase
             new PlayAlbumIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
             new PlayVideoIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
             new PlayChannelIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
+
+            new MarkFavoriteIntentHandler(sessionManager, Plugin.Instance!.Configuration, userDataManager, userManager, libraryManager, loggerFactory),
+            new UnmarkFavoriteIntentHandler(sessionManager, Plugin.Instance!.Configuration, userDataManager, userManager, libraryManager, loggerFactory),
 
             new PlaybackFailedEventHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
             new PlaybackFinishedEventHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),

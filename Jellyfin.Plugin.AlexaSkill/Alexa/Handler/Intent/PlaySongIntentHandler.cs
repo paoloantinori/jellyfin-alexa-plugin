@@ -65,12 +65,12 @@ public class PlaySongIntentHandler : BaseHandler
         string songQuery = intentRequest.Intent.Slots["song"].Value;
         string? musicianQuery = intentRequest.Intent.Slots["musician"].Value;
 
-        Jellyfin.Data.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
 
         List<Guid> artistsIds = new List<Guid>();
         if (musicianQuery != null)
         {
-            List<BaseItem> artists = _libraryManager.GetItemList(new InternalItemsQuery()
+            IReadOnlyList<BaseItem> artists = _libraryManager.GetItemList(new InternalItemsQuery()
             {
                 User = jellyfinUser,
                 Recursive = true,
@@ -89,7 +89,7 @@ public class PlaySongIntentHandler : BaseHandler
             }
         }
 
-        List<BaseItem> songs = _libraryManager.GetItemList(new InternalItemsQuery()
+        IReadOnlyList<BaseItem> songs = _libraryManager.GetItemList(new InternalItemsQuery()
         {
             User = jellyfinUser,
             Recursive = true,
