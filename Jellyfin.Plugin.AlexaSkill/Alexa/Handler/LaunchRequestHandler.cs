@@ -3,6 +3,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -50,12 +51,15 @@ public class LaunchRequestHandler : BaseHandler
     /// <returns>A play directive or a question what should be played.</returns>
     public override SkillResponse Handle(Request request, Context context, Entities.User user, SessionInfo session)
     {
+        string locale = GetLocale(request);
         LaunchRequest launchRequest = (LaunchRequest)request;
 
         // check if we have any media in the queue
         if (session.NowPlayingQueue.Count == 0)
         {
-            return ResponseBuilder.Ask("Welcome to Jellyfin Skill, what can I play?", new Reprompt("Please tell me, what should I play?"));
+            return ResponseBuilder.Ask(
+                ResponseStrings.Get("Welcome", locale),
+                new Reprompt(ResponseStrings.Get("WelcomeReprompt", locale)));
         }
 
         // check if something is currently playing which we can resume

@@ -3,6 +3,7 @@ using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
@@ -54,7 +55,7 @@ public abstract class BaseHandler
         {
             Logger.LogError("User not found");
 
-            return ResponseBuilder.Tell("User not found. Please relink your account.");
+            return ResponseBuilder.Tell(ResponseStrings.Get("UserNotFound", GetLocale(request)));
         }
 
         SessionInfo session = SessionManager.GetSessionByAuthenticationToken(user.JellyfinToken, context.System.Device.DeviceID, Plugin.Instance!.Configuration.ServerAddress).Result;
@@ -89,5 +90,15 @@ public abstract class BaseHandler
     {
         // TODO: add possible transcoding
         return new Uri(new Uri(_config.ServerAddress), "Items/" + itemId + "/Download?api_key=" + user.JellyfinToken).ToString();
+    }
+
+    /// <summary>
+    /// Extract the locale from the request, defaulting to en-US if not available.
+    /// </summary>
+    /// <param name="request">The incoming request.</param>
+    /// <returns>The locale string (e.g. "en-US", "it-IT").</returns>
+    protected static string GetLocale(Request request)
+    {
+        return string.IsNullOrEmpty(request.Locale) ? "en-US" : request.Locale;
     }
 }

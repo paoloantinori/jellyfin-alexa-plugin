@@ -2,6 +2,7 @@ using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
@@ -42,6 +43,6 @@ public class ExceptionHandler : BaseHandler
         SystemExceptionRequest exceptionRequest = (SystemExceptionRequest)request;
         Logger.LogError("{0}", exceptionRequest.Error.Message);
 
-        return ResponseBuilder.Tell("Something went wrong, please try again.");
+        return ResponseBuilder.Tell(ResponseStrings.Get("SomethingWrong", GetLocale(request)));
     }
 }

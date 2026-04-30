@@ -3,6 +3,7 @@ using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
@@ -43,23 +44,24 @@ public class UnmarkFavoriteIntentHandler : BaseHandler
 
     public override SkillResponse Handle(Request request, Context context, Entities.User user, SessionInfo session)
     {
+        string locale = GetLocale(request);
         BaseItemDto? item = session.NowPlayingItem;
         if (item == null)
         {
-            return ResponseBuilder.Tell("Sorry I could not find the media.");
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale));
         }
 
         var jellyfinUser = _userManager.GetUserById(user.Id);
         var baseItem = _libraryManager.GetItemById(item.Id);
         if (baseItem == null)
         {
-            return ResponseBuilder.Tell("Sorry I could not find the media.");
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale));
         }
 
         var data = _userDataManager.GetUserData(jellyfinUser, baseItem);
         data.IsFavorite = false;
         _userDataManager.SaveUserData(jellyfinUser, baseItem, data, UserDataSaveReason.UpdateUserRating, CancellationToken.None);
 
-        return ResponseBuilder.Tell("Media removed from the favorites list.");
+        return ResponseBuilder.Tell(ResponseStrings.Get("RemovedFromFavorites", locale));
     }
 }

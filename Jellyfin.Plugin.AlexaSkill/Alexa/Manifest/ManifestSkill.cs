@@ -7,6 +7,7 @@ using Alexa.NET.Management.Manifest;
 using Alexa.NET.Management.Skills;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Interface;
 using Jellyfin.Plugin.AlexaSkill.Controller;
+using ManifestLocale = Alexa.NET.Management.Manifest.Locale;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Manifest;
 
@@ -80,7 +81,7 @@ public class ManifestSkill : Skill
     {
         string version = Util.GetVersion();
 
-        foreach (KeyValuePair<string, Locale> l in Manifest.PublishingInformation.Locales)
+        foreach (KeyValuePair<string, ManifestLocale> l in Manifest.PublishingInformation.Locales)
         {
             if (l.Value != null)
             {
@@ -95,7 +96,7 @@ public class ManifestSkill : Skill
     /// <returns>The version tag of the skill.</returns>
     public string GetVersionTag()
     {
-        Locale? baseLocale = Manifest.PublishingInformation.Locales.GetValueOrDefault<string, Locale?>("en-US", null);
+        ManifestLocale? baseLocale = Manifest.PublishingInformation.Locales.GetValueOrDefault<string, ManifestLocale?>("en-US", null);
         if (baseLocale != null)
         {
             string[] split = baseLocale.Name.Split(" ");

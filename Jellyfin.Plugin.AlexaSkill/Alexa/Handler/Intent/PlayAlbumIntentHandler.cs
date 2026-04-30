@@ -6,6 +6,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -61,6 +62,7 @@ public class PlayAlbumIntentHandler : BaseHandler
     /// <returns>A skill response.</returns>
     public override SkillResponse Handle(Request request, Context context, Entities.User user, SessionInfo session)
     {
+        string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
         string album = intentRequest.Intent.Slots["album"].Value;
         string? musician = intentRequest.Intent.Slots["musician"].Value;
@@ -80,7 +82,7 @@ public class PlayAlbumIntentHandler : BaseHandler
             });
             if (artists.Count == 0)
             {
-                return ResponseBuilder.Tell(FormattableString.Invariant($"Sorry, I couldn't find any albums with the artist {musician}."));
+                return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByArtist", locale, musician));
             }
 
             foreach (BaseItem artist in artists)
@@ -100,11 +102,11 @@ public class PlayAlbumIntentHandler : BaseHandler
         });
         if (albums.Count == 0 && musician != null)
         {
-            return ResponseBuilder.Tell(FormattableString.Invariant($"Sorry, I couldn't find any albums with the name {album} by {musician}."));
+            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByNameAndArtist", locale, album, musician));
         }
         else if (albums.Count == 0)
         {
-            return ResponseBuilder.Tell(FormattableString.Invariant($"Sorry, I couldn't find any albums with the name {album}."));
+            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByName", locale, album));
         }
 
         // Get all songs from the album
@@ -118,7 +120,7 @@ public class PlayAlbumIntentHandler : BaseHandler
         });
         if (albumItems.Count == 0)
         {
-            return ResponseBuilder.Tell(FormattableString.Invariant($"There are no songs in the album {album}."));
+            return ResponseBuilder.Tell(ResponseStrings.Get("NoSongsInAlbum", locale, album));
         }
 
         List<QueueItem> queueItems = new List<QueueItem>();
