@@ -1,10 +1,11 @@
 using System;
-using Alexa.NET;
-using Alexa.NET.Request;
-using Alexa.NET.Request.Type;
-using Alexa.NET.Response;
+using global::Alexa.NET;
+using global::Alexa.NET.Request;
+using global::Alexa.NET.Request.Type;
+using global::Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
+using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
@@ -34,27 +35,38 @@ public class EventHandlerTests
     {
         return new Context
         {
-            System = new Alexa.NET.Request.System
+            System = new global::Alexa.NET.Request.AlexaSystem
             {
-                User = new Alexa.NET.Request.User { AccessToken = Guid.NewGuid().ToString() },
+                User = new global::Alexa.NET.Request.User { AccessToken = Guid.NewGuid().ToString() },
                 Device = new Device { DeviceID = "test-device" }
             }
         };
     }
 
-    private static SessionInfo CreateSession()
+    private SessionInfo CreateSession()
     {
-        return new SessionInfo
+        return new SessionInfo(_sessionManagerMock.Object, _loggerFactory.CreateLogger<SessionInfo>())
         {
             PlayState = new PlayerStateInfo()
         };
+    }
+
+    private static AudioPlayerRequest CreateAudioPlayerRequest(string type, string? token = null, long offset = 0)
+    {
+        var request = new AudioPlayerRequest
+        {
+            Type = type,
+            Token = token ?? Guid.NewGuid().ToString(),
+            OffsetInMilliseconds = offset
+        };
+        return request;
     }
 
     [Fact]
     public void PlaybackStarted_CanHandle_ReturnsTrueForPlaybackStarted()
     {
         var handler = new PlaybackStartedEventHandler(_sessionManagerMock.Object, _config, _loggerFactory);
-        var request = new AudioPlayerRequest { AudioRequestType = AudioRequestType.PlaybackStarted };
+        var request = CreateAudioPlayerRequest("AudioPlayer.PlaybackStarted");
 
         Assert.True(handler.CanHandle(request));
     }
@@ -63,7 +75,7 @@ public class EventHandlerTests
     public void PlaybackStarted_CanHandle_ReturnsFalseForOtherTypes()
     {
         var handler = new PlaybackStartedEventHandler(_sessionManagerMock.Object, _config, _loggerFactory);
-        var request = new AudioPlayerRequest { AudioRequestType = AudioRequestType.PlaybackStopped };
+        var request = CreateAudioPlayerRequest("AudioPlayer.PlaybackStopped");
 
         Assert.False(handler.CanHandle(request));
     }
@@ -72,12 +84,7 @@ public class EventHandlerTests
     public void PlaybackStarted_Handle_ReturnsEmptyResponse()
     {
         var handler = new PlaybackStartedEventHandler(_sessionManagerMock.Object, _config, _loggerFactory);
-        var request = new AudioPlayerRequest
-        {
-            AudioRequestType = AudioRequestType.PlaybackStarted,
-            Token = Guid.NewGuid().ToString(),
-            OffsetInMilliseconds = 5000
-        };
+        var request = CreateAudioPlayerRequest("AudioPlayer.PlaybackStarted", offset: 5000);
 
         var response = handler.Handle(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession());
 
@@ -89,7 +96,7 @@ public class EventHandlerTests
     public void PlaybackFinished_CanHandle_ReturnsTrueForPlaybackFinished()
     {
         var handler = new PlaybackFinishedEventHandler(_sessionManagerMock.Object, _config, _loggerFactory);
-        var request = new AudioPlayerRequest { AudioRequestType = AudioRequestType.PlaybackFinished };
+        var request = CreateAudioPlayerRequest("AudioPlayer.PlaybackFinished");
 
         Assert.True(handler.CanHandle(request));
     }
@@ -98,12 +105,7 @@ public class EventHandlerTests
     public void PlaybackFinished_Handle_ReturnsEmptyResponse()
     {
         var handler = new PlaybackFinishedEventHandler(_sessionManagerMock.Object, _config, _loggerFactory);
-        var request = new AudioPlayerRequest
-        {
-            AudioRequestType = AudioRequestType.PlaybackFinished,
-            Token = Guid.NewGuid().ToString(),
-            OffsetInMilliseconds = 10000
-        };
+        var request = CreateAudioPlayerRequest("AudioPlayer.PlaybackFinished", offset: 10000);
 
         var response = handler.Handle(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession());
 
@@ -115,7 +117,7 @@ public class EventHandlerTests
     public void PlaybackStopped_CanHandle_ReturnsTrueForPlaybackStopped()
     {
         var handler = new PlaybackStoppedEventHandler(_sessionManagerMock.Object, _config, _loggerFactory);
-        var request = new AudioPlayerRequest { AudioRequestType = AudioRequestType.PlaybackStopped };
+        var request = CreateAudioPlayerRequest("AudioPlayer.PlaybackStopped");
 
         Assert.True(handler.CanHandle(request));
     }
@@ -124,12 +126,7 @@ public class EventHandlerTests
     public void PlaybackStopped_Handle_ReturnsEmptyResponse()
     {
         var handler = new PlaybackStoppedEventHandler(_sessionManagerMock.Object, _config, _loggerFactory);
-        var request = new AudioPlayerRequest
-        {
-            AudioRequestType = AudioRequestType.PlaybackStopped,
-            Token = Guid.NewGuid().ToString(),
-            OffsetInMilliseconds = 3000
-        };
+        var request = CreateAudioPlayerRequest("AudioPlayer.PlaybackStopped", offset: 3000);
 
         var response = handler.Handle(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession());
 
@@ -141,7 +138,7 @@ public class EventHandlerTests
     public void PlaybackFailed_CanHandle_ReturnsTrueForPlaybackFailed()
     {
         var handler = new PlaybackFailedEventHandler(_sessionManagerMock.Object, _config, _loggerFactory);
-        var request = new AudioPlayerRequest { AudioRequestType = AudioRequestType.PlaybackFailed };
+        var request = CreateAudioPlayerRequest("AudioPlayer.PlaybackFailed");
 
         Assert.True(handler.CanHandle(request));
     }
@@ -150,11 +147,7 @@ public class EventHandlerTests
     public void PlaybackFailed_Handle_ReturnsErrorMessage()
     {
         var handler = new PlaybackFailedEventHandler(_sessionManagerMock.Object, _config, _loggerFactory);
-        var request = new AudioPlayerRequest
-        {
-            AudioRequestType = AudioRequestType.PlaybackFailed,
-            Token = Guid.NewGuid().ToString()
-        };
+        var request = CreateAudioPlayerRequest("AudioPlayer.PlaybackFailed");
 
         var response = handler.Handle(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession());
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);

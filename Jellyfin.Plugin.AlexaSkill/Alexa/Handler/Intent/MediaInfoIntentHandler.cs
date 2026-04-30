@@ -72,7 +72,7 @@ public class MediaInfoIntentHandler : BaseHandler
 
     private static string BuildMediaDescription(BaseItemDto item)
     {
-        string type = item.Type ?? string.Empty;
+        string type = item.Type.ToString() ?? string.Empty;
 
         if (string.Equals(type, ItemType.Audio, StringComparison.OrdinalIgnoreCase))
         {

@@ -67,7 +67,7 @@ public class PlayPlaylistIntentHandler : BaseHandler
 
         Logger.LogDebug("Play playlist: {0}", playlistName);
 
-        Jellyfin.Data.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
 
         InternalItemsQuery query = new InternalItemsQuery()
         {

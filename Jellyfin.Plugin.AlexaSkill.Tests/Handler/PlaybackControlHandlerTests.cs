@@ -1,10 +1,11 @@
 using System;
-using Alexa.NET;
-using Alexa.NET.Request;
-using Alexa.NET.Request.Type;
-using Alexa.NET.Response;
+using global::Alexa.NET;
+using global::Alexa.NET.Request;
+using global::Alexa.NET.Request.Type;
+using global::Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
+using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -28,6 +29,11 @@ public class PlaybackControlHandlerTests
         _loggerFactory = LoggerFactory.Create(b => { });
     }
 
+    private SessionInfo CreateSession()
+    {
+        return new SessionInfo(_sessionManagerMock.Object, _loggerFactory.CreateLogger<SessionInfo>());
+    }
+
     [Theory]
     [InlineData("AMAZON.PauseIntent", true)]
     [InlineData("AMAZON.StopIntent", true)]
@@ -49,7 +55,7 @@ public class PlaybackControlHandlerTests
             new IntentRequest { Intent = new Intent { Name = "AMAZON.PauseIntent" } },
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            new SessionInfo());
+            CreateSession());
 
         Assert.NotNull(response);
         Assert.NotNull(response.Response);
@@ -73,7 +79,7 @@ public class PlaybackControlHandlerTests
             new IntentRequest { Intent = new Intent { Name = "AMAZON.FallbackIntent" } },
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            new SessionInfo());
+            CreateSession());
 
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
         Assert.Contains("could not understand", speech.Text, StringComparison.OrdinalIgnoreCase);
@@ -83,9 +89,9 @@ public class PlaybackControlHandlerTests
     {
         return new Context
         {
-            System = new Alexa.NET.Request.System
+            System = new global::Alexa.NET.Request.AlexaSystem
             {
-                User = new Alexa.NET.Request.User
+                User = new global::Alexa.NET.Request.User
                 {
                     AccessToken = Guid.NewGuid().ToString()
                 },

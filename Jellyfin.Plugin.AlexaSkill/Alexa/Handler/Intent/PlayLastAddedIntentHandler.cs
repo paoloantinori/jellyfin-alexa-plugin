@@ -65,7 +65,7 @@ public class PlayLastAddedIntentHandler : BaseHandler
             DtoOptions = new MediaBrowser.Controller.Dto.DtoOptions(true)
         };
 
-        List<BaseItem> latestItems = _libraryManager.GetItemList(query);
+        IReadOnlyList<BaseItem> latestItems = _libraryManager.GetItemList(query);
 
         if (latestItems.Count == 0)
         {

@@ -54,9 +54,9 @@ public class PlayChannelIntentHandler : BaseHandler
             return ResponseBuilder.Tell("I didn't catch the channel name. Please try again.");
         }
 
-        Jellyfin.Data.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
 
-        List<BaseItem> channels = _libraryManager.GetItemList(new InternalItemsQuery()
+        IReadOnlyList<BaseItem> channels = _libraryManager.GetItemList(new InternalItemsQuery()
         {
             User = jellyfinUser,
             Recursive = true,

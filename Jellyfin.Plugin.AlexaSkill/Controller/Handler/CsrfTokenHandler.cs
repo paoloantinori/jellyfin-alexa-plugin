@@ -15,13 +15,18 @@ public class CsrfTokenHandler
     /// </summary>
     public void RemoveExpiredCsrfTokens()
     {
-        // iter over all csrf tokens and remove the expired ones
+        List<string> expiredKeys = new List<string>();
         foreach (KeyValuePair<string, CsrfToken> csrfToken in csrfTokens)
         {
-            if (DateTime.Compare(DateTime.UtcNow, csrfToken.Value.Expiration) < 0)
+            if (DateTime.Compare(DateTime.UtcNow, csrfToken.Value.Expiration) >= 0)
             {
-                csrfTokens.Remove(csrfToken.Key);
+                expiredKeys.Add(csrfToken.Key);
             }
+        }
+
+        foreach (string key in expiredKeys)
+        {
+            csrfTokens.Remove(key);
         }
     }
 
@@ -30,8 +35,13 @@ public class CsrfTokenHandler
     /// </summary>
     /// <param name="token">The token to validate.</param>
     /// <returns>True if the token is valid, false otherwise.</returns>
-    public bool ValidateCsrfToken(string token)
+    public bool ValidateCsrfToken(string? token)
     {
+        if (string.IsNullOrEmpty(token))
+        {
+            return false;
+        }
+
         CsrfToken? csfrToken;
         if (!csrfTokens.TryGetValue(token, out csfrToken))
         {

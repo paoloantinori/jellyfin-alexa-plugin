@@ -1,6 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.EntryPoints;
+using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;

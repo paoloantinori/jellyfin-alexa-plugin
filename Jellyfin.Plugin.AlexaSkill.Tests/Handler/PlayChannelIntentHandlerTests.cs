@@ -1,13 +1,15 @@
 using System;
 using System.Collections.Generic;
-using Alexa.NET;
-using Alexa.NET.Request;
-using Alexa.NET.Request.Type;
-using Alexa.NET.Response;
-using Alexa.NET.Response.Directive;
+using global::Alexa.NET;
+using global::Alexa.NET.Request;
+using global::Alexa.NET.Request.Type;
+using global::Alexa.NET.Response;
+using global::Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
+using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
@@ -30,6 +32,7 @@ public class PlayChannelIntentHandlerTests
         _libraryManagerMock = new Mock<ILibraryManager>();
         _userManagerMock = new Mock<IUserManager>();
         _config = new PluginConfiguration();
+        TestHelpers.SetServerAddress(_config, "http://localhost:8096");
         _loggerFactory = LoggerFactory.Create(b => { });
     }
 
@@ -41,6 +44,11 @@ public class PlayChannelIntentHandlerTests
             _libraryManagerMock.Object,
             _userManagerMock.Object,
             _loggerFactory);
+    }
+
+    private SessionInfo CreateSession()
+    {
+        return new SessionInfo(_sessionManagerMock.Object, _loggerFactory.CreateLogger<SessionInfo>());
     }
 
     private static IntentRequest CreatePlayChannelRequest(string? channel = "CNN")
@@ -65,9 +73,9 @@ public class PlayChannelIntentHandlerTests
     {
         return new Context
         {
-            System = new Alexa.NET.Request.System
+            System = new global::Alexa.NET.Request.AlexaSystem
             {
-                User = new Alexa.NET.Request.User
+                User = new global::Alexa.NET.Request.User
                 {
                     AccessToken = Guid.NewGuid().ToString()
                 },
@@ -76,12 +84,9 @@ public class PlayChannelIntentHandlerTests
         };
     }
 
-    private static Mock<BaseItem> CreateMockChannel(string name, Guid? id = null)
+    private static BaseItem CreateTestChannel(string name, Guid? id = null)
     {
-        var item = new Mock<BaseItem>();
-        item.Setup(i => i.Name).Returns(name);
-        item.Setup(i => i.Id).Returns(id ?? Guid.NewGuid());
-        return item;
+        return new Movie { Name = name, Id = id ?? Guid.NewGuid() };
     }
 
     [Theory]
@@ -116,7 +121,7 @@ public class PlayChannelIntentHandlerTests
             }
         };
 
-        var response = handler.Handle(request, CreateContext(), TestHelpers.CreateTestUser(), new SessionInfo());
+        var response = handler.Handle(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession());
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
 
         Assert.Contains("didn't catch", speech.Text);
@@ -130,7 +135,7 @@ public class PlayChannelIntentHandlerTests
             CreatePlayChannelRequest(null),
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            new SessionInfo());
+            CreateSession());
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
 
         Assert.Contains("didn't catch", speech.Text);
@@ -146,7 +151,7 @@ public class PlayChannelIntentHandlerTests
             CreatePlayChannelRequest(channel),
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            new SessionInfo());
+            CreateSession());
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
 
         Assert.Contains("didn't catch", speech.Text);
@@ -164,7 +169,7 @@ public class PlayChannelIntentHandlerTests
             CreatePlayChannelRequest("Unknown Channel"),
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            new SessionInfo());
+            CreateSession());
 
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
         Assert.Contains("couldn't find", speech.Text);
@@ -174,18 +179,18 @@ public class PlayChannelIntentHandlerTests
     public void Handle_FoundChannel_ReturnsAudioPlayerDirective()
     {
         var channelId = Guid.NewGuid();
-        var channel = CreateMockChannel("CNN", channelId);
+        var channel = CreateTestChannel("CNN", channelId);
 
         _libraryManagerMock
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns(new List<BaseItem> { channel.Object });
+            .Returns(new List<BaseItem> { channel });
 
         var handler = CreateHandler();
         var response = handler.Handle(
             CreatePlayChannelRequest("CNN"),
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            new SessionInfo());
+            CreateSession());
 
         Assert.Null(response.Response.OutputSpeech);
         Assert.NotNull(response.Response.Directives);
@@ -200,12 +205,12 @@ public class PlayChannelIntentHandlerTests
     public void Handle_FoundChannel_SetsSessionQueue()
     {
         var channelId = Guid.NewGuid();
-        var channel = CreateMockChannel("CNN", channelId);
-        var session = new SessionInfo();
+        var channel = CreateTestChannel("CNN", channelId);
+        var session = CreateSession();
 
         _libraryManagerMock
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns(new List<BaseItem> { channel.Object });
+            .Returns(new List<BaseItem> { channel });
 
         var handler = CreateHandler();
         handler.Handle(CreatePlayChannelRequest("CNN"), CreateContext(), TestHelpers.CreateTestUser(), session);
@@ -218,19 +223,19 @@ public class PlayChannelIntentHandlerTests
     [Fact]
     public void Handle_FoundMultipleChannels_ReturnsFirstMatch()
     {
-        var ch1 = CreateMockChannel("CNN");
-        var ch2 = CreateMockChannel("CNN International");
+        var ch1 = CreateTestChannel("CNN");
+        var ch2 = CreateTestChannel("CNN International");
 
         _libraryManagerMock
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns(new List<BaseItem> { ch1.Object, ch2.Object });
+            .Returns(new List<BaseItem> { ch1, ch2 });
 
         var handler = CreateHandler();
         var response = handler.Handle(
             CreatePlayChannelRequest("CNN"),
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            new SessionInfo());
+            CreateSession());
 
         Assert.NotNull(response.Response.Directives);
         Assert.Single(response.Response.Directives);

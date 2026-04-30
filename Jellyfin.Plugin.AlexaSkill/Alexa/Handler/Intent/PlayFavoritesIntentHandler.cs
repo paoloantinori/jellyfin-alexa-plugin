@@ -64,7 +64,7 @@ public class PlayFavoritesIntentHandler : BaseHandler
             DtoOptions = new MediaBrowser.Controller.Dto.DtoOptions(true)
         };
 
-        List<BaseItem> favoriteItems = _libraryManager.GetItemList(query);
+        IReadOnlyList<BaseItem> favoriteItems = _libraryManager.GetItemList(query);
 
         if (favoriteItems.Count == 0)
         {

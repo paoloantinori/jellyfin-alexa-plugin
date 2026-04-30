@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;

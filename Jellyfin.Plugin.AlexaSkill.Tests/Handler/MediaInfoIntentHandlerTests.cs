@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
-using Alexa.NET;
-using Alexa.NET.Request;
-using Alexa.NET.Request.Type;
-using Alexa.NET.Response;
+using global::Alexa.NET;
+using global::Alexa.NET.Request;
+using global::Alexa.NET.Request.Type;
+using global::Alexa.NET.Response;
+using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
+using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Session;
@@ -26,6 +28,11 @@ public class MediaInfoIntentHandlerTests
         _sessionManagerMock = new Mock<ISessionManager>();
         _config = new PluginConfiguration();
         _loggerFactory = LoggerFactory.Create(b => { });
+    }
+
+    private SessionInfo CreateSession()
+    {
+        return new SessionInfo(_sessionManagerMock.Object, _loggerFactory.CreateLogger<SessionInfo>());
     }
 
     private MediaInfoIntentHandler CreateHandler()
@@ -52,9 +59,9 @@ public class MediaInfoIntentHandlerTests
     {
         return new Context
         {
-            System = new Alexa.NET.Request.System
+            System = new global::Alexa.NET.Request.AlexaSystem
             {
-                User = new Alexa.NET.Request.User
+                User = new global::Alexa.NET.Request.User
                 {
                     AccessToken = Guid.NewGuid().ToString()
                 },
@@ -84,7 +91,8 @@ public class MediaInfoIntentHandlerTests
     public void Handle_NoMediaPlaying_ReturnsNothingPlaying()
     {
         var handler = CreateHandler();
-        var session = new SessionInfo { NowPlayingItem = null };
+        var session = CreateSession();
+        session.NowPlayingItem = null;
 
         var response = handler.Handle(
             CreateMediaInfoRequest(), CreateContext(),
@@ -97,15 +105,13 @@ public class MediaInfoIntentHandlerTests
     public void Handle_AudioItem_ReportsTrackArtistAndAlbum()
     {
         var handler = CreateHandler();
-        var session = new SessionInfo
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
         {
-            NowPlayingItem = new BaseItemDto
-            {
-                Name = "Bohemian Rhapsody",
-                Type = "Audio",
-                AlbumArtist = "Queen",
-                Album = "A Night at the Opera"
-            }
+            Name = "Bohemian Rhapsody",
+            Type = BaseItemKind.Audio,
+            AlbumArtist = "Queen",
+            Album = "A Night at the Opera"
         };
 
         var text = GetSpeechText(handler.Handle(
@@ -121,14 +127,12 @@ public class MediaInfoIntentHandlerTests
     public void Handle_AudioItem_NoAlbum_ReportsTrackAndArtist()
     {
         var handler = CreateHandler();
-        var session = new SessionInfo
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
         {
-            NowPlayingItem = new BaseItemDto
-            {
-                Name = "Yesterday",
-                Type = "Audio",
-                AlbumArtist = "The Beatles"
-            }
+            Name = "Yesterday",
+            Type = BaseItemKind.Audio,
+            AlbumArtist = "The Beatles"
         };
 
         var text = GetSpeechText(handler.Handle(
@@ -143,13 +147,11 @@ public class MediaInfoIntentHandlerTests
     public void Handle_AudioItem_NoArtistOrAlbum_ReportsTrackOnly()
     {
         var handler = CreateHandler();
-        var session = new SessionInfo
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
         {
-            NowPlayingItem = new BaseItemDto
-            {
-                Name = "Mystery Track",
-                Type = "Audio"
-            }
+            Name = "Mystery Track",
+            Type = BaseItemKind.Audio
         };
 
         var text = GetSpeechText(handler.Handle(
@@ -163,16 +165,14 @@ public class MediaInfoIntentHandlerTests
     public void Handle_EpisodeItem_ReportsSeriesSeasonEpisode()
     {
         var handler = CreateHandler();
-        var session = new SessionInfo
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
         {
-            NowPlayingItem = new BaseItemDto
-            {
-                Name = "Pilot",
-                Type = "Episode",
-                SeriesName = "Breaking Bad",
-                ParentIndexNumber = 1,
-                IndexNumber = 1
-            }
+            Name = "Pilot",
+            Type = BaseItemKind.Episode,
+            SeriesName = "Breaking Bad",
+            ParentIndexNumber = 1,
+            IndexNumber = 1
         };
 
         var text = GetSpeechText(handler.Handle(
@@ -189,13 +189,11 @@ public class MediaInfoIntentHandlerTests
     public void Handle_EpisodeItem_NoSeriesName_ReportsEpisodeOnly()
     {
         var handler = CreateHandler();
-        var session = new SessionInfo
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
         {
-            NowPlayingItem = new BaseItemDto
-            {
-                Name = "Unknown Episode",
-                Type = "Episode"
-            }
+            Name = "Unknown Episode",
+            Type = BaseItemKind.Episode
         };
 
         var text = GetSpeechText(handler.Handle(
@@ -209,14 +207,12 @@ public class MediaInfoIntentHandlerTests
     public void Handle_MovieItem_ReportsTitleAndYear()
     {
         var handler = CreateHandler();
-        var session = new SessionInfo
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
         {
-            NowPlayingItem = new BaseItemDto
-            {
-                Name = "The Matrix",
-                Type = "Movie",
-                ProductionYear = 1999
-            }
+            Name = "The Matrix",
+            Type = BaseItemKind.Movie,
+            ProductionYear = 1999
         };
 
         var text = GetSpeechText(handler.Handle(
@@ -231,13 +227,11 @@ public class MediaInfoIntentHandlerTests
     public void Handle_MovieItem_NoYear_ReportsTitleOnly()
     {
         var handler = CreateHandler();
-        var session = new SessionInfo
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
         {
-            NowPlayingItem = new BaseItemDto
-            {
-                Name = "Old Movie",
-                Type = "Movie"
-            }
+            Name = "Old Movie",
+            Type = BaseItemKind.Movie
         };
 
         var text = GetSpeechText(handler.Handle(
@@ -252,13 +246,11 @@ public class MediaInfoIntentHandlerTests
     public void Handle_UnknownType_ReportsName()
     {
         var handler = CreateHandler();
-        var session = new SessionInfo
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
         {
-            NowPlayingItem = new BaseItemDto
-            {
-                Name = "Some Media",
-                Type = "Photo"
-            }
+            Name = "Some Media",
+            Type = BaseItemKind.Photo
         };
 
         var text = GetSpeechText(handler.Handle(
@@ -272,18 +264,16 @@ public class MediaInfoIntentHandlerTests
     public void Handle_WithPositionAndRuntime_ReportsPosition()
     {
         var handler = CreateHandler();
-        var session = new SessionInfo
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
         {
-            NowPlayingItem = new BaseItemDto
-            {
-                Name = "Test Song",
-                Type = "Audio",
-                RunTimeTicks = TimeSpan.FromMinutes(4).Ticks
-            },
-            PlayState = new PlayerStateInfo
-            {
-                PositionTicks = TimeSpan.FromMinutes(2).Ticks
-            }
+            Name = "Test Song",
+            Type = BaseItemKind.Audio,
+            RunTimeTicks = TimeSpan.FromMinutes(4).Ticks
+        };
+        session.PlayState = new PlayerStateInfo
+        {
+            PositionTicks = TimeSpan.FromMinutes(2).Ticks
         };
 
         var text = GetSpeechText(handler.Handle(
@@ -298,17 +288,15 @@ public class MediaInfoIntentHandlerTests
     public void Handle_WithPositionNoRuntime_ReportsPositionOnly()
     {
         var handler = CreateHandler();
-        var session = new SessionInfo
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
         {
-            NowPlayingItem = new BaseItemDto
-            {
-                Name = "Test Song",
-                Type = "Audio"
-            },
-            PlayState = new PlayerStateInfo
-            {
-                PositionTicks = TimeSpan.FromMinutes(1).Ticks
-            }
+            Name = "Test Song",
+            Type = BaseItemKind.Audio
+        };
+        session.PlayState = new PlayerStateInfo
+        {
+            PositionTicks = TimeSpan.FromMinutes(1).Ticks
         };
 
         var text = GetSpeechText(handler.Handle(
@@ -323,16 +311,14 @@ public class MediaInfoIntentHandlerTests
     public void Handle_NullPlayState_NoPositionReported()
     {
         var handler = CreateHandler();
-        var session = new SessionInfo
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
         {
-            NowPlayingItem = new BaseItemDto
-            {
-                Name = "Test Song",
-                Type = "Audio",
-                AlbumArtist = "Artist"
-            },
-            PlayState = null
+            Name = "Test Song",
+            Type = BaseItemKind.Audio,
+            AlbumArtist = "Artist"
         };
+        session.PlayState = null;
 
         var text = GetSpeechText(handler.Handle(
             CreateMediaInfoRequest(), CreateContext(),
