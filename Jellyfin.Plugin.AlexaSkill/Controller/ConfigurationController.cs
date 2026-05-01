@@ -58,9 +58,9 @@ public class ConfigurationController : ControllerBase
     [Authorize(Policy = "RequiresElevation")]
     public ActionResult UpdateUserSkill([FromRoute] string userId, [FromBody] dynamic json)
     {
-        if (!Guid.TryParse(userId, out Guid userIdGuid))
+        if (!TryResolvePluginUser(userId, out var pluginUser, out var error))
         {
-            return new JsonResult(new { error = "Invalid user id format" }) { StatusCode = 400 };
+            return error;
         }
 
         Dictionary<string, string> req = JsonConvert.DeserializeObject<Dictionary<string, string>>(json.ToString());
@@ -68,12 +68,6 @@ public class ConfigurationController : ControllerBase
             && invocationName.Length > 0
             && invocationName.Split(" ").Length >= 2)
         {
-            Jellyfin.Plugin.AlexaSkill.Entities.User? pluginUser = Plugin.Instance!.Configuration.GetUserById(userIdGuid);
-            if (pluginUser == null)
-            {
-                return new JsonResult(new { error = "Could not find user" }, StatusCode(404));
-            }
-
             if (pluginUser.UserSkill == null)
             {
                 return new JsonResult(new { error = "User has no skill" }, StatusCode(404));
@@ -158,15 +152,9 @@ public class ConfigurationController : ControllerBase
     [Authorize(Policy = "RequiresElevation")]
     public ActionResult DeleteUserSkill([FromRoute] string userId)
     {
-        if (!Guid.TryParse(userId, out Guid userIdGuid))
+        if (!TryResolvePluginUser(userId, out var pluginUser, out var error))
         {
-            return new JsonResult(new { error = "Invalid user id format" }) { StatusCode = 400 };
-        }
-
-        Jellyfin.Plugin.AlexaSkill.Entities.User? pluginUser = Plugin.Instance!.Configuration.GetUserById(userIdGuid);
-        if (pluginUser == null)
-        {
-            return new JsonResult(new { error = "Could not find user" }, StatusCode(404));
+            return error;
         }
 
         string? skillId = pluginUser.UserSkill?.SkillId;
@@ -216,16 +204,12 @@ public class ConfigurationController : ControllerBase
     [Authorize(Policy = "RequiresElevation")]
     public ActionResult GetUserSkillAuthorisation([FromRoute] string userId)
     {
-        if (!Guid.TryParse(userId, out Guid userIdGuid))
+        if (!TryResolvePluginUser(userId, out var pluginUser, out var error))
         {
-            return new JsonResult(new { error = "Invalid user id format" }) { StatusCode = 400 };
+            return error;
         }
-        Jellyfin.Plugin.AlexaSkill.Entities.User? pluginUser = Plugin.Instance!.Configuration.GetUserById(userIdGuid);
-        if (pluginUser == null)
-        {
-            return new JsonResult(new { error = "Could not find user" }) { StatusCode = 404 };
-        }
-        else if (pluginUser.UserSkill == null)
+
+        if (pluginUser.UserSkill == null)
         {
             return new JsonResult(new { error = "User has no skill" }) { StatusCode = 404 };
         }
@@ -235,10 +219,31 @@ public class ConfigurationController : ControllerBase
             {
                 verificationUrl = LWAController.ApiBaseUri
                     + "?token="
-                    + HttpUtility.UrlEncode(lwaAuthorizationRequestHandler.GetNewLwaAuthorizationRequest(userIdGuid))
+                    + HttpUtility.UrlEncode(lwaAuthorizationRequestHandler.GetNewLwaAuthorizationRequest(pluginUser.Id))
             })
         {
             StatusCode = 200
         };
+    }
+
+    private bool TryResolvePluginUser(string userId, out Jellyfin.Plugin.AlexaSkill.Entities.User? pluginUser, out ActionResult? error)
+    {
+        pluginUser = null;
+        error = null;
+
+        if (!Guid.TryParse(userId, out Guid userIdGuid))
+        {
+            error = new JsonResult(new { error = "Invalid user id format" }) { StatusCode = 400 };
+            return false;
+        }
+
+        pluginUser = Plugin.Instance!.Configuration.GetUserById(userIdGuid);
+        if (pluginUser == null)
+        {
+            error = new JsonResult(new { error = "Could not find user" }) { StatusCode = 404 };
+            return false;
+        }
+
+        return true;
     }
 }

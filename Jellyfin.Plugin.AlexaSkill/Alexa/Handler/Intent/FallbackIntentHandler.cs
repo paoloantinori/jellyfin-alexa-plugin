@@ -28,7 +28,7 @@ public class FallbackIntentHandler : BaseHandler
     public override bool CanHandle(Request request)
     {
         IntentRequest? intentRequest = request as IntentRequest;
-        return intentRequest != null && string.Equals(intentRequest.Intent.Name, "AMAZON.FallbackIntent", System.StringComparison.Ordinal);
+        return intentRequest != null && string.Equals(intentRequest.Intent.Name, IntentNames.AmazonFallback, System.StringComparison.Ordinal);
     }
 
     /// <summary>

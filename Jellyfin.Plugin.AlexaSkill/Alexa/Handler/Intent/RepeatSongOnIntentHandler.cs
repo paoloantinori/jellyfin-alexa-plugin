@@ -25,7 +25,7 @@ public class LoopSongOnIntentHandler : BaseHandler
     public override bool CanHandle(Request request)
     {
         IntentRequest? intentRequest = request as IntentRequest;
-        return intentRequest != null && string.Equals(intentRequest.Intent.Name, "LoopSongOnIntent");
+        return intentRequest != null && string.Equals(intentRequest.Intent.Name, IntentNames.LoopSongOn);
     }
 
     /// <summary>

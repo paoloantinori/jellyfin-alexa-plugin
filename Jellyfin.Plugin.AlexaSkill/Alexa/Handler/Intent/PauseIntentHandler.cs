@@ -28,9 +28,9 @@ public class PauseIntentHandler : BaseHandler
     {
         IntentRequest? intentRequest = request as IntentRequest;
         PlaybackControllerRequest? playbackControllerRequest = request as PlaybackControllerRequest;
-        return (intentRequest != null && ((string.Equals(intentRequest.Intent.Name, "AMAZON.PauseIntent", System.StringComparison.Ordinal) ||
-            string.Equals(intentRequest.Intent.Name, "AMAZON.StopIntent", System.StringComparison.Ordinal)) ||
-            string.Equals(intentRequest.Intent.Name, "AMAZON.CancelIntent", System.StringComparison.Ordinal))) ||
+        return (intentRequest != null && ((string.Equals(intentRequest.Intent.Name, IntentNames.AmazonPause, System.StringComparison.Ordinal) ||
+            string.Equals(intentRequest.Intent.Name, IntentNames.AmazonStop, System.StringComparison.Ordinal)) ||
+            string.Equals(intentRequest.Intent.Name, IntentNames.AmazonCancel, System.StringComparison.Ordinal))) ||
             (playbackControllerRequest != null && playbackControllerRequest.PlaybackRequestType is PlaybackControllerRequestType.Pause);
     }
 

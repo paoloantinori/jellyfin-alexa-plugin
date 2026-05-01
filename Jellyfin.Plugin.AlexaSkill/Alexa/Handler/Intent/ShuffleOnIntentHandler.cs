@@ -25,7 +25,7 @@ public class ShuffleOnIntentHandler : BaseHandler
     public override bool CanHandle(Request request)
     {
         IntentRequest? intentRequest = request as IntentRequest;
-        return intentRequest != null && string.Equals(intentRequest.Intent.Name, "AMAZON.ShuffleOnIntent");
+        return intentRequest != null && string.Equals(intentRequest.Intent.Name, IntentNames.AmazonShuffleOn);
     }
 
     /// <summary>

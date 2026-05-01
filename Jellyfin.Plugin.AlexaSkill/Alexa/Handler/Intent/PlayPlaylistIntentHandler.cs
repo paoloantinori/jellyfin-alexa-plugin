@@ -49,7 +49,7 @@ public class PlayPlaylistIntentHandler : BaseHandler
     public override bool CanHandle(Request request)
     {
         IntentRequest? intentRequest = request as IntentRequest;
-        return intentRequest != null && string.Equals(intentRequest.Intent.Name, "PlayPlaylistIntent", System.StringComparison.Ordinal);
+        return intentRequest != null && string.Equals(intentRequest.Intent.Name, IntentNames.PlayPlaylist, System.StringComparison.Ordinal);
     }
 
     /// <summary>

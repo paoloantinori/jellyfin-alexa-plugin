@@ -25,7 +25,7 @@ public class LoopOnIntentHandler : BaseHandler
     public override bool CanHandle(Request request)
     {
         IntentRequest? intentRequest = request as IntentRequest;
-        return intentRequest != null && string.Equals(intentRequest.Intent.Name, "AMAZON.LoopOnIntent");
+        return intentRequest != null && string.Equals(intentRequest.Intent.Name, IntentNames.AmazonLoopOn);
     }
 
     /// <summary>

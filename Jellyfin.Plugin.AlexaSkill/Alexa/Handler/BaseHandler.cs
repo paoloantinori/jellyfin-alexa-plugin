@@ -48,7 +48,10 @@ public abstract class BaseHandler
     /// <returns>The skill response to the request.</returns>
     public SkillResponse HandleRequest(Request request, Context context)
     {
-        Guid userId = new Guid(context.System.User.AccessToken);
+        if (!Guid.TryParse(context.System.User.AccessToken, out Guid userId))
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("UserNotFound", GetLocale(request)));
+        }
 
         Entities.User? user = _config.GetUserById(userId);
         if (user == null)

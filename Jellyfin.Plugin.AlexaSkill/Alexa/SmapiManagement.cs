@@ -17,7 +17,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa;
 /// </summary>
 public class SmapiManagement : ManagementApi
 {
-    private readonly DeviceToken _deviceToken;
+    private const int MaxPollRetries = 60;
     private readonly ILogger _logger;
 
     /// <summary>
@@ -27,7 +27,6 @@ public class SmapiManagement : ManagementApi
     /// <param name="loggerFactory">The logger factory.</param>
     public SmapiManagement(DeviceToken smapiDeviceToken, ILoggerFactory loggerFactory) : base(smapiDeviceToken.AccessToken)
     {
-        _deviceToken = smapiDeviceToken;
         _logger = loggerFactory.CreateLogger<SmapiManagement>();
     }
 
@@ -49,11 +48,7 @@ public class SmapiManagement : ManagementApi
         SkillId skillId = this.Skills.Create(vendorId, manifestSkill).Result;
         _logger.LogInformation("Skill creation initiated: {SkillId}", skillId.Id);
 
-        // wait until the skill is created
-        while (this.GetSkillStatus(skillId.Id).Manifest.LastModified.Status == SkillStatusState.IN_PROGRESS)
-        {
-            Thread.Sleep(1000);
-        }
+        WaitForSkillStatus(skillId.Id);
 
         _logger.LogInformation("Skill manifest processed, updating account linking and interaction models");
 
@@ -80,11 +75,7 @@ public class SmapiManagement : ManagementApi
 
         _ = this.Skills.Update(skillId, SkillStage.Development, manifestSkill);
 
-        // wait until the skill update is processed
-        while (this.GetSkillStatus(skillId).Manifest.LastModified.Status == SkillStatusState.IN_PROGRESS)
-        {
-            Thread.Sleep(1000);
-        }
+        WaitForSkillStatus(skillId);
 
         foreach (var interactionModel in interactionModels)
         {
@@ -171,6 +162,24 @@ public class SmapiManagement : ManagementApi
             ClientId = clientId,
         };
         this.AccountLinking.Update(skillId, accountLinkData);
+    }
+
+    /// <summary>
+    /// Polls skill status until it transitions out of IN_PROGRESS.
+    /// </summary>
+    private void WaitForSkillStatus(string skillId)
+    {
+        for (int i = 0; i < MaxPollRetries; i++)
+        {
+            if (this.GetSkillStatus(skillId).Manifest.LastModified.Status != SkillStatusState.IN_PROGRESS)
+            {
+                return;
+            }
+
+            Thread.Sleep(1000);
+        }
+
+        throw new TimeoutException($"Skill {skillId} did not transition from IN_PROGRESS within {MaxPollRetries} seconds");
     }
 
     /// <summary>

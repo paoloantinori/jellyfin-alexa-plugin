@@ -5,6 +5,21 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Alexa.Locale;
 
 public class ResponseStringsTests
 {
+    private static readonly string[] AllExpectedKeys = new[]
+    {
+        "UserNotFound", "MediaNotFound", "AddedToFavorites", "RemovedFromFavorites",
+        "NoMediaPlaying", "PlaybackFailed", "SomethingWrong", "CouldNotUnderstand",
+        "DidNotCatchVideoTitle", "DidNotCatchChannelName", "NotFoundVideo", "NotFoundChannel",
+        "NotFoundSongByArtist", "NotFoundSongByNameAndArtist", "NotFoundSongByName",
+        "NotFoundAlbumByArtist", "NotFoundAlbumByNameAndArtist", "NotFoundAlbumByName",
+        "NoSongsInAlbum", "NotFoundPlaylist", "PlaylistEmpty", "NoFavoriteItems",
+        "NoNewlyAddedItems", "NotFoundArtist", "NoSongsForArtist", "Welcome",
+        "WelcomeReprompt", "NowPlaying", "NowPlayingWithPosition", "UnknownMedia",
+        "HoursAndMinutes", "MinutesAndSeconds", "SecondsOnly", "PositionOfTotal",
+        "TrackByArtist", "TrackByArtistFromAlbum", "SeasonEpisode", "SeriesTitle",
+        "TitleWithYear"
+    };
+
     [Fact]
     public void Get_EnUs_ReturnsEnglishString()
     {
@@ -61,54 +76,15 @@ public class ResponseStringsTests
         Assert.Equal("Sorry, I couldn't find any songs with the name Yesterday by The Beatles.", result);
     }
 
-    [Fact]
-    public void Get_AllKeysPresentInEnUs()
+    [Theory]
+    [InlineData("en-US")]
+    [InlineData("it-IT")]
+    public void Get_AllKeysPresent(string locale)
     {
-        string[] expectedKeys = new[]
+        foreach (string key in AllExpectedKeys)
         {
-            "UserNotFound", "MediaNotFound", "AddedToFavorites", "RemovedFromFavorites",
-            "NoMediaPlaying", "PlaybackFailed", "SomethingWrong", "CouldNotUnderstand",
-            "DidNotCatchVideoTitle", "DidNotCatchChannelName", "NotFoundVideo", "NotFoundChannel",
-            "NotFoundSongByArtist", "NotFoundSongByNameAndArtist", "NotFoundSongByName",
-            "NotFoundAlbumByArtist", "NotFoundAlbumByNameAndArtist", "NotFoundAlbumByName",
-            "NoSongsInAlbum", "NotFoundPlaylist", "PlaylistEmpty", "NoFavoriteItems",
-            "NoNewlyAddedItems", "NotFoundArtist", "NoSongsForArtist", "Welcome",
-            "WelcomeReprompt", "NowPlaying", "NowPlayingWithPosition", "UnknownMedia",
-            "HoursAndMinutes", "MinutesAndSeconds", "SecondsOnly", "PositionOfTotal",
-            "TrackByArtist", "TrackByArtistFromAlbum", "SeasonEpisode", "SeriesTitle",
-            "TitleWithYear"
-        };
-
-        foreach (string key in expectedKeys)
-        {
-            string value = ResponseStrings.Get(key, "en-US");
-            Assert.NotEqual(key, value); // Should not fall back to key name
-            Assert.NotEmpty(value);
-        }
-    }
-
-    [Fact]
-    public void Get_AllKeysPresentInItIt()
-    {
-        string[] expectedKeys = new[]
-        {
-            "UserNotFound", "MediaNotFound", "AddedToFavorites", "RemovedFromFavorites",
-            "NoMediaPlaying", "PlaybackFailed", "SomethingWrong", "CouldNotUnderstand",
-            "DidNotCatchVideoTitle", "DidNotCatchChannelName", "NotFoundVideo", "NotFoundChannel",
-            "NotFoundSongByArtist", "NotFoundSongByNameAndArtist", "NotFoundSongByName",
-            "NotFoundAlbumByArtist", "NotFoundAlbumByNameAndArtist", "NotFoundAlbumByName",
-            "NoSongsInAlbum", "NotFoundPlaylist", "PlaylistEmpty", "NoFavoriteItems",
-            "NoNewlyAddedItems", "NotFoundArtist", "NoSongsForArtist", "Welcome",
-            "WelcomeReprompt", "NowPlaying", "NowPlayingWithPosition", "UnknownMedia",
-            "HoursAndMinutes", "MinutesAndSeconds", "SecondsOnly", "PositionOfTotal",
-            "TrackByArtist", "TrackByArtistFromAlbum", "SeasonEpisode", "SeriesTitle",
-            "TitleWithYear"
-        };
-
-        foreach (string key in expectedKeys)
-        {
-            string value = ResponseStrings.Get(key, "it-IT");
-            Assert.NotEqual(key, value); // Should not fall back to key name
+            string value = ResponseStrings.Get(key, locale);
+            Assert.NotEqual(key, value);
             Assert.NotEmpty(value);
         }
     }

@@ -41,7 +41,7 @@ public class PlayVideoIntentHandler : BaseHandler
     public override bool CanHandle(Request request)
     {
         IntentRequest? intentRequest = request as IntentRequest;
-        return intentRequest != null && string.Equals(intentRequest.Intent.Name, "PlayVideoIntent", StringComparison.Ordinal);
+        return intentRequest != null && string.Equals(intentRequest.Intent.Name, IntentNames.PlayVideo, StringComparison.Ordinal);
     }
 
     /// <inheritdoc/>

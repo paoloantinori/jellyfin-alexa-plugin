@@ -46,10 +46,7 @@ public class PlayChannelIntentHandlerTests
             _loggerFactory);
     }
 
-    private SessionInfo CreateSession()
-    {
-        return new SessionInfo(_sessionManagerMock.Object, _loggerFactory.CreateLogger<SessionInfo>());
-    }
+    private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
 
     private static IntentRequest CreatePlayChannelRequest(string? channel = "CNN")
     {
@@ -69,20 +66,7 @@ public class PlayChannelIntentHandlerTests
         };
     }
 
-    private static Context CreateContext()
-    {
-        return new Context
-        {
-            System = new global::Alexa.NET.Request.AlexaSystem
-            {
-                User = new global::Alexa.NET.Request.User
-                {
-                    AccessToken = Guid.NewGuid().ToString()
-                },
-                Device = new Device { DeviceID = "test-device" }
-            }
-        };
-    }
+    private static Context CreateContext() => TestHelpers.CreateTestContext();
 
     private static BaseItem CreateTestChannel(string name, Guid? id = null)
     {

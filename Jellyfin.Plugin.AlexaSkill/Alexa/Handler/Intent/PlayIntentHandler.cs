@@ -29,7 +29,7 @@ public class PlayIntentHandler : BaseHandler
     {
         IntentRequest? intentRequest = request as IntentRequest;
         PlaybackControllerRequest? playbackControllerRequest = request as PlaybackControllerRequest;
-        return (intentRequest != null && string.Equals(intentRequest.Intent.Name, "PlayIntent", System.StringComparison.Ordinal)) ||
+        return (intentRequest != null && string.Equals(intentRequest.Intent.Name, IntentNames.Play, System.StringComparison.Ordinal)) ||
             (playbackControllerRequest != null && playbackControllerRequest.PlaybackRequestType is PlaybackControllerRequestType.Play);
     }
 

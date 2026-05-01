@@ -46,7 +46,7 @@ public class PlayLastAddedIntentHandler : BaseHandler
     public override bool CanHandle(Request request)
     {
         IntentRequest? intentRequest = request as IntentRequest;
-        return intentRequest != null && string.Equals(intentRequest.Intent.Name, "PlayLastAddedIntent", System.StringComparison.Ordinal);
+        return intentRequest != null && string.Equals(intentRequest.Intent.Name, IntentNames.PlayLastAdded, System.StringComparison.Ordinal);
     }
 
     /// <summary>
