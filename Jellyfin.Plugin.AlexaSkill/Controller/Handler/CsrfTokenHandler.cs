@@ -67,22 +67,15 @@ public class CsrfTokenHandler
     /// <returns>The new CSRF token.</returns>
     public CsrfToken GetNewCsrfToken()
     {
-        CsrfToken csfrToken;
+        RemoveExpiredCsrfTokens();
 
-        while (true)
+        CsrfToken token;
+        do
         {
-            try
-            {
-                csfrToken = new CsrfToken();
-                csrfTokens.Add(csfrToken.Token, csfrToken);
-                break;
-            }
-            catch (System.ArgumentException)
-            {
-                continue;
-            }
+            token = new CsrfToken();
         }
+        while (!csrfTokens.TryAdd(token.Token, token));
 
-        return csfrToken;
+        return token;
     }
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
@@ -37,14 +38,12 @@ public static class ResponseStrings
             return value;
         }
 
-        // Fallback to default locale
         if (!string.Equals(locale, DefaultLocale, StringComparison.OrdinalIgnoreCase)
             && TryGetValue(key, DefaultLocale, out value))
         {
             return value;
         }
 
-        // Return the key itself as last resort
         return key;
     }
 
@@ -61,7 +60,7 @@ public static class ResponseStrings
         return string.Format(CultureInfo.InvariantCulture, template, args);
     }
 
-    private static bool TryGetValue(string key, string locale, out string? value)
+    private static bool TryGetValue(string key, string locale, [NotNullWhen(true)] out string? value)
     {
         value = null;
         if (_locales.TryGetValue(locale, out var dict))

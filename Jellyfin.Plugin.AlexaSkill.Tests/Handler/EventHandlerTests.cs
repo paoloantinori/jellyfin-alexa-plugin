@@ -31,24 +31,13 @@ public class EventHandlerTests
         _loggerFactory = LoggerFactory.Create(b => { });
     }
 
-    private static Context CreateContext()
-    {
-        return new Context
-        {
-            System = new global::Alexa.NET.Request.AlexaSystem
-            {
-                User = new global::Alexa.NET.Request.User { AccessToken = Guid.NewGuid().ToString() },
-                Device = new Device { DeviceID = "test-device" }
-            }
-        };
-    }
+    private static Context CreateContext() => TestHelpers.CreateTestContext();
 
     private SessionInfo CreateSession()
     {
-        return new SessionInfo(_sessionManagerMock.Object, _loggerFactory.CreateLogger<SessionInfo>())
-        {
-            PlayState = new PlayerStateInfo()
-        };
+        var session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+        session.PlayState = new PlayerStateInfo();
+        return session;
     }
 
     private static AudioPlayerRequest CreateAudioPlayerRequest(string type, string? token = null, long offset = 0)

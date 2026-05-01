@@ -39,7 +39,7 @@ public class PreviousIntentHandler : BaseHandler
     {
         IntentRequest? intentRequest = request as IntentRequest;
         PlaybackControllerRequest? playbackControllerRequest = request as PlaybackControllerRequest;
-        return (intentRequest != null && string.Equals(intentRequest.Intent.Name, "AMAZON.PreviousIntent", System.StringComparison.Ordinal)) ||
+        return (intentRequest != null && string.Equals(intentRequest.Intent.Name, IntentNames.AmazonPrevious, System.StringComparison.Ordinal)) ||
             (playbackControllerRequest != null && playbackControllerRequest.PlaybackRequestType is PlaybackControllerRequestType.Previous);
     }
 

@@ -41,7 +41,7 @@ public class PlayChannelIntentHandler : BaseHandler
     public override bool CanHandle(Request request)
     {
         IntentRequest? intentRequest = request as IntentRequest;
-        return intentRequest != null && string.Equals(intentRequest.Intent.Name, "PlayChannelIntent", StringComparison.Ordinal);
+        return intentRequest != null && string.Equals(intentRequest.Intent.Name, IntentNames.PlayChannel, StringComparison.Ordinal);
     }
 
     /// <inheritdoc/>

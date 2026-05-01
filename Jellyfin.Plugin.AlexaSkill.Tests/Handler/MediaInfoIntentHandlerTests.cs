@@ -30,10 +30,7 @@ public class MediaInfoIntentHandlerTests
         _loggerFactory = LoggerFactory.Create(b => { });
     }
 
-    private SessionInfo CreateSession()
-    {
-        return new SessionInfo(_sessionManagerMock.Object, _loggerFactory.CreateLogger<SessionInfo>());
-    }
+    private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
 
     private MediaInfoIntentHandler CreateHandler()
     {
@@ -55,20 +52,7 @@ public class MediaInfoIntentHandlerTests
         };
     }
 
-    private static Context CreateContext()
-    {
-        return new Context
-        {
-            System = new global::Alexa.NET.Request.AlexaSystem
-            {
-                User = new global::Alexa.NET.Request.User
-                {
-                    AccessToken = Guid.NewGuid().ToString()
-                },
-                Device = new Device { DeviceID = "test-device" }
-            }
-        };
-    }
+    private static Context CreateContext() => TestHelpers.CreateTestContext();
 
     private static string GetSpeechText(SkillResponse response)
     {

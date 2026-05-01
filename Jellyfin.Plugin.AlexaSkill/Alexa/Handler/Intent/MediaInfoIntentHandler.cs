@@ -3,10 +3,12 @@ using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
+using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Dto;
+using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
@@ -16,13 +18,6 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public class MediaInfoIntentHandler : BaseHandler
 {
-    private static class ItemType
-    {
-        public const string Audio = "Audio";
-        public const string Episode = "Episode";
-        public const string Movie = "Movie";
-    }
-
     /// <summary>
     /// Initializes a new instance of the <see cref="MediaInfoIntentHandler"/> class.
     /// </summary>
@@ -40,7 +35,7 @@ public class MediaInfoIntentHandler : BaseHandler
     public override bool CanHandle(Request request)
     {
         IntentRequest? intentRequest = request as IntentRequest;
-        return intentRequest != null && string.Equals(intentRequest.Intent.Name, "MediaInfoIntent", StringComparison.Ordinal);
+        return intentRequest != null && string.Equals(intentRequest.Intent.Name, IntentNames.MediaInfo, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -74,9 +69,7 @@ public class MediaInfoIntentHandler : BaseHandler
 
     private static string BuildMediaDescription(BaseItemDto item, string locale)
     {
-        string type = item.Type.ToString() ?? string.Empty;
-
-        if (string.Equals(type, ItemType.Audio, StringComparison.OrdinalIgnoreCase))
+        if (item.Type == BaseItemKind.Audio)
         {
             string artist = item.AlbumArtist ?? string.Empty;
             string album = item.Album ?? string.Empty;
@@ -93,7 +86,7 @@ public class MediaInfoIntentHandler : BaseHandler
             return item.Name ?? ResponseStrings.Get("UnknownMedia", locale);
         }
 
-        if (string.Equals(type, ItemType.Episode, StringComparison.OrdinalIgnoreCase))
+        if (item.Type == BaseItemKind.Episode)
         {
             string series = item.SeriesName ?? string.Empty;
             int? season = item.ParentIndexNumber;
@@ -111,7 +104,7 @@ public class MediaInfoIntentHandler : BaseHandler
             return item.Name ?? ResponseStrings.Get("UnknownMedia", locale);
         }
 
-        if (string.Equals(type, ItemType.Movie, StringComparison.OrdinalIgnoreCase))
+        if (item.Type == BaseItemKind.Movie)
         {
             int? year = item.ProductionYear;
             return year.HasValue
@@ -129,12 +122,12 @@ public class MediaInfoIntentHandler : BaseHandler
             return string.Empty;
         }
 
-        long? positionTicks = session.PlayState.PositionTicks;
+        long positionTicks = session.PlayState.PositionTicks.Value;
         long? runtimeTicks = session.NowPlayingItem?.RunTimeTicks;
 
-        if (positionTicks.HasValue && positionTicks.Value > 0)
+        if (positionTicks > 0)
         {
-            var position = TimeSpan.FromTicks(positionTicks.Value);
+            var position = TimeSpan.FromTicks(positionTicks);
             string positionStr = FormatTimeSpan(position, locale);
 
             if (runtimeTicks.HasValue && runtimeTicks.Value > 0)

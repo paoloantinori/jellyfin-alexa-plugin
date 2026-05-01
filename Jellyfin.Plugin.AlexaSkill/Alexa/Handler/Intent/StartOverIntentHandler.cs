@@ -26,7 +26,7 @@ public class StartOverIntentHandler : BaseHandler
     public override bool CanHandle(Request request)
     {
         IntentRequest? intentRequest = request as IntentRequest;
-        return intentRequest != null && string.Equals(intentRequest.Intent.Name, "AMAZON.StartOverIntent", System.StringComparison.Ordinal);
+        return intentRequest != null && string.Equals(intentRequest.Intent.Name, IntentNames.AmazonStartOver, System.StringComparison.Ordinal);
     }
 
     /// <summary>
