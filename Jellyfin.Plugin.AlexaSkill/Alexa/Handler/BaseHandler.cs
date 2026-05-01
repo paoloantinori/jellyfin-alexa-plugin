@@ -59,7 +59,7 @@ public abstract class BaseHandler
         Entities.User? user = _config.GetUserById(userId);
         if (user == null)
         {
-            Logger.LogError("User not found");
+            Logger.LogError("User not found for access token: {UserId}", userId);
 
             return ResponseBuilder.Tell(ResponseStrings.Get("UserNotFound", GetLocale(request)));
         }

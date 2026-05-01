@@ -40,6 +40,24 @@ public class SessionEndedRequestHandler : BaseHandler
     /// <inheritdoc/>
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
+        SessionEndedRequest sessionEnded = (SessionEndedRequest)request;
+        if (sessionEnded.Error != null)
+        {
+            Logger.LogWarning(
+                "Session ended with error: {Reason} - {ErrorType}: {ErrorMessage} [RequestId={RequestId}]",
+                sessionEnded.Reason,
+                sessionEnded.Error.Type,
+                sessionEnded.Error.Message,
+                request.RequestId);
+        }
+        else
+        {
+            Logger.LogInformation(
+                "Session ended: {Reason} [RequestId={RequestId}]",
+                sessionEnded.Reason,
+                request.RequestId);
+        }
+
         return ResponseBuilder.Empty();
     }
 }
