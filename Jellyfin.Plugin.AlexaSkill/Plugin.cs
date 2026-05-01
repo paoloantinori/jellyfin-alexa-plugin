@@ -38,6 +38,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         LoggerFactory = loggerFactory;
 
         ILogger<Plugin> logger = loggerFactory.CreateLogger<Plugin>();
+        logger.LogInformation("AlexaSkill plugin loaded v{Version}", Util.GetVersion());
     }
 
     /// <inheritdoc />

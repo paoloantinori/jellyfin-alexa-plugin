@@ -43,7 +43,12 @@ public class ExceptionHandler : BaseHandler
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         SystemExceptionRequest exceptionRequest = (SystemExceptionRequest)request;
-        Logger.LogError("{0}", exceptionRequest.Error.Message);
+        Logger.LogError(
+            "Alexa system exception: {ErrorType} - {ErrorMessage} [RequestId={RequestId}, DeviceId={DeviceId}]",
+            exceptionRequest.Error.Type,
+            exceptionRequest.Error.Message,
+            request.RequestId,
+            context.System.Device?.DeviceID);
 
         return ResponseBuilder.Tell(ResponseStrings.Get("SomethingWrong", GetLocale(request)));
     }

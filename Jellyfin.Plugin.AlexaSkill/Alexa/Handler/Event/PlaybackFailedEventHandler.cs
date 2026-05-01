@@ -46,13 +46,19 @@ public class PlaybackFailedEventHandler : BaseHandler
     {
         AudioPlayerRequest req = (AudioPlayerRequest)request;
 
+        Logger.LogError(
+            "Playback failed for item {ItemId} at offset {OffsetMs}ms [RequestId={RequestId}, DeviceId={DeviceId}]",
+            req.Token,
+            req.OffsetInMilliseconds,
+            request.RequestId,
+            context.System.Device?.DeviceID);
+
         PlaybackStopInfo playbackStopInfo = new PlaybackStopInfo
         {
             SessionId = session.Id,
             ItemId = new Guid(req.Token),
             Failed = true,
         };
-        Logger.LogError("Playback failed for item {ItemId}", req.Token);
         await SessionManager.OnPlaybackStopped(playbackStopInfo).ConfigureAwait(false);
 
         return ResponseBuilder.Empty();

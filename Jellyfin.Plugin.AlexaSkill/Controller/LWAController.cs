@@ -176,11 +176,11 @@ public class LWAController : ControllerBase
                         // create the skill
                         if (user.SmapiManagement == null)
                         {
-                            _logger.LogError("SmapiManagement is null for user with id {0}", user.Id);
+                            _logger.LogError("SmapiManagement is null for user with id {UserId}", user.Id);
                         }
                         else
                         {
-                            _logger.LogInformation("New skill will be created for user with id {0}", user.Id);
+                            _logger.LogInformation("New skill will be created for user with id {UserId}", user.Id);
                             Collection<SkillInteractionModel> skillInteractionModels = new Collection<SkillInteractionModel>();
                             foreach (Tuple<string, string> model in Plugin.Instance.InteractionModels)
                             {

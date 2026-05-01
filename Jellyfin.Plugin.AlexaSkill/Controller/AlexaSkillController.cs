@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -131,14 +132,14 @@ public class AlexaSkillController : ControllerBase
 
         if (!valid_redirect_uri)
         {
-            _logger.LogError("Invalid redirect uri: {0}", redirectUri);
+            _logger.LogError("Invalid redirect uri: {RedirectUri}", redirectUri);
 
             return new BadRequestResult();
         }
 
         if (!clientId.Equals(Plugin.Instance!.Configuration.AccountLinkingClientId, StringComparison.Ordinal))
         {
-            _logger.LogError("Invalid client id: {0}", clientId);
+            _logger.LogError("Invalid client id: {ClientId}", clientId);
 
             return new BadRequestResult();
         }
@@ -208,14 +209,14 @@ public class AlexaSkillController : ControllerBase
 
         if (!valid_redirect_uri)
         {
-            _logger.LogError("Invalid redirect uri: {0}", redirectUri);
+            _logger.LogError("Invalid redirect uri: {RedirectUri}", redirectUri);
 
             return new BadRequestResult();
         }
 
         if (!clientId.Equals(Plugin.Instance!.Configuration.AccountLinkingClientId, StringComparison.Ordinal))
         {
-            _logger.LogError("Invalid client id: {0}", clientId);
+            _logger.LogError("Invalid client id: {ClientId}", clientId);
 
             return new BadRequestResult();
         }
@@ -298,34 +299,49 @@ public class AlexaSkillController : ControllerBase
                 return SkillResponseContent(ResponseBuilder.Tell("Unable to authenticate. Please try linking your account again."));
             }
 
-            Entities.User? user = Plugin.Instance!.Configuration.GetUserById(userId);
-            if (user == null)
-            {
-                _logger.LogError("User not found or invalid access token: {0}", userId);
-                return SkillResponseContent(ResponseBuilder.Tell("User not found. Please link your account in the Jellyfin Alexa plugin settings."));
-            }
+            string requestId = req.Request?.RequestId ?? Guid.NewGuid().ToString("N")[..8];
+            string deviceId = req.Context.System.Device?.DeviceID ?? "unknown";
+            string requestType = req.Request?.Type ?? "unknown";
 
-            if (req.Request == null)
+            using (_logger.BeginScope(new Dictionary<string, object>
             {
-                _logger.LogWarning("Received skill request with null request body");
+                ["RequestId"] = requestId,
+                ["UserId"] = userId,
+                ["DeviceId"] = deviceId,
+                ["RequestType"] = requestType
+            }))
+            {
+                _logger.LogInformation("Processing Alexa request of type: {RequestType}", requestType);
+                _logger.LogDebug("Request body: {RequestBody}", body);
+
+                Entities.User? user = Plugin.Instance!.Configuration.GetUserById(userId);
+                if (user == null)
+                {
+                    _logger.LogError("User not found or invalid access token: {UserId}", userId);
+                    return SkillResponseContent(ResponseBuilder.Tell("User not found. Please link your account in the Jellyfin Alexa plugin settings."));
+                }
+
+                if (req.Request == null)
+                {
+                    _logger.LogWarning("Received skill request with null request body");
+                    return SkillResponseContent(ResponseBuilder.Empty());
+                }
+
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(6));
+
+                foreach (BaseHandler h in handler)
+                {
+                    if (h.CanHandle(req.Request))
+                    {
+                        SkillResponse skillResponse = await h.HandleRequestAsync(req.Request, req.Context, cts.Token).ConfigureAwait(false);
+                        _logger.LogDebug("Response generated for {RequestType}", requestType);
+                        return SkillResponseContent(skillResponse);
+                    }
+                }
+
+                _logger.LogWarning("Unhandled skill request: {RequestType}", req.Request.Type);
                 return SkillResponseContent(ResponseBuilder.Empty());
             }
-
-            _logger.LogInformation("Alexa request of type: {0}", req.Request.GetType().ToString());
-
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(6));
-
-            foreach (BaseHandler h in handler)
-            {
-                if (h.CanHandle(req.Request))
-                {
-                    SkillResponse skillResponse = await h.HandleRequestAsync(req.Request, req.Context, cts.Token).ConfigureAwait(false);
-                    return SkillResponseContent(skillResponse);
-                }
-            }
-
-            _logger.LogWarning("Unhandled skill request: {0}", req.Request.Type);
-            return SkillResponseContent(ResponseBuilder.Empty());
         }
         catch (OperationCanceledException)
         {
