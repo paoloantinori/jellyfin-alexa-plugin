@@ -2,6 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.InteractionModel;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -46,7 +47,7 @@ public class LWAController : ControllerBase
     /// <param name="token">The token.</param>
     /// <returns>The lwa html page.</returns>
     [HttpGet]
-    public ActionResult GetLwaDeviceTokenRequestPage([FromQuery(Name = "token")] string token)
+    public async Task<ActionResult> GetLwaDeviceTokenRequestPage([FromQuery(Name = "token")] string token)
     {
         if (string.IsNullOrWhiteSpace(token))
         {
@@ -116,15 +117,14 @@ public class LWAController : ControllerBase
                 // check if a device token request is already initiated
                 if (lwaAuthorizationRequest.DeviceAuthorizationRequest == null)
                 {
-                    // initiate a new lwa device token request
-                    DeviceAuthorizationRequest? request = LwaClient
+                    DeviceAuthorizationRequest? request = await LwaClient
                         .CreateLwaDeviceAuthorizationRequest(
                             Plugin.Instance!.Configuration.LwaClientId,
                             new Lwa.Scope[]
                             {
                                 Lwa.Scope.SkillsReadWrite,
                                 Lwa.Scope.ModelsReadWrite
-                            }).Result;
+                        }).ConfigureAwait(false);
 
                     if (request == null)
                     {
@@ -136,13 +136,12 @@ public class LWAController : ControllerBase
 
                     lwaAuthorizationRequest.DeviceAuthorizationRequest = request;
 
-                    // start a new thread to poll for the device token
-                    Thread thread = new Thread(() =>
+                    _ = Task.Run(async () =>
                     {
                         DeviceToken? deviceToken;
                         try
                         {
-                            deviceToken = LwaClient.GetDeviceToken(request).Result;
+                            deviceToken = await LwaClient.GetDeviceToken(request).ConfigureAwait(false);
                             if (deviceToken == null)
                             {
                                 _logger.LogError("Could not get lwa device token");
@@ -193,19 +192,17 @@ public class LWAController : ControllerBase
                             Uri endpointUri = new Uri(new Uri(configuration.ServerAddress), AlexaSkillController.ApiBaseUri);
                             string endpointUriString = new Uri(endpointUri, "account-linking").ToString();
 
-                            string skillId = AlexaUtil.Call(user, () => user.SmapiManagement.CreateSkill(
+                            string skillId = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.CreateSkillAsync(
                                 Plugin.Instance.ManifestSkill!,
                                 skillInteractionModels,
                                 endpointUriString,
-                                configuration.AccountLinkingClientId));
+                                configuration.AccountLinkingClientId)).ConfigureAwait(false);
 
                             user.UserSkill.SkillId = skillId;
                             user.UserSkill.UserSkillStatus = UserSkillStatus.AccountLinkPending;
                             Plugin.Instance!.SaveConfiguration();
                         }
                     });
-
-                    thread.Start();
                 }
 
                 page = page.Replace(

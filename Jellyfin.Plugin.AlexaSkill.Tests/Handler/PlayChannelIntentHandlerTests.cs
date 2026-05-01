@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Collections.Generic;
 using global::Alexa.NET;
 using global::Alexa.NET.Request;
@@ -93,7 +95,7 @@ public class PlayChannelIntentHandlerTests
     }
 
     [Fact]
-    public void Handle_NoChannelSlot_ReturnsPrompt()
+    public async Task Handle_NoChannelSlot_ReturnsPrompt()
     {
         var handler = CreateHandler();
         var request = new IntentRequest
@@ -105,21 +107,21 @@ public class PlayChannelIntentHandlerTests
             }
         };
 
-        var response = handler.Handle(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession());
+        var response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
 
         Assert.Contains("didn't catch", speech.Text);
     }
 
     [Fact]
-    public void Handle_NullChannelValue_ReturnsPrompt()
+    public async Task Handle_NullChannelValue_ReturnsPrompt()
     {
         var handler = CreateHandler();
-        var response = handler.Handle(
+        var response = await handler.HandleAsync(
             CreatePlayChannelRequest(null),
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            CreateSession());
+            CreateSession(), CancellationToken.None);
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
 
         Assert.Contains("didn't catch", speech.Text);
@@ -128,39 +130,39 @@ public class PlayChannelIntentHandlerTests
     [Theory]
     [InlineData("  ")]
     [InlineData("\t")]
-    public void Handle_WhitespaceChannel_ReturnsPrompt(string channel)
+    public async Task Handle_WhitespaceChannel_ReturnsPrompt(string channel)
     {
         var handler = CreateHandler();
-        var response = handler.Handle(
+        var response = await handler.HandleAsync(
             CreatePlayChannelRequest(channel),
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            CreateSession());
+            CreateSession(), CancellationToken.None);
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
 
         Assert.Contains("didn't catch", speech.Text);
     }
 
     [Fact]
-    public void Handle_NoResults_ReturnsNotFound()
+    public async Task Handle_NoResults_ReturnsNotFound()
     {
         _libraryManagerMock
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
 
         var handler = CreateHandler();
-        var response = handler.Handle(
+        var response = await handler.HandleAsync(
             CreatePlayChannelRequest("Unknown Channel"),
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            CreateSession());
+            CreateSession(), CancellationToken.None);
 
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
         Assert.Contains("couldn't find", speech.Text);
     }
 
     [Fact]
-    public void Handle_FoundChannel_ReturnsAudioPlayerDirective()
+    public async Task Handle_FoundChannel_ReturnsAudioPlayerDirective()
     {
         var channelId = Guid.NewGuid();
         var channel = CreateTestChannel("CNN", channelId);
@@ -170,11 +172,11 @@ public class PlayChannelIntentHandlerTests
             .Returns(new List<BaseItem> { channel });
 
         var handler = CreateHandler();
-        var response = handler.Handle(
+        var response = await handler.HandleAsync(
             CreatePlayChannelRequest("CNN"),
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            CreateSession());
+            CreateSession(), CancellationToken.None);
 
         Assert.Null(response.Response.OutputSpeech);
         Assert.NotNull(response.Response.Directives);
@@ -186,7 +188,7 @@ public class PlayChannelIntentHandlerTests
     }
 
     [Fact]
-    public void Handle_FoundChannel_SetsSessionQueue()
+    public async Task Handle_FoundChannel_SetsSessionQueue()
     {
         var channelId = Guid.NewGuid();
         var channel = CreateTestChannel("CNN", channelId);
@@ -197,7 +199,7 @@ public class PlayChannelIntentHandlerTests
             .Returns(new List<BaseItem> { channel });
 
         var handler = CreateHandler();
-        handler.Handle(CreatePlayChannelRequest("CNN"), CreateContext(), TestHelpers.CreateTestUser(), session);
+        await handler.HandleAsync(CreatePlayChannelRequest("CNN"), CreateContext(), TestHelpers.CreateTestUser(), session, CancellationToken.None);
 
         Assert.NotNull(session.NowPlayingQueue);
         Assert.Single(session.NowPlayingQueue);
@@ -205,7 +207,7 @@ public class PlayChannelIntentHandlerTests
     }
 
     [Fact]
-    public void Handle_FoundMultipleChannels_ReturnsFirstMatch()
+    public async Task Handle_FoundMultipleChannels_ReturnsFirstMatch()
     {
         var ch1 = CreateTestChannel("CNN");
         var ch2 = CreateTestChannel("CNN International");
@@ -215,11 +217,11 @@ public class PlayChannelIntentHandlerTests
             .Returns(new List<BaseItem> { ch1, ch2 });
 
         var handler = CreateHandler();
-        var response = handler.Handle(
+        var response = await handler.HandleAsync(
             CreatePlayChannelRequest("CNN"),
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            CreateSession());
+            CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response.Response.Directives);
         Assert.Single(response.Response.Directives);

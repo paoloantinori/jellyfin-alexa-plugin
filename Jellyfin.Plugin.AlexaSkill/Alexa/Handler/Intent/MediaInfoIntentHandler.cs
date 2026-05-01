@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
@@ -46,7 +48,7 @@ public class MediaInfoIntentHandler : BaseHandler
     /// <param name="user">The user instance.</param>
     /// <param name="session">The session instance.</param>
     /// <returns>A skill response with media information or an error message.</returns>
-    public override SkillResponse Handle(Request request, Context context, Entities.User user, SessionInfo session)
+    public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
         BaseItemDto? item = session.NowPlayingItem;

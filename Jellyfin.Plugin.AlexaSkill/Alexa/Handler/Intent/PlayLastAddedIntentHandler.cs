@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
@@ -57,7 +59,7 @@ public class PlayLastAddedIntentHandler : BaseHandler
     /// <param name="user">The user instance.</param>
     /// <param name="session">The session instance.</param>
     /// <returns>Play directive of the last added items.</returns>
-    public override SkillResponse Handle(Request request, Context context, Entities.User user, SessionInfo session)
+    public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
 

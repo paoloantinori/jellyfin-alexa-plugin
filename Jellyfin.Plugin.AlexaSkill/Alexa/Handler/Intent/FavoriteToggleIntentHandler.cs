@@ -1,5 +1,6 @@
 using System;
 using System.Threading;
+using System.Threading.Tasks;
 using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
@@ -47,7 +48,7 @@ public abstract class FavoriteToggleIntentHandler : BaseHandler
         return intentRequest != null && string.Equals(intentRequest.Intent.Name, IntentName, StringComparison.Ordinal);
     }
 
-    public override SkillResponse Handle(Request request, Context context, Entities.User user, SessionInfo session)
+    public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
         BaseItemDto? item = session.NowPlayingItem;

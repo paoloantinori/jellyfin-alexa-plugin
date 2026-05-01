@@ -1,3 +1,5 @@
+using System.Threading;
+using System.Threading.Tasks;
 using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
@@ -51,7 +53,7 @@ public class PreviousIntentHandler : BaseHandler
     /// <param name="user">The user instance.</param>
     /// <param name="session">The session instance.</param>
     /// <returns>A play directive of the previous item in the queue or empty response if the queue is empty.</returns>
-    public override SkillResponse Handle(Request request, Context context, Entities.User user, SessionInfo session)
+    public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         // check if we have any media in the queue and there is currently something playing
         if (session.NowPlayingQueue.Count == 0 || session.FullNowPlayingItem == null)

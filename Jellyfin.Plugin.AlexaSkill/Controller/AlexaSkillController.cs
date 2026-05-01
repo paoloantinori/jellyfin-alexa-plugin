@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
 using Alexa.NET.Request;
@@ -13,6 +15,7 @@ using MediaBrowser.Controller.Session;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using RequestVerification = Alexa.NET.Request.RequestVerification;
 
 namespace Jellyfin.Plugin.AlexaSkill.Controller;
 
@@ -260,62 +263,116 @@ public class AlexaSkillController : ControllerBase
     /// <summary>
     /// Handle a Alexa skill request.
     /// </summary>
-    /// <param name="json">Alexa skill request.</param>
     /// <returns>A <see cref="ActionResult"/>.</returns>
     [HttpPost("alexa-request")]
     [Consumes("application/json")]
-    public ActionResult HandleIntentRequest([FromBody] dynamic json)
+    public async Task<ActionResult> HandleIntentRequest()
     {
-        SkillRequest? req = JsonConvert.DeserializeObject<SkillRequest>(json.ToString());
-        if (req?.Context?.System?.User?.AccessToken == null)
+        try
         {
-            return BadRequest("Invalid skill request: missing access token.");
-        }
+            using var reader = new StreamReader(Request.Body);
+            string body = await reader.ReadToEndAsync().ConfigureAwait(false);
 
-        if (!Guid.TryParse(req.Context.System.User.AccessToken, out Guid userId))
-        {
-            return BadRequest("Invalid access token format.");
-        }
-        Entities.User? user = Plugin.Instance!.Configuration.GetUserById(userId);
-        if (user == null)
-        {
-            _logger.LogError("User not found or invalid access token: {0}", userId);
-
-            return Unauthorized();
-        }
-
-        if (req.Request == null)
-        {
-            return new NoContentResult();
-        }
-
-        _logger.LogInformation("Alexa request of type: {0}", req.Request.GetType().ToString());
-
-        foreach (BaseHandler h in handler)
-        {
-            if (h.CanHandle(req.Request))
+            if (string.IsNullOrWhiteSpace(body))
             {
-                SkillResponse skillResponse = h.HandleRequest(req.Request, req.Context);
-
-                ContentResult res = new ContentResult();
-                res.Content = JsonConvert.SerializeObject(skillResponse);
-                return res;
+                _logger.LogWarning("Received empty request body");
+                return SkillResponseContent(ResponseBuilder.Empty());
             }
-        }
 
-        if (req.Request is IntentRequest)
-        {
-            _logger.LogWarning("Unhandled skill intent request: {0}", ((IntentRequest)req.Request).Intent.Name);
+            if (!await VerifyAlexaSignature(body).ConfigureAwait(false))
+            {
+                _logger.LogWarning("Alexa request signature verification failed");
+                return SkillResponseContent(ResponseBuilder.Tell("Unable to verify request authenticity."));
+            }
 
-            ContentResult res = new ContentResult();
-            res.Content = JsonConvert.SerializeObject(ResponseBuilder.Tell("This intent is not implemented yet."));
-            return res;
-        }
-        else
-        {
+            SkillRequest? req = JsonConvert.DeserializeObject<SkillRequest>(body);
+            if (req?.Context?.System?.User?.AccessToken == null)
+            {
+                _logger.LogWarning("Invalid skill request: missing access token");
+                return SkillResponseContent(ResponseBuilder.Tell("Unable to process your request. Please try linking your account again."));
+            }
+
+            if (!Guid.TryParse(req.Context.System.User.AccessToken, out Guid userId))
+            {
+                _logger.LogWarning("Invalid access token format");
+                return SkillResponseContent(ResponseBuilder.Tell("Unable to authenticate. Please try linking your account again."));
+            }
+
+            Entities.User? user = Plugin.Instance!.Configuration.GetUserById(userId);
+            if (user == null)
+            {
+                _logger.LogError("User not found or invalid access token: {0}", userId);
+                return SkillResponseContent(ResponseBuilder.Tell("User not found. Please link your account in the Jellyfin Alexa plugin settings."));
+            }
+
+            if (req.Request == null)
+            {
+                _logger.LogWarning("Received skill request with null request body");
+                return SkillResponseContent(ResponseBuilder.Empty());
+            }
+
+            _logger.LogInformation("Alexa request of type: {0}", req.Request.GetType().ToString());
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(6));
+
+            foreach (BaseHandler h in handler)
+            {
+                if (h.CanHandle(req.Request))
+                {
+                    SkillResponse skillResponse = await h.HandleRequestAsync(req.Request, req.Context, cts.Token).ConfigureAwait(false);
+                    return SkillResponseContent(skillResponse);
+                }
+            }
+
             _logger.LogWarning("Unhandled skill request: {0}", req.Request.Type);
+            return SkillResponseContent(ResponseBuilder.Empty());
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("Request processing timed out");
+            return SkillResponseContent(ResponseBuilder.Tell("Sorry, that took too long. Please try again."));
+        }
+        catch (Exception ex)
+        {
+            string errorRef = Guid.NewGuid().ToString("N")[..8];
+            _logger.LogError(ex, "Unhandled exception processing Alexa request [ErrorRef:{ErrorRef}]", errorRef);
+            return SkillResponseContent(ResponseBuilder.Tell($"Something went wrong. Reference: {errorRef}"));
+        }
+    }
+
+    private ContentResult SkillResponseContent(SkillResponse response)
+    {
+        return new ContentResult
+        {
+            Content = JsonConvert.SerializeObject(response),
+            ContentType = "application/json"
+        };
+    }
+
+    /// <summary>
+    /// Verifies the Alexa request signature using the Signature and SignatureCertChainUrl headers.
+    /// </summary>
+    /// <param name="body">The raw request body.</param>
+    /// <returns>True if the signature is valid, false otherwise.</returns>
+    private async Task<bool> VerifyAlexaSignature(string body)
+    {
+        string? signature = Request.Headers["Signature"].FirstOrDefault();
+        string? certChainUrl = Request.Headers["SignatureCertChainUrl"].FirstOrDefault();
+
+        if (string.IsNullOrEmpty(signature) || string.IsNullOrEmpty(certChainUrl))
+        {
+            _logger.LogWarning("Missing Signature or SignatureCertChainUrl header");
+            return false;
         }
 
-        return new BadRequestResult();
+        try
+        {
+            return await RequestVerification.Verify(signature, new Uri(certChainUrl), body).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during Alexa request signature verification");
+            return false;
+        }
     }
 }

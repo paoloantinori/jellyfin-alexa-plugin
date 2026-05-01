@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
@@ -28,7 +30,7 @@ public class PlaybackFinishedEventHandler : BaseHandler
     }
 
     /// <inheritdoc/>
-    public override SkillResponse Handle(Request request, Context context, Entities.User user, SessionInfo session)
+    public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         AudioPlayerRequest req = (AudioPlayerRequest)request;
 
@@ -38,7 +40,7 @@ public class PlaybackFinishedEventHandler : BaseHandler
             ItemId = new Guid(req.Token),
             PositionTicks = TimeSpan.FromMilliseconds(req.OffsetInMilliseconds).Ticks,
         };
-        SessionManager.OnPlaybackStopped(playbackStopInfo).ConfigureAwait(false);
+        await SessionManager.OnPlaybackStopped(playbackStopInfo).ConfigureAwait(false);
 
         return ResponseBuilder.Empty();
     }

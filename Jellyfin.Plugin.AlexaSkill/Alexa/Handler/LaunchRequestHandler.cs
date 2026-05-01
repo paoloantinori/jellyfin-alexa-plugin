@@ -1,3 +1,5 @@
+using System.Threading;
+using System.Threading.Tasks;
 using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
@@ -49,7 +51,7 @@ public class LaunchRequestHandler : BaseHandler
     /// <param name="user">The user instance.</param>
     /// <param name="session">The session instance.</param>
     /// <returns>A play directive or a question what should be played.</returns>
-    public override SkillResponse Handle(Request request, Context context, Entities.User user, SessionInfo session)
+    public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
         LaunchRequest launchRequest = (LaunchRequest)request;

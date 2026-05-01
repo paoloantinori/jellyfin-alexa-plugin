@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
@@ -41,12 +43,13 @@ public abstract class BaseHandler
     protected ILogger Logger { get; set; }
 
     /// <summary>
-    /// Handle a skill reuqest by calling the class Handle method and return a skill response.
+    /// Handle a skill request by calling the class HandleAsync method and return a skill response.
     /// </summary>
     /// <param name="request">The skill request to handle.</param>
     /// <param name="context">The lambda context.</param>
+    /// <param name="cancellationToken">Cancellation token for request timeout.</param>
     /// <returns>The skill response to the request.</returns>
-    public SkillResponse HandleRequest(Request request, Context context)
+    public async Task<SkillResponse> HandleRequestAsync(Request request, Context context, CancellationToken cancellationToken = default)
     {
         if (!Guid.TryParse(context.System.User.AccessToken, out Guid userId))
         {
@@ -61,9 +64,9 @@ public abstract class BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("UserNotFound", GetLocale(request)));
         }
 
-        SessionInfo session = SessionManager.GetSessionByAuthenticationToken(user.JellyfinToken, context.System.Device.DeviceID, Plugin.Instance!.Configuration.ServerAddress).Result;
+        SessionInfo session = await SessionManager.GetSessionByAuthenticationToken(user.JellyfinToken, context.System.Device.DeviceID, Plugin.Instance!.Configuration.ServerAddress).ConfigureAwait(false);
 
-        return Handle(request, context, user, session);
+        return await HandleAsync(request, context, user, session, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -74,14 +77,15 @@ public abstract class BaseHandler
     public abstract bool CanHandle(Request request);
 
     /// <summary>
-    /// Handle a skill reuqest and return a skill response.
+    /// Handle a skill request and return a skill response.
     /// </summary>
     /// <param name="request">The skill request to handle.</param>
     /// <param name="context">The lambda context.</param>
     /// <param name="user">The user instance.</param>
     /// <param name="session">The session instance.</param>
+    /// <param name="cancellationToken">Cancellation token for request timeout.</param>
     /// <returns>The skill response to the request.</returns>
-    public abstract SkillResponse Handle(Request request, Context context, Entities.User user, SessionInfo session);
+    public abstract Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken);
 
     /// <summary>
     /// Get a stream url for the given item.
