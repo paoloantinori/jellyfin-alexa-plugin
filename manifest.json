@@ -25,7 +25,7 @@
             },
             {
                 "version": "0.2.0.0",
-                "checksum": "00000000000000000000000000000000",
+                "checksum": "1ed7c52a00384f87fdbff05f203c8357",
                 "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.0/AlexaSkill_0.2.0.0.zip",
                 "changelog": "Migrated to Jellyfin 10.11.x (net9.0). Added PlayVideo, PlayChannel, and MediaInfo intent handlers. Fixed IUserDataRepository migration, namespace changes, CsrfTokenHandler bugs. Added test project with 118+ tests. Implemented cloud skill deletion on last user removal.",
                 "targetAbi": "10.11.0.0",
