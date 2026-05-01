@@ -62,6 +62,8 @@ public class PlayFavoritesIntentHandler : BaseHandler
     {
         string locale = GetLocale(request);
 
+        await SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)).ConfigureAwait(false);
+
         InternalItemsQuery query = new InternalItemsQuery()
         {
             User = _userManager.GetUserById(session.UserId),

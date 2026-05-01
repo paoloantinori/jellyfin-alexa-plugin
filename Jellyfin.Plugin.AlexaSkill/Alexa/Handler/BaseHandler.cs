@@ -1,4 +1,5 @@
 using System;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
@@ -17,6 +18,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public abstract class BaseHandler
 {
+    private static readonly HttpClient SharedHttpClient = new();
+
     private PluginConfiguration _config;
 
     /// <summary>
@@ -107,5 +110,29 @@ public abstract class BaseHandler
     protected static string GetLocale(Request request)
     {
         return string.IsNullOrEmpty(request.Locale) ? "en-US" : request.Locale;
+    }
+
+    /// <summary>
+    /// Send a progressive response to keep the Alexa session alive during long operations.
+    /// Resets the 8-second timeout. Only works with IntentRequest/LaunchRequest.
+    /// </summary>
+    /// <param name="context">The Alexa context containing API access token.</param>
+    /// <param name="request">The request containing the request ID.</param>
+    /// <param name="message">The message to speak to the user.</param>
+    protected async Task SendProgressiveResponse(Context context, Request request, string message)
+    {
+        try
+        {
+            var progressiveResponse = new ProgressiveResponse(
+                context.System.ApiAccessToken,
+                request.RequestId,
+                context.System?.ApiEndpoint ?? "https://api.amazonalexa.com",
+                SharedHttpClient);
+            await progressiveResponse.SendSpeech(message).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to send progressive response");
+        }
     }
 }
