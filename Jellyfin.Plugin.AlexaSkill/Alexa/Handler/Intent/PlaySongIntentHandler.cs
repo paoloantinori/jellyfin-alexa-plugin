@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
@@ -111,6 +112,13 @@ public class PlaySongIntentHandler : BaseHandler
         else if (songs.Count == 0)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByName", locale, songQuery));
+        }
+
+        // If multiple songs found, ask for disambiguation
+        if (songs.Count > 1)
+        {
+            var matches = songs.Take(3).Select(s => (s.Id, s.Name)).ToList();
+            return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeSong, locale);
         }
 
         List<QueueItem> queueItems = new List<QueueItem>();

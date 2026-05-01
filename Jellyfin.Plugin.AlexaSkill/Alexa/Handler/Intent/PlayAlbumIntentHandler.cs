@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
@@ -111,6 +112,13 @@ public class PlayAlbumIntentHandler : BaseHandler
         else if (albums.Count == 0)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByName", locale, album));
+        }
+
+        // If multiple albums found, ask for disambiguation
+        if (albums.Count > 1)
+        {
+            var matches = albums.Take(3).Select(a => (a.Id, a.Name)).ToList();
+            return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeAlbum, locale);
         }
 
         // Get all songs from the album

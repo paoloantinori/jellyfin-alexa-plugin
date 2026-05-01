@@ -38,5 +38,10 @@
   "SeasonEpisode": "{0}, stagione {1}, episodio {2}: {3}",
   "SeriesTitle": "{0}: {1}",
   "TitleWithYear": "{0} ({1})",
-  "SearchingMedia": "Ricerca dei tuoi contenuti in corso..."
+  "SearchingMedia": "Ricerca dei tuoi contenuti in corso...",
+  "DisambiguatePrompt": "Ho trovato più risultati. Ti piacerebbe ascoltare {0}?",
+  "DisambiguateNext": "Che ne dici di {0}?",
+  "NoMoreMatches": "Spiacente, non ci sono altri risultati.",
+  "DisambiguateReprompt": "Puoi dire sì o no.",
+  "UnexpectedYes": "Non sono sicuro di cosa vuoi ascoltare. Puoi chiedermi di riprodurre una canzone, un album o un video."
 }

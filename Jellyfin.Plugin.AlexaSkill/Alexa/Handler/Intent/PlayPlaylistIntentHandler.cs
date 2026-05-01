@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
@@ -86,6 +88,13 @@ public class PlayPlaylistIntentHandler : BaseHandler
         if (playlists.TotalRecordCount == 0)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundPlaylist", locale, playlistName));
+        }
+
+        // If multiple playlists found, ask for disambiguation
+        if (playlists.TotalRecordCount > 1)
+        {
+            var matches = playlists.Items.Take(3).Select(p => (p.Id, p.Name)).ToList();
+            return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypePlaylist, locale);
         }
 
         BaseItem playlist = playlists.Items[0];

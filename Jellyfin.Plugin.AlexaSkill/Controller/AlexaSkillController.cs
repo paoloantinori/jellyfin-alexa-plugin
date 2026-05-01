@@ -89,6 +89,9 @@ public class AlexaSkillController : ControllerBase
             new PlayVideoIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
             new PlayChannelIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
 
+            new YesIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
+            new NoIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
+
             new MarkFavoriteIntentHandler(sessionManager, Plugin.Instance!.Configuration, userDataManager, userManager, libraryManager, loggerFactory),
             new UnmarkFavoriteIntentHandler(sessionManager, Plugin.Instance!.Configuration, userDataManager, userManager, libraryManager, loggerFactory),
 
@@ -340,7 +343,7 @@ public class AlexaSkillController : ControllerBase
                 {
                     if (h.CanHandle(req.Request))
                     {
-                        SkillResponse skillResponse = await h.HandleRequestAsync(req.Request, req.Context, cts.Token).ConfigureAwait(false);
+                        SkillResponse skillResponse = await h.HandleRequestAsync(req.Request, req.Context, req.Session, cts.Token).ConfigureAwait(false);
                         _logger.LogDebug("Response generated for {RequestType}", requestType);
                         return SkillResponseContent(skillResponse);
                     }

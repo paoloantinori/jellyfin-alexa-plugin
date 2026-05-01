@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,6 +11,7 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
+using AlexaSession = Alexa.NET.Request.Session;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
@@ -52,7 +54,20 @@ public abstract class BaseHandler
     /// <param name="context">The lambda context.</param>
     /// <param name="cancellationToken">Cancellation token for request timeout.</param>
     /// <returns>The skill response to the request.</returns>
-    public async Task<SkillResponse> HandleRequestAsync(Request request, Context context, CancellationToken cancellationToken = default)
+    public Task<SkillResponse> HandleRequestAsync(Request request, Context context, CancellationToken cancellationToken = default)
+    {
+        return HandleRequestAsync(request, context, (AlexaSession?)null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Handle a skill request with Alexa session attributes for disambiguation state.
+    /// </summary>
+    /// <param name="request">The skill request to handle.</param>
+    /// <param name="context">The lambda context.</param>
+    /// <param name="alexaSession">The Alexa session containing session attributes.</param>
+    /// <param name="cancellationToken">Cancellation token for request timeout.</param>
+    /// <returns>The skill response to the request.</returns>
+    public async Task<SkillResponse> HandleRequestAsync(Request request, Context context, AlexaSession? alexaSession, CancellationToken cancellationToken = default)
     {
         if (!Guid.TryParse(context.System.User.AccessToken, out Guid userId))
         {
@@ -69,7 +84,7 @@ public abstract class BaseHandler
 
         SessionInfo session = await SessionManager.GetSessionByAuthenticationToken(user.JellyfinToken, context.System.Device.DeviceID, Plugin.Instance!.Configuration.ServerAddress).ConfigureAwait(false);
 
-        return await HandleAsync(request, context, user, session, cancellationToken).ConfigureAwait(false);
+        return await HandleAsync(request, context, user, session, alexaSession?.Attributes, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -89,6 +104,23 @@ public abstract class BaseHandler
     /// <param name="cancellationToken">Cancellation token for request timeout.</param>
     /// <returns>The skill response to the request.</returns>
     public abstract Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Handle a skill request with session attributes for disambiguation state.
+    /// By default delegates to the session-unaware overload. Handlers that need
+    /// session attributes (e.g. Yes/No during disambiguation) should override this.
+    /// </summary>
+    /// <param name="request">The skill request to handle.</param>
+    /// <param name="context">The lambda context.</param>
+    /// <param name="user">The user instance.</param>
+    /// <param name="session">The session instance.</param>
+    /// <param name="sessionAttributes">Session attributes from the Alexa request, or null.</param>
+    /// <param name="cancellationToken">Cancellation token for request timeout.</param>
+    /// <returns>The skill response to the request.</returns>
+    public virtual Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, Dictionary<string, object>? sessionAttributes, CancellationToken cancellationToken)
+    {
+        return HandleAsync(request, context, user, session, cancellationToken);
+    }
 
     /// <summary>
     /// Get a stream url for the given item.
