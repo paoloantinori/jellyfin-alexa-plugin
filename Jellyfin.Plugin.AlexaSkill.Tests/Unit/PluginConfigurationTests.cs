@@ -109,4 +109,139 @@ public class PluginConfigurationTests
 
         Assert.False(config.DeleteUser(Guid.NewGuid()));
     }
+
+    // --- Validation Tests ---
+
+    [Fact]
+    public void Validate_ReturnsNoErrors_WhenDefaultConfig()
+    {
+        var config = CreateConfig();
+        var errors = config.Validate();
+        Assert.Empty(errors);
+    }
+
+    [Fact]
+    public void Validate_ReturnsNoErrors_WhenValidHttpUrl()
+    {
+        var config = CreateConfig();
+        TestHelpers.SetServerAddress(config, "http://example.com");
+        var errors = config.Validate();
+        Assert.Empty(errors);
+    }
+
+    [Fact]
+    public void Validate_ReturnsNoErrors_WhenValidHttpsUrl()
+    {
+        var config = CreateConfig();
+        TestHelpers.SetServerAddress(config, "https://example.com:8096");
+        var errors = config.Validate();
+        Assert.Empty(errors);
+    }
+
+    [Fact]
+    public void Validate_ReturnsError_WhenServerAddressIsInvalidUri()
+    {
+        var config = CreateConfig();
+        TestHelpers.SetServerAddress(config, "not-a-url");
+        var errors = config.Validate();
+        Assert.Contains(errors, e => e.Contains("Server address", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_ReturnsError_WhenServerAddressIsFtp()
+    {
+        var config = CreateConfig();
+        TestHelpers.SetServerAddress(config, "ftp://example.com");
+        var errors = config.Validate();
+        Assert.Contains(errors, e => e.Contains("Server address", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_ReturnsNoErrors_WhenServerAddressIsEmpty()
+    {
+        var config = CreateConfig();
+        TestHelpers.SetServerAddress(config, string.Empty);
+        var errors = config.Validate();
+        Assert.Empty(errors);
+    }
+
+    [Fact]
+    public void Validate_ReturnsError_WhenUsersExistButNoLwaClientId()
+    {
+        var config = CreateConfig();
+        config.AddUser(TestHelpers.CreateTestUser());
+        config.LwaClientId = string.Empty;
+        config.LwaClientSecret = "secret";
+
+        var errors = config.Validate();
+        Assert.Contains(errors, e => e.Contains("LWA Client ID", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_ReturnsError_WhenUsersExistButNoLwaClientSecret()
+    {
+        var config = CreateConfig();
+        config.AddUser(TestHelpers.CreateTestUser());
+        config.LwaClientId = "id";
+        config.LwaClientSecret = string.Empty;
+
+        var errors = config.Validate();
+        Assert.Contains(errors, e => e.Contains("LWA Client Secret", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_ReturnsNoErrors_WhenUsersExistWithLwaCredentials()
+    {
+        var config = CreateConfig();
+        config.AddUser(TestHelpers.CreateTestUser());
+        config.LwaClientId = "id";
+        config.LwaClientSecret = "secret";
+
+        var errors = config.Validate();
+        Assert.Empty(errors);
+    }
+
+    [Fact]
+    public void Validate_ReturnsNoErrors_WhenNoUsersWithoutLwaCredentials()
+    {
+        var config = CreateConfig();
+        config.LwaClientId = string.Empty;
+        config.LwaClientSecret = string.Empty;
+
+        var errors = config.Validate();
+        Assert.Empty(errors);
+    }
+
+    [Fact]
+    public void Validate_ReturnsError_WhenDuplicateUserIds()
+    {
+        var config = CreateConfig();
+        var guid = Guid.NewGuid();
+        // Bypass AddUser validation to inject duplicates directly
+        config.Users.Add(TestHelpers.CreateTestUser(guid));
+        config.Users.Add(TestHelpers.CreateTestUser(guid));
+
+        var errors = config.Validate();
+        Assert.Contains(errors, e => e.Contains("Duplicate user ID", StringComparison.OrdinalIgnoreCase));
+    }
+
+    // --- Null-safe Setter Tests ---
+
+    [Fact]
+    public void ServerAddress_Setter_DoesNotThrow_WhenPluginInstanceIsNull()
+    {
+        // Plugin.Instance is null during tests, so setting ServerAddress should not throw
+        var config = CreateConfig();
+        var exception = Record.Exception(() => TestHelpers.SetServerAddress(config, "https://example.com"));
+        Assert.Null(exception);
+        Assert.Equal("https://example.com", config.ServerAddress);
+    }
+
+    [Fact]
+    public void SslCertType_Setter_DoesNotThrow_WhenPluginInstanceIsNull()
+    {
+        var config = CreateConfig();
+        var exception = Record.Exception(() => config.SslCertType = global::Alexa.NET.Management.SslCertificateType.Trusted);
+        Assert.Null(exception);
+    }
 }
