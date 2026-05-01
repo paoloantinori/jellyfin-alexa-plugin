@@ -40,15 +40,7 @@ public class PluginConfiguration : BasePluginConfiguration
         set
         {
             sslCertType = value;
-
-            if (Plugin.Instance!.ManifestSkill == null)
-            {
-                Plugin.Instance.ManifestSkill = new ManifestSkill("Jellyfin.Plugin.AlexaSkill.Alexa.Manifest.manifest.json", ServerAddress, value);
-            }
-            else
-            {
-                Plugin.Instance.ManifestSkill.SetApiEndpoint(ServerAddress, value);
-            }
+            UpdateManifestSkill();
         }
     }
 
@@ -61,15 +53,7 @@ public class PluginConfiguration : BasePluginConfiguration
         set
         {
             serverAddress = value;
-
-            if (Plugin.Instance!.ManifestSkill == null)
-            {
-                Plugin.Instance.ManifestSkill = new ManifestSkill("Jellyfin.Plugin.AlexaSkill.Alexa.Manifest.manifest.json", value, SslCertType);
-            }
-            else
-            {
-                Plugin.Instance.ManifestSkill.SetApiEndpoint(value, SslCertType);
-            }
+            UpdateManifestSkill();
         }
     }
 
@@ -92,6 +76,69 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Gets or sets the list of users.
     /// </summary>
     public List<User> Users { get; set; }
+
+    /// <summary>
+    /// Validate the configuration and return a list of error messages.
+    /// </summary>
+    /// <returns>A list of validation error messages. Empty if valid.</returns>
+    public List<string> Validate()
+    {
+        var errors = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(serverAddress))
+        {
+            if (!Uri.TryCreate(serverAddress, UriKind.Absolute, out Uri? uri)
+                || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            {
+                errors.Add("Server address must be a valid HTTP or HTTPS URL.");
+            }
+        }
+
+        if (Users.Count > 0)
+        {
+            if (string.IsNullOrWhiteSpace(LwaClientId))
+            {
+                errors.Add("LWA Client ID is required when users are configured.");
+            }
+
+            if (string.IsNullOrWhiteSpace(LwaClientSecret))
+            {
+                errors.Add("LWA Client Secret is required when users are configured.");
+            }
+        }
+
+        var seen = new HashSet<Guid>();
+        foreach (User u in Users)
+        {
+            if (!seen.Add(u.Id))
+            {
+                errors.Add($"Duplicate user ID: {u.Id}");
+            }
+        }
+
+        return errors;
+    }
+
+    /// <summary>
+    /// Update the manifest skill with the current ServerAddress and SslCertType.
+    /// No-op when the plugin instance is not yet initialized (e.g. during XML deserialization).
+    /// </summary>
+    private void UpdateManifestSkill()
+    {
+        if (Plugin.Instance == null)
+        {
+            return;
+        }
+
+        if (Plugin.Instance.ManifestSkill == null)
+        {
+            Plugin.Instance.ManifestSkill = new ManifestSkill("Jellyfin.Plugin.AlexaSkill.Alexa.Manifest.manifest.json", serverAddress, sslCertType);
+        }
+        else
+        {
+            Plugin.Instance.ManifestSkill.SetApiEndpoint(serverAddress, sslCertType);
+        }
+    }
 
     /// <summary>
     /// Add a user to the list of users.
