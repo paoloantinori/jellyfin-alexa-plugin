@@ -10,6 +10,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Controller.Handler;
+using Jellyfin.Plugin.AlexaSkill.Diagnostics;
 using MediaBrowser.Controller.Authentication;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
@@ -35,6 +36,7 @@ public class AlexaSkillController : ControllerBase
     private readonly IUserManager _userManager;
     private readonly ISessionManager _sessionManager;
     private readonly ILogger<AlexaSkillController> _logger;
+    private readonly RequestCounters _counters;
 
     private BaseHandler[] handler;
 
@@ -52,11 +54,13 @@ public class AlexaSkillController : ControllerBase
         ISessionManager sessionManager,
         ILibraryManager libraryManager,
         IUserDataManager userDataManager,
-        ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory,
+        RequestCounters counters)
     {
         _userManager = userManager;
         _sessionManager = sessionManager;
         _logger = loggerFactory.CreateLogger<AlexaSkillController>();
+        _counters = counters;
 
         csrfTokenHandler = Plugin.Instance!.CsrfTokenHandler;
 
@@ -303,6 +307,9 @@ public class AlexaSkillController : ControllerBase
             string deviceId = req.Context.System.Device?.DeviceID ?? "unknown";
             string requestType = req.Request?.Type ?? "unknown";
 
+            _counters.IncrementRequests();
+            _counters.IncrementType(requestType);
+
             using (_logger.BeginScope(new Dictionary<string, object>
             {
                 ["RequestId"] = requestId,
@@ -345,11 +352,13 @@ public class AlexaSkillController : ControllerBase
         }
         catch (OperationCanceledException)
         {
+            _counters.IncrementErrors();
             _logger.LogWarning("Request processing timed out");
             return SkillResponseContent(ResponseBuilder.Tell("Sorry, that took too long. Please try again."));
         }
         catch (Exception ex)
         {
+            _counters.IncrementErrors();
             string errorRef = Guid.NewGuid().ToString("N")[..8];
             _logger.LogError(ex, "Unhandled exception processing Alexa request [ErrorRef:{ErrorRef}]", errorRef);
             return SkillResponseContent(ResponseBuilder.Tell($"Something went wrong. Reference: {errorRef}"));
