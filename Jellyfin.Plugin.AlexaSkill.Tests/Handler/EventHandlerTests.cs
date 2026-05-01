@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using global::Alexa.NET;
 using global::Alexa.NET.Request;
 using global::Alexa.NET.Request.Type;
@@ -70,12 +72,12 @@ public class EventHandlerTests
     }
 
     [Fact]
-    public void PlaybackStarted_Handle_ReturnsEmptyResponse()
+    public async Task PlaybackStarted_Handle_ReturnsEmptyResponse()
     {
         var handler = new PlaybackStartedEventHandler(_sessionManagerMock.Object, _config, _loggerFactory);
         var request = CreateAudioPlayerRequest("AudioPlayer.PlaybackStarted", offset: 5000);
 
-        var response = handler.Handle(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession());
+        var response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response);
         _sessionManagerMock.Verify(s => s.OnPlaybackStart(It.IsAny<PlaybackStartInfo>()), Times.Once);
@@ -91,12 +93,12 @@ public class EventHandlerTests
     }
 
     [Fact]
-    public void PlaybackFinished_Handle_ReturnsEmptyResponse()
+    public async Task PlaybackFinished_Handle_ReturnsEmptyResponse()
     {
         var handler = new PlaybackFinishedEventHandler(_sessionManagerMock.Object, _config, _loggerFactory);
         var request = CreateAudioPlayerRequest("AudioPlayer.PlaybackFinished", offset: 10000);
 
-        var response = handler.Handle(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession());
+        var response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response);
         _sessionManagerMock.Verify(s => s.OnPlaybackStopped(It.IsAny<PlaybackStopInfo>()), Times.Once);
@@ -112,12 +114,12 @@ public class EventHandlerTests
     }
 
     [Fact]
-    public void PlaybackStopped_Handle_ReturnsEmptyResponse()
+    public async Task PlaybackStopped_Handle_ReturnsEmptyResponse()
     {
         var handler = new PlaybackStoppedEventHandler(_sessionManagerMock.Object, _config, _loggerFactory);
         var request = CreateAudioPlayerRequest("AudioPlayer.PlaybackStopped", offset: 3000);
 
-        var response = handler.Handle(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession());
+        var response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response);
         _sessionManagerMock.Verify(s => s.OnPlaybackStopped(It.IsAny<PlaybackStopInfo>()), Times.Once);
@@ -133,15 +135,15 @@ public class EventHandlerTests
     }
 
     [Fact]
-    public void PlaybackFailed_Handle_ReturnsErrorMessage()
+    public async Task PlaybackFailed_Handle_ReturnsEmptyResponse()
     {
         var handler = new PlaybackFailedEventHandler(_sessionManagerMock.Object, _config, _loggerFactory);
         var request = CreateAudioPlayerRequest("AudioPlayer.PlaybackFailed");
 
-        var response = handler.Handle(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession());
-        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        var response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
 
-        Assert.Contains("wrong", speech.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.NotNull(response);
+        Assert.Null(response.Response.OutputSpeech);
         _sessionManagerMock.Verify(s => s.OnPlaybackStopped(It.Is<PlaybackStopInfo>(i => i.Failed)), Times.Once);
     }
 
@@ -160,14 +162,15 @@ public class EventHandlerTests
     }
 
     [Fact]
-    public void SessionEnded_Handle_ReturnsEmpty()
+    public async Task SessionEnded_Handle_ReturnsEmpty()
     {
         var handler = new SessionEndedRequestHandler(_sessionManagerMock.Object, _config, _loggerFactory);
-        var response = handler.Handle(
+        var response = await handler.HandleAsync(
             new SessionEndedRequest(),
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            CreateSession());
+            CreateSession(),
+            CancellationToken.None);
 
         Assert.NotNull(response);
     }
@@ -187,14 +190,15 @@ public class EventHandlerTests
     }
 
     [Fact]
-    public void ExceptionHandler_Handle_ReturnsErrorMessage()
+    public async Task ExceptionHandler_Handle_ReturnsErrorMessage()
     {
         var handler = new ExceptionHandler(_sessionManagerMock.Object, _config, _loggerFactory);
-        var response = handler.Handle(
+        var response = await handler.HandleAsync(
             new SystemExceptionRequest { Error = new Error { Message = "test error" } },
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            CreateSession());
+            CreateSession(),
+            CancellationToken.None);
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
 
         Assert.Contains("wrong", speech.Text, StringComparison.OrdinalIgnoreCase);

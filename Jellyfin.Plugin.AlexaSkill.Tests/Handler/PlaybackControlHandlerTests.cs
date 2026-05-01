@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using global::Alexa.NET;
 using global::Alexa.NET.Request;
 using global::Alexa.NET.Request.Type;
@@ -45,14 +47,14 @@ public class PlaybackControlHandlerTests
     }
 
     [Fact]
-    public void PauseIntentHandler_Handle_ReturnsAudioPlayerStop()
+    public async Task PauseIntentHandler_Handle_ReturnsAudioPlayerStop()
     {
         var handler = new PauseIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory);
-        var response = handler.Handle(
+        var response = await handler.HandleAsync(
             new IntentRequest { Intent = new Intent { Name = "AMAZON.PauseIntent" } },
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            CreateSession());
+            CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response);
         Assert.NotNull(response.Response);
@@ -69,14 +71,14 @@ public class PlaybackControlHandlerTests
     }
 
     [Fact]
-    public void FallbackIntentHandler_Handle_ReturnsFallbackMessage()
+    public async Task FallbackIntentHandler_Handle_ReturnsFallbackMessage()
     {
         var handler = new FallbackIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory);
-        var response = handler.Handle(
+        var response = await handler.HandleAsync(
             new IntentRequest { Intent = new Intent { Name = "AMAZON.FallbackIntent" } },
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            CreateSession());
+            CreateSession(), CancellationToken.None);
 
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
         Assert.Contains("could not understand", speech.Text, StringComparison.OrdinalIgnoreCase);

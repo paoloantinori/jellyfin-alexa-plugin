@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Web;
 using Jellyfin.Plugin.AlexaSkill.Controller.Handler;
 using Jellyfin.Plugin.AlexaSkill.Entities;
@@ -150,7 +151,7 @@ public class ConfigurationController : ControllerBase
     /// <returns>A <see cref="ActionResult"/>.</returns>
     [HttpDelete("user-skills/{userId}")]
     [Authorize(Policy = "RequiresElevation")]
-    public ActionResult DeleteUserSkill([FromRoute] string userId)
+    public async Task<ActionResult> DeleteUserSkill([FromRoute] string userId)
     {
         if (!TryResolvePluginUser(userId, out var pluginUser, out var error))
         {
@@ -168,14 +169,14 @@ public class ConfigurationController : ControllerBase
 
             if (!otherUsersWithSameSkill)
             {
-                TryDeleteCloudSkill(pluginUser, skillId);
+                await TryDeleteCloudSkillAsync(pluginUser, skillId).ConfigureAwait(false);
             }
         }
 
         return new OkResult();
     }
 
-    private void TryDeleteCloudSkill(Jellyfin.Plugin.AlexaSkill.Entities.User user, string skillId)
+    private async Task TryDeleteCloudSkillAsync(Jellyfin.Plugin.AlexaSkill.Entities.User user, string skillId)
     {
         try
         {
@@ -186,7 +187,7 @@ public class ConfigurationController : ControllerBase
                 return;
             }
 
-            smapi.DeleteSkill(skillId);
+            await smapi.DeleteSkillAsync(skillId).ConfigureAwait(false);
             _logger.LogInformation("Deleted cloud skill {SkillId} (last user removed)", skillId);
         }
         catch (Exception ex)

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using global::Alexa.NET;
 using global::Alexa.NET.Request;
 using global::Alexa.NET.Request.Type;
@@ -72,21 +74,21 @@ public class MediaInfoIntentHandlerTests
     }
 
     [Fact]
-    public void Handle_NoMediaPlaying_ReturnsNothingPlaying()
+    public async Task Handle_NoMediaPlaying_ReturnsNothingPlaying()
     {
         var handler = CreateHandler();
         var session = CreateSession();
         session.NowPlayingItem = null;
 
-        var response = handler.Handle(
+        var response = await handler.HandleAsync(
             CreateMediaInfoRequest(), CreateContext(),
-            TestHelpers.CreateTestUser(), session);
+            TestHelpers.CreateTestUser(), session, CancellationToken.None);
 
         Assert.Contains("Nothing is currently playing", GetSpeechText(response));
     }
 
     [Fact]
-    public void Handle_AudioItem_ReportsTrackArtistAndAlbum()
+    public async Task Handle_AudioItem_ReportsTrackArtistAndAlbum()
     {
         var handler = CreateHandler();
         var session = CreateSession();
@@ -98,9 +100,9 @@ public class MediaInfoIntentHandlerTests
             Album = "A Night at the Opera"
         };
 
-        var text = GetSpeechText(handler.Handle(
+        var text = GetSpeechText(await handler.HandleAsync(
             CreateMediaInfoRequest(), CreateContext(),
-            TestHelpers.CreateTestUser(), session));
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
 
         Assert.Contains("Bohemian Rhapsody", text);
         Assert.Contains("Queen", text);
@@ -108,7 +110,7 @@ public class MediaInfoIntentHandlerTests
     }
 
     [Fact]
-    public void Handle_AudioItem_NoAlbum_ReportsTrackAndArtist()
+    public async Task Handle_AudioItem_NoAlbum_ReportsTrackAndArtist()
     {
         var handler = CreateHandler();
         var session = CreateSession();
@@ -119,16 +121,16 @@ public class MediaInfoIntentHandlerTests
             AlbumArtist = "The Beatles"
         };
 
-        var text = GetSpeechText(handler.Handle(
+        var text = GetSpeechText(await handler.HandleAsync(
             CreateMediaInfoRequest(), CreateContext(),
-            TestHelpers.CreateTestUser(), session));
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
 
         Assert.Contains("Yesterday", text);
         Assert.Contains("The Beatles", text);
     }
 
     [Fact]
-    public void Handle_AudioItem_NoArtistOrAlbum_ReportsTrackOnly()
+    public async Task Handle_AudioItem_NoArtistOrAlbum_ReportsTrackOnly()
     {
         var handler = CreateHandler();
         var session = CreateSession();
@@ -138,15 +140,15 @@ public class MediaInfoIntentHandlerTests
             Type = BaseItemKind.Audio
         };
 
-        var text = GetSpeechText(handler.Handle(
+        var text = GetSpeechText(await handler.HandleAsync(
             CreateMediaInfoRequest(), CreateContext(),
-            TestHelpers.CreateTestUser(), session));
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
 
         Assert.Contains("Mystery Track", text);
     }
 
     [Fact]
-    public void Handle_EpisodeItem_ReportsSeriesSeasonEpisode()
+    public async Task Handle_EpisodeItem_ReportsSeriesSeasonEpisode()
     {
         var handler = CreateHandler();
         var session = CreateSession();
@@ -159,9 +161,9 @@ public class MediaInfoIntentHandlerTests
             IndexNumber = 1
         };
 
-        var text = GetSpeechText(handler.Handle(
+        var text = GetSpeechText(await handler.HandleAsync(
             CreateMediaInfoRequest(), CreateContext(),
-            TestHelpers.CreateTestUser(), session));
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
 
         Assert.Contains("Breaking Bad", text);
         Assert.Contains("season 1", text);
@@ -170,7 +172,7 @@ public class MediaInfoIntentHandlerTests
     }
 
     [Fact]
-    public void Handle_EpisodeItem_NoSeriesName_ReportsEpisodeOnly()
+    public async Task Handle_EpisodeItem_NoSeriesName_ReportsEpisodeOnly()
     {
         var handler = CreateHandler();
         var session = CreateSession();
@@ -180,15 +182,15 @@ public class MediaInfoIntentHandlerTests
             Type = BaseItemKind.Episode
         };
 
-        var text = GetSpeechText(handler.Handle(
+        var text = GetSpeechText(await handler.HandleAsync(
             CreateMediaInfoRequest(), CreateContext(),
-            TestHelpers.CreateTestUser(), session));
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
 
         Assert.Contains("Unknown Episode", text);
     }
 
     [Fact]
-    public void Handle_MovieItem_ReportsTitleAndYear()
+    public async Task Handle_MovieItem_ReportsTitleAndYear()
     {
         var handler = CreateHandler();
         var session = CreateSession();
@@ -199,16 +201,16 @@ public class MediaInfoIntentHandlerTests
             ProductionYear = 1999
         };
 
-        var text = GetSpeechText(handler.Handle(
+        var text = GetSpeechText(await handler.HandleAsync(
             CreateMediaInfoRequest(), CreateContext(),
-            TestHelpers.CreateTestUser(), session));
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
 
         Assert.Contains("The Matrix", text);
         Assert.Contains("1999", text);
     }
 
     [Fact]
-    public void Handle_MovieItem_NoYear_ReportsTitleOnly()
+    public async Task Handle_MovieItem_NoYear_ReportsTitleOnly()
     {
         var handler = CreateHandler();
         var session = CreateSession();
@@ -218,16 +220,16 @@ public class MediaInfoIntentHandlerTests
             Type = BaseItemKind.Movie
         };
 
-        var text = GetSpeechText(handler.Handle(
+        var text = GetSpeechText(await handler.HandleAsync(
             CreateMediaInfoRequest(), CreateContext(),
-            TestHelpers.CreateTestUser(), session));
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
 
         Assert.Contains("Old Movie", text);
         Assert.DoesNotContain("(", text);
     }
 
     [Fact]
-    public void Handle_UnknownType_ReportsName()
+    public async Task Handle_UnknownType_ReportsName()
     {
         var handler = CreateHandler();
         var session = CreateSession();
@@ -237,15 +239,15 @@ public class MediaInfoIntentHandlerTests
             Type = BaseItemKind.Photo
         };
 
-        var text = GetSpeechText(handler.Handle(
+        var text = GetSpeechText(await handler.HandleAsync(
             CreateMediaInfoRequest(), CreateContext(),
-            TestHelpers.CreateTestUser(), session));
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
 
         Assert.Contains("Some Media", text);
     }
 
     [Fact]
-    public void Handle_WithPositionAndRuntime_ReportsPosition()
+    public async Task Handle_WithPositionAndRuntime_ReportsPosition()
     {
         var handler = CreateHandler();
         var session = CreateSession();
@@ -260,16 +262,16 @@ public class MediaInfoIntentHandlerTests
             PositionTicks = TimeSpan.FromMinutes(2).Ticks
         };
 
-        var text = GetSpeechText(handler.Handle(
+        var text = GetSpeechText(await handler.HandleAsync(
             CreateMediaInfoRequest(), CreateContext(),
-            TestHelpers.CreateTestUser(), session));
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
 
         Assert.Contains("2 minutes", text);
         Assert.Contains("4 minutes", text);
     }
 
     [Fact]
-    public void Handle_WithPositionNoRuntime_ReportsPositionOnly()
+    public async Task Handle_WithPositionNoRuntime_ReportsPositionOnly()
     {
         var handler = CreateHandler();
         var session = CreateSession();
@@ -283,16 +285,16 @@ public class MediaInfoIntentHandlerTests
             PositionTicks = TimeSpan.FromMinutes(1).Ticks
         };
 
-        var text = GetSpeechText(handler.Handle(
+        var text = GetSpeechText(await handler.HandleAsync(
             CreateMediaInfoRequest(), CreateContext(),
-            TestHelpers.CreateTestUser(), session));
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
 
         Assert.Contains("1 minutes", text);
         Assert.DoesNotContain("of", text);
     }
 
     [Fact]
-    public void Handle_NullPlayState_NoPositionReported()
+    public async Task Handle_NullPlayState_NoPositionReported()
     {
         var handler = CreateHandler();
         var session = CreateSession();
@@ -304,9 +306,9 @@ public class MediaInfoIntentHandlerTests
         };
         session.PlayState = null;
 
-        var text = GetSpeechText(handler.Handle(
+        var text = GetSpeechText(await handler.HandleAsync(
             CreateMediaInfoRequest(), CreateContext(),
-            TestHelpers.CreateTestUser(), session));
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
 
         Assert.DoesNotContain("Position", text);
     }

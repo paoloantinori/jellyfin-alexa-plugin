@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Threading;
+using System.Threading.Tasks;
 using Alexa.NET.Management;
 using Alexa.NET.Management.AccountLinking;
 using Alexa.NET.Management.Api;
@@ -38,17 +39,17 @@ public class SmapiManagement : ManagementApi
     /// <param name="endpointUri">The alexa api endpoint.</param>
     /// <param name="clientId">The client api which will be used in alexa requests to the api endpoint.</param>
     /// <returns>The id of the created skill.</returns>
-    public string CreateSkill(ManifestSkill manifestSkill, Collection<SkillInteractionModel> interactionModels, string endpointUri, string clientId)
+    public async Task<string> CreateSkillAsync(ManifestSkill manifestSkill, Collection<SkillInteractionModel> interactionModels, string endpointUri, string clientId)
     {
         _logger.LogInformation("Creating new skill...");
 
-        VendorResponse vendor = this.Vendors.Get().Result;
+        VendorResponse vendor = await this.Vendors.Get().ConfigureAwait(false);
         string vendorId = vendor.Vendors[0].Id;
 
-        SkillId skillId = this.Skills.Create(vendorId, manifestSkill).Result;
+        SkillId skillId = await this.Skills.Create(vendorId, manifestSkill).ConfigureAwait(false);
         _logger.LogInformation("Skill creation initiated: {SkillId}", skillId.Id);
 
-        WaitForSkillStatus(skillId.Id);
+        await WaitForSkillStatusAsync(skillId.Id).ConfigureAwait(false);
 
         _logger.LogInformation("Skill manifest processed, updating account linking and interaction models");
 
@@ -69,13 +70,13 @@ public class SmapiManagement : ManagementApi
     /// <param name="skillId">The id of the skill to update.</param>
     /// <param name="manifestSkill">The new manifest skill.</param>
     /// <param name="interactionModels">The new interaction models.</param>
-    public void UpdateSkill(string skillId, ManifestSkill manifestSkill, Collection<SkillInteractionModel> interactionModels)
+    public async Task UpdateSkillAsync(string skillId, ManifestSkill manifestSkill, Collection<SkillInteractionModel> interactionModels)
     {
         _logger.LogInformation("Updating skill {SkillId}...", skillId);
 
-        _ = this.Skills.Update(skillId, SkillStage.Development, manifestSkill);
+        _ = await this.Skills.Update(skillId, SkillStage.Development, manifestSkill).ConfigureAwait(false);
 
-        WaitForSkillStatus(skillId);
+        await WaitForSkillStatusAsync(skillId).ConfigureAwait(false);
 
         foreach (var interactionModel in interactionModels)
         {
@@ -90,15 +91,16 @@ public class SmapiManagement : ManagementApi
     /// </summary>
     /// <param name="skillId">The id of the skill to get.</param>
     /// <returns>The skill.</returns>
-    public ManifestSkill GetSkill(string skillId)
+    public async Task<ManifestSkill> GetSkillAsync(string skillId)
     {
         _logger.LogDebug("Getting skill {SkillId}", skillId);
 
         try
         {
-            return new ManifestSkill(this.Skills.Get(skillId, SkillStage.Development).Result.Manifest);
+            var skillResponse = await this.Skills.Get(skillId, SkillStage.Development).ConfigureAwait(false);
+            return new ManifestSkill(skillResponse.Manifest);
         }
-        catch (AggregateException ex)
+        catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to get skill {SkillId}", skillId);
             throw;
@@ -109,16 +111,16 @@ public class SmapiManagement : ManagementApi
     /// Deletes a skill.
     /// </summary>
     /// <param name="skillId">The id of the skill to delete.</param>
-    public void DeleteSkill(string skillId)
+    public async Task DeleteSkillAsync(string skillId)
     {
         _logger.LogInformation("Deleting skill {SkillId}...", skillId);
 
         try
         {
-            this.Skills.Delete(skillId).Wait();
+            await this.Skills.Delete(skillId).ConfigureAwait(false);
             _logger.LogInformation("Skill deleted: {SkillId}", skillId);
         }
-        catch (AggregateException ex)
+        catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to delete skill {SkillId}", skillId);
             throw;
@@ -130,15 +132,15 @@ public class SmapiManagement : ManagementApi
     /// </summary>
     /// <param name="skillId">The id of the skill to get the AccountLinking data from.</param>
     /// <returns>The AccountLinking data.</returns>
-    public AccountLinkData GetAccountLinkData(string skillId)
+    public async Task<AccountLinkData> GetAccountLinkDataAsync(string skillId)
     {
         _logger.LogDebug("Getting account link data for skill {SkillId}", skillId);
 
         try
         {
-            return this.AccountLinking.Get(skillId, SkillStage.Development).Result;
+            return await this.AccountLinking.Get(skillId, SkillStage.Development).ConfigureAwait(false);
         }
-        catch (AggregateException ex)
+        catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to get account link data for skill {SkillId}", skillId);
             throw;
@@ -167,16 +169,16 @@ public class SmapiManagement : ManagementApi
     /// <summary>
     /// Polls skill status until it transitions out of IN_PROGRESS.
     /// </summary>
-    private void WaitForSkillStatus(string skillId)
+    private async Task WaitForSkillStatusAsync(string skillId)
     {
         for (int i = 0; i < MaxPollRetries; i++)
         {
-            if (this.GetSkillStatus(skillId).Manifest.LastModified.Status != SkillStatusState.IN_PROGRESS)
+            if ((await GetSkillStatusAsync(skillId).ConfigureAwait(false)).Manifest.LastModified.Status != SkillStatusState.IN_PROGRESS)
             {
                 return;
             }
 
-            Thread.Sleep(1000);
+            await Task.Delay(1000).ConfigureAwait(false);
         }
 
         throw new TimeoutException($"Skill {skillId} did not transition from IN_PROGRESS within {MaxPollRetries} seconds");
@@ -187,8 +189,8 @@ public class SmapiManagement : ManagementApi
     /// </summary>
     /// <param name="skillId">The id of the skill.</param>
     /// <returns>The skill status.</returns>
-    public SkillStatus GetSkillStatus(string skillId)
+    public async Task<SkillStatus> GetSkillStatusAsync(string skillId)
     {
-        return this.Skills.Status(skillId).Result;
+        return await this.Skills.Status(skillId).ConfigureAwait(false);
     }
 }

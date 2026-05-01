@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Collections.Generic;
 using global::Alexa.NET;
 using global::Alexa.NET.Request;
@@ -87,7 +89,7 @@ public class PlayVideoIntentHandlerTests
     }
 
     [Fact]
-    public void Handle_NoTitleSlot_ReturnsPrompt()
+    public async Task Handle_NoTitleSlot_ReturnsPrompt()
     {
         var handler = CreateHandler();
         var request = new IntentRequest
@@ -99,46 +101,46 @@ public class PlayVideoIntentHandlerTests
             }
         };
 
-        var response = handler.Handle(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession());
+        var response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
 
         Assert.Contains("didn't catch", speech.Text);
     }
 
     [Fact]
-    public void Handle_EmptyTitle_ReturnsPrompt()
+    public async Task Handle_EmptyTitle_ReturnsPrompt()
     {
         var handler = CreateHandler();
-        var response = handler.Handle(
+        var response = await handler.HandleAsync(
             CreatePlayVideoRequest(""),
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            CreateSession());
+            CreateSession(), CancellationToken.None);
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
 
         Assert.Contains("didn't catch", speech.Text);
     }
 
     [Fact]
-    public void Handle_NoResults_ReturnsNotFound()
+    public async Task Handle_NoResults_ReturnsNotFound()
     {
         _libraryManagerMock
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
 
         var handler = CreateHandler();
-        var response = handler.Handle(
+        var response = await handler.HandleAsync(
             CreatePlayVideoRequest("Unknown Movie"),
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            CreateSession());
+            CreateSession(), CancellationToken.None);
 
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
         Assert.Contains("couldn't find", speech.Text);
     }
 
     [Fact]
-    public void Handle_FoundMovie_ReturnsVideoAppDirective()
+    public async Task Handle_FoundMovie_ReturnsVideoAppDirective()
     {
         var movie = CreateTestItem("The Matrix");
 
@@ -147,11 +149,11 @@ public class PlayVideoIntentHandlerTests
             .Returns(new List<BaseItem> { movie });
 
         var handler = CreateHandler();
-        var response = handler.Handle(
+        var response = await handler.HandleAsync(
             CreatePlayVideoRequest("The Matrix"),
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            CreateSession());
+            CreateSession(), CancellationToken.None);
 
         Assert.Null(response.Response.OutputSpeech);
         Assert.NotNull(response.Response.Directives);
@@ -160,7 +162,7 @@ public class PlayVideoIntentHandlerTests
     }
 
     [Fact]
-    public void Handle_FoundMultipleResults_ReturnsFirstMatch()
+    public async Task Handle_FoundMultipleResults_ReturnsFirstMatch()
     {
         var movie1 = CreateTestItem("The Matrix");
         var movie2 = CreateTestItem("The Matrix Reloaded");
@@ -170,25 +172,25 @@ public class PlayVideoIntentHandlerTests
             .Returns(new List<BaseItem> { movie1, movie2 });
 
         var handler = CreateHandler();
-        var response = handler.Handle(
+        var response = await handler.HandleAsync(
             CreatePlayVideoRequest("The Matrix"),
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            CreateSession());
+            CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response.Response.Directives);
         Assert.Single(response.Response.Directives);
     }
 
     [Fact]
-    public void Handle_NullTitleSlotValue_ReturnsPrompt()
+    public async Task Handle_NullTitleSlotValue_ReturnsPrompt()
     {
         var handler = CreateHandler();
-        var response = handler.Handle(
+        var response = await handler.HandleAsync(
             CreatePlayVideoRequest(null),
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            CreateSession());
+            CreateSession(), CancellationToken.None);
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
 
         Assert.Contains("didn't catch", speech.Text);
@@ -197,21 +199,21 @@ public class PlayVideoIntentHandlerTests
     [Theory]
     [InlineData("  ")]
     [InlineData("\t")]
-    public void Handle_WhitespaceTitle_ReturnsPrompt(string title)
+    public async Task Handle_WhitespaceTitle_ReturnsPrompt(string title)
     {
         var handler = CreateHandler();
-        var response = handler.Handle(
+        var response = await handler.HandleAsync(
             CreatePlayVideoRequest(title),
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            CreateSession());
+            CreateSession(), CancellationToken.None);
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
 
         Assert.Contains("didn't catch", speech.Text);
     }
 
     [Fact]
-    public void Handle_FoundMovie_DirectiveContainsSourceAndMetadata()
+    public async Task Handle_FoundMovie_DirectiveContainsSourceAndMetadata()
     {
         var id = Guid.NewGuid();
         var movie = CreateTestItem("The Matrix", id);
@@ -221,11 +223,11 @@ public class PlayVideoIntentHandlerTests
             .Returns(new List<BaseItem> { movie });
 
         var handler = CreateHandler();
-        var response = handler.Handle(
+        var response = await handler.HandleAsync(
             CreatePlayVideoRequest("The Matrix"),
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            CreateSession());
+            CreateSession(), CancellationToken.None);
 
         var directive = Assert.IsType<VideoAppLaunchDirective>(response.Response.Directives[0]);
         Assert.NotNull(directive.VideoItem);
@@ -236,7 +238,7 @@ public class PlayVideoIntentHandlerTests
     }
 
     [Fact]
-    public void Handle_FoundMovie_SetsSessionQueue()
+    public async Task Handle_FoundMovie_SetsSessionQueue()
     {
         var id = Guid.NewGuid();
         var movie = CreateTestItem("The Matrix", id);
@@ -247,7 +249,7 @@ public class PlayVideoIntentHandlerTests
             .Returns(new List<BaseItem> { movie });
 
         var handler = CreateHandler();
-        handler.Handle(CreatePlayVideoRequest("The Matrix"), CreateContext(), TestHelpers.CreateTestUser(), session);
+        await handler.HandleAsync(CreatePlayVideoRequest("The Matrix"), CreateContext(), TestHelpers.CreateTestUser(), session, CancellationToken.None);
 
         Assert.NotNull(session.NowPlayingQueue);
         Assert.Single(session.NowPlayingQueue);
@@ -264,7 +266,7 @@ public class PlayVideoIntentHandlerTests
     }
 
     [Fact]
-    public void Handle_VideoResponse_EndsSession()
+    public async Task Handle_VideoResponse_EndsSession()
     {
         var movie = CreateTestItem("Test Video");
 
@@ -273,11 +275,11 @@ public class PlayVideoIntentHandlerTests
             .Returns(new List<BaseItem> { movie });
 
         var handler = CreateHandler();
-        var response = handler.Handle(
+        var response = await handler.HandleAsync(
             CreatePlayVideoRequest("Test Video"),
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            CreateSession());
+            CreateSession(), CancellationToken.None);
 
         Assert.True(response.Response.ShouldEndSession);
     }

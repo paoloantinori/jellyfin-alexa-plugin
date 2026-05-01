@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
@@ -40,7 +42,7 @@ public class PlaybackFailedEventHandler : BaseHandler
     }
 
     /// <inheritdoc/>
-    public override SkillResponse Handle(Request request, Context context, Entities.User user, SessionInfo session)
+    public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         AudioPlayerRequest req = (AudioPlayerRequest)request;
 
@@ -50,8 +52,9 @@ public class PlaybackFailedEventHandler : BaseHandler
             ItemId = new Guid(req.Token),
             Failed = true,
         };
-        SessionManager.OnPlaybackStopped(playbackStopInfo).ConfigureAwait(false);
+        Logger.LogError("Playback failed for item {ItemId}", req.Token);
+        await SessionManager.OnPlaybackStopped(playbackStopInfo).ConfigureAwait(false);
 
-        return ResponseBuilder.Tell(ResponseStrings.Get("PlaybackFailed", GetLocale(request)));
+        return ResponseBuilder.Empty();
     }
 }
