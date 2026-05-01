@@ -13,25 +13,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: get the tag name
-        id: get_tag
-        run: echo ::set-output name=TAG::$(echo $GITHUB_REF | cut -d / -f 3)
-
       - name: Parse version
         id: version
         run: echo "VERSION="$(grep -oP "(?<=<Version>)[^<]+" Directory.Build.props) >> $GITHUB_OUTPUT
-      
-      - name: Check if tag and project version matches
-        run: if ! diff <(echo "${{ steps.get_tag.outputs.TAG }}" ) <(echo "${{ steps.version.outputs.VERSION }}"); then exit -1; fi
 
-      - name: Setup .NET Core SDK 8.0
+      - name: Check if tag and project version matches
+        if: startsWith(github.ref, 'refs/tags/')
+        run: if ! diff <(echo "${GITHUB_REF##*/}") <(echo "${{ steps.version.outputs.VERSION }}"); then exit 1; fi
+
+      - name: Setup .NET SDK 9.0
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.x
+          dotnet-version: 9.x
 
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.10' 
+          python-version: '3.12'
 
       - name: Build
         run: dotnet publish --configuration Release
@@ -41,22 +38,27 @@ jobs:
 
       - name: Create zip
         run: |
-          mkdir -p archive/Jellyfin.Plugin.AlexaSkill
-          cp -r Jellyfin.Plugin.AlexaSkill/bin/Release/net8.0/publish/* archive/Jellyfin.Plugin.AlexaSkill
-          cd archive && zip -r AlexaSkill_${{ steps.version.outputs.VERSION }}.zip Jellyfin.Plugin.AlexaSkill
+          cd Jellyfin.Plugin.AlexaSkill/bin/Release/net9.0/publish
+          zip -j ${GITHUB_WORKSPACE}/AlexaSkill_${{ steps.version.outputs.VERSION }}.zip \
+            Alexa.NET.dll \
+            Alexa.NET.Management.dll \
+            Amazon.Lambda.Core.dll \
+            Amazon.Lambda.Serialization.Json.dll \
+            Jellyfin.Plugin.AlexaSkill.dll \
+            Refit.dll
 
       - name: Create github release
         id: create-release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.VERSION }}
-          files: archive/AlexaSkill_${{ steps.version.outputs.VERSION }}.zip
+          files: AlexaSkill_${{ steps.version.outputs.VERSION }}.zip
           generate_release_notes: true
           fail_on_unmatched_files: true
           prerelease: true
 
       - name: Add release to repo manifest
-        run: python3 .github/workflows/add_release_to_manifest.py ${{ steps.version.outputs.VERSION }} archive/AlexaSkill_${{ steps.version.outputs.VERSION }}.zip
+        run: python3 .github/workflows/add_release_to_manifest.py ${{ steps.version.outputs.VERSION }} AlexaSkill_${{ steps.version.outputs.VERSION }}.zip
 
       - name: Commit manifest changes
         run: |

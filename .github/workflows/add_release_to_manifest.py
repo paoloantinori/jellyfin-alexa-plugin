@@ -1,32 +1,45 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import hashlib
 import json
 import sys
 
-if len(sys.argv) != 3:
-    print("ERROR: Wrong arguments!\nUsage: add_release_to_manifest.py <version> <file>")
-    sys.exit(1)
+import yaml
 
-with open("manifest.json", "r") as f:
-    manifest = json.load(f)
 
-version = sys.argv[1]
+def main():
+    if len(sys.argv) != 3:
+        print("ERROR: Wrong arguments!\nUsage: add_release_to_manifest.py <version> <file>")
+        sys.exit(1)
 
-with open(sys.argv[2], "rb") as f:
-    checksum = hashlib.md5()
-    while chunk := f.read(4096):
-        checksum.update(chunk)
+    version = sys.argv[1]
+    zip_path = sys.argv[2]
 
-new_version_info = {
-    "version": version,
-    "checksum": checksum.hexdigest(),
-    "sourceUrl": f"https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/{version}/AlexaSkill_{version}.zip",
-    "changelog": "See for more details: https://github.com/paoloantinori/jellyfin-alexa-plugin/releases",
-    "targetAbi": "10.8.0.0",
-    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-}
+    with open("manifest.json", "r") as f:
+        manifest = json.load(f)
 
-manifest[0]["versions"].append(new_version_info)
+    with open("build.yaml", "r") as f:
+        build = yaml.safe_load(f)
 
-with open("manifest.json", "w") as f:
-    json.dump(manifest, f, indent=4)
+    with open(zip_path, "rb") as f:
+        checksum = hashlib.md5()
+        while chunk := f.read(4096):
+            checksum.update(chunk)
+
+    new_version_info = {
+        "version": version,
+        "checksum": checksum.hexdigest(),
+        "sourceUrl": f"https://github.com/{build['owner']}/{build.get('repository', 'jellyfin-alexa-plugin')}/releases/download/{version}/AlexaSkill_{version}.zip",
+        "changelog": build.get("changelog", ""),
+        "targetAbi": build["targetAbi"],
+        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    }
+
+    manifest[0]["versions"].append(new_version_info)
+
+    with open("manifest.json", "w") as f:
+        json.dump(manifest, f, indent=4)
+        f.write("\n")
+
+
+if __name__ == "__main__":
+    main()
