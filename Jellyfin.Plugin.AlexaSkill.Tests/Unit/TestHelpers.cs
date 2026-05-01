@@ -1,5 +1,4 @@
 using System;
-using System.Reflection;
 using Alexa.NET;
 using Alexa.NET.Request;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -28,8 +27,7 @@ internal static class TestHelpers
 
     internal static void SetServerAddress(PluginConfiguration config, string address)
     {
-        var field = typeof(PluginConfiguration).GetField("serverAddress", BindingFlags.NonPublic | BindingFlags.Instance);
-        field?.SetValue(config, address);
+        config.ServerAddress = address;
     }
 
     internal static SessionInfo CreateTestSession(ISessionManager sessionManager, ILoggerFactory loggerFactory)

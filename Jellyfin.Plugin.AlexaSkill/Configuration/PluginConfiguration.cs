@@ -46,15 +46,33 @@ public class PluginConfiguration : BasePluginConfiguration
 
     /// <summary>
     /// Gets or sets the server address.
+    /// Normalized to always end with a trailing slash for correct relative URI resolution
+    /// (e.g., when Jellyfin is behind a reverse proxy with a subpath like /jellyfin/).
     /// </summary>
     public string ServerAddress
     {
         get => serverAddress;
         set
         {
-            serverAddress = value;
+            serverAddress = NormalizeTrailingSlash(value);
             UpdateManifestSkill();
         }
+    }
+
+    /// <summary>
+    /// Ensure the URL ends with a trailing slash so that relative URI construction
+    /// preserves path segments. Without this, <c>new Uri("https://host/path", "Items/1")</c>
+    /// resolves to <c>https://host/Items/1</c> instead of <c>https://host/path/Items/1</c>.
+    /// </summary>
+    private static string NormalizeTrailingSlash(string? address)
+    {
+        if (string.IsNullOrWhiteSpace(address))
+        {
+            return string.Empty;
+        }
+
+        address = address.TrimEnd('/');
+        return address + "/";
     }
 
     /// <summary>
