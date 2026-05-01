@@ -230,11 +230,10 @@ public class PluginConfigurationTests
     [Fact]
     public void ServerAddress_Setter_DoesNotThrow_WhenPluginInstanceIsNull()
     {
-        // Plugin.Instance is null during tests, so setting ServerAddress should not throw
         var config = CreateConfig();
         var exception = Record.Exception(() => TestHelpers.SetServerAddress(config, "https://example.com"));
         Assert.Null(exception);
-        Assert.Equal("https://example.com", config.ServerAddress);
+        Assert.Equal("https://example.com/", config.ServerAddress);
     }
 
     [Fact]
@@ -243,5 +242,94 @@ public class PluginConfigurationTests
         var config = CreateConfig();
         var exception = Record.Exception(() => config.SslCertType = global::Alexa.NET.Management.SslCertificateType.Trusted);
         Assert.Null(exception);
+    }
+
+    // --- Trailing Slash Normalization Tests ---
+
+    [Fact]
+    public void ServerAddress_Normalizes_AddsTrailingSlash()
+    {
+        var config = CreateConfig();
+        TestHelpers.SetServerAddress(config, "https://example.com:8096");
+        Assert.Equal("https://example.com:8096/", config.ServerAddress);
+    }
+
+    [Fact]
+    public void ServerAddress_Normalizes_RemovesExtraTrailingSlashes()
+    {
+        var config = CreateConfig();
+        TestHelpers.SetServerAddress(config, "https://example.com:8096///");
+        Assert.Equal("https://example.com:8096/", config.ServerAddress);
+    }
+
+    [Fact]
+    public void ServerAddress_Normalizes_KeepsSingleTrailingSlash()
+    {
+        var config = CreateConfig();
+        TestHelpers.SetServerAddress(config, "https://example.com:8096/");
+        Assert.Equal("https://example.com:8096/", config.ServerAddress);
+    }
+
+    [Fact]
+    public void ServerAddress_Normalizes_SubpathWithoutSlash()
+    {
+        var config = CreateConfig();
+        TestHelpers.SetServerAddress(config, "https://example.com/jellyfin");
+        Assert.Equal("https://example.com/jellyfin/", config.ServerAddress);
+    }
+
+    [Fact]
+    public void ServerAddress_Normalizes_SubpathWithSlash()
+    {
+        var config = CreateConfig();
+        TestHelpers.SetServerAddress(config, "https://example.com/jellyfin/");
+        Assert.Equal("https://example.com/jellyfin/", config.ServerAddress);
+    }
+
+    [Fact]
+    public void ServerAddress_Normalizes_EmptyString()
+    {
+        var config = CreateConfig();
+        TestHelpers.SetServerAddress(config, string.Empty);
+        Assert.Equal(string.Empty, config.ServerAddress);
+    }
+
+    // --- URI Resolution with Subpath Tests ---
+
+    [Fact]
+    public void UriResolution_Subpath_ItemsUrlConstructedCorrectly()
+    {
+        var config = CreateConfig();
+        TestHelpers.SetServerAddress(config, "https://example.com/jellyfin");
+
+        // Simulate what GetStreamUrl does
+        var baseUri = new Uri(config.ServerAddress);
+        var streamUrl = new Uri(baseUri, "Items/" + Guid.NewGuid() + "/Download?api_key=test");
+
+        Assert.StartsWith("https://example.com/jellyfin/Items/", streamUrl.ToString());
+    }
+
+    [Fact]
+    public void UriResolution_Subpath_AudioUrlConstructedCorrectly()
+    {
+        var config = CreateConfig();
+        TestHelpers.SetServerAddress(config, "https://example.com/jellyfin");
+
+        var baseUri = new Uri(config.ServerAddress);
+        var audioUrl = new Uri(baseUri, "Audio/" + Guid.NewGuid() + "/universal");
+
+        Assert.StartsWith("https://example.com/jellyfin/Audio/", audioUrl.ToString());
+    }
+
+    [Fact]
+    public void UriResolution_NoSubpath_ItemsUrlConstructedCorrectly()
+    {
+        var config = CreateConfig();
+        TestHelpers.SetServerAddress(config, "https://example.com:8096");
+
+        var baseUri = new Uri(config.ServerAddress);
+        var streamUrl = new Uri(baseUri, "Items/" + Guid.NewGuid() + "/Download?api_key=test");
+
+        Assert.StartsWith("https://example.com:8096/Items/", streamUrl.ToString());
     }
 }
