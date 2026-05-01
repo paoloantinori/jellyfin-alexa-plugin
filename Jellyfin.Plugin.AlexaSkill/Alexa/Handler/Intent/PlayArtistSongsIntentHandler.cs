@@ -68,6 +68,8 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         IntentRequest intentRequest = (IntentRequest)request;
         string musician = intentRequest.Intent.Slots["musician"].Value;
 
+        await SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)).ConfigureAwait(false);
+
         Jellyfin.Database.Implementations.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
 
         IReadOnlyList<BaseItem> artists = _libraryManager.GetItemList(new InternalItemsQuery()

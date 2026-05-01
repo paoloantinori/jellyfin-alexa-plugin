@@ -37,5 +37,6 @@
   "TrackByArtistFromAlbum": "{0} by {1}, from {2}",
   "SeasonEpisode": "{0}, season {1}, episode {2}: {3}",
   "SeriesTitle": "{0}: {1}",
-  "TitleWithYear": "{0} ({1})"
+  "TitleWithYear": "{0} ({1})",
+  "SearchingMedia": "Searching for your music..."
 }

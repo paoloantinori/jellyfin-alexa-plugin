@@ -58,6 +58,8 @@ public class PlayChannelIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchChannelName", locale));
         }
 
+        await SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)).ConfigureAwait(false);
+
         Jellyfin.Database.Implementations.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
 
         IReadOnlyList<BaseItem> channels = _libraryManager.GetItemList(new InternalItemsQuery()

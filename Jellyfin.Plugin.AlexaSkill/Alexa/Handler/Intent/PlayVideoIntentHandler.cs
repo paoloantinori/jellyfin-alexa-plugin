@@ -58,6 +58,8 @@ public class PlayVideoIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchVideoTitle", locale));
         }
 
+        await SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)).ConfigureAwait(false);
+
         Jellyfin.Database.Implementations.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
 
         IReadOnlyList<BaseItem> videos = _libraryManager.GetItemList(new InternalItemsQuery()
