@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
@@ -74,6 +75,13 @@ public class PlayVideoIntentHandler : BaseHandler
         if (videos.Count == 0)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundVideo", locale, titleQuery));
+        }
+
+        // If multiple videos found, ask for disambiguation
+        if (videos.Count > 1)
+        {
+            var matches = videos.Take(3).Select(v => (v.Id, v.Name)).ToList();
+            return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeVideo, locale);
         }
 
         BaseItem video = videos[0];

@@ -38,5 +38,10 @@
   "SeasonEpisode": "{0}, season {1}, episode {2}: {3}",
   "SeriesTitle": "{0}: {1}",
   "TitleWithYear": "{0} ({1})",
-  "SearchingMedia": "Searching for your music..."
+  "SearchingMedia": "Searching for your music...",
+  "DisambiguatePrompt": "I found multiple matches. Would you like to hear {0}?",
+  "DisambiguateNext": "How about {0}?",
+  "NoMoreMatches": "Sorry, there are no more matches.",
+  "DisambiguateReprompt": "You can say yes or no.",
+  "UnexpectedYes": "I'm not sure what you'd like me to play. You can ask me to play a song, album, or video."
 }

@@ -162,7 +162,7 @@ public class PlayVideoIntentHandlerTests
     }
 
     [Fact]
-    public async Task Handle_FoundMultipleResults_ReturnsFirstMatch()
+    public async Task Handle_FoundMultipleResults_ReturnsDisambiguationPrompt()
     {
         var movie1 = CreateTestItem("The Matrix");
         var movie2 = CreateTestItem("The Matrix Reloaded");
@@ -178,8 +178,11 @@ public class PlayVideoIntentHandlerTests
             TestHelpers.CreateTestUser(),
             CreateSession(), CancellationToken.None);
 
-        Assert.NotNull(response.Response.Directives);
-        Assert.Single(response.Response.Directives);
+        // Should return an Ask response for disambiguation, not a video directive
+        Assert.NotNull(response.Response.OutputSpeech);
+        Assert.False(response.Response.ShouldEndSession);
+        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        Assert.Contains("The Matrix", speech.Text);
     }
 
     [Fact]

@@ -31,4 +31,6 @@ internal static class IntentNames
     public const string AmazonShuffleOff = "AMAZON.ShuffleOffIntent";
     public const string AmazonShuffleOn = "AMAZON.ShuffleOnIntent";
     public const string AmazonStartOver = "AMAZON.StartOverIntent";
+    public const string AmazonYes = "AMAZON.YesIntent";
+    public const string AmazonNo = "AMAZON.NoIntent";
 }
