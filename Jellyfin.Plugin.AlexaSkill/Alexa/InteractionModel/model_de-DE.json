@@ -167,7 +167,7 @@
       {
         "name": "PlayFavoritesIntent",
         "samples": [
-          "Spiele meine Lieblings-{media_type}",
+          "Spiele meine Lieblings {media_type}",
           "Spiele meine {media_type} Favoriten",
           "Spiele meine Favoriten"
         ],

@@ -57,7 +57,15 @@ public class SmapiManagement : ManagementApi
 
         foreach (var interactionModel in interactionModels)
         {
-            this.InteractionModel.Update(skillId.Id, SkillStage.Development, interactionModel.Locale, interactionModel);
+            try
+            {
+                await this.InteractionModel.Update(skillId.Id, SkillStage.Development, interactionModel.Locale, interactionModel).ConfigureAwait(false);
+                _logger.LogInformation("Interaction model updated for locale {Locale}", interactionModel.Locale);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to update interaction model for locale {Locale}", interactionModel.Locale);
+            }
         }
 
         _logger.LogInformation("Skill created successfully: {SkillId}", skillId.Id);
@@ -80,7 +88,15 @@ public class SmapiManagement : ManagementApi
 
         foreach (var interactionModel in interactionModels)
         {
-            this.InteractionModel.Update(skillId, SkillStage.Development, interactionModel.Locale, interactionModel);
+            try
+            {
+                await this.InteractionModel.Update(skillId, SkillStage.Development, interactionModel.Locale, interactionModel).ConfigureAwait(false);
+                _logger.LogInformation("Interaction model updated for locale {Locale}", interactionModel.Locale);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to update interaction model for locale {Locale}", interactionModel.Locale);
+            }
         }
 
         _logger.LogInformation("Skill updated successfully: {SkillId}", skillId);

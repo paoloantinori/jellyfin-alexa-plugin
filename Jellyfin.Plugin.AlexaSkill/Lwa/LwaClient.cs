@@ -80,7 +80,7 @@ public static class LwaClient
     /// Gets the device token for authenticated requests to SMAPI.
     /// </summary>
     /// <param name="deviceAuthorizationRequest">Device authorization request.</param>
-    /// <returns>Devive token.</returns>
+    /// <returns>Device token.</returns>
     public static async Task<DeviceToken?> GetDeviceToken(DeviceAuthorizationRequest deviceAuthorizationRequest)
     {
         string url = "https://api.amazon.com/auth/o2/token";
@@ -101,23 +101,10 @@ public static class LwaClient
 
             if (response.IsSuccessStatusCode)
             {
-                if (json != null
-                && json.TryGetValue("access_token", out var token)
-                && json.TryGetValue("refresh_token", out var refreshToken)
-                && json.TryGetValue("token_type", out var tokenType)
-                && json.TryGetValue("expires_in", out var expiresInStr)
-                && int.TryParse(expiresInStr, out int expiresIn))
-                {
-                    return new DeviceToken(token, refreshToken, tokenType, new DateTimeOffset(DateTime.UtcNow).AddSeconds(expiresIn).ToUnixTimeSeconds());
-                }
-                else
-                {
-                    throw new JsonException("Could not get device token: " + content);
-                }
+                return ParseTokenResponse(json, content);
             }
             else if (json != null && json.TryGetValue("error", out var error) && error == "authorization_pending")
             {
-                // wait for the interval before polling again
                 Thread.Sleep(deviceAuthorizationRequest.Interval * 1000);
             }
             else
@@ -161,18 +148,7 @@ public static class LwaClient
         }
 
         Dictionary<string, string>? json = JsonConvert.DeserializeObject<Dictionary<string, string>>(content);
-        if (json != null
-            && json.TryGetValue("access_token", out var token)
-            && json.TryGetValue("refresh_token", out var refreshToken)
-            && json.TryGetValue("token_type", out var tokenType)
-            && json.TryGetValue("expires_in", out var expiresInStr)
-            && int.TryParse(expiresInStr, out int expiresIn))
-        {
-            return new DeviceToken(token, refreshToken, tokenType,
-                new DateTimeOffset(DateTime.UtcNow).AddSeconds(expiresIn).ToUnixTimeSeconds());
-        }
-
-        throw new JsonException("Could not parse token response: " + content);
+        return ParseTokenResponse(json, content);
     }
 
     /// <summary>
@@ -181,7 +157,7 @@ public static class LwaClient
     /// <param name="deviceToken">Device token.</param>
     /// <param name="clientId">LWA client id.</param>
     /// <param name="clientSecret">LWA client secret.</param>
-    /// <returns>Devive token.</returns>
+    /// <returns>Device token.</returns>
     public static async Task<DeviceToken?> RefreshDeviceToken(DeviceToken deviceToken, string clientId, string clientSecret)
     {
         string url = "https://api.amazon.com/auth/o2/token";
@@ -196,29 +172,33 @@ public static class LwaClient
         HttpResponseMessage response = await Plugin.HttpClient.PostAsync(url, formUrlEncodedContent).ConfigureAwait(false);
 
         string content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-        Dictionary<string, string>? json = JsonConvert.DeserializeObject<Dictionary<string, string>>(content);
 
-        if (response.IsSuccessStatusCode)
+        if (!response.IsSuccessStatusCode)
         {
-            if (json != null
+            throw new HttpRequestException(
+                $"Token refresh failed with status {response.StatusCode}: {content}");
+        }
+
+        Dictionary<string, string>? json = JsonConvert.DeserializeObject<Dictionary<string, string>>(content);
+        return ParseTokenResponse(json, content);
+    }
+
+    /// <summary>
+    /// Parses a token response JSON into a <see cref="DeviceToken"/>.
+    /// </summary>
+    private static DeviceToken ParseTokenResponse(Dictionary<string, string>? json, string rawContent)
+    {
+        if (json != null
             && json.TryGetValue("access_token", out var token)
             && json.TryGetValue("refresh_token", out var refreshToken)
             && json.TryGetValue("token_type", out var tokenType)
             && json.TryGetValue("expires_in", out var expiresInStr)
             && int.TryParse(expiresInStr, out int expiresIn))
-            {
-                return new DeviceToken(token, refreshToken, tokenType, new DateTimeOffset(DateTime.UtcNow).AddSeconds(expiresIn).ToUnixTimeSeconds());
-            }
-            else
-            {
-                throw new JsonException("Could not get device token: " + content);
-            }
-        }
-        else
         {
-            string errorContent = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-            throw new HttpRequestException(
-                $"Token refresh failed with status {response.StatusCode}: {errorContent}");
+            return new DeviceToken(token, refreshToken, tokenType,
+                new DateTimeOffset(DateTime.UtcNow).AddSeconds(expiresIn).ToUnixTimeSeconds());
         }
+
+        throw new JsonException("Could not parse token response: " + rawContent);
     }
 }

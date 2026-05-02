@@ -33,7 +33,7 @@
             },
             {
                 "version": "0.2.0.1",
-                "checksum": "95f0a50c8efae8e430f2fb8b36a2cd40",
+                "checksum": "8709db920df31c7fa0d841cf43d28988",
                 "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.1/AlexaSkill_0.2.0.1.zip",
                 "changelog": "Replace broken LWA device auth with authorization code flow. Add persisted refresh token for restart recovery.",
                 "targetAbi": "10.11.0.0",

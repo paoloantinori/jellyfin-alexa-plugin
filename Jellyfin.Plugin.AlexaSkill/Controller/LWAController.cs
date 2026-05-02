@@ -149,11 +149,7 @@ public class LWAController : ControllerBase
             }
 
             _logger.LogInformation("Creating skill for user with id {UserId}", user.Id);
-            Collection<SkillInteractionModel> skillInteractionModels = new Collection<SkillInteractionModel>();
-            foreach (Tuple<string, string> model in Plugin.Instance.InteractionModels)
-            {
-                skillInteractionModels.Add(new SkillInteractionModel(model.Item1, model.Item2, user.UserSkill.InvocationName));
-            }
+            Collection<SkillInteractionModel> skillInteractionModels = Plugin.Instance.BuildSkillInteractionModels(user.UserSkill.InvocationName);
 
             try
             {

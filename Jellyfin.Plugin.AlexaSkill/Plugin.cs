@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Net.Http;
+using Jellyfin.Plugin.AlexaSkill.Alexa.InteractionModel;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Manifest;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Controller.Handler;
@@ -82,6 +83,22 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     /// Gets the Interaction models for each supported locale.
     /// </summary>
     public Collection<Tuple<string, string>> InteractionModels { get; } = Util.GetLocalInteractionModels();
+
+    /// <summary>
+    /// Builds the skill interaction model collection for a given invocation name.
+    /// </summary>
+    /// <param name="invocationName">The invocation name for the skill.</param>
+    /// <returns>A collection of skill interaction models.</returns>
+    public Collection<SkillInteractionModel> BuildSkillInteractionModels(string invocationName)
+    {
+        Collection<SkillInteractionModel> models = new Collection<SkillInteractionModel>();
+        foreach (Tuple<string, string> model in InteractionModels)
+        {
+            models.Add(new SkillInteractionModel(model.Item1, model.Item2, invocationName));
+        }
+
+        return models;
+    }
 
     /// <summary>
     /// Gets the CSRF token handler.
