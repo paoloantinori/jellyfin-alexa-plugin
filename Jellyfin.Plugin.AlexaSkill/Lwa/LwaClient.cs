@@ -18,7 +18,7 @@ public static class LwaClient
     /// <param name="clientId">LWA client id.</param>
     /// <param name="scopes">List scopes of the request.</param>
     /// <returns>Access token.</returns>
-    public static async Task<DeviceAuthorizationRequest?> CreateLwaDeviceAuthorizationRequest(string clientId, Scope[] scopes)
+    public static async Task<DeviceAuthorizationRequest?> CreateLwaDeviceAuthorizationRequest(string clientId, string clientSecret, Scope[] scopes)
     {
         string url = "https://api.amazon.com/auth/o2/create/codepair";
 
@@ -37,6 +37,7 @@ public static class LwaClient
         {
             { "response_type", "device_code" },
             { "client_id", clientId },
+            { "client_secret", clientSecret },
             { "scope", scopeString }
         });
 
