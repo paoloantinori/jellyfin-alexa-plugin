@@ -1,244 +1,244 @@
 {
-    "languageModel": {
-        "invocationName": "jellyfin",
-        "intents": [
-            {
-                "name": "AMAZON.CancelIntent"
-            },
-            {
-                "name": "AMAZON.HelpIntent"
-            },
-            {
-                "name": "AMAZON.StopIntent"
-            },
-            {
-                "name": "AMAZON.FallbackIntent"
-            },
-            {
-                "name": "AMAZON.PauseIntent"
-            },
-            {
-                "name": "AMAZON.ResumeIntent"
-            },
-            {
-                "name": "AMAZON.NextIntent"
-            },
-            {
-                "name": "AMAZON.PreviousIntent"
-            },
-            {
-                "name": "AMAZON.YesIntent"
-            },
-            {
-                "name": "AMAZON.NoIntent"
-            },
-            {
-                "name": "AMAZON.LoopOnIntent"
-            },
-            {
-                "name": "AMAZON.LoopOffIntent"
-            },
-            {
-                "name": "LoopSongOnIntent",
-                "samples": [
-                    "Repite esta canción",
-                    "Repite esta canción siempre",
-                    "Repetir la canción",
-                    "Repetir esta canción",
-                    "Repetir esta canción siempre"
-                ]
-            },
-            {
-                "name": "AMAZON.ShuffleOnIntent"
-            },
-            {
-                "name": "AMAZON.ShuffleOffIntent"
-            },
-            {
-                "name": "AMAZON.StartOverIntent"
-            },
-            {
-                "name": "PlayChannelIntent",
-                "samples": [
-                    "Pon el canal {channel}",
-                    "Pon la radio {channel}"
-                ],
-                "slots": [
-                    {
-                        "name": "channel",
-                        "type": "AMAZON.SearchQuery"
-                    }
-                ]
-            },
-            {
-                "name": "PlaySongIntent",
-                "samples": [
-                    "Reproduce la canción {song}",
-                    "Reproduce la canción {song} de {musician}"
-                ],
-                "slots": [
-                    {
-                        "name": "song",
-                        "type": "AMAZON.MusicRecording"
-                    },
-                    {
-                        "name": "musician",
-                        "type": "AMAZON.Musician"
-                    }
-                ]
-            },
-            {
-                "name": "PlayAlbumIntent",
-                "samples": [
-                    "Reproduce el álbum {album}",
-                    "Reproduce el álbum {album} de {musician}"
-                ],
-                "slots": [
-                    {
-                        "name": "album",
-                        "type": "AMAZON.MusicRecording"
-                    },
-                    {
-                        "name": "musician",
-                        "type": "AMAZON.Musician"
-                    }
-                ]
-            },
-            {
-                "name": "PlayVideoIntent",
-                "samples": [
-                    "Reproduce el vídeo {title}"
-                ],
-                "slots": [
-                    {
-                        "name": "title",
-                        "type": "AMAZON.SearchQuery"
-                    }
-                ]
-            },
-            {
-                "name": "PlayArtistSongsIntent",
-                "samples": [
-                    "Reproduce canciones de {musician}",
-                    "Reproduce música de {musician}"
-                ],
-                "slots": [
-                    {
-                        "name": "musician",
-                        "type": "AMAZON.Musician"
-                    }
-                ]
-            },
-            {
-                "name": "PlayLastAddedIntent",
-                "samples": [
-                    "Reproduce los últimos {media_type} añadidos",
-                    "Reproduce {media_type} añadidos recientemente",
-                    "Reproduce {media_type} nuevos",
-                    "Reproduce contenidos nuevos"
-                ],
-                "slots": [
-                    {
-                        "name": "media_type",
-                        "type": "MediaType"
-                    }
-                ]
-            },
-            {
-                "name": "PlayPlaylistIntent",
-                "samples": [
-                    "Reproduce la lista de reproducción {playlist}",
-                    "Reproduce mi lista de reproducción {playlist}"
-                ],
-                "slots": [
-                    {
-                        "name": "playlist",
-                        "type": "AMAZON.SearchQuery"
-                    }
-                ]
-            },
-            {
-                "name": "PlayFavoritesIntent",
-                "samples": [
-                    "Reproduce mis {media_type} favoritos",
-                    "Reproduce mis favoritos",
-                    "Reproduce mi {media_type} favorito"
-                ],
-                "slots": [
-                    {
-                        "name": "media_type",
-                        "type": "MediaType"
-                    }
-                ]
-            },
-            {
-                "name": "MarkFavoriteIntent",
-                "samples": [
-                    "Me gusta",
-                    "Me gusta el vídeo",
-                    "Me gusta la canción",
-                    "Me gusta la música",
-                    "Añade el vídeo a mis favoritos",
-                    "Añade la canción a mis favoritos"
-                ]
-            },
-            {
-                "name": "UnmarkFavoriteIntent",
-                "samples": [
-                    "No me gusta esto",
-                    "No me gusta el vídeo",
-                    "No me gusta la canción",
-                    "No me gusta la música",
-                    "Quita el vídeo de mis favoritos",
-                    "Quita la canción de mis favoritos"
-                ]
-            },
-            {
-                "name": "MediaInfoIntent",
-                "samples": [
-                    "Cómo se llama esta canción",
-                    "Cómo se llama este vídeo",
-                    "Cómo se llama esta música",
-                    "Cuál es el título de esta canción",
-                    "Cuál es el título de este vídeo",
-                    "Cuál es el título de esta música",
-                    "Qué está sonando ahora"
-                ]
-            }
-        ],
-        "types": [
-            {
-                "name": "MediaType",
-                "values": [
-                    {
-                        "id": "media",
-                        "name": {
-                            "value": "contenidos"
-                        }
-                    },
-                    {
-                        "id": "video",
-                        "name": {
-                            "value": "vídeos",
-                            "synonyms": [
-                                "películas",
-                                "clips",
-                                "episodios"
-                            ]
-                        }
-                    },
-                    {
-                        "id": "audio",
-                        "name": {
-                            "value": "Audio",
-                            "synonyms": [
-                                "música",
-                                "canciones"
-                            ]
-                        }
-                    }
-                ]
-            }
+  "languageModel": {
+    "invocationName": "jellyfin",
+    "intents": [
+      {
+        "name": "AMAZON.CancelIntent"
+      },
+      {
+        "name": "AMAZON.HelpIntent"
+      },
+      {
+        "name": "AMAZON.StopIntent"
+      },
+      {
+        "name": "AMAZON.FallbackIntent"
+      },
+      {
+        "name": "AMAZON.PauseIntent"
+      },
+      {
+        "name": "AMAZON.ResumeIntent"
+      },
+      {
+        "name": "AMAZON.NextIntent"
+      },
+      {
+        "name": "AMAZON.PreviousIntent"
+      },
+      {
+        "name": "AMAZON.YesIntent"
+      },
+      {
+        "name": "AMAZON.NoIntent"
+      },
+      {
+        "name": "AMAZON.LoopOnIntent"
+      },
+      {
+        "name": "AMAZON.LoopOffIntent"
+      },
+      {
+        "name": "LoopSongOnIntent",
+        "samples": [
+          "Repite esta canción",
+          "Repite esta canción siempre",
+          "Repetir la canción",
+          "Repetir esta canción",
+          "Repetir esta canción siempre"
         ]
-    }
+      },
+      {
+        "name": "AMAZON.ShuffleOnIntent"
+      },
+      {
+        "name": "AMAZON.ShuffleOffIntent"
+      },
+      {
+        "name": "AMAZON.StartOverIntent"
+      },
+      {
+        "name": "PlayChannelIntent",
+        "samples": [
+          "Pon el canal {channel}",
+          "Pon la radio {channel}"
+        ],
+        "slots": [
+          {
+            "name": "channel",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
+        "name": "PlaySongIntent",
+        "samples": [
+          "Reproduce la canción {song}",
+          "Reproduce la canción {song} de {musician}"
+        ],
+        "slots": [
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
+        ]
+      },
+      {
+        "name": "PlayAlbumIntent",
+        "samples": [
+          "Reproduce el álbum {album}",
+          "Reproduce el álbum {album} de {musician}"
+        ],
+        "slots": [
+          {
+            "name": "album",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
+        ]
+      },
+      {
+        "name": "PlayVideoIntent",
+        "samples": [
+          "Reproduce el vídeo {title}"
+        ],
+        "slots": [
+          {
+            "name": "title",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
+        "name": "PlayArtistSongsIntent",
+        "samples": [
+          "Reproduce canciones de {musician}",
+          "Reproduce música de {musician}"
+        ],
+        "slots": [
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
+        ]
+      },
+      {
+        "name": "PlayLastAddedIntent",
+        "samples": [
+          "Reproduce los últimos {media_type} añadidos",
+          "Reproduce {media_type} añadidos recientemente",
+          "Reproduce {media_type} nuevos",
+          "Reproduce contenidos nuevos"
+        ],
+        "slots": [
+          {
+            "name": "media_type",
+            "type": "MediaType"
+          }
+        ]
+      },
+      {
+        "name": "PlayPlaylistIntent",
+        "samples": [
+          "Reproduce la lista de reproducción {playlist}",
+          "Reproduce mi lista de reproducción {playlist}"
+        ],
+        "slots": [
+          {
+            "name": "playlist",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
+        "name": "PlayFavoritesIntent",
+        "samples": [
+          "Reproduce mis {media_type} favoritos",
+          "Reproduce mis favoritos",
+          "Reproduce mi {media_type} favorito"
+        ],
+        "slots": [
+          {
+            "name": "media_type",
+            "type": "MediaType"
+          }
+        ]
+      },
+      {
+        "name": "MarkFavoriteIntent",
+        "samples": [
+          "Me gusta",
+          "Me gusta el vídeo",
+          "Me gusta la canción",
+          "Me gusta la música",
+          "Añade el vídeo a mis favoritos",
+          "Añade la canción a mis favoritos"
+        ]
+      },
+      {
+        "name": "UnmarkFavoriteIntent",
+        "samples": [
+          "No me gusta esto",
+          "No me gusta el vídeo",
+          "No me gusta la canción",
+          "No me gusta la música",
+          "Quita el vídeo de mis favoritos",
+          "Quita la canción de mis favoritos"
+        ]
+      },
+      {
+        "name": "MediaInfoIntent",
+        "samples": [
+          "Cómo se llama esta canción",
+          "Cómo se llama este vídeo",
+          "Cómo se llama esta música",
+          "Cuál es el título de esta canción",
+          "Cuál es el título de este vídeo",
+          "Cuál es el título de esta música",
+          "Qué está sonando ahora"
+        ]
+      }
+    ],
+    "types": [
+      {
+        "name": "MediaType",
+        "values": [
+          {
+            "id": "media",
+            "name": {
+              "value": "contenidos"
+            }
+          },
+          {
+            "id": "video",
+            "name": {
+              "value": "vídeos",
+              "synonyms": [
+                "películas",
+                "clips",
+                "episodios"
+              ]
+            }
+          },
+          {
+            "id": "audio",
+            "name": {
+              "value": "Audio",
+              "synonyms": [
+                "música",
+                "canciones"
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
 }
