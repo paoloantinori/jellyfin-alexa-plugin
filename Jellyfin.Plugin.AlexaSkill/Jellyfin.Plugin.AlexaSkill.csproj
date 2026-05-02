@@ -47,12 +47,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Alexa/InteractionModel/model_en-US.json" />
+    <EmbeddedResource Include="Alexa/InteractionModel/model_*.json" />
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Alexa/Locale/en-US.json" />
-    <EmbeddedResource Include="Alexa/Locale/it-IT.json" />
+    <EmbeddedResource Include="Alexa/Locale/*.json" />
   </ItemGroup>
 
   <ItemGroup>

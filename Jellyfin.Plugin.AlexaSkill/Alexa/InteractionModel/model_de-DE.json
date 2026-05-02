@@ -1,0 +1,293 @@
+{
+    "languageModel": {
+        "invocationName": "jellyfin",
+        "intents": [
+            {
+                "name": "AMAZON.CancelIntent",
+                "samples": [
+                    "Abbrechen"
+                ]
+            },
+            {
+                "name": "AMAZON.HelpIntent"
+            },
+            {
+                "name": "AMAZON.StopIntent",
+                "samples": [
+                    "Stopp"
+                ]
+            },
+            {
+                "name": "AMAZON.FallbackIntent"
+            },
+            {
+                "name": "AMAZON.PauseIntent",
+                "samples": [
+                    "Pause"
+                ]
+            },
+            {
+                "name": "AMAZON.ResumeIntent",
+                "samples": [
+                    "Play",
+                    "Fortsetzen"
+                ]
+            },
+            {
+                "name": "AMAZON.NextIntent",
+                "samples": [
+                    "Naechstes",
+                    "Weiter"
+                ]
+            },
+            {
+                "name": "AMAZON.PreviousIntent",
+                "samples": [
+                    "Zurueck",
+                    "Vorheriges"
+                ]
+            },
+            {
+                "name": "AMAZON.YesIntent",
+                "samples": [
+                    "Ja"
+                ]
+            },
+            {
+                "name": "AMAZON.NoIntent",
+                "samples": [
+                    "Nein"
+                ]
+            },
+            {
+                "name": "LoopAllOffIntent",
+                "samples": [
+                    "Wiederholung aus",
+                    "Schleife aus"
+                ]
+            },
+            {
+                "name": "LoopAllOnIntent",
+                "samples": [
+                    "Wiederholung an",
+                    "Schleife an"
+                ]
+            },
+            {
+                "name": "RepeatSingleOnIntent",
+                "samples": [
+                    "Lied wiederholen",
+                    "Titel wiederholen",
+                    "Video wiederholen",
+                    "Das wiederholen"
+                ]
+            },
+            {
+                "name": "AMAZON.ShuffleOnIntent",
+                "samples": [
+                    "Zufallswiedergabe",
+                    "Zufaellig abspielen",
+                    "Zufallswiedergabe aktivieren"
+                ]
+            },
+            {
+                "name": "AMAZON.ShuffleOffIntent",
+                "samples": [
+                    "Zufallswiedergabe deaktivieren",
+                    "Zufaellige Wiedergabe ausschalten"
+                ]
+            },
+            {
+                "name": "AMAZON.StartOverIntent",
+                "samples": [
+                    "Von vorne abspielen",
+                    "Nochmal von vorne"
+                ]
+            },
+            {
+                "name": "PlayChannelIntent",
+                "samples": [
+                    "Kanal {channel}",
+                    "Spiele Radio {channel}",
+                    "Radio {channel}"
+                ],
+                "slots": [
+                    {
+                        "name": "channel",
+                        "type": "AMAZON.SearchQuery"
+                    }
+                ]
+            },
+            {
+                "name": "PlaySongIntent",
+                "samples": [
+                    "Spiele das Lied {song}",
+                    "Spiele das Lied {song} von {musician}"
+                ],
+                "slots": [
+                    {
+                        "name": "song",
+                        "type": "AMAZON.MusicRecording"
+                    },
+                    {
+                        "name": "musician",
+                        "type": "AMAZON.Musician"
+                    }
+                ]
+            },
+            {
+                "name": "PlayAlbumIntent",
+                "samples": [
+                    "Spiele das Album {album}",
+                    "Spiele das Album {album} von {musician}"
+                ],
+                "slots": [
+                    {
+                        "name": "album",
+                        "type": "AMAZON.MusicRecording"
+                    },
+                    {
+                        "name": "musician",
+                        "type": "AMAZON.Musician"
+                    }
+                ]
+            },
+            {
+                "name": "PlayVideoIntent",
+                "samples": [
+                    "Spiele das Video {title}"
+                ],
+                "slots": [
+                    {
+                        "name": "title",
+                        "type": "AMAZON.SearchQuery"
+                    }
+                ]
+            },
+            {
+                "name": "PlayArtistSongsIntent",
+                "samples": [
+                    "Spiele Lieder von {musician}",
+                    "Spiele Musik von {musician}"
+                ],
+                "slots": [
+                    {
+                        "name": "musician",
+                        "type": "AMAZON.Musician"
+                    }
+                ]
+            },
+            {
+                "name": "PlayLastAddedIntent",
+                "samples": [
+                    "Spiele neu hinzugefuegte {media_type}",
+                    "Spiele kuerzlich hinzugefuegte {media_type}",
+                    "Spiele neue Medien"
+                ],
+                "slots": [
+                    {
+                        "name": "media_type",
+                        "type": "MediaType"
+                    }
+                ]
+            },
+            {
+                "name": "PlayPlaylistIntent",
+                "samples": [
+                    "Spiele die Playlist {playlist}",
+                    "Spiele meine Playlist {playlist}"
+                ],
+                "slots": [
+                    {
+                        "name": "playlist",
+                        "type": "AMAZON.SearchQuery"
+                    }
+                ]
+            },
+            {
+                "name": "PlayFavoritesIntent",
+                "samples": [
+                    "Spiele meine Lieblings-{media_type}",
+                    "Spiele meine {media_type} Favoriten",
+                    "Spiele meine Favoriten"
+                ],
+                "slots": [
+                    {
+                        "name": "media_type",
+                        "type": "MediaType"
+                    }
+                ]
+            },
+            {
+                "name": "MarkFavoriteIntent",
+                "samples": [
+                    "Das gefaellt mir",
+                    "Das Video gefaellt mir",
+                    "Das Lied gefaellt mir",
+                    "Die Musik gefaellt mir",
+                    "Fuege das Video zu meinen Favoriten hinzu",
+                    "Fuege das Lied zu meinen Favoriten hinzu"
+                ]
+            },
+            {
+                "name": "UnmarkFavoriteIntent",
+                "samples": [
+                    "Das gefaellt mir nicht",
+                    "Das Video gefaellt mir nicht",
+                    "Das Lied gefaellt mir nicht",
+                    "Die Musik gefaellt mir nicht",
+                    "Entferne das Video aus meinen Favoriten",
+                    "Entferne das Lied aus meinen Favoriten"
+                ]
+            },
+            {
+                "name": "MediaInfoIntent",
+                "samples": [
+                    "Wie heisst das Lied",
+                    "Wie heisst das Video",
+                    "Wie heisst die Musik",
+                    "Welcher Titel laeuft gerade",
+                    "Was wird gerade abgespielt"
+                ]
+            }
+        ],
+        "types": [
+            {
+                "name": "MediaType",
+                "values": [
+                    {
+                        "id": "media",
+                        "name": {
+                            "value": "Medien",
+                            "synonyms": [
+                                "Inhalte"
+                            ]
+                        }
+                    },
+                    {
+                        "id": "video",
+                        "name": {
+                            "value": "Video",
+                            "synonyms": [
+                                "Film",
+                                "Clip",
+                                "Episode"
+                            ]
+                        }
+                    },
+                    {
+                        "id": "audio",
+                        "name": {
+                            "value": "Audio",
+                            "synonyms": [
+                                "Musik",
+                                "Lied",
+                                "Titel"
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}
