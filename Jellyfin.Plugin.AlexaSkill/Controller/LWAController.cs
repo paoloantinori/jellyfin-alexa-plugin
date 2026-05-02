@@ -120,6 +120,7 @@ public class LWAController : ControllerBase
                     DeviceAuthorizationRequest? request = await LwaClient
                         .CreateLwaDeviceAuthorizationRequest(
                             Plugin.Instance!.Configuration.LwaClientId,
+                            Plugin.Instance!.Configuration.LwaClientSecret,
                             new Lwa.Scope[]
                             {
                                 Lwa.Scope.SkillsReadWrite,
