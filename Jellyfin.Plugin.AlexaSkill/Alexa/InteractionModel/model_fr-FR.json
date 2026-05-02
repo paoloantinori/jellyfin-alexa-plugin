@@ -1,0 +1,294 @@
+{
+    "languageModel": {
+        "invocationName": "jellyfin",
+        "intents": [
+            {
+                "name": "AMAZON.CancelIntent",
+                "samples": [
+                    "Annule"
+                ]
+            },
+            {
+                "name": "AMAZON.HelpIntent"
+            },
+            {
+                "name": "AMAZON.StopIntent",
+                "samples": [
+                    "Arrête"
+                ]
+            },
+            {
+                "name": "AMAZON.FallbackIntent"
+            },
+            {
+                "name": "AMAZON.PauseIntent",
+                "samples": [
+                    "Pause"
+                ]
+            },
+            {
+                "name": "AMAZON.ResumeIntent",
+                "samples": [
+                    "Lis",
+                    "Reprends"
+                ]
+            },
+            {
+                "name": "AMAZON.NextIntent",
+                "samples": [
+                    "Suivante",
+                    "Suivant",
+                    "Passe"
+                ]
+            },
+            {
+                "name": "AMAZON.PreviousIntent",
+                "samples": [
+                    "Précédent",
+                    "Précédente",
+                    "Reviens en arrière"
+                ]
+            },
+            {
+                "name": "AMAZON.YesIntent",
+                "samples": [
+                    "Oui"
+                ]
+            },
+            {
+                "name": "AMAZON.NoIntent",
+                "samples": [
+                    "Non"
+                ]
+            },
+            {
+                "name": "LoopAllOffIntent",
+                "samples": [
+                    "Désactive la boucle",
+                    "Désactive la répétition"
+                ]
+            },
+            {
+                "name": "LoopAllOnIntent",
+                "samples": [
+                    "Active la boucle",
+                    "Active la répétition"
+                ]
+            },
+            {
+                "name": "RepeatSingleOnIntent",
+                "samples": [
+                    "Répète la chanson",
+                    "Répète le morceau",
+                    "Répète la vidéo",
+                    "Répète"
+                ]
+            },
+            {
+                "name": "AMAZON.ShuffleOnIntent",
+                "samples": [
+                    "Lecture aléatoire",
+                    "Lis au hasard",
+                    "Active la lecture aléatoire"
+                ]
+            },
+            {
+                "name": "AMAZON.ShuffleOffIntent",
+                "samples": [
+                    "Désactive la lecture aléatoire",
+                    "Désactive le mode aléatoire"
+                ]
+            },
+            {
+                "name": "AMAZON.StartOverIntent",
+                "samples": [
+                    "Reprends du début",
+                    "Recommence"
+                ]
+            },
+            {
+                "name": "PlayChannelIntent",
+                "samples": [
+                    "Chaîne {channel}",
+                    "Lis la radio {channel}",
+                    "Radio {channel}"
+                ],
+                "slots": [
+                    {
+                        "name": "channel",
+                        "type": "AMAZON.SearchQuery"
+                    }
+                ]
+            },
+            {
+                "name": "PlaySongIntent",
+                "samples": [
+                    "Lis la chanson {song}",
+                    "Lis la chanson {song} de {musician}"
+                ],
+                "slots": [
+                    {
+                        "name": "song",
+                        "type": "AMAZON.MusicRecording"
+                    },
+                    {
+                        "name": "musician",
+                        "type": "AMAZON.Musician"
+                    }
+                ]
+            },
+            {
+                "name": "PlayAlbumIntent",
+                "samples": [
+                    "Lis l'album {album}",
+                    "Lis l'album {album} de {musician}"
+                ],
+                "slots": [
+                    {
+                        "name": "album",
+                        "type": "AMAZON.MusicRecording"
+                    },
+                    {
+                        "name": "musician",
+                        "type": "AMAZON.Musician"
+                    }
+                ]
+            },
+            {
+                "name": "PlayVideoIntent",
+                "samples": [
+                    "Lis la vidéo {title}"
+                ],
+                "slots": [
+                    {
+                        "name": "title",
+                        "type": "AMAZON.SearchQuery"
+                    }
+                ]
+            },
+            {
+                "name": "PlayArtistSongsIntent",
+                "samples": [
+                    "Lis les chansons de {musician}",
+                    "Lis la musique de {musician}"
+                ],
+                "slots": [
+                    {
+                        "name": "musician",
+                        "type": "AMAZON.Musician"
+                    }
+                ]
+            },
+            {
+                "name": "PlayLastAddedIntent",
+                "samples": [
+                    "Lis les derniers {media_type} ajoutés",
+                    "Lis les nouveautés {media_type}",
+                    "Lis les nouveaux médias"
+                ],
+                "slots": [
+                    {
+                        "name": "media_type",
+                        "type": "MediaType"
+                    }
+                ]
+            },
+            {
+                "name": "PlayPlaylistIntent",
+                "samples": [
+                    "Lis la playlist {playlist}",
+                    "Lis ma playlist {playlist}"
+                ],
+                "slots": [
+                    {
+                        "name": "playlist",
+                        "type": "AMAZON.SearchQuery"
+                    }
+                ]
+            },
+            {
+                "name": "PlayFavoritesIntent",
+                "samples": [
+                    "Lis mes {media_type} préférés",
+                    "Lis mes favoris"
+                ],
+                "slots": [
+                    {
+                        "name": "media_type",
+                        "type": "MediaType"
+                    }
+                ]
+            },
+            {
+                "name": "MarkFavoriteIntent",
+                "samples": [
+                    "J'aime bien",
+                    "J'aime cette vidéo",
+                    "J'aime cette chanson",
+                    "J'aime cette musique",
+                    "Ajoute la vidéo aux favoris",
+                    "Ajoute la chanson aux favoris"
+                ]
+            },
+            {
+                "name": "UnmarkFavoriteIntent",
+                "samples": [
+                    "Je n'aime pas ça",
+                    "Je n'aime pas cette vidéo",
+                    "Je n'aime pas cette chanson",
+                    "Je n'aime pas cette musique",
+                    "Retire la vidéo des favoris",
+                    "Retire la chanson des favoris"
+                ]
+            },
+            {
+                "name": "MediaInfoIntent",
+                "samples": [
+                    "Quel est le nom de la chanson",
+                    "Quel est le nom de la vidéo",
+                    "Quel est le titre de la chanson",
+                    "Quel est le titre de la vidéo",
+                    "Qu'est-ce qui est en cours de lecture"
+                ]
+            }
+        ],
+        "types": [
+            {
+                "name": "MediaType",
+                "values": [
+                    {
+                        "id": "media",
+                        "name": {
+                            "value": "média",
+                            "synonyms": [
+                                "contenu"
+                            ]
+                        }
+                    },
+                    {
+                        "id": "video",
+                        "name": {
+                            "value": "vidéo",
+                            "synonyms": [
+                                "film",
+                                "clip",
+                                "épisode"
+                            ]
+                        }
+                    },
+                    {
+                        "id": "audio",
+                        "name": {
+                            "value": "Audio",
+                            "synonyms": [
+                                "musique",
+                                "chanson",
+                                "morceau"
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}

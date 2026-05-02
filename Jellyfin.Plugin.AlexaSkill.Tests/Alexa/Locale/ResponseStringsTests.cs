@@ -17,7 +17,8 @@ public class ResponseStringsTests
         "WelcomeReprompt", "NowPlaying", "NowPlayingWithPosition", "UnknownMedia",
         "HoursAndMinutes", "MinutesAndSeconds", "SecondsOnly", "PositionOfTotal",
         "TrackByArtist", "TrackByArtistFromAlbum", "SeasonEpisode", "SeriesTitle",
-        "TitleWithYear"
+        "TitleWithYear", "SearchingMedia", "DisambiguatePrompt", "DisambiguateNext",
+        "NoMoreMatches", "DisambiguateReprompt", "UnexpectedYes"
     };
 
     [Fact]
@@ -44,7 +45,7 @@ public class ResponseStringsTests
     [Fact]
     public void Get_UnknownLocale_FallsBackToEnUs()
     {
-        string result = ResponseStrings.Get("NoMediaPlaying", "fr-FR");
+        string result = ResponseStrings.Get("NoMediaPlaying", "zh-CN");
         Assert.Equal("Nothing is currently playing.", result);
     }
 
@@ -77,7 +78,17 @@ public class ResponseStringsTests
     }
 
     [Theory]
+    [InlineData("de-DE")]
+    [InlineData("en-AU")]
+    [InlineData("en-CA")]
+    [InlineData("en-GB")]
+    [InlineData("en-IN")]
     [InlineData("en-US")]
+    [InlineData("es-ES")]
+    [InlineData("es-MX")]
+    [InlineData("es-US")]
+    [InlineData("fr-CA")]
+    [InlineData("fr-FR")]
     [InlineData("it-IT")]
     public void Get_AllKeysPresent(string locale)
     {
@@ -89,24 +100,38 @@ public class ResponseStringsTests
         }
     }
 
-    [Fact]
-    public void Get_ItIt_AndEnUs_ReturnDifferentStrings()
+    [Theory]
+    [InlineData("en-AU")]
+    [InlineData("en-CA")]
+    [InlineData("en-GB")]
+    [InlineData("en-IN")]
+    public void Get_EnglishVariants_MatchEnUs(string locale)
     {
-        string enResult = ResponseStrings.Get("Welcome", "en-US");
-        string itResult = ResponseStrings.Get("Welcome", "it-IT");
-        Assert.NotEqual(enResult, itResult);
+        foreach (string key in AllExpectedKeys)
+        {
+            Assert.Equal(
+                ResponseStrings.Get(key, "en-US"),
+                ResponseStrings.Get(key, locale));
+        }
+    }
+
+    [Fact]
+    public void Get_NonEnglishLocales_ReturnDifferentStringsFromEnUs()
+    {
+        string[] nonEnglishLocales = new[] { "de-DE", "es-ES", "fr-FR", "it-IT" };
+        foreach (string locale in nonEnglishLocales)
+        {
+            Assert.NotEqual(
+                ResponseStrings.Get("Welcome", "en-US"),
+                ResponseStrings.Get("Welcome", locale));
+        }
     }
 
     [Fact]
     public void Reset_ClearsCachedData()
     {
-        // Load first to populate cache
         ResponseStrings.Get("Welcome", "en-US");
-
-        // Reset
         ResponseStrings.Reset();
-
-        // Should still work after reset (lazy reload)
         string result = ResponseStrings.Get("Welcome", "en-US");
         Assert.Equal("Welcome to Jellyfin Skill, what can I play?", result);
     }
