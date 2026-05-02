@@ -130,6 +130,52 @@ public static class LwaClient
     }
 
     /// <summary>
+    /// Exchanges an authorization code for access and refresh tokens.
+    /// </summary>
+    /// <param name="code">The authorization code received from Amazon.</param>
+    /// <param name="clientId">LWA client id.</param>
+    /// <param name="clientSecret">LWA client secret.</param>
+    /// <param name="redirectUri">The redirect URI used in the authorization request.</param>
+    /// <returns>Device token.</returns>
+    public static async Task<DeviceToken?> ExchangeAuthorizationCode(string code, string clientId, string clientSecret, string redirectUri)
+    {
+        string url = "https://api.amazon.com/auth/o2/token";
+        var formUrlEncodedContent = new FormUrlEncodedContent(new Dictionary<string, string>()
+        {
+            { "grant_type", "authorization_code" },
+            { "code", code },
+            { "client_id", clientId },
+            { "client_secret", clientSecret },
+            { "redirect_uri", redirectUri }
+        });
+
+        HttpResponseMessage response = await Plugin.HttpClient.PostAsync(url, formUrlEncodedContent)
+            .ConfigureAwait(false);
+
+        string content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new HttpRequestException(
+                $"Authorization code exchange failed with status {response.StatusCode}: {content}");
+        }
+
+        Dictionary<string, string>? json = JsonConvert.DeserializeObject<Dictionary<string, string>>(content);
+        if (json != null
+            && json.TryGetValue("access_token", out var token)
+            && json.TryGetValue("refresh_token", out var refreshToken)
+            && json.TryGetValue("token_type", out var tokenType)
+            && json.TryGetValue("expires_in", out var expiresInStr)
+            && int.TryParse(expiresInStr, out int expiresIn))
+        {
+            return new DeviceToken(token, refreshToken, tokenType,
+                new DateTimeOffset(DateTime.UtcNow).AddSeconds(expiresIn).ToUnixTimeSeconds());
+        }
+
+        throw new JsonException("Could not parse token response: " + content);
+    }
+
+    /// <summary>
     /// Refreshes the access token.
     /// </summary>
     /// <param name="deviceToken">Device token.</param>

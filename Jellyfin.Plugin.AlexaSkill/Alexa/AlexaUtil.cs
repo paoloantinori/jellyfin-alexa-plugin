@@ -43,6 +43,7 @@ public static class AlexaUtil
                 }
 
                 user.SmapiDeviceToken = token;
+                user.SmapiRefreshToken = token.RefreshToken;
 
                 Plugin.Instance.SaveConfiguration();
 

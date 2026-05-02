@@ -62,6 +62,7 @@
     <EmbeddedResource Include="Controller/Pages/account_linking.html" />
     <EmbeddedResource Include="Controller/Pages/lwa_device_token_request.html" />
     <EmbeddedResource Include="Controller/Pages/lwa_error.html" />
+    <EmbeddedResource Include="Controller/Pages/lwa_success.html" />
   </ItemGroup>
 
 </Project>

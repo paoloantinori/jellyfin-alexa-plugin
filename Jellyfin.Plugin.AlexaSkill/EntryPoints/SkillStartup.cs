@@ -10,6 +10,7 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.Manifest;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Controller;
 using Jellyfin.Plugin.AlexaSkill.Entities;
+using Jellyfin.Plugin.AlexaSkill.Lwa;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -65,6 +66,39 @@ public class SkillStartup : IHostedService, IDisposable
             foreach (User user in configuration.Users)
             {
                 token.ThrowIfCancellationRequested();
+
+                // Restart recovery: reconstruct in-memory token from persisted refresh token
+                if (user.SmapiDeviceToken == null && !string.IsNullOrEmpty(user.SmapiRefreshToken))
+                {
+                    _logger.LogInformation("Recovering SMAPI token for user {UserId} from persisted refresh token", user.Id);
+                    try
+                    {
+                        DeviceToken? tokenResult = await LwaClient.RefreshDeviceToken(
+                            new DeviceToken(user.SmapiRefreshToken, user.SmapiRefreshToken, "Bearer", 0),
+                            configuration.LwaClientId,
+                            configuration.LwaClientSecret).ConfigureAwait(false);
+
+                        if (tokenResult != null)
+                        {
+                            user.SmapiDeviceToken = tokenResult;
+                            user.SmapiRefreshToken = tokenResult.RefreshToken;
+                            Plugin.Instance.SaveConfiguration();
+                            _logger.LogInformation("SMAPI token recovered for user {UserId}", user.Id);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to recover SMAPI token for user {UserId}. Re-authorization required.", user.Id);
+                        user.SmapiRefreshToken = null;
+                        if (user.UserSkill != null)
+                        {
+                            user.UserSkill.UserSkillStatus = UserSkillStatus.LwaAuthPending;
+                        }
+
+                        Plugin.Instance.SaveConfiguration();
+                        continue;
+                    }
+                }
 
                 if (user.UserSkill != null)
                 {

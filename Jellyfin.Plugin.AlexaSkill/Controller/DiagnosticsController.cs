@@ -47,7 +47,8 @@ public class DiagnosticsController : ControllerBase
                 : (DateTime?)null,
             SmapiTokenExpired = u.SmapiDeviceToken != null
                 && u.SmapiDeviceToken.ExpireTimestamp > 0
-                && DateTimeOffset.FromUnixTimeSeconds(u.SmapiDeviceToken.ExpireTimestamp) < DateTimeOffset.UtcNow
+                && DateTimeOffset.FromUnixTimeSeconds(u.SmapiDeviceToken.ExpireTimestamp) < DateTimeOffset.UtcNow,
+                SmapiRefreshTokenPresent = !string.IsNullOrEmpty(u.SmapiRefreshToken)
         }).ToList();
 
         var locales = Plugin.Instance.InteractionModels
