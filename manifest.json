@@ -30,6 +30,14 @@
                 "changelog": "Migrated to Jellyfin 10.11.x (net9.0). Added PlayVideo, PlayChannel, and MediaInfo intent handlers. Fixed IUserDataRepository migration, namespace changes, CsrfTokenHandler bugs. Added test project with 118+ tests. Implemented cloud skill deletion on last user removal.",
                 "targetAbi": "10.11.0.0",
                 "timestamp": "2026-04-29T00:00:00Z"
+            },
+            {
+                "version": "0.2.0.1",
+                "checksum": "c0e9cc319fa1d4cd4f5f6238b1352405",
+                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.1/AlexaSkill_0.2.0.1.zip",
+                "changelog": "Fix LWA device authorization by including client_secret in the codepair request.",
+                "targetAbi": "10.11.0.0",
+                "timestamp": "2026-05-02T16:49:00Z"
             }
         ]
     }
