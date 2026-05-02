@@ -150,6 +150,6 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         string item_id = albumItems[0].Id.ToString();
 
-        return ResponseBuilder.AudioPlayerPlay(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id);
+        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, albumItems[0], user);
     }
 }

@@ -73,7 +73,7 @@ public class NextIntentHandler : BaseHandler
                 string previousToken = session.FullNowPlayingItem.Id.ToString();
                 session.FullNowPlayingItem = nextItem;
 
-                return ResponseBuilder.AudioPlayerPlay(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id);
+                return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, nextItem, user);
             }
         }
 
