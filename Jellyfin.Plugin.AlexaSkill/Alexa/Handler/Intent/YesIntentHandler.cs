@@ -111,7 +111,7 @@ public class YesIntentHandler : BaseHandler
         string itemId = song.Id.ToString();
         session.NowPlayingQueue = new List<QueueItem> { new() { Id = song.Id } };
         session.FullNowPlayingItem = song;
-        return ResponseBuilder.AudioPlayerPlay(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId);
+        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, song, user);
     }
 
     private SkillResponse PlayAlbum(BaseItem album, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale)
@@ -134,7 +134,7 @@ public class YesIntentHandler : BaseHandler
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = albumItems[0];
         string itemId = albumItems[0].Id.ToString();
-        return ResponseBuilder.AudioPlayerPlay(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId);
+        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, albumItems[0], user);
     }
 
     private SkillResponse PlayArtist(BaseItem artist, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale)
@@ -157,7 +157,7 @@ public class YesIntentHandler : BaseHandler
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = artistItems[0];
         string itemId = artistItems[0].Id.ToString();
-        return ResponseBuilder.AudioPlayerPlay(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId);
+        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, artistItems[0], user);
     }
 
     private SkillResponse PlayVideo(BaseItem video, Entities.User user, SessionInfo session)
@@ -209,6 +209,6 @@ public class YesIntentHandler : BaseHandler
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = playlistItems[0];
         string itemId = playlistItems[0].Id.ToString();
-        return ResponseBuilder.AudioPlayerPlay(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId);
+        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, playlistItems[0], user);
     }
 }

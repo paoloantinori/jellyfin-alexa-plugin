@@ -47,7 +47,7 @@ public class StartOverIntentHandler : BaseHandler
         }
 
         string item_id = session.FullNowPlayingItem.Id.ToString();
-        return ResponseBuilder.AudioPlayerPlay(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, 0);
+        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, session.FullNowPlayingItem, user);
     }
 }
 

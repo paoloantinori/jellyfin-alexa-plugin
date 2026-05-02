@@ -7,6 +7,7 @@ using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
+using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Session;
@@ -132,6 +133,66 @@ public abstract class BaseHandler
     {
         // TODO: add possible transcoding
         return new Uri(new Uri(_config.ServerAddress), "Items/" + itemId + "/Download?api_key=" + user.JellyfinToken).ToString();
+    }
+
+    /// <summary>
+    /// Get a cover art image URL for the given item.
+    /// </summary>
+    /// <param name="itemId">Id of the item.</param>
+    /// <param name="user">The user for authentication.</param>
+    /// <returns>URL of the item's primary image.</returns>
+    public string GetImageUrl(string itemId, Entities.User user)
+    {
+        return new Uri(new Uri(_config.ServerAddress), "Items/" + itemId + "/Images/Primary?api_key=" + user.JellyfinToken).ToString();
+    }
+
+    /// <summary>
+    /// Build an AudioPlayer response with cover art metadata.
+    /// </summary>
+    /// <param name="playBehavior">The play behavior (ReplaceAll, Enqueue, ReplaceEnqueued).</param>
+    /// <param name="streamUrl">The audio stream URL.</param>
+    /// <param name="itemId">The item ID used as the stream token.</param>
+    /// <param name="item">The media item for metadata (title, art), or null.</param>
+    /// <param name="user">The user for building the image URL.</param>
+    /// <param name="offsetInMilliseconds">Resume offset in milliseconds (default 0).</param>
+    /// <returns>A SkillResponse containing the AudioPlayer directive with metadata.</returns>
+    public SkillResponse BuildAudioPlayerResponse(PlayBehavior playBehavior, string streamUrl, string itemId, MediaBrowser.Controller.Entities.BaseItem? item, Entities.User user, int offsetInMilliseconds = 0)
+    {
+        string imageUrl = item != null ? GetImageUrl(itemId, user) : string.Empty;
+        var imageSources = new AudioItemSources
+        {
+            Sources = new List<AudioItemSource> { new() { Url = imageUrl } }
+        };
+
+        var directive = new AudioPlayerPlayDirective
+        {
+            PlayBehavior = playBehavior,
+            AudioItem = new AudioItem
+            {
+                Stream = new AudioItemStream
+                {
+                    Url = streamUrl,
+                    Token = itemId,
+                    OffsetInMilliseconds = offsetInMilliseconds
+                },
+                Metadata = new AudioItemMetadata
+                {
+                    Title = item?.Name ?? string.Empty,
+                    Art = imageSources,
+                    BackgroundImage = imageSources
+                }
+            }
+        };
+
+        return new SkillResponse
+        {
+            Version = "1.0",
+            Response = new ResponseBody
+            {
+                ShouldEndSession = true,
+                Directives = new List<IDirective> { directive }
+            }
+        };
     }
 
     /// <summary>
