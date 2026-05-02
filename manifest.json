@@ -33,7 +33,7 @@
             },
             {
                 "version": "0.2.0.1",
-                "checksum": "c0e9cc319fa1d4cd4f5f6238b1352405",
+                "checksum": "ff1f3d8e35384b6b034ca1930b9813f7",
                 "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.1/AlexaSkill_0.2.0.1.zip",
                 "changelog": "Fix LWA device authorization by including client_secret in the codepair request.",
                 "targetAbi": "10.11.0.0",
