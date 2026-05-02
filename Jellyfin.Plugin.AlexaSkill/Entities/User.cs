@@ -46,6 +46,11 @@ public class User
     public DeviceToken? SmapiDeviceToken { get; set; }
 
     /// <summary>
+    /// Gets or sets the persisted SMAPI refresh token for restart recovery.
+    /// </summary>
+    public string? SmapiRefreshToken { get; set; }
+
+    /// <summary>
     /// Gets or sets the user skill.
     /// </summary>
     public UserSkill? UserSkill { get; set; }

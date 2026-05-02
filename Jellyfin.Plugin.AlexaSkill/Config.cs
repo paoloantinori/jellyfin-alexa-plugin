@@ -26,14 +26,19 @@ public static class Config
     public const int CsrfTokenExpirationMinutes = 10;
 
     /// <summary>
+    /// The path for the LWA Authorization Code callback endpoint.
+    /// </summary>
+    public const string LwaCallbackPath = "alexaskill/lwa/callback";
+
+    /// <summary>
     /// Length of the LWA authorization page token.
     /// </summary>
     public const int LwaAuthorizePageTokenLength = 6;
 
     /// <summary>
-    /// Expiration time of the CSRF token in minutes.
+    /// Expiration time of the LWA authorization page token in minutes.
     /// </summary>
-    public const int LwaAuthorizePageTokenExpirationMinutes = 10;
+    public const int LwaAuthorizePageTokenExpirationMinutes = 30;
 
     /// <summary>
     /// Name of the database file.
