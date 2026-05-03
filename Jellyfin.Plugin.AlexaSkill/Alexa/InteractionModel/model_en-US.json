@@ -389,6 +389,74 @@
           "i want {mood} music",
           "play me something {mood}"
         ]
+      },
+      {
+        "name": "AddToQueueIntent",
+        "slots": [
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.MusicGroup"
+          }
+        ],
+        "samples": [
+          "add {song} to my queue",
+          "add {song} to the queue",
+          "add {song} by {musician} to my queue",
+          "add {song} by {musician} to the queue",
+          "queue {song}",
+          "queue {song} by {musician}",
+          "put {song} in my queue",
+          "add {song} to my playlist"
+        ]
+      },
+      {
+        "name": "PlayNextIntent",
+        "slots": [
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.MusicGroup"
+          }
+        ],
+        "samples": [
+          "play {song} next",
+          "play {song} by {musician} next",
+          "play {song} up next",
+          "play {song} by {musician} up next",
+          "I want to hear {song} next",
+          "hear {song} next",
+          "play {song} after this"
+        ]
+      },
+      {
+        "name": "ClearQueueIntent",
+        "samples": [
+          "clear my queue",
+          "clear the queue",
+          "empty my queue",
+          "empty the queue",
+          "remove everything from my queue",
+          "clear my playlist"
+        ]
+      },
+      {
+        "name": "ListQueueIntent",
+        "samples": [
+          "what's in my queue",
+          "what's in the queue",
+          "what's coming up",
+          "what's up next",
+          "show my queue",
+          "list my queue",
+          "what's playing next"
+        ]
       }
     ],
     "types": [
