@@ -7,6 +7,7 @@
   "PlaybackFailed": "Beim Abspielen ist etwas schiefgelaufen. Bitte versuche es erneut.",
   "SomethingWrong": "Etwas ist schiefgelaufen, bitte versuche es erneut.",
   "CouldNotUnderstand": "Ich konnte das nicht verstehen, bitte versuche es erneut.",
+  "UnsupportedIntent": "Leider kann ich das noch nicht. Versuche, mich nach Musik oder Wiedergabesteuerung zu fragen.",
   "DidNotCatchVideoTitle": "Ich habe den Videotitel nicht verstanden. Bitte versuche es erneut.",
   "DidNotCatchChannelName": "Ich habe den Kanalnamen nicht verstanden. Bitte versuche es erneut.",
   "NotFoundVideo": "Entschuldigung, ich konnte kein Video mit dem Titel {0} finden.",

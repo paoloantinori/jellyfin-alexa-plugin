@@ -7,6 +7,7 @@
   "PlaybackFailed": "Un problème est survenu lors de la lecture. Veuillez réessayer.",
   "SomethingWrong": "Un problème est survenu, veuillez réessayer.",
   "CouldNotUnderstand": "Je n'ai pas compris, veuillez réessayer.",
+  "UnsupportedIntent": "Désolé, je ne peux pas encore faire ça. Essayez de me demander de jouer de la musique ou de contrôler la lecture.",
   "DidNotCatchVideoTitle": "Je n'ai pas bien compris le titre de la vidéo. Veuillez réessayer.",
   "DidNotCatchChannelName": "Je n'ai pas bien compris le nom de la chaîne. Veuillez réessayer.",
   "NotFoundVideo": "Désolé, je n'ai trouvé aucune vidéo avec le titre {0}.",

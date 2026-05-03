@@ -29,8 +29,22 @@ public class FallbackIntentHandler : BaseHandler
     /// <inheritdoc/>
     public override bool CanHandle(Request request)
     {
-        IntentRequest? intentRequest = request as IntentRequest;
-        return intentRequest != null && string.Equals(intentRequest.Intent.Name, IntentNames.AmazonFallback, System.StringComparison.Ordinal);
+        if (request is IntentRequest intentRequest)
+        {
+            // Handle AMAZON.FallbackIntent specifically
+            if (string.Equals(intentRequest.Intent.Name, IntentNames.AmazonFallback, System.StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            // Also catch any other AMAZON.* built-in intents not handled by specific handlers
+            if (intentRequest.Intent.Name.StartsWith("AMAZON.", System.StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -43,6 +57,16 @@ public class FallbackIntentHandler : BaseHandler
     /// <returns>Notification about an error.</returns>
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
-        return ResponseBuilder.Tell(ResponseStrings.Get("CouldNotUnderstand", GetLocale(request)));
+        string locale = GetLocale(request);
+        IntentRequest intentRequest = (IntentRequest)request;
+
+        // For unsupported built-in intents, give a specific message
+        if (intentRequest.Intent.Name.StartsWith("AMAZON.", System.StringComparison.Ordinal)
+            && !string.Equals(intentRequest.Intent.Name, IntentNames.AmazonFallback, System.StringComparison.Ordinal))
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("UnsupportedIntent", locale));
+        }
+
+        return ResponseBuilder.Tell(ResponseStrings.Get("CouldNotUnderstand", locale));
     }
 }
