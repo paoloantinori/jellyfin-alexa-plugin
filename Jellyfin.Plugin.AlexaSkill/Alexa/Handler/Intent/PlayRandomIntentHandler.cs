@@ -206,14 +206,4 @@ public class PlayRandomIntentHandler : BaseHandler
             DtoOptions = new DtoOptions(true)
         }), "GetAlbumTracks", cancellationToken).ConfigureAwait(false);
     }
-
-    private static void Shuffle<T>(List<T> list)
-    {
-        int n = list.Count;
-        for (int i = n - 1; i > 0; i--)
-        {
-            int j = Random.Shared.Next(i + 1);
-            (list[i], list[j]) = (list[j], list[i]);
-        }
-    }
 }

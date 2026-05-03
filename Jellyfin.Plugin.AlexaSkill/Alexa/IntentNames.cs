@@ -32,6 +32,9 @@ internal static class IntentNames
     public const string PlayNext = "PlayNextIntent";
     public const string ClearQueue = "ClearQueueIntent";
     public const string ListQueue = "ListQueueIntent";
+    public const string PlayRadio = "PlayRadioIntent";
+    public const string TurnRadioOn = "TurnRadioOnIntent";
+    public const string TurnRadioOff = "TurnRadioOffIntent";
 
     public const string AmazonFallback = "AMAZON.FallbackIntent";
     public const string AmazonLoopOff = "AMAZON.LoopOffIntent";

@@ -84,5 +84,11 @@
   "QueueCleared": "Coda svuotata.",
   "QueueEmpty": "La tua coda è vuota.",
   "QueueList": "Prossimi brani: {0}",
-  "DidNotCatchQueueItem": "Cosa vorresti aggiungere alla coda?"
+  "DidNotCatchQueueItem": "Cosa vorresti aggiungere alla coda?",
+  "RadioNothingPlaying": "Nessun contenuto in riproduzione. Riproduci una canzone prima, poi dì riproduci radio.",
+  "RadioNotAudio": "La modalità radio funziona solo con la musica. Prova a riprodurre una canzone prima.",
+  "RadioNoSimilar": "Non ho trovato brani simili nella tua libreria.",
+  "RadioStarted": "Modalità radio attiva. Trovati {0} brani simili.",
+  "RadioModeOn": "Modalità radio attivata. Continuerò a riprodurre musica simile quando la coda finisce.",
+  "RadioModeOff": "Modalità radio disattivata. La riproduzione si fermerà quando la coda finisce."
 }

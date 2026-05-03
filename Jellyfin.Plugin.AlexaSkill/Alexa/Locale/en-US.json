@@ -84,5 +84,11 @@
   "QueueCleared": "Queue cleared.",
   "QueueEmpty": "Your queue is empty.",
   "QueueList": "Up next: {0}",
-  "DidNotCatchQueueItem": "What would you like to add to your queue?"
+  "DidNotCatchQueueItem": "What would you like to add to your queue?",
+  "RadioNothingPlaying": "Nothing is currently playing. Play a song first, then say play radio.",
+  "RadioNotAudio": "Radio mode only works with music. Try playing a song first.",
+  "RadioNoSimilar": "I couldn't find any similar tracks in your library.",
+  "RadioStarted": "Radio mode on. Found {0} similar tracks.",
+  "RadioModeOn": "Radio mode is now on. I'll keep playing similar music when your queue runs out.",
+  "RadioModeOff": "Radio mode is now off. Playback will stop when your queue ends."
 }
