@@ -173,6 +173,22 @@
         ]
       },
       {
+        "name": "PlayByGenreIntent",
+        "samples": [
+          "Joue de la musique {genre}",
+          "Joue du {genre}",
+          "Je veux écouter du {genre}",
+          "Mets du {genre}",
+          "Joue des chansons {genre}"
+        ],
+        "slots": [
+          {
+            "name": "genre",
+            "type": "AMAZON.Genre"
+          }
+        ]
+      },
+      {
         "name": "PlayPlaylistIntent",
         "samples": [
           "Lis la playlist {playlist}",

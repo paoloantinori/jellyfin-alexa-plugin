@@ -45,5 +45,7 @@
   "DisambiguateReprompt": "Vous pouvez dire oui ou non.",
   "UnexpectedYes": "Je ne suis pas sûr de ce que vous souhaitez écouter. Vous pouvez me demander de lire une chanson, un album ou une vidéo.",
   "NotFoundRandom": "Je n'ai pas trouvé de média à lire au hasard. Essayez d'ajouter de la musique à votre bibliothèque d'abord.",
-  "NotFoundRandomGenre": "Je n'ai pas trouvé de média {0} à lire au hasard."
+  "NotFoundRandomGenre": "Je n'ai pas trouvé de média {0} à lire au hasard.",
+  "DidNotCatchGenre": "Je n'ai pas compris le genre musical. Veuillez réessayer.",
+  "NotFoundGenre": "Désolé, je n'ai pas trouvé de musique {0} dans votre bibliothèque."
 }

@@ -45,5 +45,7 @@
   "DisambiguateReprompt": "Puedes decir sí o no.",
   "UnexpectedYes": "No estoy seguro de qué quieres que reproduzca. Puedes pedirme que reproduzca una canción, un álbum o un vídeo.",
   "NotFoundRandom": "No encontré contenido para reproducir al azar. Intenta agregar música a tu biblioteca primero.",
-  "NotFoundRandomGenre": "No encontré contenido de {0} para reproducir al azar."
+  "NotFoundRandomGenre": "No encontré contenido de {0} para reproducir al azar.",
+  "DidNotCatchGenre": "No entendí el género. Por favor, inténtalo de nuevo.",
+  "NotFoundGenre": "Lo siento, no encontré música de {0} en tu biblioteca."
 }
