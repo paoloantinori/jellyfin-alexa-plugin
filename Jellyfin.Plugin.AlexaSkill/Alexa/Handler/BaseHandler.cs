@@ -182,6 +182,7 @@ public abstract class BaseHandler
                 Metadata = new AudioItemMetadata
                 {
                     Title = item?.Name ?? string.Empty,
+                    Subtitle = GetSubtitle(item),
                     Art = imageSources,
                     BackgroundImage = imageSources
                 }
@@ -197,6 +198,24 @@ public abstract class BaseHandler
                 Directives = new List<IDirective> { directive }
             }
         };
+    }
+
+    /// <summary>
+    /// Build a subtitle string from item metadata for display on Echo Show/Fire TV.
+    /// </summary>
+    private static string GetSubtitle(BaseItem? item)
+    {
+        if (item is MediaBrowser.Controller.Entities.Audio.Audio audio)
+        {
+            return audio.Album ?? string.Empty;
+        }
+
+        if (item is MediaBrowser.Controller.Entities.TV.Episode episode)
+        {
+            return episode.SeriesName ?? string.Empty;
+        }
+
+        return string.Empty;
     }
 
     /// <summary>
