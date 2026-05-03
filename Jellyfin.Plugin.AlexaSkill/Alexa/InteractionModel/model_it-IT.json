@@ -50,9 +50,14 @@
         "name": "RepeatSingleOnIntent",
         "samples": [
           "Ripeti la canzone",
+          "Ripeti la traccia",
           "Ripeti il brano",
           "Ripeti il video",
-          "Ripetilo"
+          "Ripetilo",
+          "riplei",
+          "replei",
+          "Suonalo ancora",
+          "Suonala ancora"
         ]
       },
       {
@@ -82,7 +87,37 @@
         "name": "PlaySongIntent",
         "samples": [
           "Riproduci il brano {song}",
-          "Riproduci {song} di {musician}"
+          "Riproduci la canzone {song}",
+          "Riproduci il pezzo {song}",
+          "Riproduci la traccia {song}",
+          "Suona il brano {song}",
+          "Suona la canzone {song}",
+          "Suona il pezzo {song}",
+          "Suona la traccia {song}",
+          "Metti il brano {song}",
+          "Metti la canzone {song}",
+          "Metti il pezzo {song}",
+          "Metti la traccia {song}",
+          "Pleia il brano {song}",
+          "Pleia la canzone {song}",
+          "Pleia il pezzo {song}",
+          "Pleia la traccia {song}",
+          "Riproduci {song} di {musician}",
+          "Riproduci {song} dei {musician}",
+          "Riproduci {song} degli {musician}",
+          "Riproduci {song} delle {musician}",
+          "Suona {song} di {musician}",
+          "Suona {song} dei {musician}",
+          "Suona {song} degli {musician}",
+          "Suona {song} delle {musician}",
+          "Metti {song} di {musician}",
+          "Metti {song} dei {musician}",
+          "Metti {song} degli {musician}",
+          "Metti {song} delle {musician}",
+          "Pleia {song} di {musician}",
+          "Pleia {song} dei {musician}",
+          "Pleia {song} degli {musician}",
+          "Pleia {song} delle {musician}"          
         ],
         "slots": [
           {
@@ -99,7 +134,26 @@
         "name": "PlayAlbumIntent",
         "samples": [
           "Riproduci album {album}",
-          "Riproduci album {album} di {musician}"
+          "Suona album {album}",
+          "Metti album {album}",
+          "Pleia album {album}",
+          "Riproduci album {album} di {musician}",
+          "Riproduci album {album} dei {musician}",
+          "Riproduci album {album} degli {musician}",
+          "Riproduci album {album} delle {musician}",
+          "Riproduci album {album} delle {musician}",
+          "Suona album {album} di {musician}",
+          "Suona album {album} dei {musician}",
+          "Suona album {album} degli {musician}",
+          "Suona album {album} delle {musician}",
+          "Metti album {album} di {musician}",
+          "Metti album {album} dei {musician}",
+          "Metti album {album} degli {musician}",
+          "Metti album {album} delle {musician}",
+          "Pleia album {album} di {musician}",
+          "Pleia album {album} dei {musician}",
+          "Pleia album {album} degli {musician}",
+          "Pleia album {album} delle {musician}"
         ],
         "slots": [
           {
@@ -115,7 +169,9 @@
       {
         "name": "PlayVideoIntent",
         "samples": [
-          "Riproduci il video {title}"
+          "Riproduci il video {title}",
+          "Metti il video {title}",
+          "Pleia il video {title}"
         ],
         "slots": [
           {
@@ -128,7 +184,41 @@
         "name": "PlayArtistSongsIntent",
         "samples": [
           "Riproduci brani di {musician}",
-          "Riproduci canzoni di {musician}"
+          "Riproduci canzoni di {musician}",
+          "Riproduci musica di {musician}",
+          "Riproduci brani dei {musician}",
+          "Riproduci canzoni dei {musician}",
+          "Riproduci musica dei {musician}",
+          "Riproduci brani degli {musician}",
+          "Riproduci canzoni degli {musician}",
+          "Riproduci musica degli {musician}",
+          "Riproduci brani delle {musician}",
+          "Riproduci canzoni delle {musician}",
+          "Riproduci musica delle {musician}",
+          "Sunona brani di {musician}",
+          "Sunona canzoni di {musician}",
+          "Sunona musica di {musician}",
+          "Sunona brani dei {musician}",
+          "Sunona canzoni dei {musician}",
+          "Sunona musica dei {musician}",
+          "Sunona brani degli {musician}",
+          "Sunona canzoni degli {musician}",
+          "Sunona musica degli {musician}",
+          "Sunona brani delle {musician}",
+          "Sunona canzoni delle {musician}",
+          "Sunona musica delle {musician}",
+          "Pleia brani di {musician}",
+          "Pleia canzoni di {musician}",
+          "Pleia musica di {musician}",
+          "Pleia brani dei {musician}",
+          "Pleia canzoni dei {musician}",
+          "Pleia musica dei {musician}",
+          "Pleia brani degli {musician}",
+          "Pleia canzoni degli {musician}",
+          "Pleia musica degli {musician}",
+          "Pleia brani delle {musician}",
+          "Pleia canzoni delle {musician}",
+          "Pleia musica delle {musician}"
         ],
         "slots": [
           {
@@ -142,7 +232,13 @@
         "samples": [
           "Riproduci novità {media_type}",
           "Riproduci ultimi {media_type} aggiunti",
-          "Riproduci nuovi media"
+          "Riproduci nuovi media",
+          "Suona novità {media_type}",
+          "Suona ultimi {media_type} aggiunti",
+          "Suona nuovi media",
+          "Metti novità {media_type}",
+          "Metti ultimi {media_type} aggiunti",
+          "Metti nuovi media"
         ],
         "slots": [
           {
@@ -155,7 +251,11 @@
         "name": "PlayPlaylistIntent",
         "samples": [
           "Riproduci playlist {playlist}",
-          "Metti playlist {playlist}"
+          "Riproduci la playlist {playlist}",
+          "Metti playlist {playlist}",
+          "Metti la playlist {playlist}",
+          "Suona playlist {playlist}",
+          "Suona la playlist {playlist}"          
         ],
         "slots": [
           {
@@ -208,10 +308,14 @@
         "name": "MediaInfoIntent",
         "samples": [
           "Che canzone è questa",
+          "Che canzone è",
           "Cosa c'è in riproduzione",
           "Che film è questo",
           "Che cosa sta suonando",
-          "Dimmi che brano è questo"
+          "Cosa stai suonando",
+          "Dimmi che brano è questo",
+          "Di chi è questa",
+          "Di chi è questa canzone"
         ]
       }
     ],
@@ -235,6 +339,8 @@
               "synonyms": [
                 "film",
                 "clip",
+                "filmato",
+                "puntata",
                 "episodio"
               ]
             }
@@ -245,7 +351,10 @@
               "value": "Audio",
               "synonyms": [
                 "canzone",
-                "brano"
+                "brano",
+                "pezzo",
+                "traccia",
+                "musica"
               ]
             }
           }
