@@ -181,8 +181,11 @@ public class PlayVideoIntentHandlerTests
         // Should return an Ask response for disambiguation, not a video directive
         Assert.NotNull(response.Response.OutputSpeech);
         Assert.False(response.Response.ShouldEndSession);
-        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
-        Assert.Contains("The Matrix", speech.Text);
+
+        string speechText = response.Response.OutputSpeech is SsmlOutputSpeech ssml
+            ? ssml.Ssml
+            : Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech).Text;
+        Assert.Contains("The Matrix", speechText);
     }
 
     [Fact]

@@ -59,6 +59,14 @@ public class LaunchRequestHandler : BaseHandler
         // check if we have any media in the queue
         if (session.NowPlayingQueue.Count == 0)
         {
+            string? welcomeSsml = GetSsml("WelcomeSsml", locale);
+            string? repromptSsml = GetSsml("WelcomeRepromptSsml", locale);
+
+            if (welcomeSsml != null && repromptSsml != null)
+            {
+                return AskSsml(welcomeSsml, repromptSsml);
+            }
+
             return ResponseBuilder.Ask(
                 ResponseStrings.Get("Welcome", locale),
                 new Reprompt(ResponseStrings.Get("WelcomeReprompt", locale)));

@@ -146,13 +146,18 @@ public class PlayRandomIntentHandler : BaseHandler
         if (firstItem is MediaBrowser.Controller.Entities.Movies.Movie
             or MediaBrowser.Controller.Entities.TV.Episode)
         {
+            string? npSsml = GetSsml("NowPlayingSsml", locale, firstItem.Name);
+            var outputSpeech = npSsml != null
+                ? (IOutputSpeech)new SsmlOutputSpeech { Ssml = $"<speak>{npSsml}</speak>" }
+                : new PlainTextOutputSpeech(ResponseStrings.Get("NowPlaying", locale, firstItem.Name));
+
             return new SkillResponse
             {
                 Version = "1.0",
                 Response = new ResponseBody
                 {
                     ShouldEndSession = true,
-                    OutputSpeech = new PlainTextOutputSpeech(ResponseStrings.Get("NowPlaying", locale, firstItem.Name)),
+                    OutputSpeech = outputSpeech,
                     Directives = new List<IDirective>
                     {
                         new Directive.VideoAppLaunchDirective

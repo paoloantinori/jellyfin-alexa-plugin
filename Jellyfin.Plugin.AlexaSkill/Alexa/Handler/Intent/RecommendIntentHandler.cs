@@ -165,13 +165,18 @@ public class RecommendIntentHandler : BaseHandler
         // Use VideoApp for movies, AudioPlayer for audio
         if (item is MediaBrowser.Controller.Entities.Movies.Movie)
         {
+            string? recSsml = GetSsml("RecommendPlayingSsml", locale, item.Name);
+            var outputSpeech = recSsml != null
+                ? (IOutputSpeech)new SsmlOutputSpeech { Ssml = $"<speak>{recSsml}</speak>" }
+                : new PlainTextOutputSpeech(ResponseStrings.Get("RecommendPlaying", locale, item.Name));
+
             return new SkillResponse
             {
                 Version = "1.0",
                 Response = new ResponseBody
                 {
                     ShouldEndSession = true,
-                    OutputSpeech = new PlainTextOutputSpeech(ResponseStrings.Get("RecommendPlaying", locale, item.Name)),
+                    OutputSpeech = outputSpeech,
                     Directives = new List<IDirective>
                     {
                         new VideoAppLaunchDirective
@@ -187,7 +192,15 @@ public class RecommendIntentHandler : BaseHandler
             };
         }
 
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, item, user);
+        // For audio, add NowPlaying speech before the audio directive
+        string? nowPlayingSsml = GetSsml("NowPlayingSsml", locale, item.Name);
+        var audioResponse = BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, item, user);
+        if (nowPlayingSsml != null)
+        {
+            audioResponse.Response.OutputSpeech = new SsmlOutputSpeech { Ssml = $"<speak>{nowPlayingSsml}</speak>" };
+        }
+
+        return audioResponse;
     }
 
     private static BaseItemKind[] GetItemTypes(string? mediaType)

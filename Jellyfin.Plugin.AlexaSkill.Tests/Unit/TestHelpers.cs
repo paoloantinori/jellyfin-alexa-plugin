@@ -1,6 +1,8 @@
 using System;
+using System.Text.RegularExpressions;
 using Alexa.NET;
 using Alexa.NET.Request;
+using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Entities;
 using Jellyfin.Plugin.AlexaSkill.Lwa;
@@ -45,5 +47,30 @@ internal static class TestHelpers
                 Device = new Device { DeviceID = "test-device" }
             }
         };
+    }
+
+    /// <summary>
+    /// Extract speech text from a SkillResponse, handling both plain text and SSML output.
+    /// Strips SSML markup for content assertions.
+    /// </summary>
+    internal static string GetSpeechText(SkillResponse response)
+    {
+        if (response.Response.OutputSpeech is SsmlOutputSpeech ssml)
+        {
+            string raw = ssml.Ssml;
+            raw = raw.Replace("<speak>", string.Empty).Replace("</speak>", string.Empty);
+            raw = Regex.Replace(raw, "<break[^>]*>", " ");
+            raw = Regex.Replace(raw, "<emphasis[^>]*>", string.Empty);
+            raw = raw.Replace("</emphasis>", string.Empty);
+            raw = Regex.Replace(raw, "<say-as[^>]*>", string.Empty);
+            raw = raw.Replace("</say-as>", string.Empty);
+            raw = Regex.Replace(raw, "<prosody[^>]*>", string.Empty);
+            raw = raw.Replace("</prosody>", string.Empty);
+            raw = Regex.Replace(raw, @"\s+", " ").Trim();
+            return raw;
+        }
+
+        var speech = global::Xunit.Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        return speech.Text;
     }
 }

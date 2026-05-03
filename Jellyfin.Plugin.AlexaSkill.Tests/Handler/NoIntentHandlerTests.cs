@@ -144,8 +144,11 @@ public class NoIntentHandlerTests
         // Should return an Ask (not Tell) with the next match name
         Assert.NotNull(response.Response.OutputSpeech);
         Assert.False(response.Response.ShouldEndSession);
-        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
-        Assert.Contains("Second Song", speech.Text);
+
+        string speechText = response.Response.OutputSpeech is SsmlOutputSpeech ssml
+            ? ssml.Ssml
+            : Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech).Text;
+        Assert.Contains("Second Song", speechText);
     }
 
     [Fact]
