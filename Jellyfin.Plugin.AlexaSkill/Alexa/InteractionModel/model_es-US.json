@@ -303,6 +303,26 @@
           "reproduce {series_name} temporada {season_number} episodio {episode_number}",
           "ver temporada {season_number} episodio {episode_number} de {series_name}"
         ]
+      },
+      {
+        "name": "BrowseLibraryIntent",
+        "slots": [
+          {
+            "name": "browse_category",
+            "type": "BrowseCategory"
+          },
+          {
+            "name": "filter",
+            "type": "AMAZON.SearchQuery"
+          }
+        ],
+        "samples": [
+          "explorar {browse_category}",
+          "muéstrame {browse_category}",
+          "lista {browse_category}",
+          "explorar {browse_category} {filter}",
+          "muéstrame {browse_category} de {filter}"
+        ]
       }
     ],
     "types": [
@@ -334,6 +354,36 @@
                 "música",
                 "canciones"
               ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "BrowseCategory",
+        "values": [
+          {
+            "name": {
+              "value": "artistas"
+            }
+          },
+          {
+            "name": {
+              "value": "álbumes"
+            }
+          },
+          {
+            "name": {
+              "value": "películas"
+            }
+          },
+          {
+            "name": {
+              "value": "canciones"
+            }
+          },
+          {
+            "name": {
+              "value": "géneros"
             }
           }
         ]

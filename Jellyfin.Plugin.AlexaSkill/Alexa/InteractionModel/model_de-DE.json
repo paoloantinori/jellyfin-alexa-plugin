@@ -308,6 +308,26 @@
           "spiele {series_name} staffel {season_number} folge {episode_number}",
           "schau staffel {season_number} folge {episode_number} von {series_name}"
         ]
+      },
+      {
+        "name": "BrowseLibraryIntent",
+        "slots": [
+          {
+            "name": "browse_category",
+            "type": "BrowseCategory"
+          },
+          {
+            "name": "filter",
+            "type": "AMAZON.SearchQuery"
+          }
+        ],
+        "samples": [
+          "durchsuche {browse_category}",
+          "zeige mir {browse_category}",
+          "liste {browse_category}",
+          "durchsuche {browse_category} {filter}",
+          "zeige mir {browse_category} von {filter}"
+        ]
       }
     ],
     "types": [
@@ -343,6 +363,36 @@
                 "Lied",
                 "Titel"
               ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "BrowseCategory",
+        "values": [
+          {
+            "name": {
+              "value": "künstler"
+            }
+          },
+          {
+            "name": {
+              "value": "alben"
+            }
+          },
+          {
+            "name": {
+              "value": "filme"
+            }
+          },
+          {
+            "name": {
+              "value": "lieder"
+            }
+          },
+          {
+            "name": {
+              "value": "genres"
             }
           }
         ]
