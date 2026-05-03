@@ -9,7 +9,7 @@ description: >
   This is a Jellyfin plugin for an Alexa skill to play media from your Jellyfin server.
   Besides, simple playback, other additional functions like playback of playlists or managing favorites are included.
 category: General
-owner: "paolo"
+owner: "paoloantinori"
 artifacts:
   - Alexa.NET.dll
   - Alexa.NET.Management.dll
@@ -17,4 +17,4 @@ artifacts:
   - Amazon.Lambda.Serialization.Json.dll
   - Jellyfin.Plugin.AlexaSkill.dll
   - Refit.dll
-changelog: ""
+changelog: "Add comprehensive README tutorial. Expand Italian voice command utterances. Fix ProgressiveResponse HttpClient reuse bug. Update manifest author attribution."
