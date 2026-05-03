@@ -121,6 +121,6 @@ public class PlayArtistSongsIntentHandler : BaseHandler
 
         string item_id = artistsItems[0].Id.ToString();
 
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, artistsItems[0], user);
+        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, artistsItems[0], user, context);
     }
 }

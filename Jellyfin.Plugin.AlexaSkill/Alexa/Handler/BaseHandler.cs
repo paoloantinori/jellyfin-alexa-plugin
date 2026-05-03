@@ -165,6 +165,22 @@ public abstract class BaseHandler
     /// <returns>A SkillResponse containing the AudioPlayer directive with metadata.</returns>
     public SkillResponse BuildAudioPlayerResponse(PlayBehavior playBehavior, string streamUrl, string itemId, MediaBrowser.Controller.Entities.BaseItem? item, Entities.User user, int offsetInMilliseconds = 0)
     {
+        return BuildAudioPlayerResponse(playBehavior, streamUrl, itemId, item, user, null, offsetInMilliseconds);
+    }
+
+    /// <summary>
+    /// Build an AudioPlayer response with cover art metadata and optional APL visual.
+    /// </summary>
+    /// <param name="playBehavior">The play behavior (ReplaceAll, Enqueue, ReplaceEnqueued).</param>
+    /// <param name="streamUrl">The audio stream URL.</param>
+    /// <param name="itemId">The item ID used as the stream token.</param>
+    /// <param name="item">The media item for metadata (title, art), or null.</param>
+    /// <param name="user">The user for building the image URL.</param>
+    /// <param name="context">Optional Alexa context for APL device detection.</param>
+    /// <param name="offsetInMilliseconds">Resume offset in milliseconds (default 0).</param>
+    /// <returns>A SkillResponse containing the AudioPlayer directive with optional APL visual.</returns>
+    public SkillResponse BuildAudioPlayerResponse(PlayBehavior playBehavior, string streamUrl, string itemId, MediaBrowser.Controller.Entities.BaseItem? item, Entities.User user, Context? context, int offsetInMilliseconds = 0)
+    {
         string imageUrl = item != null ? GetImageUrl(itemId, user) : string.Empty;
         var imageSources = new AudioItemSources
         {
@@ -192,13 +208,24 @@ public abstract class BaseHandler
             }
         };
 
+        var directives = new List<IDirective> { directive };
+
+        if (item != null && context != null && Apl.AplHelper.DeviceSupportsApl(context))
+        {
+            var aplDirective = Apl.AplHelper.BuildNowPlayingDirective(item, imageUrl, imageUrl);
+            if (aplDirective != null)
+            {
+                directives.Add(aplDirective);
+            }
+        }
+
         return new SkillResponse
         {
             Version = "1.0",
             Response = new ResponseBody
             {
                 ShouldEndSession = true,
-                Directives = new List<IDirective> { directive }
+                Directives = directives
             }
         };
     }

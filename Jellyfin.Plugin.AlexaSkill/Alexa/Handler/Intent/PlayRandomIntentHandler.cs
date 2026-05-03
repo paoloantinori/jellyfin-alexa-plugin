@@ -173,7 +173,7 @@ public class PlayRandomIntentHandler : BaseHandler
             };
         }
 
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, firstItem, user);
+        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, firstItem, user, context);
     }
 
     private static void ApplyMediaTypeFilter(InternalItemsQuery query, string? mediaTypeSlot)
