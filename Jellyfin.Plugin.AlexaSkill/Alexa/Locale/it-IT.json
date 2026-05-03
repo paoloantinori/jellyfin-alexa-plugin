@@ -7,6 +7,7 @@
   "PlaybackFailed": "Qualcosa è andato storto durante la riproduzione. Per favore riprova.",
   "SomethingWrong": "Qualcosa è andato storto, per favore riprova.",
   "CouldNotUnderstand": "Non ho capito, per favore riprova.",
+  "UnsupportedIntent": "Mi dispiace, non posso ancora farlo. Prova a chiedermi di riprodurre musica o controllare la riproduzione.",
   "DidNotCatchVideoTitle": "Non ho capito il titolo del video. Per favore riprova.",
   "DidNotCatchChannelName": "Non ho capito il nome del canale. Per favore riprova.",
   "NotFoundVideo": "Spiacente, non ho trovato nessun video con il titolo {0}.",

@@ -7,6 +7,7 @@
   "PlaybackFailed": "Something went wrong while playing your media. Please try again.",
   "SomethingWrong": "Something went wrong, please try again.",
   "CouldNotUnderstand": "I could not understand that, please try again.",
+  "UnsupportedIntent": "Sorry, I can't do that yet. Try asking me to play music or control playback.",
   "DidNotCatchVideoTitle": "I didn't catch the video title. Please try again.",
   "DidNotCatchChannelName": "I didn't catch the channel name. Please try again.",
   "NotFoundVideo": "Sorry, I couldn't find any video with the title {0}.",
