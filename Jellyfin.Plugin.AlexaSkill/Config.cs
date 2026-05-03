@@ -12,6 +12,8 @@ public static class Config
 
     /// <summary>
     /// The default invocation name of the Alexa skill.
+    /// Amazon requires at least two words (e.g. "jelly fin").
+    /// Each user can override this with their own invocation name.
     /// </summary>
     public const string InvocationName = "jelly fin";
 

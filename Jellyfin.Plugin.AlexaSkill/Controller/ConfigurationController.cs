@@ -220,6 +220,9 @@ public class ConfigurationController : ControllerBase
         };
     }
 
+    /// <summary>
+    /// Validates that an invocation name meets Amazon's requirements (at least 2 words).
+    /// </summary>
     private static bool IsValidInvocationName(string name) =>
         name.Length > 0 && name.Contains(' ');
 
