@@ -62,14 +62,14 @@ public class PlayChannelIntentHandler : BaseHandler
 
         Jellyfin.Database.Implementations.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
 
-        IReadOnlyList<BaseItem> channels = _libraryManager.GetItemList(new InternalItemsQuery()
+        IReadOnlyList<BaseItem> channels = await RetryAsync(() => _libraryManager.GetItemList(new InternalItemsQuery()
         {
             User = jellyfinUser,
             Recursive = true,
             SearchTerm = channelQuery,
             IncludeItemTypes = new[] { BaseItemKind.LiveTvChannel },
             DtoOptions = new DtoOptions(true)
-        });
+        }), "GetChannels", cancellationToken).ConfigureAwait(false);
 
         if (channels.Count == 0)
         {

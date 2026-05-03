@@ -93,7 +93,7 @@ public class PlayByGenreIntentHandler : BaseHandler
             DtoOptions = new DtoOptions(true)
         };
 
-        IReadOnlyList<BaseItem> items = _libraryManager.GetItemList(query);
+        IReadOnlyList<BaseItem> items = await RetryAsync(() => _libraryManager.GetItemList(query), "GetGenreItems", cancellationToken).ConfigureAwait(false);
 
         if (items.Count == 0)
         {

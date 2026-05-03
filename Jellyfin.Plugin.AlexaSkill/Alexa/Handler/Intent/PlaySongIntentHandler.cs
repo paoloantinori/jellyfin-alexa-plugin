@@ -77,14 +77,14 @@ public class PlaySongIntentHandler : BaseHandler
         List<Guid> artistsIds = new List<Guid>();
         if (musicianQuery != null)
         {
-            IReadOnlyList<BaseItem> artists = _libraryManager.GetItemList(new InternalItemsQuery()
+            IReadOnlyList<BaseItem> artists = await RetryAsync(() => _libraryManager.GetItemList(new InternalItemsQuery()
             {
                 User = jellyfinUser,
                 Recursive = true,
                 SearchTerm = musicianQuery,
                 IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
                 DtoOptions = new DtoOptions(true)
-            });
+            }), "GetArtists", cancellationToken).ConfigureAwait(false);
             if (artists.Count == 0)
             {
                 return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByArtist", locale, musicianQuery));
@@ -96,7 +96,7 @@ public class PlaySongIntentHandler : BaseHandler
             }
         }
 
-        IReadOnlyList<BaseItem> songs = _libraryManager.GetItemList(new InternalItemsQuery()
+        IReadOnlyList<BaseItem> songs = await RetryAsync(() => _libraryManager.GetItemList(new InternalItemsQuery()
         {
             User = jellyfinUser,
             Recursive = true,
@@ -104,7 +104,7 @@ public class PlaySongIntentHandler : BaseHandler
             ArtistIds = artistsIds.ToArray(),
             IncludeItemTypes = new[] { BaseItemKind.Audio },
             DtoOptions = new DtoOptions(true)
-        });
+        }), "GetSongs", cancellationToken).ConfigureAwait(false);
         if (songs.Count == 0 && musicianQuery != null)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByNameAndArtist", locale, songQuery, musicianQuery));

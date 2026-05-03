@@ -87,7 +87,7 @@ public class InProgressMediaListIntentHandler : BaseHandler
             DtoOptions = new DtoOptions(true)
         };
 
-        IReadOnlyList<BaseItem> recentItems = _libraryManager.GetItemList(query);
+        IReadOnlyList<BaseItem> recentItems = await RetryAsync(() => _libraryManager.GetItemList(query), "GetRecentItems", cancellationToken).ConfigureAwait(false);
 
         var inProgressItems = new List<(BaseItem Item, long PlaybackPositionTicks)>();
 

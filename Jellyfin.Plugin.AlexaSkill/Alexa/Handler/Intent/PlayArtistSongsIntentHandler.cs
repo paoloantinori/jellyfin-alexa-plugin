@@ -73,13 +73,13 @@ public class PlayArtistSongsIntentHandler : BaseHandler
 
         Jellyfin.Database.Implementations.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
 
-        IReadOnlyList<BaseItem> artists = _libraryManager.GetItemList(new InternalItemsQuery()
+        IReadOnlyList<BaseItem> artists = await RetryAsync(() => _libraryManager.GetItemList(new InternalItemsQuery()
         {
             Recursive = true,
             SearchTerm = musician,
             IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
             DtoOptions = new DtoOptions(true)
-        });
+        }), "GetArtists", cancellationToken).ConfigureAwait(false);
         if (artists.Count == 0)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundArtist", locale, musician));
@@ -93,14 +93,14 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         }
 
         // Get all songs with the artists
-        IReadOnlyList<BaseItem> artistsItems = _libraryManager.GetItemList(new InternalItemsQuery()
+        IReadOnlyList<BaseItem> artistsItems = await RetryAsync(() => _libraryManager.GetItemList(new InternalItemsQuery()
         {
             User = jellyfinUser,
             Recursive = true,
             MediaTypes = new[] { MediaType.Audio },
             DtoOptions = new DtoOptions(true),
             ArtistIds = new[] { artists[0].Id }
-        });
+        }), "GetArtistSongs", cancellationToken).ConfigureAwait(false);
         if (artistsItems.Count == 0)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NoSongsForArtist", locale, musician));

@@ -98,7 +98,7 @@ public class RecommendIntentHandler : BaseHandler
             DtoOptions = new DtoOptions(true)
         };
 
-        IReadOnlyList<BaseItem> playedItems = _libraryManager.GetItemList(historyQuery);
+        IReadOnlyList<BaseItem> playedItems = await RetryAsync(() => _libraryManager.GetItemList(historyQuery), "GetPlayedItems", cancellationToken).ConfigureAwait(false);
 
         // Step 2: Collect distinct genres from played items
         List<string> genres = playedItems
@@ -123,7 +123,7 @@ public class RecommendIntentHandler : BaseHandler
                 DtoOptions = new DtoOptions(true)
             };
 
-            recommendations = _libraryManager.GetItemList(recQuery);
+            recommendations = await RetryAsync(() => _libraryManager.GetItemList(recQuery), "GetGenreRecommendations", cancellationToken).ConfigureAwait(false);
         }
         else
         {
@@ -143,7 +143,7 @@ public class RecommendIntentHandler : BaseHandler
                 DtoOptions = new DtoOptions(true)
             };
 
-            recommendations = _libraryManager.GetItemList(fallbackQuery);
+            recommendations = await RetryAsync(() => _libraryManager.GetItemList(fallbackQuery), "GetFallbackRecommendations", cancellationToken).ConfigureAwait(false);
         }
 
         if (recommendations.Count == 0)
