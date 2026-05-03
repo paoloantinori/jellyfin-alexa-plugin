@@ -66,8 +66,7 @@ public class ConfigurationController : ControllerBase
 
         Dictionary<string, string> req = JsonConvert.DeserializeObject<Dictionary<string, string>>(json.ToString());
         if (req.TryGetValue("InvocationName", out var invocationName)
-            && invocationName.Length > 0
-            && invocationName.Split(" ").Length >= 2)
+            && IsValidInvocationName(invocationName))
         {
             if (pluginUser.UserSkill == null)
             {
@@ -95,19 +94,13 @@ public class ConfigurationController : ControllerBase
     public ActionResult CreateNewUserSkill([FromBody] dynamic json)
     {
         Dictionary<string, string> req = JsonConvert.DeserializeObject<Dictionary<string, string>>(json.ToString());
-        if (!req.TryGetValue("Username", out var username))
-        {
-            return new JsonResult(new { error = "Missing username parameter" }) { StatusCode = 400 };
-        }
-        else if (username.Length == 0)
+        if (!req.TryGetValue("Username", out var username) || username.Length == 0)
         {
             return new JsonResult(new { error = "Invalid username" }) { StatusCode = 400 };
         }
-        else if (!req.TryGetValue("InvocationName", out var invocationName))
-        {
-            return new JsonResult(new { error = "Missing invocation name parameter" }) { StatusCode = 400 };
-        }
-        else if (invocationName.Length == 0 || invocationName.Split(" ").Length < 2)
+
+        if (!req.TryGetValue("InvocationName", out var invocationName)
+            || !IsValidInvocationName(invocationName))
         {
             return new JsonResult(new { error = "Invalid invocation name" }) { StatusCode = 400 };
         }
@@ -120,7 +113,7 @@ public class ConfigurationController : ControllerBase
 
         UserSkill userSkill = new UserSkill
         {
-            InvocationName = Config.InvocationName,
+            InvocationName = invocationName,
             UserSkillStatus = UserSkillStatus.LwaAuthPending
         };
 
@@ -226,6 +219,9 @@ public class ConfigurationController : ControllerBase
             StatusCode = 200
         };
     }
+
+    private static bool IsValidInvocationName(string name) =>
+        name.Length > 0 && name.Contains(' ');
 
     private bool TryResolvePluginUser(string userId, out Jellyfin.Plugin.AlexaSkill.Entities.User? pluginUser, out ActionResult? error)
     {
