@@ -552,5 +552,139 @@
         ]
       }
     ]
-  }
+  },
+  "dialog": {
+    "intents": [
+      {
+        "name": "PlayEpisodeIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "series_name",
+            "type": "AMAZON.Series",
+            "confirmationRequired": false,
+            "elicitationRequired": true,
+            "prompts": {
+              "elicitation": "Elicit.SeriesName"
+            }
+          },
+          {
+            "name": "season_number",
+            "type": "AMAZON.NUMBER",
+            "confirmationRequired": false,
+            "elicitationRequired": true,
+            "prompts": {
+              "elicitation": "Elicit.SeasonNumber"
+            }
+          },
+          {
+            "name": "episode_number",
+            "type": "AMAZON.NUMBER",
+            "confirmationRequired": false,
+            "elicitationRequired": true,
+            "prompts": {
+              "elicitation": "Elicit.EpisodeNumber"
+            }
+          }
+        ]
+      },
+      {
+        "name": "PlaySongIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording",
+            "confirmationRequired": false,
+            "elicitationRequired": true,
+            "prompts": {
+              "elicitation": "Elicit.SongName"
+            }
+          }
+        ]
+      },
+      {
+        "name": "PlayAlbumIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "album",
+            "type": "AMAZON.MusicRecording",
+            "confirmationRequired": false,
+            "elicitationRequired": true,
+            "prompts": {
+              "elicitation": "Elicit.AlbumName"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "prompts": [
+    {
+      "id": "Elicit.SeriesName",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "Which series would you like to watch?"
+        },
+        {
+          "type": "PlainText",
+          "value": "What's the name of the series?"
+        }
+      ]
+    },
+    {
+      "id": "Elicit.SeasonNumber",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "Which season?"
+        },
+        {
+          "type": "PlainText",
+          "value": "What season number?"
+        }
+      ]
+    },
+    {
+      "id": "Elicit.EpisodeNumber",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "Which episode number?"
+        },
+        {
+          "type": "PlainText",
+          "value": "What episode would you like to watch?"
+        }
+      ]
+    },
+    {
+      "id": "Elicit.SongName",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "What song would you like to hear?"
+        },
+        {
+          "type": "PlainText",
+          "value": "Which song?"
+        }
+      ]
+    },
+    {
+      "id": "Elicit.AlbumName",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "Which album would you like to hear?"
+        },
+        {
+          "type": "PlainText",
+          "value": "What's the album name?"
+        }
+      ]
+    }
+  ]
 }

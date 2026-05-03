@@ -203,7 +203,8 @@ public class ProgressiveResponseIntegrationTests
                     ["song"] = new Slot { Value = "Test Song" },
                     ["musician"] = new Slot { Value = null }
                 }
-            }
+            },
+            DialogState = "COMPLETED"
         };
 
         SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
@@ -233,7 +234,8 @@ public class ProgressiveResponseIntegrationTests
                     ["album"] = new Slot { Value = "Unknown Album" },
                     ["musician"] = new Slot { Value = null }
                 }
-            }
+            },
+            DialogState = "COMPLETED"
         };
 
         SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
