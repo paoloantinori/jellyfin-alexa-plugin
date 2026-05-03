@@ -133,7 +133,7 @@
                 input.type = "text";
                 input.is = "emby-input";
                 input.classList.add("emby-input")
-                input.value = (user.UserSkill)? user.UserSkill.InvocationName : "jellyfin player";
+                input.value = (user.UserSkill)? user.UserSkill.InvocationName : "jelly fin";
                 td.appendChild(input);
                 tr.appendChild(td);
                 
@@ -344,7 +344,7 @@
                     ApiClient.getPluginConfiguration(Config.pluginUniqueId).then(function (config) {
                         let newUserRow = createUserRow({
                             "Username": username,
-                            "InvocationName": "jellyfin player",
+                            "InvocationName": "jelly fin",
                             "SkillStatus": "unsaved"
                         }, config);
 

@@ -1,10 +1,10 @@
 ---
 id: JF-1.7
 title: 'Finalize release: cleanup, build pipeline, and manifest'
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-04-29 21:14'
-updated_date: '2026-04-30 15:06'
+updated_date: '2026-05-03 06:41'
 labels: []
 milestone: m-0
 dependencies: []
@@ -43,19 +43,19 @@ Finalize the migration release: clean up artifacts, verify the build pipeline, a
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Cleanup backup files removed from repository
-- [ ] #2 Plugin ZIP artifact builds correctly via CI
-- [ ] #3 Release tagged with correct version
-- [ ] #4 manifest.json checksum matches built artifact
+- [x] #1 Cleanup backup files removed from repository
+- [x] #2 Plugin ZIP artifact builds correctly via CI
+- [x] #3 Release tagged with correct version
+- [x] #4 manifest.json checksum matches built artifact
 <!-- AC:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Cleanup completed: backup files removed, .gitignore covers patterns. Manifest changelog updated. Build verified passing with 113+ tests. Remaining: build release ZIP with `dotnet publish`, compute MD5 checksum, update manifest.json checksum, tag release, create GitHub release.
+Release finalized: Directory.Build.props bumped to 0.2.0.1 matching the released version. AlexaSkill_0.2.0.1.zip removed from git tracking, *.zip added to .gitignore. Build verified: 249/250 tests pass, 0 errors. Tag 0.2.0.1 already existed. manifest.json checksum already correct.
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 /simplify
+- [x] #1 /simplify
 <!-- DOD:END -->
