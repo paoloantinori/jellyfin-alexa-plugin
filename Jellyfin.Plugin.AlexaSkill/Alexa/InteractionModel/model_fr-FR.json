@@ -359,6 +359,21 @@
           "arrêter après {duration_minutes} minutes",
           "éteindre dans {duration_minutes} minutes"
         ]
+      },
+      {
+        "name": "PlayMoodMusicIntent",
+        "slots": [
+          {
+            "name": "mood",
+            "type": "AMAZON.SearchQuery"
+          }
+        ],
+        "samples": [
+          "joue de la musique {mood}",
+          "joue quelque chose de {mood}",
+          "je veux de la musique {mood}",
+          "joue-moi quelque chose de {mood}"
+        ]
       }
     ],
     "types": [

@@ -66,5 +66,7 @@
   "RecommendPlaying": "Aquí tienes una recomendación: reproduciendo {0}",
   "DidNotCatchSleepTimer": "¿Cuánto tiempo debo poner el temporizador? Por favor di un número de minutos.",
   "SleepTimerSet": "Temporizador de sueño configurado para {0} minutos. La reproducción se detendrá entonces.",
-  "CancelSleepTimer": "Temporizador cancelado."
+  "CancelSleepTimer": "Temporizador cancelado.",
+  "DidNotCatchMood": "¿Qué tipo de música te gustaría? Puedes decir relajante, alegre, chill, energética o concentración.",
+  "NotFoundMood": "No pude encontrar música {0} en tu biblioteca."
 }
