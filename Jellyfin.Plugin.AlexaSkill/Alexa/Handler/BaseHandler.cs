@@ -21,8 +21,6 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public abstract class BaseHandler
 {
-    private static readonly HttpClient SharedHttpClient = new();
-
     private PluginConfiguration _config;
 
     /// <summary>
@@ -216,11 +214,12 @@ public abstract class BaseHandler
     {
         try
         {
+            using var httpClient = new HttpClient();
             var progressiveResponse = new ProgressiveResponse(
                 context.System.ApiAccessToken,
                 request.RequestId,
                 context.System?.ApiEndpoint ?? "https://api.amazonalexa.com",
-                SharedHttpClient);
+                httpClient);
             await progressiveResponse.SendSpeech(message).ConfigureAwait(false);
         }
         catch (Exception ex)

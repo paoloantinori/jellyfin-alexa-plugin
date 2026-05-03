@@ -133,6 +133,21 @@ public class ProgressiveResponseTests
     }
 
     [Fact]
+    public async Task SendProgressiveResponse_MultipleCalls_DoNotThrow()
+    {
+        var handler = CreateHandler();
+        var context = CreateContext();
+        var request = new IntentRequest { RequestId = "test-request-id" };
+
+        // First call should succeed
+        await handler.InvokeSendProgressiveResponse(context, request, "Searching...");
+
+        // Second call should also succeed (previously threw InvalidOperationException
+        // due to shared HttpClient BaseAddress mutation)
+        await handler.InvokeSendProgressiveResponse(context, request, "Still searching...");
+    }
+
+    [Fact]
     public void SearchingMedia_LocaleString_ExistsInItalianLocale()
     {
         string message = ResponseStrings.Get("SearchingMedia", "it-IT");
