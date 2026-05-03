@@ -90,5 +90,10 @@
   "RadioNoSimilar": "I couldn't find any similar tracks in your library.",
   "RadioStarted": "Radio mode on. Found {0} similar tracks.",
   "RadioModeOn": "Radio mode is now on. I'll keep playing similar music when your queue runs out.",
-  "RadioModeOff": "Radio mode is now off. Playback will stop when your queue ends."
+  "RadioModeOff": "Radio mode is now off. Playback will stop when your queue ends.",
+  "VoiceLearned": "Got it! I've linked your voice to the account {0}. From now on, I'll use your library when I recognize you.",
+  "VoiceAlreadyLinked": "Your voice is already linked to the account {0}.",
+  "VoiceLearnFailed": "I couldn't link your voice. Make sure voice profiles are enabled in your Alexa settings.",
+  "WhoAmI": "You're connected as {0}.",
+  "WhoAmIUnknown": "I don't recognize your voice yet. Say learn my voice to set it up."
 }

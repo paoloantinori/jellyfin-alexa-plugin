@@ -491,6 +491,29 @@
           "disable radio",
           "stop radio mode"
         ]
+      },
+      {
+        "name": "LearnMyVoiceIntent",
+        "samples": [
+          "learn my voice",
+          "remember my voice",
+          "recognize me",
+          "link my voice",
+          "this is my voice",
+          "set up my voice profile",
+          "associate my voice"
+        ]
+      },
+      {
+        "name": "WhoAmIIntent",
+        "samples": [
+          "who am i",
+          "which account is this",
+          "what account am i using",
+          "who is speaking",
+          "which profile is active",
+          "am i recognized"
+        ]
       }
     ],
     "types": [

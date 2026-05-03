@@ -195,6 +195,29 @@ public class PluginConfiguration : BasePluginConfiguration
     }
 
     /// <summary>
+    /// Get the user by their Alexa person ID (voice profile).
+    /// </summary>
+    /// <param name="personId">The Alexa person ID from speaker recognition.</param>
+    /// <returns>Instance of the <see cref="User"/> class or null if no mapping exists.</returns>
+    public User? GetUserByPersonId(string personId)
+    {
+        if (string.IsNullOrEmpty(personId))
+        {
+            return null;
+        }
+
+        foreach (User u in Users)
+        {
+            if (string.Equals(u.AlexaPersonId, personId, StringComparison.Ordinal))
+            {
+                return u;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Delete the user with the given guid.
     /// </summary>
     /// <param name="guid">The guid of the user.</param>

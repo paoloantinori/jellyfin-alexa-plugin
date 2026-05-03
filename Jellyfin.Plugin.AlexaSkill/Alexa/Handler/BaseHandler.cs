@@ -73,15 +73,27 @@ public abstract class BaseHandler
     /// <returns>The skill response to the request.</returns>
     public async Task<SkillResponse> HandleRequestAsync(Request request, Context context, AlexaSession? alexaSession, CancellationToken cancellationToken = default)
     {
-        if (!Guid.TryParse(context.System.User.AccessToken, out Guid userId))
-        {
-            return ResponseBuilder.Tell(ResponseStrings.Get("UserNotFound", GetLocale(request)));
-        }
+        // Voice-based identification takes priority over account linking so multi-user
+        // households get the right library automatically when speaker recognition is active.
+        string? personId = context.System?.Person?.PersonId;
+        Entities.User? user = !string.IsNullOrEmpty(personId)
+            ? _config.GetUserByPersonId(personId)
+            : null;
 
-        Entities.User? user = _config.GetUserById(userId);
+        // Account linking via access token serves as the fallback for devices without speaker recognition.
         if (user == null)
         {
-            Logger.LogError("User not found for access token: {UserId}", userId);
+            if (!Guid.TryParse(context.System.User.AccessToken, out Guid userId))
+            {
+                return ResponseBuilder.Tell(ResponseStrings.Get("UserNotFound", GetLocale(request)));
+            }
+
+            user = _config.GetUserById(userId);
+        }
+
+        if (user == null)
+        {
+            Logger.LogError("User not found for access token or person ID");
 
             return ResponseBuilder.Tell(ResponseStrings.Get("UserNotFound", GetLocale(request)));
         }

@@ -374,22 +374,22 @@
       {
         "name": "PlayLastAddedIntent",
         "samples": [
-          "Riproduci novità {media_type}",
+          "Riproduci novit\u00e0 {media_type}",
           "Riproduci ultimi {media_type} aggiunti",
           "Riproduci nuovi media",
-          "Suona novità {media_type}",
+          "Suona novit\u00e0 {media_type}",
           "Suona ultimi {media_type} aggiunti",
           "Suona nuovi media",
-          "Metti novità {media_type}",
+          "Metti novit\u00e0 {media_type}",
           "Metti ultimi {media_type} aggiunti",
           "Metti nuovi media",
-          "Di riprodurre novità {media_type}",
+          "Di riprodurre novit\u00e0 {media_type}",
           "Di riprodurre ultimi {media_type} aggiunti",
           "Di riprodurre nuovi media",
-          "Di suonare novità {media_type}",
+          "Di suonare novit\u00e0 {media_type}",
           "Di suonare ultimi {media_type} aggiunti",
           "Di suonare nuovi media",
-          "Di mettere novità {media_type}",
+          "Di mettere novit\u00e0 {media_type}",
           "Di mettere ultimi {media_type} aggiunti",
           "Di mettere nuovi media"
         ],
@@ -518,7 +518,7 @@
       {
         "name": "MarkFavoriteIntent",
         "samples": [
-          "Questa è bella",
+          "Questa \u00e8 bella",
           "Mi piace questa canzone",
           "Ci piace",
           "Aggiungi ai preferiti",
@@ -531,7 +531,7 @@
       {
         "name": "UnmarkFavoriteIntent",
         "samples": [
-          "Questa è brutta",
+          "Questa \u00e8 brutta",
           "Non mi piace questa canzone",
           "Non ci piace",
           "Togli dai preferiti",
@@ -544,16 +544,16 @@
       {
         "name": "MediaInfoIntent",
         "samples": [
-          "Che canzone è questa",
-          "Che canzone è",
-          "Cosa c'è in riproduzione",
-          "Che film è questo",
+          "Che canzone \u00e8 questa",
+          "Che canzone \u00e8",
+          "Cosa c'\u00e8 in riproduzione",
+          "Che film \u00e8 questo",
           "Che cosa sta suonando",
           "Cosa stai suonando",
-          "Dimmi che brano è questo",
-          "Di dirmi che brano è questo",
-          "Di chi è questa",
-          "Di chi è questa canzone"
+          "Dimmi che brano \u00e8 questo",
+          "Di dirmi che brano \u00e8 questo",
+          "Di chi \u00e8 questa",
+          "Di chi \u00e8 questa canzone"
         ]
       },
       {
@@ -561,7 +561,7 @@
         "samples": [
           "cosa sto ascoltando",
           "cosa sto guardando",
-          "cosa è in corso",
+          "cosa \u00e8 in corso",
           "mostra i miei progressi",
           "cosa ho iniziato"
         ]
@@ -653,6 +653,28 @@
           "riproduci qualcosa di {mood}",
           "voglio musica {mood}",
           "riproduci qualcosa di {mood}"
+        ]
+      },
+      {
+        "name": "LearnMyVoiceIntent",
+        "samples": [
+          "impara la mia voce",
+          "ricorda la mia voce",
+          "riconoscimi",
+          "collega la mia voce",
+          "questa \u00e8 la mia voce",
+          "configura il mio profilo vocale",
+          "associa la mia voce"
+        ]
+      },
+      {
+        "name": "WhoAmIIntent",
+        "samples": [
+          "chi sono",
+          "quale account \u00e8 questo",
+          "quale account sto usando",
+          "chi sta parlando",
+          "quale profilo \u00e8 attivo"
         ]
       }
     ],

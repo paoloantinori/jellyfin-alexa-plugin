@@ -114,6 +114,9 @@ public class AlexaSkillController : ControllerBase
             new TurnRadioOnIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
             new TurnRadioOffIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
 
+            new LearnMyVoiceIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
+            new WhoAmIIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
+
             new YesIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
             new NoIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
 
@@ -319,17 +322,14 @@ public class AlexaSkillController : ControllerBase
             }
 
             SkillRequest? req = JsonConvert.DeserializeObject<SkillRequest>(body);
-            if (req?.Context?.System?.User?.AccessToken == null)
+            if (req?.Context?.System?.User?.AccessToken == null
+                && string.IsNullOrEmpty(req?.Context?.System?.Person?.PersonId))
             {
-                _logger.LogWarning("Invalid skill request: missing access token");
+                _logger.LogWarning("Invalid skill request: missing access token and person ID");
                 return SkillResponseContent(ResponseBuilder.Tell("Unable to process your request. Please try linking your account again."));
             }
 
-            if (!Guid.TryParse(req.Context.System.User.AccessToken, out Guid userId))
-            {
-                _logger.LogWarning("Invalid access token format");
-                return SkillResponseContent(ResponseBuilder.Tell("Unable to authenticate. Please try linking your account again."));
-            }
+            Guid.TryParse(req.Context.System.User?.AccessToken, out Guid userId);
 
             string requestId = req.Request?.RequestId ?? Guid.NewGuid().ToString("N")[..8];
             string deviceId = req.Context.System.Device?.DeviceID ?? "unknown";
@@ -350,6 +350,17 @@ public class AlexaSkillController : ControllerBase
                 _logger.LogDebug("Request body: {RequestBody}", body);
 
                 Entities.User? user = Plugin.Instance!.Configuration.GetUserById(userId);
+
+                // Fall back to voice-based identification
+                if (user == null)
+                {
+                    string? personId = req.Context.System?.Person?.PersonId;
+                    if (!string.IsNullOrEmpty(personId))
+                    {
+                        user = Plugin.Instance!.Configuration.GetUserByPersonId(personId);
+                    }
+                }
+
                 if (user == null)
                 {
                     _logger.LogError("User not found or invalid access token: {UserId}", userId);
