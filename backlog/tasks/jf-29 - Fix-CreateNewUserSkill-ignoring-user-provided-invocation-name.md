@@ -1,9 +1,10 @@
 ---
 id: JF-29
 title: Fix CreateNewUserSkill ignoring user-provided invocation name
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-05-03 10:42'
+updated_date: '2026-05-03 11:34'
 labels:
   - bug
 dependencies: []
@@ -33,5 +34,11 @@ UserSkill userSkill = new UserSkill
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 /simplify
+- [x] #1 /simplify
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fixed ConfigurationController.CreateNewUserSkill to use the validated invocation name from the request body instead of the hardcoded default. Extracted IsValidInvocationName() helper to deduplicate validation between CreateNewUserSkill and UpdateUserSkill. Replaced Split() allocation with Contains() for efficiency. Added regression test.
+<!-- SECTION:FINAL_SUMMARY:END -->

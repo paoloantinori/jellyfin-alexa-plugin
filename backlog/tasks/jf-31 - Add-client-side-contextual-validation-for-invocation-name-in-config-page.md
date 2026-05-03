@@ -1,9 +1,10 @@
 ---
 id: JF-31
 title: Add client-side contextual validation for invocation name in config page
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-05-03 10:42'
+updated_date: '2026-05-03 11:37'
 labels:
   - ux
   - improvement
@@ -34,5 +35,11 @@ The server-side validation in `ConfigurationController.cs` (lines 69-70, 110) sh
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 /simplify
+- [x] #1 /simplify
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added client-side validation for invocation name in config page: input/blur event listeners validate that the name contains at least 2 words, showing inline error message with yellow border on invalid input. Save handler skips invalid rows with continue to prevent unnecessary API calls.
+<!-- SECTION:FINAL_SUMMARY:END -->

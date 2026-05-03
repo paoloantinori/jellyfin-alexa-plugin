@@ -1,9 +1,10 @@
 ---
 id: JF-33
 title: Add inline code documentation for invocation name constraints and lifecycle
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-05-03 10:42'
+updated_date: '2026-05-03 11:39'
 labels:
   - documentation
 dependencies: []
@@ -40,5 +41,11 @@ Keep comments short and focused on WHY, not WHAT.
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 /simplify
+- [x] #1 /simplify
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added concise XML doc comments in 4 files: Config.cs (Amazon 2-word rule, per-user override), SkillInteractionModel.cs (overwrites template), ConfigurationController.cs (validation rationale), Plugin.cs (per-user invocation name in BuildSkillInteractionModels).
+<!-- SECTION:FINAL_SUMMARY:END -->

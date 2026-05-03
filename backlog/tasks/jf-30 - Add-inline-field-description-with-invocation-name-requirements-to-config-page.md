@@ -1,9 +1,10 @@
 ---
 id: JF-30
 title: Add inline field description with invocation name requirements to config page
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-05-03 10:42'
+updated_date: '2026-05-03 11:35'
 labels:
   - ux
   - improvement
@@ -31,5 +32,11 @@ Add a `fieldDescription` div below (or as part of) the invocation name input col
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 /simplify
+- [x] #1 /simplify
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added fieldDescription div below invocation name input in config page with guidance: "Two or more words (e.g. jelly fin). This is what you say to invoke the skill." Also fixed copy-paste bug where input name was "LwaClientSecret" instead of "InvocationName".
+<!-- SECTION:FINAL_SUMMARY:END -->
