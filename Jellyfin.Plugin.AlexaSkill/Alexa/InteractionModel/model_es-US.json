@@ -355,6 +355,21 @@
           "parar después de {duration_minutes} minutos",
           "apagar en {duration_minutes} minutos"
         ]
+      },
+      {
+        "name": "PlayMoodMusicIntent",
+        "slots": [
+          {
+            "name": "mood",
+            "type": "AMAZON.SearchQuery"
+          }
+        ],
+        "samples": [
+          "reproduce música {mood}",
+          "reproduce algo {mood}",
+          "quiero música {mood}",
+          "reproduce algo {mood}"
+        ]
       }
     ],
     "types": [

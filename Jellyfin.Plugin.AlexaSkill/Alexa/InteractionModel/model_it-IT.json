@@ -639,6 +639,21 @@
           "ferma dopo {duration_minutes} minuti",
           "spegni tra {duration_minutes} minuti"
         ]
+      },
+      {
+        "name": "PlayMoodMusicIntent",
+        "slots": [
+          {
+            "name": "mood",
+            "type": "AMAZON.SearchQuery"
+          }
+        ],
+        "samples": [
+          "riproduci musica {mood}",
+          "riproduci qualcosa di {mood}",
+          "voglio musica {mood}",
+          "riproduci qualcosa di {mood}"
+        ]
       }
     ],
     "types": [

@@ -373,6 +373,22 @@
           "turn off in {duration_minutes} minutes",
           "set sleep timer {duration_minutes}"
         ]
+      },
+      {
+        "name": "PlayMoodMusicIntent",
+        "slots": [
+          {
+            "name": "mood",
+            "type": "AMAZON.SearchQuery"
+          }
+        ],
+        "samples": [
+          "play {mood} music",
+          "play something {mood}",
+          "play {mood} songs",
+          "i want {mood} music",
+          "play me something {mood}"
+        ]
       }
     ],
     "types": [
