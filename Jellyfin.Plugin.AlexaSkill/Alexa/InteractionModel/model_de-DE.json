@@ -189,6 +189,15 @@
         ]
       },
       {
+        "name": "ContinueWatchingIntent",
+        "samples": [
+          "Weiter schauen",
+          "Weiter hören",
+          "Mach da weiter wo ich war",
+          "Weiter"
+        ]
+      },
+      {
         "name": "PlayPlaylistIntent",
         "samples": [
           "Spiele die Playlist {playlist}",

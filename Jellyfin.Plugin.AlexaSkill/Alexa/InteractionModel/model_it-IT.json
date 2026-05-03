@@ -438,6 +438,15 @@
         ]
       },
       {
+        "name": "ContinueWatchingIntent",
+        "samples": [
+          "Continua a guardare",
+          "Continua ad ascoltare",
+          "Riprendi da dove ero rimasto",
+          "Continua"
+        ]
+      },
+      {
         "name": "PlayPlaylistIntent",
         "samples": [
           "Riproduci playlist {playlist}",
