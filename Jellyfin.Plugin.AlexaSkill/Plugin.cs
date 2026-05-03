@@ -86,6 +86,8 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 
     /// <summary>
     /// Builds the skill interaction model collection for a given invocation name.
+    /// Each user gets their own skill with their own invocation name, which replaces
+    /// the template's default in all locale models.
     /// </summary>
     /// <param name="invocationName">The invocation name for the skill.</param>
     /// <returns>A collection of skill interaction models.</returns>

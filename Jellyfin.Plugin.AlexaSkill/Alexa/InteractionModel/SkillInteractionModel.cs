@@ -29,6 +29,7 @@ public class SkillInteractionModel : SkillInteractionContainer
 
     /// <summary>
     /// Gets or sets the invocation name of this interaction model.
+    /// Overwrites the template's invocation name loaded from the JSON resource file.
     /// </summary>
     [JsonIgnore]
     public string InvocationName
