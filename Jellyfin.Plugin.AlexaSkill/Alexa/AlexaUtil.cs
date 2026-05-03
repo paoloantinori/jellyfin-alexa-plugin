@@ -24,35 +24,36 @@ public static class AlexaUtil
         {
             return await func().ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex.InnerException is Refit.ApiException)
+        catch (Refit.ApiException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
         {
-            if (((Refit.ApiException) ex.InnerException).StatusCode == HttpStatusCode.Unauthorized) {
-                if (user.SmapiDeviceToken == null)
-                {
-                    throw ex;
-                }
-
-                // Refresh the token and try again
-                DeviceToken? token = await LwaClient.RefreshDeviceToken(
-                    user.SmapiDeviceToken,
-                    Plugin.Instance!.Configuration.LwaClientId,
-                    Plugin.Instance!.Configuration.LwaClientSecret).ConfigureAwait(false);
-                if (token == null)
-                {
-                    throw new UnauthorizedAccessException("Failed to refresh token");
-                }
-
-                user.SmapiDeviceToken = token;
-                user.SmapiRefreshToken = token.RefreshToken;
-
-                Plugin.Instance.SaveConfiguration();
-
-                return await func().ConfigureAwait(false);
-            }
-            else
-            {
-                throw ex;
-            }
+            return await RefreshAndRetry(user, func, ex).ConfigureAwait(false);
         }
+        catch (Exception ex) when (ex.InnerException is Refit.ApiException apiEx && apiEx.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            return await RefreshAndRetry(user, func, apiEx).ConfigureAwait(false);
+        }
+    }
+
+    private static async Task<T> RefreshAndRetry<T>(User user, Func<Task<T>> func, Refit.ApiException originalEx)
+    {
+        if (user.SmapiDeviceToken == null)
+        {
+            throw originalEx;
+        }
+
+        DeviceToken? token = await LwaClient.RefreshDeviceToken(
+            user.SmapiDeviceToken,
+            Plugin.Instance!.Configuration.LwaClientId,
+            Plugin.Instance!.Configuration.LwaClientSecret).ConfigureAwait(false);
+        if (token == null)
+        {
+            throw new UnauthorizedAccessException("Failed to refresh token");
+        }
+
+        user.SmapiDeviceToken = token;
+        user.SmapiRefreshToken = token.RefreshToken;
+        Plugin.Instance.SaveConfiguration();
+
+        return await func().ConfigureAwait(false);
     }
 }
