@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET.Management.AccountLinking;
@@ -24,6 +25,7 @@ public class SkillStartup : IHostedService, IDisposable
 {
     private readonly ILogger<SkillStartup> _logger;
     private readonly ISessionManager _sessionManager;
+    private readonly IHttpClientFactory _httpClientFactory;
     private CancellationTokenSource? _cts;
     private Task? _runningTask;
     private bool _disposed;
@@ -33,9 +35,11 @@ public class SkillStartup : IHostedService, IDisposable
     /// </summary>
     /// <param name="sessionManager">Session manager.</param>
     /// <param name="loggerFactory">Logger.</param>
-    public SkillStartup(ISessionManager sessionManager, ILoggerFactory loggerFactory)
+    /// <param name="httpClientFactory">HTTP client factory for outbound calls.</param>
+    public SkillStartup(ISessionManager sessionManager, ILoggerFactory loggerFactory, IHttpClientFactory httpClientFactory)
     {
         _sessionManager = sessionManager;
+        _httpClientFactory = httpClientFactory;
         _logger = loggerFactory.CreateLogger<SkillStartup>();
     }
 
@@ -43,6 +47,8 @@ public class SkillStartup : IHostedService, IDisposable
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         _logger.LogInformation("Skill version (local): v{Version}", Util.GetVersion());
+
+        Plugin.Instance!._httpClientFactory = _httpClientFactory;
 
         PluginConfiguration configuration = Plugin.Instance!.Configuration;
 
