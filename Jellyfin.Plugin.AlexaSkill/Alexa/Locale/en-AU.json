@@ -63,5 +63,8 @@
   "BrowseItem": "{0}. {1}",
   "NoBrowseResults": "I couldn't find any {0}.",
   "NoRecommendations": "I couldn't find any recommendations for you right now. Try listening to more music first!",
-  "RecommendPlaying": "Here's a recommendation for you: playing {0}"
+  "RecommendPlaying": "Here's a recommendation for you: playing {0}",
+  "DidNotCatchSleepTimer": "How long should I set the sleep timer for? Please say a number of minutes.",
+  "SleepTimerSet": "Sleep timer set for {0} minutes. Playback will stop then.",
+  "CancelSleepTimer": "Sleep timer cancelled."
 }

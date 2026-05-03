@@ -340,6 +340,21 @@
           "reproduce algo que me guste",
           "recomienda {media_type}"
         ]
+      },
+      {
+        "name": "SleepTimerIntent",
+        "slots": [
+          {
+            "name": "duration_minutes",
+            "type": "AMAZON.NUMBER"
+          }
+        ],
+        "samples": [
+          "detener en {duration_minutes} minutos",
+          "temporizador {duration_minutes} minutos",
+          "parar después de {duration_minutes} minutos",
+          "apagar en {duration_minutes} minutos"
+        ]
       }
     ],
     "types": [

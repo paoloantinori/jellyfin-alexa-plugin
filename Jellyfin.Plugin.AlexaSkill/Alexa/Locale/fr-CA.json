@@ -63,5 +63,8 @@
   "BrowseItem": "{0}. {1}",
   "NoBrowseResults": "Je n'ai trouvé aucun {0}.",
   "NoRecommendations": "Je n'ai pas trouvé de recommandations pour le moment. Essayez d'écouter plus de musique d'abord !",
-  "RecommendPlaying": "Voici une recommandation pour vous : lecture de {0}"
+  "RecommendPlaying": "Voici une recommandation pour vous : lecture de {0}",
+  "DidNotCatchSleepTimer": "Combien de temps pour la minuterie de sommeil ? Veuillez indiquer un nombre de minutes.",
+  "SleepTimerSet": "Minuterie de sommeil réglée sur {0} minutes. La lecture s'arrêtera alors.",
+  "CancelSleepTimer": "Minuterie annulée."
 }

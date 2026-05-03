@@ -58,6 +58,22 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     {
         AudioPlayerRequest req = (AudioPlayerRequest)request;
 
+        // Check for sleep timer deadline encoded in the current token
+        string? currentToken = context.AudioPlayer?.Token;
+        if (!string.IsNullOrEmpty(currentToken) && currentToken.Contains("|sleep:", StringComparison.Ordinal))
+        {
+            int sleepIdx = currentToken.IndexOf("|sleep:", StringComparison.Ordinal);
+            string deadlineStr = currentToken[(sleepIdx + "|sleep:".Length)..];
+            if (long.TryParse(deadlineStr, out long deadlineTicks))
+            {
+                if (DateTimeOffset.UtcNow.UtcTicks >= deadlineTicks)
+                {
+                    // Sleep timer expired — stop playback
+                    return ResponseBuilder.Empty();
+                }
+            }
+        }
+
         Guid? next_item_id = null;
         for (int i = 0; i < session.NowPlayingQueue.Count; i++)
         {

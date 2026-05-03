@@ -344,6 +344,21 @@
           "joue quelque chose que j'aimerais",
           "recommande {media_type}"
         ]
+      },
+      {
+        "name": "SleepTimerIntent",
+        "slots": [
+          {
+            "name": "duration_minutes",
+            "type": "AMAZON.NUMBER"
+          }
+        ],
+        "samples": [
+          "arrêter dans {duration_minutes} minutes",
+          "minuterie {duration_minutes} minutes",
+          "arrêter après {duration_minutes} minutes",
+          "éteindre dans {duration_minutes} minutes"
+        ]
       }
     ],
     "types": [

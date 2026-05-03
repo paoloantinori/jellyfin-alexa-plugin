@@ -24,6 +24,7 @@ internal static class IntentNames
     public const string InProgressMediaList = "InProgressMediaListIntent";
     public const string BrowseLibrary = "BrowseLibraryIntent";
     public const string Recommend = "RecommendIntent";
+    public const string SleepTimer = "SleepTimerIntent";
     public const string PlayEpisode = "PlayEpisodeIntent";
     public const string LoopSongOn = "LoopSongOnIntent";
 
