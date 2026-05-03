@@ -219,6 +219,83 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// Build a Tell response using SSML for more natural speech.
+    /// </summary>
+    /// <param name="ssml">SSML content (without the outer speak tags).</param>
+    /// <returns>A SkillResponse with SSML output speech.</returns>
+    public static SkillResponse TellSsml(string ssml)
+    {
+        return new SkillResponse
+        {
+            Version = "1.0",
+            Response = new ResponseBody
+            {
+                ShouldEndSession = true,
+                OutputSpeech = new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" }
+            }
+        };
+    }
+
+    /// <summary>
+    /// Build an Ask response using SSML for more natural speech, with an SSML reprompt.
+    /// </summary>
+    /// <param name="ssml">SSML content for the main speech (without speak tags).</param>
+    /// <param name="repromptSsml">SSML content for the reprompt (without speak tags).</param>
+    /// <returns>A SkillResponse with SSML output speech and reprompt.</returns>
+    public static SkillResponse AskSsml(string ssml, string repromptSsml)
+    {
+        return new SkillResponse
+        {
+            Version = "1.0",
+            Response = new ResponseBody
+            {
+                ShouldEndSession = false,
+                OutputSpeech = new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" },
+                Reprompt = new Reprompt { OutputSpeech = new SsmlOutputSpeech { Ssml = $"<speak>{repromptSsml}</speak>" } }
+            }
+        };
+    }
+
+    /// <summary>
+    /// Build an Ask response using SSML for speech and plain text for reprompt.
+    /// </summary>
+    /// <param name="ssml">SSML content for the main speech (without speak tags).</param>
+    /// <param name="reprompt">Plain text reprompt.</param>
+    /// <returns>A SkillResponse with SSML output speech and plain text reprompt.</returns>
+    public static SkillResponse AskSsml(string ssml, Reprompt reprompt)
+    {
+        return new SkillResponse
+        {
+            Version = "1.0",
+            Response = new ResponseBody
+            {
+                ShouldEndSession = false,
+                OutputSpeech = new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" },
+                Reprompt = reprompt
+            }
+        };
+    }
+
+    /// <summary>
+    /// Try to get an SSML-enhanced string from locale files.
+    /// Returns null if no SSML key exists, allowing fallback to plain text.
+    /// </summary>
+    /// <param name="key">The SSML key (e.g. "NowPlayingSsml").</param>
+    /// <param name="locale">The locale identifier.</param>
+    /// <param name="args">Optional format arguments.</param>
+    /// <returns>The formatted SSML string, or null if the key doesn't exist.</returns>
+    public static string? GetSsml(string key, string locale, params object[] args)
+    {
+        string template = ResponseStrings.Get(key, locale);
+        if (template == key)
+        {
+            return null;
+        }
+
+        return string.Format(System.Globalization.CultureInfo.InvariantCulture, template, args);
+    }
+
+    /// <summary>
     /// Extract the locale from the request, defaulting to en-US if not available.
     /// </summary>
     /// <param name="request">The incoming request.</param>

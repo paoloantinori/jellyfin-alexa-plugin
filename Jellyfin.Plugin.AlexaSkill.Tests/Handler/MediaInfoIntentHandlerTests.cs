@@ -56,11 +56,7 @@ public class MediaInfoIntentHandlerTests
 
     private static Context CreateContext() => TestHelpers.CreateTestContext();
 
-    private static string GetSpeechText(SkillResponse response)
-    {
-        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
-        return speech.Text;
-    }
+    private static string GetSpeechText(SkillResponse response) => TestHelpers.GetSpeechText(response);
 
     [Theory]
     [InlineData("MediaInfoIntent", true)]

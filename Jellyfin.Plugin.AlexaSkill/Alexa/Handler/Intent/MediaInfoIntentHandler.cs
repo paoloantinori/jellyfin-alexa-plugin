@@ -58,19 +58,35 @@ public class MediaInfoIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale));
         }
 
-        string description = BuildMediaDescription(item, locale);
+        string description = BuildMediaDescription(item, locale, out string? descriptionSsml);
         string position = BuildPositionInfo(session, locale);
 
-        string response = string.IsNullOrEmpty(position)
-            ? ResponseStrings.Get("NowPlaying", locale, description)
-            : ResponseStrings.Get("NowPlayingWithPosition", locale, description, position);
-
         Logger.LogInformation("MediaInfoIntent: reporting {ItemName}", item.Name);
-        return ResponseBuilder.Tell(response);
+
+        if (string.IsNullOrEmpty(position))
+        {
+            string? ssml = GetSsml("NowPlayingSsml", locale, descriptionSsml ?? description);
+            if (ssml != null)
+            {
+                return TellSsml(ssml);
+            }
+
+            return ResponseBuilder.Tell(ResponseStrings.Get("NowPlaying", locale, description));
+        }
+
+        string? ssmlFull = GetSsml("NowPlayingWithPositionSsml", locale, descriptionSsml ?? description, position);
+        if (ssmlFull != null)
+        {
+            return TellSsml(ssmlFull);
+        }
+
+        return ResponseBuilder.Tell(ResponseStrings.Get("NowPlayingWithPosition", locale, description, position));
     }
 
-    private static string BuildMediaDescription(BaseItemDto item, string locale)
+    private static string BuildMediaDescription(BaseItemDto item, string locale, out string? ssmlDescription)
     {
+        ssmlDescription = null;
+
         if (item.Type == BaseItemKind.Audio)
         {
             string artist = item.AlbumArtist ?? string.Empty;
@@ -78,10 +94,12 @@ public class MediaInfoIntentHandler : BaseHandler
 
             if (!string.IsNullOrEmpty(artist) && !string.IsNullOrEmpty(album))
             {
+                ssmlDescription = GetSsml("TrackByArtistFromAlbumSsml", locale, item.Name, artist, album);
                 return ResponseStrings.Get("TrackByArtistFromAlbum", locale, item.Name, artist, album);
             }
             else if (!string.IsNullOrEmpty(artist))
             {
+                ssmlDescription = GetSsml("TrackByArtistSsml", locale, item.Name, artist);
                 return ResponseStrings.Get("TrackByArtist", locale, item.Name, artist);
             }
 

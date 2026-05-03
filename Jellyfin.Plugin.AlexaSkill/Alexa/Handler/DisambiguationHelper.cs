@@ -46,10 +46,20 @@ internal static class DisambiguationHelper
         var matchList = matches.Take(3).Select(m => new MatchInfo { Id = m.Id.ToString(), Name = m.Name }).ToList();
         int index = 0;
 
-        string prompt = ResponseStrings.Get("DisambiguatePrompt", locale, matchList[index].Name);
+        string? promptSsml = BaseHandler.GetSsml("DisambiguatePromptSsml", locale, matchList[index].Name);
         string reprompt = ResponseStrings.Get("DisambiguateReprompt", locale);
 
-        var response = ResponseBuilder.Ask(prompt, new Reprompt(reprompt));
+        SkillResponse response;
+        if (promptSsml != null)
+        {
+            response = BaseHandler.AskSsml(promptSsml, new Reprompt(reprompt));
+        }
+        else
+        {
+            string prompt = ResponseStrings.Get("DisambiguatePrompt", locale, matchList[index].Name);
+            response = ResponseBuilder.Ask(prompt, new Reprompt(reprompt));
+        }
+
         response.SessionAttributes = BuildAttributes(matchList, index, mediaType);
         return response;
     }
@@ -63,10 +73,20 @@ internal static class DisambiguationHelper
         string mediaType,
         string locale)
     {
-        string prompt = ResponseStrings.Get("DisambiguateNext", locale, matches[nextIndex].Name);
+        string? promptSsml = BaseHandler.GetSsml("DisambiguateNextSsml", locale, matches[nextIndex].Name);
         string reprompt = ResponseStrings.Get("DisambiguateReprompt", locale);
 
-        var response = ResponseBuilder.Ask(prompt, new Reprompt(reprompt));
+        SkillResponse response;
+        if (promptSsml != null)
+        {
+            response = BaseHandler.AskSsml(promptSsml, new Reprompt(reprompt));
+        }
+        else
+        {
+            string prompt = ResponseStrings.Get("DisambiguateNext", locale, matches[nextIndex].Name);
+            response = ResponseBuilder.Ask(prompt, new Reprompt(reprompt));
+        }
+
         response.SessionAttributes = BuildAttributes(matches, nextIndex, mediaType);
         return response;
     }

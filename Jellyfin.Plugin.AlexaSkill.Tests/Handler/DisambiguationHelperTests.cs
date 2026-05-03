@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using Newtonsoft.Json;
 using Xunit;
 
@@ -69,8 +70,7 @@ public class DisambiguationHelperTests
         Assert.NotNull(response.Response);
         Assert.False(response.Response.ShouldEndSession);
         Assert.NotNull(response.Response.OutputSpeech);
-        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
-        Assert.Contains("Test Song", speech.Text);
+        Assert.Contains("Test Song", TestHelpers.GetSpeechText(response));
     }
 
     [Fact]
@@ -131,8 +131,7 @@ public class DisambiguationHelperTests
 
         Assert.NotNull(response);
         Assert.False(response.Response.ShouldEndSession);
-        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
-        Assert.Contains("Second", speech.Text);
+        Assert.Contains("Second", TestHelpers.GetSpeechText(response));
     }
 
     [Fact]
