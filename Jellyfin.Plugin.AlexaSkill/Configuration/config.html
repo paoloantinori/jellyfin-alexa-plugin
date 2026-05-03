@@ -31,6 +31,9 @@
                         </button>
                         <div id="testConnectionResult" style="display:none; margin-bottom:1.5em; padding:0.8em; border-radius:4px;"></div>
 
+                        <div id="healthSummary" style="display:none; margin-bottom:1.5em; padding:0.8em; border-radius:4px; background:#333;">
+                        </div>
+
                         <div class="selectContainer">
                             <label class="selectLabel" for="SslCertType">SSL Certificate Type</label>
                             <select is="emby-select" id="SslCertType" name="SslCertType" class="emby-select-withcolor emby-select">
@@ -70,6 +73,7 @@
                                 <th scope="col" class="detailTableHeaderCell">Skill ID</th>
                                 <th scope="col" class="detailTableHeaderCell">Invocation Name</th>
                                 <th scope="col" class="detailTableHeaderCell">Status</th>
+                                <th scope="col" class="detailTableHeaderCell">Token</th>
                                 <th scope="col" class="detailTableHeaderCell">Action</th>
                             </tr>
                         </thead>
@@ -106,7 +110,9 @@
                     }
 
                     Dashboard.hideLoadingMsg();
-                });    
+                });
+
+                loadHealthSummary();
             });
 
             function isValidInvocationName(value) {
@@ -178,6 +184,22 @@
                 td.classList.add("detailTableBodyCell");
                 td.style.verticalAlign = "middle";
                 td.innerHTML = (user.UserSkill)? user.UserSkill.UserSkillStatus : "unsaved";
+                tr.appendChild(td);
+
+                td = document.createElement("td");
+                td.classList.add("detailTableBodyCell");
+                td.style.verticalAlign = "middle";
+                if (user.SmapiDeviceToken && user.SmapiDeviceToken.ExpireTimestamp > 0) {
+                    var expires = new Date(user.SmapiDeviceToken.ExpireTimestamp * 1000);
+                    var isExpired = expires < new Date();
+                    td.innerHTML = isExpired
+                        ? '<span style="color:#e5a00d">Expired</span>'
+                        : '<span style="color:#4caf50">Valid</span> (exp ' + expires.toLocaleDateString() + ')';
+                } else if (user.SmapiRefreshToken) {
+                    td.innerHTML = '<span style="color:#29b6f6">Recoverable</span>';
+                } else {
+                    td.innerHTML = '<span style="color:#888">None</span>';
+                }
                 tr.appendChild(td);
                 
                 tdDetailTableBodyCell = document.createElement("td");
@@ -315,18 +337,17 @@
                                     row.cells[1].innerHTML = user.UserSkill.SkillId;
                                     row.cells[2].firstChild.value = user.UserSkill.InvocationName;
                                     row.cells[3].innerHTML = user.UserSkill.UserSkillStatus;
-                                    console.log(row.cells[4]);
                                     if (user.UserSkill.UserSkillStatus === "LwaAuthPending" && config.ServerAddress != "" && config.LwaClientId != "" && config.LwaClientSecret != "") {
-                                        row.cells[4].children[1].style.display = "block";
+                                        row.cells[5].children[1].style.display = "block";
                                     } else {
-                                        row.cells[4].children[1].style.display = "none";
+                                        row.cells[5].children[1].style.display = "none";
                                     }
                                 });
                             }, function (res) {
                                 Dashboard.alert("Could not create a new user skill");
                                 res.json().then(function (data) {
                                     Dashboard.alert("Reason:"  + data.error);
-                                });                        
+                                });
                             });
                         } else {
                             // update current user skill config
@@ -352,9 +373,9 @@
                                     row.cells[3].innerHTML = user.UserSkill.UserSkillStatus;
 
                                     if (user.UserSkill.UserSkillStatus === "LwaAuthPending" && config.ServerAddress != "" && config.LwaClientId != "" && config.LwaClientSecret != "") {
-                                        row.cells[4].children[1].style.display = "block";
+                                        row.cells[5].children[1].style.display = "block";
                                     } else {
-                                        row.cells[4].children[1].style.display = "none";
+                                        row.cells[5].children[1].style.display = "none";
                                     }
                                 });
                             }, function (res) {
@@ -377,6 +398,27 @@
 
                 return false;
             });
+
+            function loadHealthSummary() {
+                ApiClient.ajax({
+                    type: "GET",
+                    url: ApiClient.getUrl("alexaskill/api/diagnostics")
+                }).then(function (res) {
+                    res.json().then(function (data) {
+                        var div = document.querySelector("#healthSummary");
+                        var healthColor = data.Health.Status === "Healthy" ? "#4caf50"
+                            : data.Health.Status === "Degraded" ? "#e5a00d" : "#c62828";
+                        var html = '<strong style="color:' + healthColor + '">' + data.Health.Status + '</strong>';
+                        html += ' &mdash; v' + data.Version;
+                        html += ' &mdash; ' + data.Configuration.UserCount + ' user(s)';
+                        if (data.Metrics.TotalRequests > 0) {
+                            html += ' &mdash; ' + data.Metrics.TotalRequests + ' requests (' + data.Metrics.TotalErrors + ' errors)';
+                        }
+                        div.innerHTML = html;
+                        div.style.display = "block";
+                    }).catch(function() {});
+                }, function() {});
+            }
 
             document.querySelector("#testConnectionButton").addEventListener("click", function() {
                 var resultDiv = document.querySelector("#testConnectionResult");
