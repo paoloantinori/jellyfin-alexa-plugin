@@ -54,6 +54,11 @@ public class PlayEpisodeIntentHandler : BaseHandler
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
 
+        if (intentRequest.DialogState != DialogStates.Completed)
+        {
+            return DelegateToDialog(intentRequest);
+        }
+
         string? seriesName = intentRequest.Intent.Slots?.TryGetValue("series_name", out var seriesSlot) == true ? seriesSlot.Value : null;
 
         if (string.IsNullOrWhiteSpace(seriesName))

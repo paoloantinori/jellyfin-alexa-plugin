@@ -67,6 +67,12 @@ public class PlayAlbumIntentHandler : BaseHandler
     {
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
+
+        if (intentRequest.DialogState != DialogStates.Completed)
+        {
+            return DelegateToDialog(intentRequest);
+        }
+
         string album = intentRequest.Intent.Slots["album"].Value;
         string? musician = intentRequest.Intent.Slots["musician"].Value;
 

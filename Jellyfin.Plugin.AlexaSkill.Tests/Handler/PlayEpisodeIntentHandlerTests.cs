@@ -52,7 +52,7 @@ public class PlayEpisodeIntentHandlerTests
             _loggerFactory);
     }
 
-    private static IntentRequest CreateIntentRequest(string? seriesName = null, string? seasonNumber = null, string? episodeNumber = null)
+    private static IntentRequest CreateIntentRequest(string? seriesName = null, string? seasonNumber = null, string? episodeNumber = null, string? dialogState = "COMPLETED")
     {
         var intent = new Intent { Name = IntentNames.PlayEpisode };
         intent.Slots = new Dictionary<string, global::Alexa.NET.Request.Slot>();
@@ -72,7 +72,7 @@ public class PlayEpisodeIntentHandlerTests
             intent.Slots["episode_number"] = new global::Alexa.NET.Request.Slot { Name = "episode_number", Value = episodeNumber };
         }
 
-        return new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req" };
+        return new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req", DialogState = dialogState };
     }
 
     private static Context CreateContext()
@@ -227,5 +227,38 @@ public class PlayEpisodeIntentHandlerTests
 
         Assert.NotNull(response);
         Assert.NotEmpty(response.Response.Directives);
+    }
+
+    [Fact]
+    public async Task HandleAsync_DialogStarted_ReturnsDelegateDirective()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(dialogState: "STARTED");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.False(response.Response.ShouldEndSession);
+        Assert.NotEmpty(response.Response.Directives);
+        Assert.Contains(response.Response.Directives, d => d.Type == "Dialog.Delegate");
+    }
+
+    [Fact]
+    public async Task HandleAsync_DialogInProgress_ReturnsDelegateDirective()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(seriesName: "The Office", dialogState: "IN_PROGRESS");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.False(response.Response.ShouldEndSession);
+        Assert.Contains(response.Response.Directives, d => d.Type == "Dialog.Delegate");
     }
 }

@@ -397,6 +397,28 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// Return a Dialog.Delegate directive to let Alexa collect missing slots.
+    /// </summary>
+    protected static SkillResponse DelegateToDialog(IntentRequest intentRequest)
+    {
+        return new SkillResponse
+        {
+            Version = "1.0",
+            Response = new ResponseBody
+            {
+                ShouldEndSession = false,
+                Directives = new List<IDirective>
+                {
+                    new global::Alexa.NET.Response.Directive.DialogDelegate
+                    {
+                        UpdatedIntent = intentRequest.Intent
+                    }
+                }
+            }
+        };
+    }
+
+    /// <summary>
     /// Shuffle a list in place using Fisher-Yates algorithm.
     /// </summary>
     protected static void Shuffle<T>(List<T> list)

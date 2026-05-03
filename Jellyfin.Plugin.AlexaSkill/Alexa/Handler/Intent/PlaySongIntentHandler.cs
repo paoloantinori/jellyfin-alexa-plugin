@@ -67,6 +67,12 @@ public class PlaySongIntentHandler : BaseHandler
     {
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
+
+        if (intentRequest.DialogState != DialogStates.Completed)
+        {
+            return DelegateToDialog(intentRequest);
+        }
+
         string songQuery = intentRequest.Intent.Slots["song"].Value;
         string? musicianQuery = intentRequest.Intent.Slots["musician"].Value;
 

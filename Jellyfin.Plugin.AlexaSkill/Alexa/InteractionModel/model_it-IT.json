@@ -728,5 +728,139 @@
         ]
       }
     ]
-  }
+  },
+  "dialog": {
+    "intents": [
+      {
+        "name": "PlayEpisodeIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "series_name",
+            "type": "AMAZON.Series",
+            "confirmationRequired": false,
+            "elicitationRequired": true,
+            "prompts": {
+              "elicitation": "Elicit.SeriesName"
+            }
+          },
+          {
+            "name": "season_number",
+            "type": "AMAZON.NUMBER",
+            "confirmationRequired": false,
+            "elicitationRequired": true,
+            "prompts": {
+              "elicitation": "Elicit.SeasonNumber"
+            }
+          },
+          {
+            "name": "episode_number",
+            "type": "AMAZON.NUMBER",
+            "confirmationRequired": false,
+            "elicitationRequired": true,
+            "prompts": {
+              "elicitation": "Elicit.EpisodeNumber"
+            }
+          }
+        ]
+      },
+      {
+        "name": "PlaySongIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording",
+            "confirmationRequired": false,
+            "elicitationRequired": true,
+            "prompts": {
+              "elicitation": "Elicit.SongName"
+            }
+          }
+        ]
+      },
+      {
+        "name": "PlayAlbumIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "album",
+            "type": "AMAZON.MusicRecording",
+            "confirmationRequired": false,
+            "elicitationRequired": true,
+            "prompts": {
+              "elicitation": "Elicit.AlbumName"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "prompts": [
+    {
+      "id": "Elicit.SeriesName",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "Quale serie vorresti guardare?"
+        },
+        {
+          "type": "PlainText",
+          "value": "Come si chiama la serie?"
+        }
+      ]
+    },
+    {
+      "id": "Elicit.SeasonNumber",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "Quale stagione?"
+        },
+        {
+          "type": "PlainText",
+          "value": "Che numero di stagione?"
+        }
+      ]
+    },
+    {
+      "id": "Elicit.EpisodeNumber",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "Quale numero di episodio?"
+        },
+        {
+          "type": "PlainText",
+          "value": "Quale episodio vorresti guardare?"
+        }
+      ]
+    },
+    {
+      "id": "Elicit.SongName",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "Quale canzone vorresti ascoltare?"
+        },
+        {
+          "type": "PlainText",
+          "value": "Che canzone?"
+        }
+      ]
+    },
+    {
+      "id": "Elicit.AlbumName",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "Quale album vorresti ascoltare?"
+        },
+        {
+          "type": "PlainText",
+          "value": "Come si chiama l'album?"
+        }
+      ]
+    }
+  ]
 }
