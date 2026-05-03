@@ -457,6 +457,40 @@
           "list my queue",
           "what's playing next"
         ]
+      },
+      {
+        "name": "PlayRadioIntent",
+        "samples": [
+          "play radio",
+          "play radio mode",
+          "start radio",
+          "play more like this",
+          "keep playing similar music",
+          "play similar songs",
+          "start a radio station",
+          "play songs like this"
+        ]
+      },
+      {
+        "name": "TurnRadioOnIntent",
+        "samples": [
+          "turn on radio mode",
+          "enable radio mode",
+          "radio mode on",
+          "turn on radio",
+          "enable radio"
+        ]
+      },
+      {
+        "name": "TurnRadioOffIntent",
+        "samples": [
+          "turn off radio mode",
+          "disable radio mode",
+          "radio mode off",
+          "turn off radio",
+          "disable radio",
+          "stop radio mode"
+        ]
       }
     ],
     "types": [

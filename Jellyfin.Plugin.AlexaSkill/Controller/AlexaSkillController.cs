@@ -110,6 +110,10 @@ public class AlexaSkillController : ControllerBase
             new ClearQueueIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
             new ListQueueIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, loggerFactory),
 
+            new PlayRadioIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
+            new TurnRadioOnIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
+            new TurnRadioOffIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
+
             new YesIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
             new NoIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
 
@@ -118,7 +122,7 @@ public class AlexaSkillController : ControllerBase
 
             new PlaybackFailedEventHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
             new PlaybackFinishedEventHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
-            new PlaybackNearlyFinishedEventHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, loggerFactory),
+            new PlaybackNearlyFinishedEventHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
             new PlaybackStartedEventHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
             new PlaybackStoppedEventHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
             new SessionEndedRequestHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),

@@ -8,10 +8,13 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
+using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
+using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
 using AlexaSession = Alexa.NET.Request.Session;
@@ -391,5 +394,55 @@ public abstract class BaseHandler
     protected static T? FuzzyMatch<T>(string query, IEnumerable<T> candidates, Func<T, string> selector, int threshold = FuzzyMatcher.DefaultThreshold) where T : class
     {
         return FuzzyMatcher.FindBestMatch(query, candidates, selector, threshold);
+    }
+
+    /// <summary>
+    /// Shuffle a list in place using Fisher-Yates algorithm.
+    /// </summary>
+    protected static void Shuffle<T>(List<T> list)
+    {
+        int n = list.Count;
+        for (int i = n - 1; i > 0; i--)
+        {
+            int j = Random.Shared.Next(i + 1);
+            (list[i], list[j]) = (list[j], list[i]);
+        }
+    }
+
+    /// <summary>
+    /// Find tracks with genres matching the given audio item.
+    /// Returns deduplicated results excluding the current item.
+    /// </summary>
+    protected async Task<IReadOnlyList<BaseItem>> FindRadioTracksAsync(
+        MediaBrowser.Controller.Entities.Audio.Audio current,
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser,
+        ILibraryManager libraryManager,
+        CancellationToken cancellationToken)
+    {
+        var allResults = new List<BaseItem>();
+        var seen = new HashSet<Guid> { current.Id };
+
+        if (current.Genres != null && current.Genres.Length > 0)
+        {
+            IReadOnlyList<BaseItem> byGenre = await RetryAsync(() => libraryManager.GetItemList(new InternalItemsQuery
+            {
+                User = jellyfinUser,
+                Recursive = true,
+                Genres = current.Genres,
+                IncludeItemTypes = new[] { BaseItemKind.Audio },
+                Limit = 50,
+                DtoOptions = new DtoOptions(true)
+            }), "GetRadioGenreTracks", cancellationToken).ConfigureAwait(false);
+
+            foreach (BaseItem item in byGenre)
+            {
+                if (seen.Add(item.Id))
+                {
+                    allResults.Add(item);
+                }
+            }
+        }
+
+        return allResults;
     }
 }

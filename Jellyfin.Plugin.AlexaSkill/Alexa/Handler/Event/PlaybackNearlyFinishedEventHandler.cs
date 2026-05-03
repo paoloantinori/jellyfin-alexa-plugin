@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
@@ -10,33 +12,35 @@ using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
 /// <summary>
 /// Handler for PlaybackNearlyFinished events.
+/// Enqueues the next item in the queue. When radio mode is enabled and the
+/// queue is about to run out, automatically finds and appends similar tracks.
 /// </summary>
 #pragma warning disable CA1711
 public class PlaybackNearlyFinishedEventHandler : BaseHandler
 #pragma warning restore CA1711
 {
-    private ILibraryManager _libraryManager;
+    private readonly ILibraryManager _libraryManager;
+    private readonly IUserManager _userManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PlaybackNearlyFinishedEventHandler"/> class.
     /// </summary>
-    /// <param name="sessionManager">Instance of the <see cref="ISessionManager"/> interface.</param>
-    /// <param name="config">The plugin configuration.</param>
-    /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
-    /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
     public PlaybackNearlyFinishedEventHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
+        IUserManager userManager,
         ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
+        _userManager = userManager;
     }
 
     /// <inheritdoc/>
@@ -47,17 +51,11 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     }
 
     /// <summary>
-    /// Respond with next item in the queue, otherwise sginal end of playback queue.
+    /// Respond with next item in the queue. If radio mode is enabled and the
+    /// queue is about to run out, auto-populate with similar tracks.
     /// </summary>
-    /// <param name="request">The skill request which should be handled.</param>
-    /// <param name="context">The context of the skill intent request.</param>
-    /// <param name="user">The user instance.</param>
-    /// <param name="session">The session instance.</param>
-    /// <returns>Next item in the queue or end of playback queue.</returns>
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
-        AudioPlayerRequest req = (AudioPlayerRequest)request;
-
         // Check for sleep timer deadline encoded in the current token
         string? currentToken = context.AudioPlayer?.Token;
         if (!string.IsNullOrEmpty(currentToken) && currentToken.Contains("|sleep:", StringComparison.Ordinal))
@@ -68,36 +66,97 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             {
                 if (DateTimeOffset.UtcNow.UtcTicks >= deadlineTicks)
                 {
-                    // Sleep timer expired — stop playback
                     return ResponseBuilder.Empty();
                 }
             }
         }
 
-        Guid? next_item_id = null;
+        Guid? nextItemId = null;
         for (int i = 0; i < session.NowPlayingQueue.Count; i++)
         {
             if (session.NowPlayingQueue[i].Id == session.FullNowPlayingItem?.Id)
             {
                 if (i + 1 < session.NowPlayingQueue.Count)
                 {
-                    next_item_id = session.NowPlayingQueue[i + 1].Id;
+                    nextItemId = session.NowPlayingQueue[i + 1].Id;
                 }
 
                 break;
             }
         }
 
-        if (next_item_id == null)
+        // If no next item and radio mode is on, auto-populate similar tracks
+        if (nextItemId == null && RadioModeState.IsEnabled(session.UserId, context.System.Device.DeviceID))
+        {
+            nextItemId = await AutoPopulateRadioTracks(session, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (nextItemId == null)
         {
             return ResponseBuilder.Empty();
         }
 
-        BaseItem item = _libraryManager.GetItemById((Guid)next_item_id);
+        BaseItem item = _libraryManager.GetItemById((Guid)nextItemId);
+        if (item == null)
+        {
+            return ResponseBuilder.Empty();
+        }
 
-        string item_id = item.Id.ToString();
-        string audioUrl = new Uri(new Uri(Plugin.Instance!.Configuration.ServerAddress), "Audio/" + item_id + "/universal").ToString();
+        string itemId = item.Id.ToString();
+        string audioUrl = new Uri(new Uri(Plugin.Instance!.Configuration.ServerAddress), "Audio/" + itemId + "/universal").ToString();
 
-        return BuildAudioPlayerResponse(PlayBehavior.Enqueue, audioUrl, item_id, item, user);
+        return BuildAudioPlayerResponse(PlayBehavior.Enqueue, audioUrl, itemId, item, user);
+    }
+
+    /// <summary>
+    /// Find similar tracks to the current item and append them to the queue.
+    /// Returns the first new track ID, or null if no tracks found.
+    /// </summary>
+    private async Task<Guid?> AutoPopulateRadioTracks(SessionInfo session, CancellationToken cancellationToken)
+    {
+        var currentAudio = session.FullNowPlayingItem as MediaBrowser.Controller.Entities.Audio.Audio;
+        if (currentAudio == null)
+        {
+            return null;
+        }
+
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
+        IReadOnlyList<BaseItem> similar = await FindRadioTracksAsync(currentAudio, jellyfinUser, _libraryManager, cancellationToken).ConfigureAwait(false);
+
+        if (similar.Count == 0)
+        {
+            Logger.LogInformation("Radio mode: no similar tracks found, ending radio");
+            return null;
+        }
+
+        List<BaseItem> shuffled = similar.ToList();
+        Shuffle(shuffled);
+        if (shuffled.Count > 15)
+        {
+            shuffled.RemoveRange(15, shuffled.Count - 15);
+        }
+
+        var queue = new List<QueueItem>(session.NowPlayingQueue);
+        var seen = new HashSet<Guid>(queue.Select(q => q.Id));
+        Guid? firstNewId = null;
+        int addedCount = 0;
+
+        foreach (BaseItem track in shuffled)
+        {
+            if (seen.Add(track.Id))
+            {
+                queue.Add(new QueueItem { Id = track.Id });
+                firstNewId ??= track.Id;
+                addedCount++;
+            }
+        }
+
+        if (firstNewId != null)
+        {
+            session.NowPlayingQueue = queue;
+            Logger.LogInformation("Radio mode: added {Count} similar tracks", addedCount);
+        }
+
+        return firstNewId;
     }
 }
