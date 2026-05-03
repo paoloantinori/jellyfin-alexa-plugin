@@ -48,5 +48,7 @@
   "NotFoundRandomGenre": "Non ho trovato contenuti {0} da riprodurre a caso.",
   "DidNotCatchGenre": "Non ho capito il genere musicale. Per favore riprova.",
   "NotFoundGenre": "Mi dispiace, non ho trovato musica {0} nella tua libreria.",
-  "NoContinueWatching": "Non hai contenuti in corso. Prova a riprodurre qualcosa prima!"
+  "NoContinueWatching": "Non hai contenuti in corso. Prova a riprodurre qualcosa prima!",
+  "NoChapters": "Questo contenuto non ha capitoli.",
+  "ChapterNotFound": "Capitolo {0} non trovato. Ci sono {1} capitoli in totale."
 }

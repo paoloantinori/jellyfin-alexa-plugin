@@ -55,7 +55,8 @@ public class AlexaSkillController : ControllerBase
         ILibraryManager libraryManager,
         IUserDataManager userDataManager,
         ILoggerFactory loggerFactory,
-        RequestCounters counters)
+        RequestCounters counters,
+        MediaBrowser.Controller.Chapters.IChapterManager chapterManager)
     {
         _userManager = userManager;
         _sessionManager = sessionManager;
@@ -91,6 +92,7 @@ public class AlexaSkillController : ControllerBase
             new PlayRandomIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
             new PlayByGenreIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
             new ContinueWatchingIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, userDataManager, loggerFactory),
+            new GoToChapterIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, chapterManager, loggerFactory),
 
             new YesIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
             new NoIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),

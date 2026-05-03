@@ -48,5 +48,7 @@
   "NotFoundRandomGenre": "I couldn't find any {0} media to shuffle.",
   "DidNotCatchGenre": "I didn't catch the genre. Please try again.",
   "NotFoundGenre": "Sorry, I couldn't find any {0} music in your library.",
-  "NoContinueWatching": "You don't have any media in progress. Try playing something first!"
+  "NoContinueWatching": "You don't have any media in progress. Try playing something first!",
+  "NoChapters": "This media doesn't have chapters.",
+  "ChapterNotFound": "Chapter {0} not found. There are {1} chapters total."
 }

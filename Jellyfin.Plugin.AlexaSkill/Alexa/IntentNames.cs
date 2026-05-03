@@ -20,6 +20,7 @@ internal static class IntentNames
     public const string PlayRandom = "PlayRandomIntent";
     public const string PlayByGenre = "PlayByGenreIntent";
     public const string ContinueWatching = "ContinueWatchingIntent";
+    public const string GoToChapter = "GoToChapterIntent";
     public const string LoopSongOn = "LoopSongOnIntent";
 
     public const string AmazonFallback = "AMAZON.FallbackIntent";

@@ -196,6 +196,28 @@
         ]
       },
       {
+        "name": "GoToChapterIntent",
+        "samples": [
+          "Next chapter",
+          "Previous chapter",
+          "Go to chapter {chapter_number}",
+          "Skip to chapter {chapter_number}",
+          "Go forward a chapter",
+          "Go back a chapter",
+          "Skip chapter"
+        ],
+        "slots": [
+          {
+            "name": "direction",
+            "type": "AMAZON.SearchQuery"
+          },
+          {
+            "name": "chapter_number",
+            "type": "AMAZON.NUMBER"
+          }
+        ]
+      },
+      {
         "name": "PlayPlaylistIntent",
         "samples": [
           "Play the playlist {playlist}",
