@@ -1,7 +1,9 @@
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.EntryPoints;
 using MediaBrowser.Controller.Session;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
@@ -12,16 +14,20 @@ public class SkillStartupTests
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly ILoggerFactory _loggerFactory;
+    private readonly IHttpClientFactory _httpClientFactory;
 
     public SkillStartupTests()
     {
         _sessionManagerMock = new Mock<ISessionManager>();
         _loggerFactory = LoggerFactory.Create(b => { });
+        var services = new ServiceCollection();
+        services.AddHttpClient();
+        _httpClientFactory = services.BuildServiceProvider().GetRequiredService<IHttpClientFactory>();
     }
 
     private SkillStartup CreateStartup()
     {
-        return new SkillStartup(_sessionManagerMock.Object, _loggerFactory);
+        return new SkillStartup(_sessionManagerMock.Object, _loggerFactory, _httpClientFactory);
     }
 
     [Fact]

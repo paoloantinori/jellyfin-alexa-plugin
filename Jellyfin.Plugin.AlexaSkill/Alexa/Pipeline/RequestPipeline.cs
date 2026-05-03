@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using global::Alexa.NET;
@@ -28,12 +29,12 @@ public class RequestPipeline
     /// <param name="responseInterceptors">Interceptors to run after the handler.</param>
     /// <param name="logger">Logger for pipeline diagnostics.</param>
     public RequestPipeline(
-        IReadOnlyList<IRequestInterceptor> requestInterceptors,
-        IReadOnlyList<IResponseInterceptor> responseInterceptors,
+        IEnumerable<IRequestInterceptor> requestInterceptors,
+        IEnumerable<IResponseInterceptor> responseInterceptors,
         ILogger<RequestPipeline> logger)
     {
-        _requestInterceptors = requestInterceptors;
-        _responseInterceptors = responseInterceptors;
+        _requestInterceptors = requestInterceptors.ToList().AsReadOnly();
+        _responseInterceptors = responseInterceptors.ToList().AsReadOnly();
         _logger = logger;
     }
 

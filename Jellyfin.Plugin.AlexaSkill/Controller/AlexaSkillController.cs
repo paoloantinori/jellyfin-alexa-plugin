@@ -51,6 +51,7 @@ public class AlexaSkillController : ControllerBase
     /// <param name="sessionManager">Instance of the <see cref="ISessionManager"/> interface.</param>
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILogger{RequestController}"/> interface.</param>
+    /// <param name="pipeline">The request pipeline for interceptor-based request processing.</param>
     public AlexaSkillController(
         IUserManager userManager,
         ISessionManager sessionManager,
@@ -58,12 +59,14 @@ public class AlexaSkillController : ControllerBase
         IUserDataManager userDataManager,
         ILoggerFactory loggerFactory,
         RequestCounters counters,
+        RequestPipeline pipeline,
         MediaBrowser.Controller.Chapters.IChapterManager chapterManager)
     {
         _userManager = userManager;
         _sessionManager = sessionManager;
         _logger = loggerFactory.CreateLogger<AlexaSkillController>();
         _counters = counters;
+        _pipeline = pipeline;
 
         csrfTokenHandler = Plugin.Instance!.CsrfTokenHandler;
 
@@ -118,18 +121,6 @@ public class AlexaSkillController : ControllerBase
             new ExceptionHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
             new FallbackIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory)
         };
-
-        _pipeline = new RequestPipeline(
-            new IRequestInterceptor[]
-            {
-                new LoggingRequestInterceptor(loggerFactory.CreateLogger<LoggingRequestInterceptor>())
-            },
-            new IResponseInterceptor[]
-            {
-                new SessionAttributesInterceptor(loggerFactory.CreateLogger<SessionAttributesInterceptor>()),
-                new LoggingResponseInterceptor(loggerFactory.CreateLogger<LoggingResponseInterceptor>())
-            },
-            loggerFactory.CreateLogger<RequestPipeline>());
     }
 
     /// <summary>

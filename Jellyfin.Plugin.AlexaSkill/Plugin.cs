@@ -11,6 +11,7 @@ using MediaBrowser.Common.Plugins;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Plugins;
 using MediaBrowser.Model.Serialization;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.AlexaSkill;
@@ -49,9 +50,28 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public override Guid Id => Guid.Parse("c5df7de0-8777-4b3c-a70d-5c3dae359c9e");
 
     /// <summary>
-    /// Gets the http client.
+    /// Gets an HttpClient from the registered IHttpClientFactory.
+    /// Falls back to a static HttpClient if DI is not available.
     /// </summary>
-    public static HttpClient HttpClient { get; } = new HttpClient();
+    public static HttpClient HttpClient
+    {
+        get
+        {
+            if (Instance?._httpClientFactory != null)
+            {
+                return Instance._httpClientFactory.CreateClient("AlexaSkill");
+            }
+
+            return _fallbackHttpClient;
+        }
+    }
+
+    private static readonly HttpClient _fallbackHttpClient = new();
+
+    /// <summary>
+    /// Sets the HttpClientFactory from DI registration.
+    /// </summary>
+    internal IHttpClientFactory? _httpClientFactory;
 
     /// <summary>
     /// Gets or sets the skill manifest.
