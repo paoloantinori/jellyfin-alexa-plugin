@@ -13,7 +13,7 @@ public static class Config
     /// <summary>
     /// The default invocation name of the Alexa skill.
     /// </summary>
-    public const string InvocationName = "jellyfin player";
+    public const string InvocationName = "jelly fin";
 
     /// <summary>
     /// Length of the CSRF token.
