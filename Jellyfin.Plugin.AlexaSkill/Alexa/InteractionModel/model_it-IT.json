@@ -154,11 +154,11 @@
           "Pleia {song} di {musician}",
           "Pleia {song} dei {musician}",
           "Pleia {song} degli {musician}",
-          "Pleia {song} delle {musician}",     
+          "Pleia {song} delle {musician}",
           "Di pleiare {song} di {musician}",
           "Di pleiare {song} dei {musician}",
           "Di pleiare {song} degli {musician}",
-          "Di pleiare {song} delle {musician}"          
+          "Di pleiare {song} delle {musician}"
         ],
         "slots": [
           {
@@ -422,6 +422,22 @@
         ]
       },
       {
+        "name": "PlayByGenreIntent",
+        "samples": [
+          "Suona musica {genre}",
+          "Suona {genre}",
+          "Voglio ascoltare {genre}",
+          "Metti {genre}",
+          "Suona canzoni {genre}"
+        ],
+        "slots": [
+          {
+            "name": "genre",
+            "type": "AMAZON.Genre"
+          }
+        ]
+      },
+      {
         "name": "PlayPlaylistIntent",
         "samples": [
           "Riproduci playlist {playlist}",
@@ -429,13 +445,13 @@
           "Metti playlist {playlist}",
           "Metti la playlist {playlist}",
           "Suona playlist {playlist}",
-          "Suona la playlist {playlist}",       
+          "Suona la playlist {playlist}",
           "Di riprodurre playlist {playlist}",
           "Di riprodurre la playlist {playlist}",
           "Di mettere playlist {playlist}",
           "Di mettere la playlist {playlist}",
           "Di suonare playlist {playlist}",
-          "Di suonare la playlist {playlist}"          
+          "Di suonare la playlist {playlist}"
         ],
         "slots": [
           {

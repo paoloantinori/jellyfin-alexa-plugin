@@ -166,6 +166,22 @@
         ]
       },
       {
+        "name": "PlayByGenreIntent",
+        "samples": [
+          "Reproduce música {genre}",
+          "Reproduce {genre}",
+          "Pon {genre}",
+          "Quiero escuchar {genre}",
+          "Reproduce canciones de {genre}"
+        ],
+        "slots": [
+          {
+            "name": "genre",
+            "type": "AMAZON.Genre"
+          }
+        ]
+      },
+      {
         "name": "PlayPlaylistIntent",
         "samples": [
           "Reproduce la lista de reproducción {playlist}",

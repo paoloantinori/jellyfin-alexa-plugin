@@ -168,6 +168,23 @@
         ]
       },
       {
+        "name": "PlayByGenreIntent",
+        "samples": [
+          "Play some {genre} music",
+          "Play {genre} songs",
+          "Play {genre} music",
+          "Play me some {genre}",
+          "I want to listen to {genre}",
+          "Play {genre}"
+        ],
+        "slots": [
+          {
+            "name": "genre",
+            "type": "AMAZON.Genre"
+          }
+        ]
+      },
+      {
         "name": "PlayPlaylistIntent",
         "samples": [
           "Play the playlist {playlist}",

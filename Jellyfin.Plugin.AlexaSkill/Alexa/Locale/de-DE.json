@@ -45,5 +45,7 @@
   "DisambiguateReprompt": "Du kannst ja oder nein sagen.",
   "UnexpectedYes": "Ich bin mir nicht sicher, was ich abspielen soll. Du kannst mich bitten, ein Lied, ein Album oder ein Video abzuspielen.",
   "NotFoundRandom": "Ich konnte keine Medien zum Zufallswiedergabe finden. Füge zuerst etwas Musik zu deiner Bibliothek hinzu.",
-  "NotFoundRandomGenre": "Ich konnte keine {0}-Medien zum Zufallswiedergabe finden."
+  "NotFoundRandomGenre": "Ich konnte keine {0}-Medien zum Zufallswiedergabe finden.",
+  "DidNotCatchGenre": "Ich habe das Genre nicht verstanden. Bitte versuche es noch einmal.",
+  "NotFoundGenre": "Leider konnte ich keine {0} Musik in deiner Bibliothek finden."
 }

@@ -45,5 +45,7 @@
   "DisambiguateReprompt": "You can say yes or no.",
   "UnexpectedYes": "I'm not sure what you'd like me to play. You can ask me to play a song, album, or video.",
   "NotFoundRandom": "I couldn't find any media to shuffle. Try adding some music to your library first.",
-  "NotFoundRandomGenre": "I couldn't find any {0} media to shuffle."
+  "NotFoundRandomGenre": "I couldn't find any {0} media to shuffle.",
+  "DidNotCatchGenre": "I didn't catch the genre. Please try again.",
+  "NotFoundGenre": "Sorry, I couldn't find any {0} music in your library."
 }
