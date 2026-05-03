@@ -105,6 +105,11 @@ public class AlexaSkillController : ControllerBase
             new SleepTimerIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
             new PlayMoodMusicIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
 
+            new AddToQueueIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
+            new PlayNextIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
+            new ClearQueueIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
+            new ListQueueIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, loggerFactory),
+
             new YesIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
             new NoIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
 

@@ -78,5 +78,11 @@
   "SleepTimerSet": "Timer di spegnimento impostato per {0} minuti. La riproduzione si fermerà.",
   "CancelSleepTimer": "Timer di spegnimento cancellato.",
   "DidNotCatchMood": "Che tipo di musica vorresti? Puoi dire rilassante, allegra, chill, energica o concentrazione.",
-  "NotFoundMood": "Non ho trovato musica {0} nella tua libreria."
+  "NotFoundMood": "Non ho trovato musica {0} nella tua libreria.",
+  "AddedToQueue": "{0} aggiunto alla coda.",
+  "PlayNextConfirmed": "{0} sarà riprodotto tra poco.",
+  "QueueCleared": "Coda svuotata.",
+  "QueueEmpty": "La tua coda è vuota.",
+  "QueueList": "Prossimi brani: {0}",
+  "DidNotCatchQueueItem": "Cosa vorresti aggiungere alla coda?"
 }

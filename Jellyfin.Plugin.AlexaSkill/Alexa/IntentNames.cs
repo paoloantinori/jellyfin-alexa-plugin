@@ -28,6 +28,10 @@ internal static class IntentNames
     public const string SleepTimer = "SleepTimerIntent";
     public const string PlayEpisode = "PlayEpisodeIntent";
     public const string LoopSongOn = "LoopSongOnIntent";
+    public const string AddToQueue = "AddToQueueIntent";
+    public const string PlayNext = "PlayNextIntent";
+    public const string ClearQueue = "ClearQueueIntent";
+    public const string ListQueue = "ListQueueIntent";
 
     public const string AmazonFallback = "AMAZON.FallbackIntent";
     public const string AmazonLoopOff = "AMAZON.LoopOffIntent";
