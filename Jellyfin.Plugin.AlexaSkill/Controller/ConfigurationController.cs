@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
 using Jellyfin.Plugin.AlexaSkill.Controller.Handler;
@@ -218,6 +220,68 @@ public class ConfigurationController : ControllerBase
         {
             StatusCode = 200
         };
+    }
+
+    /// <summary>
+    /// Test connectivity to a Jellyfin server URL.
+    /// </summary>
+    /// <param name="address">The server address to test. Falls back to saved config if empty.</param>
+    /// <returns>A JSON object with connection test results.</returns>
+    [HttpGet("test-connection")]
+    [Authorize(Policy = "RequiresElevation")]
+    public async Task<ActionResult> TestConnection([FromQuery] string? address = null)
+    {
+        address = address?.Trim() ?? Plugin.Instance!.Configuration.ServerAddress?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrEmpty(address))
+        {
+            return new JsonResult(new { success = false, error = "No server address configured" });
+        }
+
+        if (!Uri.TryCreate(address, UriKind.Absolute, out Uri? uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            return new JsonResult(new { success = false, error = "Invalid URL (must be HTTP or HTTPS)" });
+        }
+
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            HttpResponseMessage response = await Plugin.HttpClient
+                .GetAsync(uri.AbsoluteUri.TrimEnd('/') + "/System/Info/Public", cts.Token)
+                .ConfigureAwait(false);
+
+            if (response.IsSuccessStatusCode)
+            {
+                return new JsonResult(new
+                {
+                    success = true,
+                    status = (int)response.StatusCode,
+                    scheme = uri.Scheme,
+                    host = uri.Host,
+                    port = uri.Port
+                });
+            }
+
+            return new JsonResult(new
+            {
+                success = false,
+                error = $"Server returned HTTP {(int)response.StatusCode} ({response.StatusCode})",
+                status = (int)response.StatusCode
+            });
+        }
+        catch (HttpRequestException ex)
+        {
+            return new JsonResult(new
+            {
+                success = false,
+                error = ex.InnerException?.Message ?? ex.Message
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            return new JsonResult(new { success = false, error = "Connection timed out (10s)" });
+        }
     }
 
     /// <summary>

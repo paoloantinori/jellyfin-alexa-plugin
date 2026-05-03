@@ -26,6 +26,11 @@
                             <div class="fieldDescription">The public accessable https address of this server.</div>
                         </div>
 
+                        <button id="testConnectionButton" is="emby-button" type="button" class="raised button-alt emby-button" style="margin-bottom:1.5em;">
+                            <span>Test Connection</span>
+                        </button>
+                        <div id="testConnectionResult" style="display:none; margin-bottom:1.5em; padding:0.8em; border-radius:4px;"></div>
+
                         <div class="selectContainer">
                             <label class="selectLabel" for="SslCertType">SSL Certificate Type</label>
                             <select is="emby-select" id="SslCertType" name="SslCertType" class="emby-select-withcolor emby-select">
@@ -371,6 +376,43 @@
                 e.preventDefault();
 
                 return false;
+            });
+
+            document.querySelector("#testConnectionButton").addEventListener("click", function() {
+                var resultDiv = document.querySelector("#testConnectionResult");
+                var address = document.querySelector("#ServerAddress").value.trim();
+                resultDiv.style.display = "block";
+                resultDiv.style.background = "#444";
+                resultDiv.style.color = "#ccc";
+                resultDiv.textContent = "Testing connection...";
+
+                ApiClient.ajax({
+                    type: "GET",
+                    url: ApiClient.getUrl("alexaskill/api/test-connection?address=" + encodeURIComponent(address))
+                }).then(function (res) {
+                    res.json().then(function (data) {
+                        if (data.success) {
+                            resultDiv.style.background = "#2e7d32";
+                            resultDiv.style.color = "#fff";
+                            resultDiv.textContent = "Connection successful — server is reachable (" + data.scheme.toUpperCase() + " on " + data.host + ":" + data.port + ")";
+                        } else {
+                            resultDiv.style.background = "#c62828";
+                            resultDiv.style.color = "#fff";
+                            resultDiv.textContent = "Connection failed: " + data.error;
+                        }
+                    }).catch(function () {
+                        resultDiv.style.background = "#c62828";
+                        resultDiv.style.color = "#fff";
+                        resultDiv.textContent = "Failed to parse server response";
+                    });
+                }, function (res) {
+                    resultDiv.style.background = "#c62828";
+                    resultDiv.style.color = "#fff";
+                    resultDiv.textContent = "Request failed";
+                    if (res.status === 401) {
+                        resultDiv.textContent = "Request failed: unauthorized";
+                    }
+                });
             });
 
             document.querySelector("#newUserSkillButton").addEventListener("click", function(e) {
