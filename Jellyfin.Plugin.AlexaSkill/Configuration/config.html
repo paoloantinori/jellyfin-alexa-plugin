@@ -129,12 +129,17 @@
                 td.style.verticalAlign = "middle";
                 let input = document.createElement("input");
                 input.setAttribute("data-id", user.Id);
-                input.name = "LwaClientSecret";
+                input.name = "InvocationName";
                 input.type = "text";
                 input.is = "emby-input";
                 input.classList.add("emby-input")
                 input.value = (user.UserSkill)? user.UserSkill.InvocationName : "jelly fin";
                 td.appendChild(input);
+                let desc = document.createElement("div");
+                desc.classList.add("fieldDescription");
+                desc.style.marginTop = "0.25em";
+                desc.textContent = 'Two or more words (e.g. "jelly fin"). This is what you say to invoke the skill.';
+                td.appendChild(desc);
                 tr.appendChild(td);
                 
                 td = document.createElement("td");
