@@ -337,6 +337,25 @@
           "show me {browse_category} by {filter}",
           "list {browse_category} {filter}"
         ]
+      },
+      {
+        "name": "RecommendIntent",
+        "slots": [
+          {
+            "name": "media_type",
+            "type": "MediaType"
+          }
+        ],
+        "samples": [
+          "recommend something",
+          "recommend some music",
+          "recommend a movie",
+          "suggest something to watch",
+          "suggest some music",
+          "play something i would like",
+          "recommend {media_type}",
+          "suggest {media_type}"
+        ]
       }
     ],
     "types": [

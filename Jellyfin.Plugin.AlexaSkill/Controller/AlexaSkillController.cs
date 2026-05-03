@@ -96,6 +96,7 @@ public class AlexaSkillController : ControllerBase
             new InProgressMediaListIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, userDataManager, loggerFactory),
             new PlayEpisodeIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
             new BrowseLibraryIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
+            new RecommendIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, userDataManager, loggerFactory),
 
             new YesIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
             new NoIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),

@@ -323,6 +323,23 @@
           "explorar {browse_category} {filter}",
           "muéstrame {browse_category} de {filter}"
         ]
+      },
+      {
+        "name": "RecommendIntent",
+        "slots": [
+          {
+            "name": "media_type",
+            "type": "MediaType"
+          }
+        ],
+        "samples": [
+          "recomienda algo",
+          "recomienda música",
+          "recomienda una película",
+          "sugiere algo",
+          "reproduce algo que me guste",
+          "recomienda {media_type}"
+        ]
       }
     ],
     "types": [
