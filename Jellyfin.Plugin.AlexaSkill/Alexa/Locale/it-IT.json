@@ -47,5 +47,6 @@
   "NotFoundRandom": "Non ho trovato contenuti da riprodurre a caso. Prova ad aggiungere musica alla tua libreria.",
   "NotFoundRandomGenre": "Non ho trovato contenuti {0} da riprodurre a caso.",
   "DidNotCatchGenre": "Non ho capito il genere musicale. Per favore riprova.",
-  "NotFoundGenre": "Mi dispiace, non ho trovato musica {0} nella tua libreria."
+  "NotFoundGenre": "Mi dispiace, non ho trovato musica {0} nella tua libreria.",
+  "NoContinueWatching": "Non hai contenuti in corso. Prova a riprodurre qualcosa prima!"
 }

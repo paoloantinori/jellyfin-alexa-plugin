@@ -182,6 +182,15 @@
         ]
       },
       {
+        "name": "ContinueWatchingIntent",
+        "samples": [
+          "Continuar viendo",
+          "Continuar escuchando",
+          "Seguir donde lo dejé",
+          "Continuar"
+        ]
+      },
+      {
         "name": "PlayPlaylistIntent",
         "samples": [
           "Reproduce la lista de reproducción {playlist}",
