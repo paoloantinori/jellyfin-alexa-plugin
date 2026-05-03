@@ -104,6 +104,22 @@
                 });    
             });
 
+            function isValidInvocationName(value) {
+                return value.length > 0 && value.includes(" ");
+            }
+
+            function validateInvocationName(input) {
+                let errMsg = input.parentElement.querySelector(".invocation-name-error");
+                if (!errMsg) return;
+                if (!isValidInvocationName(input.value)) {
+                    errMsg.style.display = "block";
+                    input.style.borderColor = "#e5a00d";
+                } else {
+                    errMsg.style.display = "none";
+                    input.style.borderColor = "";
+                }
+            }
+
             function createUserRow(user, config) {
                 let tr = document.createElement("tr");
                 tr.setAttribute("data-id", user.Id);
@@ -134,12 +150,22 @@
                 input.is = "emby-input";
                 input.classList.add("emby-input")
                 input.value = (user.UserSkill)? user.UserSkill.InvocationName : "jelly fin";
+                input.addEventListener("input", function() { validateInvocationName(this); });
+                input.addEventListener("blur", function() { validateInvocationName(this); });
                 td.appendChild(input);
                 let desc = document.createElement("div");
                 desc.classList.add("fieldDescription");
                 desc.style.marginTop = "0.25em";
                 desc.textContent = 'Two or more words (e.g. "jelly fin"). This is what you say to invoke the skill.';
                 td.appendChild(desc);
+                let errMsg = document.createElement("div");
+                errMsg.classList.add("invocation-name-error");
+                errMsg.style.display = "none";
+                errMsg.style.color = "#e5a00d";
+                errMsg.style.fontSize = "0.85em";
+                errMsg.style.marginTop = "0.25em";
+                errMsg.textContent = "Invocation name must contain at least 2 words.";
+                td.appendChild(errMsg);
                 tr.appendChild(td);
                 
                 td = document.createElement("td");
@@ -256,6 +282,11 @@
                     
                     for (let row of document.querySelector("#userTableBody").rows) {
                         const userId = row.getAttribute("data-id");
+                        const invocationInput = row.cells[2].querySelector("input");
+                        if (!isValidInvocationName(invocationInput.value)) {
+                            validateInvocationName(invocationInput);
+                            continue;
+                        }
 
                         if (userId === "undefined") {
                             // create a new user skill
