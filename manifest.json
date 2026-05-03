@@ -46,6 +46,14 @@
                 "changelog": "Add comprehensive README tutorial. Expand Italian voice command utterances. Fix ProgressiveResponse HttpClient reuse bug. Update manifest author attribution.",
                 "targetAbi": "10.11.0.0",
                 "timestamp": "2026-05-03 08:01:19"
+            },
+            {
+                "version": "0.2.0.4",
+                "checksum": "9e33526d95872d482495f784ce164d48",
+                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.4/AlexaSkill_0.2.0.4.zip",
+                "changelog": "Add comprehensive README tutorial. Expand Italian voice command utterances. Fix ProgressiveResponse HttpClient reuse bug. Update manifest author attribution.",
+                "targetAbi": "10.11.0.0",
+                "timestamp": "2026-05-03 13:01:54"
             }
         ]
     }
