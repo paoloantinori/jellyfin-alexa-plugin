@@ -1,3 +1,4 @@
+using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Diagnostics;
 using MediaBrowser.Controller;
@@ -19,6 +20,7 @@ public class Registrator : IPluginServiceRegistrator
 
         // Singletons
         serviceCollection.AddSingleton<RequestCounters>();
+        serviceCollection.AddSingleton<SearchResultCache>();
 
         // HttpClient for LWA and progressive responses
         serviceCollection.AddHttpClient("AlexaSkill");
