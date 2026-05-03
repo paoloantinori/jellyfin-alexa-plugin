@@ -16,6 +16,7 @@ obj/
 # Build artifacts
 *.orig
 *.bak
+*.zip
 packages/
 tools/
 
