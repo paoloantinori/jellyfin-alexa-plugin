@@ -53,5 +53,9 @@
   "ChapterNotFound": "Chapitre {0} non trouvé. Il y a {1} chapitres au total.",
   "NoInProgressMedia": "Vous n'avez aucun média en cours.",
   "InProgressList": "Vous avez {0} médias en cours : {1}",
-  "InProgressItemWithPosition": "{0} à {1}"
+  "InProgressItemWithPosition": "{0} à {1}",
+  "DidNotCatchSeriesName": "Je n'ai pas compris le nom de la série. Quelle série souhaitez-vous regarder ?",
+  "DidNotCatchEpisodeNumber": "Je n'ai pas compris le numéro de saison ou d'épisode. Veuillez indiquer la saison et l'épisode.",
+  "NotFoundSeries": "Je n'ai pas trouvé de série appelée {0}.",
+  "NotFoundEpisode": "Je n'ai pas trouvé la saison {0} épisode {1} de {2}."
 }

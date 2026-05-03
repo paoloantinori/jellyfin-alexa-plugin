@@ -290,6 +290,31 @@
           "list my in progress media",
           "what have i started"
         ]
+      },
+      {
+        "name": "PlayEpisodeIntent",
+        "slots": [
+          {
+            "name": "series_name",
+            "type": "AMAZON.Series"
+          },
+          {
+            "name": "season_number",
+            "type": "AMAZON.NUMBER"
+          },
+          {
+            "name": "episode_number",
+            "type": "AMAZON.NUMBER"
+          }
+        ],
+        "samples": [
+          "play season {season_number} episode {episode_number} of {series_name}",
+          "play {series_name} season {season_number} episode {episode_number}",
+          "play episode {episode_number} of season {season_number} of {series_name}",
+          "play {series_name} season {season_number} episode {episode_number}",
+          "watch season {season_number} episode {episode_number} of {series_name}",
+          "watch {series_name} season {season_number} episode {episode_number}"
+        ]
       }
     ],
     "types": [
