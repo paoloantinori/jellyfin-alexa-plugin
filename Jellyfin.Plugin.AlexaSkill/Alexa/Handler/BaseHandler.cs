@@ -227,4 +227,18 @@ public abstract class BaseHandler
             Logger.LogWarning(ex, "Failed to send progressive response");
         }
     }
+
+    /// <summary>
+    /// Find the best fuzzy match from a list of items when exact search fails.
+    /// </summary>
+    /// <typeparam name="T">The item type.</typeparam>
+    /// <param name="query">The search query from the user.</param>
+    /// <param name="candidates">Items to match against.</param>
+    /// <param name="selector">Function to extract the comparable string.</param>
+    /// <param name="threshold">Minimum similarity score (0-100).</param>
+    /// <returns>The best matching item, or null.</returns>
+    protected static T? FuzzyMatch<T>(string query, IEnumerable<T> candidates, Func<T, string> selector, int threshold = FuzzyMatcher.DefaultThreshold) where T : class
+    {
+        return FuzzyMatcher.FindBestMatch(query, candidates, selector, threshold);
+    }
 }
