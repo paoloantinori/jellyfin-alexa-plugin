@@ -35,6 +35,8 @@ internal static class IntentNames
     public const string PlayRadio = "PlayRadioIntent";
     public const string TurnRadioOn = "TurnRadioOnIntent";
     public const string TurnRadioOff = "TurnRadioOffIntent";
+    public const string LearnMyVoice = "LearnMyVoiceIntent";
+    public const string WhoAmI = "WhoAmIIntent";
 
     public const string AmazonFallback = "AMAZON.FallbackIntent";
     public const string AmazonLoopOff = "AMAZON.LoopOffIntent";

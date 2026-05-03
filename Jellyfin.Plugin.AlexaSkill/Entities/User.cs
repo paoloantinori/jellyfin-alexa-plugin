@@ -66,6 +66,12 @@ public class User
     public string InvocationName { get; set; }
 
     /// <summary>
+    /// Gets or sets the Alexa person ID for voice-based user identification.
+    /// When a voice profile is recognized, this maps the speaker to this Jellyfin user.
+    /// </summary>
+    public string? AlexaPersonId { get; set; }
+
+    /// <summary>
     /// Gets the smapi Smapi Management object for this user.
     /// </summary>
     [JsonIgnore]

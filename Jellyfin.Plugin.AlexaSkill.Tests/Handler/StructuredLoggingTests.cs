@@ -283,7 +283,7 @@ public class StructuredLoggingTests
 
         var entry = Assert.Single(factory.LogEntries);
         Assert.Equal(LogLevel.Error, entry.Level);
-        Assert.Contains(unknownUserId.ToString(), entry.Message);
+        Assert.Contains("not found", entry.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

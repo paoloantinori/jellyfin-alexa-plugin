@@ -90,5 +90,10 @@
   "RadioNoSimilar": "Non ho trovato brani simili nella tua libreria.",
   "RadioStarted": "Modalità radio attiva. Trovati {0} brani simili.",
   "RadioModeOn": "Modalità radio attivata. Continuerò a riprodurre musica simile quando la coda finisce.",
-  "RadioModeOff": "Modalità radio disattivata. La riproduzione si fermerà quando la coda finisce."
+  "RadioModeOff": "Modalità radio disattivata. La riproduzione si fermerà quando la coda finisce.",
+  "VoiceLearned": "Perfetto! Ho collegato la tua voce all'account {0}. D'ora in poi userò la tua libreria quando ti riconosco.",
+  "VoiceAlreadyLinked": "La tua voce è già collegata all'account {0}.",
+  "VoiceLearnFailed": "Non sono riuscito a collegare la tua voce. Assicurati che i profili vocali siano attivati nelle impostazioni Alexa.",
+  "WhoAmI": "Sei connesso come {0}.",
+  "WhoAmIUnknown": "Non riconosco ancora la tua voce. Di' impara la mia voce per configurarlo."
 }
