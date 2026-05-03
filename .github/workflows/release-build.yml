@@ -42,13 +42,15 @@ jobs:
       - name: Create zip
         run: |
           cd Jellyfin.Plugin.AlexaSkill/bin/Release/net9.0/publish
+          cp ${GITHUB_WORKSPACE}/Jellyfin.Plugin.AlexaSkill/icon.png .
           zip -j ${GITHUB_WORKSPACE}/AlexaSkill_${{ steps.version.outputs.VERSION }}.zip \
             Alexa.NET.dll \
             Alexa.NET.Management.dll \
             Amazon.Lambda.Core.dll \
             Amazon.Lambda.Serialization.Json.dll \
             Jellyfin.Plugin.AlexaSkill.dll \
-            Refit.dll
+            Refit.dll \
+            icon.png
 
       - name: Create github release
         id: create-release
