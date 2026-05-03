@@ -328,6 +328,23 @@
           "durchsuche {browse_category} {filter}",
           "zeige mir {browse_category} von {filter}"
         ]
+      },
+      {
+        "name": "RecommendIntent",
+        "slots": [
+          {
+            "name": "media_type",
+            "type": "MediaType"
+          }
+        ],
+        "samples": [
+          "empfehle etwas",
+          "empfehle musik",
+          "empfehle einen film",
+          "schlage etwas vor",
+          "spiele etwas das mir gefällt",
+          "empfehle {media_type}"
+        ]
       }
     ],
     "types": [

@@ -327,6 +327,23 @@
           "parcourir {browse_category} {filter}",
           "montre-moi {browse_category} de {filter}"
         ]
+      },
+      {
+        "name": "RecommendIntent",
+        "slots": [
+          {
+            "name": "media_type",
+            "type": "MediaType"
+          }
+        ],
+        "samples": [
+          "recommande quelque chose",
+          "recommande de la musique",
+          "recommande un film",
+          "suggère quelque chose",
+          "joue quelque chose que j'aimerais",
+          "recommande {media_type}"
+        ]
       }
     ],
     "types": [

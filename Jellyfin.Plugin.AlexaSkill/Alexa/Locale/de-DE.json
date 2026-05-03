@@ -61,5 +61,7 @@
   "DidNotCatchBrowseCategory": "Was möchtest du durchsuchen? Du kannst Künstler, Alben, Filme, Lieder oder Genres sagen.",
   "BrowseResults": "Ich habe {0} Ergebnisse gefunden: {1}",
   "BrowseItem": "{0}. {1}",
-  "NoBrowseResults": "Ich konnte keine {0} finden."
+  "NoBrowseResults": "Ich konnte keine {0} finden.",
+  "NoRecommendations": "Ich konnte momentan keine Empfehlungen finden. Hör zuerst mehr Musik!",
+  "RecommendPlaying": "Hier ist eine Empfehlung für dich: spiele {0}"
 }

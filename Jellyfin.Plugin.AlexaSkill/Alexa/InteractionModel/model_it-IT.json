@@ -607,6 +607,23 @@
           "esplora {browse_category} {filter}",
           "mostrami {browse_category} di {filter}"
         ]
+      },
+      {
+        "name": "RecommendIntent",
+        "slots": [
+          {
+            "name": "media_type",
+            "type": "MediaType"
+          }
+        ],
+        "samples": [
+          "raccomanda qualcosa",
+          "raccomanda musica",
+          "raccomanda un film",
+          "suggerisci qualcosa",
+          "riproduci qualcosa che mi piacerebbe",
+          "raccomanda {media_type}"
+        ]
       }
     ],
     "types": [
