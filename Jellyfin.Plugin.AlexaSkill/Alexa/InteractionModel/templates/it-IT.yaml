@@ -1,0 +1,310 @@
+# Italian interaction model templates for Alexa skill.
+#
+# Vocabulary sets are expanded via Cartesian product into utterance samples.
+# Slot references like {song} are preserved as-is (not expanded).
+# To add a new verb (e.g. "Ascolta"), just add it to the imperative/infinitive lists.
+#
+# Run: python scripts/generate_interaction_model.py it-IT
+
+invocationName: jelly fin
+
+vocabulary:
+  imperative: [Riproduci, Suona, Metti, Pleia]
+  infinitive: [Di riprodurre, Di suonare, Di mettere, Di pleiare]
+
+  song_noun: [il brano, la canzone, il pezzo, la traccia]
+  album_noun: [album, disco]
+  artist_article: [di, dei, degli, delle]
+  media_noun: [brani, canzoni, musica]
+  favorites_noun: [i miei preferiti, "{media_type} preferiti"]
+  last_added_phrase: ["novità {media_type}", "ultimi {media_type} aggiunti", "nuovi media"]
+
+# Intents that are fully static (no templates). Listed here so the generator
+# knows to preserve them from the base JSON if present.
+static_intents:
+  - AMAZON.CancelIntent
+  - AMAZON.HelpIntent
+  - AMAZON.StopIntent
+  - AMAZON.FallbackIntent
+  - AMAZON.PauseIntent
+  - AMAZON.ResumeIntent
+  - AMAZON.NextIntent
+  - AMAZON.PreviousIntent
+  - AMAZON.YesIntent
+  - AMAZON.NoIntent
+  - AMAZON.ShuffleOnIntent
+  - AMAZON.ShuffleOffIntent
+  - AMAZON.StartOverIntent
+
+# Intents with explicit samples (not generated from templates).
+# Each has a "samples" list and optional "slots" list.
+explicit_intents:
+  LoopAllOffIntent:
+    samples:
+      - Disattiva loop
+      - Disattiva ripetizione
+  LoopAllOnIntent:
+    samples:
+      - Attiva loop
+      - Attiva ripetizione
+  RepeatSingleOnIntent:
+    samples:
+      - Ripeti la canzone
+      - Ripeti la traccia
+      - Ripeti il brano
+      - Ripeti il video
+      - di ripeter la canzone
+      - di ripeter la traccia
+      - di ripeter il brano
+      - di ripeter il video
+      - Ripetilo
+      - di ripeterlo
+      - riplei
+      - replei
+      - Suonalo ancora
+      - di suonarlo ancora
+      - Suonala ancora
+      - di suonarla ancora
+  PlayChannelIntent:
+    samples:
+      - Canale {channel}
+      - Riproduci radio {channel}
+      - di riprodurre la radio {channel}
+      - di mettere la radio {channel}
+      - Radio {channel}
+    slots:
+      - name: channel
+        type: AMAZON.SearchQuery
+  PlayVideoIntent:
+    samples:
+      - Riproduci {title}
+      - Suona {title}
+      - Metti {title}
+      - Pleia {title}
+      - Di riprodurre {title}
+      - Di suonare {title}
+    slots:
+      - name: title
+        type: AMAZON.SearchQuery
+  PlayByGenreIntent:
+    samples:
+      - Riproduci {genre}
+      - Suona {genre}
+      - Metti {genre}
+      - Pleia {genre}
+      - Di riprodurre {genre}
+    slots:
+      - name: genre
+        type: AMAZON.SearchQuery
+  PlayPlaylistIntent:
+    samples:
+      - Riproduci playlist {playlist}
+      - Suona playlist {playlist}
+      - Metti playlist {playlist}
+      - Pleia playlist {playlist}
+      - Di riprodurre playlist {playlist}
+      - Di suonare playlist {playlist}
+      - Di mettere playlist {playlist}
+      - Di pleiare playlist {playlist}
+      - Riproduci la playlist {playlist}
+      - Suona la playlist {playlist}
+      - Metti la playlist {playlist}
+      - Pleia la playlist {playlist}
+    slots:
+      - name: playlist
+        type: AMAZON.SearchQuery
+  GoToChapterIntent:
+    samples:
+      - Vai al capitolo {chapter_number}
+      - Vai al capitolo {direction}
+      - Salta al capitolo {chapter_number}
+      - Salta al capitolo {direction}
+      - Capitolo {chapter_number}
+      - Capitolo {direction}
+    slots:
+      - name: direction
+        type: AMAZON.Ordinal
+      - name: chapter_number
+        type: AMAZON.Number
+  MarkFavoriteIntent:
+    samples:
+      - Aggiungi ai preferiti
+      - Metti nei preferiti
+      - Segna come preferito
+      - Mi piace
+      - Aggiungi questo ai preferiti
+      - Metti questo nei preferiti
+      - Segna questo come preferito
+      - Questo mi piace
+  UnmarkFavoriteIntent:
+    samples:
+      - Rimuovi dai preferiti
+      - Togli dai preferiti
+      - Rimuovi questo dai preferiti
+      - Togli questo dai preferiti
+      - Non mi piace più
+      - Non mi piace piu
+      - Questo non mi piace più
+      - Questo non mi piace piu
+  MediaInfoIntent:
+    samples:
+      - Cosa sta suonando
+      - Cosa sta suonando adesso
+      - Che brano è questo
+      - Che canzone è questa
+      - Chi è questo artista
+      - Info su questo brano
+      - Informazioni su questa canzone
+      - Dimmi cosa sta suonando
+      - Che cosa suona
+      - Chi suona adesso
+  InProgressMediaListIntent:
+    samples:
+      - Cosa stavo guardando
+      - Mostrami i video in corso
+      - Riprendi a guardare
+      - Cosa ho lasciato a metà
+      - Cosa ho lasciato a meta
+  PlayEpisodeIntent:
+    samples:
+      - Riproduci {series_name} stagione {season_number} episodio {episode_number}
+      - Suona {series_name} stagione {season_number} episodio {episode_number}
+      - Metti {series_name} stagione {season_number} episodio {episode_number}
+    slots:
+      - name: series_name
+        type: AMAZON.SearchQuery
+      - name: season_number
+        type: AMAZON.Number
+      - name: episode_number
+        type: AMAZON.Number
+  BrowseLibraryIntent:
+    samples:
+      - Sfoglia {browse_category}
+      - Mostra {browse_category}
+      - Elenca {browse_category}
+      - Sfoglia {browse_category} {filter}
+      - Mostra {browse_category} {filter}
+      - Elenca {browse_category} {filter}
+    slots:
+      - name: browse_category
+        type: AMAZON.SearchQuery
+      - name: filter
+        type: AMAZON.SearchQuery
+  RecommendIntent:
+    samples:
+      - Consiglia {media_type}
+      - Raccomanda {media_type}
+      - Suggerisci {media_type}
+      - Di consigliare {media_type}
+      - Di raccomandare {media_type}
+      - Di suggerire {media_type}
+    slots:
+      - name: media_type
+        type: AMAZON.SearchQuery
+  SleepTimerIntent:
+    samples:
+      - Imposta timer {duration_minutes}
+      - Timer per dormire {duration_minutes}
+      - Spegimento automatico {duration_minutes}
+      - Ferma dopo {duration_minutes}
+    slots:
+      - name: duration_minutes
+        type: AMAZON.Number
+  PlayMoodMusicIntent:
+    samples:
+      - Musica {mood}
+      - Riproduci musica {mood}
+      - Suona musica {mood}
+      - Metti musica {mood}
+    slots:
+      - name: mood
+        type: AMAZON.SearchQuery
+  PlayRandomIntent:
+    samples:
+      - Riproduci {media_type} casuali
+      - Riproduci {media_type} a caso
+      - Suona {media_type} casuali
+      - Suona {media_type} a caso
+      - Metti {media_type} casuali
+      - Metti {media_type} a caso
+    slots:
+      - name: media_type
+        type: AMAZON.SearchQuery
+      - name: genre
+        type: AMAZON.SearchQuery
+  ContinueWatchingIntent:
+    samples:
+      - Continua a guardare
+      - Riprendi a guardare
+      - Continua il video
+      - Riprendi il video
+  LearnMyVoiceIntent:
+    samples:
+      - Impara la mia voce
+      - Riconosci la mia voce
+      - Associa la mia voce
+      - Collega la mia voce
+      - Impara chi sono
+      - Riconoscimi
+      - Impara questa voce
+  WhoAmIIntent:
+    samples:
+      - Chi sono
+      - Chi sto usando
+      - Con che utente sono collegato
+      - Dimmi chi sono
+      - Che utente sono
+
+# Template-based intents. Each template uses {vocab_name} references that get
+# expanded via Cartesian product. Slot references like {song} are preserved.
+#
+# Templates produce: for each template string, substitute each vocab reference
+# with each value from that vocabulary list (Cartesian product).
+templates:
+  PlaySongIntent:
+    templates:
+      - "{imperative} {song_noun} {song}"
+      - "{infinitive} {song_noun} {song}"
+      - "{imperative} {song} {artist_article} {musician}"
+      - "{infinitive} {song} {artist_article} {musician}"
+    slots:
+      - name: song
+        type: AMAZON.MusicRecording
+      - name: musician
+        type: AMAZON.Musician
+
+  PlayAlbumIntent:
+    templates:
+      - "{imperative} {album_noun} {album}"
+      - "{infinitive} {album_noun} {album}"
+      - "{imperative} {album_noun} {album} {artist_article} {musician}"
+      - "{infinitive} {album_noun} {album} {artist_article} {musician}"
+    slots:
+      - name: album
+        type: AMAZON.Album
+      - name: musician
+        type: AMAZON.Musician
+
+  PlayArtistSongsIntent:
+    templates:
+      - "{imperative} {media_noun} {artist_article} {musician}"
+      - "{infinitive} {media_noun} {artist_article} {musician}"
+    slots:
+      - name: musician
+        type: AMAZON.Musician
+
+  PlayLastAddedIntent:
+    templates:
+      - "{imperative} {last_added_phrase}"
+      - "{infinitive} {last_added_phrase}"
+    slots:
+      - name: media_type
+        type: AMAZON.SearchQuery
+
+  PlayFavoritesIntent:
+    templates:
+      - "{imperative} {favorites_noun}"
+      - "{infinitive} {favorites_noun}"
+    slots:
+      - name: media_type
+        type: AMAZON.SearchQuery
