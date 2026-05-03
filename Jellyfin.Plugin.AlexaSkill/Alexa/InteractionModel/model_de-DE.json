@@ -152,6 +152,27 @@
         ]
       },
       {
+        "name": "PlayRandomIntent",
+        "samples": [
+          "Spiele zufällige {media_type}",
+          "Spiele eine zufällige {media_type}",
+          "Zufällige {media_type} abspielen",
+          "Spiele etwas zufälliges",
+          "Spiele zufällige {media_type} aus {genre}",
+          "Überrasche mich mit {media_type}"
+        ],
+        "slots": [
+          {
+            "name": "media_type",
+            "type": "MediaType"
+          },
+          {
+            "name": "genre",
+            "type": "AMAZON.Genre"
+          }
+        ]
+      },
+      {
         "name": "PlayPlaylistIntent",
         "samples": [
           "Spiele die Playlist {playlist}",

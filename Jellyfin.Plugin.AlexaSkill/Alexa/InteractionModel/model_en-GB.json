@@ -145,6 +145,29 @@
         ]
       },
       {
+        "name": "PlayRandomIntent",
+        "samples": [
+          "Play a random {media_type}",
+          "Play random {media_type}",
+          "Shuffle my {media_type}",
+          "Play something random",
+          "Play a random {media_type} from {genre}",
+          "Play random {genre} {media_type}",
+          "Surprise me with some {media_type}",
+          "Shuffle {genre} {media_type}"
+        ],
+        "slots": [
+          {
+            "name": "media_type",
+            "type": "MediaType"
+          },
+          {
+            "name": "genre",
+            "type": "AMAZON.Genre"
+          }
+        ]
+      },
+      {
         "name": "PlayPlaylistIntent",
         "samples": [
           "Play the playlist {playlist}",

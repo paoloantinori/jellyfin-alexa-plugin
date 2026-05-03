@@ -43,5 +43,7 @@
   "DisambiguateNext": "Che ne dici di {0}?",
   "NoMoreMatches": "Spiacente, non ci sono altri risultati.",
   "DisambiguateReprompt": "Puoi dire sì o no.",
-  "UnexpectedYes": "Non sono sicuro di cosa vuoi ascoltare. Puoi chiedermi di riprodurre una canzone, un album o un video."
+  "UnexpectedYes": "Non sono sicuro di cosa vuoi ascoltare. Puoi chiedermi di riprodurre una canzone, un album o un video.",
+  "NotFoundRandom": "Non ho trovato contenuti da riprodurre a caso. Prova ad aggiungere musica alla tua libreria.",
+  "NotFoundRandomGenre": "Non ho trovato contenuti {0} da riprodurre a caso."
 }

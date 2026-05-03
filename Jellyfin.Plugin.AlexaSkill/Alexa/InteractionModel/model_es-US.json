@@ -145,6 +145,27 @@
         ]
       },
       {
+        "name": "PlayRandomIntent",
+        "samples": [
+          "Reproduce {media_type} aleatoria",
+          "Reproduce {media_type} al azar",
+          "Pon {media_type} aleatoria",
+          "Reproduce algo aleatorio",
+          "Reproduce {media_type} aleatoria de {genre}",
+          "Sorpréndeme con {media_type}"
+        ],
+        "slots": [
+          {
+            "name": "media_type",
+            "type": "MediaType"
+          },
+          {
+            "name": "genre",
+            "type": "AMAZON.Genre"
+          }
+        ]
+      },
+      {
         "name": "PlayPlaylistIntent",
         "samples": [
           "Reproduce la lista de reproducción {playlist}",

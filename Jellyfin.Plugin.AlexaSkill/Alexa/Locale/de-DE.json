@@ -43,5 +43,7 @@
   "DisambiguateNext": "Wie waere es mit {0}?",
   "NoMoreMatches": "Entschuldigung, es gibt keine weiteren Treffer.",
   "DisambiguateReprompt": "Du kannst ja oder nein sagen.",
-  "UnexpectedYes": "Ich bin mir nicht sicher, was ich abspielen soll. Du kannst mich bitten, ein Lied, ein Album oder ein Video abzuspielen."
+  "UnexpectedYes": "Ich bin mir nicht sicher, was ich abspielen soll. Du kannst mich bitten, ein Lied, ein Album oder ein Video abzuspielen.",
+  "NotFoundRandom": "Ich konnte keine Medien zum Zufallswiedergabe finden. Füge zuerst etwas Musik zu deiner Bibliothek hinzu.",
+  "NotFoundRandomGenre": "Ich konnte keine {0}-Medien zum Zufallswiedergabe finden."
 }
