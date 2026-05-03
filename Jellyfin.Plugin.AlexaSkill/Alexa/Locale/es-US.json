@@ -63,5 +63,8 @@
   "BrowseItem": "{0}. {1}",
   "NoBrowseResults": "No pude encontrar {0}.",
   "NoRecommendations": "No pude encontrar recomendaciones ahora. ¡Intenta escuchar más música primero!",
-  "RecommendPlaying": "Aquí tienes una recomendación: reproduciendo {0}"
+  "RecommendPlaying": "Aquí tienes una recomendación: reproduciendo {0}",
+  "DidNotCatchSleepTimer": "¿Cuánto tiempo debo poner el temporizador? Por favor di un número de minutos.",
+  "SleepTimerSet": "Temporizador de sueño configurado para {0} minutos. La reproducción se detendrá entonces.",
+  "CancelSleepTimer": "Temporizador cancelado."
 }

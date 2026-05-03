@@ -63,5 +63,8 @@
   "BrowseItem": "{0}. {1}",
   "NoBrowseResults": "Non ho trovato {0}.",
   "NoRecommendations": "Non ho trovato raccomandazioni al momento. Prova ad ascoltare più musica prima!",
-  "RecommendPlaying": "Ecco una raccomandazione per te: riproduco {0}"
+  "RecommendPlaying": "Ecco una raccomandazione per te: riproduco {0}",
+  "DidNotCatchSleepTimer": "Per quanto devo impostare il timer di spegnimento? Per favore indica un numero di minuti.",
+  "SleepTimerSet": "Timer di spegnimento impostato per {0} minuti. La riproduzione si fermerà.",
+  "CancelSleepTimer": "Timer di spegnimento cancellato."
 }

@@ -356,6 +356,23 @@
           "recommend {media_type}",
           "suggest {media_type}"
         ]
+      },
+      {
+        "name": "SleepTimerIntent",
+        "slots": [
+          {
+            "name": "duration_minutes",
+            "type": "AMAZON.NUMBER"
+          }
+        ],
+        "samples": [
+          "stop playing in {duration_minutes} minutes",
+          "set a sleep timer for {duration_minutes} minutes",
+          "sleep timer {duration_minutes} minutes",
+          "stop after {duration_minutes} minutes",
+          "turn off in {duration_minutes} minutes",
+          "set sleep timer {duration_minutes}"
+        ]
       }
     ],
     "types": [

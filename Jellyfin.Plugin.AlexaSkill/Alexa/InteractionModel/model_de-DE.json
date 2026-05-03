@@ -345,6 +345,21 @@
           "spiele etwas das mir gefällt",
           "empfehle {media_type}"
         ]
+      },
+      {
+        "name": "SleepTimerIntent",
+        "slots": [
+          {
+            "name": "duration_minutes",
+            "type": "AMAZON.NUMBER"
+          }
+        ],
+        "samples": [
+          "stoppe in {duration_minutes} minuten",
+          "schlaf-timer {duration_minutes} minuten",
+          "stoppe nach {duration_minutes} minuten",
+          "ausschalten in {duration_minutes} minuten"
+        ]
       }
     ],
     "types": [
