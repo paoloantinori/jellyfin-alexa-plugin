@@ -587,6 +587,26 @@
           "riproduci {series_name} stagione {season_number} episodio {episode_number}",
           "guarda stagione {season_number} episodio {episode_number} di {series_name}"
         ]
+      },
+      {
+        "name": "BrowseLibraryIntent",
+        "slots": [
+          {
+            "name": "browse_category",
+            "type": "BrowseCategory"
+          },
+          {
+            "name": "filter",
+            "type": "AMAZON.SearchQuery"
+          }
+        ],
+        "samples": [
+          "esplora {browse_category}",
+          "mostrami {browse_category}",
+          "elenca {browse_category}",
+          "esplora {browse_category} {filter}",
+          "mostrami {browse_category} di {filter}"
+        ]
       }
     ],
     "types": [
@@ -626,6 +646,36 @@
                 "traccia",
                 "musica"
               ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "BrowseCategory",
+        "values": [
+          {
+            "name": {
+              "value": "artisti"
+            }
+          },
+          {
+            "name": {
+              "value": "album"
+            }
+          },
+          {
+            "name": {
+              "value": "film"
+            }
+          },
+          {
+            "name": {
+              "value": "canzoni"
+            }
+          },
+          {
+            "name": {
+              "value": "generi"
             }
           }
         ]

@@ -307,6 +307,26 @@
           "joue {series_name} saison {season_number} épisode {episode_number}",
           "regarde la saison {season_number} épisode {episode_number} de {series_name}"
         ]
+      },
+      {
+        "name": "BrowseLibraryIntent",
+        "slots": [
+          {
+            "name": "browse_category",
+            "type": "BrowseCategory"
+          },
+          {
+            "name": "filter",
+            "type": "AMAZON.SearchQuery"
+          }
+        ],
+        "samples": [
+          "parcourir {browse_category}",
+          "montre-moi {browse_category}",
+          "lister {browse_category}",
+          "parcourir {browse_category} {filter}",
+          "montre-moi {browse_category} de {filter}"
+        ]
       }
     ],
     "types": [
@@ -342,6 +362,36 @@
                 "chanson",
                 "morceau"
               ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "BrowseCategory",
+        "values": [
+          {
+            "name": {
+              "value": "artistes"
+            }
+          },
+          {
+            "name": {
+              "value": "albums"
+            }
+          },
+          {
+            "name": {
+              "value": "films"
+            }
+          },
+          {
+            "name": {
+              "value": "chansons"
+            }
+          },
+          {
+            "name": {
+              "value": "genres"
             }
           }
         ]
