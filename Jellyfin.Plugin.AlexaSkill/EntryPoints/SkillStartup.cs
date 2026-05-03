@@ -67,92 +67,99 @@ public class SkillStartup : IHostedService, IDisposable
             {
                 token.ThrowIfCancellationRequested();
 
-                // Restart recovery: reconstruct in-memory token from persisted refresh token
-                if (user.SmapiDeviceToken == null && !string.IsNullOrEmpty(user.SmapiRefreshToken))
+                try
                 {
-                    _logger.LogInformation("Recovering SMAPI token for user {UserId} from persisted refresh token", user.Id);
-                    try
+                    // Restart recovery: reconstruct in-memory token from persisted refresh token
+                    if (user.SmapiDeviceToken == null && !string.IsNullOrEmpty(user.SmapiRefreshToken))
                     {
-                        DeviceToken? tokenResult = await LwaClient.RefreshDeviceToken(
-                            new DeviceToken(user.SmapiRefreshToken, user.SmapiRefreshToken, "Bearer", 0),
-                            configuration.LwaClientId,
-                            configuration.LwaClientSecret).ConfigureAwait(false);
-
-                        if (tokenResult != null)
+                        _logger.LogInformation("Recovering SMAPI token for user {UserId} from persisted refresh token", user.Id);
+                        try
                         {
-                            user.SmapiDeviceToken = tokenResult;
-                            user.SmapiRefreshToken = tokenResult.RefreshToken;
+                            DeviceToken? tokenResult = await LwaClient.RefreshDeviceToken(
+                                new DeviceToken(user.SmapiRefreshToken, user.SmapiRefreshToken, "Bearer", 0),
+                                configuration.LwaClientId,
+                                configuration.LwaClientSecret).ConfigureAwait(false);
+
+                            if (tokenResult != null)
+                            {
+                                user.SmapiDeviceToken = tokenResult;
+                                user.SmapiRefreshToken = tokenResult.RefreshToken;
+                                Plugin.Instance.SaveConfiguration();
+                                _logger.LogInformation("SMAPI token recovered for user {UserId}", user.Id);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Failed to recover SMAPI token for user {UserId}. Re-authorization required.", user.Id);
+                            user.SmapiRefreshToken = null;
+                            if (user.UserSkill != null)
+                            {
+                                user.UserSkill.UserSkillStatus = UserSkillStatus.LwaAuthPending;
+                            }
+
                             Plugin.Instance.SaveConfiguration();
-                            _logger.LogInformation("SMAPI token recovered for user {UserId}", user.Id);
+                            continue;
                         }
                     }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Failed to recover SMAPI token for user {UserId}. Re-authorization required.", user.Id);
-                        user.SmapiRefreshToken = null;
-                        if (user.UserSkill != null)
-                        {
-                            user.UserSkill.UserSkillStatus = UserSkillStatus.LwaAuthPending;
-                        }
 
-                        Plugin.Instance.SaveConfiguration();
-                        continue;
+                    if (user.UserSkill != null)
+                    {
+                        Collection<SkillInteractionModel> skillInteractionModels = Plugin.Instance.BuildSkillInteractionModels(user.UserSkill.InvocationName);
+
+                        if (user.UserSkill.SkillId != null && user.SmapiManagement != null)
+                        {
+                            ManifestSkill cloudManifestSkill = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.GetSkillAsync(user.UserSkill.SkillId)).ConfigureAwait(false);
+                            _logger.LogInformation("Skill version (cloud) for user {UserId}: {Version}", user.Id, cloudManifestSkill.GetVersionTag());
+
+                            AccountLinkData accountLinkingData = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.GetAccountLinkDataAsync(user.UserSkill.SkillId)).ConfigureAwait(false);
+
+                            SkillStatus status = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.GetSkillStatusAsync(user.UserSkill.SkillId)).ConfigureAwait(false);
+
+                            if (cloudManifestSkill.GetVersionTag() != Util.GetVersion()
+                                || status.Manifest.LastModified.Status == SkillStatusState.FAILED)
+                            {
+                                _logger.LogInformation("Skill for user {UserId} is outdated. Updating...", user.Id);
+                                await AlexaUtil.CallAsync<object?>(user, () =>
+                                {
+                                    user.SmapiManagement.UpdateSkillAsync(user.UserSkill.SkillId, manifestSkill, skillInteractionModels);
+                                    return Task.FromResult<object?>(null);
+                                }).ConfigureAwait(false);
+                            }
+
+                            if (!accountLinkingData.AuthorizationUrl.Equals(endpointUriString, StringComparison.Ordinal)
+                                || !Plugin.Instance.Configuration.AccountLinkingClientId.Equals(accountLinkingData.ClientId, StringComparison.Ordinal))
+                            {
+                                _logger.LogInformation("Account linking data for user {UserId} is outdated. Updating...", user.Id);
+                                await AlexaUtil.CallAsync<object?>(user, () =>
+                                {
+                                    user.SmapiManagement.UpdateAccountLinkData(
+                                        user.UserSkill.SkillId,
+                                        configuration.ServerAddress,
+                                        configuration.AccountLinkingClientId);
+                                    return Task.FromResult<object?>(null);
+                                }).ConfigureAwait(false);
+                            }
+                        }
+                        else if (user.SmapiManagement != null)
+                        {
+                            user.UserSkill.UserSkillStatus = UserSkillStatus.SkillCreating;
+
+                            _logger.LogInformation("Skill for user {UserId} not in cloud. Creating...", user.Id);
+                            string skillId = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.CreateSkillAsync(
+                                manifestSkill,
+                                skillInteractionModels,
+                                configuration.ServerAddress,
+                                configuration.AccountLinkingClientId)).ConfigureAwait(false);
+
+                            user.UserSkill.SkillId = skillId;
+                            user.UserSkill.UserSkillStatus = UserSkillStatus.AccountLinkPending;
+                            Plugin.Instance.SaveConfiguration();
+                        }
                     }
                 }
-
-                if (user.UserSkill != null)
+                catch (Exception ex)
                 {
-                    Collection<SkillInteractionModel> skillInteractionModels = Plugin.Instance.BuildSkillInteractionModels(user.UserSkill.InvocationName);
-
-                    if (user.UserSkill.SkillId != null && user.SmapiManagement != null)
-                    {
-                        ManifestSkill cloudManifestSkill = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.GetSkillAsync(user.UserSkill.SkillId)).ConfigureAwait(false);
-                        _logger.LogInformation("Skill version (cloud) for user {UserId}: {Version}", user.Id, cloudManifestSkill.GetVersionTag());
-
-                        AccountLinkData accountLinkingData = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.GetAccountLinkDataAsync(user.UserSkill.SkillId)).ConfigureAwait(false);
-
-                        SkillStatus status = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.GetSkillStatusAsync(user.UserSkill.SkillId)).ConfigureAwait(false);
-
-                        if (cloudManifestSkill.GetVersionTag() != Util.GetVersion()
-                            || status.Manifest.LastModified.Status == SkillStatusState.FAILED)
-                        {
-                            _logger.LogInformation("Skill for user {UserId} is outdated. Updating...", user.Id);
-                            await AlexaUtil.CallAsync<object?>(user, () =>
-                            {
-                                user.SmapiManagement.UpdateSkillAsync(user.UserSkill.SkillId, manifestSkill, skillInteractionModels);
-                                return Task.FromResult<object?>(null);
-                            }).ConfigureAwait(false);
-                        }
-
-                        if (!accountLinkingData.AuthorizationUrl.Equals(endpointUriString, StringComparison.Ordinal)
-                            || !Plugin.Instance.Configuration.AccountLinkingClientId.Equals(accountLinkingData.ClientId, StringComparison.Ordinal))
-                        {
-                            _logger.LogInformation("Account linking data for user {UserId} is outdated. Updating...", user.Id);
-                            await AlexaUtil.CallAsync<object?>(user, () =>
-                            {
-                                user.SmapiManagement.UpdateAccountLinkData(
-                                    user.UserSkill.SkillId,
-                                    configuration.ServerAddress,
-                                    configuration.AccountLinkingClientId);
-                                return Task.FromResult<object?>(null);
-                            }).ConfigureAwait(false);
-                        }
-                    }
-                    else if (user.SmapiManagement != null)
-                    {
-                        user.UserSkill.UserSkillStatus = UserSkillStatus.SkillCreating;
-
-                        _logger.LogInformation("Skill for user {UserId} not in cloud. Creating...", user.Id);
-                        string skillId = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.CreateSkillAsync(
-                            manifestSkill,
-                            skillInteractionModels,
-                            configuration.ServerAddress,
-                            configuration.AccountLinkingClientId)).ConfigureAwait(false);
-
-                        user.UserSkill.SkillId = skillId;
-                        user.UserSkill.UserSkillStatus = UserSkillStatus.AccountLinkPending;
-                        Plugin.Instance.SaveConfiguration();
-                    }
+                    _logger.LogError(ex, "Error processing skill for user {UserId}. Continuing with other users.", user.Id);
                 }
             }
         }, token);
