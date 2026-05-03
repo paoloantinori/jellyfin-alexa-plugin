@@ -8,8 +8,10 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
 using AlexaSession = Alexa.NET.Request.Session;
@@ -243,6 +245,42 @@ public abstract class BaseHandler
     protected Task<T> RetryAsync<T>(Func<T> operation, string operationName, CancellationToken cancellationToken = default)
     {
         return RetryHelper.ExecuteWithRetryAsync(operation, Logger, operationName, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>
+    /// Execute a library search with caching. On success, results are cached.
+    /// On failure, returns cached results if available.
+    /// </summary>
+    /// <param name="userId">The user ID for cache partitioning.</param>
+    /// <param name="queryKey">Normalized cache key (search term + filters).</param>
+    /// <param name="operation">The library query to execute.</param>
+    /// <param name="operationName">Name for logging.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A tuple of search results and whether they came from cache.</returns>
+    protected async Task<(IReadOnlyList<BaseItem> Results, bool FromCache)> CachedSearchAsync(
+        Guid userId,
+        string queryKey,
+        Func<IReadOnlyList<BaseItem>> operation,
+        string operationName,
+        CancellationToken cancellationToken)
+    {
+        SearchResultCache cache = Plugin.Instance?.SearchCache ?? SearchResultCache.Noop;
+
+        try
+        {
+            IReadOnlyList<BaseItem> results = await RetryAsync(operation, operationName, cancellationToken).ConfigureAwait(false);
+            cache.Put(userId, queryKey, results);
+            return (results, false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (cache.TryGet(userId, queryKey, out IReadOnlyList<BaseItem>? cached))
+        {
+            Logger.LogWarning(ex, "Library search failed for {Operation}, serving cached results", operationName);
+            return (cached!, true);
+        }
     }
 
     /// <summary>

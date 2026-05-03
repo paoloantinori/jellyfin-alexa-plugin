@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Alexa.NET.Management.AccountLinking;
 using Alexa.NET.Management.Skills;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Alexa.InteractionModel;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Manifest;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -26,6 +27,7 @@ public class SkillStartup : IHostedService, IDisposable
     private readonly ILogger<SkillStartup> _logger;
     private readonly ISessionManager _sessionManager;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly SearchResultCache _searchCache;
     private CancellationTokenSource? _cts;
     private Task? _runningTask;
     private bool _disposed;
@@ -36,10 +38,12 @@ public class SkillStartup : IHostedService, IDisposable
     /// <param name="sessionManager">Session manager.</param>
     /// <param name="loggerFactory">Logger.</param>
     /// <param name="httpClientFactory">HTTP client factory for outbound calls.</param>
-    public SkillStartup(ISessionManager sessionManager, ILoggerFactory loggerFactory, IHttpClientFactory httpClientFactory)
+    /// <param name="searchCache">Search result cache for fallback.</param>
+    public SkillStartup(ISessionManager sessionManager, ILoggerFactory loggerFactory, IHttpClientFactory httpClientFactory, SearchResultCache searchCache)
     {
         _sessionManager = sessionManager;
         _httpClientFactory = httpClientFactory;
+        _searchCache = searchCache;
         _logger = loggerFactory.CreateLogger<SkillStartup>();
     }
 
@@ -49,6 +53,7 @@ public class SkillStartup : IHostedService, IDisposable
         _logger.LogInformation("Skill version (local): v{Version}", Util.GetVersion());
 
         Plugin.Instance!._httpClientFactory = _httpClientFactory;
+        Plugin.Instance!.SearchCache = _searchCache;
 
         PluginConfiguration configuration = Plugin.Instance!.Configuration;
 

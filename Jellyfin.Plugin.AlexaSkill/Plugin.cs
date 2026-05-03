@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Net.Http;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Alexa.InteractionModel;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Manifest;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -72,6 +73,11 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     /// Sets the HttpClientFactory from DI registration.
     /// </summary>
     internal IHttpClientFactory? _httpClientFactory;
+
+    /// <summary>
+    /// Gets the search result cache for fallback on API failures.
+    /// </summary>
+    public SearchResultCache SearchCache { get; internal set; } = SearchResultCache.Noop;
 
     /// <summary>
     /// Gets or sets the skill manifest.

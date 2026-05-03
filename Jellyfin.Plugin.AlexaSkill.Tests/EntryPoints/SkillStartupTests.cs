@@ -1,6 +1,7 @@
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.EntryPoints;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,6 +16,7 @@ public class SkillStartupTests
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly ILoggerFactory _loggerFactory;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly SearchResultCache _searchCache;
 
     public SkillStartupTests()
     {
@@ -22,12 +24,15 @@ public class SkillStartupTests
         _loggerFactory = LoggerFactory.Create(b => { });
         var services = new ServiceCollection();
         services.AddHttpClient();
-        _httpClientFactory = services.BuildServiceProvider().GetRequiredService<IHttpClientFactory>();
+        services.AddSingleton<SearchResultCache>();
+        var provider = services.BuildServiceProvider();
+        _httpClientFactory = provider.GetRequiredService<IHttpClientFactory>();
+        _searchCache = provider.GetRequiredService<SearchResultCache>();
     }
 
     private SkillStartup CreateStartup()
     {
-        return new SkillStartup(_sessionManagerMock.Object, _loggerFactory, _httpClientFactory);
+        return new SkillStartup(_sessionManagerMock.Object, _loggerFactory, _httpClientFactory, _searchCache);
     }
 
     [Fact]
