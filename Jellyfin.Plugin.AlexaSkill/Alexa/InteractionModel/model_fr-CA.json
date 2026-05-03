@@ -285,6 +285,28 @@
           "afficher ma progression",
           "qu'ai-je commencé"
         ]
+      },
+      {
+        "name": "PlayEpisodeIntent",
+        "slots": [
+          {
+            "name": "series_name",
+            "type": "AMAZON.Series"
+          },
+          {
+            "name": "season_number",
+            "type": "AMAZON.NUMBER"
+          },
+          {
+            "name": "episode_number",
+            "type": "AMAZON.NUMBER"
+          }
+        ],
+        "samples": [
+          "joue la saison {season_number} épisode {episode_number} de {series_name}",
+          "joue {series_name} saison {season_number} épisode {episode_number}",
+          "regarde la saison {season_number} épisode {episode_number} de {series_name}"
+        ]
       }
     ],
     "types": [

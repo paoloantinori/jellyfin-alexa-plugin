@@ -281,6 +281,28 @@
           "muestra mi progreso",
           "qué he empezado"
         ]
+      },
+      {
+        "name": "PlayEpisodeIntent",
+        "slots": [
+          {
+            "name": "series_name",
+            "type": "AMAZON.Series"
+          },
+          {
+            "name": "season_number",
+            "type": "AMAZON.NUMBER"
+          },
+          {
+            "name": "episode_number",
+            "type": "AMAZON.NUMBER"
+          }
+        ],
+        "samples": [
+          "reproduce la temporada {season_number} episodio {episode_number} de {series_name}",
+          "reproduce {series_name} temporada {season_number} episodio {episode_number}",
+          "ver temporada {season_number} episodio {episode_number} de {series_name}"
+        ]
       }
     ],
     "types": [

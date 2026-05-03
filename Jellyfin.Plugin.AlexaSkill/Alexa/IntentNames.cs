@@ -22,6 +22,7 @@ internal static class IntentNames
     public const string ContinueWatching = "ContinueWatchingIntent";
     public const string GoToChapter = "GoToChapterIntent";
     public const string InProgressMediaList = "InProgressMediaListIntent";
+    public const string PlayEpisode = "PlayEpisodeIntent";
     public const string LoopSongOn = "LoopSongOnIntent";
 
     public const string AmazonFallback = "AMAZON.FallbackIntent";

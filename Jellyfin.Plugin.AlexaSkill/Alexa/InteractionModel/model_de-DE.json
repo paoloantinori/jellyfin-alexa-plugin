@@ -286,6 +286,28 @@
           "zeige meinen fortschritt",
           "was habe ich angefangen"
         ]
+      },
+      {
+        "name": "PlayEpisodeIntent",
+        "slots": [
+          {
+            "name": "series_name",
+            "type": "AMAZON.Series"
+          },
+          {
+            "name": "season_number",
+            "type": "AMAZON.NUMBER"
+          },
+          {
+            "name": "episode_number",
+            "type": "AMAZON.NUMBER"
+          }
+        ],
+        "samples": [
+          "spiele staffel {season_number} folge {episode_number} von {series_name}",
+          "spiele {series_name} staffel {season_number} folge {episode_number}",
+          "schau staffel {season_number} folge {episode_number} von {series_name}"
+        ]
       }
     ],
     "types": [
