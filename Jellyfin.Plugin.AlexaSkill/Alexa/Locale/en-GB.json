@@ -50,5 +50,8 @@
   "NotFoundGenre": "Sorry, I couldn't find any {0} music in your library.",
   "NoContinueWatching": "You don't have any media in progress. Try playing something first!",
   "NoChapters": "This media doesn't have chapters.",
-  "ChapterNotFound": "Chapter {0} not found. There are {1} chapters total."
+  "ChapterNotFound": "Chapter {0} not found. There are {1} chapters total.",
+  "NoInProgressMedia": "You don't have any media in progress.",
+  "InProgressList": "You have {0} items in progress: {1}",
+  "InProgressItemWithPosition": "{0} at {1}"
 }

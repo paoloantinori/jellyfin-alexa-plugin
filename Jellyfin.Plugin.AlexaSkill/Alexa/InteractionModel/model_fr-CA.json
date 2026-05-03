@@ -275,6 +275,16 @@
           "Quel est le titre de la vidéo",
           "Qu'est-ce qui est en cours de lecture"
         ]
+      },
+      {
+        "name": "InProgressMediaListIntent",
+        "samples": [
+          "qu'est-ce que j'écoute",
+          "qu'est-ce que je regarde",
+          "quoi en cours",
+          "afficher ma progression",
+          "qu'ai-je commencé"
+        ]
       }
     ],
     "types": [

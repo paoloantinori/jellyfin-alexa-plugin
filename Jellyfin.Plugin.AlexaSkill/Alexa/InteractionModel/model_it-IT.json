@@ -555,6 +555,16 @@
           "Di chi è questa",
           "Di chi è questa canzone"
         ]
+      },
+      {
+        "name": "InProgressMediaListIntent",
+        "samples": [
+          "cosa sto ascoltando",
+          "cosa sto guardando",
+          "cosa è in corso",
+          "mostra i miei progressi",
+          "cosa ho iniziato"
+        ]
       }
     ],
     "types": [
