@@ -191,6 +191,27 @@
         ]
       },
       {
+        "name": "GoToChapterIntent",
+        "samples": [
+          "Siguiente capítulo",
+          "Capítulo anterior",
+          "Ir al capítulo {chapter_number}",
+          "Saltar al capítulo {chapter_number}",
+          "Avanzar un capítulo",
+          "Retroceder un capítulo"
+        ],
+        "slots": [
+          {
+            "name": "direction",
+            "type": "AMAZON.SearchQuery"
+          },
+          {
+            "name": "chapter_number",
+            "type": "AMAZON.NUMBER"
+          }
+        ]
+      },
+      {
         "name": "PlayPlaylistIntent",
         "samples": [
           "Reproduce la lista de reproducción {playlist}",
