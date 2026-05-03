@@ -154,7 +154,8 @@
       {
         "name": "PlayPlaylistIntent",
         "samples": [
-          "Riproduci playlist {playlist}"
+          "Riproduci playlist {playlist}",
+          "Metti playlist {playlist}"
         ],
         "slots": [
           {
@@ -166,7 +167,13 @@
       {
         "name": "PlayFavoritesIntent",
         "samples": [
-          "Riproduci {media_type} preferiti"
+          "Riproduci i miei preferiti",
+          "Riproduci {media_type} preferiti",
+          "Suona i miei preferiti",
+          "Suona {media_type} preferiti",
+          "Metti i miei preferiti",
+          "Metti {media_type} preferiti",
+          "Ascolta i miei preferiti"
         ],
         "slots": [
           {
@@ -181,7 +188,9 @@
           "Questa è bella",
           "Mi piace questa canzone",
           "Ci piace",
-          "Aggiungi ai preferiti"
+          "Aggiungi ai preferiti",
+          "Mi piace questo brano",
+          "Aggiungi ai preferiti questo brano"
         ]
       },
       {
@@ -190,7 +199,9 @@
           "Questa è brutta",
           "Non mi piace questa canzone",
           "Non ci piace",
-          "Togli dai preferiti"
+          "Togli dai preferiti",
+          "Non mi piace questo brano",
+          "Rimuovi dai preferiti"
         ]
       },
       {
@@ -198,7 +209,9 @@
         "samples": [
           "Che canzone è questa",
           "Cosa c'è in riproduzione",
-          "Che film è questo"
+          "Che film è questo",
+          "Che cosa sta suonando",
+          "Dimmi che brano è questo"
         ]
       }
     ],
