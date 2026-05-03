@@ -29,6 +29,7 @@ public class Registrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<IRequestInterceptor, LoggingRequestInterceptor>();
         serviceCollection.AddSingleton<IResponseInterceptor, SessionAttributesInterceptor>();
         serviceCollection.AddSingleton<IResponseInterceptor, LoggingResponseInterceptor>();
+        serviceCollection.AddSingleton<IResponseInterceptor, MetricsResponseInterceptor>();
 
         // Request pipeline
         serviceCollection.AddSingleton<RequestPipeline>();

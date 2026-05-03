@@ -73,7 +73,8 @@ public class DiagnosticsController : ControllerBase
             {
                 _counters.TotalRequests,
                 _counters.TotalErrors,
-                PerType = _counters.PerType.ToDictionary(k => k.Key, v => v.Value)
+                PerType = _counters.PerType.ToDictionary(k => k.Key, v => v.Value),
+                PerIntent = _counters.GetIntentMetrics()
             },
             Health = new
             {
@@ -84,6 +85,64 @@ public class DiagnosticsController : ControllerBase
 
         return new JsonResult(result);
     }
+
+    /// <summary>
+    /// Get per-intent request metrics with timing data.
+    /// </summary>
+    /// <returns>A JSON object with per-intent counts, average/min/max response times, and error counts.</returns>
+    [HttpGet("diagnostics/metrics")]
+    [Authorize(Policy = "RequiresElevation")]
+    public ActionResult GetMetrics()
+    {
+        var result = new
+        {
+            TotalRequests = _counters.TotalRequests,
+            TotalErrors = _counters.TotalErrors,
+            ErrorRate = ComputeErrorRate(),
+            Uptime = _counters.Uptime.ToString(),
+            PerType = _counters.PerType.ToDictionary(k => k.Key, v => v.Value),
+            Intents = _counters.GetIntentMetrics()
+                .OrderByDescending(kvp => kvp.Value.Count)
+                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
+        };
+
+        return new JsonResult(result);
+    }
+
+    /// <summary>
+    /// Get a lightweight health check for monitoring.
+    /// </summary>
+    /// <returns>A JSON object with health status, uptime, and error rate.</returns>
+    [HttpGet("diagnostics/health")]
+    [Authorize(Policy = "RequiresElevation")]
+    public ActionResult GetHealth()
+    {
+        var config = Plugin.Instance!.Configuration;
+        var validationErrors = config.Validate();
+
+        string status = DetermineHealthStatus(config, validationErrors);
+
+        if (status == "Healthy" && _counters.TotalRequests > 10 && ComputeErrorRate() > 0.1)
+        {
+            status = "Degraded";
+        }
+
+        var result = new
+        {
+            Status = status,
+            Version = Util.GetVersion(),
+            Uptime = _counters.Uptime.ToString(),
+            TotalRequests = _counters.TotalRequests,
+            TotalErrors = _counters.TotalErrors,
+            ErrorRate = Math.Round(ComputeErrorRate(), 4),
+            CheckedAt = DateTime.UtcNow
+        };
+
+        return new JsonResult(result);
+    }
+
+    private double ComputeErrorRate() =>
+        _counters.TotalRequests > 0 ? (double)_counters.TotalErrors / _counters.TotalRequests : 0;
 
     private static string DetermineHealthStatus(Configuration.PluginConfiguration config, List<string> validationErrors)
     {
