@@ -276,6 +276,16 @@
           "Welcher Titel laeuft gerade",
           "Was wird gerade abgespielt"
         ]
+      },
+      {
+        "name": "InProgressMediaListIntent",
+        "samples": [
+          "was höre ich gerade",
+          "was schaue ich gerade",
+          "was ist in bearbeitung",
+          "zeige meinen fortschritt",
+          "was habe ich angefangen"
+        ]
       }
     ],
     "types": [

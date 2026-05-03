@@ -271,6 +271,16 @@
           "Cuál es el título de esta música",
           "Qué está sonando ahora"
         ]
+      },
+      {
+        "name": "InProgressMediaListIntent",
+        "samples": [
+          "qué estoy escuchando",
+          "qué estoy viendo",
+          "qué está en progreso",
+          "muestra mi progreso",
+          "qué he empezado"
+        ]
       }
     ],
     "types": [

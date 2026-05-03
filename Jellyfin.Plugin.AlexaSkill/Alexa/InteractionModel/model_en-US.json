@@ -277,6 +277,19 @@
           "What is the title of the music",
           "What is currently playing"
         ]
+      },
+      {
+        "name": "InProgressMediaListIntent",
+        "samples": [
+          "what am i listening to",
+          "what am i watching",
+          "what's in progress",
+          "what is in progress",
+          "show my progress",
+          "what was i playing",
+          "list my in progress media",
+          "what have i started"
+        ]
       }
     ],
     "types": [
