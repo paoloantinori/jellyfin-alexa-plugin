@@ -82,7 +82,7 @@ public class PlayEpisodeIntentHandler : BaseHandler
             IncludeItemTypes = new[] { BaseItemKind.Series },
             DtoOptions = new DtoOptions(true)
         };
-        IReadOnlyList<BaseItem> seriesList = _libraryManager.GetItemList(seriesQuery);
+        IReadOnlyList<BaseItem> seriesList = await RetryAsync(() => _libraryManager.GetItemList(seriesQuery), "GetSeries", cancellationToken).ConfigureAwait(false);
 
         if (seriesList.Count == 0)
         {
@@ -100,7 +100,7 @@ public class PlayEpisodeIntentHandler : BaseHandler
             ParentIndexNumber = seasonNumber,
             DtoOptions = new DtoOptions(true)
         };
-        IReadOnlyList<BaseItem> episodes = _libraryManager.GetItemList(episodeQuery);
+        IReadOnlyList<BaseItem> episodes = await RetryAsync(() => _libraryManager.GetItemList(episodeQuery), "GetEpisodes", cancellationToken).ConfigureAwait(false);
 
         BaseItem? episode = episodes.FirstOrDefault(e => e.IndexNumber == episodeNumber);
 

@@ -113,7 +113,7 @@ public class PlayMoodMusicIntentHandler : BaseHandler
                 DtoOptions = new DtoOptions(true)
             };
 
-            IReadOnlyList<BaseItem> items = _libraryManager.GetItemList(query);
+            IReadOnlyList<BaseItem> items = await RetryAsync(() => _libraryManager.GetItemList(query), "GetMoodItems", cancellationToken).ConfigureAwait(false);
 
             if (items.Count > 0)
             {

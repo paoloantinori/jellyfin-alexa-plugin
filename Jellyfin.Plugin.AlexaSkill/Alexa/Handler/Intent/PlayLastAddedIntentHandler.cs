@@ -72,7 +72,7 @@ public class PlayLastAddedIntentHandler : BaseHandler
             DtoOptions = new MediaBrowser.Controller.Dto.DtoOptions(true)
         };
 
-        IReadOnlyList<BaseItem> latestItems = _libraryManager.GetItemList(query);
+        IReadOnlyList<BaseItem> latestItems = await RetryAsync(() => _libraryManager.GetItemList(query), "GetLatestItems", cancellationToken).ConfigureAwait(false);
 
         if (latestItems.Count == 0)
         {

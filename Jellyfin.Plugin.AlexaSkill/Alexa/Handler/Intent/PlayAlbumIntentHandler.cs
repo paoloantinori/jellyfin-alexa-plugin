@@ -77,14 +77,14 @@ public class PlayAlbumIntentHandler : BaseHandler
         List<Guid> artistsIds = new List<Guid>();
         if (musician != null)
         {
-            IReadOnlyList<BaseItem> artists = _libraryManager.GetItemList(new InternalItemsQuery()
+            IReadOnlyList<BaseItem> artists = await RetryAsync(() => _libraryManager.GetItemList(new InternalItemsQuery()
             {
                 User = jellyfinUser,
                 Recursive = true,
                 SearchTerm = musician,
                 IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
                 DtoOptions = new DtoOptions(true)
-            });
+            }), "GetArtists", cancellationToken).ConfigureAwait(false);
             if (artists.Count == 0)
             {
                 return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByArtist", locale, musician));
@@ -96,7 +96,7 @@ public class PlayAlbumIntentHandler : BaseHandler
             }
         }
 
-        IReadOnlyList<BaseItem> albums = _libraryManager.GetItemList(new InternalItemsQuery()
+        IReadOnlyList<BaseItem> albums = await RetryAsync(() => _libraryManager.GetItemList(new InternalItemsQuery()
         {
             User = jellyfinUser,
             Recursive = true,
@@ -104,7 +104,7 @@ public class PlayAlbumIntentHandler : BaseHandler
             ArtistIds = artistsIds.ToArray(),
             IncludeItemTypes = new[] { BaseItemKind.MusicAlbum },
             DtoOptions = new DtoOptions(true)
-        });
+        }), "GetAlbums", cancellationToken).ConfigureAwait(false);
         if (albums.Count == 0 && musician != null)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByNameAndArtist", locale, album, musician));
@@ -122,14 +122,14 @@ public class PlayAlbumIntentHandler : BaseHandler
         }
 
         // Get all songs from the album
-        IReadOnlyList<BaseItem> albumItems = _libraryManager.GetItemList(new InternalItemsQuery()
+        IReadOnlyList<BaseItem> albumItems = await RetryAsync(() => _libraryManager.GetItemList(new InternalItemsQuery()
         {
             User = jellyfinUser,
             Recursive = true,
             ParentId = albums[0].Id,
             MediaTypes = new[] { MediaType.Audio },
             DtoOptions = new DtoOptions(true),
-        });
+        }), "GetAlbumTracks", cancellationToken).ConfigureAwait(false);
         if (albumItems.Count == 0)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NoSongsInAlbum", locale, album));

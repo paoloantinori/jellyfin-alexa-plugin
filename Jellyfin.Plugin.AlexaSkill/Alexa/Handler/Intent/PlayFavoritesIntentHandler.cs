@@ -71,7 +71,7 @@ public class PlayFavoritesIntentHandler : BaseHandler
             DtoOptions = new MediaBrowser.Controller.Dto.DtoOptions(true)
         };
 
-        IReadOnlyList<BaseItem> favoriteItems = _libraryManager.GetItemList(query);
+        IReadOnlyList<BaseItem> favoriteItems = await RetryAsync(() => _libraryManager.GetItemList(query), "GetFavoriteItems", cancellationToken).ConfigureAwait(false);
 
         if (favoriteItems.Count == 0)
         {

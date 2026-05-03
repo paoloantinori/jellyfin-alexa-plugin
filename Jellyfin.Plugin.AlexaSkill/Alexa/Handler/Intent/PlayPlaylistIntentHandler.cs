@@ -83,7 +83,7 @@ public class PlayPlaylistIntentHandler : BaseHandler
             DtoOptions = new DtoOptions(true),
         };
 
-        QueryResult<BaseItem> playlists = _libraryManager.GetItemsResult(query);
+        QueryResult<BaseItem> playlists = await RetryAsync(() => _libraryManager.GetItemsResult(query), "GetPlaylists", cancellationToken).ConfigureAwait(false);
 
         if (playlists.TotalRecordCount == 0)
         {

@@ -86,7 +86,7 @@ public class ContinueWatchingIntentHandler : BaseHandler
             DtoOptions = new DtoOptions(true)
         };
 
-        IReadOnlyList<BaseItem> recentItems = _libraryManager.GetItemList(query);
+        IReadOnlyList<BaseItem> recentItems = await RetryAsync(() => _libraryManager.GetItemList(query), "GetRecentItems", cancellationToken).ConfigureAwait(false);
 
         // Find the most recently played item with a non-trivial resume position
         BaseItem? resumeItem = null;

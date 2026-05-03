@@ -104,7 +104,7 @@ public class PlayRandomIntentHandler : BaseHandler
             query.Genres = new[] { genreSlot };
         }
 
-        IReadOnlyList<BaseItem> items = _libraryManager.GetItemList(query);
+        IReadOnlyList<BaseItem> items = await RetryAsync(() => _libraryManager.GetItemList(query), "GetRandomItems", cancellationToken).ConfigureAwait(false);
 
         if (items.Count == 0)
         {
@@ -121,7 +121,7 @@ public class PlayRandomIntentHandler : BaseHandler
         // For albums, expand the first album to tracks
         if (shuffled[0] is MediaBrowser.Controller.Entities.Audio.MusicAlbum album)
         {
-            IReadOnlyList<BaseItem> tracks = ExpandAlbumToTracks(album, jellyfinUser);
+            IReadOnlyList<BaseItem> tracks = await ExpandAlbumToTracks(album, jellyfinUser, cancellationToken).ConfigureAwait(false);
             if (tracks.Count > 0)
             {
                 shuffled = tracks.ToList();
@@ -190,16 +190,16 @@ public class PlayRandomIntentHandler : BaseHandler
         }
     }
 
-    private IReadOnlyList<BaseItem> ExpandAlbumToTracks(MediaBrowser.Controller.Entities.Audio.MusicAlbum album, Jellyfin.Database.Implementations.Entities.User jellyfinUser)
+    private async Task<IReadOnlyList<BaseItem>> ExpandAlbumToTracks(MediaBrowser.Controller.Entities.Audio.MusicAlbum album, Jellyfin.Database.Implementations.Entities.User jellyfinUser, CancellationToken cancellationToken)
     {
-        return _libraryManager.GetItemList(new InternalItemsQuery
+        return await RetryAsync(() => _libraryManager.GetItemList(new InternalItemsQuery
         {
             User = jellyfinUser,
             ParentId = album.Id,
             IncludeItemTypes = new[] { BaseItemKind.Audio },
             Recursive = true,
             DtoOptions = new DtoOptions(true)
-        });
+        }), "GetAlbumTracks", cancellationToken).ConfigureAwait(false);
     }
 
     private static void Shuffle<T>(List<T> list)

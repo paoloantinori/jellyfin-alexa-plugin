@@ -81,7 +81,11 @@ public abstract class BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("UserNotFound", GetLocale(request)));
         }
 
-        SessionInfo session = await SessionManager.GetSessionByAuthenticationToken(user.JellyfinToken, context.System.Device.DeviceID, Plugin.Instance!.Configuration.ServerAddress).ConfigureAwait(false);
+        SessionInfo session = await RetryHelper.ExecuteWithRetryAsync(
+            () => SessionManager.GetSessionByAuthenticationToken(user.JellyfinToken, context.System.Device.DeviceID, Plugin.Instance!.Configuration.ServerAddress),
+            Logger,
+            "GetSessionByAuthToken",
+            cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return await HandleAsync(request, context, user, session, alexaSession?.Attributes, cancellationToken).ConfigureAwait(false);
     }
@@ -226,6 +230,19 @@ public abstract class BaseHandler
         {
             Logger.LogWarning(ex, "Failed to send progressive response");
         }
+    }
+
+    /// <summary>
+    /// Execute a synchronous Jellyfin API call with retry logic and exponential backoff.
+    /// </summary>
+    /// <typeparam name="T">The return type.</typeparam>
+    /// <param name="operation">The synchronous operation to execute.</param>
+    /// <param name="operationName">Name for logging (e.g. "GetItemsList").</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The result of the operation.</returns>
+    protected Task<T> RetryAsync<T>(Func<T> operation, string operationName, CancellationToken cancellationToken = default)
+    {
+        return RetryHelper.ExecuteWithRetryAsync(operation, Logger, operationName, cancellationToken: cancellationToken);
     }
 
     /// <summary>

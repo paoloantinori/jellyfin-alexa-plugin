@@ -63,14 +63,14 @@ public class PlayVideoIntentHandler : BaseHandler
 
         Jellyfin.Database.Implementations.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
 
-        IReadOnlyList<BaseItem> videos = _libraryManager.GetItemList(new InternalItemsQuery()
+        IReadOnlyList<BaseItem> videos = await RetryAsync(() => _libraryManager.GetItemList(new InternalItemsQuery()
         {
             User = jellyfinUser,
             Recursive = true,
             SearchTerm = titleQuery,
             IncludeItemTypes = new[] { BaseItemKind.Movie, BaseItemKind.Episode },
             DtoOptions = new DtoOptions(true)
-        });
+        }), "GetVideos", cancellationToken).ConfigureAwait(false);
 
         if (videos.Count == 0)
         {

@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 
 namespace Jellyfin.Plugin.AlexaSkill.Lwa;
@@ -12,6 +14,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Lwa;
 /// </summary>
 public static class LwaClient
 {
+    private static ILogger Logger => Plugin.Instance?.LoggerFactory.CreateLogger(nameof(LwaClient))
+        ?? LoggerFactory.Create(b => { }).CreateLogger(nameof(LwaClient));
+
     /// <summary>
     /// Create a device authorization request to LWA.
     /// </summary>
@@ -41,7 +46,10 @@ public static class LwaClient
             { "scope", scopeString }
         });
 
-        HttpResponseMessage response = await Plugin.HttpClient.PostAsync(url, formUrlEncodedContent).ConfigureAwait(false);
+        HttpResponseMessage response = await RetryHelper.ExecuteWithRetryAsync(
+            () => Plugin.HttpClient.PostAsync(url, formUrlEncodedContent),
+            Logger,
+            "LwaDeviceAuth").ConfigureAwait(false);
         if (response.IsSuccessStatusCode)
         {
             string content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
@@ -136,7 +144,10 @@ public static class LwaClient
             { "redirect_uri", redirectUri }
         });
 
-        HttpResponseMessage response = await Plugin.HttpClient.PostAsync(url, formUrlEncodedContent)
+        HttpResponseMessage response = await RetryHelper.ExecuteWithRetryAsync(
+            () => Plugin.HttpClient.PostAsync(url, formUrlEncodedContent),
+            Logger,
+            "LwaExchangeCode")
             .ConfigureAwait(false);
 
         string content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
@@ -169,7 +180,10 @@ public static class LwaClient
             { "client_secret", clientSecret }
         });
 
-        HttpResponseMessage response = await Plugin.HttpClient.PostAsync(url, formUrlEncodedContent).ConfigureAwait(false);
+        HttpResponseMessage response = await RetryHelper.ExecuteWithRetryAsync(
+            () => Plugin.HttpClient.PostAsync(url, formUrlEncodedContent),
+            Logger,
+            "LwaRefreshToken").ConfigureAwait(false);
 
         string content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 

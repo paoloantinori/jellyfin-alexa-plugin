@@ -100,18 +100,18 @@ public class BrowseLibraryIntentHandler : BaseHandler
         switch (browseCategory.ToLowerInvariant())
         {
             case "artists":
-                items = QueryItems(BaseItemKind.MusicArtist, filter, jellyfinUser);
+                items = await QueryItems(BaseItemKind.MusicArtist, filter, jellyfinUser, cancellationToken).ConfigureAwait(false);
                 break;
             case "albums":
-                items = QueryItems(BaseItemKind.MusicAlbum, filter, jellyfinUser);
+                items = await QueryItems(BaseItemKind.MusicAlbum, filter, jellyfinUser, cancellationToken).ConfigureAwait(false);
                 break;
             case "genres":
-                return HandleGenresQuery(filter, locale, jellyfinUser);
+                return await HandleGenresQuery(filter, locale, jellyfinUser, cancellationToken).ConfigureAwait(false);
             case "movies":
-                items = QueryItems(BaseItemKind.Movie, filter, jellyfinUser);
+                items = await QueryItems(BaseItemKind.Movie, filter, jellyfinUser, cancellationToken).ConfigureAwait(false);
                 break;
             case "songs":
-                items = QueryItems(BaseItemKind.Audio, filter, jellyfinUser);
+                items = await QueryItems(BaseItemKind.Audio, filter, jellyfinUser, cancellationToken).ConfigureAwait(false);
                 break;
             default:
                 return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchBrowseCategory", locale));
@@ -132,7 +132,7 @@ public class BrowseLibraryIntentHandler : BaseHandler
     /// <param name="filter">Optional search term to filter results.</param>
     /// <param name="jellyfinUser">The Jellyfin user for the query.</param>
     /// <returns>A list of matching items, limited to MaxResults.</returns>
-    private IReadOnlyList<BaseItem> QueryItems(BaseItemKind itemType, string? filter, Jellyfin.Database.Implementations.Entities.User jellyfinUser)
+    private async Task<IReadOnlyList<BaseItem>> QueryItems(BaseItemKind itemType, string? filter, Jellyfin.Database.Implementations.Entities.User jellyfinUser, CancellationToken cancellationToken)
     {
         var query = new InternalItemsQuery
         {
@@ -148,7 +148,7 @@ public class BrowseLibraryIntentHandler : BaseHandler
             query.SearchTerm = filter;
         }
 
-        return _libraryManager.GetItemList(query);
+        return await RetryAsync(() => _libraryManager.GetItemList(query), $"Get{itemType}Items", cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -160,7 +160,7 @@ public class BrowseLibraryIntentHandler : BaseHandler
     /// <param name="locale">The locale for localized responses.</param>
     /// <param name="jellyfinUser">The Jellyfin user for the query.</param>
     /// <returns>A skill response.</returns>
-    private SkillResponse HandleGenresQuery(string? filter, string locale, Jellyfin.Database.Implementations.Entities.User jellyfinUser)
+    private async Task<SkillResponse> HandleGenresQuery(string? filter, string locale, Jellyfin.Database.Implementations.Entities.User jellyfinUser, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(filter))
         {
@@ -177,7 +177,7 @@ public class BrowseLibraryIntentHandler : BaseHandler
             DtoOptions = new DtoOptions(true)
         };
 
-        IReadOnlyList<BaseItem> items = _libraryManager.GetItemList(query);
+        IReadOnlyList<BaseItem> items = await RetryAsync(() => _libraryManager.GetItemList(query), "GetGenreItems", cancellationToken).ConfigureAwait(false);
 
         if (items.Count == 0)
         {
