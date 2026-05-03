@@ -9,6 +9,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Controller.Handler;
 using Jellyfin.Plugin.AlexaSkill.Diagnostics;
 using MediaBrowser.Controller.Authentication;
@@ -37,6 +38,7 @@ public class AlexaSkillController : ControllerBase
     private readonly ISessionManager _sessionManager;
     private readonly ILogger<AlexaSkillController> _logger;
     private readonly RequestCounters _counters;
+    private readonly RequestPipeline _pipeline;
 
     private BaseHandler[] handler;
 
@@ -116,6 +118,18 @@ public class AlexaSkillController : ControllerBase
             new ExceptionHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
             new FallbackIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory)
         };
+
+        _pipeline = new RequestPipeline(
+            new IRequestInterceptor[]
+            {
+                new LoggingRequestInterceptor(loggerFactory.CreateLogger<LoggingRequestInterceptor>())
+            },
+            new IResponseInterceptor[]
+            {
+                new SessionAttributesInterceptor(loggerFactory.CreateLogger<SessionAttributesInterceptor>()),
+                new LoggingResponseInterceptor(loggerFactory.CreateLogger<LoggingResponseInterceptor>())
+            },
+            loggerFactory.CreateLogger<RequestPipeline>());
     }
 
     /// <summary>
@@ -354,8 +368,7 @@ public class AlexaSkillController : ControllerBase
                 {
                     if (h.CanHandle(req.Request))
                     {
-                        SkillResponse skillResponse = await h.HandleRequestAsync(req.Request, req.Context, req.Session, cts.Token).ConfigureAwait(false);
-                        _logger.LogDebug("Response generated for {RequestType}", requestType);
+                        SkillResponse skillResponse = await _pipeline.ExecuteAsync(h, req.Request, req.Context, req.Session, cts.Token).ConfigureAwait(false);
                         return SkillResponseContent(skillResponse);
                     }
                 }
