@@ -6,7 +6,7 @@
 #
 # Run: python scripts/generate_interaction_model.py it-IT
 
-invocationName: jelly fin
+invocationName: jellyfin player
 
 vocabulary:
   imperative: [Riproduci, Suona, Metti, Pleia]
