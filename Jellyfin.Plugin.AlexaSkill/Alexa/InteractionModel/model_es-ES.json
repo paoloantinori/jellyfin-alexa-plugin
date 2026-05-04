@@ -306,18 +306,12 @@
           {
             "name": "browse_category",
             "type": "BrowseCategory"
-          },
-          {
-            "name": "filter",
-            "type": "AMAZON.SearchQuery"
           }
         ],
         "samples": [
           "explorar {browse_category}",
           "muéstrame {browse_category}",
-          "lista {browse_category}",
-          "explorar {browse_category} {filter}",
-          "muéstrame {browse_category} de {filter}"
+          "lista {browse_category}"
         ]
       },
       {
