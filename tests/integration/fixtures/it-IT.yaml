@@ -1,0 +1,358 @@
+locale: it-IT
+invocation_name: jellyfin player
+tests:
+  # -------------------------------------------------------------------------
+  # 1. LoopAllOffIntent (no slots)
+  # -------------------------------------------------------------------------
+  - utterance: "Disattiva loop"
+    expected_intent: LoopAllOffIntent
+    expected_slots: {}
+
+  - utterance: "Disattiva ripetizione"
+    expected_intent: LoopAllOffIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 2. LoopAllOnIntent (no slots)
+  # -------------------------------------------------------------------------
+  - utterance: "Attiva loop"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  - utterance: "Attiva ripetizione"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 3. RepeatSingleOnIntent (no slots)
+  # -------------------------------------------------------------------------
+  - utterance: "Ripeti la canzone"
+    expected_intent: RepeatSingleOnIntent
+    expected_slots: {}
+
+  - utterance: "Ripeti il brano"
+    expected_intent: RepeatSingleOnIntent
+    expected_slots: {}
+
+  - utterance: "Ripetilo"
+    expected_intent: RepeatSingleOnIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 4. PlayChannelIntent (channel)
+  # -------------------------------------------------------------------------
+  - utterance: "Canale radio maria"
+    expected_intent: PlayChannelIntent
+    expected_slots:
+      channel: {}
+
+  - utterance: "Riproduci radio rtl"
+    expected_intent: PlayChannelIntent
+    expected_slots:
+      channel: {}
+
+  # -------------------------------------------------------------------------
+  # 5. PlayVideoIntent (title)
+  # -------------------------------------------------------------------------
+  - utterance: "Riproduci star wars"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+
+  - utterance: "Suona il padrino"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+
+  # -------------------------------------------------------------------------
+  # 6. PlayByGenreIntent (genre)
+  # -------------------------------------------------------------------------
+  - utterance: "Riproduci rock"
+    expected_intent: PlayByGenreIntent
+    expected_slots:
+      genre: {}
+
+  - utterance: "Suona jazz"
+    expected_intent: PlayByGenreIntent
+    expected_slots:
+      genre: {}
+
+  # -------------------------------------------------------------------------
+  # 7. PlayPlaylistIntent (playlist)
+  # -------------------------------------------------------------------------
+  - utterance: "Riproduci playlist i miei brani"
+    expected_intent: PlayPlaylistIntent
+    expected_slots:
+      playlist: {}
+
+  - utterance: "Suona la playlist rock classico"
+    expected_intent: PlayPlaylistIntent
+    expected_slots:
+      playlist: {}
+
+  # -------------------------------------------------------------------------
+  # 8. GoToChapterIntent (direction, chapter_number)
+  # -------------------------------------------------------------------------
+  - utterance: "Vai al capitolo cinque"
+    expected_intent: GoToChapterIntent
+    expected_slots:
+      chapter_number: {}
+
+  - utterance: "Salta al capitolo primo"
+    expected_intent: GoToChapterIntent
+    expected_slots:
+      direction: {}
+
+  - utterance: "Capitolo tre"
+    expected_intent: GoToChapterIntent
+    expected_slots:
+      chapter_number: {}
+
+  # -------------------------------------------------------------------------
+  # 9. MarkFavoriteIntent (no slots)
+  # -------------------------------------------------------------------------
+  - utterance: "Aggiungi ai preferiti"
+    expected_intent: MarkFavoriteIntent
+    expected_slots: {}
+
+  - utterance: "Mi piace"
+    expected_intent: MarkFavoriteIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 10. UnmarkFavoriteIntent (no slots)
+  # -------------------------------------------------------------------------
+  - utterance: "Rimuovi dai preferiti"
+    expected_intent: UnmarkFavoriteIntent
+    expected_slots: {}
+
+  - utterance: "Non mi piace piu"
+    expected_intent: UnmarkFavoriteIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 11. MediaInfoIntent (no slots)
+  # -------------------------------------------------------------------------
+  - utterance: "Cosa sta suonando"
+    expected_intent: MediaInfoIntent
+    expected_slots: {}
+
+  - utterance: "Che brano e questo"
+    expected_intent: MediaInfoIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 12. InProgressMediaListIntent (no slots)
+  # -------------------------------------------------------------------------
+  - utterance: "Cosa stavo guardando"
+    expected_intent: InProgressMediaListIntent
+    expected_slots: {}
+
+  - utterance: "Mostrami i video in corso"
+    expected_intent: InProgressMediaListIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 13. PlayEpisodeIntent (series_name, season_number, episode_number)
+  # -------------------------------------------------------------------------
+  - utterance: "Riproduci breaking bad stagione uno episodio tre"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
+      series_name: {}
+      season_number: {}
+      episode_number: {}
+
+  - utterance: "Suona stranger things stagione due episodio uno"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
+      series_name: {}
+      season_number: {}
+      episode_number: {}
+
+  # -------------------------------------------------------------------------
+  # 14. BrowseLibraryIntent (browse_category)
+  # -------------------------------------------------------------------------
+  - utterance: "Sfoglia film"
+    expected_intent: BrowseLibraryIntent
+    expected_slots:
+      browse_category: {}
+
+  - utterance: "Mostra albums"
+    expected_intent: BrowseLibraryIntent
+    expected_slots:
+      browse_category: {}
+
+  - utterance: "Elenca generi"
+    expected_intent: BrowseLibraryIntent
+    expected_slots:
+      browse_category: {}
+
+  # -------------------------------------------------------------------------
+  # 15. RecommendIntent (media_type)
+  # -------------------------------------------------------------------------
+  - utterance: "Consiglia un film"
+    expected_intent: RecommendIntent
+    expected_slots:
+      media_type: {}
+
+  - utterance: "Suggerisci una canzone"
+    expected_intent: RecommendIntent
+    expected_slots:
+      media_type: {}
+
+  # -------------------------------------------------------------------------
+  # 16. SleepTimerIntent (duration_minutes)
+  # -------------------------------------------------------------------------
+  - utterance: "Imposta timer trenta"
+    expected_intent: SleepTimerIntent
+    expected_slots:
+      duration_minutes: {}
+
+  - utterance: "Ferma dopo sessanta"
+    expected_intent: SleepTimerIntent
+    expected_slots:
+      duration_minutes: {}
+
+  # -------------------------------------------------------------------------
+  # 17. PlayMoodMusicIntent (mood)
+  # -------------------------------------------------------------------------
+  - utterance: "Musica felice"
+    expected_intent: PlayMoodMusicIntent
+    expected_slots:
+      mood: {}
+
+  - utterance: "Riproduci musica rilassante"
+    expected_intent: PlayMoodMusicIntent
+    expected_slots:
+      mood: {}
+
+  # -------------------------------------------------------------------------
+  # 18. PlayRandomIntent (media_type)
+  # -------------------------------------------------------------------------
+  - utterance: "Riproduci film casuali"
+    expected_intent: PlayRandomIntent
+    expected_slots:
+      media_type: {}
+
+  - utterance: "Suona brani a caso"
+    expected_intent: PlayRandomIntent
+    expected_slots:
+      media_type: {}
+
+  # -------------------------------------------------------------------------
+  # 19. ContinueWatchingIntent (no slots)
+  # -------------------------------------------------------------------------
+  - utterance: "Continua a guardare"
+    expected_intent: ContinueWatchingIntent
+    expected_slots: {}
+
+  - utterance: "Riprendi il video"
+    expected_intent: ContinueWatchingIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 20. LearnMyVoiceIntent (no slots)
+  # -------------------------------------------------------------------------
+  - utterance: "Impara la mia voce"
+    expected_intent: LearnMyVoiceIntent
+    expected_slots: {}
+
+  - utterance: "Riconoscimi"
+    expected_intent: LearnMyVoiceIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 21. WhoAmIIntent (no slots)
+  # -------------------------------------------------------------------------
+  - utterance: "Chi sono"
+    expected_intent: WhoAmIIntent
+    expected_slots: {}
+
+  - utterance: "Che utente sono"
+    expected_intent: WhoAmIIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 22. QueryArtistLibraryIntent (musician, query_type)
+  # -------------------------------------------------------------------------
+  - utterance: "Quali brani abbiamo dei queen"
+    expected_intent: QueryArtistLibraryIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "Quali album abbiamo dei pink floyd"
+    expected_intent: QueryArtistLibraryIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "Mostra i brani di ligabue"
+    expected_intent: QueryArtistLibraryIntent
+    expected_slots:
+      musician: {}
+      query_type: {}
+
+  # -------------------------------------------------------------------------
+  # 23. PlaySongIntent (song, musician)
+  # -------------------------------------------------------------------------
+  - utterance: "Riproduci il brano bohemian rhapsody"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+
+  - utterance: "Suona imagine di john lennon"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+      musician: {}
+
+  # -------------------------------------------------------------------------
+  # 24. PlayAlbumIntent (album, musician)
+  # -------------------------------------------------------------------------
+  - utterance: "Riproduci album dark side of the moon"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+
+  - utterance: "Suona album thriller di michael jackson"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+      musician: {}
+
+  # -------------------------------------------------------------------------
+  # 25. PlayArtistSongsIntent (musician)
+  # -------------------------------------------------------------------------
+  - utterance: "Riproduci brani dei queen"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "Suona musica dei pink floyd"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  # -------------------------------------------------------------------------
+  # 26. PlayLastAddedIntent (media_type)
+  # -------------------------------------------------------------------------
+  - utterance: "Riproduci novita film"
+    expected_intent: PlayLastAddedIntent
+    expected_slots:
+      media_type: {}
+
+  - utterance: "Suona ultimi brani aggiunti"
+    expected_intent: PlayLastAddedIntent
+    expected_slots:
+      media_type: {}
+
+  # -------------------------------------------------------------------------
+  # 27. PlayFavoritesIntent (media_type)
+  # -------------------------------------------------------------------------
+  - utterance: "Riproduci i miei preferiti"
+    expected_intent: PlayFavoritesIntent
+    expected_slots: {}
+
+  - utterance: "Suona brani preferiti"
+    expected_intent: PlayFavoritesIntent
+    expected_slots:
+      media_type: {}
