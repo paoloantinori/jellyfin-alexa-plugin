@@ -49,13 +49,13 @@ public class PlayIntentHandler : BaseHandler
         if (session.FullNowPlayingItem != null)
         {
             string item_id = session.FullNowPlayingItem.Id.ToString();
-            return BuildAudioPlayerResponse(PlayBehavior.Enqueue, GetStreamUrl(item_id, user), item_id, session.FullNowPlayingItem, user);
+            return BuildAudioPlayerResponse(PlayBehavior.Enqueue, GetStreamUrl(item_id, user), item_id, session.FullNowPlayingItem, user, context);
         }
         else if (session.NowPlayingQueue.Count > 0)
         {
             // resume the first item in the queue
             string item_id = session.NowPlayingQueue[0].Id.ToString();
-            return BuildAudioPlayerResponse(PlayBehavior.Enqueue, GetStreamUrl(item_id, user), item_id, null, user);
+            return BuildAudioPlayerResponse(PlayBehavior.Enqueue, GetStreamUrl(item_id, user), item_id, null, user, context);
         }
 
         return ResponseBuilder.Empty();

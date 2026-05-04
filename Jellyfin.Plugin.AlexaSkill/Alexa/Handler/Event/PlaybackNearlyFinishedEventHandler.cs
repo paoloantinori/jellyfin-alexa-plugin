@@ -105,7 +105,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         string itemId = item.Id.ToString();
         string audioUrl = new Uri(new Uri(Plugin.Instance!.Configuration.ServerAddress), "Audio/" + itemId + "/universal").ToString();
 
-        return BuildAudioPlayerResponse(PlayBehavior.Enqueue, audioUrl, itemId, item, user);
+        return BuildAudioPlayerResponse(PlayBehavior.Enqueue, audioUrl, itemId, item, user, context);
     }
 
     /// <summary>
