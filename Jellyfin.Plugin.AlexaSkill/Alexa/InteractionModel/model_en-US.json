@@ -514,6 +514,35 @@
           "which profile is active",
           "am i recognized"
         ]
+      },
+      {
+        "name": "QueryArtistLibraryIntent",
+        "samples": [
+          "which tracks do we have by {musician}",
+          "which songs do we have by {musician}",
+          "what tracks are available from {musician}",
+          "what songs are available from {musician}",
+          "which albums do we have by {musician}",
+          "what albums are available from {musician}",
+          "what do we have by {musician}",
+          "show me tracks by {musician}",
+          "show me albums by {musician}",
+          "list tracks by {musician}",
+          "list albums by {musician}",
+          "which {query_type} do we have by {musician}",
+          "what {query_type} are available from {musician}",
+          "show me {query_type} by {musician}"
+        ],
+        "slots": [
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          },
+          {
+            "name": "query_type",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
       }
     ],
     "types": [

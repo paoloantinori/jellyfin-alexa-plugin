@@ -363,6 +363,37 @@
         ]
       },
       {
+        "name": "QueryArtistLibraryIntent",
+        "samples": [
+          "Quali brani abbiamo di {musician}",
+          "Quali canzoni abbiamo di {musician}",
+          "Che brani abbiamo di {musician}",
+          "Che canzoni abbiamo di {musician}",
+          "Quali album abbiamo di {musician}",
+          "Che album abbiamo di {musician}",
+          "Quali dischi abbiamo di {musician}",
+          "Che dischi abbiamo di {musician}",
+          "Cosa abbiamo di {musician}",
+          "Mostra i brani di {musician}",
+          "Mostra gli album di {musician}",
+          "Elenca i brani di {musician}",
+          "Elenca gli album di {musician}",
+          "Quali {query_type} abbiamo di {musician}",
+          "Che {query_type} abbiamo di {musician}",
+          "Mostra {query_type} di {musician}"
+        ],
+        "slots": [
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          },
+          {
+            "name": "query_type",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
         "name": "PlaySongIntent",
         "samples": [
           "Riproduci il brano {song}",
