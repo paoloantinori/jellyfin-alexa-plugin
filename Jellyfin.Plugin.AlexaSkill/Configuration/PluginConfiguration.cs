@@ -148,6 +148,11 @@ public class PluginConfiguration : BasePluginConfiguration
             return;
         }
 
+        if (!Uri.TryCreate(serverAddress, UriKind.Absolute, out _))
+        {
+            return;
+        }
+
         if (Plugin.Instance.ManifestSkill == null)
         {
             Plugin.Instance.ManifestSkill = new ManifestSkill("Jellyfin.Plugin.AlexaSkill.Alexa.Manifest.manifest.json", serverAddress, sslCertType);
