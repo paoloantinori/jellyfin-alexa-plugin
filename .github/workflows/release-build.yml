@@ -60,7 +60,7 @@ jobs:
           files: AlexaSkill_${{ steps.version.outputs.VERSION }}.zip
           generate_release_notes: true
           fail_on_unmatched_files: true
-          prerelease: true
+          prerelease: false
 
       - name: Add release to repo manifest
         run: python3 .github/workflows/add_release_to_manifest.py ${{ steps.version.outputs.VERSION }} AlexaSkill_${{ steps.version.outputs.VERSION }}.zip
