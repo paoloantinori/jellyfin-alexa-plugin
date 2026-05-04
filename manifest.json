@@ -71,6 +71,14 @@
                 "changelog": "Add comprehensive README tutorial. Expand Italian voice command utterances. Fix ProgressiveResponse HttpClient reuse bug. Update manifest author attribution.",
                 "targetAbi": "10.11.0.0",
                 "timestamp": "2026-05-04 09:46:02"
+            },
+            {
+                "version": "0.2.0.7",
+                "checksum": "0fd0647dd25fa0f720441b667891f845",
+                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.7/AlexaSkill_0.2.0.7.zip",
+                "changelog": "Add QueryArtistLibraryIntent for listing tracks/albums by artist. Add comprehensive localized voice command examples to README. Fix it-IT interaction model validation errors. Fix cross-locale AMAZON.SearchQuery slot conflicts.",
+                "targetAbi": "10.11.0.0",
+                "timestamp": "2026-05-04 10:16:00"
             }
         ]
     }
