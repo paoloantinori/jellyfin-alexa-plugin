@@ -247,19 +247,12 @@
         "samples": [
           "Sfoglia {browse_category}",
           "Mostra {browse_category}",
-          "Elenca {browse_category}",
-          "Sfoglia {browse_category} {filter}",
-          "Mostra {browse_category} {filter}",
-          "Elenca {browse_category} {filter}"
+          "Elenca {browse_category}"
         ],
         "slots": [
           {
             "name": "browse_category",
             "type": "BrowseCategory"
-          },
-          {
-            "name": "filter",
-            "type": "AMAZON.SearchQuery"
           }
         ]
       },
@@ -555,7 +548,18 @@
         "slots": [
           {
             "name": "album",
-            "type": "AMAZON.Album"
+            "type": "AMAZON.Album",
+            "samples": [
+              "Discovery",
+              "Abbey Road",
+              "Thriller",
+              "The Dark Side of the Moon",
+              "Back in Black",
+              "Rumours",
+              "A Night at the Opera",
+              "La cura",
+              "Come mai"
+            ]
           },
           {
             "name": "musician",
