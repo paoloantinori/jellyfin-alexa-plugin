@@ -123,9 +123,9 @@ explicit_intents:
       - Capitolo {direction}
     slots:
       - name: direction
-        type: AMAZON.Ordinal
+        type: ItalianOrdinal
       - name: chapter_number
-        type: AMAZON.Number
+        type: ItalianNumber
   MarkFavoriteIntent:
     samples:
       - Aggiungi ai preferiti
@@ -174,9 +174,9 @@ explicit_intents:
       - name: series_name
         type: SeriesName
       - name: season_number
-        type: AMAZON.Number
+        type: ItalianNumber
       - name: episode_number
-        type: AMAZON.Number
+        type: ItalianNumber
   BrowseLibraryIntent:
     samples:
       - Sfoglia {browse_category}
@@ -204,7 +204,7 @@ explicit_intents:
       - Ferma dopo {duration_minutes}
     slots:
       - name: duration_minutes
-        type: AMAZON.Number
+        type: ItalianNumber
   PlayMoodMusicIntent:
     samples:
       - Musica {mood}
@@ -270,6 +270,84 @@ explicit_intents:
         type: AMAZON.Musician
       - name: query_type
         type: LibraryQueryType
+
+# Custom slot type definitions. These are emitted into the model's types section.
+# Each type has a name and a list of values (with optional id and synonyms).
+types:
+  SeriesName:
+    values:
+      - Breaking Bad
+      - Il Trono di Spade
+      - Stranger Things
+      - La Casa di Carta
+      - Peaky Blinders
+      - The Walking Dead
+      - Dark
+      - Lupin
+  AlbumName:
+    values:
+      - Discovery
+      - Thriller
+      - The Dark Side of the Moon
+      - Back in Black
+      - Rumours
+      - A Night at the Opera
+      - La cura
+      - Come mai
+  BrowseCategory:
+    values:
+      - artisti
+      - albums
+      - film
+      - brani
+      - canzoni
+      - generi
+      - serie
+      - playlist
+  LibraryQueryType:
+    values:
+      - id: tracks
+        value: brani
+        synonyms: [canzoni]
+      - id: albums
+        value: album
+        synonyms: [dischi]
+  ItalianNumber:
+    values:
+      - uno
+      - due
+      - tre
+      - quattro
+      - cinque
+      - sei
+      - sette
+      - otto
+      - nove
+      - dieci
+      - undici
+      - dodici
+      - tredici
+      - quattordici
+      - quindici
+      - venti
+      - trenta
+      - quaranta
+      - cinquanta
+      - sessanta
+      - novanta
+      - cento
+  ItalianOrdinal:
+    values:
+      - primo
+      - secondo
+      - terzo
+      - quarto
+      - quinto
+      - sesto
+      - settimo
+      - ottavo
+      - nono
+      - decimo
 
 # Template-based intents. Each template uses {vocab_name} references that get
 # expanded via Cartesian product. Slot references like {song} are preserved.

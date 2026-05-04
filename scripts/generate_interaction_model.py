@@ -95,12 +95,44 @@ def build_model(config: dict) -> dict:
             intent["slots"] = intent_config["slots"]
         intents.append(intent)
 
-    return {
-        "languageModel": {
-            "invocationName": config.get("invocationName", "jelly fin"),
-            "intents": intents,
-        }
+    # Build language model
+    language_model = {
+        "invocationName": config.get("invocationName", "jelly fin"),
+        "intents": intents,
     }
+
+    # Add custom slot types
+    types_config = config.get("types", {})
+    if types_config:
+        types_list = []
+        for type_name, type_def in types_config.items():
+            type_entry = {"name": type_name, "values": []}
+            raw_values = type_def.get("values", [])
+            for v in raw_values:
+                if isinstance(v, str):
+                    type_entry["values"].append({"name": {"value": v}})
+                elif isinstance(v, dict):
+                    entry = {"name": {"value": v["value"]}}
+                    if "id" in v:
+                        entry["id"] = v["id"]
+                    if "synonyms" in v:
+                        entry["name"]["synonyms"] = v["synonyms"]
+                    type_entry["values"].append(entry)
+            types_list.append(type_entry)
+        language_model["types"] = types_list
+
+    # Add slot samples to matching intent slots
+    slot_samples = config.get("slot_samples", {})
+    if slot_samples:
+        for key, samples_list in slot_samples.items():
+            intent_name, slot_name = key.split(".")
+            for intent in intents:
+                if intent.get("name") == intent_name and "slots" in intent:
+                    for slot in intent["slots"]:
+                        if slot.get("name") == slot_name:
+                            slot["samples"] = samples_list
+
+    return {"languageModel": language_model}
 
 
 def main():
