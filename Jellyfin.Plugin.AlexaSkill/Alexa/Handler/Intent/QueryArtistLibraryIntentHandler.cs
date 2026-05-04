@@ -123,6 +123,7 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
 
         string normalized = queryType.ToLowerInvariant().Trim();
         return normalized.Contains("album", StringComparison.Ordinal)
+            || normalized.Contains("records", StringComparison.Ordinal)
             || normalized.Contains("dischi", StringComparison.Ordinal)
             || normalized.Contains("disco", StringComparison.Ordinal);
     }

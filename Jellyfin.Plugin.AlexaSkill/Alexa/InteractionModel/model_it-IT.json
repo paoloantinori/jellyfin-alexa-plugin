@@ -399,7 +399,7 @@
           },
           {
             "name": "query_type",
-            "type": "AMAZON.SearchQuery"
+            "type": "LibraryQueryType"
           }
         ]
       },
@@ -759,6 +759,25 @@
       }
     ],
     "types": [
+      {
+        "name": "LibraryQueryType",
+        "values": [
+          {
+            "id": "tracks",
+            "name": {
+              "value": "brani",
+              "synonyms": ["canzoni"]
+            }
+          },
+          {
+            "id": "albums",
+            "name": {
+              "value": "album",
+              "synonyms": ["dischi"]
+            }
+          }
+        ]
+      },
       {
         "name": "BrowseCategory",
         "values": [
