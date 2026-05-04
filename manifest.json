@@ -79,6 +79,14 @@
                 "changelog": "Add QueryArtistLibraryIntent for listing tracks/albums by artist. Add comprehensive localized voice command examples to README. Fix it-IT interaction model validation errors. Fix cross-locale AMAZON.SearchQuery slot conflicts.",
                 "targetAbi": "10.11.0.0",
                 "timestamp": "2026-05-04 10:16:00"
+            },
+            {
+                "version": "0.2.0.8",
+                "checksum": "7c433681fa88b36c86e6d3e302d411d1",
+                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.8/AlexaSkill_0.2.0.8.zip",
+                "changelog": "Add QueryArtistLibraryIntent for listing tracks/albums by artist. Add comprehensive localized voice command examples to README. Fix it-IT interaction model validation errors. Fix cross-locale AMAZON.SearchQuery slot conflicts.",
+                "targetAbi": "10.11.0.0",
+                "timestamp": "2026-05-04 12:29:42"
             }
         ]
     }
