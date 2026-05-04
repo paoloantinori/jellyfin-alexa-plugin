@@ -208,10 +208,6 @@
         ],
         "slots": [
           {
-            "name": "direction",
-            "type": "AMAZON.SearchQuery"
-          },
-          {
             "name": "chapter_number",
             "type": "AMAZON.NUMBER"
           }
@@ -553,14 +549,19 @@
             "id": "tracks",
             "name": {
               "value": "tracks",
-              "synonyms": ["songs", "music"]
+              "synonyms": [
+                "songs",
+                "music"
+              ]
             }
           },
           {
             "id": "albums",
             "name": {
               "value": "albums",
-              "synonyms": ["records"]
+              "synonyms": [
+                "records"
+              ]
             }
           }
         ]
