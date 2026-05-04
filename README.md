@@ -182,22 +182,116 @@ Once account linking is complete, try:
 
 ## Supported Voice Commands
 
-### Playback Control
+Utterances are shown for English (en-US) and Italian (it-IT). Replace *Jellyfin Player* with your configured invocation name. The YAML templates in `Alexa/InteractionModel/templates/` are the source of truth for Italian utterances.
 
-| Command | Example |
-|---------|---------|
-| Play a song | "Play the song *Bohemian Rhapsody*" |
-| Play a song by artist | "Play the song *Bohemian Rhapsody* from *Queen*" |
-| Play an album | "Play the album *Discovery*" |
-| Play an album by artist | "Play the album *Discovery* by *Daft Punk*" |
-| Play artist songs | "Play songs from *Queen*" |
-| Play a playlist | "Play the playlist *Workout Mix*" |
-| Play a video | "Play the video *Inception*" |
-| Play a channel | "Play channel *BBC Radio 1*" |
-| Play recently added | "Play recently added music" |
-| Play favorites | "Play my favorites" |
+### Playback
 
-### Playback Controls (Built-in Alexa Commands)
+**Play a song**
+
+| Locale | Example |
+|--------|---------|
+| en-US | "Play the song *Bohemian Rhapsody*" |
+| it-IT | "Riproduci il brano *Bohemian Rhapsody*" / "Suona la canzone *Bohemian Rhapsody*" |
+
+**Play a song by artist**
+
+| Locale | Example |
+|--------|---------|
+| en-US | "Play the song *Bohemian Rhapsody* from *Queen*" |
+| it-IT | "Riproduci il brano *Bohemian Rhapsody* di *Queen*" |
+
+**Play an album**
+
+| Locale | Example |
+|--------|---------|
+| en-US | "Play the album *Discovery*" |
+| it-IT | "Riproduci l'album *Discovery*" / "Suona il disco *Discovery*" |
+
+**Play an album by artist**
+
+| Locale | Example |
+|--------|---------|
+| en-US | "Play the album *Discovery* by *Daft Punk*" |
+| it-IT | "Riproduci l'album *Discovery* di *Daft Punk*" |
+
+**Play artist songs**
+
+| Locale | Example |
+|--------|---------|
+| en-US | "Play songs from *Queen*" |
+| it-IT | "Riproduci brani di *Queen*" / "Suona musica degli *Queen*" |
+
+**Play a playlist**
+
+| Locale | Example |
+|--------|---------|
+| en-US | "Play the playlist *Workout Mix*" |
+| it-IT | "Riproduci playlist *Workout Mix*" / "Suona la playlist *Workout Mix*" |
+
+**Play a video**
+
+| Locale | Example |
+|--------|---------|
+| en-US | "Play the video *Inception*" |
+| it-IT | "Riproduci *Inception*" / "Suona *Inception*" |
+
+**Play a channel/radio**
+
+| Locale | Example |
+|--------|---------|
+| en-US | "Play channel *BBC Radio 1*" |
+| it-IT | "Canale *BBC Radio 1*" / "Riproduci radio *BBC Radio 1*" |
+
+**Play recently added**
+
+| Locale | Example |
+|--------|---------|
+| en-US | "Play recently added music" |
+| it-IT | "Riproduci novità brani" / "Suona ultimi brani aggiunti" |
+
+**Play favorites**
+
+| Locale | Example |
+|--------|---------|
+| en-US | "Play my favorites" |
+| it-IT | "Riproduci i miei preferiti" / "Suona i miei preferiti" |
+
+**Play random**
+
+| Locale | Example |
+|--------|---------|
+| en-US | "Play random songs" |
+| it-IT | "Riproduci brani casuali" / "Suona brani a caso" |
+
+**Play by genre**
+
+| Locale | Example |
+|--------|---------|
+| en-US | "Play *rock*" |
+| it-IT | "Riproduci *rock*" / "Suona *rock*" |
+
+**Play mood music**
+
+| Locale | Example |
+|--------|---------|
+| en-US | "Play relaxing music" |
+| it-IT | "Musica rilassante" / "Riproduci musica rilassante" |
+
+**Play a specific episode**
+
+| Locale | Example |
+|--------|---------|
+| en-US | "Play *Breaking Bad* season 1 episode 1" |
+| it-IT | "Riproduci *Breaking Bad* stagione 1 episodio 1" |
+
+**Continue watching**
+
+| Locale | Example |
+|--------|---------|
+| en-US | "Continue watching" |
+| it-IT | "Continua a guardare" / "Riprendi a guardare" |
+
+### Transport Controls (Built-in Alexa Commands)
 
 | Command | What It Does |
 |---------|-------------|
@@ -207,24 +301,102 @@ Once account linking is complete, try:
 | "Previous" | Goes to previous track |
 | "Shuffle on" | Enables shuffle mode |
 | "Shuffle off" | Disables shuffle mode |
-| "Loop this song" | Repeats the current song |
-| "Loop on" | Repeats the entire queue |
-| "Loop off" | Disables repeat mode |
 | "Start over" | Restarts current media from the beginning |
+
+**Repeat / Loop**
+
+| Locale | Example |
+|--------|---------|
+| en-US | "Loop this song" / "Loop on" / "Loop off" |
+| it-IT | "Ripeti la canzone" / "Attiva loop" / "Disattiva loop" |
+
+### Queue Management
+
+| Locale | Example |
+|--------|---------|
+| en-US | "Add *Song Name* to queue" / "Play *Song Name* next" / "Clear queue" / "What's in my queue?" |
+| it-IT | (falls back to default Alexa phrasing) |
 
 ### Favorites Management
 
-| Command | Example |
-|---------|---------|
-| Add to favorites | "I like this song" / "Add this to my favorites" |
-| Remove from favorites | "I don't like this" / "Remove from my favorites" |
+**Add to favorites**
+
+| Locale | Example |
+|--------|---------|
+| en-US | "I like this song" / "Add this to my favorites" |
+| it-IT | "Aggiungi ai preferiti" / "Mi piace" / "Segna come preferito" |
+
+**Remove from favorites**
+
+| Locale | Example |
+|--------|---------|
+| en-US | "I don't like this" / "Remove from my favorites" |
+| it-IT | "Rimuovi dai preferiti" / "Non mi piace più" / "Togli dai preferiti" |
 
 ### Media Information
 
-| Command | What It Does |
-|---------|-------------|
-| "What's playing?" | Tells you the name of the currently playing media |
-| "What song is this?" | Identifies the current song |
+| Locale | Example |
+|--------|---------|
+| en-US | "What's playing?" / "What song is this?" |
+| it-IT | "Cosa sta suonando" / "Che brano è questo" / "Chi suona adesso" |
+
+### Library Browsing
+
+**Browse by category**
+
+| Locale | Example |
+|--------|---------|
+| en-US | "Browse artists" / "Show me albums" / "List songs" |
+| it-IT | "Sfoglia artisti" / "Mostra album" / "Elenca canzoni" |
+
+**Query by artist**
+
+| Locale | Example |
+|--------|---------|
+| en-US | "Which tracks do we have by *Queen*?" / "What albums are available from *Daft Punk*?" |
+| it-IT | "Quali brani abbiamo di *Queen*?" / "Quali album abbiamo di *Daft Punk*?" / "Cosa abbiamo di *Beatles*?" |
+
+### In-Progress Media
+
+| Locale | Example |
+|--------|---------|
+| en-US | "What was I watching?" / "Show me in-progress media" |
+| it-IT | "Cosa stavo guardando" / "Cosa ho lasciato a metà" |
+
+### Chapter Navigation
+
+| Locale | Example |
+|--------|---------|
+| en-US | "Go to chapter 3" / "Skip to the next chapter" |
+| it-IT | "Vai al capitolo 3" / "Salta al capitolo prossimo" |
+
+### Recommendations
+
+| Locale | Example |
+|--------|---------|
+| en-US | "Recommend music" / "Suggest a song" |
+| it-IT | "Consiglia musica" / "Raccomanda brani" / "Suggerisci canzoni" |
+
+### Sleep Timer
+
+| Locale | Example |
+|--------|---------|
+| en-US | "Set sleep timer for 30 minutes" |
+| it-IT | "Imposta timer 30" / "Timer per dormire 30" / "Ferma dopo 30" |
+
+### Radio Mode
+
+| Locale | Example |
+|--------|---------|
+| en-US | "Play radio" / "Turn radio on" / "Turn radio off" |
+| it-IT | (falls back to default Alexa phrasing) |
+
+### Voice Identification
+
+| Locale | Example |
+|--------|---------|
+| en-US | "Learn my voice" / "Who am I?" |
+| it-IT | "Impara la mia voce" / "Riconosci la mia voce" / "Chi sono" |
 
 ## Supported Languages
 
