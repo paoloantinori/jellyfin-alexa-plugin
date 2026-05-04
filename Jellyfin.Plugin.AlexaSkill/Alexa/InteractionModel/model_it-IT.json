@@ -165,11 +165,7 @@
           },
           {
             "name": "chapter_number",
-            "type": "AMAZON.Number",
-            "samples": [
-              "1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
-              "11", "12", "15", "20"
-            ]
+            "type": "AMAZON.NUMBER"
           }
         ]
       },
@@ -238,18 +234,11 @@
           },
           {
             "name": "season_number",
-            "type": "AMAZON.Number",
-            "samples": [
-              "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"
-            ]
+            "type": "AMAZON.NUMBER"
           },
           {
             "name": "episode_number",
-            "type": "AMAZON.Number",
-            "samples": [
-              "1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
-              "11", "12", "13", "14", "15", "20", "24"
-            ]
+            "type": "AMAZON.NUMBER"
           }
         ]
       },
@@ -302,10 +291,7 @@
         "slots": [
           {
             "name": "duration_minutes",
-            "type": "AMAZON.Number",
-            "samples": [
-              "5", "10", "15", "20", "30", "45", "60", "90", "120"
-            ]
+            "type": "AMAZON.NUMBER"
           }
         ]
       },
@@ -569,18 +555,7 @@
         "slots": [
           {
             "name": "album",
-            "type": "AMAZON.Album",
-            "samples": [
-              "Discovery",
-              "Abbey Road",
-              "Thriller",
-              "The Dark Side of the Moon",
-              "Back in Black",
-              "Rumours",
-              "A Night at the Opera",
-              "La cura",
-              "Come mai"
-            ]
+            "type": "AMAZON.Album"
           },
           {
             "name": "musician",
@@ -766,14 +741,18 @@
             "id": "tracks",
             "name": {
               "value": "brani",
-              "synonyms": ["canzoni"]
+              "synonyms": [
+                "canzoni"
+              ]
             }
           },
           {
             "id": "albums",
             "name": {
               "value": "album",
-              "synonyms": ["dischi"]
+              "synonyms": [
+                "dischi"
+              ]
             }
           }
         ]
@@ -781,27 +760,91 @@
       {
         "name": "BrowseCategory",
         "values": [
-          { "name": { "value": "artisti" } },
-          { "name": { "value": "albums" } },
-          { "name": { "value": "film" } },
-          { "name": { "value": "brani" } },
-          { "name": { "value": "canzoni" } },
-          { "name": { "value": "generi" } },
-          { "name": { "value": "serie" } },
-          { "name": { "value": "playlist" } }
+          {
+            "name": {
+              "value": "artisti"
+            }
+          },
+          {
+            "name": {
+              "value": "albums"
+            }
+          },
+          {
+            "name": {
+              "value": "film"
+            }
+          },
+          {
+            "name": {
+              "value": "brani"
+            }
+          },
+          {
+            "name": {
+              "value": "canzoni"
+            }
+          },
+          {
+            "name": {
+              "value": "generi"
+            }
+          },
+          {
+            "name": {
+              "value": "serie"
+            }
+          },
+          {
+            "name": {
+              "value": "playlist"
+            }
+          }
         ]
       },
       {
         "name": "SeriesName",
         "values": [
-          { "name": { "value": "Breaking Bad" } },
-          { "name": { "value": "Il Trono di Spade" } },
-          { "name": { "value": "Stranger Things" } },
-          { "name": { "value": "La Casa di Carta" } },
-          { "name": { "value": "Peaky Blinders" } },
-          { "name": { "value": "The Walking Dead" } },
-          { "name": { "value": "Dark" } },
-          { "name": { "value": "Lupin" } }
+          {
+            "name": {
+              "value": "Breaking Bad"
+            }
+          },
+          {
+            "name": {
+              "value": "Il Trono di Spade"
+            }
+          },
+          {
+            "name": {
+              "value": "Stranger Things"
+            }
+          },
+          {
+            "name": {
+              "value": "La Casa di Carta"
+            }
+          },
+          {
+            "name": {
+              "value": "Peaky Blinders"
+            }
+          },
+          {
+            "name": {
+              "value": "The Walking Dead"
+            }
+          },
+          {
+            "name": {
+              "value": "Dark"
+            }
+          },
+          {
+            "name": {
+              "value": "Lupin"
+            }
+          }
         ]
       }
     ]
