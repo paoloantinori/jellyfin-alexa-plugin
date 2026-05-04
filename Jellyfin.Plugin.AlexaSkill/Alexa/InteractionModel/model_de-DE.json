@@ -209,10 +209,6 @@
         ],
         "slots": [
           {
-            "name": "direction",
-            "type": "AMAZON.SearchQuery"
-          },
-          {
             "name": "chapter_number",
             "type": "AMAZON.NUMBER"
           }
