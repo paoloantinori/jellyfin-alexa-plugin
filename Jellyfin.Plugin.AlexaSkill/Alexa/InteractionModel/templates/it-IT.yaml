@@ -274,7 +274,7 @@ explicit_intents:
       - name: musician
         type: AMAZON.Musician
       - name: query_type
-        type: AMAZON.SearchQuery
+        type: LibraryQueryType
 
 # Template-based intents. Each template uses {vocab_name} references that get
 # expanded via Cartesian product. Slot references like {song} are preserved.

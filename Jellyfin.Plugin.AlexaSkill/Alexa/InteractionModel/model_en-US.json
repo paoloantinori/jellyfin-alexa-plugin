@@ -540,12 +540,31 @@
           },
           {
             "name": "query_type",
-            "type": "AMAZON.SearchQuery"
+            "type": "LibraryQueryType"
           }
         ]
       }
     ],
     "types": [
+      {
+        "name": "LibraryQueryType",
+        "values": [
+          {
+            "id": "tracks",
+            "name": {
+              "value": "tracks",
+              "synonyms": ["songs", "music"]
+            }
+          },
+          {
+            "id": "albums",
+            "name": {
+              "value": "albums",
+              "synonyms": ["records"]
+            }
+          }
+        ]
+      },
       {
         "name": "MediaType",
         "values": [
