@@ -283,7 +283,7 @@
         "slots": [
           {
             "name": "series_name",
-            "type": "AMAZON.Series"
+            "type": "SeriesName"
           },
           {
             "name": "season_number",
@@ -421,6 +421,61 @@
           {
             "name": {
               "value": "géneros"
+            }
+          }
+        ]
+      },
+      {
+        "name": "SeriesName",
+        "values": [
+          {
+            "name": {
+              "value": "Breaking Bad"
+            }
+          },
+          {
+            "name": {
+              "value": "Juego de Tronos"
+            }
+          },
+          {
+            "name": {
+              "value": "Stranger Things"
+            }
+          },
+          {
+            "name": {
+              "value": "La Casa de Papel"
+            }
+          },
+          {
+            "name": {
+              "value": "Peaky Blinders"
+            }
+          },
+          {
+            "name": {
+              "value": "The Walking Dead"
+            }
+          },
+          {
+            "name": {
+              "value": "Dark"
+            }
+          },
+          {
+            "name": {
+              "value": "Sherlock"
+            }
+          },
+          {
+            "name": {
+              "value": "Better Call Saul"
+            }
+          },
+          {
+            "name": {
+              "value": "El Señor de los Cielos"
             }
           }
         ]

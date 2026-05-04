@@ -292,7 +292,7 @@
         "slots": [
           {
             "name": "series_name",
-            "type": "AMAZON.Series"
+            "type": "SeriesName"
           },
           {
             "name": "season_number",
@@ -388,7 +388,7 @@
           },
           {
             "name": "musician",
-            "type": "AMAZON.MusicGroup"
+            "type": "AMAZON.Musician"
           }
         ],
         "samples": [
@@ -411,7 +411,7 @@
           },
           {
             "name": "musician",
-            "type": "AMAZON.MusicGroup"
+            "type": "AMAZON.Musician"
           }
         ],
         "samples": [
@@ -615,6 +615,61 @@
             }
           }
         ]
+      },
+      {
+        "name": "SeriesName",
+        "values": [
+          {
+            "name": {
+              "value": "Breaking Bad"
+            }
+          },
+          {
+            "name": {
+              "value": "Game of Thrones"
+            }
+          },
+          {
+            "name": {
+              "value": "Stranger Things"
+            }
+          },
+          {
+            "name": {
+              "value": "Money Heist"
+            }
+          },
+          {
+            "name": {
+              "value": "Peaky Blinders"
+            }
+          },
+          {
+            "name": {
+              "value": "The Walking Dead"
+            }
+          },
+          {
+            "name": {
+              "value": "Dark"
+            }
+          },
+          {
+            "name": {
+              "value": "Sherlock"
+            }
+          },
+          {
+            "name": {
+              "value": "Better Call Saul"
+            }
+          },
+          {
+            "name": {
+              "value": "Dexter"
+            }
+          }
+        ]
       }
     ]
   },
@@ -626,7 +681,7 @@
         "slots": [
           {
             "name": "series_name",
-            "type": "AMAZON.Series",
+            "type": "SeriesName",
             "confirmationRequired": false,
             "elicitationRequired": true,
             "prompts": {
