@@ -165,7 +165,7 @@
           },
           {
             "name": "chapter_number",
-            "type": "AMAZON.NUMBER"
+            "type": "AMAZON.Number"
           }
         ]
       },
@@ -234,11 +234,11 @@
           },
           {
             "name": "season_number",
-            "type": "AMAZON.NUMBER"
+            "type": "AMAZON.Number"
           },
           {
             "name": "episode_number",
-            "type": "AMAZON.NUMBER"
+            "type": "AMAZON.Number"
           }
         ]
       },
@@ -284,7 +284,7 @@
         "slots": [
           {
             "name": "duration_minutes",
-            "type": "AMAZON.NUMBER"
+            "type": "AMAZON.Number"
           }
         ]
       },
@@ -548,18 +548,7 @@
         "slots": [
           {
             "name": "album",
-            "type": "AMAZON.Album",
-            "samples": [
-              "Discovery",
-              "Abbey Road",
-              "Thriller",
-              "The Dark Side of the Moon",
-              "Back in Black",
-              "Rumours",
-              "A Night at the Opera",
-              "La cura",
-              "Come mai"
-            ]
+            "type": "AlbumName"
           },
           {
             "name": "musician",
@@ -582,6 +571,22 @@
           "Riproduci musica dei {musician}",
           "Riproduci musica degli {musician}",
           "Riproduci musica delle {musician}",
+          "Riproduci un brano di {musician}",
+          "Riproduci un brano dei {musician}",
+          "Riproduci un brano degli {musician}",
+          "Riproduci un brano delle {musician}",
+          "Riproduci una canzone di {musician}",
+          "Riproduci una canzone dei {musician}",
+          "Riproduci una canzone degli {musician}",
+          "Riproduci una canzone delle {musician}",
+          "Riproduci un pezzo di {musician}",
+          "Riproduci un pezzo dei {musician}",
+          "Riproduci un pezzo degli {musician}",
+          "Riproduci un pezzo delle {musician}",
+          "Riproduci una traccia di {musician}",
+          "Riproduci una traccia dei {musician}",
+          "Riproduci una traccia degli {musician}",
+          "Riproduci una traccia delle {musician}",
           "Suona brani di {musician}",
           "Suona brani dei {musician}",
           "Suona brani degli {musician}",
@@ -594,6 +599,22 @@
           "Suona musica dei {musician}",
           "Suona musica degli {musician}",
           "Suona musica delle {musician}",
+          "Suona un brano di {musician}",
+          "Suona un brano dei {musician}",
+          "Suona un brano degli {musician}",
+          "Suona un brano delle {musician}",
+          "Suona una canzone di {musician}",
+          "Suona una canzone dei {musician}",
+          "Suona una canzone degli {musician}",
+          "Suona una canzone delle {musician}",
+          "Suona un pezzo di {musician}",
+          "Suona un pezzo dei {musician}",
+          "Suona un pezzo degli {musician}",
+          "Suona un pezzo delle {musician}",
+          "Suona una traccia di {musician}",
+          "Suona una traccia dei {musician}",
+          "Suona una traccia degli {musician}",
+          "Suona una traccia delle {musician}",
           "Metti brani di {musician}",
           "Metti brani dei {musician}",
           "Metti brani degli {musician}",
@@ -606,6 +627,22 @@
           "Metti musica dei {musician}",
           "Metti musica degli {musician}",
           "Metti musica delle {musician}",
+          "Metti un brano di {musician}",
+          "Metti un brano dei {musician}",
+          "Metti un brano degli {musician}",
+          "Metti un brano delle {musician}",
+          "Metti una canzone di {musician}",
+          "Metti una canzone dei {musician}",
+          "Metti una canzone degli {musician}",
+          "Metti una canzone delle {musician}",
+          "Metti un pezzo di {musician}",
+          "Metti un pezzo dei {musician}",
+          "Metti un pezzo degli {musician}",
+          "Metti un pezzo delle {musician}",
+          "Metti una traccia di {musician}",
+          "Metti una traccia dei {musician}",
+          "Metti una traccia degli {musician}",
+          "Metti una traccia delle {musician}",
           "Pleia brani di {musician}",
           "Pleia brani dei {musician}",
           "Pleia brani degli {musician}",
@@ -618,6 +655,22 @@
           "Pleia musica dei {musician}",
           "Pleia musica degli {musician}",
           "Pleia musica delle {musician}",
+          "Pleia un brano di {musician}",
+          "Pleia un brano dei {musician}",
+          "Pleia un brano degli {musician}",
+          "Pleia un brano delle {musician}",
+          "Pleia una canzone di {musician}",
+          "Pleia una canzone dei {musician}",
+          "Pleia una canzone degli {musician}",
+          "Pleia una canzone delle {musician}",
+          "Pleia un pezzo di {musician}",
+          "Pleia un pezzo dei {musician}",
+          "Pleia un pezzo degli {musician}",
+          "Pleia un pezzo delle {musician}",
+          "Pleia una traccia di {musician}",
+          "Pleia una traccia dei {musician}",
+          "Pleia una traccia degli {musician}",
+          "Pleia una traccia delle {musician}",
           "Di riprodurre brani di {musician}",
           "Di riprodurre brani dei {musician}",
           "Di riprodurre brani degli {musician}",
@@ -630,6 +683,22 @@
           "Di riprodurre musica dei {musician}",
           "Di riprodurre musica degli {musician}",
           "Di riprodurre musica delle {musician}",
+          "Di riprodurre un brano di {musician}",
+          "Di riprodurre un brano dei {musician}",
+          "Di riprodurre un brano degli {musician}",
+          "Di riprodurre un brano delle {musician}",
+          "Di riprodurre una canzone di {musician}",
+          "Di riprodurre una canzone dei {musician}",
+          "Di riprodurre una canzone degli {musician}",
+          "Di riprodurre una canzone delle {musician}",
+          "Di riprodurre un pezzo di {musician}",
+          "Di riprodurre un pezzo dei {musician}",
+          "Di riprodurre un pezzo degli {musician}",
+          "Di riprodurre un pezzo delle {musician}",
+          "Di riprodurre una traccia di {musician}",
+          "Di riprodurre una traccia dei {musician}",
+          "Di riprodurre una traccia degli {musician}",
+          "Di riprodurre una traccia delle {musician}",
           "Di suonare brani di {musician}",
           "Di suonare brani dei {musician}",
           "Di suonare brani degli {musician}",
@@ -642,6 +711,22 @@
           "Di suonare musica dei {musician}",
           "Di suonare musica degli {musician}",
           "Di suonare musica delle {musician}",
+          "Di suonare un brano di {musician}",
+          "Di suonare un brano dei {musician}",
+          "Di suonare un brano degli {musician}",
+          "Di suonare un brano delle {musician}",
+          "Di suonare una canzone di {musician}",
+          "Di suonare una canzone dei {musician}",
+          "Di suonare una canzone degli {musician}",
+          "Di suonare una canzone delle {musician}",
+          "Di suonare un pezzo di {musician}",
+          "Di suonare un pezzo dei {musician}",
+          "Di suonare un pezzo degli {musician}",
+          "Di suonare un pezzo delle {musician}",
+          "Di suonare una traccia di {musician}",
+          "Di suonare una traccia dei {musician}",
+          "Di suonare una traccia degli {musician}",
+          "Di suonare una traccia delle {musician}",
           "Di mettere brani di {musician}",
           "Di mettere brani dei {musician}",
           "Di mettere brani degli {musician}",
@@ -654,6 +739,22 @@
           "Di mettere musica dei {musician}",
           "Di mettere musica degli {musician}",
           "Di mettere musica delle {musician}",
+          "Di mettere un brano di {musician}",
+          "Di mettere un brano dei {musician}",
+          "Di mettere un brano degli {musician}",
+          "Di mettere un brano delle {musician}",
+          "Di mettere una canzone di {musician}",
+          "Di mettere una canzone dei {musician}",
+          "Di mettere una canzone degli {musician}",
+          "Di mettere una canzone delle {musician}",
+          "Di mettere un pezzo di {musician}",
+          "Di mettere un pezzo dei {musician}",
+          "Di mettere un pezzo degli {musician}",
+          "Di mettere un pezzo delle {musician}",
+          "Di mettere una traccia di {musician}",
+          "Di mettere una traccia dei {musician}",
+          "Di mettere una traccia degli {musician}",
+          "Di mettere una traccia delle {musician}",
           "Di pleiare brani di {musician}",
           "Di pleiare brani dei {musician}",
           "Di pleiare brani degli {musician}",
@@ -665,7 +766,23 @@
           "Di pleiare musica di {musician}",
           "Di pleiare musica dei {musician}",
           "Di pleiare musica degli {musician}",
-          "Di pleiare musica delle {musician}"
+          "Di pleiare musica delle {musician}",
+          "Di pleiare un brano di {musician}",
+          "Di pleiare un brano dei {musician}",
+          "Di pleiare un brano degli {musician}",
+          "Di pleiare un brano delle {musician}",
+          "Di pleiare una canzone di {musician}",
+          "Di pleiare una canzone dei {musician}",
+          "Di pleiare una canzone degli {musician}",
+          "Di pleiare una canzone delle {musician}",
+          "Di pleiare un pezzo di {musician}",
+          "Di pleiare un pezzo dei {musician}",
+          "Di pleiare un pezzo degli {musician}",
+          "Di pleiare un pezzo delle {musician}",
+          "Di pleiare una traccia di {musician}",
+          "Di pleiare una traccia dei {musician}",
+          "Di pleiare una traccia degli {musician}",
+          "Di pleiare una traccia delle {musician}"
         ],
         "slots": [
           {
@@ -733,121 +850,6 @@
           {
             "name": "media_type",
             "type": "AMAZON.SearchQuery"
-          }
-        ]
-      }
-    ],
-    "types": [
-      {
-        "name": "LibraryQueryType",
-        "values": [
-          {
-            "id": "tracks",
-            "name": {
-              "value": "brani",
-              "synonyms": [
-                "canzoni"
-              ]
-            }
-          },
-          {
-            "id": "albums",
-            "name": {
-              "value": "album",
-              "synonyms": [
-                "dischi"
-              ]
-            }
-          }
-        ]
-      },
-      {
-        "name": "BrowseCategory",
-        "values": [
-          {
-            "name": {
-              "value": "artisti"
-            }
-          },
-          {
-            "name": {
-              "value": "albums"
-            }
-          },
-          {
-            "name": {
-              "value": "film"
-            }
-          },
-          {
-            "name": {
-              "value": "brani"
-            }
-          },
-          {
-            "name": {
-              "value": "canzoni"
-            }
-          },
-          {
-            "name": {
-              "value": "generi"
-            }
-          },
-          {
-            "name": {
-              "value": "serie"
-            }
-          },
-          {
-            "name": {
-              "value": "playlist"
-            }
-          }
-        ]
-      },
-      {
-        "name": "SeriesName",
-        "values": [
-          {
-            "name": {
-              "value": "Breaking Bad"
-            }
-          },
-          {
-            "name": {
-              "value": "Il Trono di Spade"
-            }
-          },
-          {
-            "name": {
-              "value": "Stranger Things"
-            }
-          },
-          {
-            "name": {
-              "value": "La Casa di Carta"
-            }
-          },
-          {
-            "name": {
-              "value": "Peaky Blinders"
-            }
-          },
-          {
-            "name": {
-              "value": "The Walking Dead"
-            }
-          },
-          {
-            "name": {
-              "value": "Dark"
-            }
-          },
-          {
-            "name": {
-              "value": "Lupin"
-            }
           }
         ]
       }
