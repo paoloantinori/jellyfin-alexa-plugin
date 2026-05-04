@@ -161,11 +161,11 @@
         "slots": [
           {
             "name": "direction",
-            "type": "AMAZON.Ordinal"
+            "type": "ItalianOrdinal"
           },
           {
             "name": "chapter_number",
-            "type": "AMAZON.Number"
+            "type": "ItalianNumber"
           }
         ]
       },
@@ -234,11 +234,11 @@
           },
           {
             "name": "season_number",
-            "type": "AMAZON.Number"
+            "type": "ItalianNumber"
           },
           {
             "name": "episode_number",
-            "type": "AMAZON.Number"
+            "type": "ItalianNumber"
           }
         ]
       },
@@ -284,7 +284,7 @@
         "slots": [
           {
             "name": "duration_minutes",
-            "type": "AMAZON.Number"
+            "type": "ItalianNumber"
           }
         ]
       },
@@ -850,6 +850,336 @@
           {
             "name": "media_type",
             "type": "AMAZON.SearchQuery"
+          }
+        ]
+      }
+    ],
+    "types": [
+      {
+        "name": "SeriesName",
+        "values": [
+          {
+            "name": {
+              "value": "Breaking Bad"
+            }
+          },
+          {
+            "name": {
+              "value": "Il Trono di Spade"
+            }
+          },
+          {
+            "name": {
+              "value": "Stranger Things"
+            }
+          },
+          {
+            "name": {
+              "value": "La Casa di Carta"
+            }
+          },
+          {
+            "name": {
+              "value": "Peaky Blinders"
+            }
+          },
+          {
+            "name": {
+              "value": "The Walking Dead"
+            }
+          },
+          {
+            "name": {
+              "value": "Dark"
+            }
+          },
+          {
+            "name": {
+              "value": "Lupin"
+            }
+          }
+        ]
+      },
+      {
+        "name": "AlbumName",
+        "values": [
+          {
+            "name": {
+              "value": "Discovery"
+            }
+          },
+          {
+            "name": {
+              "value": "Thriller"
+            }
+          },
+          {
+            "name": {
+              "value": "The Dark Side of the Moon"
+            }
+          },
+          {
+            "name": {
+              "value": "Back in Black"
+            }
+          },
+          {
+            "name": {
+              "value": "Rumours"
+            }
+          },
+          {
+            "name": {
+              "value": "A Night at the Opera"
+            }
+          },
+          {
+            "name": {
+              "value": "La cura"
+            }
+          },
+          {
+            "name": {
+              "value": "Come mai"
+            }
+          }
+        ]
+      },
+      {
+        "name": "BrowseCategory",
+        "values": [
+          {
+            "name": {
+              "value": "artisti"
+            }
+          },
+          {
+            "name": {
+              "value": "albums"
+            }
+          },
+          {
+            "name": {
+              "value": "film"
+            }
+          },
+          {
+            "name": {
+              "value": "brani"
+            }
+          },
+          {
+            "name": {
+              "value": "canzoni"
+            }
+          },
+          {
+            "name": {
+              "value": "generi"
+            }
+          },
+          {
+            "name": {
+              "value": "serie"
+            }
+          },
+          {
+            "name": {
+              "value": "playlist"
+            }
+          }
+        ]
+      },
+      {
+        "name": "LibraryQueryType",
+        "values": [
+          {
+            "name": {
+              "value": "brani",
+              "synonyms": [
+                "canzoni"
+              ]
+            },
+            "id": "tracks"
+          },
+          {
+            "name": {
+              "value": "album",
+              "synonyms": [
+                "dischi"
+              ]
+            },
+            "id": "albums"
+          }
+        ]
+      },
+      {
+        "name": "ItalianNumber",
+        "values": [
+          {
+            "name": {
+              "value": "uno"
+            }
+          },
+          {
+            "name": {
+              "value": "due"
+            }
+          },
+          {
+            "name": {
+              "value": "tre"
+            }
+          },
+          {
+            "name": {
+              "value": "quattro"
+            }
+          },
+          {
+            "name": {
+              "value": "cinque"
+            }
+          },
+          {
+            "name": {
+              "value": "sei"
+            }
+          },
+          {
+            "name": {
+              "value": "sette"
+            }
+          },
+          {
+            "name": {
+              "value": "otto"
+            }
+          },
+          {
+            "name": {
+              "value": "nove"
+            }
+          },
+          {
+            "name": {
+              "value": "dieci"
+            }
+          },
+          {
+            "name": {
+              "value": "undici"
+            }
+          },
+          {
+            "name": {
+              "value": "dodici"
+            }
+          },
+          {
+            "name": {
+              "value": "tredici"
+            }
+          },
+          {
+            "name": {
+              "value": "quattordici"
+            }
+          },
+          {
+            "name": {
+              "value": "quindici"
+            }
+          },
+          {
+            "name": {
+              "value": "venti"
+            }
+          },
+          {
+            "name": {
+              "value": "trenta"
+            }
+          },
+          {
+            "name": {
+              "value": "quaranta"
+            }
+          },
+          {
+            "name": {
+              "value": "cinquanta"
+            }
+          },
+          {
+            "name": {
+              "value": "sessanta"
+            }
+          },
+          {
+            "name": {
+              "value": "novanta"
+            }
+          },
+          {
+            "name": {
+              "value": "cento"
+            }
+          }
+        ]
+      },
+      {
+        "name": "ItalianOrdinal",
+        "values": [
+          {
+            "name": {
+              "value": "primo"
+            }
+          },
+          {
+            "name": {
+              "value": "secondo"
+            }
+          },
+          {
+            "name": {
+              "value": "terzo"
+            }
+          },
+          {
+            "name": {
+              "value": "quarto"
+            }
+          },
+          {
+            "name": {
+              "value": "quinto"
+            }
+          },
+          {
+            "name": {
+              "value": "sesto"
+            }
+          },
+          {
+            "name": {
+              "value": "settimo"
+            }
+          },
+          {
+            "name": {
+              "value": "ottavo"
+            }
+          },
+          {
+            "name": {
+              "value": "nono"
+            }
+          },
+          {
+            "name": {
+              "value": "decimo"
+            }
           }
         ]
       }
