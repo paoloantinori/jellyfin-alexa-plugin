@@ -199,17 +199,24 @@ public abstract class BaseHandler
             Sources = new List<AudioItemSource> { new() { Url = imageUrl } }
         };
 
+        var stream = new AudioItemStream
+        {
+            Url = streamUrl,
+            Token = itemId,
+            OffsetInMilliseconds = offsetInMilliseconds
+        };
+
+        if (playBehavior == PlayBehavior.Enqueue && context?.AudioPlayer?.Token != null)
+        {
+            stream.ExpectedPreviousToken = context.AudioPlayer.Token;
+        }
+
         var directive = new AudioPlayerPlayDirective
         {
             PlayBehavior = playBehavior,
             AudioItem = new AudioItem
             {
-                Stream = new AudioItemStream
-                {
-                    Url = streamUrl,
-                    Token = itemId,
-                    OffsetInMilliseconds = offsetInMilliseconds
-                },
+                Stream = stream,
                 Metadata = new AudioItemMetadata
                 {
                     Title = item?.Name ?? string.Empty,
