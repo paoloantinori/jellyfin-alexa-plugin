@@ -6,7 +6,7 @@
         "description": "Alexa skill plugin for Jellyfin, based on work by infinityofspace",
         "owner": "Paolo Antinori",
         "overview": "Alexa skill plugin for Jellyfin",
-        "imageUrl": "https://raw.githubusercontent.com/paoloantinori/jellyfin-alexa-plugin/main/icon.png",
+        "imageUrl": "https://raw.githubusercontent.com/paoloantinori/jellyfin-alexa-plugin/main/Jellyfin.Plugin.AlexaSkill/icon.png",
         "versions": [
             {
                 "version": "0.1.0.0",
@@ -58,7 +58,7 @@
             },
             {
                 "version": "0.2.0.5",
-                "checksum": "dcd695eae349199d8993b67482841f7e",
+                "checksum": "5b42b9a23eece179d46ecc6cf3489c3d",
                 "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.5/AlexaSkill_0.2.0.5.zip",
                 "changelog": "Per-intent diagnostics metrics. Voice-based user identification. APL visual templates. Utterance template generator. Dialog delegation. Queue management. Radio mode. SSML natural speech.",
                 "targetAbi": "10.11.0.0",
