@@ -34,7 +34,14 @@ def main():
         "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     }
 
-    manifest[0]["versions"].append(new_version_info)
+    # Update existing entry or append new one
+    versions = manifest[0]["versions"]
+    for i, v in enumerate(versions):
+        if v["version"] == version:
+            versions[i] = new_version_info
+            break
+    else:
+        versions.append(new_version_info)
 
     with open("manifest.json", "w") as f:
         json.dump(manifest, f, indent=4)
