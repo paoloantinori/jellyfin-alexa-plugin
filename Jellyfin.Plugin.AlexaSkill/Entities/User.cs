@@ -24,12 +24,12 @@ public class User
     {
         get
         {
-            if (Id == Guid.Empty)
+            if (Id == Guid.Empty || Plugin.Instance == null)
             {
                 return string.Empty;
             }
 
-            return Plugin.Instance!.UserManager.GetUserById(Id).Username;
+            return Plugin.Instance.UserManager.GetUserById(Id)?.Username ?? string.Empty;
         }
     }
 
