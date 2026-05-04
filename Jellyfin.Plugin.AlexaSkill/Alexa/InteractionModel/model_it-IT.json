@@ -165,7 +165,11 @@
           },
           {
             "name": "chapter_number",
-            "type": "AMAZON.Number"
+            "type": "AMAZON.Number",
+            "samples": [
+              "1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
+              "11", "12", "15", "20"
+            ]
           }
         ]
       },
@@ -230,15 +234,22 @@
         "slots": [
           {
             "name": "series_name",
-            "type": "AMAZON.SearchQuery"
+            "type": "SeriesName"
           },
           {
             "name": "season_number",
-            "type": "AMAZON.Number"
+            "type": "AMAZON.Number",
+            "samples": [
+              "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"
+            ]
           },
           {
             "name": "episode_number",
-            "type": "AMAZON.Number"
+            "type": "AMAZON.Number",
+            "samples": [
+              "1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
+              "11", "12", "13", "14", "15", "20", "24"
+            ]
           }
         ]
       },
@@ -255,7 +266,7 @@
         "slots": [
           {
             "name": "browse_category",
-            "type": "AMAZON.SearchQuery"
+            "type": "BrowseCategory"
           },
           {
             "name": "filter",
@@ -291,7 +302,10 @@
         "slots": [
           {
             "name": "duration_minutes",
-            "type": "AMAZON.Number"
+            "type": "AMAZON.Number",
+            "samples": [
+              "5", "10", "15", "20", "30", "45", "60", "90", "120"
+            ]
           }
         ]
       },
@@ -323,10 +337,6 @@
         "slots": [
           {
             "name": "media_type",
-            "type": "AMAZON.SearchQuery"
-          },
-          {
-            "name": "genre",
             "type": "AMAZON.SearchQuery"
           }
         ]
@@ -559,7 +569,18 @@
         "slots": [
           {
             "name": "album",
-            "type": "AMAZON.Album"
+            "type": "AMAZON.Album",
+            "samples": [
+              "Discovery",
+              "Abbey Road",
+              "Thriller",
+              "The Dark Side of the Moon",
+              "Back in Black",
+              "Rumours",
+              "A Night at the Opera",
+              "La cura",
+              "Come mai"
+            ]
           },
           {
             "name": "musician",
@@ -734,6 +755,34 @@
             "name": "media_type",
             "type": "AMAZON.SearchQuery"
           }
+        ]
+      }
+    ],
+    "types": [
+      {
+        "name": "BrowseCategory",
+        "values": [
+          { "name": { "value": "artisti" } },
+          { "name": { "value": "albums" } },
+          { "name": { "value": "film" } },
+          { "name": { "value": "brani" } },
+          { "name": { "value": "canzoni" } },
+          { "name": { "value": "generi" } },
+          { "name": { "value": "serie" } },
+          { "name": { "value": "playlist" } }
+        ]
+      },
+      {
+        "name": "SeriesName",
+        "values": [
+          { "name": { "value": "Breaking Bad" } },
+          { "name": { "value": "Il Trono di Spade" } },
+          { "name": { "value": "Stranger Things" } },
+          { "name": { "value": "La Casa di Carta" } },
+          { "name": { "value": "Peaky Blinders" } },
+          { "name": { "value": "The Walking Dead" } },
+          { "name": { "value": "Dark" } },
+          { "name": { "value": "Lupin" } }
         ]
       }
     ]

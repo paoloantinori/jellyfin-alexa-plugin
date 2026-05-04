@@ -100,17 +100,22 @@ public class BrowseLibraryIntentHandler : BaseHandler
         switch (browseCategory.ToLowerInvariant())
         {
             case "artists":
+            case "artisti":
                 items = await QueryItems(BaseItemKind.MusicArtist, filter, jellyfinUser, cancellationToken).ConfigureAwait(false);
                 break;
             case "albums":
                 items = await QueryItems(BaseItemKind.MusicAlbum, filter, jellyfinUser, cancellationToken).ConfigureAwait(false);
                 break;
             case "genres":
+            case "generi":
                 return await HandleGenresQuery(filter, locale, jellyfinUser, cancellationToken).ConfigureAwait(false);
             case "movies":
+            case "film":
                 items = await QueryItems(BaseItemKind.Movie, filter, jellyfinUser, cancellationToken).ConfigureAwait(false);
                 break;
             case "songs":
+            case "brani":
+            case "canzoni":
                 items = await QueryItems(BaseItemKind.Audio, filter, jellyfinUser, cancellationToken).ConfigureAwait(false);
                 break;
             default:

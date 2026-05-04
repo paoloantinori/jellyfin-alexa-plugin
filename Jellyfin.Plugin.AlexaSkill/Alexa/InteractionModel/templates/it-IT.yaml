@@ -172,7 +172,7 @@ explicit_intents:
       - Metti {series_name} stagione {season_number} episodio {episode_number}
     slots:
       - name: series_name
-        type: AMAZON.SearchQuery
+        type: SeriesName
       - name: season_number
         type: AMAZON.Number
       - name: episode_number
@@ -187,7 +187,7 @@ explicit_intents:
       - Elenca {browse_category} {filter}
     slots:
       - name: browse_category
-        type: AMAZON.SearchQuery
+        type: BrowseCategory
       - name: filter
         type: AMAZON.SearchQuery
   RecommendIntent:
@@ -229,8 +229,6 @@ explicit_intents:
       - Metti {media_type} a caso
     slots:
       - name: media_type
-        type: AMAZON.SearchQuery
-      - name: genre
         type: AMAZON.SearchQuery
   ContinueWatchingIntent:
     samples:
