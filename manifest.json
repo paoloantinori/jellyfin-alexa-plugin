@@ -58,11 +58,11 @@
             },
             {
                 "version": "0.2.0.5",
-                "checksum": "5b42b9a23eece179d46ecc6cf3489c3d",
+                "checksum": "39bfe857f7cbeeef8b893aa6a28c0cbb",
                 "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.5/AlexaSkill_0.2.0.5.zip",
-                "changelog": "Per-intent diagnostics metrics. Voice-based user identification. APL visual templates. Utterance template generator. Dialog delegation. Queue management. Radio mode. SSML natural speech.",
+                "changelog": "Add comprehensive README tutorial. Expand Italian voice command utterances. Fix ProgressiveResponse HttpClient reuse bug. Update manifest author attribution.",
                 "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-04T05:07:03Z"
+                "timestamp": "2026-05-04 07:56:59"
             },
             {
                 "version": "0.2.0.5",
