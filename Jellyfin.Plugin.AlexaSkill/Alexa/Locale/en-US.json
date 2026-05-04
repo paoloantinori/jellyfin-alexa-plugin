@@ -95,5 +95,11 @@
   "VoiceAlreadyLinked": "Your voice is already linked to the account {0}.",
   "VoiceLearnFailed": "I couldn't link your voice. Make sure voice profiles are enabled in your Alexa settings.",
   "WhoAmI": "You're connected as {0}.",
-  "WhoAmIUnknown": "I don't recognize your voice yet. Say learn my voice to set it up."
+  "WhoAmIUnknown": "I don't recognize your voice yet. Say learn my voice to set it up.",
+  "DidNotCatchArtistName": "I didn't catch the artist name. Which artist would you like to look up?",
+  "NoAlbumsByArtist": "I couldn't find any albums by {0}.",
+  "AlbumsByArtistList": "You have {1} albums by {0}: {2}.",
+  "AlbumsByArtistPartial": "You have {1} albums by {0}. Here are the first {2}: {3}.",
+  "TracksByArtistList": "You have {1} tracks by {0}: {2}.",
+  "TracksByArtistPartial": "You have {1} tracks by {0}. Here are the first {2}: {3}."
 }
