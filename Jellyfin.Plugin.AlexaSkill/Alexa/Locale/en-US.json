@@ -84,7 +84,7 @@
   "DidNotCatchSleepTimer": "How long should I set the sleep timer for? Please say a number of minutes.",
   "SleepTimerSet": "Sleep timer set for {0} minutes. Playback will stop then.",
   "CancelSleepTimer": "Sleep timer cancelled.",
-  "DidNotCatchMood": "What kind of music would you like? You can say relaxing, upbeat, chill, energetic, or focus.",
+  "DidNotCatchMood": "What kind of music would you like? You can say relaxing, upbeat, workout, morning, evening, or focus.",
   "NotFoundMood": "I couldn't find any {0} music in your library.",
   "AddedToQueue": "Added {0} to your queue.",
   "PlayNextConfirmed": "{0} will play next.",

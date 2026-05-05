@@ -376,7 +376,14 @@
           "Musica {mood}",
           "Riproduci musica {mood}",
           "Suona musica {mood}",
-          "Metti musica {mood}"
+          "Metti musica {mood}",
+          "Musica mattutina",
+          "Musica serale",
+          "Musica per cena",
+          "Musica per allenamento",
+          "Musica per concentrarmi",
+          "Musica per festa",
+          "Musica rilassante"
         ],
         "slots": [
           {

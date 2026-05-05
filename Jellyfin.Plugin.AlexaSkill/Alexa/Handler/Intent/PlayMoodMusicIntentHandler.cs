@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
@@ -36,7 +37,10 @@ public class PlayMoodMusicIntentHandler : BaseHandler
         ["happy"] = new[] { "pop", "dance", "reggae" },
         ["sad"] = new[] { "blues", "indie", "folk", "alternative" },
         ["party"] = new[] { "dance", "electronic", "hip hop", "pop" },
-        ["workout"] = new[] { "electronic", "rock", "hip hop", "metal" }
+        ["workout"] = new[] { "electronic", "rock", "hip hop", "metal" },
+        ["morning"] = new[] { "acoustic", "pop", "indie", "folk", "jazz" },
+        ["evening"] = new[] { "jazz", "ambient", "classical", "lounge", "soul" },
+        ["dinner"] = new[] { "jazz", "classical", "acoustic", "bossa nova", "soul" }
     };
 
     private readonly ILibraryManager _libraryManager;
@@ -97,7 +101,7 @@ public class PlayMoodMusicIntentHandler : BaseHandler
 
         Jellyfin.Database.Implementations.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
 
-        string[] genres = ResolveGenres(mood);
+        string[] genres = ResolveGenres(mood, DateTime.Now.Hour);
 
         List<BaseItem> foundItems = new();
 
@@ -145,25 +149,55 @@ public class PlayMoodMusicIntentHandler : BaseHandler
     /// <summary>
     /// Resolves a mood string to an array of genre names.
     /// Tries an exact match first, then a contains match, then falls back to
-    /// using the mood word itself as a genre.
+    /// using the mood word itself as a genre. Reorders genres based on time of day.
     /// </summary>
     /// <param name="mood">The mood keyword from the user.</param>
+    /// <param name="hour">Current hour (0-23) for time-of-day bias.</param>
     /// <returns>An array of genre names to search for.</returns>
-    private static string[] ResolveGenres(string mood)
+    internal static string[] ResolveGenres(string mood, int hour = -1)
     {
-        if (MoodGenreMap.TryGetValue(mood, out string[]? genres))
+        string[]? genres = null;
+
+        if (MoodGenreMap.TryGetValue(mood, out string[]? mapped))
+        {
+            genres = mapped;
+        }
+        else
+        {
+            foreach (KeyValuePair<string, string[]> entry in MoodGenreMap)
+            {
+                if (mood.Contains(entry.Key, StringComparison.OrdinalIgnoreCase))
+                {
+                    genres = entry.Value;
+                    break;
+                }
+            }
+        }
+
+        if (genres == null)
+        {
+            return new[] { mood };
+        }
+
+        if (hour < 0)
         {
             return genres;
         }
 
-        foreach (KeyValuePair<string, string[]> entry in MoodGenreMap)
-        {
-            if (mood.Contains(entry.Key, StringComparison.OrdinalIgnoreCase))
-            {
-                return entry.Value;
-            }
-        }
-
-        return new[] { mood };
+        // Bias genre order toward time-appropriate genres
+        string[] preferred = GetTimePreferredGenres(hour);
+        return genres
+            .OrderByDescending(g => preferred.Contains(g, StringComparer.OrdinalIgnoreCase))
+            .ThenBy(_ => Random.Shared.Next())
+            .ToArray();
     }
+
+    private static string[] GetTimePreferredGenres(int hour) => hour switch
+    {
+        >= 5 and < 10 => new[] { "acoustic", "pop", "folk", "indie", "classical" },
+        >= 10 and < 14 => new[] { "pop", "rock", "indie", "alternative" },
+        >= 14 and < 18 => new[] { "rock", "electronic", "hip hop", "dance" },
+        >= 18 and < 22 => new[] { "jazz", "ambient", "lounge", "soul", "classical" },
+        _ => new[] { "ambient", "chillout", "classical", "jazz" }
+    };
 }

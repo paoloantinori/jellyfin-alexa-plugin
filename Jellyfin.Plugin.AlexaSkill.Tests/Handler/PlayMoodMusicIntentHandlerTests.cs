@@ -188,4 +188,93 @@ public class PlayMoodMusicIntentHandlerTests
         Assert.NotNull(response);
         Assert.NotNull(response.Response?.OutputSpeech);
     }
+
+    [Theory]
+    [InlineData("morning")]
+    [InlineData("evening")]
+    [InlineData("dinner")]
+    [InlineData("workout")]
+    public async Task HandleAsync_TimeOfDayMoods_PlaysFromMappedGenres(string mood)
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(mood: mood);
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var audio = new Audio { Name = "Test Track", Id = Guid.NewGuid() };
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { audio });
+
+        _libraryManagerMock.Setup(l => l.GetItemById(audio.Id))
+            .Returns(audio);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotEmpty(response.Response.Directives);
+    }
+
+    [Fact]
+    public void ResolveGenres_ExactMatch_ReturnsMappedGenres()
+    {
+        string[] genres = PlayMoodMusicIntentHandler.ResolveGenres("morning", hour: -1);
+        Assert.Contains("acoustic", genres);
+    }
+
+    [Fact]
+    public void ResolveGenres_TimeBiasMorning_ReordersGenres()
+    {
+        // "happy" maps to [pop, dance, reggae]. Morning bias (hour 7) prefers pop/folk/indie.
+        // "pop" is in morning preferred list so it should come first.
+        string[] morningBias = PlayMoodMusicIntentHandler.ResolveGenres("happy", hour: 7);
+        Assert.Equal(3, morningBias.Length);
+        Assert.Equal("pop", morningBias[0], ignoreCase: true);
+    }
+
+    [Fact]
+    public void ResolveGenres_TimeBiasEvening_ReordersGenres()
+    {
+        // "relaxing" maps to [ambient, acoustic, jazz, classical, new age].
+        // Evening bias (hour 20) prefers jazz, ambient, lounge, soul, classical.
+        // Jazz and ambient are in both, so they should be at the front.
+        string[] eveningBias = PlayMoodMusicIntentHandler.ResolveGenres("relaxing", hour: 20);
+        Assert.Equal(5, eveningBias.Length);
+
+        // Preferred genres (jazz, ambient, classical) should appear before non-preferred (acoustic, new age)
+        int jazzIdx = Array.FindIndex(eveningBias, g => g.Equals("jazz", StringComparison.OrdinalIgnoreCase));
+        int ambientIdx = Array.FindIndex(eveningBias, g => g.Equals("ambient", StringComparison.OrdinalIgnoreCase));
+        int acousticIdx = Array.FindIndex(eveningBias, g => g.Equals("acoustic", StringComparison.OrdinalIgnoreCase));
+
+        // Jazz and ambient should rank ahead of acoustic (not in evening preferred)
+        Assert.True(jazzIdx < acousticIdx, "jazz should rank ahead of acoustic in evening bias");
+        Assert.True(ambientIdx < acousticIdx, "ambient should rank ahead of acoustic in evening bias");
+    }
+
+    [Fact]
+    public void ResolveGenres_TimeBiasAfternoon_PrefersHighEnergy()
+    {
+        // "upbeat" maps to [pop, rock, dance, electronic]. Afternoon (hour 15) prefers rock, electronic, hip hop, dance.
+        // rock and electronic should be boosted ahead of pop.
+        string[] afternoonBias = PlayMoodMusicIntentHandler.ResolveGenres("upbeat", hour: 15);
+        Assert.Equal(4, afternoonBias.Length);
+
+        int rockIdx = Array.FindIndex(afternoonBias, g => g.Equals("rock", StringComparison.OrdinalIgnoreCase));
+        int electronicIdx = Array.FindIndex(afternoonBias, g => g.Equals("electronic", StringComparison.OrdinalIgnoreCase));
+        int popIdx = Array.FindIndex(afternoonBias, g => g.Equals("pop", StringComparison.OrdinalIgnoreCase));
+
+        Assert.True(rockIdx < popIdx, "rock should rank ahead of pop in afternoon bias");
+        Assert.True(electronicIdx < popIdx, "electronic should rank ahead of pop in afternoon bias");
+    }
+
+    [Fact]
+    public void ResolveGenres_UnknownMood_FallsBackToRawMood()
+    {
+        string[] genres = PlayMoodMusicIntentHandler.ResolveGenres("funkyspacerock", hour: 12);
+        Assert.Single(genres);
+        Assert.Equal("funkyspacerock", genres[0]);
+    }
 }

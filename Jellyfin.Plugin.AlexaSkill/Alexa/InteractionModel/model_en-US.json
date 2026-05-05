@@ -462,7 +462,15 @@
           "play something {mood}",
           "play {mood} songs",
           "i want {mood} music",
-          "play me something {mood}"
+          "play me something {mood}",
+          "play morning music",
+          "play evening music",
+          "play dinner music",
+          "play workout music",
+          "play focus music",
+          "play party music",
+          "play relaxing music",
+          "i want something chill"
         ]
       },
       {
