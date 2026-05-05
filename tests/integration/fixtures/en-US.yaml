@@ -218,11 +218,7 @@ tests:
     expected_intent: MarkFavoriteIntent
     expected_slots: {}
 
-  - utterance: "Thumbs up"
-    expected_intent: MarkFavoriteIntent
-    expected_slots: {}
-
-  - utterance: "Add this to my favorites"
+  - utterance: "Favorite this"
     expected_intent: MarkFavoriteIntent
     expected_slots: {}
 

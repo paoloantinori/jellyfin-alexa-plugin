@@ -140,7 +140,6 @@ explicit_intents:
       - Questo mi piace
       - Mi piace questa canzone
       - Salva nei preferiti
-      - Metti tra i preferiti
   UnmarkFavoriteIntent:
     samples:
       - Rimuovi dai preferiti
