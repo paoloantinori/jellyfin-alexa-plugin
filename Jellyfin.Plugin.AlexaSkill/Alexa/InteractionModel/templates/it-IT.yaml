@@ -202,6 +202,19 @@ explicit_intents:
     slots:
       - name: podcast_name
         type: AMAZON.SearchQuery
+  SearchMediaIntent:
+    samples:
+      - Cerca {query}
+      - Trova {query}
+      - Cerco {query}
+      - Hai {query}
+      - Voglio trovare {query}
+      - Puoi trovare {query}
+      - Cerca il contenuto {query}
+      - Trova il brano {query}
+    slots:
+      - name: query
+        type: AMAZON.SearchQuery
   BrowseLibraryIntent:
     samples:
       - Sfoglia {browse_category}
