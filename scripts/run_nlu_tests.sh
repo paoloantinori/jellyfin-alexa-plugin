@@ -7,9 +7,10 @@
 #   ./scripts/run_nlu_tests.sh -k "en-US"   # run only en-US tests
 #
 # Environment variables:
-#   ASK_SKILL_ID   Override auto-detected skill ID
-#   SMAPI_DELAY    Seconds between SMAPI calls (default: 1.5)
-#   PYTEST_ARGS    Extra pytest arguments
+#   ASK_SKILL_ID      Override auto-detected skill ID
+#   SMAPI_DELAY       Seconds between SMAPI calls (default: 1.5)
+#   SMAPI_TIMEOUT     Per-test timeout in seconds (default: 120)
+#   PYTEST_ARGS       Extra pytest arguments
 
 set -euo pipefail
 
@@ -33,9 +34,17 @@ echo "Installing dependencies..."
 # Run pytest from the integration test directory
 echo ""
 cd "${TEST_DIR}"
+
+# Build timeout option if SMAPI_TIMEOUT is set
+TIMEOUT_OPT=""
+if [ -n "${SMAPI_TIMEOUT:-}" ]; then
+  TIMEOUT_OPT="--smapi-timeout=${SMAPI_TIMEOUT}"
+fi
+
 exec "${VENV_DIR}/bin/python" -m pytest \
   --rootdir="${TEST_DIR}" \
   --tb=short \
   -v \
+  ${TIMEOUT_OPT} \
   ${PYTEST_ARGS:-} \
   "$@"

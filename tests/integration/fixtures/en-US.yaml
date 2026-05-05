@@ -1,5 +1,5 @@
 locale: en-US
-invocation_name: jelly fin
+invocation_name: jellyfin player
 tests:
   # -------------------------------------------------------------------------
   # 1. LoopSongOnIntent (no slots)

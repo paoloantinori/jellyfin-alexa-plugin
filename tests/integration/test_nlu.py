@@ -7,9 +7,13 @@ YAML fixture files.
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 
 from smapi_client import SmapiClient, SmapiError
+
+logger = logging.getLogger("nlu.test")
 
 
 @pytest.fixture
@@ -25,6 +29,7 @@ def smapi_client(skill_id, smapi_delay, nlu_fixture):
         skill_id=skill_id,
         locale=nlu_fixture["locale"],
         delay=smapi_delay,
+        invocation_name=nlu_fixture.get("invocation_name", ""),
     )
 
 
@@ -44,6 +49,8 @@ def test_utterance_resolves_correct_intent(request, nlu_fixture, smapi_client):
             f"expected_slots must be a dict, got {type(expected_slots).__name__}"
         )
         pytest.skip("dry-run mode: SMAPI call skipped")
+
+    logger.info("Testing [%s] (%s) expecting %s", utterance, locale, expected_intent)
 
     # --- Live SMAPI simulation ---
     try:
@@ -71,3 +78,9 @@ def test_utterance_resolves_correct_intent(request, nlu_fixture, smapi_client):
             f"  expected slots: {sorted(expected_slots.keys())}\n"
             f"  resolved slots: {sorted(resolved_slots.keys())}"
         )
+
+    logger.info(
+        "  PASS: [%s] -> %s (conf=%.2f, slots=%s)",
+        utterance[:30], resolved_intent, result["confidence"],
+        sorted(resolved_slots.keys()),
+    )

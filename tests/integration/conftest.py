@@ -11,7 +11,9 @@ Provides:
 from __future__ import annotations
 
 import json
+import logging
 import os
+import signal
 import sys
 from pathlib import Path
 from typing import Any
@@ -135,13 +137,26 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=False,
         help="Skip SMAPI calls; validate fixture structure only.",
     )
+    parser.addoption(
+        "--smapi-timeout",
+        type=float,
+        default=120.0,
+        help="Per-test timeout in seconds for live SMAPI calls (default: 120).",
+    )
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Register custom markers."""
+    """Register custom markers and configure NLU logging."""
     config.addinivalue_line("markers", "nlu: NLU simulation test via SMAPI")
     config.addinivalue_line(
         "markers", "locale(name): locale under test (e.g. en-US, it-IT)"
+    )
+
+    # Configure the nlu.smapi logger so progress is visible with -v/--verbose
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(name)s %(levelname)s %(message)s",
+        datefmt="%H:%M:%S",
     )
 
 
@@ -184,3 +199,47 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
         cases.append(fixture)
 
     metafunc.parametrize("nlu_fixture", cases, ids=ids, indirect=True)
+
+
+# ---------------------------------------------------------------------------
+# Per-test timeout for live SMAPI tests
+# ---------------------------------------------------------------------------
+
+class _TimeoutError(Exception):
+    """Raised when a test exceeds its SMAPI timeout."""
+
+
+def _timeout_handler(signum: int, frame: Any) -> None:  # noqa: ARG001
+    raise _TimeoutError("Test exceeded per-test SMAPI timeout")
+
+
+@pytest.fixture(autouse=True)
+def _smapi_test_timeout(request: pytest.FixtureRequest) -> Any:
+    """Apply a per-test timeout to NLU tests to prevent indefinite hangs.
+
+    Only active for tests marked with @pytest.mark.nlu and not in dry-run mode.
+    Uses SIGALRM on Linux/macOS. Controlled by --smapi-timeout CLI option.
+    """
+    marker = request.node.get_closest_marker("nlu")
+    if marker is None:
+        yield
+        return
+
+    if request.config.getoption("--dry-run", default=False):
+        yield
+        return
+
+    timeout = request.config.getoption("--smapi-timeout", default=120.0)
+    old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
+    signal.alarm(int(timeout))
+    try:
+        yield
+    except _TimeoutError:
+        pytest.fail(
+            f"Test timed out after {timeout:.0f}s — SMAPI likely rate-limited or "
+            f"simulation stuck. Try increasing --smapi-timeout or adding a delay "
+            f"between runs with SMAPI_DELAY env var."
+        )
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old_handler)
