@@ -18,12 +18,20 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
 /// <summary>
-/// Handler for PlayLastAdded intents.
+/// Handler for PlayLastAdded intents. Supports optional time context
+/// to filter recently added items by period (today, this week, this month).
 /// </summary>
 public class PlayLastAddedIntentHandler : BaseHandler
 {
     private ILibraryManager _libraryManager;
     private IUserManager _userManager;
+
+    private static readonly Dictionary<string, (int Days, string LocaleKey)> TimePeriodMap = new()
+    {
+        { "today", (1, "TimePeriodToday") },
+        { "this_week", (7, "TimePeriodThisWeek") },
+        { "this_month", (30, "TimePeriodThisMonth") }
+    };
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PlayLastAddedIntentHandler"/> class.
@@ -52,7 +60,7 @@ public class PlayLastAddedIntentHandler : BaseHandler
     }
 
     /// <summary>
-    /// Resume any currently playing media or ask the user to say some media name to play.
+    /// Play recently added items, optionally filtered by a time period slot.
     /// </summary>
     /// <param name="request">The skill request which should be handled.</param>
     /// <param name="context">The context of the skill intent request.</param>
@@ -62,13 +70,32 @@ public class PlayLastAddedIntentHandler : BaseHandler
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
+        IntentRequest intentRequest = (IntentRequest)request;
 
-        await SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)).ConfigureAwait(false);
+        int lookbackDays = 3;
+        string? timeLabel = null;
+
+        if (intentRequest.Intent.Slots != null
+            && intentRequest.Intent.Slots.TryGetValue("time_period", out Slot? timeSlot)
+            && !string.IsNullOrEmpty(timeSlot.Value))
+        {
+            string periodId = timeSlot.Value.ToLowerInvariant();
+            if (TimePeriodMap.TryGetValue(periodId, out var period))
+            {
+                lookbackDays = period.Days;
+                timeLabel = ResponseStrings.Get(period.LocaleKey, locale);
+            }
+        }
+
+        string searchingText = timeLabel != null
+            ? ResponseStrings.Get("SearchingMediaTime", locale, timeLabel)
+            : ResponseStrings.Get("SearchingMedia", locale);
+        await SendProgressiveResponse(context, request, searchingText).ConfigureAwait(false);
 
         InternalItemsQuery query = new InternalItemsQuery()
         {
             User = _userManager.GetUserById(session.UserId),
-            MinDateLastSavedForUser = DateTime.Today.AddDays(-3),
+            MinDateLastSavedForUser = DateTime.UtcNow.Date.AddDays(-lookbackDays),
             DtoOptions = new MediaBrowser.Controller.Dto.DtoOptions(true)
         };
 
@@ -76,6 +103,11 @@ public class PlayLastAddedIntentHandler : BaseHandler
 
         if (latestItems.Count == 0)
         {
+            if (timeLabel != null)
+            {
+                return ResponseBuilder.Tell(ResponseStrings.Get("NoNewlyAddedItemsTime", locale, timeLabel));
+            }
+
             return ResponseBuilder.Tell(ResponseStrings.Get("NoNewlyAddedItems", locale));
         }
 

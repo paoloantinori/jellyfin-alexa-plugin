@@ -135,12 +135,21 @@
           "Play last added {media_type}",
           "Play recently added {media_type}",
           "Play newly added {media_type}",
-          "Play new media"
+          "Play new media",
+          "Play something new",
+          "Play {media_type} added {time_period}",
+          "Play recently added {media_type} from {time_period}",
+          "Play new {media_type} from {time_period}",
+          "Play {media_type} added {time_period}"
         ],
         "slots": [
           {
             "name": "media_type",
             "type": "MediaType"
+          },
+          {
+            "name": "time_period",
+            "type": "TimePeriod"
           }
         ]
       },
@@ -687,6 +696,46 @@
           {
             "name": {
               "value": "Dexter"
+            }
+          }
+        ]
+      },
+      {
+        "name": "TimePeriod",
+        "values": [
+          {
+            "id": "today",
+            "name": {
+              "value": "today",
+              "synonyms": [
+                "earlier today"
+              ]
+            }
+          },
+          {
+            "id": "this_week",
+            "name": {
+              "value": "this week",
+              "synonyms": [
+                "the past week",
+                "the last week",
+                "past week",
+                "last week",
+                "this past week"
+              ]
+            }
+          },
+          {
+            "id": "this_month",
+            "name": {
+              "value": "this month",
+              "synonyms": [
+                "the past month",
+                "the last month",
+                "past month",
+                "last month",
+                "this past month"
+              ]
             }
           }
         ]
