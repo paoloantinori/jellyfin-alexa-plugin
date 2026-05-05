@@ -194,6 +194,36 @@
         ]
       },
       {
+        "name": "PlayByDecadeIntent",
+        "samples": [
+          "play songs from the {decade}",
+          "play tracks from the {decade}",
+          "play hits from the {decade}",
+          "play music from the {decade}",
+          "play {decade} hits",
+          "play {decade} songs",
+          "play {decade} tracks",
+          "play {decade} music",
+          "play {genre} from the {decade}",
+          "play {genre} songs from the {decade}",
+          "I want to hear {decade} music",
+          "play something from the {decade}",
+          "listen to {decade} music",
+          "give me {decade} songs",
+          "shuffle {decade} music"
+        ],
+        "slots": [
+          {
+            "name": "decade",
+            "type": "Decade"
+          },
+          {
+            "name": "genre",
+            "type": "AMAZON.Genre"
+          }
+        ]
+      },
+      {
         "name": "ContinueWatchingIntent",
         "samples": [
           "Continue watching",
@@ -816,6 +846,102 @@
               "synonyms": [
                 "bio",
                 "about the artist"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "Decade",
+        "values": [
+          {
+            "id": "50s",
+            "name": {
+              "value": "50s",
+              "synonyms": [
+                "fifties",
+                "the 50s",
+                "the fifties",
+                "1950s"
+              ]
+            }
+          },
+          {
+            "id": "60s",
+            "name": {
+              "value": "60s",
+              "synonyms": [
+                "sixties",
+                "the 60s",
+                "the sixties",
+                "1960s"
+              ]
+            }
+          },
+          {
+            "id": "70s",
+            "name": {
+              "value": "70s",
+              "synonyms": [
+                "seventies",
+                "the 70s",
+                "the seventies",
+                "1970s"
+              ]
+            }
+          },
+          {
+            "id": "80s",
+            "name": {
+              "value": "80s",
+              "synonyms": [
+                "eighties",
+                "the 80s",
+                "the eighties",
+                "1980s"
+              ]
+            }
+          },
+          {
+            "id": "90s",
+            "name": {
+              "value": "90s",
+              "synonyms": [
+                "nineties",
+                "the 90s",
+                "the nineties",
+                "1990s"
+              ]
+            }
+          },
+          {
+            "id": "2000s",
+            "name": {
+              "value": "2000s",
+              "synonyms": [
+                "two thousands",
+                "the 2000s",
+                "the two thousands"
+              ]
+            }
+          },
+          {
+            "id": "2010s",
+            "name": {
+              "value": "2010s",
+              "synonyms": [
+                "twenty tens",
+                "the 2010s"
+              ]
+            }
+          },
+          {
+            "id": "2020s",
+            "name": {
+              "value": "2020s",
+              "synonyms": [
+                "twenty twenties",
+                "the 2020s"
               ]
             }
           }

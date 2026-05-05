@@ -76,6 +76,19 @@ tests:
       genre: {}
 
   # -------------------------------------------------------------------------
+  # 6b. PlayByDecadeIntent (decade)
+  # -------------------------------------------------------------------------
+  - utterance: "Riproduci musica degli anni ottanta"
+    expected_intent: PlayByDecadeIntent
+    expected_slots:
+      decade: {}
+
+  - utterance: "Brani degli anni ottanta"
+    expected_intent: PlayByDecadeIntent
+    expected_slots:
+      decade: {}
+
+  # -------------------------------------------------------------------------
   # 7. PlayPlaylistIntent (playlist)
   # -------------------------------------------------------------------------
   - utterance: "Riproduci playlist i miei brani"
