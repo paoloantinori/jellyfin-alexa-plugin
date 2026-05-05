@@ -1,4 +1,4 @@
-"""SMAPI client wrapping ASK CLI simulate-skill for NLU testing."""
+"""SMAPI client wrapping ASK CLI profile-nlu and simulate-skill for NLU testing."""
 
 from __future__ import annotations
 
@@ -216,6 +216,45 @@ class SmapiClient:
             f"for '{utterance}' ({self.locale})"
         )
 
+    def profile_nlu(self, utterance: str, stage: str = "development") -> dict[str, Any]:
+        """Run profile-nlu (synchronous, no invocation prefix needed).
+
+        Preferred over simulate-skill for NLU intent resolution testing
+        because it works with bare utterances in all locales without
+        requiring a locale-specific invocation prefix.
+        """
+        global _last_smapi_call
+        elapsed = time.time() - _last_smapi_call
+        if elapsed < self.delay:
+            wait = self.delay - elapsed
+            logger.debug("Rate-limit delay: %.1fs", wait)
+            time.sleep(wait)
+
+        for attempt in range(_RATE_LIMIT_MAX_RETRIES):
+            try:
+                output = _run_ask([
+                    "profile-nlu",
+                    "--skill-id", self.skill_id,
+                    "--stage", stage,
+                    "--locale", self.locale,
+                    "--utterance", utterance,
+                ])
+                _last_smapi_call = time.time()
+                return _parse_json_output(output)
+            except SmapiRateLimitError as exc:
+                backoff = _RATE_LIMIT_BACKOFF_BASE * (attempt + 1)
+                if attempt < _RATE_LIMIT_MAX_RETRIES - 1:
+                    logger.warning(
+                        "Rate limited on attempt %d/%d, backing off %.0fs",
+                        attempt + 1, _RATE_LIMIT_MAX_RETRIES, backoff,
+                    )
+                    time.sleep(backoff)
+                    continue
+                raise SmapiError(
+                    f"Rate limited after {_RATE_LIMIT_MAX_RETRIES} attempts"
+                ) from exc
+        raise SmapiError("Should not reach here")
+
     @staticmethod
     def _intent_summary(response: dict[str, Any]) -> str:
         """Extract a short intent name for log messages."""
@@ -280,3 +319,38 @@ class SmapiClient:
             raise SmapiError(
                 f"Unexpected SMAPI response structure: {exc}"
             ) from exc
+
+    @staticmethod
+    def parse_profile_nlu_result(response: dict[str, Any]) -> dict[str, Any]:
+        """Extract intent and slots from profile-nlu response.
+
+        Returns:
+            dict with keys:
+                intent: resolved intent name (str)
+                slots:  dict mapping slot_name to
+                        {"name": str, "value": str}
+                raw:   full response payload for debugging
+        """
+        selected = response.get("selectedIntent")
+        if not selected:
+            considered = response.get("consideredIntents", [])
+            if considered:
+                names = [c.get("name", "?") for c in considered]
+                raise SmapiError(
+                    f"No selectedIntent; considered: {names}"
+                )
+            raise SmapiError("No selectedIntent or consideredIntents in response")
+
+        intent_name = selected.get("name", "")
+        slots: dict[str, dict[str, Any]] = {}
+        for slot_name, slot_data in selected.get("slots", {}).items():
+            slots[slot_name] = {
+                "name": slot_name,
+                "value": slot_data.get("value", ""),
+            }
+
+        return {
+            "intent": intent_name,
+            "slots": slots,
+            "raw": response,
+        }

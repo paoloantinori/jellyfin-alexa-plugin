@@ -1,4 +1,4 @@
-"""NLU integration tests using ASK CLI simulate-skill.
+"""NLU integration tests using ASK CLI profile-nlu.
 
 Each test case sends an utterance through Alexa's NLU pipeline and asserts
 that the resolved intent and required slots match the expected values from
@@ -52,13 +52,13 @@ def test_utterance_resolves_correct_intent(request, nlu_fixture, smapi_client):
 
     logger.info("Testing [%s] (%s) expecting %s", utterance, locale, expected_intent)
 
-    # --- Live SMAPI simulation ---
+    # --- Live SMAPI NLU profiling ---
     try:
-        response = smapi_client.simulate(utterance)
+        response = smapi_client.profile_nlu(utterance)
     except SmapiError as exc:
         pytest.fail(f"SMAPI error for '{utterance}' ({locale}): {exc}")
 
-    result = SmapiClient.parse_nlu_result(response)
+    result = SmapiClient.parse_profile_nlu_result(response)
 
     resolved_intent = result["intent"]
 
@@ -66,8 +66,7 @@ def test_utterance_resolves_correct_intent(request, nlu_fixture, smapi_client):
     assert resolved_intent == expected_intent, (
         f"Intent mismatch for '{utterance}' ({locale}):\n"
         f"  expected: {expected_intent}\n"
-        f"  actual:   {resolved_intent}\n"
-        f"  confidence: {result['confidence']:.2f}"
+        f"  actual:   {resolved_intent}"
     )
 
     # --- Slot assertions ---
@@ -80,7 +79,7 @@ def test_utterance_resolves_correct_intent(request, nlu_fixture, smapi_client):
         )
 
     logger.info(
-        "  PASS: [%s] -> %s (conf=%.2f, slots=%s)",
-        utterance[:30], resolved_intent, result["confidence"],
+        "  PASS: [%s] -> %s (slots=%s)",
+        utterance[:30], resolved_intent,
         sorted(resolved_slots.keys()),
     )
