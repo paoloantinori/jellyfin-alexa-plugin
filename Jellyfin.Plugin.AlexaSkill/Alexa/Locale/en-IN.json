@@ -76,5 +76,18 @@
   "ArtistInfoGenreAlbums": "{0} is a {1} artist with {2} albums in your library.",
   "ArtistInfoBioOnly": "{0}. {1}",
   "ArtistInfoGenreOnly": "{0} is a {1} artist.",
-  "ArtistInfoAlbumsOnly": "{0} has {1} albums in your library."
+  "ArtistInfoAlbumsOnly": "{0} has {1} albums in your library.",
+  "MediaInfoTitle": "This is {0} by {1}",
+  "MediaInfoTitleNoArtist": "This is {0}",
+  "MediaInfoAlbum": "This is from the album {0}",
+  "MediaInfoAlbumUnavailable": "I don't have album information for this track.",
+  "MediaInfoArtist": "This is by {0}",
+  "MediaInfoArtistUnavailable": "I don't have artist information for this track.",
+  "MediaInfoYear": "This was released in {0}",
+  "MediaInfoYearUnavailable": "I don't have the release year for this track.",
+  "MediaInfoDuration": "This is {0} long",
+  "MediaInfoDurationUnavailable": "I don't have duration information for this track.",
+  "MediaInfoGenre": "The genre is {0}",
+  "MediaInfoGenreUnavailable": "I don't have genre information for this track.",
+  "MediaInfoBiographyUnavailable": "I don't have a biography for {0}."
 }

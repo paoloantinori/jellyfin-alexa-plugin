@@ -264,12 +264,31 @@
       },
       {
         "name": "MediaInfoIntent",
+        "slots": [
+          {
+            "name": "media_info_type",
+            "type": "MediaInfoType"
+          }
+        ],
         "samples": [
-          "Quel est le nom de la chanson",
-          "Quel est le nom de la vidéo",
-          "Quel est le titre de la chanson",
-          "Quel est le titre de la vidéo",
-          "Qu'est-ce qui est en cours de lecture"
+          "Quel est le {media_info_type}",
+          "Quelle est la {media_info_type}",
+          "Dis-moi le {media_info_type}",
+          "Dis-moi la {media_info_type}",
+          "Quel {media_info_type} est-ce",
+          "Quelle {media_info_type} est-ce",
+          "Qu'est-ce qui joue",
+          "Quelle est cette chanson",
+          "Qui chante",
+          "Qui chante cette chanson",
+          "De quel album",
+          "De quelle année",
+          "Quand est-ce sorti",
+          "Combien de temps",
+          "Combien de temps dure cette chanson",
+          "Quel genre est-ce",
+          "Parle-moi de l'artiste",
+          "Raconte-moi l'artiste"
         ]
       },
       {
@@ -484,6 +503,81 @@
           {
             "name": {
               "value": "Engrenages"
+            }
+          }
+        ]
+      },
+      {
+        "name": "MediaInfoType",
+        "values": [
+          {
+            "id": "title",
+            "name": {
+              "value": "titre",
+              "synonyms": [
+                "chanson",
+                "morceau",
+                "nom"
+              ]
+            }
+          },
+          {
+            "id": "album",
+            "name": {
+              "value": "album",
+              "synonyms": [
+                "disque"
+              ]
+            }
+          },
+          {
+            "id": "artist",
+            "name": {
+              "value": "artiste",
+              "synonyms": [
+                "chanteur",
+                "groupe",
+                "musicien"
+              ]
+            }
+          },
+          {
+            "id": "year",
+            "name": {
+              "value": "année",
+              "synonyms": [
+                "année de sortie"
+              ]
+            }
+          },
+          {
+            "id": "duration",
+            "name": {
+              "value": "durée",
+              "synonyms": [
+                "longueur",
+                "temps"
+              ]
+            }
+          },
+          {
+            "id": "genre",
+            "name": {
+              "value": "genre",
+              "synonyms": [
+                "style",
+                "type de musique"
+              ]
+            }
+          },
+          {
+            "id": "biography",
+            "name": {
+              "value": "biographie",
+              "synonyms": [
+                "bio",
+                "sur l'artiste"
+              ]
             }
           }
         ]

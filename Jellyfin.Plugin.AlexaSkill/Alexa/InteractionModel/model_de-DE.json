@@ -265,12 +265,31 @@
       },
       {
         "name": "MediaInfoIntent",
+        "slots": [
+          {
+            "name": "media_info_type",
+            "type": "MediaInfoType"
+          }
+        ],
         "samples": [
-          "Wie heisst das Lied",
-          "Wie heisst das Video",
-          "Wie heisst die Musik",
-          "Welcher Titel laeuft gerade",
-          "Was wird gerade abgespielt"
+          "Was ist der {media_info_type}",
+          "Was ist die {media_info_type}",
+          "Sag mir den {media_info_type}",
+          "Sag mir die {media_info_type}",
+          "Welcher {media_info_type} ist das",
+          "Welche {media_info_type} ist das",
+          "Was läuft gerade",
+          "Was spielt gerade",
+          "Wie heißt das Lied",
+          "Wer singt das",
+          "Von wem ist das",
+          "Welches Album ist das",
+          "Welches Jahr ist das",
+          "Wann wurde das veröffentlicht",
+          "Wie lange dauert das",
+          "Welches Genre ist das",
+          "Erzähl mir von dem Künstler",
+          "Infos über den Künstler"
         ]
       },
       {
@@ -485,6 +504,81 @@
           {
             "name": {
               "value": "Dexter"
+            }
+          }
+        ]
+      },
+      {
+        "name": "MediaInfoType",
+        "values": [
+          {
+            "id": "title",
+            "name": {
+              "value": "Titel",
+              "synonyms": [
+                "Lied",
+                "Song",
+                "Name"
+              ]
+            }
+          },
+          {
+            "id": "album",
+            "name": {
+              "value": "Album",
+              "synonyms": [
+                "Platte"
+              ]
+            }
+          },
+          {
+            "id": "artist",
+            "name": {
+              "value": "Künstler",
+              "synonyms": [
+                "Sänger",
+                "Band",
+                "Musiker"
+              ]
+            }
+          },
+          {
+            "id": "year",
+            "name": {
+              "value": "Jahr",
+              "synonyms": [
+                "Erscheinungsjahr"
+              ]
+            }
+          },
+          {
+            "id": "duration",
+            "name": {
+              "value": "Dauer",
+              "synonyms": [
+                "Länge",
+                "Spieldauer"
+              ]
+            }
+          },
+          {
+            "id": "genre",
+            "name": {
+              "value": "Genre",
+              "synonyms": [
+                "Stil",
+                "Musikrichtung"
+              ]
+            }
+          },
+          {
+            "id": "biography",
+            "name": {
+              "value": "Biografie",
+              "synonyms": [
+                "Bio",
+                "über den Künstler"
+              ]
             }
           }
         ]

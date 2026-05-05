@@ -211,6 +211,12 @@
       },
       {
         "name": "MediaInfoIntent",
+        "slots": [
+          {
+            "name": "media_info_type",
+            "type": "MediaInfoType"
+          }
+        ],
         "samples": [
           "Cosa sta suonando",
           "Cosa sta suonando adesso",
@@ -221,7 +227,23 @@
           "Informazioni su questa canzone",
           "Dimmi cosa sta suonando",
           "Che cosa suona",
-          "Chi suona adesso"
+          "Chi suona adesso",
+          "Qual è il {media_info_type}",
+          "Qual è la {media_info_type}",
+          "Dimmi il {media_info_type}",
+          "Dimmi la {media_info_type}",
+          "Che {media_info_type} è",
+          "Chi canta",
+          "Chi canta questa canzone",
+          "Di che album è questo brano",
+          "Che anno è",
+          "Quando è uscito",
+          "Quanto dura",
+          "Quanto dura questa canzone",
+          "Che genere è",
+          "Che genere di musica è",
+          "Parlami dell'artista",
+          "Raccontami di questo artista"
         ]
       },
       {
@@ -1193,6 +1215,81 @@
           {
             "name": {
               "value": "decimo"
+            }
+          }
+        ]
+      },
+      {
+        "name": "MediaInfoType",
+        "values": [
+          {
+            "id": "title",
+            "name": {
+              "value": "titolo",
+              "synonyms": [
+                "canzone",
+                "brano",
+                "nome"
+              ]
+            }
+          },
+          {
+            "id": "album",
+            "name": {
+              "value": "album",
+              "synonyms": [
+                "disco"
+              ]
+            }
+          },
+          {
+            "id": "artist",
+            "name": {
+              "value": "artista",
+              "synonyms": [
+                "cantante",
+                "gruppo",
+                "musicista"
+              ]
+            }
+          },
+          {
+            "id": "year",
+            "name": {
+              "value": "anno",
+              "synonyms": [
+                "anno di uscita"
+              ]
+            }
+          },
+          {
+            "id": "duration",
+            "name": {
+              "value": "durata",
+              "synonyms": [
+                "lunghezza",
+                "quanto dura"
+              ]
+            }
+          },
+          {
+            "id": "genre",
+            "name": {
+              "value": "genere",
+              "synonyms": [
+                "stile",
+                "tipo di musica"
+              ]
+            }
+          },
+          {
+            "id": "biography",
+            "name": {
+              "value": "biografia",
+              "synonyms": [
+                "bio",
+                "sull'artista"
+              ]
             }
           }
         ]
