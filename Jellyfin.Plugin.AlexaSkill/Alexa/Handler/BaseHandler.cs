@@ -256,7 +256,9 @@ public abstract class BaseHandler
     {
         if (item is MediaBrowser.Controller.Entities.Audio.Audio audio)
         {
-            return audio.Album ?? string.Empty;
+            return audio.Artists?.Count > 0
+                ? audio.Artists[0]
+                : audio.Album ?? string.Empty;
         }
 
         if (item is MediaBrowser.Controller.Entities.TV.Episode episode)

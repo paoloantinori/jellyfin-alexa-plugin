@@ -353,4 +353,97 @@ public class CoverArtTests
 
         Assert.Equal(PlayBehavior.ReplaceEnqueued, directive.PlayBehavior);
     }
+
+    [Fact]
+    public void BuildAudioPlayerResponse_AudioWithArtist_SubtitleShowsArtist()
+    {
+        var handler = CreateHandler();
+        var song = new Audio
+        {
+            Name = "Bohemian Rhapsody",
+            Id = Guid.NewGuid(),
+            Artists = new List<string> { "Queen" },
+            Album = "A Night at the Opera"
+        };
+        var user = CreateUser();
+        string itemId = song.Id.ToString();
+        string streamUrl = handler.GetStreamUrl(itemId, user);
+
+        var response = handler.BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
+
+        var directive = Assert.IsType<AudioPlayerPlayDirective>(
+            Assert.Single(response.Response.Directives));
+
+        Assert.Equal("Queen", directive.AudioItem.Metadata.Subtitle);
+    }
+
+    [Fact]
+    public void BuildAudioPlayerResponse_AudioWithoutArtist_SubtitleFallsBackToAlbum()
+    {
+        var handler = CreateHandler();
+        var song = new Audio
+        {
+            Name = "Instrumental Track",
+            Id = Guid.NewGuid(),
+            Artists = new List<string>(),
+            Album = "Greatest Hits"
+        };
+        var user = CreateUser();
+        string itemId = song.Id.ToString();
+        string streamUrl = handler.GetStreamUrl(itemId, user);
+
+        var response = handler.BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
+
+        var directive = Assert.IsType<AudioPlayerPlayDirective>(
+            Assert.Single(response.Response.Directives));
+
+        Assert.Equal("Greatest Hits", directive.AudioItem.Metadata.Subtitle);
+    }
+
+    [Fact]
+    public void BuildAudioPlayerResponse_AudioNoArtistNoAlbum_SubtitleIsEmpty()
+    {
+        var handler = CreateHandler();
+        var song = new Audio
+        {
+            Name = "Unknown Track",
+            Id = Guid.NewGuid()
+        };
+        var user = CreateUser();
+        string itemId = song.Id.ToString();
+        string streamUrl = handler.GetStreamUrl(itemId, user);
+
+        var response = handler.BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
+
+        var directive = Assert.IsType<AudioPlayerPlayDirective>(
+            Assert.Single(response.Response.Directives));
+
+        Assert.Equal(string.Empty, directive.AudioItem.Metadata.Subtitle);
+    }
+
+    [Fact]
+    public void BuildAudioPlayerResponse_Episode_SubtitleShowsSeriesName()
+    {
+        var handler = CreateHandler();
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Pilot",
+            Id = Guid.NewGuid(),
+            SeriesName = "Breaking Bad"
+        };
+        var user = CreateUser();
+        string itemId = episode.Id.ToString();
+        string streamUrl = handler.GetStreamUrl(itemId, user);
+
+        var response = handler.BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, streamUrl, itemId, episode, user);
+
+        var directive = Assert.IsType<AudioPlayerPlayDirective>(
+            Assert.Single(response.Response.Directives));
+
+        Assert.Equal("Breaking Bad", directive.AudioItem.Metadata.Subtitle);
+    }
 }
