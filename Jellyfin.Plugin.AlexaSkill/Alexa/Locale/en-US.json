@@ -101,5 +101,12 @@
   "AlbumsByArtistList": "You have {1} albums by {0}: {2}.",
   "AlbumsByArtistPartial": "You have {1} albums by {0}. Here are the first {2}: {3}.",
   "TracksByArtistList": "You have {1} tracks by {0}: {2}.",
-  "TracksByArtistPartial": "You have {1} tracks by {0}. Here are the first {2}: {3}."
+  "TracksByArtistPartial": "You have {1} tracks by {0}. Here are the first {2}: {3}.",
+  "ArtistInfoBioGenreAlbums": "{0} is a {1} artist with {2} albums in your library. {3}",
+  "ArtistInfoBioGenre": "{0} is a {1} artist. {2}",
+  "ArtistInfoBioAlbums": "{0} has {1} albums in your library. {2}",
+  "ArtistInfoGenreAlbums": "{0} is a {1} artist with {2} albums in your library.",
+  "ArtistInfoBioOnly": "{0}. {1}",
+  "ArtistInfoGenreOnly": "{0} is a {1} artist.",
+  "ArtistInfoAlbumsOnly": "{0} has {1} albums in your library."
 }

@@ -74,6 +74,8 @@ public class AlexaSkillController : ControllerBase
         {
             new LaunchRequestHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, loggerFactory),
 
+            new MediaInfoIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
+
             new PlayIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
             new PauseIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
             new NextIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, loggerFactory),

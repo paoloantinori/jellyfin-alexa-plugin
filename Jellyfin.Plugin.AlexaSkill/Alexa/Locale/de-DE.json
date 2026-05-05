@@ -69,5 +69,12 @@
   "SleepTimerSet": "Schlaf-Timer auf {0} Minuten gesetzt. Die Wiedergabe wird dann gestoppt.",
   "CancelSleepTimer": "Schlaf-Timer abgebrochen.",
   "DidNotCatchMood": "Was für Musik möchtest du? Du kannst entspannend, fröhlich, chillig, energiegeladen oder Fokus sagen.",
-  "NotFoundMood": "Ich konnte keine {0} Musik in deiner Bibliothek finden."
+  "NotFoundMood": "Ich konnte keine {0} Musik in deiner Bibliothek finden.",
+  "ArtistInfoBioGenreAlbums": "{0} ist ein {1}-Künstler mit {2} Alben in deiner Bibliothek. {3}",
+  "ArtistInfoBioGenre": "{0} ist ein {1}-Künstler. {2}",
+  "ArtistInfoBioAlbums": "{0} hat {1} Alben in deiner Bibliothek. {2}",
+  "ArtistInfoGenreAlbums": "{0} ist ein {1}-Künstler mit {2} Alben in deiner Bibliothek.",
+  "ArtistInfoBioOnly": "{0}. {1}",
+  "ArtistInfoGenreOnly": "{0} ist ein {1}-Künstler.",
+  "ArtistInfoAlbumsOnly": "{0} hat {1} Alben in deiner Bibliothek."
 }

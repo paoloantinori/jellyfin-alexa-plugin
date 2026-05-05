@@ -10,6 +10,10 @@ using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
+using MediaBrowser.Controller.Dto;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Audio;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Session;
@@ -22,12 +26,16 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 public class MediaInfoIntentHandlerTests
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
+    private readonly Mock<ILibraryManager> _libraryManagerMock;
+    private readonly Mock<IUserManager> _userManagerMock;
     private readonly PluginConfiguration _config;
     private readonly ILoggerFactory _loggerFactory;
 
     public MediaInfoIntentHandlerTests()
     {
         _sessionManagerMock = new Mock<ISessionManager>();
+        _libraryManagerMock = new Mock<ILibraryManager>();
+        _userManagerMock = new Mock<IUserManager>();
         _config = new PluginConfiguration();
         _loggerFactory = LoggerFactory.Create(b => { });
     }
@@ -39,6 +47,8 @@ public class MediaInfoIntentHandlerTests
         return new MediaInfoIntentHandler(
             _sessionManagerMock.Object,
             _config,
+            _libraryManagerMock.Object,
+            _userManagerMock.Object,
             _loggerFactory);
     }
 
@@ -57,6 +67,26 @@ public class MediaInfoIntentHandlerTests
     private static Context CreateContext() => TestHelpers.CreateTestContext();
 
     private static string GetSpeechText(SkillResponse response) => TestHelpers.GetSpeechText(response);
+
+    private void SetupArtistLookup(string artistName, string? overview, string[]? genres)
+    {
+        var artistItem = new MusicArtist { Name = artistName, Id = Guid.NewGuid() };
+        artistItem.Overview = overview;
+        artistItem.Genres = genres ?? Array.Empty<string>();
+
+        var artistList = new List<BaseItem> { artistItem };
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) =>
+            {
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Length > 0 && q.IncludeItemTypes[0] == BaseItemKind.MusicArtist)
+                {
+                    return artistList;
+                }
+
+                return new List<BaseItem>();
+            });
+    }
 
     [Theory]
     [InlineData("MediaInfoIntent", true)]
@@ -86,6 +116,7 @@ public class MediaInfoIntentHandlerTests
     [Fact]
     public async Task Handle_AudioItem_ReportsTrackArtistAndAlbum()
     {
+        SetupArtistLookup("Queen", "Queen are a British rock band.", new[] { "Rock" });
         var handler = CreateHandler();
         var session = CreateSession();
         session.NowPlayingItem = new BaseItemDto
@@ -108,6 +139,7 @@ public class MediaInfoIntentHandlerTests
     [Fact]
     public async Task Handle_AudioItem_NoAlbum_ReportsTrackAndArtist()
     {
+        SetupArtistLookup("The Beatles", null, null);
         var handler = CreateHandler();
         var session = CreateSession();
         session.NowPlayingItem = new BaseItemDto
@@ -141,6 +173,77 @@ public class MediaInfoIntentHandlerTests
             TestHelpers.CreateTestUser(), session, CancellationToken.None));
 
         Assert.Contains("Mystery Track", text);
+    }
+
+    [Fact]
+    public async Task Handle_AudioItem_WithArtistBio_IncludesBioInResponse()
+    {
+        SetupArtistLookup("Queen", "Queen are a British rock band formed in London in 1970. They are one of the most commercially successful bands.", new[] { "Rock", "Classic Rock" });
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Name = "Bohemian Rhapsody",
+            Type = BaseItemKind.Audio,
+            AlbumArtist = "Queen",
+            Album = "A Night at the Opera"
+        };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest(), CreateContext(),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("Bohemian Rhapsody", text);
+        Assert.Contains("Queen", text);
+        Assert.Contains("British rock band", text);
+    }
+
+    [Fact]
+    public async Task Handle_AudioItem_WithGenresOnly_IncludesGenreInResponse()
+    {
+        SetupArtistLookup("Radiohead", null, new[] { "Alternative", "Experimental" });
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Name = "Karma Police",
+            Type = BaseItemKind.Audio,
+            AlbumArtist = "Radiohead",
+            Album = "OK Computer"
+        };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest(), CreateContext(),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("Alternative", text);
+    }
+
+    [Fact]
+    public async Task Handle_AudioItem_NoArtistMetadata_FallsBackToBasicInfo()
+    {
+        // No artist found in library
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Name = "Unknown Song",
+            Type = BaseItemKind.Audio,
+            AlbumArtist = "Unknown Artist",
+            Album = "Unknown Album"
+        };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest(), CreateContext(),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        // Should still report track info even without artist metadata
+        Assert.Contains("Unknown Song", text);
+        Assert.Contains("Unknown Artist", text);
     }
 
     [Fact]
@@ -307,5 +410,30 @@ public class MediaInfoIntentHandlerTests
             TestHelpers.CreateTestUser(), session, CancellationToken.None));
 
         Assert.DoesNotContain("Position", text);
+    }
+
+    [Fact]
+    public async Task Handle_BioTruncation_TruncatesToTwoSentences()
+    {
+        string longBio = "Queen are a British rock band formed in London in 1970. Their classic lineup was Freddie Mercury, Brian May, Roger Taylor, and John Deacon. The band has sold over 300 million records worldwide.";
+        SetupArtistLookup("Queen", longBio, new[] { "Rock" });
+
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Name = "Bohemian Rhapsody",
+            Type = BaseItemKind.Audio,
+            AlbumArtist = "Queen",
+            Album = "A Night at the Opera"
+        };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest(), CreateContext(),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        // Should contain first two sentences but not the third
+        Assert.Contains("British rock band", text);
+        Assert.DoesNotContain("300 million", text);
     }
 }
