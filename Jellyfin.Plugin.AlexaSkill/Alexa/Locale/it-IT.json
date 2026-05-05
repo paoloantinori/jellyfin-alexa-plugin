@@ -128,5 +128,9 @@
   "MediaInfoDurationUnavailable": "Non ho informazioni sulla durata di questo brano.",
   "MediaInfoGenre": "Il genere è {0}",
   "MediaInfoGenreUnavailable": "Non ho informazioni sul genere di questo brano.",
-  "MediaInfoBiographyUnavailable": "Non ho una biografia per {0}."
+  "MediaInfoBiographyUnavailable": "Non ho una biografia per {0}.",
+  "SearchingPodcast": "Cerco il podcast...",
+  "DidNotCatchPodcastName": "Non ho capito il nome del podcast. Quale podcast vorresti ascoltare?",
+  "NotFoundPodcast": "Non ho trovato un podcast chiamato {0}.",
+  "NoEpisodesInPodcast": "Non ho trovato episodi di {0}."
 }

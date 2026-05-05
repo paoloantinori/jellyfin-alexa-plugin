@@ -416,3 +416,21 @@ tests:
   - utterance: "Suona i miei preferiti"
     expected_intent: PlayFavoritesIntent
     expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 28. PlayPodcastIntent (podcast_name)
+  # -------------------------------------------------------------------------
+  - utterance: "Riproduci il podcast serial"
+    expected_intent: PlayPodcastIntent
+    expected_slots:
+      podcast_name: {}
+
+  - utterance: "Ascolta il podcast the daily"
+    expected_intent: PlayPodcastIntent
+    expected_slots:
+      podcast_name: {}
+
+  - utterance: "Suona il podcast radiolab"
+    expected_intent: PlayPodcastIntent
+    expected_slots:
+      podcast_name: {}

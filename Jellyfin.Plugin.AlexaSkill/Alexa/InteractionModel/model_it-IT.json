@@ -228,9 +228,9 @@
           "Togli dai preferiti",
           "Rimuovi questo dai preferiti",
           "Togli questo dai preferiti",
-          "Non mi piace più",
+          "Non mi piace pi\u00f9",
           "Non mi piace piu",
-          "Questo non mi piace più",
+          "Questo non mi piace pi\u00f9",
           "Questo non mi piace piu"
         ]
       },
@@ -245,28 +245,28 @@
         "samples": [
           "Cosa sta suonando",
           "Cosa sta suonando adesso",
-          "Che brano è questo",
-          "Che canzone è questa",
-          "Chi è questo artista",
+          "Che brano \u00e8 questo",
+          "Che canzone \u00e8 questa",
+          "Chi \u00e8 questo artista",
           "Info su questo brano",
           "Informazioni su questa canzone",
           "Dimmi cosa sta suonando",
           "Che cosa suona",
           "Chi suona adesso",
-          "Qual è il {media_info_type}",
-          "Qual è la {media_info_type}",
+          "Qual \u00e8 il {media_info_type}",
+          "Qual \u00e8 la {media_info_type}",
           "Dimmi il {media_info_type}",
           "Dimmi la {media_info_type}",
-          "Che {media_info_type} è",
+          "Che {media_info_type} \u00e8",
           "Chi canta",
           "Chi canta questa canzone",
-          "Di che album è questo brano",
-          "Che anno è",
-          "Quando è uscito",
+          "Di che album \u00e8 questo brano",
+          "Che anno \u00e8",
+          "Quando \u00e8 uscito",
           "Quanto dura",
           "Quanto dura questa canzone",
-          "Che genere è",
-          "Che genere di musica è",
+          "Che genere \u00e8",
+          "Che genere di musica \u00e8",
           "Parlami dell'artista",
           "Raccontami di questo artista"
         ]
@@ -277,7 +277,7 @@
           "Cosa stavo guardando",
           "Mostrami i video in corso",
           "Riprendi a guardare",
-          "Cosa ho lasciato a metà",
+          "Cosa ho lasciato a met\u00e0",
           "Cosa ho lasciato a meta"
         ]
       },
@@ -300,6 +300,27 @@
           {
             "name": "episode_number",
             "type": "ItalianNumber"
+          }
+        ]
+      },
+      {
+        "name": "PlayPodcastIntent",
+        "samples": [
+          "Riproduci il podcast {podcast_name}",
+          "Suona il podcast {podcast_name}",
+          "Ascolta il podcast {podcast_name}",
+          "Metti il podcast {podcast_name}",
+          "Riproduci podcast {podcast_name}",
+          "Suona podcast {podcast_name}",
+          "Ascolta podcast {podcast_name}",
+          "Ascolta l'ultimo episodio di {podcast_name}",
+          "Riproduci l'ultimo episodio di {podcast_name}",
+          "Di riprodurre il podcast {podcast_name}"
+        ],
+        "slots": [
+          {
+            "name": "podcast_name",
+            "type": "AMAZON.SearchQuery"
           }
         ]
       },
@@ -855,40 +876,40 @@
       {
         "name": "PlayLastAddedIntent",
         "samples": [
-          "Riproduci novità {media_type}",
+          "Riproduci novit\u00e0 {media_type}",
           "Riproduci ultimi {media_type} aggiunti",
           "Riproduci nuovi media",
-          "Suona novità {media_type}",
+          "Suona novit\u00e0 {media_type}",
           "Suona ultimi {media_type} aggiunti",
           "Suona nuovi media",
-          "Metti novità {media_type}",
+          "Metti novit\u00e0 {media_type}",
           "Metti ultimi {media_type} aggiunti",
           "Metti nuovi media",
-          "Pleia novità {media_type}",
+          "Pleia novit\u00e0 {media_type}",
           "Pleia ultimi {media_type} aggiunti",
           "Pleia nuovi media",
-          "Di riprodurre novità {media_type}",
+          "Di riprodurre novit\u00e0 {media_type}",
           "Di riprodurre ultimi {media_type} aggiunti",
           "Di riprodurre nuovi media",
-          "Di suonare novità {media_type}",
+          "Di suonare novit\u00e0 {media_type}",
           "Di suonare ultimi {media_type} aggiunti",
           "Di suonare nuovi media",
-          "Di mettere novità {media_type}",
+          "Di mettere novit\u00e0 {media_type}",
           "Di mettere ultimi {media_type} aggiunti",
           "Di mettere nuovi media",
-          "Di pleiare novità {media_type}",
+          "Di pleiare novit\u00e0 {media_type}",
           "Di pleiare ultimi {media_type} aggiunti",
           "Di pleiare nuovi media",
           "Riproduci {media_type} aggiunti {time_period}",
           "Suona {media_type} aggiunti {time_period}",
           "Metti {media_type} aggiunti {time_period}",
-          "Riproduci novità {media_type} {time_period}",
-          "Suona novità {media_type} {time_period}",
+          "Riproduci novit\u00e0 {media_type} {time_period}",
+          "Suona novit\u00e0 {media_type} {time_period}",
           "Riproduci {media_type} {time_period}",
           "Suona {media_type} {time_period}",
           "Di riprodurre {media_type} aggiunti {time_period}",
           "Di suonare {media_type} aggiunti {time_period}",
-          "Di riprodurre novità {media_type} {time_period}"
+          "Di riprodurre novit\u00e0 {media_type} {time_period}"
         ],
         "slots": [
           {

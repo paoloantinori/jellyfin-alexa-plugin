@@ -376,6 +376,29 @@
         ]
       },
       {
+        "name": "PlayPodcastIntent",
+        "samples": [
+          "play the podcast {podcast_name}",
+          "play podcast {podcast_name}",
+          "listen to the podcast {podcast_name}",
+          "listen to podcast {podcast_name}",
+          "play the latest episode of {podcast_name}",
+          "play the newest episode of {podcast_name}",
+          "play the latest {podcast_name}",
+          "hear the podcast {podcast_name}",
+          "start the podcast {podcast_name}",
+          "I want to listen to {podcast_name} podcast",
+          "play {podcast_name} podcast",
+          "open {podcast_name} podcast"
+        ],
+        "slots": [
+          {
+            "name": "podcast_name",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
         "name": "BrowseLibraryIntent",
         "slots": [
           {

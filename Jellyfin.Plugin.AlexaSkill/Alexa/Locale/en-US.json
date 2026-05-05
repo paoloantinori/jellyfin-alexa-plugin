@@ -128,5 +128,9 @@
   "MediaInfoDurationUnavailable": "I don't have duration information for this track.",
   "MediaInfoGenre": "The genre is {0}",
   "MediaInfoGenreUnavailable": "I don't have genre information for this track.",
-  "MediaInfoBiographyUnavailable": "I don't have a biography for {0}."
+  "MediaInfoBiographyUnavailable": "I don't have a biography for {0}.",
+  "SearchingPodcast": "Searching for your podcast...",
+  "DidNotCatchPodcastName": "I didn't catch the podcast name. Which podcast would you like to listen to?",
+  "NotFoundPodcast": "I couldn't find a podcast called {0}.",
+  "NoEpisodesInPodcast": "I couldn't find any episodes of {0}."
 }
