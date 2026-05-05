@@ -69,5 +69,12 @@
   "SleepTimerSet": "Minuterie de sommeil réglée sur {0} minutes. La lecture s'arrêtera alors.",
   "CancelSleepTimer": "Minuterie annulée.",
   "DidNotCatchMood": "Quel genre de musique aimeriez-vous ? Vous pouvez dire relaxant, joyeux, chill, énergique ou concentration.",
-  "NotFoundMood": "Je n'ai pas trouvé de musique {0} dans votre bibliothèque."
+  "NotFoundMood": "Je n'ai pas trouvé de musique {0} dans votre bibliothèque.",
+  "ArtistInfoBioGenreAlbums": "{0} est un artiste de {1} avec {2} albums dans votre bibliothèque. {3}",
+  "ArtistInfoBioGenre": "{0} est un artiste de {1}. {2}",
+  "ArtistInfoBioAlbums": "{0} a {1} albums dans votre bibliothèque. {2}",
+  "ArtistInfoGenreAlbums": "{0} est un artiste de {1} avec {2} albums dans votre bibliothèque.",
+  "ArtistInfoBioOnly": "{0}. {1}",
+  "ArtistInfoGenreOnly": "{0} est un artiste de {1}.",
+  "ArtistInfoAlbumsOnly": "{0} a {1} albums dans votre bibliothèque."
 }

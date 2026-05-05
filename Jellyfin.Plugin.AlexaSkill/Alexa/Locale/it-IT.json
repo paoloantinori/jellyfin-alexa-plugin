@@ -101,5 +101,12 @@
   "AlbumsByArtistList": "Hai {1} album di {0}: {2}.",
   "AlbumsByArtistPartial": "Hai {1} album di {0}. Ecco i primi {2}: {3}.",
   "TracksByArtistList": "Hai {1} brani di {0}: {2}.",
-  "TracksByArtistPartial": "Hai {1} brani di {0}. Ecco i primi {2}: {3}."
+  "TracksByArtistPartial": "Hai {1} brani di {0}. Ecco i primi {2}: {3}.",
+  "ArtistInfoBioGenreAlbums": "{0} è un artista {1} con {2} album nella tua libreria. {3}",
+  "ArtistInfoBioGenre": "{0} è un artista {1}. {2}",
+  "ArtistInfoBioAlbums": "{0} ha {1} album nella tua libreria. {2}",
+  "ArtistInfoGenreAlbums": "{0} è un artista {1} con {2} album nella tua libreria.",
+  "ArtistInfoBioOnly": "{0}. {1}",
+  "ArtistInfoGenreOnly": "{0} è un artista {1}.",
+  "ArtistInfoAlbumsOnly": "{0} ha {1} album nella tua libreria."
 }
