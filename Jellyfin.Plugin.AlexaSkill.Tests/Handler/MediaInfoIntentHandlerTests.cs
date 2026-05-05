@@ -64,6 +64,21 @@ public class MediaInfoIntentHandlerTests
         };
     }
 
+    private static IntentRequest CreateMediaInfoRequest(string infoType)
+    {
+        return new IntentRequest
+        {
+            Intent = new Intent
+            {
+                Name = "MediaInfoIntent",
+                Slots = new Dictionary<string, Slot>
+                {
+                    ["media_info_type"] = new Slot { Value = infoType }
+                }
+            }
+        };
+    }
+
     private static Context CreateContext() => TestHelpers.CreateTestContext();
 
     private static string GetSpeechText(SkillResponse response) => TestHelpers.GetSpeechText(response);
@@ -435,5 +450,377 @@ public class MediaInfoIntentHandlerTests
         // Should contain first two sentences but not the third
         Assert.Contains("British rock band", text);
         Assert.DoesNotContain("300 million", text);
+    }
+
+    // --- Slot-based specific info query tests ---
+
+    [Fact]
+    public async Task Handle_SlotTitle_ReturnsTitleAndArtist()
+    {
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Name = "Bohemian Rhapsody",
+            Type = BaseItemKind.Audio,
+            AlbumArtist = "Queen"
+        };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest("title"), CreateContext(),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("Bohemian Rhapsody", text);
+        Assert.Contains("Queen", text);
+    }
+
+    [Fact]
+    public async Task Handle_SlotTitle_NoArtist_ReturnsTitleOnly()
+    {
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Name = "Mystery Track",
+            Type = BaseItemKind.Audio
+        };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest("title"), CreateContext(),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("Mystery Track", text);
+    }
+
+    [Fact]
+    public async Task Handle_SlotAlbum_ReturnsAlbumName()
+    {
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Name = "Bohemian Rhapsody",
+            Type = BaseItemKind.Audio,
+            Album = "A Night at the Opera"
+        };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest("album"), CreateContext(),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("A Night at the Opera", text);
+    }
+
+    [Fact]
+    public async Task Handle_SlotAlbum_NoAlbum_ReturnsUnavailable()
+    {
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Name = "Track",
+            Type = BaseItemKind.Audio
+        };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest("album"), CreateContext(),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("album", text.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Handle_SlotArtist_ReturnsArtistName()
+    {
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Name = "Song",
+            Type = BaseItemKind.Audio,
+            AlbumArtist = "Daft Punk"
+        };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest("artist"), CreateContext(),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("Daft Punk", text);
+    }
+
+    [Fact]
+    public async Task Handle_SlotArtist_NoArtist_ReturnsUnavailable()
+    {
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Name = "Track",
+            Type = BaseItemKind.Audio
+        };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest("artist"), CreateContext(),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("artist", text.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Handle_SlotYear_ReturnsProductionYear()
+    {
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Name = "Song",
+            Type = BaseItemKind.Audio,
+            ProductionYear = 1975
+        };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest("year"), CreateContext(),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("1975", text);
+    }
+
+    [Fact]
+    public async Task Handle_SlotYear_NoYear_ReturnsUnavailable()
+    {
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Name = "Track",
+            Type = BaseItemKind.Audio
+        };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest("year"), CreateContext(),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("year", text.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Handle_SlotDuration_ReturnsFormattedDuration()
+    {
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Name = "Song",
+            Type = BaseItemKind.Audio,
+            RunTimeTicks = TimeSpan.FromMinutes(3).Ticks + TimeSpan.FromSeconds(45).Ticks
+        };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest("duration"), CreateContext(),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("3 minutes", text);
+    }
+
+    [Fact]
+    public async Task Handle_SlotDuration_LongTrack_ReportsHoursAndMinutes()
+    {
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Name = "Audiobook",
+            Type = BaseItemKind.Audio,
+            RunTimeTicks = TimeSpan.FromHours(2).Ticks + TimeSpan.FromMinutes(30).Ticks
+        };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest("duration"), CreateContext(),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("2 hours", text);
+        Assert.Contains("30 minutes", text);
+    }
+
+    [Fact]
+    public async Task Handle_SlotDuration_NoRuntime_ReturnsUnavailable()
+    {
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Name = "Track",
+            Type = BaseItemKind.Audio
+        };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest("duration"), CreateContext(),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("duration", text.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Handle_SlotGenre_ReturnsGenre()
+    {
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Name = "Song",
+            Type = BaseItemKind.Audio,
+            Genres = new[] { "Rock", "Classic Rock" }
+        };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest("genre"), CreateContext(),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("Rock", text);
+    }
+
+    [Fact]
+    public async Task Handle_SlotGenre_MultipleGenres_ReturnsUpToThree()
+    {
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Name = "Song",
+            Type = BaseItemKind.Audio,
+            Genres = new[] { "Rock", "Pop", "Jazz", "Classical" }
+        };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest("genre"), CreateContext(),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("Rock", text);
+        Assert.Contains("Pop", text);
+        Assert.Contains("Jazz", text);
+        Assert.DoesNotContain("Classical", text);
+    }
+
+    [Fact]
+    public async Task Handle_SlotGenre_NoGenre_ReturnsUnavailable()
+    {
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Name = "Track",
+            Type = BaseItemKind.Audio,
+            Genres = Array.Empty<string>()
+        };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest("genre"), CreateContext(),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("genre", text.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Handle_SlotBiography_ReturnsArtistInfo()
+    {
+        SetupArtistLookup("Queen", "Queen are a British rock band formed in London.", new[] { "Rock" });
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Name = "Bohemian Rhapsody",
+            Type = BaseItemKind.Audio,
+            AlbumArtist = "Queen"
+        };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest("biography"), CreateContext(),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("Queen", text);
+        Assert.Contains("British rock band", text);
+    }
+
+    [Fact]
+    public async Task Handle_SlotBiography_NoArtistName_ReturnsUnavailable()
+    {
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Name = "Track",
+            Type = BaseItemKind.Audio
+        };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest("biography"), CreateContext(),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("artist", text.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Handle_SlotBiography_NoBioData_ReturnsUnavailable()
+    {
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Name = "Song",
+            Type = BaseItemKind.Audio,
+            AlbumArtist = "Unknown Artist"
+        };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest("biography"), CreateContext(),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("Unknown Artist", text);
+    }
+
+    [Fact]
+    public async Task Handle_SlotUnknown_FallsBackToFullInfo()
+    {
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Name = "Test Song",
+            Type = BaseItemKind.Audio,
+            AlbumArtist = "Artist"
+        };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest("unknown_slot"), CreateContext(),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("Test Song", text);
+    }
+
+    [Fact]
+    public async Task Handle_NoSlot_PreservesBackwardCompatibility()
+    {
+        // Without a slot, the handler should behave exactly as before
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Name = "Test Song",
+            Type = BaseItemKind.Audio,
+            AlbumArtist = "Artist",
+            Album = "Album"
+        };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest(), CreateContext(),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("Test Song", text);
+        Assert.Contains("Artist", text);
+        Assert.Contains("Album", text);
     }
 }

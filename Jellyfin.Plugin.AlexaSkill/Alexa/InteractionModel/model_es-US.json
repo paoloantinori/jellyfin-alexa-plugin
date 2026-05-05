@@ -258,14 +258,30 @@
       },
       {
         "name": "MediaInfoIntent",
+        "slots": [
+          {
+            "name": "media_info_type",
+            "type": "MediaInfoType"
+          }
+        ],
         "samples": [
-          "Cómo se llama esta canción",
-          "Cómo se llama este vídeo",
-          "Cómo se llama esta música",
-          "Cuál es el título de esta canción",
-          "Cuál es el título de este vídeo",
-          "Cuál es el título de esta música",
-          "Qué está sonando ahora"
+          "Cuál es el {media_info_type}",
+          "Cuál es la {media_info_type}",
+          "Dime el {media_info_type}",
+          "Dime la {media_info_type}",
+          "Qué {media_info_type} es",
+          "Qué está sonando",
+          "Qué canción es esta",
+          "Quién canta",
+          "Quién canta esta canción",
+          "De qué álbum es",
+          "Qué año es",
+          "Cuándo se lanzó",
+          "Cuánto dura",
+          "Cuánto dura esta canción",
+          "Qué género es",
+          "Cuéntame sobre el artista",
+          "Háblame del artista"
         ]
       },
       {
@@ -476,6 +492,81 @@
           {
             "name": {
               "value": "El Señor de los Cielos"
+            }
+          }
+        ]
+      },
+      {
+        "name": "MediaInfoType",
+        "values": [
+          {
+            "id": "title",
+            "name": {
+              "value": "título",
+              "synonyms": [
+                "canción",
+                "tema",
+                "nombre"
+              ]
+            }
+          },
+          {
+            "id": "album",
+            "name": {
+              "value": "álbum",
+              "synonyms": [
+                "disco"
+              ]
+            }
+          },
+          {
+            "id": "artist",
+            "name": {
+              "value": "artista",
+              "synonyms": [
+                "cantante",
+                "grupo",
+                "músico"
+              ]
+            }
+          },
+          {
+            "id": "year",
+            "name": {
+              "value": "año",
+              "synonyms": [
+                "año de lanzamiento"
+              ]
+            }
+          },
+          {
+            "id": "duration",
+            "name": {
+              "value": "duración",
+              "synonyms": [
+                "longitud",
+                "tiempo"
+              ]
+            }
+          },
+          {
+            "id": "genre",
+            "name": {
+              "value": "género",
+              "synonyms": [
+                "estilo",
+                "tipo de música"
+              ]
+            }
+          },
+          {
+            "id": "biography",
+            "name": {
+              "value": "biografía",
+              "synonyms": [
+                "bio",
+                "sobre el artista"
+              ]
             }
           }
         ]

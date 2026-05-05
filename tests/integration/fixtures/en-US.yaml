@@ -208,7 +208,7 @@ tests:
     expected_slots: {}
 
   # -------------------------------------------------------------------------
-  # 16. MediaInfoIntent (no slots)
+  # 16. MediaInfoIntent (media_info_type)
   # -------------------------------------------------------------------------
   - utterance: "What is the name of the song"
     expected_intent: MediaInfoIntent
@@ -217,6 +217,41 @@ tests:
   - utterance: "What is currently playing"
     expected_intent: MediaInfoIntent
     expected_slots: {}
+
+  - utterance: "What song is this"
+    expected_intent: MediaInfoIntent
+    expected_slots:
+      media_info_type: {}
+
+  - utterance: "What album is this from"
+    expected_intent: MediaInfoIntent
+    expected_slots:
+      media_info_type: {}
+
+  - utterance: "Who sings this"
+    expected_intent: MediaInfoIntent
+    expected_slots:
+      media_info_type: {}
+
+  - utterance: "What year was this released"
+    expected_intent: MediaInfoIntent
+    expected_slots:
+      media_info_type: {}
+
+  - utterance: "How long is this song"
+    expected_intent: MediaInfoIntent
+    expected_slots:
+      media_info_type: {}
+
+  - utterance: "What genre is this"
+    expected_intent: MediaInfoIntent
+    expected_slots:
+      media_info_type: {}
+
+  - utterance: "Tell me about this artist"
+    expected_intent: MediaInfoIntent
+    expected_slots:
+      media_info_type: {}
 
   # -------------------------------------------------------------------------
   # 17. InProgressMediaListIntent (no slots)

@@ -76,5 +76,18 @@
   "ArtistInfoGenreAlbums": "{0} est un artiste de {1} avec {2} albums dans votre bibliothèque.",
   "ArtistInfoBioOnly": "{0}. {1}",
   "ArtistInfoGenreOnly": "{0} est un artiste de {1}.",
-  "ArtistInfoAlbumsOnly": "{0} a {1} albums dans votre bibliothèque."
+  "ArtistInfoAlbumsOnly": "{0} a {1} albums dans votre bibliothèque.",
+  "MediaInfoTitle": "C'est {0} par {1}",
+  "MediaInfoTitleNoArtist": "C'est {0}",
+  "MediaInfoAlbum": "C'est de l'album {0}",
+  "MediaInfoAlbumUnavailable": "Je n'ai pas d'information sur l'album de cette piste.",
+  "MediaInfoArtist": "C'est par {0}",
+  "MediaInfoArtistUnavailable": "Je n'ai pas d'information sur l'artiste de cette piste.",
+  "MediaInfoYear": "C'est sorti en {0}",
+  "MediaInfoYearUnavailable": "Je n'ai pas l'année de sortie de cette piste.",
+  "MediaInfoDuration": "La durée est de {0}",
+  "MediaInfoDurationUnavailable": "Je n'ai pas d'information sur la durée de cette piste.",
+  "MediaInfoGenre": "Le genre est {0}",
+  "MediaInfoGenreUnavailable": "Je n'ai pas d'information sur le genre de cette piste.",
+  "MediaInfoBiographyUnavailable": "Je n'ai pas de biographie pour {0}."
 }

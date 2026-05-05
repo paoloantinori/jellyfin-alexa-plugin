@@ -56,6 +56,7 @@ public class MediaInfoIntentHandler : BaseHandler
 
     /// <summary>
     /// Report information about the currently playing media, including extended artist metadata when available.
+    /// Supports targeted follow-up queries via the media_info_type slot (title, album, artist, year, duration, genre, biography).
     /// </summary>
     /// <param name="request">The skill request which should be handled.</param>
     /// <param name="context">The context of the skill intent request.</param>
@@ -72,6 +73,137 @@ public class MediaInfoIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale));
         }
 
+        // Check for specific info type slot (follow-up queries like "what album is this?")
+        IntentRequest? intentRequest = request as IntentRequest;
+        string? infoType = GetInfoType(intentRequest);
+
+        if (!string.IsNullOrEmpty(infoType))
+        {
+            Logger.LogInformation("MediaInfoIntent: specific query '{InfoType}' for {ItemName}", infoType, item.Name);
+            return await HandleSpecificInfoType(infoType, item, session, locale, cancellationToken).ConfigureAwait(false);
+        }
+
+        // Default: return full now-playing info
+        Logger.LogInformation("MediaInfoIntent: reporting {ItemName}", item.Name);
+        return await BuildNowPlayingResponse(item, session, locale, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static string? GetInfoType(IntentRequest? intentRequest)
+    {
+        if (intentRequest?.Intent.Slots == null
+            || !intentRequest.Intent.Slots.TryGetValue("media_info_type", out Slot? slot)
+            || string.IsNullOrEmpty(slot.Value))
+        {
+            return null;
+        }
+
+        return slot.Value.ToLowerInvariant();
+    }
+
+    private async Task<SkillResponse> HandleSpecificInfoType(
+        string infoType, BaseItemDto item, SessionInfo session, string locale, CancellationToken cancellationToken)
+    {
+        return infoType switch
+        {
+            "title" => HandleTitleQuery(item, locale),
+            "album" => HandleAlbumQuery(item, locale),
+            "artist" => HandleArtistQuery(item, locale),
+            "year" => HandleYearQuery(item, locale),
+            "duration" => HandleDurationQuery(item, locale),
+            "genre" => HandleGenreQuery(item, locale),
+            "biography" => await HandleBiographyQuery(item, session, locale, cancellationToken).ConfigureAwait(false),
+            _ => BuildNowPlayingResponse(item, session, locale, cancellationToken)
+        };
+    }
+
+    private static SkillResponse HandleTitleQuery(BaseItemDto item, string locale)
+    {
+        string name = item.Name ?? ResponseStrings.Get("UnknownMedia", locale);
+        string artist = item.AlbumArtist ?? string.Empty;
+        string response = !string.IsNullOrEmpty(artist)
+            ? ResponseStrings.Get("MediaInfoTitle", locale, name, artist)
+            : ResponseStrings.Get("MediaInfoTitleNoArtist", locale, name);
+
+        return ResponseBuilder.Tell(response);
+    }
+
+    private static SkillResponse HandleAlbumQuery(BaseItemDto item, string locale)
+    {
+        if (string.IsNullOrEmpty(item.Album))
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaInfoAlbumUnavailable", locale));
+        }
+
+        string response = ResponseStrings.Get("MediaInfoAlbum", locale, item.Album);
+        return ResponseBuilder.Tell(response);
+    }
+
+    private static SkillResponse HandleArtistQuery(BaseItemDto item, string locale)
+    {
+        if (string.IsNullOrEmpty(item.AlbumArtist))
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaInfoArtistUnavailable", locale));
+        }
+
+        string response = ResponseStrings.Get("MediaInfoArtist", locale, item.AlbumArtist);
+        return ResponseBuilder.Tell(response);
+    }
+
+    private static SkillResponse HandleYearQuery(BaseItemDto item, string locale)
+    {
+        if (!item.ProductionYear.HasValue)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaInfoYearUnavailable", locale));
+        }
+
+        string response = ResponseStrings.Get("MediaInfoYear", locale, item.ProductionYear.Value);
+        return ResponseBuilder.Tell(response);
+    }
+
+    private static SkillResponse HandleDurationQuery(BaseItemDto item, string locale)
+    {
+        if (!item.RunTimeTicks.HasValue || item.RunTimeTicks.Value <= 0)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaInfoDurationUnavailable", locale));
+        }
+
+        var duration = TimeSpan.FromTicks(item.RunTimeTicks.Value);
+        string durationStr = FormatTimeSpan(duration, locale);
+        string response = ResponseStrings.Get("MediaInfoDuration", locale, durationStr);
+        return ResponseBuilder.Tell(response);
+    }
+
+    private static SkillResponse HandleGenreQuery(BaseItemDto item, string locale)
+    {
+        if (item.Genres == null || item.Genres.Length == 0)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaInfoGenreUnavailable", locale));
+        }
+
+        string genreList = string.Join(", ", item.Genres.Take(3));
+        string response = ResponseStrings.Get("MediaInfoGenre", locale, genreList);
+        return ResponseBuilder.Tell(response);
+    }
+
+    private async Task<SkillResponse> HandleBiographyQuery(BaseItemDto item, SessionInfo session, string locale, CancellationToken cancellationToken)
+    {
+        string? artistName = item.AlbumArtist;
+        if (string.IsNullOrEmpty(artistName))
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaInfoArtistUnavailable", locale));
+        }
+
+        string? artistInfo = await GetArtistInfoText(artistName, session, locale, cancellationToken).ConfigureAwait(false);
+        if (artistInfo == null)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaInfoBiographyUnavailable", locale, artistName));
+        }
+
+        return ResponseBuilder.Tell(artistInfo);
+    }
+
+    private async Task<SkillResponse> BuildNowPlayingResponse(BaseItemDto item, SessionInfo session, string locale, CancellationToken cancellationToken)
+    {
         string description;
         string? descriptionSsml;
 
@@ -85,8 +217,6 @@ public class MediaInfoIntentHandler : BaseHandler
         }
 
         string position = BuildPositionInfo(session, locale);
-
-        Logger.LogInformation("MediaInfoIntent: reporting {ItemName}", item.Name);
 
         if (string.IsNullOrEmpty(position))
         {

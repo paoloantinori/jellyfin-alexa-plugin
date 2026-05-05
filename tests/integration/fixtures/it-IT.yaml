@@ -129,7 +129,7 @@ tests:
     expected_slots: {}
 
   # -------------------------------------------------------------------------
-  # 11. MediaInfoIntent (no slots)
+  # 11. MediaInfoIntent (media_info_type)
   # -------------------------------------------------------------------------
   - utterance: "Cosa sta suonando"
     expected_intent: MediaInfoIntent
@@ -138,6 +138,36 @@ tests:
   - utterance: "Che brano è questo"
     expected_intent: MediaInfoIntent
     expected_slots: {}
+
+  - utterance: "Chi canta questa canzone"
+    expected_intent: MediaInfoIntent
+    expected_slots:
+      media_info_type: {}
+
+  - utterance: "Di che album è questo brano"
+    expected_intent: MediaInfoIntent
+    expected_slots:
+      media_info_type: {}
+
+  - utterance: "Quanto dura questa canzone"
+    expected_intent: MediaInfoIntent
+    expected_slots:
+      media_info_type: {}
+
+  - utterance: "Che genere è"
+    expected_intent: MediaInfoIntent
+    expected_slots:
+      media_info_type: {}
+
+  - utterance: "Parlami dell'artista"
+    expected_intent: MediaInfoIntent
+    expected_slots:
+      media_info_type: {}
+
+  - utterance: "Che anno è"
+    expected_intent: MediaInfoIntent
+    expected_slots:
+      media_info_type: {}
 
   # -------------------------------------------------------------------------
   # 12. InProgressMediaListIntent (no slots)
