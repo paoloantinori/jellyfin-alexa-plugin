@@ -275,6 +275,16 @@ tests:
     expected_slots:
       mood: {}
 
+  - utterance: "Musica mattutina"
+    expected_intent: PlayMoodMusicIntent
+    expected_slots:
+      mood: {}
+
+  - utterance: "Musica per cena"
+    expected_intent: PlayMoodMusicIntent
+    expected_slots:
+      mood: {}
+
   # -------------------------------------------------------------------------
   # 18. PlayRandomIntent (media_type)
   # -------------------------------------------------------------------------

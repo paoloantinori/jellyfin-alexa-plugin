@@ -84,7 +84,7 @@
   "DidNotCatchSleepTimer": "Per quanto devo impostare il timer di spegnimento? Per favore indica un numero di minuti.",
   "SleepTimerSet": "Timer di spegnimento impostato per {0} minuti. La riproduzione si fermerà.",
   "CancelSleepTimer": "Timer di spegnimento cancellato.",
-  "DidNotCatchMood": "Che tipo di musica vorresti? Puoi dire rilassante, allegra, chill, energica o concentrazione.",
+  "DidNotCatchMood": "Che tipo di musica vorresti? Puoi dire rilassante, allegra, allenamento, mattutina, serale o concentrazione.",
   "NotFoundMood": "Non ho trovato musica {0} nella tua libreria.",
   "AddedToQueue": "{0} aggiunto alla coda.",
   "PlayNextConfirmed": "{0} sarà riprodotto tra poco.",

@@ -249,6 +249,13 @@ explicit_intents:
       - Riproduci musica {mood}
       - Suona musica {mood}
       - Metti musica {mood}
+      - Musica mattutina
+      - Musica serale
+      - Musica per cena
+      - Musica per allenamento
+      - Musica per concentrarmi
+      - Musica per festa
+      - Musica rilassante
     slots:
       - name: mood
         type: AMAZON.SearchQuery

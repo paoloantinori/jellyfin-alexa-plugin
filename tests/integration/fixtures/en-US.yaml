@@ -392,6 +392,21 @@ tests:
     expected_slots:
       mood: {}
 
+  - utterance: "play morning music"
+    expected_intent: PlayMoodMusicIntent
+    expected_slots:
+      mood: {}
+
+  - utterance: "play workout music"
+    expected_intent: PlayMoodMusicIntent
+    expected_slots:
+      mood: {}
+
+  - utterance: "play dinner music"
+    expected_intent: PlayMoodMusicIntent
+    expected_slots:
+      mood: {}
+
   # -------------------------------------------------------------------------
   # 23. AddToQueueIntent (song, musician)
   # -------------------------------------------------------------------------
