@@ -1,11 +1,12 @@
-"""Pytest configuration and fixtures for NLU integration tests.
+"""Pytest configuration and fixtures for NLU and E2E integration tests.
 
 Provides:
 - Automatic skill_id detection from ASK CLI config or environment
 - SMAPI rate-limit delay configuration
 - YAML fixture loading and parametrized test generation
 - --dry-run flag for fixture-only validation
-- Custom markers: nlu, locale
+- E2E options: --jellyfin-url, --jellyfin-api-key, --jellyfin-user
+- Custom markers: nlu, locale, e2e
 """
 
 from __future__ import annotations
@@ -26,6 +27,8 @@ import pytest
 import yaml
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
+
+logger = logging.getLogger("e2e.conftest")
 
 
 # ---------------------------------------------------------------------------
@@ -87,22 +90,30 @@ def smapi_delay() -> float:
 # ---------------------------------------------------------------------------
 
 
-def load_locale_fixtures(fixture_dir: Path) -> list[dict[str, Any]]:
-    """Discover and parse all YAML fixture files under *fixture_dir*.
+def load_locale_fixtures(fixture_dir: Path,
+                         prefix: str = "",
+                         exclude_prefix: str = "e2e_") -> list[dict[str, Any]]:
+    """Discover and parse YAML fixture files under *fixture_dir*.
+
+    Args:
+        prefix: Only load files starting with this prefix (empty = all).
+        exclude_prefix: Skip files starting with this prefix.
 
     Each YAML file has a top-level ``locale``, ``invocation_name``, and
     a ``tests`` list.  This function flattens the structure so each
     individual test case carries its locale and invocation name.
-
-    Returns:
-        A list of dicts, one per utterance, each augmented with
-        ``locale``, ``invocation_name``, and ``source`` keys.
     """
     fixtures: list[dict[str, Any]] = []
     if not fixture_dir.is_dir():
         return fixtures
 
     for path in sorted(fixture_dir.glob("*.yaml")):
+        name = path.name
+        if prefix and not name.startswith(prefix):
+            continue
+        if exclude_prefix and name.startswith(exclude_prefix):
+            continue
+
         with open(path, encoding="utf-8") as handle:
             data = yaml.safe_load(handle)
 
@@ -130,7 +141,7 @@ def load_locale_fixtures(fixture_dir: Path) -> list[dict[str, Any]]:
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
-    """Register the --dry-run CLI flag."""
+    """Register CLI flags for NLU and E2E tests."""
     parser.addoption(
         "--dry-run",
         action="store_true",
@@ -143,6 +154,21 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=120.0,
         help="Per-test timeout in seconds for live SMAPI calls (default: 120).",
     )
+    parser.addoption(
+        "--jellyfin-url",
+        default=os.environ.get("JELLYFIN_URL", ""),
+        help="Jellyfin server base URL (or set JELLYFIN_URL env var).",
+    )
+    parser.addoption(
+        "--jellyfin-api-key",
+        default=os.environ.get("JELLYFIN_API_KEY", ""),
+        help="Jellyfin API key (or set JELLYFIN_API_KEY env var).",
+    )
+    parser.addoption(
+        "--jellyfin-user",
+        default=os.environ.get("JELLYFIN_USER", ""),
+        help="Jellyfin user ID for E2E tests (or set JELLYFIN_USER env var).",
+    )
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -151,6 +177,9 @@ def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line(
         "markers", "locale(name): locale under test (e.g. en-US, it-IT)"
     )
+    config.addinivalue_line(
+        "markers", "e2e: full-chain E2E test via SMAPI simulate-skill"
+    )
 
     # Configure the nlu.smapi logger so progress is visible with -v/--verbose
     logging.basicConfig(
@@ -158,6 +187,83 @@ def pytest_configure(config: pytest.Config) -> None:
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
         datefmt="%H:%M:%S",
     )
+
+
+# ---------------------------------------------------------------------------
+# E2E fixtures
+# ---------------------------------------------------------------------------
+
+
+def _jellyfin_configured(request: pytest.FixtureRequest) -> bool:
+    """Check whether Jellyfin E2E parameters are all provided."""
+    return bool(
+        request.config.getoption("--jellyfin-url")
+        and request.config.getoption("--jellyfin-api-key")
+        and request.config.getoption("--jellyfin-user")
+    )
+
+
+@pytest.fixture(scope="session")
+def jellyfin_client(request: pytest.FixtureRequest):
+    """Create a JellyfinClient if E2E parameters are configured, else None."""
+    if request.config.getoption("--dry-run"):
+        return None
+
+    url = request.config.getoption("--jellyfin-url")
+    api_key = request.config.getoption("--jellyfin-api-key")
+    user_id = request.config.getoption("--jellyfin-user")
+
+    if not (url and api_key and user_id):
+        return None
+
+    from jellyfin_client import JellyfinClient
+
+    client = JellyfinClient(
+        base_url=url,
+        api_key=api_key,
+        user_id=user_id,
+    )
+
+    if not client.health_check():
+        pytest.exit(
+            f"Jellyfin server at {url} is not reachable. "
+            "Check --jellyfin-url or JELLYFIN_URL env var.",
+            returncode=2,
+        )
+
+    return client
+
+
+@pytest.fixture(autouse=True)
+def _skip_without_jellyfin(request: pytest.FixtureRequest):
+    """Skip E2E tests when Jellyfin parameters are not configured."""
+    marker = request.node.get_closest_marker("e2e")
+    if marker is None:
+        yield
+        return
+
+    if request.config.getoption("--dry-run"):
+        yield
+        return
+
+    if not _jellyfin_configured(request):
+        pytest.skip(
+            "Jellyfin E2E parameters not configured "
+            "(--jellyfin-url, --jellyfin-api-key, --jellyfin-user)"
+        )
+    yield
+
+
+@pytest.fixture(autouse=True)
+def _e2e_cleanup(request: pytest.FixtureRequest, jellyfin_client):
+    """Stop playback after each E2E test to avoid state leakage."""
+    yield
+    marker = request.node.get_closest_marker("e2e")
+    if marker is not None and jellyfin_client is not None:
+        try:
+            jellyfin_client.stop_playback()
+        except Exception:  # noqa: BLE001
+            logger.debug("E2E cleanup: could not stop playback")
 
 
 def pytest_collection_modifyitems(
@@ -174,31 +280,39 @@ def pytest_collection_modifyitems(
             item.add_marker(pytest.mark.locale(locale_name))
 
 
-def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
-    """Parametrize tests that accept the ``nlu_fixture`` indirect parameter.
-
-    Discovers YAML files from the fixtures directory and generates one
-    test case per utterance/locale combination.
-    """
-    if "nlu_fixture" not in metafunc.fixturenames:
-        return
-
-    fixture_root = FIXTURES_DIR
-    fixtures = load_locale_fixtures(fixture_root)
-
+def _parametrize_fixtures(
+    metafunc: pytest.Metafunc,
+    fixture_name: str,
+    fixtures: list[dict[str, Any]],
+    id_prefix: str = "",
+) -> None:
+    """Parametrize a test with loaded fixtures and generate test IDs."""
     if not fixtures:
         return
-
     ids: list[str] = []
     cases: list[dict[str, Any]] = []
+    prefix = f"{id_prefix}:" if id_prefix else ""
     for fixture in fixtures:
         locale = fixture.get("locale", "unknown")
         utterance = fixture.get("utterance", "")
-        test_id = f"{locale} - {utterance}"
-        ids.append(test_id)
+        ids.append(f"{prefix}{locale} - {utterance}")
         cases.append(fixture)
+    metafunc.parametrize(fixture_name, cases, ids=ids, indirect=True)
 
-    metafunc.parametrize("nlu_fixture", cases, ids=ids, indirect=True)
+
+def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
+    """Parametrize tests that accept ``nlu_fixture`` or ``e2e_fixture``."""
+    if "nlu_fixture" in metafunc.fixturenames:
+        _parametrize_fixtures(
+            metafunc, "nlu_fixture", load_locale_fixtures(FIXTURES_DIR),
+        )
+
+    if "e2e_fixture" in metafunc.fixturenames:
+        _parametrize_fixtures(
+            metafunc, "e2e_fixture",
+            load_locale_fixtures(FIXTURES_DIR, prefix="e2e_", exclude_prefix=""),
+            id_prefix="e2e",
+        )
 
 
 # ---------------------------------------------------------------------------

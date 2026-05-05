@@ -1,0 +1,52 @@
+locale: en-US
+invocation_name: jellyfin player
+tests:
+  # --- Playback intents ---
+  - utterance: "Play happy music"
+    expected_intent: PlayMoodMusicIntent
+    expected_slots:
+      mood: {}
+    expected_response_type: directive
+    expected_directive_type: AudioPlayer.Play
+
+  - utterance: "Play random rock songs"
+    expected_intent: PlayRandomIntent
+    expected_slots:
+      genre: {}
+      media_type: {}
+    expected_response_type: any
+
+  - utterance: "Play songs added this week"
+    expected_intent: PlayLastAddedIntent
+    expected_slots:
+      media_type: {}
+      time_period: {}
+    expected_response_type: any
+
+  # --- Info queries (speech-only responses) ---
+  - utterance: "What is currently playing"
+    expected_intent: MediaInfoIntent
+    expected_slots: {}
+    expected_response_type: speech
+
+  - utterance: "What's in progress"
+    expected_intent: InProgressMediaListIntent
+    expected_slots: {}
+    expected_response_type: speech
+
+  # --- State change intents ---
+  - utterance: "I like this song"
+    expected_intent: MarkFavoriteIntent
+    expected_slots: {}
+    expected_response_type: speech
+
+  - utterance: "Continue watching"
+    expected_intent: ContinueWatchingIntent
+    expected_slots: {}
+    expected_response_type: any
+
+  # --- Queue management ---
+  - utterance: "What's up next"
+    expected_intent: ListQueueIntent
+    expected_slots: {}
+    expected_response_type: speech
