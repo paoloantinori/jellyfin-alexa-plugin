@@ -521,3 +521,21 @@ tests:
     expected_slots:
       musician: {}
       query_type: {}
+
+  # -------------------------------------------------------------------------
+  # 33. PlayPodcastIntent (podcast_name)
+  # -------------------------------------------------------------------------
+  - utterance: "Play the podcast serial"
+    expected_intent: PlayPodcastIntent
+    expected_slots:
+      podcast_name: {}
+
+  - utterance: "Play podcast the daily"
+    expected_intent: PlayPodcastIntent
+    expected_slots:
+      podcast_name: {}
+
+  - utterance: "Listen to the podcast radiolab"
+    expected_intent: PlayPodcastIntent
+    expected_slots:
+      podcast_name: {}

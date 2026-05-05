@@ -24,6 +24,7 @@ internal static class DisambiguationHelper
     public const string MediaTypeArtist = "artist";
     public const string MediaTypeVideo = "video";
     public const string MediaTypePlaylist = "playlist";
+    public const string MediaTypePodcast = "podcast";
 
     /// <summary>
     /// Check if session attributes contain active disambiguation state.

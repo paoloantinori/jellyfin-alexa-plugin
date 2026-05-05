@@ -192,6 +192,16 @@ explicit_intents:
         type: ItalianNumber
       - name: episode_number
         type: ItalianNumber
+  PlayPodcastIntent:
+    samples:
+      - Riproduci il podcast {podcast_name}
+      - Suona il podcast {podcast_name}
+      - Ascolta il podcast {podcast_name}
+      - Metti il podcast {podcast_name}
+      - Ascolta l'ultimo episodio di {podcast_name}
+    slots:
+      - name: podcast_name
+        type: AMAZON.SearchQuery
   BrowseLibraryIntent:
     samples:
       - Sfoglia {browse_category}
