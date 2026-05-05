@@ -361,7 +361,7 @@ tests:
       musician: {}
 
   # -------------------------------------------------------------------------
-  # 26. PlayLastAddedIntent (media_type)
+  # 26. PlayLastAddedIntent (media_type, time_period)
   # -------------------------------------------------------------------------
   - utterance: "Riproduci novità film"
     expected_intent: PlayLastAddedIntent
@@ -372,6 +372,18 @@ tests:
     expected_intent: PlayLastAddedIntent
     expected_slots:
       media_type: {}
+
+  - utterance: "Riproduci brani aggiunti questa settimana"
+    expected_intent: PlayLastAddedIntent
+    expected_slots:
+      media_type: {}
+      time_period: {}
+
+  - utterance: "Suona musica aggiunti questo mese"
+    expected_intent: PlayLastAddedIntent
+    expected_slots:
+      media_type: {}
+      time_period: {}
 
   # -------------------------------------------------------------------------
   # 27. PlayFavoritesIntent (media_type)

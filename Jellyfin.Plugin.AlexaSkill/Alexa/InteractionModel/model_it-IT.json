@@ -853,12 +853,26 @@
           "Di mettere nuovi media",
           "Di pleiare novità {media_type}",
           "Di pleiare ultimi {media_type} aggiunti",
-          "Di pleiare nuovi media"
+          "Di pleiare nuovi media",
+          "Riproduci {media_type} aggiunti {time_period}",
+          "Suona {media_type} aggiunti {time_period}",
+          "Metti {media_type} aggiunti {time_period}",
+          "Riproduci novità {media_type} {time_period}",
+          "Suona novità {media_type} {time_period}",
+          "Riproduci {media_type} {time_period}",
+          "Suona {media_type} {time_period}",
+          "Di riprodurre {media_type} aggiunti {time_period}",
+          "Di suonare {media_type} aggiunti {time_period}",
+          "Di riprodurre novità {media_type} {time_period}"
         ],
         "slots": [
           {
             "name": "media_type",
             "type": "AMAZON.SearchQuery"
+          },
+          {
+            "name": "time_period",
+            "type": "TimePeriod"
           }
         ]
       },
@@ -1289,6 +1303,44 @@
               "synonyms": [
                 "bio",
                 "sull'artista"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "TimePeriod",
+        "values": [
+          {
+            "id": "today",
+            "name": {
+              "value": "oggi",
+              "synonyms": [
+                "quest'oggi",
+                "nell'ultima giornata"
+              ]
+            }
+          },
+          {
+            "id": "this_week",
+            "name": {
+              "value": "questa settimana",
+              "synonyms": [
+                "nell'ultima settimana",
+                "la scorsa settimana",
+                "ultimamente",
+                "di recente"
+              ]
+            }
+          },
+          {
+            "id": "this_month",
+            "name": {
+              "value": "questo mese",
+              "synonyms": [
+                "nell'ultimo mese",
+                "lo scorso mese",
+                "nelle ultime settimane"
               ]
             }
           }

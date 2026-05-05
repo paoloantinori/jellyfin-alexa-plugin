@@ -18,6 +18,8 @@ vocabulary:
   media_noun: [brani, canzoni, musica, un brano, una canzone, un pezzo, una traccia]
   favorites_noun: [i miei preferiti, "{media_type} preferiti"]
   last_added_phrase: ["novità {media_type}", "ultimi {media_type} aggiunti", "nuovi media"]
+  last_added_time_phrase: ["{media_type} aggiunti {time_period}", "novità {media_type} {time_period}", "{media_type} {time_period}"]
+  time_period_val: [oggi, "questa settimana", "questo mese"]
 
 # Intents that are fully static (no templates). Listed here so the generator
 # knows to preserve them from the base JSON if present.
@@ -391,9 +393,13 @@ templates:
     templates:
       - "{imperative} {last_added_phrase}"
       - "{infinitive} {last_added_phrase}"
+      - "{imperative} {last_added_time_phrase}"
+      - "{infinitive} {last_added_time_phrase}"
     slots:
       - name: media_type
         type: AMAZON.SearchQuery
+      - name: time_period
+        type: TimePeriod
 
   PlayFavoritesIntent:
     templates:
