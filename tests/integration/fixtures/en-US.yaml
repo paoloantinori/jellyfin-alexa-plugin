@@ -214,6 +214,18 @@ tests:
     expected_intent: MarkFavoriteIntent
     expected_slots: {}
 
+  - utterance: "I like this song"
+    expected_intent: MarkFavoriteIntent
+    expected_slots: {}
+
+  - utterance: "Thumbs up"
+    expected_intent: MarkFavoriteIntent
+    expected_slots: {}
+
+  - utterance: "Add this to my favorites"
+    expected_intent: MarkFavoriteIntent
+    expected_slots: {}
+
   # -------------------------------------------------------------------------
   # 15. UnmarkFavoriteIntent (no slots)
   # -------------------------------------------------------------------------
