@@ -434,3 +434,21 @@ tests:
     expected_intent: PlayPodcastIntent
     expected_slots:
       podcast_name: {}
+
+  # -------------------------------------------------------------------------
+  # 29. SearchMediaIntent (query)
+  # -------------------------------------------------------------------------
+  - utterance: "Cerca bohemian rhapsody"
+    expected_intent: SearchMediaIntent
+    expected_slots:
+      query: {}
+
+  - utterance: "Trova inception"
+    expected_intent: SearchMediaIntent
+    expected_slots:
+      query: {}
+
+  - utterance: "Hai breaking bad"
+    expected_intent: SearchMediaIntent
+    expected_slots:
+      query: {}

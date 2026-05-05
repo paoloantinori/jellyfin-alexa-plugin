@@ -618,6 +618,26 @@
             "type": "LibraryQueryType"
           }
         ]
+      },
+      {
+        "name": "SearchMediaIntent",
+        "slots": [
+          {
+            "name": "query",
+            "type": "AMAZON.SearchQuery"
+          }
+        ],
+        "samples": [
+          "Search for {query}",
+          "Find {query}",
+          "Look for {query}",
+          "Look up {query}",
+          "Do you have {query}",
+          "I want to find {query}",
+          "Can you find {query}",
+          "Search {query}",
+          "Find me {query}"
+        ]
       }
     ],
     "types": [
