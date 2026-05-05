@@ -151,6 +151,19 @@ tests:
       genre: {}
 
   # -------------------------------------------------------------------------
+  # 9b. PlayByDecadeIntent (decade)
+  # -------------------------------------------------------------------------
+  - utterance: "Play songs from the eighties"
+    expected_intent: PlayByDecadeIntent
+    expected_slots:
+      decade: {}
+
+  - utterance: "Play 80s hits"
+    expected_intent: PlayByDecadeIntent
+    expected_slots:
+      decade: {}
+
+  # -------------------------------------------------------------------------
   # 10. ContinueWatchingIntent (no slots)
   # -------------------------------------------------------------------------
   - utterance: "Continue watching"

@@ -112,7 +112,7 @@ public class MediaInfoIntentHandler : BaseHandler
             "duration" => HandleDurationQuery(item, locale),
             "genre" => HandleGenreQuery(item, locale),
             "biography" => await HandleBiographyQuery(item, session, locale, cancellationToken).ConfigureAwait(false),
-            _ => BuildNowPlayingResponse(item, session, locale, cancellationToken)
+            _ => await BuildNowPlayingResponse(item, session, locale, cancellationToken).ConfigureAwait(false)
         };
     }
 

@@ -140,6 +140,29 @@
         ]
       },
       {
+        "name": "PlayByDecadeIntent",
+        "samples": [
+          "Riproduci musica degli anni {decade}",
+          "Suona musica degli anni {decade}",
+          "Metti musica degli anni {decade}",
+          "Riproduci brani degli anni {decade}",
+          "Suona brani degli anni {decade}",
+          "Riproduci canzoni degli anni {decade}",
+          "Suona canzoni degli anni {decade}",
+          "Metti brani degli anni {decade}",
+          "Ascolta musica degli anni {decade}",
+          "Musica degli anni {decade}",
+          "Brani degli anni {decade}",
+          "Canzoni degli anni {decade}"
+        ],
+        "slots": [
+          {
+            "name": "decade",
+            "type": "Decade"
+          }
+        ]
+      },
+      {
         "name": "PlayPlaylistIntent",
         "samples": [
           "Riproduci playlist {playlist}",
@@ -1343,6 +1366,96 @@
                 "nell'ultimo mese",
                 "lo scorso mese",
                 "nelle ultime settimane"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "Decade",
+        "values": [
+          {
+            "id": "50s",
+            "name": {
+              "value": "cinquanta",
+              "synonyms": [
+                "anni cinquanta",
+                "50",
+                "cinquantesimo"
+              ]
+            }
+          },
+          {
+            "id": "60s",
+            "name": {
+              "value": "sessanta",
+              "synonyms": [
+                "anni sessanta",
+                "60",
+                "sessantesimo"
+              ]
+            }
+          },
+          {
+            "id": "70s",
+            "name": {
+              "value": "settanta",
+              "synonyms": [
+                "anni settanta",
+                "70",
+                "settantesimo"
+              ]
+            }
+          },
+          {
+            "id": "80s",
+            "name": {
+              "value": "ottanta",
+              "synonyms": [
+                "anni ottanta",
+                "80",
+                "ottantesimo"
+              ]
+            }
+          },
+          {
+            "id": "90s",
+            "name": {
+              "value": "novanta",
+              "synonyms": [
+                "anni novanta",
+                "90",
+                "novantesimo"
+              ]
+            }
+          },
+          {
+            "id": "2000s",
+            "name": {
+              "value": "duemila",
+              "synonyms": [
+                "anni duemila",
+                "2000"
+              ]
+            }
+          },
+          {
+            "id": "2010s",
+            "name": {
+              "value": "duemiladieci",
+              "synonyms": [
+                "anni duemila dieci",
+                "2010"
+              ]
+            }
+          },
+          {
+            "id": "2020s",
+            "name": {
+              "value": "duemilaventi",
+              "synonyms": [
+                "anni duemila venti",
+                "2020"
               ]
             }
           }

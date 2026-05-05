@@ -98,6 +98,17 @@ explicit_intents:
     slots:
       - name: genre
         type: AMAZON.SearchQuery
+  PlayByDecadeIntent:
+    samples:
+      - Riproduci musica degli anni {decade}
+      - Suona musica degli anni {decade}
+      - Metti musica degli anni {decade}
+      - Musica anni {decade}
+      - Brani degli anni {decade}
+      - Canzoni degli anni {decade}
+    slots:
+      - name: decade
+        type: Decade
   PlayPlaylistIntent:
     samples:
       - Riproduci playlist {playlist}
@@ -278,6 +289,32 @@ explicit_intents:
 # Custom slot type definitions. These are emitted into the model's types section.
 # Each type has a name and a list of values (with optional id and synonyms).
 types:
+  Decade:
+    values:
+      - id: "1950"
+        value: cinquanta
+        synonyms: [anni cinquanta, "1950", "50"]
+      - id: "1960"
+        value: sessanta
+        synonyms: [anni sessanta, "1960", "60"]
+      - id: "1970"
+        value: settanta
+        synonyms: [anni settanta, "1970", "70"]
+      - id: "1980"
+        value: ottanta
+        synonyms: [anni ottanta, "1980", "80"]
+      - id: "1990"
+        value: novanta
+        synonyms: [anni novanta, "1990", "90"]
+      - id: "2000"
+        value: duemila
+        synonyms: [anni duemila, "2000"]
+      - id: "2010"
+        value: duemiladieci
+        synonyms: [anni dieci, "2010"]
+      - id: "2020"
+        value: duemilaventi
+        synonyms: [anni venti, "2020"]
   SeriesName:
     values:
       - Breaking Bad
