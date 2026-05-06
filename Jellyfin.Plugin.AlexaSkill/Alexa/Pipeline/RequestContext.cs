@@ -58,8 +58,26 @@ public class RequestContext
     public string RequestType => SkillRequest?.Type ?? "unknown";
 
     /// <summary>
+    /// Gets the intent name for logging/metrics.
+    /// Returns "none" for non-intent requests.
+    /// </summary>
+    public string IntentName => SkillRequest is IntentRequest ir ? ir.Intent?.Name ?? "none" : RequestType;
+
+    /// <summary>
+    /// Gets the request locale for logging/metrics.
+    /// Returns "unknown" when locale is not available.
+    /// </summary>
+    public string Locale => SkillRequest?.Locale ?? "unknown";
+
+    /// <summary>
     /// Gets or sets the timestamp when request processing started.
     /// Set by the first request interceptor in the pipeline.
     /// </summary>
     public DateTimeOffset StartedAt { get; set; }
+
+    /// <summary>
+    /// Gets or sets the correlation ID for end-to-end request tracing.
+    /// Set by the CorrelationId interceptor in the pipeline.
+    /// </summary>
+    public string CorrelationId { get; set; } = string.Empty;
 }
