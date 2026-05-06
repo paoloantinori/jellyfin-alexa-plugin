@@ -26,6 +26,12 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public abstract class BaseHandler
 {
+    /// <summary>
+    /// Alexa request timeout budget in milliseconds.
+    /// Matches the CancellationTokenSource(TimeSpan.FromSeconds(6)) in AlexaSkillController.
+    /// </summary>
+    private const int AlexaRequestTimeoutMs = 6000;
+
     private PluginConfiguration _config;
 
     /// <summary>
@@ -102,7 +108,8 @@ public abstract class BaseHandler
             () => SessionManager.GetSessionByAuthenticationToken(user.JellyfinToken, context.System.Device.DeviceID, Plugin.Instance!.Configuration.ServerAddress),
             Logger,
             "GetSessionByAuthToken",
-            cancellationToken: cancellationToken).ConfigureAwait(false);
+            cancellationToken: cancellationToken,
+            timeoutMs: AlexaRequestTimeoutMs).ConfigureAwait(false);
 
         string serverUrl = _config.ServerAddress;
 
@@ -414,7 +421,7 @@ public abstract class BaseHandler
     /// <returns>The result of the operation.</returns>
     protected Task<T> RetryAsync<T>(Func<T> operation, string operationName, CancellationToken cancellationToken = default)
     {
-        return RetryHelper.ExecuteWithRetryAsync(operation, Logger, operationName, cancellationToken: cancellationToken);
+        return RetryHelper.ExecuteWithRetryAsync(operation, Logger, operationName, cancellationToken: cancellationToken, timeoutMs: AlexaRequestTimeoutMs);
     }
 
     /// <summary>

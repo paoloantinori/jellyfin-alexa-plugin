@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Globalization;
 using System.Net.Http;
 using System.Threading;
@@ -24,6 +25,33 @@ internal static class RetryHelper
     public const int DefaultInitialDelayMs = 500;
 
     /// <summary>
+    /// Default minimum estimated operation time in milliseconds.
+    /// Used by timeout-aware retry to check if there's enough budget for another attempt.
+    /// </summary>
+    public const int DefaultMinOperationMs = 500;
+
+    /// <summary>
+    /// Check if the retry budget is exceeded.
+    /// Returns true if budget is exceeded (caller should rethrow the caught exception).
+    /// </summary>
+    private static bool IsBudgetExceeded(Stopwatch stopwatch, int delayMs, int minOperationMs, int budgetMs, ILogger logger, string operationName)
+    {
+        if (stopwatch.ElapsedMilliseconds + delayMs + minOperationMs > budgetMs)
+        {
+            logger.LogWarning(
+                "Skipping retry for {Operation}: timeout budget exceeded (elapsed={Elapsed}ms, nextDelay={Delay}ms, minOp={MinOp}ms, budget={Budget}ms)",
+                operationName,
+                stopwatch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture),
+                delayMs.ToString(CultureInfo.InvariantCulture),
+                minOperationMs.ToString(CultureInfo.InvariantCulture),
+                budgetMs.ToString(CultureInfo.InvariantCulture));
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Calculate exponential backoff delay with random jitter to prevent thundering herd.
     /// Formula: initialDelay * 2^attempt + random(0, initialDelay/2).
     /// </summary>
@@ -37,6 +65,7 @@ internal static class RetryHelper
     /// <summary>
     /// Execute a synchronous operation with retry logic and exponential backoff.
     /// Use for in-process API calls (LibraryManager, SessionManager) that may fail transiently.
+    /// When <paramref name="timeoutMs"/> is set, skips retries that would exceed the budget.
     /// </summary>
     /// <typeparam name="T">The return type of the operation.</typeparam>
     /// <param name="operation">The synchronous operation to execute.</param>
@@ -45,6 +74,8 @@ internal static class RetryHelper
     /// <param name="maxRetries">Maximum retry attempts (default 3).</param>
     /// <param name="initialDelayMs">Initial delay in ms before first retry (default 500).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="timeoutMs">Optional total timeout budget in ms. Retries are skipped if elapsed + delay + minOperation would exceed this.</param>
+    /// <param name="minOperationMs">Minimum estimated time for one operation attempt in ms (default 500).</param>
     /// <returns>The result of the operation.</returns>
     public static async Task<T> ExecuteWithRetryAsync<T>(
         Func<T> operation,
@@ -52,9 +83,13 @@ internal static class RetryHelper
         string operationName,
         int maxRetries = DefaultMaxRetries,
         int initialDelayMs = DefaultInitialDelayMs,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        int? timeoutMs = null,
+        int minOperationMs = DefaultMinOperationMs)
     {
         ArgumentNullException.ThrowIfNull(operation);
+
+        Stopwatch? stopwatch = timeoutMs.HasValue ? Stopwatch.StartNew() : null;
 
         for (int attempt = 0; ; attempt++)
         {
@@ -67,6 +102,12 @@ internal static class RetryHelper
             catch (Exception ex) when (attempt < maxRetries && IsTransient(ex, cancellationToken))
             {
                 int delayMs = CalculateDelay(initialDelayMs, attempt);
+
+                if (stopwatch != null && IsBudgetExceeded(stopwatch, delayMs, minOperationMs, timeoutMs!.Value, logger, operationName))
+                {
+                    throw;
+                }
+
                 logger.LogWarning(
                     "Retry {Attempt}/{MaxRetries} for {Operation} after {Delay}ms due to: {Error}",
                     (attempt + 1).ToString(CultureInfo.InvariantCulture),
@@ -83,6 +124,7 @@ internal static class RetryHelper
     /// <summary>
     /// Execute an async operation with retry logic and exponential backoff.
     /// Use for HTTP calls (LWA, progressive responses) that may fail transiently.
+    /// When <paramref name="timeoutMs"/> is set, skips retries that would exceed the budget.
     /// </summary>
     /// <typeparam name="T">The return type of the operation.</typeparam>
     /// <param name="operation">The async operation to execute.</param>
@@ -91,6 +133,8 @@ internal static class RetryHelper
     /// <param name="maxRetries">Maximum retry attempts (default 3).</param>
     /// <param name="initialDelayMs">Initial delay in ms before first retry (default 500).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="timeoutMs">Optional total timeout budget in ms. Retries are skipped if elapsed + delay + minOperation would exceed this.</param>
+    /// <param name="minOperationMs">Minimum estimated time for one operation attempt in ms (default 500).</param>
     /// <returns>The result of the operation.</returns>
     public static async Task<T> ExecuteWithRetryAsync<T>(
         Func<Task<T>> operation,
@@ -98,9 +142,13 @@ internal static class RetryHelper
         string operationName,
         int maxRetries = DefaultMaxRetries,
         int initialDelayMs = DefaultInitialDelayMs,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        int? timeoutMs = null,
+        int minOperationMs = DefaultMinOperationMs)
     {
         ArgumentNullException.ThrowIfNull(operation);
+
+        Stopwatch? stopwatch = timeoutMs.HasValue ? Stopwatch.StartNew() : null;
 
         for (int attempt = 0; ; attempt++)
         {
@@ -113,6 +161,12 @@ internal static class RetryHelper
             catch (Exception ex) when (attempt < maxRetries && IsTransient(ex, cancellationToken))
             {
                 int delayMs = CalculateDelay(initialDelayMs, attempt);
+
+                if (stopwatch != null && IsBudgetExceeded(stopwatch, delayMs, minOperationMs, timeoutMs!.Value, logger, operationName))
+                {
+                    throw;
+                }
+
                 logger.LogWarning(
                     "Retry {Attempt}/{MaxRetries} for {Operation} after {Delay}ms due to: {Error}",
                     (attempt + 1).ToString(CultureInfo.InvariantCulture),

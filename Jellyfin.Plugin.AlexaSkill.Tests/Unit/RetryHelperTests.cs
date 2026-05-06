@@ -293,4 +293,149 @@ public class RetryHelperTests
         int delay = RetryHelper.CalculateDelay(1, 0);
         Assert.Equal(1, delay);
     }
+
+    // --- Timeout budget tests ---
+
+    [Fact]
+    public async Task Sync_BudgetExceeded_SkipsRetryAndThrows()
+    {
+        int calls = 0;
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(() =>
+            RetryHelper.ExecuteWithRetryAsync(
+                (Func<string>)(() =>
+                {
+                    calls++;
+                    throw new HttpRequestException("transient");
+                }),
+                _logger,
+                "TestOp",
+                maxRetries: 3,
+                initialDelayMs: 100,
+                timeoutMs: 1,
+                minOperationMs: 1));
+
+        // Only the initial attempt; retry skipped because delay (100+) > budget (1ms)
+        Assert.Equal(1, calls);
+        Assert.Equal("transient", ex.Message);
+    }
+
+    [Fact]
+    public async Task Async_BudgetExceeded_SkipsRetryAndThrows()
+    {
+        int calls = 0;
+        var ex = await Assert.ThrowsAsync<TimeoutException>(() =>
+            RetryHelper.ExecuteWithRetryAsync(
+                () =>
+                {
+                    calls++;
+                    return Task.FromException<string>(new TimeoutException("transient"));
+                },
+                _logger,
+                "TestOp",
+                maxRetries: 3,
+                initialDelayMs: 100,
+                timeoutMs: 1,
+                minOperationMs: 1));
+
+        Assert.Equal(1, calls);
+        Assert.Equal("transient", ex.Message);
+    }
+
+    [Fact]
+    public async Task Sync_BudgetSufficient_RetriesNormally()
+    {
+        int calls = 0;
+        string result = await RetryHelper.ExecuteWithRetryAsync(
+            (Func<string>)(() =>
+            {
+                calls++;
+                if (calls < 2)
+                {
+                    throw new HttpRequestException("transient");
+                }
+
+                return "ok";
+            }),
+            _logger,
+            "TestOp",
+            maxRetries: 3,
+            initialDelayMs: 1,
+            timeoutMs: 10000,
+            minOperationMs: 100);
+
+        Assert.Equal("ok", result);
+        Assert.Equal(2, calls);
+    }
+
+    [Fact]
+    public async Task Async_BudgetSufficient_RetriesNormally()
+    {
+        int calls = 0;
+        string result = await RetryHelper.ExecuteWithRetryAsync(
+            () =>
+            {
+                calls++;
+                if (calls < 2)
+                {
+                    return Task.FromException<string>(new HttpRequestException("transient"));
+                }
+
+                return Task.FromResult("ok");
+            },
+            _logger,
+            "TestOp",
+            maxRetries: 3,
+            initialDelayMs: 1,
+            timeoutMs: 10000,
+            minOperationMs: 100);
+
+        Assert.Equal("ok", result);
+        Assert.Equal(2, calls);
+    }
+
+    [Fact]
+    public async Task NoTimeoutSpecified_RetriesAsBefore()
+    {
+        // Without timeoutMs, behavior is unchanged — all retries exhausted
+        int calls = 0;
+        await Assert.ThrowsAsync<HttpRequestException>(() =>
+            RetryHelper.ExecuteWithRetryAsync(
+                (Func<int>)(() =>
+                {
+                    calls++;
+                    throw new HttpRequestException("persistent");
+                }),
+                _logger,
+                "TestOp",
+                maxRetries: 2,
+                initialDelayMs: 1));
+
+        // 1 initial + 2 retries = 3 total
+        Assert.Equal(3, calls);
+    }
+
+    [Fact]
+    public async Task BudgetTightButSufficient_SingleRetryAllowed()
+    {
+        int calls = 0;
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(() =>
+            RetryHelper.ExecuteWithRetryAsync(
+                (Func<string>)(() =>
+                {
+                    calls++;
+                    throw new HttpRequestException("fail");
+                }),
+                _logger,
+                "TestOp",
+                maxRetries: 5,
+                initialDelayMs: 1,
+                timeoutMs: 600,
+                minOperationMs: 100));
+
+        // First attempt near-instant, delay=1+jitter, minOp=100 → ~101ms < 600ms → 1 retry allowed
+        // After first retry (~1ms elapsed), next delay=2+jitter → ~102ms < 600ms → another retry
+        // This continues until delay grows enough to exceed budget
+        // With budget=600 and minOp=100, budget allows retries until delay > 500
+        Assert.True(calls >= 2, $"Expected at least 2 calls, got {calls}");
+    }
 }
