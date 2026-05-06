@@ -28,6 +28,7 @@ public class SkillStartup : IHostedService, IDisposable
     private readonly ISessionManager _sessionManager;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly SearchResultCache _searchCache;
+    private readonly CircuitBreaker _circuitBreaker;
     private CancellationTokenSource? _cts;
     private Task? _runningTask;
     private bool _disposed;
@@ -39,11 +40,13 @@ public class SkillStartup : IHostedService, IDisposable
     /// <param name="loggerFactory">Logger.</param>
     /// <param name="httpClientFactory">HTTP client factory for outbound calls.</param>
     /// <param name="searchCache">Search result cache for fallback.</param>
-    public SkillStartup(ISessionManager sessionManager, ILoggerFactory loggerFactory, IHttpClientFactory httpClientFactory, SearchResultCache searchCache)
+    /// <param name="circuitBreaker">Circuit breaker for backend health tracking.</param>
+    public SkillStartup(ISessionManager sessionManager, ILoggerFactory loggerFactory, IHttpClientFactory httpClientFactory, SearchResultCache searchCache, CircuitBreaker circuitBreaker)
     {
         _sessionManager = sessionManager;
         _httpClientFactory = httpClientFactory;
         _searchCache = searchCache;
+        _circuitBreaker = circuitBreaker;
         _logger = loggerFactory.CreateLogger<SkillStartup>();
     }
 
@@ -54,6 +57,7 @@ public class SkillStartup : IHostedService, IDisposable
 
         Plugin.Instance!._httpClientFactory = _httpClientFactory;
         Plugin.Instance!.SearchCache = _searchCache;
+        Plugin.Instance!.CircuitBreaker = _circuitBreaker;
 
         PluginConfiguration configuration = Plugin.Instance!.Configuration;
 

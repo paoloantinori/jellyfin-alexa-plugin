@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Net.Http;
+using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Alexa.InteractionModel;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Manifest;
@@ -78,6 +79,11 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     /// Gets the search result cache for fallback on API failures.
     /// </summary>
     public SearchResultCache SearchCache { get; internal set; } = SearchResultCache.Noop;
+
+    /// <summary>
+    /// Gets the circuit breaker for tracking Jellyfin backend API health.
+    /// </summary>
+    public CircuitBreaker CircuitBreaker { get; internal set; } = new CircuitBreaker();
 
     /// <summary>
     /// Gets or sets the skill manifest.

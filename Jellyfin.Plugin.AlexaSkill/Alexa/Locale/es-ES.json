@@ -88,5 +88,10 @@
   "MediaInfoDurationUnavailable": "No tengo información de duración para esta pista.",
   "MediaInfoGenre": "El género es {0}",
   "MediaInfoGenreUnavailable": "No tengo información de género para esta pista.",
-  "MediaInfoBiographyUnavailable": "No tengo biografía para {0}."
+  "MediaInfoBiographyUnavailable": "No tengo biografía para {0}.",
+  "SearchingPodcast": "Buscando tu podcast...",
+  "DidNotCatchPodcastName": "No entendí el nombre del podcast. ¿Qué podcast quieres escuchar?",
+  "NotFoundPodcast": "No pude encontrar un podcast llamado {0}.",
+  "NoEpisodesInPodcast": "No pude encontrar episodios de {0}.",
+  "ServerUnavailable": "No puedo comunicarme con tu servidor de medios en este momento. Por favor, intenta de nuevo en un momento."
 }

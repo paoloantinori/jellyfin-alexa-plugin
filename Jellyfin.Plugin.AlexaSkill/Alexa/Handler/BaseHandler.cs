@@ -104,7 +104,19 @@ public abstract class BaseHandler
             "GetSessionByAuthToken",
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        return await HandleAsync(request, context, user, session, alexaSession?.Attributes, cancellationToken).ConfigureAwait(false);
+        string serverUrl = _config.ServerAddress;
+
+        try
+        {
+            SkillResponse response = await HandleAsync(request, context, user, session, alexaSession?.Attributes, cancellationToken).ConfigureAwait(false);
+            Plugin.Instance?.CircuitBreaker.RecordSuccess(serverUrl);
+            return response;
+        }
+        catch (Exception ex) when (RetryHelper.IsTransient(ex, cancellationToken))
+        {
+            Plugin.Instance?.CircuitBreaker.RecordFailure(serverUrl, Logger);
+            throw;
+        }
     }
 
     /// <summary>
@@ -352,6 +364,17 @@ public abstract class BaseHandler
     /// <param name="request">The incoming request.</param>
     /// <returns>The locale string (e.g. "en-US", "it-IT").</returns>
     protected static string GetLocale(Request request)
+    {
+        return GetLocalePublic(request);
+    }
+
+    /// <summary>
+    /// Extract the locale from the request, defaulting to en-US if not available.
+    /// Public version accessible from pipeline interceptors.
+    /// </summary>
+    /// <param name="request">The incoming request.</param>
+    /// <returns>The locale string (e.g. "en-US", "it-IT").</returns>
+    public static string GetLocalePublic(Request request)
     {
         return string.IsNullOrEmpty(request.Locale) ? "en-US" : request.Locale;
     }
