@@ -12,6 +12,7 @@ using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Alexa.NET.Assertions;
 using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
@@ -199,7 +200,7 @@ public class EventHandlerTests
             TestHelpers.CreateTestUser(),
             CreateSession(),
             CancellationToken.None);
-        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        var speech = response.Tells<PlainTextOutputSpeech>();
 
         Assert.Contains("wrong", speech.Text, StringComparison.OrdinalIgnoreCase);
     }

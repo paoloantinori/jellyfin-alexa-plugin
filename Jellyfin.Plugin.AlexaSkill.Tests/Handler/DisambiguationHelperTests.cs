@@ -5,6 +5,7 @@ using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using Newtonsoft.Json;
+using Alexa.NET.Assertions;
 using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
@@ -67,9 +68,7 @@ public class DisambiguationHelperTests
         var response = DisambiguationHelper.AskFirstMatch(matches, "song", "en-US");
 
         Assert.NotNull(response);
-        Assert.NotNull(response.Response);
-        Assert.False(response.Response.ShouldEndSession);
-        Assert.NotNull(response.Response.OutputSpeech);
+        response.Asks();
         Assert.Contains("Test Song", TestHelpers.GetSpeechText(response));
     }
 
@@ -130,7 +129,7 @@ public class DisambiguationHelperTests
         var response = DisambiguationHelper.AskNextMatch(matches, 1, "song", "en-US");
 
         Assert.NotNull(response);
-        Assert.False(response.Response.ShouldEndSession);
+        response.Asks();
         Assert.Contains("Second", TestHelpers.GetSpeechText(response));
     }
 
@@ -157,9 +156,7 @@ public class DisambiguationHelperTests
         var response = DisambiguationHelper.NoMoreMatches("en-US");
 
         Assert.NotNull(response);
-        Assert.True(response.Response.ShouldEndSession);
-        Assert.NotNull(response.Response.OutputSpeech);
-        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        var speech = response.Tells<PlainTextOutputSpeech>();
         Assert.Contains("no more matches", speech.Text, StringComparison.OrdinalIgnoreCase);
     }
 

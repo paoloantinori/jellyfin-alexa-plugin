@@ -6,6 +6,7 @@ using global::Alexa.NET;
 using global::Alexa.NET.Request;
 using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
+using Alexa.NET.Assertions;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -156,9 +157,7 @@ public class PlayVideoIntentHandlerTests
             CreateSession(), CancellationToken.None);
 
         Assert.Null(response.Response.OutputSpeech);
-        Assert.NotNull(response.Response.Directives);
-        Assert.Single(response.Response.Directives);
-        Assert.Equal("VideoApp.Launch", response.Response.Directives[0].Type);
+        response.HasDirective<VideoAppLaunchDirective>();
     }
 
     [Fact]
@@ -235,7 +234,7 @@ public class PlayVideoIntentHandlerTests
             TestHelpers.CreateTestUser(),
             CreateSession(), CancellationToken.None);
 
-        var directive = Assert.IsType<VideoAppLaunchDirective>(response.Response.Directives[0]);
+        var directive = response.HasDirective<VideoAppLaunchDirective>();
         Assert.NotNull(directive.VideoItem);
         Assert.Contains(id.ToString(), directive.VideoItem.Source);
         Assert.Contains("Download", directive.VideoItem.Source);

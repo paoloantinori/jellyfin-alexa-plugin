@@ -16,6 +16,7 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Alexa.NET.Assertions;
 using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
@@ -108,7 +109,7 @@ public class PlayChannelIntentHandlerTests
         };
 
         var response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
-        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        var speech = response.Tells<PlainTextOutputSpeech>();
 
         Assert.Contains("didn't catch", speech.Text);
     }
@@ -122,7 +123,7 @@ public class PlayChannelIntentHandlerTests
             CreateContext(),
             TestHelpers.CreateTestUser(),
             CreateSession(), CancellationToken.None);
-        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        var speech = response.Tells<PlainTextOutputSpeech>();
 
         Assert.Contains("didn't catch", speech.Text);
     }
@@ -138,7 +139,7 @@ public class PlayChannelIntentHandlerTests
             CreateContext(),
             TestHelpers.CreateTestUser(),
             CreateSession(), CancellationToken.None);
-        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        var speech = response.Tells<PlainTextOutputSpeech>();
 
         Assert.Contains("didn't catch", speech.Text);
     }
@@ -157,7 +158,7 @@ public class PlayChannelIntentHandlerTests
             TestHelpers.CreateTestUser(),
             CreateSession(), CancellationToken.None);
 
-        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        var speech = response.Tells<PlainTextOutputSpeech>();
         Assert.Contains("couldn't find", speech.Text);
     }
 
@@ -179,10 +180,7 @@ public class PlayChannelIntentHandlerTests
             CreateSession(), CancellationToken.None);
 
         Assert.Null(response.Response.OutputSpeech);
-        Assert.NotNull(response.Response.Directives);
-        Assert.Single(response.Response.Directives);
-
-        var directive = Assert.IsType<AudioPlayerPlayDirective>(response.Response.Directives[0]);
+        var directive = response.HasDirective<AudioPlayerPlayDirective>();
         Assert.Contains(channelId.ToString(), directive.AudioItem.Stream.Url);
         Assert.Contains("Download", directive.AudioItem.Stream.Url);
     }
@@ -223,7 +221,6 @@ public class PlayChannelIntentHandlerTests
             TestHelpers.CreateTestUser(),
             CreateSession(), CancellationToken.None);
 
-        Assert.NotNull(response.Response.Directives);
-        Assert.Single(response.Response.Directives);
+        response.HasDirective<AudioPlayerPlayDirective>();
     }
 }

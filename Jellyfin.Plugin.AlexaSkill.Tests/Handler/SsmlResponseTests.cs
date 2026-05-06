@@ -1,4 +1,5 @@
 using System;
+using Alexa.NET.Assertions;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Xunit;
@@ -12,8 +13,7 @@ public class SsmlResponseTests
     {
         var response = BaseHandler.TellSsml("Hello world");
 
-        Assert.True(response.Response.ShouldEndSession);
-        var speech = Assert.IsType<SsmlOutputSpeech>(response.Response.OutputSpeech);
+        var speech = response.Tells<SsmlOutputSpeech>();
         Assert.Equal("<speak>Hello world</speak>", speech.Ssml);
     }
 
@@ -22,8 +22,7 @@ public class SsmlResponseTests
     {
         var response = BaseHandler.AskSsml("Main prompt", "Reprompt text");
 
-        Assert.False(response.Response.ShouldEndSession);
-        var mainSpeech = Assert.IsType<SsmlOutputSpeech>(response.Response.OutputSpeech);
+        var mainSpeech = response.Asks<SsmlOutputSpeech>();
         Assert.Equal("<speak>Main prompt</speak>", mainSpeech.Ssml);
         var repromptSpeech = Assert.IsType<SsmlOutputSpeech>(response.Response.Reprompt.OutputSpeech);
         Assert.Equal("<speak>Reprompt text</speak>", repromptSpeech.Ssml);
@@ -35,8 +34,7 @@ public class SsmlResponseTests
         var reprompt = new Reprompt("plain text");
         var response = BaseHandler.AskSsml("SSML prompt", reprompt);
 
-        Assert.False(response.Response.ShouldEndSession);
-        Assert.IsType<SsmlOutputSpeech>(response.Response.OutputSpeech);
+        response.Asks<SsmlOutputSpeech>();
         Assert.IsType<PlainTextOutputSpeech>(response.Response.Reprompt.OutputSpeech);
     }
 
