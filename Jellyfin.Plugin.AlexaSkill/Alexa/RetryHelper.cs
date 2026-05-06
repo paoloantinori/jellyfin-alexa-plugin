@@ -24,6 +24,17 @@ internal static class RetryHelper
     public const int DefaultInitialDelayMs = 500;
 
     /// <summary>
+    /// Calculate exponential backoff delay with random jitter to prevent thundering herd.
+    /// Formula: initialDelay * 2^attempt + random(0, initialDelay/2).
+    /// </summary>
+    internal static int CalculateDelay(int initialDelayMs, int attempt)
+    {
+        int baseDelay = initialDelayMs * (int)Math.Pow(2, attempt);
+        int jitter = initialDelayMs > 1 ? Random.Shared.Next(0, initialDelayMs / 2 + 1) : 0;
+        return baseDelay + jitter;
+    }
+
+    /// <summary>
     /// Execute a synchronous operation with retry logic and exponential backoff.
     /// Use for in-process API calls (LibraryManager, SessionManager) that may fail transiently.
     /// </summary>
@@ -55,7 +66,7 @@ internal static class RetryHelper
             }
             catch (Exception ex) when (attempt < maxRetries && IsTransient(ex, cancellationToken))
             {
-                int delayMs = initialDelayMs * (int)Math.Pow(2, attempt);
+                int delayMs = CalculateDelay(initialDelayMs, attempt);
                 logger.LogWarning(
                     "Retry {Attempt}/{MaxRetries} for {Operation} after {Delay}ms due to: {Error}",
                     (attempt + 1).ToString(CultureInfo.InvariantCulture),
@@ -101,7 +112,7 @@ internal static class RetryHelper
             }
             catch (Exception ex) when (attempt < maxRetries && IsTransient(ex, cancellationToken))
             {
-                int delayMs = initialDelayMs * (int)Math.Pow(2, attempt);
+                int delayMs = CalculateDelay(initialDelayMs, attempt);
                 logger.LogWarning(
                     "Retry {Attempt}/{MaxRetries} for {Operation} after {Delay}ms due to: {Error}",
                     (attempt + 1).ToString(CultureInfo.InvariantCulture),

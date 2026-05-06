@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -240,5 +241,56 @@ public class RetryHelperTests
     public void IsTransient_ArgumentNullException_ReturnsFalse()
     {
         Assert.False(RetryHelper.IsTransient(new ArgumentNullException()));
+    }
+
+    // --- CalculateDelay jitter tests ---
+
+    [Fact]
+    public void CalculateDelay_IsWithinBoundedRange()
+    {
+        const int initialDelay = 500;
+        const int attempt = 1; // base = 500 * 2 = 1000
+
+        int min = initialDelay * (int)Math.Pow(2, attempt);       // 1000
+        int max = min + initialDelay / 2;                          // 1250
+
+        // Sample 100 times to exercise randomness
+        for (int i = 0; i < 100; i++)
+        {
+            int delay = RetryHelper.CalculateDelay(initialDelay, attempt);
+            Assert.InRange(delay, min, max);
+        }
+    }
+
+    [Fact]
+    public void CalculateDelay_JitterIsNonDeterministic()
+    {
+        const int initialDelay = 500;
+        const int attempt = 0;
+
+        var delays = new HashSet<int>();
+        for (int i = 0; i < 50; i++)
+        {
+            delays.Add(RetryHelper.CalculateDelay(initialDelay, attempt));
+        }
+
+        // With jitter range 0-250, 50 samples should produce multiple distinct values
+        Assert.True(delays.Count > 1, $"Expected multiple distinct delays but got {delays.Count}");
+    }
+
+    [Fact]
+    public void CalculateDelay_ZeroAttempt_NoOverflow()
+    {
+        // attempt=0: base=initialDelay, jitter=0..initialDelay/2
+        int delay = RetryHelper.CalculateDelay(500, 0);
+        Assert.InRange(delay, 500, 750);
+    }
+
+    [Fact]
+    public void CalculateDelay_SmallInitialDelay_NoNegativeJitter()
+    {
+        // Edge case: initialDelay=1, jitter should be 0 to avoid division issues
+        int delay = RetryHelper.CalculateDelay(1, 0);
+        Assert.Equal(1, delay);
     }
 }
