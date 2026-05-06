@@ -289,7 +289,17 @@
           "Wie lange dauert das",
           "Welches Genre ist das",
           "Erzähl mir von dem Künstler",
-          "Infos über den Künstler"
+          "Infos über den Künstler",
+          "Welches Lied läuft gerade",
+          "Wie heißt der Titel",
+          "Welche Band ist das",
+          "Wer hat das Lied gemacht",
+          "Sag mir den Albumnamen",
+          "Wann kam das Album raus",
+          "Welches Genre hat das Lied",
+          "Gib mir Infos zu diesem Titel",
+          "Nenne mir den Künstler",
+          "Von welchem Album ist das"
         ]
       },
       {
@@ -383,6 +393,63 @@
           "spiele etwas {mood}",
           "ich möchte {mood} musik",
           "spiele mir etwas {mood}"
+        ]
+      },
+      {
+        "name": "PlayPodcastIntent",
+        "samples": [
+          "Spiele den Podcast {podcast_name}",
+          "Spiele Podcast {podcast_name}",
+          "Höre den Podcast {podcast_name}",
+          "Höre Podcast {podcast_name}",
+          "Spiele die neueste Folge von {podcast_name}",
+          "Starte den Podcast {podcast_name}",
+          "Ich möchte den Podcast {podcast_name} hören",
+          "Spiele {podcast_name} Podcast",
+          "Öffne {podcast_name} Podcast",
+          "Spiele die letzte Folge von {podcast_name}",
+          "Höre die neueste Folge von {podcast_name}",
+          "Setze den Podcast {podcast_name} fort",
+          "Spiele mir einen Podcast vor {podcast_name}",
+          "Ich höre gerne den Podcast {podcast_name}",
+          "Mach mit dem Podcast {podcast_name} weiter",
+          "Starte den neuesten Podcast {podcast_name}",
+          "Spiele die aktuelle Folge von {podcast_name}",
+          "Weiter mit dem Podcast {podcast_name}",
+          "Lass uns den Podcast {podcast_name} hören"
+        ],
+        "slots": [
+          {
+            "name": "podcast_name",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
+        "name": "SearchMediaIntent",
+        "slots": [
+          {
+            "name": "query",
+            "type": "AMAZON.SearchQuery"
+          }
+        ],
+        "samples": [
+          "Suche nach {query}",
+          "Finde {query}",
+          "Suche {query}",
+          "Hast du {query}",
+          "Ich möchte {query} finden",
+          "Kannst du {query} finden",
+          "Finde mir {query}",
+          "Suche {query} in der Mediathek",
+          "Suche in meiner Mediathek nach {query}",
+          "Durchsuche die Mediathek nach {query}",
+          "Suche in der Bibliothek nach {query}",
+          "Finde {query} in meiner Bibliothek",
+          "Gibt es {query} in der Mediathek",
+          "Ich suche {query} in meiner Sammlung",
+          "Prüfe ob {query} vorhanden ist",
+          "Hast du {query} in der Bibliothek"
         ]
       }
     ],

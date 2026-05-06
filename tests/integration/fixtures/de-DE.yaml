@@ -1,0 +1,362 @@
+locale: de-DE
+invocation_name: jellyfin player
+tests:
+  # -------------------------------------------------------------------------
+  # 1. LoopAllOffIntent (no slots)
+  # -------------------------------------------------------------------------
+  - utterance: "Wiederholung aus"
+    expected_intent: LoopAllOffIntent
+    expected_slots: {}
+
+  - utterance: "Schleife aus"
+    expected_intent: LoopAllOffIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 2. LoopAllOnIntent (no slots)
+  # -------------------------------------------------------------------------
+  - utterance: "Wiederholung an"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  - utterance: "Schleife an"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 3. RepeatSingleOnIntent (no slots)
+  # -------------------------------------------------------------------------
+  - utterance: "Lied wiederholen"
+    expected_intent: RepeatSingleOnIntent
+    expected_slots: {}
+
+  - utterance: "Titel wiederholen"
+    expected_intent: RepeatSingleOnIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 4. PlayChannelIntent (channel)
+  # -------------------------------------------------------------------------
+  - utterance: "Kanal bbc radio"
+    expected_intent: PlayChannelIntent
+    expected_slots:
+      channel: {}
+
+  - utterance: "Spiele Radio jazz fm"
+    expected_intent: PlayChannelIntent
+    expected_slots:
+      channel: {}
+
+  # -------------------------------------------------------------------------
+  # 5. PlaySongIntent (song, musician)
+  # -------------------------------------------------------------------------
+  - utterance: "Spiele das Lied bohemian rhapsody"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+
+  - utterance: "Spiele das Lied hotel california von the eagles"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+      musician: {}
+
+  # -------------------------------------------------------------------------
+  # 6. PlayAlbumIntent (album, musician)
+  # -------------------------------------------------------------------------
+  - utterance: "Spiele das Album dark side of the moon"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+
+  - utterance: "Spiele das Album thriller von michael jackson"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+      musician: {}
+
+  # -------------------------------------------------------------------------
+  # 7. PlayVideoIntent (title)
+  # -------------------------------------------------------------------------
+  - utterance: "Spiele das Video star wars"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+
+  # -------------------------------------------------------------------------
+  # 8. PlayArtistSongsIntent (musician)
+  # -------------------------------------------------------------------------
+  - utterance: "Spiele Lieder von queen"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "Spiele Musik von the beatles"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  # -------------------------------------------------------------------------
+  # 9. PlayLastAddedIntent (media_type, time_period)
+  # -------------------------------------------------------------------------
+  - utterance: "Spiele neu hinzugefuegte lieder"
+    expected_intent: PlayLastAddedIntent
+    expected_slots:
+      media_type: {}
+
+  - utterance: "Spiele kuerzlich hinzugefuegte filme"
+    expected_intent: PlayLastAddedIntent
+    expected_slots:
+      media_type: {}
+
+  - utterance: "Spiele neue Medien"
+    expected_intent: PlayLastAddedIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 10. PlayRandomIntent (media_type, genre)
+  # -------------------------------------------------------------------------
+  - utterance: "Spiele zufällige lieder"
+    expected_intent: PlayRandomIntent
+    expected_slots:
+      media_type: {}
+
+  - utterance: "Spiele etwas zufälliges"
+    expected_intent: PlayRandomIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 11. PlayByGenreIntent (genre)
+  # -------------------------------------------------------------------------
+  - utterance: "Spiele rock Musik"
+    expected_intent: PlayByGenreIntent
+    expected_slots:
+      genre: {}
+
+  - utterance: "Spiele jazz"
+    expected_intent: PlayByGenreIntent
+    expected_slots:
+      genre: {}
+
+  - utterance: "Ich möchte klassik hören"
+    expected_intent: PlayByGenreIntent
+    expected_slots:
+      genre: {}
+
+  # -------------------------------------------------------------------------
+  # 12. ContinueWatchingIntent (no slots)
+  # -------------------------------------------------------------------------
+  - utterance: "Weiter schauen"
+    expected_intent: ContinueWatchingIntent
+    expected_slots: {}
+
+  - utterance: "Mach da weiter wo ich war"
+    expected_intent: ContinueWatchingIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 13. GoToChapterIntent (chapter_number)
+  # -------------------------------------------------------------------------
+  - utterance: "Gehe zu Kapitel fünf"
+    expected_intent: GoToChapterIntent
+    expected_slots:
+      chapter_number: {}
+
+  - utterance: "Springe zu Kapitel zwölf"
+    expected_intent: GoToChapterIntent
+    expected_slots:
+      chapter_number: {}
+
+  - utterance: "Nächstes Kapitel"
+    expected_intent: GoToChapterIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 14. PlayPlaylistIntent (playlist)
+  # -------------------------------------------------------------------------
+  - utterance: "Spiele die Playlist rock klassiker"
+    expected_intent: PlayPlaylistIntent
+    expected_slots:
+      playlist: {}
+
+  - utterance: "Spiele meine Playlist favoriten"
+    expected_intent: PlayPlaylistIntent
+    expected_slots:
+      playlist: {}
+
+  # -------------------------------------------------------------------------
+  # 15. PlayFavoritesIntent (media_type)
+  # -------------------------------------------------------------------------
+  - utterance: "Spiele meine Lieblings lieder"
+    expected_intent: PlayFavoritesIntent
+    expected_slots:
+      media_type: {}
+
+  - utterance: "Spiele meine Favoriten"
+    expected_intent: PlayFavoritesIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 16. MarkFavoriteIntent (no slots)
+  # -------------------------------------------------------------------------
+  - utterance: "Das gefaellt mir"
+    expected_intent: MarkFavoriteIntent
+    expected_slots: {}
+
+  - utterance: "Das Lied gefaellt mir"
+    expected_intent: MarkFavoriteIntent
+    expected_slots: {}
+
+  - utterance: "Fuege das Lied zu meinen Favoriten hinzu"
+    expected_intent: MarkFavoriteIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 17. UnmarkFavoriteIntent (no slots)
+  # -------------------------------------------------------------------------
+  - utterance: "Das gefaellt mir nicht"
+    expected_intent: UnmarkFavoriteIntent
+    expected_slots: {}
+
+  - utterance: "Entferne das Lied aus meinen Favoriten"
+    expected_intent: UnmarkFavoriteIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 18. MediaInfoIntent (media_info_type)
+  # -------------------------------------------------------------------------
+  - utterance: "Wie heißt das Lied"
+    expected_intent: MediaInfoIntent
+    expected_slots: {}
+
+  - utterance: "Welches Lied läuft gerade"
+    expected_intent: MediaInfoIntent
+    expected_slots: {}
+
+  - utterance: "Wer singt das"
+    expected_intent: MediaInfoIntent
+    expected_slots: {}
+
+  - utterance: "Welches Genre ist das"
+    expected_intent: MediaInfoIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 19. InProgressMediaListIntent (no slots)
+  # -------------------------------------------------------------------------
+  - utterance: "was schaue ich gerade"
+    expected_intent: InProgressMediaListIntent
+    expected_slots: {}
+
+  - utterance: "was ist in bearbeitung"
+    expected_intent: InProgressMediaListIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 20. PlayEpisodeIntent (series_name, season_number, episode_number)
+  # -------------------------------------------------------------------------
+  - utterance: "spiele staffel eins folge drei von breaking bad"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
+      series_name: {}
+      season_number: {}
+      episode_number: {}
+
+  - utterance: "spiele stranger things staffel zwei folge eins"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
+      series_name: {}
+      season_number: {}
+      episode_number: {}
+
+  # -------------------------------------------------------------------------
+  # 21. BrowseLibraryIntent (browse_category)
+  # -------------------------------------------------------------------------
+  - utterance: "durchsuche filme"
+    expected_intent: BrowseLibraryIntent
+    expected_slots:
+      browse_category: {}
+
+  - utterance: "zeige mir alben"
+    expected_intent: BrowseLibraryIntent
+    expected_slots:
+      browse_category: {}
+
+  # -------------------------------------------------------------------------
+  # 22. RecommendIntent (media_type)
+  # -------------------------------------------------------------------------
+  - utterance: "empfehle einen film"
+    expected_intent: RecommendIntent
+    expected_slots:
+      media_type: {}
+
+  - utterance: "empfehle etwas"
+    expected_intent: RecommendIntent
+    expected_slots: {}
+
+  - utterance: "schlage musik vor"
+    expected_intent: RecommendIntent
+    expected_slots:
+      media_type: {}
+
+  # -------------------------------------------------------------------------
+  # 23. SleepTimerIntent (duration_minutes)
+  # -------------------------------------------------------------------------
+  - utterance: "stoppe in dreißig minuten"
+    expected_intent: SleepTimerIntent
+    expected_slots:
+      duration_minutes: {}
+
+  - utterance: "schlaf-timer sechzig minuten"
+    expected_intent: SleepTimerIntent
+    expected_slots:
+      duration_minutes: {}
+
+  # -------------------------------------------------------------------------
+  # 24. PlayMoodMusicIntent (mood)
+  # -------------------------------------------------------------------------
+  - utterance: "spiele fröhliche musik"
+    expected_intent: PlayMoodMusicIntent
+    expected_slots:
+      mood: {}
+
+  - utterance: "spiele etwas trauriges"
+    expected_intent: PlayMoodMusicIntent
+    expected_slots:
+      mood: {}
+
+  - utterance: "ich möchte entspannte musik"
+    expected_intent: PlayMoodMusicIntent
+    expected_slots:
+      mood: {}
+
+  # -------------------------------------------------------------------------
+  # 25. PlayPodcastIntent (podcast_name)
+  # -------------------------------------------------------------------------
+  - utterance: "Spiele den podcast heute podcast"
+    expected_intent: PlayPodcastIntent
+    expected_slots:
+      podcast_name: {}
+
+  - utterance: "Höre podcast faz podcast"
+    expected_intent: PlayPodcastIntent
+    expected_slots:
+      podcast_name: {}
+
+  - utterance: "Spiele die neueste Folge von tagesschau podcast"
+    expected_intent: PlayPodcastIntent
+    expected_slots:
+      podcast_name: {}
+
+  # -------------------------------------------------------------------------
+  # 26. SearchMediaIntent (query)
+  # -------------------------------------------------------------------------
+  - utterance: "Suche in meiner Mediathek nach bohemian rhapsody"
+    expected_intent: SearchMediaIntent
+    expected_slots:
+      query: {}
+
+  - utterance: "Gibt es inception in der Mediathek"
+    expected_intent: SearchMediaIntent
+    expected_slots:
+      query: {}

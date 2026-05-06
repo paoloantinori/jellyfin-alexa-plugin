@@ -107,7 +107,12 @@
       {
         "name": "PlayVideoIntent",
         "samples": [
-          "Reproduce el vídeo {title}"
+          "Reproduce el vídeo {title}",
+          "Mete el vídeo {title}",
+          "Pon el vídeo {title}",
+          "Ver el vídeo {title}",
+          "Quiero ver el vídeo {title}",
+          "Reproduce la película {title}"
         ],
         "slots": [
           {
@@ -281,7 +286,17 @@
           "Cuánto dura esta canción",
           "Qué género es",
           "Cuéntame sobre el artista",
-          "Háblame del artista"
+          "Háblame del artista",
+          "qué canción está sonando",
+          "cuál es el nombre de esta canción",
+          "quién hizo esta canción",
+          "qué grupo es este",
+          "dime el nombre del álbum",
+          "cuándo salió esta canción",
+          "qué género tiene esta canción",
+          "dame información de esta canción",
+          "dime el nombre del artista",
+          "de qué álbum es esta canción"
         ]
       },
       {
@@ -375,6 +390,61 @@
           "reproduce algo {mood}",
           "quiero música {mood}",
           "reproduce algo {mood}"
+        ]
+      },
+      {
+        "name": "PlayPodcastIntent",
+        "samples": [
+          "reproduce el podcast {podcast_name}",
+          "escucha el podcast {podcast_name}",
+          "pon el podcast {podcast_name}",
+          "reproduce podcast {podcast_name}",
+          "escucha el último episodio de {podcast_name}",
+          "quiero escuchar el podcast {podcast_name}",
+          "reproduce {podcast_name} podcast",
+          "abre el podcast {podcast_name}",
+          "reproduce el último episodio de {podcast_name}",
+          "continúa el podcast {podcast_name}",
+          "escucha el episodio más reciente de {podcast_name}",
+          "pon el último episodio del podcast {podcast_name}",
+          "quiero oír el podcast {podcast_name}",
+          "sigue con el podcast {podcast_name}",
+          "reanuda el podcast {podcast_name}",
+          "escucha la última entrega de {podcast_name}",
+          "pon el episodio más nuevo de {podcast_name}",
+          "arranca el podcast {podcast_name}"
+        ],
+        "slots": [
+          {
+            "name": "podcast_name",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
+        "name": "SearchMediaIntent",
+        "slots": [
+          {
+            "name": "query",
+            "type": "AMAZON.SearchQuery"
+          }
+        ],
+        "samples": [
+          "Busca {query}",
+          "Encuentra {query}",
+          "Buscar {query}",
+          "Tienes {query}",
+          "Quiero encontrar {query}",
+          "Puedes encontrar {query}",
+          "Busca el contenido {query}",
+          "busca en mi biblioteca {query}",
+          "buscar en mi colección {query}",
+          "encuentra {query} en mi biblioteca",
+          "tengo {query} en mi colección",
+          "existe {query} en la biblioteca",
+          "busca {query} en mi mediateca",
+          "quiero buscar {query} en la biblioteca",
+          "consulta si existe {query}"
         ]
       }
     ],

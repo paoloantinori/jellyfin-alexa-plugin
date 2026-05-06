@@ -1,3 +1,87 @@
+# Jellyfin Alexa Skill Plugin
+
+C# Jellyfin plugin (net9.0) exposing an Alexa skill for media playback, search, and library management. Targets Jellyfin 10.11+.
+
+## Build & Test
+
+```bash
+dotnet build Jellyfin.Plugin.AlexaSkill.sln
+dotnet test Jellyfin.Plugin.AlexaSkill.Tests
+```
+
+## Project Layout
+
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Handler/Intent/` — Intent handlers (one per intent, inherit `BaseHandler`)
+- `Jellyfin.Plugin.AlexaSkill/Alexa/InteractionModel/` — Per-locale interaction model JSON files (12 locales)
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Locale/` — Response string localizations
+- `tests/integration/` — NLU and E2E test suites (Python/pytest, use SMAPI)
+- `manifest.json` — Jellyfin plugin manifest (version entries)
+- `build.yaml` — Plugin metadata (version, targetAbi, artifacts)
+- `Directory.Build.props` — Version numbers (single source of truth)
+
+## Handler Pattern
+
+All intent handlers live in `Alexa/Handler/Intent/` and inherit `BaseHandler`. Each implements:
+- `CanHandle(Request)` — returns true if this handler should process the request
+- `HandleAsync(Request, Context, User, Session, CancellationToken)` — executes the intent
+
+Handlers are registered in `Alexa/Pipeline/`. New intents need: handler class + entry in `IntentNames.cs` + interaction model samples + locale response strings.
+
+## Localization
+
+Response strings are defined in `Alexa/Locale/ResponseStrings.cs` as keys, with per-locale values in `Alexa/Locale/<locale>.json`. To add a new string:
+1. Add a const key in `ResponseStrings.cs`
+2. Add translations in each locale JSON file
+3. Use `ResponseStrings.Get("Key", locale)` in handlers — missing locale = runtime exception
+
+## Code Conventions
+
+- `Nullable enable` is on — nullability annotations required
+- `jellyfin.ruleset` controls code analysis (AllEnabledByDefault)
+- `TreatWarningsAsErrors` is false — warnings are advisory
+- Intent handlers use `async/await` with `ConfigureAwait(false)`
+
+## Interaction Models
+
+12 locale files in `Alexa/InteractionModel/model_*.json`. After editing:
+1. Wrap in `{"interactionModel": <model>}` for SMAPI
+2. Deploy: `ask smapi set-interaction-model --skill-id <ID> --stage development --locale <XX> --interaction-model file:payload.json`
+3. Wait for build: `ask smapi get-skill-status --skill-id <ID>`
+
+## NLU Integration Tests
+
+```bash
+./scripts/run_nlu_tests.sh                  # all locales
+./scripts/run_nlu_tests.sh -k "en-US"       # single locale
+./scripts/run_nlu_tests.sh --dry-run         # validate fixtures only
+```
+
+Requires `ask` CLI authenticated. Test fixtures in `tests/integration/fixtures/*.yaml`.
+Env vars: `ASK_SKILL_ID`, `SMAPI_DELAY` (default 1.5s), `SMAPI_TIMEOUT`.
+
+### E2E Tests
+
+```bash
+./scripts/run_e2e_tests.sh                                         # requires live Jellyfin
+./scripts/run_e2e_tests.sh --dry-run                               # validate fixtures only
+```
+
+E2E tests are auto-skipped without Jellyfin connection. Provide via CLI flags or env vars:
+`--jellyfin-url` / `JELLYFIN_URL`, `--jellyfin-api-key` / `JELLYFIN_API_KEY`, `--jellyfin-user` / `JELLYFIN_USER`
+
+## Key Gotchas
+
+- **AMAZON.SearchQuery cannot coexist with other slot types** in the same utterance. Use custom slot types (e.g. `MediaType`) for slots that appear alongside typed slots like `TimePeriod`.
+- **Slot name consistency**: Alexa requires the same slot name to use the same slot type across all intents in a locale.
+- **NLU competition**: Ambiguous utterances between intents need concrete (non-slotted) samples to disambiguate.
+- **SMAPI rate limits**: Space live NLU tests with `SMAPI_DELAY=1.5`. Model builds take ~15-30s.
+
+## Release
+
+1. Bump version in `Directory.Build.props` and `build.yaml`
+2. Run full test suite (unit + NLU for all locales)
+3. Commit, tag with version, push: `git push origin main --tags`
+4. Update `manifest.json` with new version entry (see `release.sh`)
 
 <!-- BACKLOG.MD MCP GUIDELINES START -->
 
