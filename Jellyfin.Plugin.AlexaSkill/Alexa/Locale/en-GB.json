@@ -94,5 +94,9 @@
   "DidNotCatchPodcastName": "I didn't catch the podcast name. Which podcast would you like to listen to?",
   "NotFoundPodcast": "I couldn't find a podcast called {0}.",
   "NoEpisodesInPodcast": "I couldn't find any episodes of {0}.",
-  "ServerUnavailable": "I'm having trouble reaching your media server right now. Please try again in a moment."
+  "ServerUnavailable": "I'm having trouble reaching your media server right now. Please try again in a moment.",
+  "ErrorPermanentBackend": "That media wasn't found or isn't available.",
+  "ErrorUserError": "I couldn't understand that, please try again.",
+  "ErrorSkillError": "Something went wrong. Please try again.",
+  "ErrorTimeout": "That took too long. Please try again."
 }
