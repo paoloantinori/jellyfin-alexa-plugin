@@ -100,6 +100,11 @@ public class DiagnosticsController : ControllerBase
             TotalErrors = _counters.TotalErrors,
             ErrorRate = ComputeErrorRate(),
             Uptime = _counters.Uptime.ToString(),
+            CacheHits = _counters.CacheHits,
+            CacheMisses = _counters.CacheMisses,
+            CacheHitRate = _counters.CacheHits + _counters.CacheMisses > 0
+                ? Math.Round((double)_counters.CacheHits / (_counters.CacheHits + _counters.CacheMisses), 4)
+                : 0,
             PerType = _counters.PerType.ToDictionary(k => k.Key, v => v.Value),
             Intents = _counters.GetIntentMetrics()
                 .OrderByDescending(kvp => kvp.Value.Count)

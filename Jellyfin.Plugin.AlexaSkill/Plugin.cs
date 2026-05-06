@@ -8,6 +8,7 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.InteractionModel;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Manifest;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Controller.Handler;
+using Jellyfin.Plugin.AlexaSkill.Diagnostics;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Controller.Library;
@@ -84,6 +85,11 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     /// Gets the circuit breaker for tracking Jellyfin backend API health.
     /// </summary>
     public CircuitBreaker CircuitBreaker { get; internal set; } = new CircuitBreaker();
+
+    /// <summary>
+    /// Gets the request counters for metrics tracking.
+    /// </summary>
+    public RequestCounters RequestCounters { get; internal set; } = new RequestCounters();
 
     /// <summary>
     /// Gets or sets the skill manifest.

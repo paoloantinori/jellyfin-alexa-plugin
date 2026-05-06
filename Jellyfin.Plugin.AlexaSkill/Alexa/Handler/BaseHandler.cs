@@ -442,11 +442,13 @@ public abstract class BaseHandler
         CancellationToken cancellationToken)
     {
         SearchResultCache cache = Plugin.Instance?.SearchCache ?? SearchResultCache.Noop;
+        var counters = Plugin.Instance?.RequestCounters;
 
         try
         {
             IReadOnlyList<BaseItem> results = await RetryAsync(operation, operationName, cancellationToken).ConfigureAwait(false);
             cache.Put(userId, queryKey, results);
+            counters?.IncrementCacheMiss();
             return (results, false);
         }
         catch (OperationCanceledException)
@@ -456,6 +458,7 @@ public abstract class BaseHandler
         catch (Exception ex) when (cache.TryGet(userId, queryKey, out IReadOnlyList<BaseItem>? cached))
         {
             Logger.LogWarning(ex, "Library search failed for {Operation}, serving cached results", operationName);
+            counters?.IncrementCacheHit();
             return (cached!, true);
         }
     }

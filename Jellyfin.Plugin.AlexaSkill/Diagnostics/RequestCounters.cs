@@ -13,6 +13,8 @@ public class RequestCounters
 {
     private int _totalRequests;
     private int _totalErrors;
+    private int _cacheHits;
+    private int _cacheMisses;
     private long _startedAt;
 
     public RequestCounters()
@@ -39,6 +41,16 @@ public class RequestCounters
     /// Increment total error count.
     /// </summary>
     public void IncrementErrors() => Interlocked.Increment(ref _totalErrors);
+
+    /// <summary>
+    /// Increment cache hit count.
+    /// </summary>
+    public void IncrementCacheHit() => Interlocked.Increment(ref _cacheHits);
+
+    /// <summary>
+    /// Increment cache miss count.
+    /// </summary>
+    public void IncrementCacheMiss() => Interlocked.Increment(ref _cacheMisses);
 
     /// <summary>
     /// Increment count for a specific request type.
@@ -80,6 +92,16 @@ public class RequestCounters
     /// Gets the total number of errors encountered.
     /// </summary>
     public int TotalErrors => Volatile.Read(ref _totalErrors);
+
+    /// <summary>
+    /// Gets the total number of cache hits.
+    /// </summary>
+    public int CacheHits => Volatile.Read(ref _cacheHits);
+
+    /// <summary>
+    /// Gets the total number of cache misses.
+    /// </summary>
+    public int CacheMisses => Volatile.Read(ref _cacheMisses);
 
     /// <summary>
     /// Gets the plugin uptime as a TimeSpan.
