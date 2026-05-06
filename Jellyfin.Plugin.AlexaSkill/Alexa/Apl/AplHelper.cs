@@ -1,9 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using Alexa.NET.Request;
+using Alexa.NET.Request.Type;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
+using MediaBrowser.Controller.Entities.TV;
 using Newtonsoft.Json.Linq;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
@@ -16,14 +20,38 @@ internal static class AplHelper
 {
     private const string AplInterfaceKey = "Alexa.Presentation.APL";
 
+    private static readonly PropertyInfo? ExtensionsProperty =
+        typeof(Request).GetProperty("Extensions", BindingFlags.Public | BindingFlags.Instance);
+
     private static readonly Lazy<JObject> NowPlayingDocument = new(() => JObject.Parse(@"{
   ""type"": ""APL"",
-  ""version"": ""1.4"",
+  ""version"": ""1.9"",
   ""theme"": ""dark"",
   ""import"": [
     {
       ""name"": ""alexa-layouts"",
-      ""version"": ""1.4.0""
+      ""version"": ""1.5.0""
+    }
+  ],
+  ""resources"": [
+    {
+      ""dimensions"": {
+        ""artSize"": 280,
+        ""titleSize"": 36,
+        ""subtitleSize"": 24,
+        ""controlSize"": 56,
+        ""controlSpacing"": 40
+      }
+    },
+    {
+      ""when"": ""${@viewportProfile == @viewportProfileRound}"",
+      ""dimensions"": {
+        ""artSize"": 200,
+        ""titleSize"": 28,
+        ""subtitleSize"": 20,
+        ""controlSize"": 48,
+        ""controlSpacing"": 30
+      }
     }
   ],
   ""mainTemplate"": {
@@ -67,15 +95,15 @@ internal static class AplHelper
               {
                 ""type"": ""Image"",
                 ""source"": ""${payload.artUrl}"",
-                ""width"": ""40vh"",
-                ""height"": ""40vh"",
+                ""width"": ""${artSize}"",
+                ""height"": ""${artSize}"",
                 ""borderRadius"": 10,
                 ""scale"": ""bestFill""
               },
               {
                 ""type"": ""Text"",
                 ""text"": ""${payload.title}"",
-                ""fontSize"": 36,
+                ""fontSize"": ""${titleSize}"",
                 ""fontWeight"": ""bold"",
                 ""color"": ""white"",
                 ""textAlign"": ""center"",
@@ -85,11 +113,74 @@ internal static class AplHelper
               {
                 ""type"": ""Text"",
                 ""text"": ""${payload.subtitle}"",
-                ""fontSize"": 24,
+                ""fontSize"": ""${subtitleSize}"",
                 ""color"": ""#B0B0B0"",
                 ""textAlign"": ""center"",
                 ""maxLines"": 1,
                 ""paddingTop"": 5
+              },
+              {
+                ""type"": ""Container"",
+                ""direction"": ""row"",
+                ""justifyContent"": ""center"",
+                ""alignItems"": ""center"",
+                ""paddingTop"": 20,
+                ""items"": [
+                  {
+                    ""type"": ""TouchWrapper"",
+                    ""onPress"": {
+                      ""type"": ""SendEvent"",
+                      ""arguments"": [
+                        ""prev""
+                      ]
+                    },
+                    ""width"": ""${controlSize}"",
+                    ""height"": ""${controlSize}"",
+                    ""item"": {
+                      ""type"": ""Text"",
+                      ""text"": ""⏮"",
+                      ""fontSize"": ""${controlSize}"",
+                      ""textAlign"": ""center"",
+                      ""color"": ""white""
+                    }
+                  },
+                  {
+                    ""type"": ""TouchWrapper"",
+                    ""onPress"": {
+                      ""type"": ""SendEvent"",
+                      ""arguments"": [
+                        ""pause""
+                      ]
+                    },
+                    ""width"": ""${controlSize}"",
+                    ""height"": ""${controlSize}"",
+                    ""item"": {
+                      ""type"": ""Text"",
+                      ""text"": ""⏸"",
+                      ""fontSize"": ""${controlSize}"",
+                      ""textAlign"": ""center"",
+                      ""color"": ""white""
+                    }
+                  },
+                  {
+                    ""type"": ""TouchWrapper"",
+                    ""onPress"": {
+                      ""type"": ""SendEvent"",
+                      ""arguments"": [
+                        ""next""
+                      ]
+                    },
+                    ""width"": ""${controlSize}"",
+                    ""height"": ""${controlSize}"",
+                    ""item"": {
+                      ""type"": ""Text"",
+                      ""text"": ""⏭"",
+                      ""fontSize"": ""${controlSize}"",
+                      ""textAlign"": ""center"",
+                      ""color"": ""white""
+                    }
+                  }
+                ]
               }
             ]
           }
@@ -101,12 +192,12 @@ internal static class AplHelper
 
     private static readonly Lazy<JObject> QueueDocument = new(() => JObject.Parse(@"{
   ""type"": ""APL"",
-  ""version"": ""1.4"",
+  ""version"": ""1.9"",
   ""theme"": ""dark"",
   ""import"": [
     {
       ""name"": ""alexa-layouts"",
-      ""version"": ""1.4.0""
+      ""version"": ""1.5.0""
     }
   ],
   ""mainTemplate"": {
@@ -137,44 +228,54 @@ internal static class AplHelper
             ""data"": ""${payload.tracks}"",
             ""items"": [
               {
-                ""type"": ""Container"",
-                ""direction"": ""row"",
-                ""paddingLeft"": 30,
-                ""paddingRight"": 30,
-                ""paddingTop"": 8,
-                ""paddingBottom"": 8,
-                ""items"": [
-                  {
-                    ""type"": ""Image"",
-                    ""source"": ""${data.artUrl}"",
-                    ""width"": 60,
-                    ""height"": 60,
-                    ""borderRadius"": 5,
-                    ""scale"": ""bestFill""
-                  },
-                  {
-                    ""type"": ""Container"",
-                    ""paddingLeft"": 15,
-                    ""direction"": ""column"",
-                    ""justifyContent"": ""center"",
-                    ""items"": [
-                      {
-                        ""type"": ""Text"",
-                        ""text"": ""${data.title}"",
-                        ""fontSize"": 20,
-                        ""color"": ""white"",
-                        ""maxLines"": 1
-                      },
-                      {
-                        ""type"": ""Text"",
-                        ""text"": ""${data.artist}"",
-                        ""fontSize"": 16,
-                        ""color"": ""#B0B0B0"",
-                        ""maxLines"": 1
-                      }
-                    ]
-                  }
-                ]
+                ""type"": ""TouchWrapper"",
+                ""onPress"": {
+                  ""type"": ""SendEvent"",
+                  ""arguments"": [
+                    ""playTrack"",
+                    ""${data.index}""
+                  ]
+                },
+                ""item"": {
+                  ""type"": ""Container"",
+                  ""direction"": ""row"",
+                  ""paddingLeft"": 30,
+                  ""paddingRight"": 30,
+                  ""paddingTop"": 8,
+                  ""paddingBottom"": 8,
+                  ""items"": [
+                    {
+                      ""type"": ""Image"",
+                      ""source"": ""${data.artUrl}"",
+                      ""width"": 60,
+                      ""height"": 60,
+                      ""borderRadius"": 5,
+                      ""scale"": ""bestFill""
+                    },
+                    {
+                      ""type"": ""Container"",
+                      ""paddingLeft"": 15,
+                      ""direction"": ""column"",
+                      ""justifyContent"": ""center"",
+                      ""items"": [
+                        {
+                          ""type"": ""Text"",
+                          ""text"": ""${data.title}"",
+                          ""fontSize"": 20,
+                          ""color"": ""white"",
+                          ""maxLines"": 1
+                        },
+                        {
+                          ""type"": ""Text"",
+                          ""text"": ""${data.artist}"",
+                          ""fontSize"": 16,
+                          ""color"": ""#B0B0B0"",
+                          ""maxLines"": 1
+                        }
+                      ]
+                    }
+                  ]
+                }
               }
             ]
           }
@@ -193,7 +294,8 @@ internal static class AplHelper
     }
 
     /// <summary>
-    /// Build an APL Now Playing screen directive showing track info and album art.
+    /// Build an APL Now Playing screen directive showing track info, album art,
+    /// and interactive playback controls (prev, pause, next) for Echo Show devices.
     /// </summary>
     /// <param name="item">The media item currently playing.</param>
     /// <param name="imageUrl">URL of the album/item art.</param>
@@ -219,7 +321,8 @@ internal static class AplHelper
     }
 
     /// <summary>
-    /// Build an APL queue list directive showing upcoming tracks.
+    /// Build an APL queue list directive showing upcoming tracks with
+    /// tap-to-play touch handlers for each item.
     /// </summary>
     /// <param name="queueItems">List of queue entries with track info.</param>
     /// <returns>An APL RenderDocument directive for the queue screen.</returns>
@@ -241,6 +344,27 @@ internal static class AplHelper
         };
     }
 
+    /// <summary>
+    /// Extract an APL touch event argument from a UserEvent request.
+    /// Returns the first argument (e.g., "prev", "pause", "next", "playTrack")
+    /// or null if the request is not an APL UserEvent.
+    /// </summary>
+    public static string? GetTouchEventArgument(Request request)
+    {
+        if (!string.Equals(request.Type, "Alexa.Presentation.APL.UserEvent", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        if (ExtensionsProperty?.GetValue(request) is IDictionary<string, JToken> extData
+            && extData.TryGetValue("arguments", out var argsToken))
+        {
+            return (argsToken as JArray)?.FirstOrDefault()?.ToString();
+        }
+
+        return null;
+    }
+
     private static string GetSubtitle(BaseItem item)
     {
         if (item is Audio audio)
@@ -256,6 +380,11 @@ internal static class AplHelper
             }
 
             return audio.Album ?? string.Empty;
+        }
+
+        if (item is Episode episode)
+        {
+            return episode.SeriesName ?? string.Empty;
         }
 
         return string.Empty;
@@ -278,13 +407,15 @@ internal static class AplHelper
     private static JObject BuildQueueDatasources(List<QueueDisplayItem> queueItems)
     {
         var tracks = new JArray();
-        foreach (var item in queueItems)
+        for (int i = 0; i < queueItems.Count; i++)
         {
+            var item = queueItems[i];
             tracks.Add(new JObject
             {
                 ["title"] = item.Title,
                 ["artist"] = item.Artist ?? string.Empty,
-                ["artUrl"] = item.ArtUrl ?? string.Empty
+                ["artUrl"] = item.ArtUrl ?? string.Empty,
+                ["index"] = i
             });
         }
 
