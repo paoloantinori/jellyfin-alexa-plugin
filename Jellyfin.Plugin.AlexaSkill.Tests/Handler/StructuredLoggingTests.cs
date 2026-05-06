@@ -80,7 +80,7 @@ public class StructuredLoggingTests
         await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
 
         var entry = Assert.Single(factory.LogEntries);
-        Assert.Equal(LogLevel.Error, entry.Level);
+        Assert.Equal(LogLevel.Critical, entry.Level);
         Assert.Contains("InternalError", entry.Message);
         Assert.Contains(errorMessage, entry.Message);
         Assert.Contains("req-123", entry.Message);

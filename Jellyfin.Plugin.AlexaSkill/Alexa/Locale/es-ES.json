@@ -93,5 +93,9 @@
   "DidNotCatchPodcastName": "No entendí el nombre del podcast. ¿Qué podcast quieres escuchar?",
   "NotFoundPodcast": "No pude encontrar un podcast llamado {0}.",
   "NoEpisodesInPodcast": "No pude encontrar episodios de {0}.",
-  "ServerUnavailable": "No puedo comunicarme con tu servidor de medios en este momento. Por favor, intenta de nuevo en un momento."
+  "ServerUnavailable": "No puedo comunicarme con tu servidor de medios en este momento. Por favor, intenta de nuevo en un momento.",
+  "ErrorPermanentBackend": "Ese contenido no se encontró o no está disponible.",
+  "ErrorUserError": "No he podido entender eso, por favor inténtalo de nuevo.",
+  "ErrorSkillError": "Algo salió mal. Por favor, inténtalo de nuevo.",
+  "ErrorTimeout": "Eso tardó demasiado. Por favor, inténtalo de nuevo."
 }

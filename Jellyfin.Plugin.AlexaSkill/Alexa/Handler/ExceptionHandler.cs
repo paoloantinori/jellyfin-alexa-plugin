@@ -12,7 +12,9 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
 /// <summary>
-/// Handler for SystemExceptionRequest.
+/// Handler for SystemExceptionRequest. Uses <see cref="ErrorClassifier"/>
+/// to map Alexa error types to structured categories with appropriate
+/// log levels and user-facing locale strings.
 /// </summary>
 public class ExceptionHandler : BaseHandler
 {
@@ -33,7 +35,7 @@ public class ExceptionHandler : BaseHandler
     }
 
     /// <summary>
-    /// Log the occured exception and notify user.
+    /// Log the occured exception and notify user with a category-appropriate message.
     /// </summary>
     /// <param name="request">The skill intent request which should be handled.</param>
     /// <param name="context">The context of the skill intent request.</param>
@@ -43,13 +45,20 @@ public class ExceptionHandler : BaseHandler
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         SystemExceptionRequest exceptionRequest = (SystemExceptionRequest)request;
-        Logger.LogError(
-            "Alexa system exception: {ErrorType} - {ErrorMessage} [RequestId={RequestId}, DeviceId={DeviceId}]",
+        string locale = GetLocale(request);
+
+        ErrorCategory category = ErrorClassifier.ClassifyAlexaError(exceptionRequest.Error.Type.ToString());
+        string localeKey = ErrorCategoryInfo.LocaleKey(category);
+        LogLevel logLevel = ErrorCategoryInfo.LogLevel(category);
+
+        Logger.Log(logLevel,
+            "Alexa error: {ErrorType} category={Category} - {ErrorMessage} [RequestId={RequestId}, DeviceId={DeviceId}]",
             exceptionRequest.Error.Type,
+            category,
             exceptionRequest.Error.Message,
             request.RequestId,
             context.System.Device?.DeviceID);
 
-        return ResponseBuilder.Tell(ResponseStrings.Get("SomethingWrong", GetLocale(request)));
+        return ResponseBuilder.Tell(ResponseStrings.Get(localeKey, locale));
     }
 }

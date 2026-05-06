@@ -94,5 +94,9 @@
   "DidNotCatchPodcastName": "Je n'ai pas compris le nom du podcast. Quel podcast souhaitez-vous écouter?",
   "NotFoundPodcast": "Je n'ai pas trouvé de podcast appelé {0}.",
   "NoEpisodesInPodcast": "Je n'ai trouvé aucun épisode de {0}.",
-  "ServerUnavailable": "Je n'arrive pas à joindre votre serveur multimédia pour le moment. Veuillez réessayer dans un instant."
+  "ServerUnavailable": "Je n'arrive pas à joindre votre serveur multimédia pour le moment. Veuillez réessayer dans un instant.",
+  "ErrorPermanentBackend": "Ce média est introuvable ou non disponible.",
+  "ErrorUserError": "Je n'ai pas compris, veuillez réessayer.",
+  "ErrorSkillError": "Un problème est survenu. Veuillez réessayer.",
+  "ErrorTimeout": "Cela a pris trop de temps. Veuillez réessayer."
 }
