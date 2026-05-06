@@ -40,6 +40,8 @@ public class RequestPipeline
 
     /// <summary>
     /// Execute the full pipeline: request interceptors -> handler -> response interceptors.
+    /// A logging scope with the correlation ID, locale, and intent name is created
+    /// so all downstream log statements carry the same trace context.
     /// </summary>
     /// <param name="handler">The handler to execute.</param>
     /// <param name="skillRequest">The skill request.</param>
@@ -61,13 +63,21 @@ public class RequestPipeline
             bool shouldContinue = await interceptor.ProcessAsync(requestContext, cancellationToken).ConfigureAwait(false);
             if (!shouldContinue)
             {
-                _logger.LogDebug("Request interceptor {Interceptor} short-circuited pipeline", interceptor.GetType().Name);
+                _logger.LogDebug("Request interceptor {Interceptor} short-circuited pipeline corr={CorrelationId}", interceptor.GetType().Name, requestContext.CorrelationId);
                 return requestContext.Response ?? ResponseBuilder.Empty();
             }
         }
 
-        cancellationToken.ThrowIfCancellationRequested();
-        requestContext.Response = await handler.HandleRequestAsync(skillRequest, context, alexaSession, cancellationToken).ConfigureAwait(false);
+        using (_logger.BeginScope(new Dictionary<string, object>
+        {
+            ["CorrelationId"] = requestContext.CorrelationId,
+            ["Intent"] = requestContext.IntentName,
+            ["Locale"] = requestContext.Locale
+        }))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            requestContext.Response = await handler.HandleRequestAsync(skillRequest, context, alexaSession, cancellationToken).ConfigureAwait(false);
+        }
 
         // Response interceptors run in reverse registration order (stack unwinding)
         for (int i = _responseInterceptors.Count - 1; i >= 0; i--)
@@ -78,7 +88,7 @@ public class RequestPipeline
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Response interceptor {Interceptor} failed", _responseInterceptors[i].GetType().Name);
+                _logger.LogWarning(ex, "Response interceptor {Interceptor} failed corr={CorrelationId}", _responseInterceptors[i].GetType().Name, requestContext.CorrelationId);
             }
         }
 

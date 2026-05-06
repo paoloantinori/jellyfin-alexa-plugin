@@ -281,6 +281,18 @@ public class PipelineTests
     }
 
     [Fact]
+    public void RequestContext_CorrelationId_DefaultsEmpty()
+    {
+        var ctx = new RequestContext(
+            CreateSkillRequest(),
+            CreateAuthenticatableContext(),
+            null,
+            CreatePlaceholderHandler());
+
+        Assert.Equal(string.Empty, ctx.CorrelationId);
+    }
+
+    [Fact]
     public void RequestContext_AlexaSession_CanBeNull()
     {
         var ctx = new RequestContext(
@@ -602,6 +614,37 @@ public class PipelineTests
         Assert.True(result);
     }
 
+    [Fact]
+    public async Task LoggingRequestInterceptor_SetsCorrelationId()
+    {
+        var interceptor = new LoggingRequestInterceptor(_loggerFactory.CreateLogger<LoggingRequestInterceptor>());
+        var ctx = new RequestContext(
+            CreateSkillRequest(),
+            CreateAuthenticatableContext(),
+            null,
+            CreatePlaceholderHandler());
+
+        await interceptor.ProcessAsync(ctx, CancellationToken.None);
+
+        Assert.NotEmpty(ctx.CorrelationId);
+        Assert.Equal(8, ctx.CorrelationId.Length);
+        Assert.Matches("^[0-9a-f]{8}$", ctx.CorrelationId);
+    }
+
+    [Fact]
+    public async Task LoggingRequestInterceptor_GeneratesUniqueCorrelationIds()
+    {
+        var interceptor = new LoggingRequestInterceptor(_loggerFactory.CreateLogger<LoggingRequestInterceptor>());
+
+        var ctx1 = new RequestContext(CreateSkillRequest(), CreateAuthenticatableContext(), null, CreatePlaceholderHandler());
+        var ctx2 = new RequestContext(CreateSkillRequest(), CreateAuthenticatableContext(), null, CreatePlaceholderHandler());
+
+        await interceptor.ProcessAsync(ctx1, CancellationToken.None);
+        await interceptor.ProcessAsync(ctx2, CancellationToken.None);
+
+        Assert.NotEqual(ctx1.CorrelationId, ctx2.CorrelationId);
+    }
+
     // =====================================================================
     // LoggingResponseInterceptor tests
     // =====================================================================
@@ -638,6 +681,24 @@ public class PipelineTests
 
         // Should not throw even with a significant elapsed time
         await interceptor.ProcessAsync(ctx, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task LoggingResponseInterceptor_CanAccessCorrelationId()
+    {
+        var reqInterceptor = new LoggingRequestInterceptor(_loggerFactory.CreateLogger<LoggingRequestInterceptor>());
+        var respInterceptor = new LoggingResponseInterceptor(_loggerFactory.CreateLogger<LoggingResponseInterceptor>());
+        var ctx = new RequestContext(
+            CreateSkillRequest("IntentRequest"),
+            CreateAuthenticatableContext(),
+            null,
+            CreatePlaceholderHandler());
+
+        await reqInterceptor.ProcessAsync(ctx, CancellationToken.None);
+        Assert.NotEmpty(ctx.CorrelationId);
+
+        // Response interceptor should not throw when CorrelationId is set
+        await respInterceptor.ProcessAsync(ctx, CancellationToken.None);
     }
 
     // =====================================================================
@@ -886,5 +947,40 @@ public class PipelineTests
         Assert.False(handlerCalled, "Handler should not be called on short-circuit");
         Assert.False(responseInterceptorCalled, "Response interceptors should not run on short-circuit");
         Assert.Equal("blocked", ((PlainTextOutputSpeech)result.Response.OutputSpeech).Text);
+    }
+
+    [Fact]
+    public async Task FullPipeline_CorrelationIdFlowsToEnd()
+    {
+        string? capturedCorrelationId = null;
+
+        var capturingInterceptor = new Mock<IResponseInterceptor>();
+        capturingInterceptor
+            .Setup(i => i.ProcessAsync(It.IsAny<RequestContext>(), It.IsAny<CancellationToken>()))
+            .Callback<RequestContext, CancellationToken>((ctx, _) => capturedCorrelationId = ctx.CorrelationId)
+            .Returns(Task.CompletedTask);
+
+        var pipeline = new RequestPipeline(
+            new IRequestInterceptor[]
+            {
+                new LoggingRequestInterceptor(_loggerFactory.CreateLogger<LoggingRequestInterceptor>())
+            },
+            new IResponseInterceptor[]
+            {
+                capturingInterceptor.Object
+            },
+            _loggerFactory.CreateLogger<RequestPipeline>());
+
+        await pipeline.ExecuteAsync(
+            CreateHandler(() => Task.FromResult(ResponseBuilder.Tell("ok"))),
+            CreateSkillRequest("IntentRequest"),
+            CreateAuthenticatableContext(),
+            null,
+            CancellationToken.None);
+
+        Assert.NotNull(capturedCorrelationId);
+        Assert.NotEmpty(capturedCorrelationId);
+        Assert.Equal(8, capturedCorrelationId.Length);
+        Assert.Matches("^[0-9a-f]{8}$", capturedCorrelationId);
     }
 }
