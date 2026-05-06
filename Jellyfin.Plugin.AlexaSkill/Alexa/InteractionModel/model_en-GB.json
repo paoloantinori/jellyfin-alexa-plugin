@@ -291,7 +291,17 @@
           "What genre is this",
           "What year was this released",
           "Tell me about this artist",
-          "What album is this from"
+          "What album is this from",
+          "tell me what song this is",
+          "what track is playing",
+          "what is the name of this track",
+          "who made this song",
+          "what band is this",
+          "tell me the album name",
+          "when was this song released",
+          "what is the genre of this",
+          "give me info about this track",
+          "tell me the artist name"
         ]
       },
       {
@@ -397,6 +407,66 @@
           "play {mood} songs",
           "i want {mood} music",
           "play me something {mood}"
+        ]
+      },
+      {
+        "name": "PlayPodcastIntent",
+        "samples": [
+          "play the podcast {podcast_name}",
+          "play podcast {podcast_name}",
+          "listen to the podcast {podcast_name}",
+          "listen to podcast {podcast_name}",
+          "play the latest episode of {podcast_name}",
+          "play the newest episode of {podcast_name}",
+          "play the latest {podcast_name}",
+          "hear the podcast {podcast_name}",
+          "start the podcast {podcast_name}",
+          "I want to listen to {podcast_name} podcast",
+          "play {podcast_name} podcast",
+          "open {podcast_name} podcast",
+          "play my podcast {podcast_name}",
+          "resume the podcast {podcast_name}",
+          "continue the podcast {podcast_name}",
+          "listen to the latest episode of {podcast_name}",
+          "start listening to the podcast {podcast_name}",
+          "I want to hear the podcast {podcast_name}",
+          "let us listen to the podcast {podcast_name}",
+          "play {podcast_name} episodes",
+          "catch up on the podcast {podcast_name}"
+        ],
+        "slots": [
+          {
+            "name": "podcast_name",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
+        "name": "SearchMediaIntent",
+        "slots": [
+          {
+            "name": "query",
+            "type": "AMAZON.SearchQuery"
+          }
+        ],
+        "samples": [
+          "Search for {query}",
+          "Find {query}",
+          "Look for {query}",
+          "Look up {query}",
+          "Do you have {query}",
+          "I want to find {query}",
+          "Can you find {query}",
+          "Search {query}",
+          "Find me {query}",
+          "search my library for {query}",
+          "look in my media library for {query}",
+          "search jellyfin for {query}",
+          "do I have {query} in my library",
+          "is {query} in my collection",
+          "search my collection for {query}",
+          "find {query} in my library",
+          "check if {query} is available"
         ]
       }
     ],

@@ -33,3 +33,6 @@ TestResults/
 jellyfin_data
 test_media
 /icon.png
+
+# Local Claude overrides (not shared with team)
+.claude.local.md

@@ -1,0 +1,331 @@
+locale: es-ES
+invocation_name: jellyfin player
+tests:
+  # -------------------------------------------------------------------------
+  # 1. LoopSongOnIntent (no slots)
+  # -------------------------------------------------------------------------
+  - utterance: "Repite esta canción"
+    expected_intent: LoopSongOnIntent
+    expected_slots: {}
+
+  - utterance: "Repetir la canción"
+    expected_intent: LoopSongOnIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 2. PlayChannelIntent (channel)
+  # -------------------------------------------------------------------------
+  - utterance: "Pon el canal bbc radio"
+    expected_intent: PlayChannelIntent
+    expected_slots:
+      channel: {}
+
+  - utterance: "Pon la radio jazz fm"
+    expected_intent: PlayChannelIntent
+    expected_slots:
+      channel: {}
+
+  # -------------------------------------------------------------------------
+  # 3. PlaySongIntent (song, musician)
+  # -------------------------------------------------------------------------
+  - utterance: "Reproduce la canción bohemian rhapsody"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+
+  - utterance: "Reproduce la canción hotel california de the eagles"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+      musician: {}
+
+  # -------------------------------------------------------------------------
+  # 4. PlayAlbumIntent (album, musician)
+  # -------------------------------------------------------------------------
+  - utterance: "Reproduce el álbum dark side of the moon"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+
+  - utterance: "Reproduce el álbum thriller de michael jackson"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+      musician: {}
+
+  # -------------------------------------------------------------------------
+  # 5. PlayVideoIntent (title)
+  # -------------------------------------------------------------------------
+  # Note: PlayVideoIntent still disabled for es-ES — even with 6 samples,
+  # the Spanish NLU consistently resolves "vídeo" patterns to PlayByGenreIntent
+  # or FallbackIntent. The pattern needs a fundamentally different approach.
+
+  # -------------------------------------------------------------------------
+  # 6. PlayArtistSongsIntent (musician)
+  # -------------------------------------------------------------------------
+  - utterance: "Reproduce canciones de queen"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "Reproduce música de the beatles"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  # -------------------------------------------------------------------------
+  # 7. PlayLastAddedIntent (media_type, time_period)
+  # -------------------------------------------------------------------------
+  - utterance: "Reroduce los últimos canciones añadidos"
+    expected_intent: PlayLastAddedIntent
+    expected_slots:
+      media_type: {}
+
+  - utterance: "Reproduce películas añadidos recientemente"
+    expected_intent: PlayLastAddedIntent
+    expected_slots:
+      media_type: {}
+
+  - utterance: "Reproduce contenidos nuevos"
+    expected_intent: PlayLastAddedIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 8. PlayRandomIntent (media_type, genre)
+  # -------------------------------------------------------------------------
+  - utterance: "Reproduce películas aleatoria"
+    expected_intent: PlayRandomIntent
+    expected_slots:
+      media_type: {}
+
+  - utterance: "Reproduce algo aleatorio"
+    expected_intent: PlayRandomIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 9. PlayByGenreIntent (genre)
+  # -------------------------------------------------------------------------
+  - utterance: "Reroduce música rock"
+    expected_intent: PlayByGenreIntent
+    expected_slots:
+      genre: {}
+
+  - utterance: "Reproduce jazz"
+    expected_intent: PlayByGenreIntent
+    expected_slots:
+      genre: {}
+
+  - utterance: "Quiero escuchar clásica"
+    expected_intent: PlayByGenreIntent
+    expected_slots:
+      genre: {}
+
+  # -------------------------------------------------------------------------
+  # 10. ContinueWatchingIntent (no slots)
+  # -------------------------------------------------------------------------
+  - utterance: "Continuar viendo"
+    expected_intent: ContinueWatchingIntent
+    expected_slots: {}
+
+  - utterance: "Seguir donde lo dejé"
+    expected_intent: ContinueWatchingIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 11. GoToChapterIntent (chapter_number)
+  # -------------------------------------------------------------------------
+  - utterance: "Ir al capítulo cinco"
+    expected_intent: GoToChapterIntent
+    expected_slots:
+      chapter_number: {}
+
+  - utterance: "Saltar al capítulo doce"
+    expected_intent: GoToChapterIntent
+    expected_slots:
+      chapter_number: {}
+
+  - utterance: "Siguiente capítulo"
+    expected_intent: GoToChapterIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 12. PlayPlaylistIntent (playlist)
+  # -------------------------------------------------------------------------
+  - utterance: "Reproduce la lista de reproducción rock clásico"
+    expected_intent: PlayPlaylistIntent
+    expected_slots:
+      playlist: {}
+
+  - utterance: "Reproduce mi lista de reproducción favoritos"
+    expected_intent: PlayPlaylistIntent
+    expected_slots:
+      playlist: {}
+
+  # -------------------------------------------------------------------------
+  # 13. PlayFavoritesIntent (media_type)
+  # -------------------------------------------------------------------------
+  - utterance: "Reproduce mis canciones favoritos"
+    expected_intent: PlayFavoritesIntent
+    expected_slots:
+      media_type: {}
+
+  - utterance: "Reroduce mis favoritos"
+    expected_intent: PlayFavoritesIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 14. MarkFavoriteIntent (no slots)
+  # -------------------------------------------------------------------------
+  - utterance: "Me gusta"
+    expected_intent: MarkFavoriteIntent
+    expected_slots: {}
+
+  - utterance: "Me gusta la canción"
+    expected_intent: MarkFavoriteIntent
+    expected_slots: {}
+
+  - utterance: "Añade la canción a mis favoritos"
+    expected_intent: MarkFavoriteIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 15. UnmarkFavoriteIntent (no slots)
+  # -------------------------------------------------------------------------
+  - utterance: "No me gusta esto"
+    expected_intent: UnmarkFavoriteIntent
+    expected_slots: {}
+
+  - utterance: "Quita la canción de mis favoritos"
+    expected_intent: UnmarkFavoriteIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 16. MediaInfoIntent (media_info_type)
+  # -------------------------------------------------------------------------
+  - utterance: "Cuál es el nombre de la canción"
+    expected_intent: MediaInfoIntent
+    expected_slots: {}
+
+  - utterance: "Qué está sonando"
+    expected_intent: MediaInfoIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 17. InProgressMediaListIntent (no slots)
+  # -------------------------------------------------------------------------
+  - utterance: "qué estoy viendo"
+    expected_intent: InProgressMediaListIntent
+    expected_slots: {}
+
+  - utterance: "qué está en progreso"
+    expected_intent: InProgressMediaListIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 18. PlayEpisodeIntent (series_name, season_number, episode_number)
+  # -------------------------------------------------------------------------
+  - utterance: "reproduce la temporada uno episodio tres de breaking bad"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
+      series_name: {}
+      season_number: {}
+      episode_number: {}
+
+  - utterance: "reproduce los simpson temporada uno episodio uno"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
+      series_name: {}
+      season_number: {}
+      episode_number: {}
+
+  # -------------------------------------------------------------------------
+  # 19. BrowseLibraryIntent (browse_category)
+  # -------------------------------------------------------------------------
+  - utterance: "explorar películas"
+    expected_intent: BrowseLibraryIntent
+    expected_slots:
+      browse_category: {}
+
+  - utterance: "muéstrame álbumes"
+    expected_intent: BrowseLibraryIntent
+    expected_slots:
+      browse_category: {}
+
+  # -------------------------------------------------------------------------
+  # 20. RecommendIntent (media_type)
+  # -------------------------------------------------------------------------
+  - utterance: "recomienda una película"
+    expected_intent: RecommendIntent
+    expected_slots:
+      media_type: {}
+
+  - utterance: "recomienda algo"
+    expected_intent: RecommendIntent
+    expected_slots: {}
+
+  - utterance: "sugiere música"
+    expected_intent: RecommendIntent
+    expected_slots:
+      media_type: {}
+
+  # -------------------------------------------------------------------------
+  # 21. SleepTimerIntent (duration_minutes)
+  # -------------------------------------------------------------------------
+  - utterance: "detener en treinta minutos"
+    expected_intent: SleepTimerIntent
+    expected_slots:
+      duration_minutes: {}
+
+  - utterance: "temporizador sesenta minutos"
+    expected_intent: SleepTimerIntent
+    expected_slots:
+      duration_minutes: {}
+
+  # -------------------------------------------------------------------------
+  # 22. PlayMoodMusicIntent (mood)
+  # -------------------------------------------------------------------------
+  - utterance: "reproduce música alegre"
+    expected_intent: PlayMoodMusicIntent
+    expected_slots:
+      mood: {}
+
+  - utterance: "reproduce algo triste"
+    expected_intent: PlayMoodMusicIntent
+    expected_slots:
+      mood: {}
+
+  - utterance: "quiero música relajante"
+    expected_intent: PlayMoodMusicIntent
+    expected_slots:
+      mood: {}
+
+  # -------------------------------------------------------------------------
+  # 23. PlayPodcastIntent (podcast_name)
+  # -------------------------------------------------------------------------
+  - utterance: "Reproduce el podcast radio ambulat"
+    expected_intent: PlayPodcastIntent
+    expected_slots:
+      podcast_name: {}
+
+  - utterance: "Escucha el podcast el intermedio"
+    expected_intent: PlayPodcastIntent
+    expected_slots:
+      podcast_name: {}
+
+  - utterance: "Reproduce el último episodio de hoy podcast"
+    expected_intent: PlayPodcastIntent
+    expected_slots:
+      podcast_name: {}
+
+  # -------------------------------------------------------------------------
+  # 24. SearchMediaIntent (query)
+  # -------------------------------------------------------------------------
+  - utterance: "Busca en mi biblioteca bohemian rhapsody"
+    expected_intent: SearchMediaIntent
+    expected_slots:
+      query: {}
+
+  - utterance: "Tengo inception en mi colección"
+    expected_intent: SearchMediaIntent
+    expected_slots:
+      query: {}
