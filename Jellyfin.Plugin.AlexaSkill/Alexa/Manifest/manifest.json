@@ -12,6 +12,23 @@
 				]
 			}
 		},
+		"events": {
+			"publications": [
+				{
+					"eventName": "AMAZON.MediaContent.Available"
+				}
+			],
+			"subscriptions": [
+				{
+					"eventName": "AMAZON.MediaContent.Available"
+				}
+			]
+		},
+		"permissions": [
+			{
+				"name": "alexa::alerts:skillnotifications:write"
+			}
+		],
 		"manifestVersion": "1.0",
 		"publishingInformation": {
 			"name": "jellyfin",

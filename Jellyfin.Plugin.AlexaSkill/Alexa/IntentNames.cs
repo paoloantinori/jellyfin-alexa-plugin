@@ -56,6 +56,11 @@ internal static class IntentNames
     public const string AmazonStartOver = "AMAZON.StartOverIntent";
     public const string AmazonYes = "AMAZON.YesIntent";
     public const string AmazonNo = "AMAZON.NoIntent";
+
+    /// <summary>
+    /// Request type for the proactive events subscription changed callback.
+    /// </summary>
+    public const string ProactiveSubscriptionChanged = "AlexaSkillEvent.ProactiveSubscriptionChanged";
 }
 
 /// <summary>

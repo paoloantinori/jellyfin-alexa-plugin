@@ -7,6 +7,7 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Diagnostics;
+using Jellyfin.Plugin.AlexaSkill.ProactiveEvents;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Plugins;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,6 +30,11 @@ public class Registrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<SearchResultCache>();
         serviceCollection.AddSingleton<CircuitBreaker>();
         serviceCollection.AddSingleton<JellyfinConnectivityChecker>();
+
+        // Proactive events
+        serviceCollection.AddSingleton<ProactiveEventClient>();
+        serviceCollection.AddSingleton<ProactiveEventRateLimiter>();
+        serviceCollection.AddHostedService<ProactiveEventService>();
 
         // PluginConfiguration — resolves live from Plugin.Instance
         serviceCollection.AddTransient(_ => Plugin.Instance!.Configuration);
