@@ -1,7 +1,7 @@
 ---
 name: Alexa Skill
 guid: c5df7de0-8777-4b3c-a70d-5c3dae359c9e
-version: 0.2.0.9
+version: 0.2.0.10
 targetAbi: 10.11.0.0
 framework: net9.0
 overview: Alexa skill plugin for Jellyfin
@@ -17,4 +17,4 @@ artifacts:
   - Amazon.Lambda.Serialization.Json.dll
   - Jellyfin.Plugin.AlexaSkill.dll
   - Refit.dll
-changelog: "Add QueryArtistLibraryIntent for listing tracks/albums by artist. Add comprehensive localized voice command examples to README. Fix it-IT interaction model validation errors. Fix cross-locale AMAZON.SearchQuery slot conflicts."
+changelog: "Add SearchMediaIntent for unified search, PlayPodcastIntent, PlayByDecadeIntent, time-of-day mood playlists. Add artist metadata and rich now-playing follow-ups to MediaInfoIntent. Add time-period filtering to PlayLastAddedIntent. Enhance MarkFavoriteIntent with natural utterances. Show artist name in AudioPlayer subtitle. Fix ENQUEUE directive missing ExpectedPreviousToken. Add NLU and E2E integration test suites."
