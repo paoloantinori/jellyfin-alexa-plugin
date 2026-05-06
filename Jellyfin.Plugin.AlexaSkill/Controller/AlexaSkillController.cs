@@ -39,106 +39,35 @@ public class AlexaSkillController : ControllerBase
     private readonly ILogger<AlexaSkillController> _logger;
     private readonly RequestCounters _counters;
     private readonly RequestPipeline _pipeline;
+    private readonly IEnumerable<BaseHandler> _handlers;
 
-    private BaseHandler[] handler;
-
-    private CsrfTokenHandler csrfTokenHandler;
+    private readonly CsrfTokenHandler _csrfTokenHandler;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AlexaSkillController"/> class.
     /// </summary>
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="sessionManager">Instance of the <see cref="ISessionManager"/> interface.</param>
-    /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILogger{RequestController}"/> interface.</param>
+    /// <param name="counters">Request counters for metrics.</param>
     /// <param name="pipeline">The request pipeline for interceptor-based request processing.</param>
+    /// <param name="handlers">The registered intent/event handlers.</param>
     public AlexaSkillController(
         IUserManager userManager,
         ISessionManager sessionManager,
-        ILibraryManager libraryManager,
-        IUserDataManager userDataManager,
         ILoggerFactory loggerFactory,
         RequestCounters counters,
         RequestPipeline pipeline,
-        MediaBrowser.Controller.Chapters.IChapterManager chapterManager)
+        IEnumerable<BaseHandler> handlers)
     {
         _userManager = userManager;
         _sessionManager = sessionManager;
         _logger = loggerFactory.CreateLogger<AlexaSkillController>();
         _counters = counters;
         _pipeline = pipeline;
+        _handlers = handlers;
 
-        csrfTokenHandler = Plugin.Instance!.CsrfTokenHandler;
-
-        handler = new BaseHandler[]
-        {
-            new LaunchRequestHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, loggerFactory),
-
-            new MediaInfoIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
-
-            new PlayIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
-            new PauseIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
-            new NextIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, loggerFactory),
-            new PreviousIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, loggerFactory),
-            new ResumeIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
-            new StartOverIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
-            new LoopOnIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
-            new LoopOffIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
-            new LoopSongOnIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
-            new ShuffleOnIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
-            new ShuffleOffIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
-
-            new PlaySongIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
-            new PlayLastAddedIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
-            new PlayPlaylistIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
-            new PlayFavoritesIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
-            new PlayArtistSongsIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
-            new PlayAlbumIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
-            new PlayVideoIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
-            new PlayChannelIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
-            new PlayRandomIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
-            new PlayByGenreIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
-            new PlayByDecadeIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
-            new PlayPodcastIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
-            new SearchMediaIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
-            new ContinueWatchingIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, userDataManager, loggerFactory),
-            new GoToChapterIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, chapterManager, loggerFactory),
-            new InProgressMediaListIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, userDataManager, loggerFactory),
-            new PlayEpisodeIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
-            new BrowseLibraryIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
-            new QueryArtistLibraryIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
-            new RecommendIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, userDataManager, loggerFactory),
-            new SleepTimerIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
-            new PlayMoodMusicIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
-
-            new AddToQueueIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
-            new PlayNextIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
-            new ClearQueueIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
-            new ListQueueIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, loggerFactory),
-
-            new PlayRadioIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
-            new TurnRadioOnIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
-            new TurnRadioOffIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
-
-            new LearnMyVoiceIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
-            new WhoAmIIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
-
-            new YesIntentHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
-            new NoIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
-
-            new MarkFavoriteIntentHandler(sessionManager, Plugin.Instance!.Configuration, userDataManager, userManager, libraryManager, loggerFactory),
-            new UnmarkFavoriteIntentHandler(sessionManager, Plugin.Instance!.Configuration, userDataManager, userManager, libraryManager, loggerFactory),
-
-            new PlaybackFailedEventHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
-            new PlaybackFinishedEventHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
-            new PlaybackNearlyFinishedEventHandler(sessionManager, Plugin.Instance!.Configuration, libraryManager, userManager, loggerFactory),
-            new PlaybackStartedEventHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
-            new PlaybackStoppedEventHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
-            new SessionEndedRequestHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
-
-            new ExceptionHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory),
-            new FallbackIntentHandler(sessionManager, Plugin.Instance!.Configuration, loggerFactory)
-        };
+        _csrfTokenHandler = Plugin.Instance!.CsrfTokenHandler;
     }
 
     /// <summary>
@@ -195,7 +124,7 @@ public class AlexaSkillController : ControllerBase
 
         string page = new StreamReader(resource).ReadToEnd();
 
-        page = page.Replace("{{ csrf_token }}", csrfTokenHandler.GetNewCsrfToken().Token, StringComparison.Ordinal);
+        page = page.Replace("{{ csrf_token }}", _csrfTokenHandler.GetNewCsrfToken().Token, StringComparison.Ordinal);
 
         if (error != null)
         {
@@ -233,7 +162,7 @@ public class AlexaSkillController : ControllerBase
             return BadRequest("Username and password are required.");
         }
 
-        if (!csrfTokenHandler.ValidateCsrfToken(csrfToken))
+        if (!_csrfTokenHandler.ValidateCsrfToken(csrfToken))
         {
             return Unauthorized();
         }
@@ -381,7 +310,7 @@ public class AlexaSkillController : ControllerBase
 
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(6));
 
-                foreach (BaseHandler h in handler)
+                foreach (BaseHandler h in _handlers)
                 {
                     if (h.CanHandle(req.Request))
                     {
