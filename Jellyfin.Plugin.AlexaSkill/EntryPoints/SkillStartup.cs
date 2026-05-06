@@ -11,6 +11,7 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.InteractionModel;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Manifest;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Controller;
+using Jellyfin.Plugin.AlexaSkill.Diagnostics;
 using Jellyfin.Plugin.AlexaSkill.Entities;
 using Jellyfin.Plugin.AlexaSkill.Lwa;
 using MediaBrowser.Controller.Session;
@@ -29,6 +30,7 @@ public class SkillStartup : IHostedService, IDisposable
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly SearchResultCache _searchCache;
     private readonly CircuitBreaker _circuitBreaker;
+    private readonly RequestCounters _requestCounters;
     private CancellationTokenSource? _cts;
     private Task? _runningTask;
     private bool _disposed;
@@ -41,12 +43,14 @@ public class SkillStartup : IHostedService, IDisposable
     /// <param name="httpClientFactory">HTTP client factory for outbound calls.</param>
     /// <param name="searchCache">Search result cache for fallback.</param>
     /// <param name="circuitBreaker">Circuit breaker for backend health tracking.</param>
-    public SkillStartup(ISessionManager sessionManager, ILoggerFactory loggerFactory, IHttpClientFactory httpClientFactory, SearchResultCache searchCache, CircuitBreaker circuitBreaker)
+    /// <param name="requestCounters">Request counters for metrics tracking.</param>
+    public SkillStartup(ISessionManager sessionManager, ILoggerFactory loggerFactory, IHttpClientFactory httpClientFactory, SearchResultCache searchCache, CircuitBreaker circuitBreaker, RequestCounters requestCounters)
     {
         _sessionManager = sessionManager;
         _httpClientFactory = httpClientFactory;
         _searchCache = searchCache;
         _circuitBreaker = circuitBreaker;
+        _requestCounters = requestCounters;
         _logger = loggerFactory.CreateLogger<SkillStartup>();
     }
 
@@ -58,6 +62,7 @@ public class SkillStartup : IHostedService, IDisposable
         Plugin.Instance!._httpClientFactory = _httpClientFactory;
         Plugin.Instance!.SearchCache = _searchCache;
         Plugin.Instance!.CircuitBreaker = _circuitBreaker;
+        Plugin.Instance!.RequestCounters = _requestCounters;
 
         PluginConfiguration configuration = Plugin.Instance!.Configuration;
 
