@@ -1,3 +1,4 @@
+using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Diagnostics;
@@ -21,11 +22,13 @@ public class Registrator : IPluginServiceRegistrator
         // Singletons
         serviceCollection.AddSingleton<RequestCounters>();
         serviceCollection.AddSingleton<SearchResultCache>();
+        serviceCollection.AddSingleton<CircuitBreaker>();
 
         // HttpClient for LWA and progressive responses
         serviceCollection.AddHttpClient("AlexaSkill");
 
-        // Request pipeline interceptors
+        // Request pipeline interceptors (order matters: circuit breaker first for fail-fast)
+        serviceCollection.AddSingleton<IRequestInterceptor, CircuitBreakerInterceptor>();
         serviceCollection.AddSingleton<IRequestInterceptor, LoggingRequestInterceptor>();
         serviceCollection.AddSingleton<IResponseInterceptor, SessionAttributesInterceptor>();
         serviceCollection.AddSingleton<IResponseInterceptor, LoggingResponseInterceptor>();
