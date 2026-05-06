@@ -8,6 +8,7 @@ using global::Alexa.NET.Request;
 using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -20,6 +21,7 @@ using MediaBrowser.Controller.Session;
 using MediaBrowser.Controller.TV;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Alexa.NET.Assertions;
 using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
@@ -130,7 +132,7 @@ public class PlayEpisodeIntentHandlerTests
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
         Assert.NotNull(response);
-        Assert.NotNull(response.Response?.OutputSpeech);
+        response.Tells();
     }
 
     [Fact]
@@ -145,7 +147,7 @@ public class PlayEpisodeIntentHandlerTests
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
         Assert.NotNull(response);
-        Assert.NotNull(response.Response?.OutputSpeech);
+        response.Tells();
     }
 
     [Fact]
@@ -164,7 +166,7 @@ public class PlayEpisodeIntentHandlerTests
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
         Assert.NotNull(response);
-        Assert.NotNull(response.Response?.OutputSpeech);
+        response.Tells();
     }
 
     [Fact]
@@ -190,7 +192,7 @@ public class PlayEpisodeIntentHandlerTests
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
         Assert.NotNull(response);
-        Assert.NotNull(response.Response?.OutputSpeech);
+        response.Tells();
     }
 
     [Fact]
@@ -226,7 +228,7 @@ public class PlayEpisodeIntentHandlerTests
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
         Assert.NotNull(response);
-        Assert.NotEmpty(response.Response.Directives);
+        response.HasDirective<VideoAppLaunchDirective>();
     }
 
     [Fact]

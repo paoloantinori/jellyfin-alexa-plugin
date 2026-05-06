@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
+using Alexa.NET.Assertions;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
@@ -110,9 +111,7 @@ public class YesIntentHandlerTests
             CreateSession(),
             CancellationToken.None);
 
-        Assert.NotNull(response.Response.OutputSpeech);
-        Assert.True(response.Response.ShouldEndSession);
-        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        var speech = response.Tells<PlainTextOutputSpeech>();
         Assert.Contains("not sure what you", speech.Text, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -130,9 +129,7 @@ public class YesIntentHandlerTests
             emptyAttrs,
             CancellationToken.None);
 
-        Assert.NotNull(response.Response.OutputSpeech);
-        Assert.True(response.Response.ShouldEndSession);
-        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        var speech = response.Tells<PlainTextOutputSpeech>();
         Assert.Contains("not sure what you", speech.Text, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -158,9 +155,7 @@ public class YesIntentHandlerTests
             attrs,
             CancellationToken.None);
 
-        Assert.NotNull(response.Response.Directives);
-        Assert.Single(response.Response.Directives);
-        Assert.Equal("AudioPlayer.Play", response.Response.Directives[0].Type);
+        response.HasDirective<AudioPlayerPlayDirective>();
     }
 
     [Fact]
@@ -185,9 +180,7 @@ public class YesIntentHandlerTests
             attrs,
             CancellationToken.None);
 
-        Assert.NotNull(response.Response.Directives);
-        Assert.Single(response.Response.Directives);
-        Assert.Equal("VideoApp.Launch", response.Response.Directives[0].Type);
+        response.HasDirective<Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>();
         Assert.True(response.Response.ShouldEndSession);
     }
 
@@ -219,9 +212,7 @@ public class YesIntentHandlerTests
             attrs,
             CancellationToken.None);
 
-        Assert.NotNull(response.Response.Directives);
-        Assert.Single(response.Response.Directives);
-        Assert.Equal("AudioPlayer.Play", response.Response.Directives[0].Type);
+        response.HasDirective<AudioPlayerPlayDirective>();
     }
 
     [Fact]
@@ -241,9 +232,7 @@ public class YesIntentHandlerTests
             attrs,
             CancellationToken.None);
 
-        Assert.NotNull(response.Response.OutputSpeech);
-        Assert.True(response.Response.ShouldEndSession);
-        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        var speech = response.Tells<PlainTextOutputSpeech>();
         Assert.Contains("not sure what you", speech.Text, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -268,8 +257,7 @@ public class YesIntentHandlerTests
             attrs,
             CancellationToken.None);
 
-        Assert.NotNull(response.Response.OutputSpeech);
-        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        var speech = response.Tells<PlainTextOutputSpeech>();
         Assert.Contains("could not find", speech.Text, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -317,8 +305,7 @@ public class YesIntentHandlerTests
             attrs,
             CancellationToken.None);
 
-        Assert.NotNull(response.Response.OutputSpeech);
-        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        var speech = response.Tells<PlainTextOutputSpeech>();
         Assert.Contains("not sure what you", speech.Text, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -344,7 +331,7 @@ public class YesIntentHandlerTests
             attrs,
             CancellationToken.None);
 
-        var directive = Assert.IsType<Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>(response.Response.Directives[0]);
+        var directive = response.HasDirective<Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>();
         Assert.NotNull(directive.VideoItem);
         Assert.NotNull(directive.VideoItem.Metadata);
         Assert.Equal("The Matrix", directive.VideoItem.Metadata.Title);

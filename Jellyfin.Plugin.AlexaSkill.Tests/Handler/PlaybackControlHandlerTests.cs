@@ -11,6 +11,7 @@ using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Alexa.NET.Assertions;
 using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
@@ -80,7 +81,7 @@ public class PlaybackControlHandlerTests
             TestHelpers.CreateTestUser(),
             CreateSession(), CancellationToken.None);
 
-        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        var speech = response.Tells<PlainTextOutputSpeech>();
         Assert.Contains("could not understand", speech.Text, StringComparison.OrdinalIgnoreCase);
     }
 

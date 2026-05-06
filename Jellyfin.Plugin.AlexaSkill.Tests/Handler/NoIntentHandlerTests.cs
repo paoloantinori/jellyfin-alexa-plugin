@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
+using Alexa.NET.Assertions;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
@@ -96,9 +97,7 @@ public class NoIntentHandlerTests
             CreateSession(),
             CancellationToken.None);
 
-        Assert.NotNull(response.Response.OutputSpeech);
-        Assert.True(response.Response.ShouldEndSession);
-        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        var speech = response.Tells<PlainTextOutputSpeech>();
         Assert.Contains("not sure what you", speech.Text, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -116,9 +115,7 @@ public class NoIntentHandlerTests
             emptyAttrs,
             CancellationToken.None);
 
-        Assert.NotNull(response.Response.OutputSpeech);
-        Assert.True(response.Response.ShouldEndSession);
-        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        var speech = response.Tells<PlainTextOutputSpeech>();
         Assert.Contains("not sure what you", speech.Text, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -142,8 +139,7 @@ public class NoIntentHandlerTests
             CancellationToken.None);
 
         // Should return an Ask (not Tell) with the next match name
-        Assert.NotNull(response.Response.OutputSpeech);
-        Assert.False(response.Response.ShouldEndSession);
+        response.Asks();
 
         string speechText = response.Response.OutputSpeech is SsmlOutputSpeech ssml
             ? ssml.Ssml
@@ -170,9 +166,7 @@ public class NoIntentHandlerTests
             CancellationToken.None);
 
         // Should return a Tell with "no more matches"
-        Assert.NotNull(response.Response.OutputSpeech);
-        Assert.True(response.Response.ShouldEndSession);
-        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        var speech = response.Tells<PlainTextOutputSpeech>();
         Assert.Contains("no more matches", speech.Text, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -197,9 +191,7 @@ public class NoIntentHandlerTests
             CancellationToken.None);
 
         // Index 2 is the last of 3 items; next index 3 is out of bounds
-        Assert.NotNull(response.Response.OutputSpeech);
-        Assert.True(response.Response.ShouldEndSession);
-        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        var speech = response.Tells<PlainTextOutputSpeech>();
         Assert.Contains("no more matches", speech.Text, StringComparison.OrdinalIgnoreCase);
     }
 

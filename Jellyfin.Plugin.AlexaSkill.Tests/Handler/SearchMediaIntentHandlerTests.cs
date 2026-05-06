@@ -7,6 +7,7 @@ using global::Alexa.NET;
 using global::Alexa.NET.Request;
 using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
+using global::Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
@@ -19,6 +20,7 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Alexa.NET.Assertions;
 using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
@@ -128,9 +130,8 @@ public class SearchMediaIntentHandlerTests
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
         Assert.NotNull(response);
-        Assert.NotNull(response.Response?.OutputSpeech);
-        string speech = TestHelpers.GetSpeechText(response);
-        Assert.Contains("understand", speech, StringComparison.OrdinalIgnoreCase);
+        var speech = response.Tells<PlainTextOutputSpeech>();
+        Assert.Contains("understand", speech.Text, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -149,9 +150,8 @@ public class SearchMediaIntentHandlerTests
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
         Assert.NotNull(response);
-        Assert.NotNull(response.Response?.OutputSpeech);
-        string speech = TestHelpers.GetSpeechText(response);
-        Assert.Contains("not find", speech, StringComparison.OrdinalIgnoreCase);
+        var speech = response.Tells<PlainTextOutputSpeech>();
+        Assert.Contains("not find", speech.Text, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -177,7 +177,7 @@ public class SearchMediaIntentHandlerTests
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
         Assert.NotNull(response);
-        Assert.NotEmpty(response.Response.Directives);
+        response.HasDirective<AudioPlayerPlayDirective>();
         Assert.NotNull(session.NowPlayingQueue);
         Assert.Single(session.NowPlayingQueue);
         Assert.Equal(audio.Id, session.NowPlayingQueue[0].Id);
@@ -304,7 +304,7 @@ public class SearchMediaIntentHandlerTests
 
         // Deduplication means single result → plays directly
         Assert.NotNull(response);
-        Assert.NotEmpty(response.Response.Directives);
+        response.HasDirective<AudioPlayerPlayDirective>();
     }
 
     [Fact]

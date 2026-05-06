@@ -6,6 +6,7 @@ using global::Alexa.NET;
 using global::Alexa.NET.Request;
 using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
+using global::Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -17,6 +18,7 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Alexa.NET.Assertions;
 using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
@@ -130,8 +132,7 @@ public class PlayLastAddedIntentHandlerTests
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
         Assert.NotNull(response);
-        Assert.NotNull(response.Response?.OutputSpeech);
-        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        var speech = response.Tells<PlainTextOutputSpeech>();
         Assert.Contains("newly added", speech.Text, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -155,8 +156,7 @@ public class PlayLastAddedIntentHandlerTests
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
         Assert.NotNull(response);
-        Assert.NotNull(response.Response?.Directives);
-        Assert.NotEmpty(response.Response.Directives);
+        response.HasDirective<AudioPlayerPlayDirective>();
     }
 
     [Fact]
@@ -264,8 +264,7 @@ public class PlayLastAddedIntentHandlerTests
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
         Assert.NotNull(response);
-        Assert.NotNull(response.Response?.OutputSpeech);
-        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        var speech = response.Tells<PlainTextOutputSpeech>();
         Assert.Contains("this week", speech.Text, StringComparison.OrdinalIgnoreCase);
     }
 
