@@ -346,12 +346,19 @@
           "Suggerisci {media_type}",
           "Di consigliare {media_type}",
           "Di raccomandare {media_type}",
-          "Di suggerire {media_type}"
+          "Di suggerire {media_type}",
+          "Consiglia un brano",
+          "Consiglia una canzone",
+          "Consiglia un film",
+          "Suggerisci un brano",
+          "Suggerisci un film",
+          "Raccomanda un brano",
+          "Raccomanda una canzone"
         ],
         "slots": [
           {
             "name": "media_type",
-            "type": "AMAZON.SearchQuery"
+            "type": "MediaType"
           }
         ]
       },
@@ -405,7 +412,7 @@
         "slots": [
           {
             "name": "media_type",
-            "type": "AMAZON.SearchQuery"
+            "type": "MediaType"
           }
         ]
       },
@@ -921,7 +928,7 @@
         "slots": [
           {
             "name": "media_type",
-            "type": "AMAZON.SearchQuery"
+            "type": "MediaType"
           },
           {
             "name": "time_period",
@@ -952,7 +959,7 @@
         "slots": [
           {
             "name": "media_type",
-            "type": "AMAZON.SearchQuery"
+            "type": "MediaType"
           }
         ]
       },
@@ -1504,6 +1511,46 @@
                 "anni duemila venti",
                 "2020"
               ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "MediaType",
+        "values": [
+          {
+            "name": {
+              "value": "brani"
+            }
+          },
+          {
+            "name": {
+              "value": "canzoni"
+            }
+          },
+          {
+            "name": {
+              "value": "musica"
+            }
+          },
+          {
+            "name": {
+              "value": "media"
+            }
+          },
+          {
+            "name": {
+              "value": "video"
+            }
+          },
+          {
+            "name": {
+              "value": "film"
+            }
+          },
+          {
+            "name": {
+              "value": "audio"
             }
           }
         ]
