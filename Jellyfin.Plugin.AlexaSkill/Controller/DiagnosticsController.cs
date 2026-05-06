@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.Diagnostics;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -15,14 +16,17 @@ namespace Jellyfin.Plugin.AlexaSkill.Controller;
 public class DiagnosticsController : ControllerBase
 {
     private readonly RequestCounters _counters;
+    private readonly JellyfinConnectivityChecker _connectivityChecker;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DiagnosticsController"/> class.
     /// </summary>
     /// <param name="counters">Instance of the <see cref="RequestCounters"/> service.</param>
-    public DiagnosticsController(RequestCounters counters)
+    /// <param name="connectivityChecker">Instance of the <see cref="JellyfinConnectivityChecker"/> service.</param>
+    public DiagnosticsController(RequestCounters counters, JellyfinConnectivityChecker connectivityChecker)
     {
         _counters = counters;
+        _connectivityChecker = connectivityChecker;
     }
 
     /// <summary>
@@ -120,7 +124,7 @@ public class DiagnosticsController : ControllerBase
     /// <returns>A JSON object with health status, uptime, and error rate.</returns>
     [HttpGet("diagnostics/health")]
     [Authorize(Policy = "RequiresElevation")]
-    public ActionResult GetHealth()
+    public async Task<ActionResult> GetHealth()
     {
         var config = Plugin.Instance!.Configuration;
         var validationErrors = config.Validate();
@@ -128,6 +132,13 @@ public class DiagnosticsController : ControllerBase
         string status = DetermineHealthStatus(config, validationErrors);
 
         if (status == "Healthy" && _counters.TotalRequests > 10 && ComputeErrorRate() > 0.1)
+        {
+            status = "Degraded";
+        }
+
+        ConnectivityResult connectivity = await _connectivityChecker.CheckAsync().ConfigureAwait(false);
+
+        if (!connectivity.IsReachable && status != "Unhealthy")
         {
             status = "Degraded";
         }
@@ -140,6 +151,13 @@ public class DiagnosticsController : ControllerBase
             TotalRequests = _counters.TotalRequests,
             TotalErrors = _counters.TotalErrors,
             ErrorRate = Math.Round(ComputeErrorRate(), 4),
+            JellyfinConnectivity = new
+            {
+                connectivity.IsReachable,
+                connectivity.Message,
+                connectivity.ResponseTimeMs,
+                connectivity.HttpStatusCode
+            },
             CheckedAt = DateTime.UtcNow
         };
 

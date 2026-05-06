@@ -28,6 +28,7 @@ public class Registrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<RequestCounters>();
         serviceCollection.AddSingleton<SearchResultCache>();
         serviceCollection.AddSingleton<CircuitBreaker>();
+        serviceCollection.AddSingleton<JellyfinConnectivityChecker>();
 
         // PluginConfiguration — resolves live from Plugin.Instance
         serviceCollection.AddTransient(_ => Plugin.Instance!.Configuration);
