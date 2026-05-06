@@ -140,7 +140,10 @@
           "Play {media_type} added {time_period}",
           "Play recently added {media_type} from {time_period}",
           "Play new {media_type} from {time_period}",
-          "Play {media_type} added {time_period}"
+          "Play {media_type} added {time_period}",
+          "Play last added songs",
+          "Play recently added songs",
+          "Play last added music"
         ],
         "slots": [
           {
@@ -163,7 +166,13 @@
           "Play a random {media_type} from {genre}",
           "Play random {genre} {media_type}",
           "Surprise me with some {media_type}",
-          "Shuffle {genre} {media_type}"
+          "Shuffle {genre} {media_type}",
+          "Play random songs",
+          "Play random music",
+          "Play random {genre} songs",
+          "Play random {genre} music",
+          "Play a random song",
+          "Play some random {genre} songs"
         ],
         "slots": [
           {
@@ -270,7 +279,12 @@
         "samples": [
           "Play my favorite {media_type}",
           "Play my {media_type} favorite",
-          "Play my favorites"
+          "Play my favorites",
+          "Play my favorite songs",
+          "Play my favorite music",
+          "Play my favorites playlist",
+          "Play my favourite songs",
+          "Play my favourite music"
         ],
         "slots": [
           {
