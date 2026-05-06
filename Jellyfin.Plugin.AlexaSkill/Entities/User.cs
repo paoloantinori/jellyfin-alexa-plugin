@@ -72,6 +72,13 @@ public class User
     public string? AlexaPersonId { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether the user has opted into proactive event notifications.
+    /// Set to true when the skill receives a <c>ProactiveSubscriptionChangedRequest</c>
+    /// indicating the user subscribed via the Alexa app.
+    /// </summary>
+    public bool ProactiveEventsEnabled { get; set; }
+
+    /// <summary>
     /// Gets the smapi Smapi Management object for this user.
     /// </summary>
     [JsonIgnore]
