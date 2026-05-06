@@ -29,7 +29,7 @@ public class JellyfinConnectivityChecker
     }
 
     /// <summary>
-    /// Gets the current connectivity status, using a cached result if fresh (<30s)
+    /// Gets the current connectivity status, using a cached result if fresh (under 30s)
     /// and the server address hasn't changed.
     /// </summary>
     /// <returns>The connectivity check result.</returns>
