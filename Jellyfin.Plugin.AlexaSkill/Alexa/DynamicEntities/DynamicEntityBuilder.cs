@@ -22,11 +22,7 @@ public class DynamicEntityBuilder
     private const int MaxDynamicValues = 50;
     private const int QueryLimit = 55;
 
-    private static readonly Dictionary<CatalogType, string> SlotTypeNames = new()
-    {
-        [CatalogType.Artist] = "AMAZON.Musician",
-        [CatalogType.Album] = "AMAZON.Album"
-    };
+    private static readonly Dictionary<CatalogType, string> SlotTypeNames = CatalogSlotTypes.Names;
 
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
@@ -95,7 +91,7 @@ public class DynamicEntityBuilder
             });
         }
 
-        _logger.LogInformation(
+        _logger.LogDebug(
             "Built dynamic entities directive with {Artists} artists and {Albums} albums",
             artistValues.Count, albumValues.Count);
 
