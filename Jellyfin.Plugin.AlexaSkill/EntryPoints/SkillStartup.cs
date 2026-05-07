@@ -75,7 +75,17 @@ public class SkillStartup : IHostedService, IDisposable
             return;
         }
 
-        ManifestSkill manifestSkill = new ManifestSkill("Jellyfin.Plugin.AlexaSkill.Alexa.Manifest.manifest.json", configuration.ServerAddress, configuration.SslCertType);
+        ManifestSkill manifestSkill;
+        try
+        {
+            manifestSkill = new ManifestSkill("Jellyfin.Plugin.AlexaSkill.Alexa.Manifest.manifest.json", configuration.ServerAddress, configuration.SslCertType);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load local skill manifest. Skills will not be created or updated.");
+            return;
+        }
+
         Plugin.Instance.ManifestSkill = manifestSkill;
 
         Uri endpointUri = new Uri(new Uri(configuration.ServerAddress), AlexaSkillController.ApiBaseUri);
