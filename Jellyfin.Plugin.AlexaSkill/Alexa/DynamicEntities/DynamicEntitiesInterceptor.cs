@@ -1,0 +1,109 @@
+#nullable enable
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Alexa.NET.Request.Type;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
+using Jellyfin.Plugin.AlexaSkill.Configuration;
+using Microsoft.Extensions.Logging;
+
+namespace Jellyfin.Plugin.AlexaSkill.Alexa.DynamicEntities;
+
+/// <summary>
+/// Response interceptor that injects dynamic entity values into the Alexa NLU
+/// at the start of a new session. These session-scoped values supplement the
+/// persistent catalog-based slot types with recently played items, improving
+/// recognition of artist and album names the user has recently listened to.
+/// </summary>
+public class DynamicEntitiesInterceptor : IResponseInterceptor
+{
+    private readonly DynamicEntityBuilder _builder;
+    private readonly PluginConfiguration _config;
+    private readonly ILogger<DynamicEntitiesInterceptor> _logger;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DynamicEntitiesInterceptor"/> class.
+    /// </summary>
+    /// <param name="builder">The dynamic entity builder.</param>
+    /// <param name="config">The plugin configuration for user resolution.</param>
+    /// <param name="logger">Logger instance.</param>
+    public DynamicEntitiesInterceptor(
+        DynamicEntityBuilder builder,
+        PluginConfiguration config,
+        ILogger<DynamicEntitiesInterceptor> logger)
+    {
+        _builder = builder;
+        _config = config;
+        _logger = logger;
+    }
+
+    /// <inheritdoc/>
+    public async Task ProcessAsync(RequestContext context, CancellationToken cancellationToken)
+    {
+        if (context.Response?.Response == null)
+        {
+            return;
+        }
+
+        // Only inject dynamic entities on new sessions (LaunchRequest or session.New)
+        bool isNewSession = context.SkillRequest is LaunchRequest
+            || (context.AlexaSession?.New ?? false);
+
+        if (!isNewSession)
+        {
+            return;
+        }
+
+        Guid jellyfinUserId = ResolveJellyfinUserId(context);
+        if (jellyfinUserId == Guid.Empty)
+        {
+            return;
+        }
+
+        try
+        {
+            DynamicEntitiesDirective? directive = await Task.Run(
+                () => _builder.BuildFromRecentItems(jellyfinUserId, cancellationToken),
+                cancellationToken).ConfigureAwait(false);
+
+            if (directive == null)
+            {
+                return;
+            }
+
+            context.Response.Response.Directives ??= new List<global::Alexa.NET.Response.IDirective>();
+            context.Response.Response.Directives.Add(directive);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Failed to build dynamic entities for user {UserId}", jellyfinUserId);
+        }
+    }
+
+    private Guid ResolveJellyfinUserId(RequestContext context)
+    {
+        // Voice-based identification takes priority (multi-user households)
+        string? personId = context.AlexaContext?.System?.Person?.PersonId;
+        if (!string.IsNullOrEmpty(personId))
+        {
+            Entities.User? user = _config.GetUserByPersonId(personId);
+            if (user != null)
+            {
+                return user.Id;
+            }
+        }
+
+        // Account linking fallback
+        string? accessToken = context.AlexaContext?.System?.User?.AccessToken;
+        if (Guid.TryParse(accessToken, out Guid userId))
+        {
+            return userId;
+        }
+
+        _logger.LogDebug("Could not resolve Jellyfin user ID for dynamic entities");
+        return Guid.Empty;
+    }
+}
