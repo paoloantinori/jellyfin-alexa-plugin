@@ -26,6 +26,8 @@
   "NoSongsForArtist": "No hay canciones del artista {0}.",
   "Welcome": "Bienvenido a la skill de Jellyfin, ¿qué puedo reproducir?",
   "WelcomeReprompt": "Por favor, dime, ¿qué debo reproducir?",
+  "WelcomePersonalized": "Bienvenido a Jellyfin, {0}! Que puedo reproducir?",
+  "WelcomePersonalizedSsml": "Bienvenido a Jellyfin, {0}!<break time=\"300ms\"/>Que puedo reproducir?",
   "NowPlaying": "Reproduciendo ahora: {0}",
   "NowPlayingWithPosition": "Reproduciendo ahora: {0}. Posición: {1}",
   "UnknownMedia": "Contenido desconocido",

@@ -34,6 +34,8 @@
   "WelcomeReprompt": "Please tell me, what should I play?",
   "WelcomeSsml": "Welcome to Jellyfin Skill<break time=\"300ms\"/>What can I play?",
   "WelcomeRepromptSsml": "Please tell me<break time=\"200ms\"/>what should I play?",
+  "WelcomePersonalized": "Welcome to Jellyfin, {0}! What can I play?",
+  "WelcomePersonalizedSsml": "Welcome to Jellyfin, {0}!<break time=\"300ms\"/>What can I play?",
   "NowPlaying": "Now playing: {0}",
   "NowPlayingWithPosition": "Now playing: {0}. Position: {1}",
   "NowPlayingSsml": "<say-as interpret-as=\"interjection\">now playing</say-as><break time=\"300ms\"/><emphasis level=\"moderate\">{0}</emphasis>",

@@ -34,6 +34,8 @@
   "WelcomeReprompt": "Per favore dimmi, cosa devo riprodurre?",
   "WelcomeSsml": "Benvenuto in Jellyfin Skill<break time=\"300ms\"/>Cosa posso riprodurre?",
   "WelcomeRepromptSsml": "Per favore dimmi<break time=\"200ms\"/>cosa devo riprodurre?",
+  "WelcomePersonalized": "Benvenuto su Jellyfin, {0}! Cosa posso riprodurre?",
+  "WelcomePersonalizedSsml": "Benvenuto su Jellyfin, {0}!<break time=\"300ms\"/>Cosa posso riprodurre?",
   "NowPlaying": "In riproduzione: {0}",
   "NowPlayingWithPosition": "In riproduzione: {0}. Posizione: {1}",
   "NowPlayingSsml": "In riproduzione<break time=\"300ms\"/><emphasis level=\"moderate\">{0}</emphasis>",
