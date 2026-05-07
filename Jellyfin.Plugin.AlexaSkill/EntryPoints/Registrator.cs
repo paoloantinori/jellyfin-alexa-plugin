@@ -3,6 +3,7 @@ using System.Linq;
 using System.Reflection;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -34,6 +35,11 @@ public class Registrator : IPluginServiceRegistrator
         // Scheduled tasks (visible in Jellyfin dashboard)
         serviceCollection.AddSingleton<TokenRefreshTask>();
         serviceCollection.AddSingleton<CacheCleanupTask>();
+        serviceCollection.AddSingleton<CatalogSyncTask>();
+
+        // Catalog sync services
+        serviceCollection.AddSingleton<CatalogManager>();
+        serviceCollection.AddSingleton<LibrarySyncService>();
 
         // Proactive events
         serviceCollection.AddSingleton<ProactiveEventClient>();
