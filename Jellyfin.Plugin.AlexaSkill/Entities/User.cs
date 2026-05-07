@@ -79,6 +79,23 @@ public class User
     public bool ProactiveEventsEnabled { get; set; }
 
     /// <summary>
+    /// Gets or sets the SMAPI catalog ID for the user's artist library.
+    /// Null if catalog has not been created yet.
+    /// </summary>
+    public string? ArtistCatalogId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the SMAPI catalog ID for the user's album library.
+    /// Null if catalog has not been created yet.
+    /// </summary>
+    public string? AlbumCatalogId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the timestamp of the last successful catalog sync.
+    /// </summary>
+    public DateTime? LastCatalogSync { get; set; }
+
+    /// <summary>
     /// Gets the smapi Smapi Management object for this user.
     /// </summary>
     [JsonIgnore]
