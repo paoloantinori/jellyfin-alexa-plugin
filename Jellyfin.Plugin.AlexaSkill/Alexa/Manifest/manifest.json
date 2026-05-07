@@ -9,6 +9,20 @@
 					{
 						"type": "VIDEO_APP"
 					}
+				],
+				"tasks": [
+					{
+						"name": "PlayFavorites",
+						"version": "1"
+					},
+					{
+						"name": "PlayMedia",
+						"version": "1"
+					},
+					{
+						"name": "SearchLibrary",
+						"version": "1"
+					}
 				]
 			}
 		},
