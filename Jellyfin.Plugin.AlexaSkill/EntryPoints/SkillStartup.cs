@@ -131,36 +131,44 @@ public class SkillStartup : IHostedService, IDisposable
 
                         if (user.UserSkill.SkillId != null && user.SmapiManagement != null)
                         {
-                            ManifestSkill cloudManifestSkill = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.GetSkillAsync(user.UserSkill.SkillId)).ConfigureAwait(false);
-                            _logger.LogInformation("Skill version (cloud) for user {UserId}: {Version}", user.Id, cloudManifestSkill.GetVersionTag());
+                            ManifestSkill? cloudManifestSkill = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.GetSkillAsync(user.UserSkill.SkillId)).ConfigureAwait(false);
 
-                            AccountLinkData accountLinkingData = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.GetAccountLinkDataAsync(user.UserSkill.SkillId)).ConfigureAwait(false);
-
-                            SkillStatus status = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.GetSkillStatusAsync(user.UserSkill.SkillId)).ConfigureAwait(false);
-
-                            if (cloudManifestSkill.GetVersionTag() != Util.GetVersion()
-                                || status.Manifest.LastModified.Status == SkillStatusState.FAILED)
+                            if (cloudManifestSkill != null)
                             {
-                                _logger.LogInformation("Skill for user {UserId} is outdated. Updating...", user.Id);
-                                await AlexaUtil.CallAsync<object?>(user, () =>
+                                _logger.LogInformation("Skill version (cloud) for user {UserId}: {Version}", user.Id, cloudManifestSkill.GetVersionTag());
+
+                                AccountLinkData accountLinkingData = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.GetAccountLinkDataAsync(user.UserSkill.SkillId)).ConfigureAwait(false);
+
+                                SkillStatus status = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.GetSkillStatusAsync(user.UserSkill.SkillId)).ConfigureAwait(false);
+
+                                if (cloudManifestSkill.GetVersionTag() != Util.GetVersion()
+                                    || status.Manifest.LastModified.Status == SkillStatusState.FAILED)
                                 {
-                                    user.SmapiManagement.UpdateSkillAsync(user.UserSkill.SkillId, manifestSkill, skillInteractionModels);
-                                    return Task.FromResult<object?>(null);
-                                }).ConfigureAwait(false);
+                                    _logger.LogInformation("Skill for user {UserId} is outdated. Updating...", user.Id);
+                                    await AlexaUtil.CallAsync<object?>(user, () =>
+                                    {
+                                        user.SmapiManagement.UpdateSkillAsync(user.UserSkill.SkillId, manifestSkill, skillInteractionModels);
+                                        return Task.FromResult<object?>(null);
+                                    }).ConfigureAwait(false);
+                                }
+
+                                if (!accountLinkingData.AuthorizationUrl.Equals(endpointUriString, StringComparison.Ordinal)
+                                    || !Plugin.Instance.Configuration.AccountLinkingClientId.Equals(accountLinkingData.ClientId, StringComparison.Ordinal))
+                                {
+                                    _logger.LogInformation("Account linking data for user {UserId} is outdated. Updating...", user.Id);
+                                    await AlexaUtil.CallAsync<object?>(user, () =>
+                                    {
+                                        user.SmapiManagement.UpdateAccountLinkData(
+                                            user.UserSkill.SkillId,
+                                            configuration.ServerAddress,
+                                            configuration.AccountLinkingClientId);
+                                        return Task.FromResult<object?>(null);
+                                    }).ConfigureAwait(false);
+                                }
                             }
-
-                            if (!accountLinkingData.AuthorizationUrl.Equals(endpointUriString, StringComparison.Ordinal)
-                                || !Plugin.Instance.Configuration.AccountLinkingClientId.Equals(accountLinkingData.ClientId, StringComparison.Ordinal))
+                            else
                             {
-                                _logger.LogInformation("Account linking data for user {UserId} is outdated. Updating...", user.Id);
-                                await AlexaUtil.CallAsync<object?>(user, () =>
-                                {
-                                    user.SmapiManagement.UpdateAccountLinkData(
-                                        user.UserSkill.SkillId,
-                                        configuration.ServerAddress,
-                                        configuration.AccountLinkingClientId);
-                                    return Task.FromResult<object?>(null);
-                                }).ConfigureAwait(false);
+                                _logger.LogWarning("Could not fetch cloud manifest for user {UserId}. Skipping version comparison and using local manifest.", user.Id);
                             }
                         }
                         else if (user.SmapiManagement != null)
@@ -187,7 +195,14 @@ public class SkillStartup : IHostedService, IDisposable
             }
         }, token);
 
-        await _runningTask.ConfigureAwait(false);
+        try
+        {
+            await _runningTask.ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Skill startup task failed. Jellyfin will continue but skill management may be unavailable until the issue is resolved.");
+        }
     }
 
     /// <inheritdoc />
