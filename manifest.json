@@ -111,6 +111,14 @@
                 "changelog": "Add circuit breaker, correlation ID tracing, retry jitter, error categorization, cache metrics, response body logging. Refactor handler registration to DI auto-discovery. Add Jellyfin connectivity ping. Update APL to v1.9. Add Proactive Events API, Reminders API, Customer Profile API, and Skill Connections. Fix test isolation for parallel execution.",
                 "targetAbi": "10.11.0.0",
                 "timestamp": "2026-05-07 06:42:45"
+            },
+            {
+                "version": "0.2.0.12",
+                "checksum": "a5dc195ef572b13c830d6375fe9ac972",
+                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.12/AlexaSkill_0.2.0.12.zip",
+                "changelog": "Add hot config propagation via ConfigurationChanged event. Add scheduled tasks for LWA token refresh (6h) and cache cleanup (1h). Fix missing Alexa.NET.Reminders, ProactiveEvents, and Profile DLLs in release package.",
+                "targetAbi": "10.11.0.0",
+                "timestamp": "2026-05-07 16:08:00"
             }
         ]
     }
