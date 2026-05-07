@@ -1,7 +1,7 @@
 ---
 name: Alexa Skill
 guid: c5df7de0-8777-4b3c-a70d-5c3dae359c9e
-version: 0.2.0.11
+version: 0.2.0.12
 targetAbi: 10.11.0.0
 framework: net9.0
 overview: Alexa skill plugin for Jellyfin
@@ -13,8 +13,11 @@ owner: "paoloantinori"
 artifacts:
   - Alexa.NET.dll
   - Alexa.NET.Management.dll
+  - Alexa.NET.ProactiveEvents.dll
+  - Alexa.NET.Profile.dll
+  - Alexa.NET.Reminders.dll
   - Amazon.Lambda.Core.dll
   - Amazon.Lambda.Serialization.Json.dll
   - Jellyfin.Plugin.AlexaSkill.dll
   - Refit.dll
-changelog: "Add circuit breaker, correlation ID tracing, retry jitter, error categorization, cache metrics, response body logging. Refactor handler registration to DI auto-discovery. Add Jellyfin connectivity ping. Update APL to v1.9. Add Proactive Events API, Reminders API, Customer Profile API, and Skill Connections. Fix test isolation for parallel execution."
+changelog: "Add hot config propagation via ConfigurationChanged event. Add scheduled tasks for LWA token refresh (6h) and cache cleanup (1h). Fix missing Alexa.NET.Reminders, ProactiveEvents, and Profile DLLs in release package."
