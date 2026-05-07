@@ -107,6 +107,38 @@ public class SearchResultCache
     public int Count => _cache.Count;
 
     /// <summary>
+    /// Remove all expired entries from the cache.
+    /// </summary>
+    /// <returns>The number of entries removed.</returns>
+    public virtual int RemoveExpired()
+    {
+        var expiredKeys = new List<string>();
+        foreach (KeyValuePair<string, CachedResult> kvp in _cache)
+        {
+            if (DateTimeOffset.UtcNow - kvp.Value.Timestamp > _expiration)
+            {
+                expiredKeys.Add(kvp.Key);
+            }
+        }
+
+        int removed = 0;
+        foreach (string key in expiredKeys)
+        {
+            if (_cache.TryRemove(key, out _))
+            {
+                removed++;
+            }
+        }
+
+        if (removed > 0)
+        {
+            _logger?.LogDebug("Removed {Count} expired cache entries", removed);
+        }
+
+        return removed;
+    }
+
+    /// <summary>
     /// Build a normalized cache key from user ID and query parameters.
     /// </summary>
     /// <param name="userId">The user ID.</param>
@@ -180,5 +212,7 @@ public class SearchResultCache
         public override void Clear()
         {
         }
+
+        public override int RemoveExpired() => 0;
     }
 }

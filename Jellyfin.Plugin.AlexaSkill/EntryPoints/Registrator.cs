@@ -31,6 +31,10 @@ public class Registrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<CircuitBreaker>();
         serviceCollection.AddSingleton<JellyfinConnectivityChecker>();
 
+        // Scheduled tasks (visible in Jellyfin dashboard)
+        serviceCollection.AddSingleton<TokenRefreshTask>();
+        serviceCollection.AddSingleton<CacheCleanupTask>();
+
         // Proactive events
         serviceCollection.AddSingleton<ProactiveEventClient>();
         serviceCollection.AddSingleton<ProactiveEventRateLimiter>();
