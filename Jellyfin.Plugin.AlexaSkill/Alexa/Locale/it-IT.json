@@ -137,5 +137,11 @@
   "ErrorPermanentBackend": "Quel contenuto non è stato trovato o non è disponibile.",
   "ErrorUserError": "Non ho capito, per favore riprova.",
   "ErrorSkillError": "Qualcosa è andato storto. Per favore riprova.",
-  "ErrorTimeout": "Ci ho messo troppo. Per favore riprova."
+  "ErrorTimeout": "Ci ho messo troppo. Per favore riprova.",
+  "DidNotCatchReminderTime": "Quando devo ricordartelo? Dimmi un orario o un numero di minuti.",
+  "ReminderSetRelative": "Promemoria impostato tra {0} minuti.",
+  "ReminderSetAbsolute": "Promemoria impostato per le {0}.",
+  "ReminderError": "Mi dispiace, non ho potuto impostare il promemoria. Riprova.",
+  "ReminderPermissionRequired": "Per impostare promemoria ho bisogno del permesso. Vai nell'app Alexa per concedere i permessi.",
+  "ReminderDefaultMessage": "Questo e il tuo promemoria Jellyfin."
 }
