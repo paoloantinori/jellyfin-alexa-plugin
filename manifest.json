@@ -146,11 +146,11 @@
             },
             {
                 "version": "0.2.0.16",
-                "checksum": "",
+                "checksum": "1f4e98c8eafb18ceacdd33e818bc481f",
                 "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.16/AlexaSkill_0.2.0.16.zip",
-                "changelog": "See for more details: https://github.com/paoloantinori/jellyfin-alexa-plugin/releases",
+                "changelog": "Fix missing Alexa.NET.Reminders, ProactiveEvents, Profile DLLs in release package. Fix fatal startup crash from local manifest EventName enum.",
                 "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-07T20:43:28Z"
+                "timestamp": "2026-05-07 20:44:34"
             }
         ]
     }
