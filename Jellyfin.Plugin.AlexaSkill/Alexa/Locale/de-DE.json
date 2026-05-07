@@ -98,5 +98,11 @@
   "ErrorPermanentBackend": "Dieses Medium wurde nicht gefunden oder ist nicht verfuegbar.",
   "ErrorUserError": "Ich konnte das nicht verstehen, bitte versuche es erneut.",
   "ErrorSkillError": "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
-  "ErrorTimeout": "Das hat zu lange gedauert. Bitte versuche es erneut."
+  "ErrorTimeout": "Das hat zu lange gedauert. Bitte versuche es erneut.",
+  "DidNotCatchReminderTime": "Wann soll ich dich erinnern? Bitte nenne eine Uhrzeit oder eine Anzahl Minuten.",
+  "ReminderSetRelative": "Erinnerung in {0} Minuten eingestellt.",
+  "ReminderSetAbsolute": "Erinnerung fuer {0} eingestellt.",
+  "ReminderError": "Sorry, ich konnte die Erinnerung nicht setzen. Bitte versuche es erneut.",
+  "ReminderPermissionRequired": "Um Erinnerungen zu setzen, brauche ich deine Erlaubnis. Bitte gehe in die Alexa-App, um die Berechtigung zu erteilen.",
+  "ReminderDefaultMessage": "Dies ist deine Jellyfin-Erinnerung."
 }

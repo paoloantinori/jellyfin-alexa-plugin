@@ -27,6 +27,9 @@
 		"permissions": [
 			{
 				"name": "alexa::alerts:skillnotifications:write"
+			},
+			{
+				"name": "alexa::alerts:reminders:skill:readwrite"
 			}
 		],
 		"manifestVersion": "1.0",
