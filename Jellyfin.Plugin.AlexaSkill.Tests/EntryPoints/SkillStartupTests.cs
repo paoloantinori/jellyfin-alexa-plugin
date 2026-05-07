@@ -19,6 +19,7 @@ public class SkillStartupTests
     private readonly ILoggerFactory _loggerFactory;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly SearchResultCache _searchCache;
+    private readonly JellyfinConnectivityChecker _connectivityChecker;
 
     public SkillStartupTests()
     {
@@ -30,11 +31,13 @@ public class SkillStartupTests
         var provider = services.BuildServiceProvider();
         _httpClientFactory = provider.GetRequiredService<IHttpClientFactory>();
         _searchCache = provider.GetRequiredService<SearchResultCache>();
+        _connectivityChecker = new JellyfinConnectivityChecker(
+            _loggerFactory.CreateLogger<JellyfinConnectivityChecker>());
     }
 
     private SkillStartup CreateStartup()
     {
-        return new SkillStartup(_sessionManagerMock.Object, _loggerFactory, _httpClientFactory, _searchCache, new CircuitBreaker(), new RequestCounters());
+        return new SkillStartup(_sessionManagerMock.Object, _loggerFactory, _httpClientFactory, _searchCache, new CircuitBreaker(), new RequestCounters(), _connectivityChecker);
     }
 
     [Fact]

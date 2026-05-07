@@ -31,6 +31,7 @@ public class SkillStartup : IHostedService, IDisposable
     private readonly SearchResultCache _searchCache;
     private readonly CircuitBreaker _circuitBreaker;
     private readonly RequestCounters _requestCounters;
+    private readonly JellyfinConnectivityChecker _connectivityChecker;
     private CancellationTokenSource? _cts;
     private Task? _runningTask;
     private bool _disposed;
@@ -44,13 +45,14 @@ public class SkillStartup : IHostedService, IDisposable
     /// <param name="searchCache">Search result cache for fallback.</param>
     /// <param name="circuitBreaker">Circuit breaker for backend health tracking.</param>
     /// <param name="requestCounters">Request counters for metrics tracking.</param>
-    public SkillStartup(ISessionManager sessionManager, ILoggerFactory loggerFactory, IHttpClientFactory httpClientFactory, SearchResultCache searchCache, CircuitBreaker circuitBreaker, RequestCounters requestCounters)
+    public SkillStartup(ISessionManager sessionManager, ILoggerFactory loggerFactory, IHttpClientFactory httpClientFactory, SearchResultCache searchCache, CircuitBreaker circuitBreaker, RequestCounters requestCounters, JellyfinConnectivityChecker connectivityChecker)
     {
         _sessionManager = sessionManager;
         _httpClientFactory = httpClientFactory;
         _searchCache = searchCache;
         _circuitBreaker = circuitBreaker;
         _requestCounters = requestCounters;
+        _connectivityChecker = connectivityChecker;
         _logger = loggerFactory.CreateLogger<SkillStartup>();
     }
 
@@ -63,6 +65,7 @@ public class SkillStartup : IHostedService, IDisposable
         Plugin.Instance!.SearchCache = _searchCache;
         Plugin.Instance!.CircuitBreaker = _circuitBreaker;
         Plugin.Instance!.RequestCounters = _requestCounters;
+        Plugin.Instance!.ConnectivityChecker = _connectivityChecker;
 
         PluginConfiguration configuration = Plugin.Instance!.Configuration;
 

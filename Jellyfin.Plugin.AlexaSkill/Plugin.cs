@@ -42,6 +42,9 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         UserManager = userManager;
         LoggerFactory = loggerFactory;
 
+        ConfigurationChanged += OnConfigurationChanged;
+        _lastKnownServerAddress = Configuration.ServerAddress;
+
         ILogger<Plugin> logger = loggerFactory.CreateLogger<Plugin>();
         logger.LogInformation("AlexaSkill plugin loaded v{Version}", Util.GetVersion());
     }
@@ -85,6 +88,11 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     /// Gets the circuit breaker for tracking Jellyfin backend API health.
     /// </summary>
     public CircuitBreaker CircuitBreaker { get; internal set; } = new CircuitBreaker();
+
+    /// <summary>
+    /// Gets the connectivity checker for Jellyfin server health diagnostics.
+    /// </summary>
+    public JellyfinConnectivityChecker? ConnectivityChecker { get; internal set; }
 
     /// <summary>
     /// Gets the request counters for metrics tracking.
@@ -149,6 +157,30 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     /// Gets the current plugin instance.
     /// </summary>
     public static Plugin? Instance { get; private set; }
+
+    private string? _lastKnownServerAddress;
+
+    /// <summary>
+    /// Handle configuration changes by propagating them to active services.
+    /// Only resets caches when ServerAddress actually changes.
+    /// </summary>
+    private void OnConfigurationChanged(object? sender, BasePluginConfiguration e)
+    {
+        var config = (PluginConfiguration)e;
+        var logger = LoggerFactory.CreateLogger<Plugin>();
+
+        if (string.Equals(_lastKnownServerAddress, config.ServerAddress, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _lastKnownServerAddress = config.ServerAddress;
+        logger.LogInformation("ServerAddress changed — propagating to active services");
+
+        ConnectivityChecker?.InvalidateCache();
+        CircuitBreaker.Reset();
+        SearchCache.Clear();
+    }
 
     /// <inheritdoc />
     public IEnumerable<PluginPageInfo> GetPages()

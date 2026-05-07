@@ -94,6 +94,19 @@ public class SearchResultCache
     }
 
     /// <summary>
+    /// Remove all entries from the cache.
+    /// </summary>
+    public virtual void Clear()
+    {
+        _cache.Clear();
+    }
+
+    /// <summary>
+    /// Get the current number of entries in the cache (for diagnostics).
+    /// </summary>
+    public int Count => _cache.Count;
+
+    /// <summary>
     /// Build a normalized cache key from user ID and query parameters.
     /// </summary>
     /// <param name="userId">The user ID.</param>
@@ -162,6 +175,10 @@ public class SearchResultCache
         {
             results = null;
             return false;
+        }
+
+        public override void Clear()
+        {
         }
     }
 }
