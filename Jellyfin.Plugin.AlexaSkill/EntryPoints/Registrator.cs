@@ -4,6 +4,7 @@ using System.Reflection;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
+using Jellyfin.Plugin.AlexaSkill.Alexa.DynamicEntities;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -41,6 +42,9 @@ public class Registrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<CatalogManager>();
         serviceCollection.AddSingleton<LibrarySyncService>();
 
+        // Dynamic entity resolution
+        serviceCollection.AddSingleton<DynamicEntityBuilder>();
+
         // Proactive events
         serviceCollection.AddSingleton<ProactiveEventClient>();
         serviceCollection.AddSingleton<ProactiveEventRateLimiter>();
@@ -76,6 +80,7 @@ public class Registrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<IRequestInterceptor, CircuitBreakerInterceptor>();
         serviceCollection.AddSingleton<IRequestInterceptor, LoggingRequestInterceptor>();
         serviceCollection.AddSingleton<IResponseInterceptor, SessionAttributesInterceptor>();
+        serviceCollection.AddSingleton<IResponseInterceptor, DynamicEntitiesInterceptor>();
         serviceCollection.AddSingleton<IResponseInterceptor, LoggingResponseInterceptor>();
         serviceCollection.AddSingleton<IResponseInterceptor, MetricsResponseInterceptor>();
         serviceCollection.AddSingleton<IResponseInterceptor, ResponseBodyLoggingInterceptor>();
