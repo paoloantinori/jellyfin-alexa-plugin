@@ -19,5 +19,18 @@ artifacts:
   - Amazon.Lambda.Core.dll
   - Amazon.Lambda.Serialization.Json.dll
   - Jellyfin.Plugin.AlexaSkill.dll
+  - Microsoft.Extensions.Configuration.Abstractions.dll
+  - Microsoft.Extensions.Configuration.Binder.dll
+  - Microsoft.Extensions.Configuration.dll
+  - Microsoft.Extensions.DependencyInjection.Abstractions.dll
+  - Microsoft.Extensions.DependencyInjection.dll
+  - Microsoft.Extensions.Logging.Abstractions.dll
+  - Microsoft.Extensions.Logging.Configuration.dll
+  - Microsoft.Extensions.Logging.Console.dll
+  - Microsoft.Extensions.Logging.dll
+  - Microsoft.Extensions.Options.ConfigurationExtensions.dll
+  - Microsoft.Extensions.Options.dll
+  - Microsoft.Extensions.Primitives.dll
+  - Newtonsoft.Json.dll
   - Refit.dll
 changelog: "Fix missing Alexa.NET.Reminders, ProactiveEvents, Profile DLLs in release package. Fix fatal startup crash from local manifest EventName enum."
