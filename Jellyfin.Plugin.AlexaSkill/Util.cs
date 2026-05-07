@@ -31,7 +31,19 @@ public static class Util
         if (resource != null)
         {
             string json = new StreamReader(resource).ReadToEnd();
-            T? val = JsonConvert.DeserializeObject<T>(json);
+            var settings = new JsonSerializerSettings
+            {
+                Error = (sender, args) =>
+                {
+                    // Tolerate unknown enum values (e.g. new Alexa event types not yet in Alexa.NET)
+                    if (args.ErrorContext.Error is JsonSerializationException
+                        && args.ErrorContext.Error.InnerException is ArgumentException)
+                    {
+                        args.ErrorContext.Handled = true;
+                    }
+                }
+            };
+            T? val = JsonConvert.DeserializeObject<T>(json, settings);
             if (val != null)
             {
                 return val;
