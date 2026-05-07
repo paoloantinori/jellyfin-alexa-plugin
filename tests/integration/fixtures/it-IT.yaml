@@ -364,6 +364,32 @@ tests:
       song: {}
       musician: {}
 
+  # Short-form utterances with English proper nouns
+  - utterance: "Suona bohemian rhapsody"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+
+  - utterance: "Metti hotel california"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+
+  - utterance: "Ascolta stairway to heaven"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+
+  - utterance: "Riproduci yesterday"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+
+  - utterance: "Fai partire Comfortably Numb"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+
   # -------------------------------------------------------------------------
   # 24. PlayAlbumIntent (album, musician)
   # -------------------------------------------------------------------------
@@ -378,6 +404,22 @@ tests:
       album: {}
       musician: {}
 
+  # Short-form utterances with English proper nouns
+  - utterance: "Suona abbey road"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+
+  - utterance: "Metti thriller"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+
+  - utterance: "Riproduci the wall"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+
   # -------------------------------------------------------------------------
   # 25. PlayArtistSongsIntent (musician)
   # -------------------------------------------------------------------------
@@ -387,6 +429,27 @@ tests:
       musician: {}
 
   - utterance: "Suona musica dei pink floyd"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  # Short-form utterances with English proper nouns
+  - utterance: "Suona queen"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "Metti beatles"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "Riproduci pink floyd"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "Ascolta led zeppelin"
     expected_intent: PlayArtistSongsIntent
     expected_slots:
       musician: {}

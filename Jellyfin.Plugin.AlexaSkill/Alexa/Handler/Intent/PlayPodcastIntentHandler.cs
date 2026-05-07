@@ -55,11 +55,6 @@ public class PlayPodcastIntentHandler : BaseHandler
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
 
-        if (intentRequest.DialogState != DialogStates.Completed)
-        {
-            return DelegateToDialog(intentRequest);
-        }
-
         string? podcastName = intentRequest.Intent.Slots?.TryGetValue("podcast_name", out var nameSlot) == true
             ? nameSlot.Value
             : null;

@@ -56,7 +56,7 @@ public class PlaySongIntentHandler : BaseHandler
     }
 
     /// <summary>
-    /// Play songs from a specific artist.
+    /// Play a specific song by name, optionally filtered by artist.
     /// </summary>
     /// <param name="request">The skill request which should be handled.</param>
     /// <param name="context">The context of the skill intent request.</param>
@@ -68,13 +68,13 @@ public class PlaySongIntentHandler : BaseHandler
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
 
-        if (intentRequest.DialogState != DialogStates.Completed)
-        {
-            return DelegateToDialog(intentRequest);
-        }
+        string? songQuery = intentRequest.Intent.Slots?.TryGetValue("song", out var songSlot) == true ? songSlot.Value : null;
+        string? musicianQuery = intentRequest.Intent.Slots?.TryGetValue("musician", out var musicianSlot) == true ? musicianSlot.Value : null;
 
-        string songQuery = intentRequest.Intent.Slots["song"].Value;
-        string? musicianQuery = intentRequest.Intent.Slots["musician"].Value;
+        if (string.IsNullOrWhiteSpace(songQuery))
+        {
+            return ResponseBuilder.Ask(ResponseStrings.Get("ElicitSongName", locale), new Reprompt(ResponseStrings.Get("ElicitSongName", locale)));
+        }
 
         await SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)).ConfigureAwait(false);
 
