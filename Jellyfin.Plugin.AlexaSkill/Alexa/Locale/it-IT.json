@@ -145,5 +145,8 @@
   "ReminderSetAbsolute": "Promemoria impostato per le {0}.",
   "ReminderError": "Mi dispiace, non ho potuto impostare il promemoria. Riprova.",
   "ReminderPermissionRequired": "Per impostare promemoria ho bisogno del permesso. Vai nell'app Alexa per concedere i permessi.",
-  "ReminderDefaultMessage": "Questo e il tuo promemoria Jellyfin."
+  "ReminderDefaultMessage": "Questo e il tuo promemoria Jellyfin.",
+  "ElicitSongName": "Quale canzone vuoi ascoltare?",
+  "ElicitAlbumName": "Quale album vuoi ascoltare?",
+  "ElicitSeriesName": "Quale serie vorresti guardare?"
 }

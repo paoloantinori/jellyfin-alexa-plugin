@@ -145,5 +145,8 @@
   "ReminderSetAbsolute": "Reminder set for {0}.",
   "ReminderError": "Sorry, I couldn't set that reminder. Please try again.",
   "ReminderPermissionRequired": "To set reminders, I need permission. Please go to the Alexa app to grant reminder permissions.",
-  "ReminderDefaultMessage": "This is your Jellyfin reminder."
+  "ReminderDefaultMessage": "This is your Jellyfin reminder.",
+  "ElicitSongName": "What song would you like to hear?",
+  "ElicitAlbumName": "Which album would you like to hear?",
+  "ElicitSeriesName": "Which series would you like to watch?"
 }

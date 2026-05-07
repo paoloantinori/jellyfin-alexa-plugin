@@ -304,7 +304,7 @@ public class PlayPodcastIntentHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_DialogStarted_ReturnsDelegateDirective()
+    public async Task HandleAsync_DialogStarted_ElicitsPodcastName()
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(dialogState: "STARTED");
@@ -315,13 +315,12 @@ public class PlayPodcastIntentHandlerTests
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
         Assert.NotNull(response);
-        Assert.False(response.Response.ShouldEndSession);
-        Assert.NotEmpty(response.Response.Directives);
-        Assert.Contains(response.Response.Directives, d => d.Type == "Dialog.Delegate");
+        Assert.True(response.Response.ShouldEndSession);
+        Assert.DoesNotContain(response.Response.Directives ?? new List<IDirective>(), d => d.Type == "Dialog.Delegate");
     }
 
     [Fact]
-    public async Task HandleAsync_DialogInProgress_ReturnsDelegateDirective()
+    public async Task HandleAsync_DialogInProgress_ElicitsMissingInfo()
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(podcastName: "Serial", dialogState: "IN_PROGRESS");
@@ -329,11 +328,15 @@ public class PlayPodcastIntentHandlerTests
         var user = CreateUser();
         var session = CreateSession();
 
+        SetupUserMock();
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
         Assert.NotNull(response);
-        Assert.False(response.Response.ShouldEndSession);
-        Assert.Contains(response.Response.Directives, d => d.Type == "Dialog.Delegate");
+        Assert.True(response.Response.ShouldEndSession);
+        Assert.DoesNotContain(response.Response.Directives ?? new List<IDirective>(), d => d.Type == "Dialog.Delegate");
     }
 
     [Fact]

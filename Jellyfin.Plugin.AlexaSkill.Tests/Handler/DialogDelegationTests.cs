@@ -42,10 +42,27 @@ public class DialogDelegationTests
     private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
     private static Entities.User CreateUser() => TestHelpers.CreateTestUser();
 
-    private static IntentRequest CreateIntentRequest(string intentName, string? dialogState, Dictionary<string, string>? slots = null)
+    private static IntentRequest CreateIntentRequest(string intentName, string? dialogState, Dictionary<string, string?>? slots = null)
     {
         var intent = new Intent { Name = intentName };
-        intent.Slots = new Dictionary<string, global::Alexa.NET.Request.Slot>();
+        intent.Slots = new Dictionary<string,global::Alexa.NET.Request.Slot>();
+
+        // Pre-populate expected slots so handlers can access them via indexer
+        string[][] expectedSlots = intentName switch
+        {
+            "PlaySongIntent" => new[] { new[] { "song", "musician" } },
+            "PlayAlbumIntent" => new[] { new[] { "album", "musician" } },
+            _ => Array.Empty<string[]>()
+        };
+
+        foreach (var slotGroup in expectedSlots)
+        {
+            foreach (var slotName in slotGroup)
+            {
+                string? value = slots?.GetValueOrDefault(slotName);
+                intent.Slots[slotName] = new global::Alexa.NET.Request.Slot { Name = slotName, Value = value };
+            }
+        }
 
         if (slots != null)
         {
@@ -59,7 +76,7 @@ public class DialogDelegationTests
     }
 
     [Fact]
-    public async Task PlaySong_DialogStarted_ReturnsDelegateDirective()
+    public async Task PlaySong_MissingSlot_ElicitsSongName()
     {
         var handler = new PlaySongIntentHandler(
             _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
@@ -70,11 +87,12 @@ public class DialogDelegationTests
 
         Assert.NotNull(response);
         Assert.False(response.Response.ShouldEndSession);
-        Assert.Contains(response.Response.Directives, d => d.Type == "Dialog.Delegate");
+        Assert.DoesNotContain(response.Response.Directives ?? new List<IDirective>(), d => d.Type == "Dialog.Delegate");
+        Assert.NotNull(response.Response.Reprompt);
     }
 
     [Fact]
-    public async Task PlaySong_DialogCompleted_ProcessesNormally()
+    public async Task PlaySong_WithSlots_ProcessesNormally()
     {
         var handler = new PlaySongIntentHandler(
             _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
@@ -90,12 +108,11 @@ public class DialogDelegationTests
         SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), session, CancellationToken.None);
 
         Assert.NotNull(response);
-        // Should not have Dialog.Delegate since dialog is completed
         Assert.DoesNotContain(response.Response.Directives ?? new List<IDirective>(), d => d.Type == "Dialog.Delegate");
     }
 
     [Fact]
-    public async Task PlayAlbum_DialogStarted_ReturnsDelegateDirective()
+    public async Task PlayAlbum_MissingSlot_ElicitsAlbumName()
     {
         var handler = new PlayAlbumIntentHandler(
             _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
@@ -106,27 +123,29 @@ public class DialogDelegationTests
 
         Assert.NotNull(response);
         Assert.False(response.Response.ShouldEndSession);
-        Assert.Contains(response.Response.Directives, d => d.Type == "Dialog.Delegate");
+        Assert.DoesNotContain(response.Response.Directives ?? new List<IDirective>(), d => d.Type == "Dialog.Delegate");
+        Assert.NotNull(response.Response.Reprompt);
     }
 
     [Fact]
-    public async Task PlayAlbum_DialogInProgress_ReturnsDelegateDirective()
+    public async Task PlayAlbum_WithPartialSlots_ElicitsRemaining()
     {
         var handler = new PlayAlbumIntentHandler(
             _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+        // Album slot missing even though musician is provided
         var request = CreateIntentRequest(IntentNames.PlayAlbum, "IN_PROGRESS",
-            new Dictionary<string, string> { { "album", "Abbey Road" } });
+            new Dictionary<string, string> { { "musician", "Queen" } });
         var session = CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), session, CancellationToken.None);
 
         Assert.NotNull(response);
         Assert.False(response.Response.ShouldEndSession);
-        Assert.Contains(response.Response.Directives, d => d.Type == "Dialog.Delegate");
+        Assert.NotNull(response.Response.Reprompt);
     }
 
     [Fact]
-    public async Task PlayEpisode_DialogCompleted_DoesNotDelegate()
+    public async Task PlayEpisode_DoesNotDelegate()
     {
         var handler = new PlayEpisodeIntentHandler(
             _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
@@ -151,7 +170,7 @@ public class DialogDelegationTests
     }
 
     [Fact]
-    public async Task PlaySong_NullDialogState_ReturnsDelegateDirective()
+    public async Task PlaySong_NullDialogState_ElicitsSongName()
     {
         var handler = new PlaySongIntentHandler(
             _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
@@ -161,6 +180,7 @@ public class DialogDelegationTests
         SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), session, CancellationToken.None);
 
         Assert.NotNull(response);
-        Assert.Contains(response.Response.Directives, d => d.Type == "Dialog.Delegate");
+        Assert.False(response.Response.ShouldEndSession);
+        Assert.NotNull(response.Response.Reprompt);
     }
 }
