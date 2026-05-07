@@ -122,11 +122,11 @@
             },
             {
                 "version": "0.2.0.13",
-                "checksum": "da485172597221b01cafa2f786bf9288",
+                "checksum": "38b65dd4d819cbe9e25d5a457650245d",
                 "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.13/AlexaSkill_0.2.0.13.zip",
                 "changelog": "Fix fatal Jellyfin startup crash when Alexa manifest contains unknown EventName enum values (e.g. AMAZON.MediaContent.Available). Gracefully fall back to local manifest when cloud deserialization fails. Add safety net around SkillStartup to prevent Kestrel crash.",
                 "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-07 18:30:00"
+                "timestamp": "2026-05-07 14:29:02"
             }
         ]
     }
