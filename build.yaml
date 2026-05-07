@@ -1,7 +1,7 @@
 ---
 name: Alexa Skill
 guid: c5df7de0-8777-4b3c-a70d-5c3dae359c9e
-version: 0.2.0.12
+version: 0.2.0.13
 targetAbi: 10.11.0.0
 framework: net9.0
 overview: Alexa skill plugin for Jellyfin
@@ -20,4 +20,4 @@ artifacts:
   - Amazon.Lambda.Serialization.Json.dll
   - Jellyfin.Plugin.AlexaSkill.dll
   - Refit.dll
-changelog: "Add hot config propagation via ConfigurationChanged event. Add scheduled tasks for LWA token refresh (6h) and cache cleanup (1h). Fix missing Alexa.NET.Reminders, ProactiveEvents, and Profile DLLs in release package."
+changelog: "Fix fatal Jellyfin startup crash when Alexa manifest contains unknown EventName enum values (e.g. AMAZON.MediaContent.Available). Gracefully fall back to local manifest when cloud deserialization fails. Add safety net around SkillStartup to prevent Kestrel crash."

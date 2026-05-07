@@ -103,11 +103,12 @@ public class SmapiManagement : ManagementApi
     }
 
     /// <summary>
-    /// Gets the skill.
+    /// Gets the skill from the Alexa cloud.
+    /// Returns null if the manifest cannot be deserialized (e.g. unknown enum values in events).
     /// </summary>
     /// <param name="skillId">The id of the skill to get.</param>
-    /// <returns>The skill.</returns>
-    public async Task<ManifestSkill> GetSkillAsync(string skillId)
+    /// <returns>The skill, or null if deserialization fails.</returns>
+    public async Task<ManifestSkill?> GetSkillAsync(string skillId)
     {
         _logger.LogDebug("Getting skill {SkillId}", skillId);
 
@@ -115,6 +116,14 @@ public class SmapiManagement : ManagementApi
         {
             var skillResponse = await this.Skills.Get(skillId, SkillStage.Development).ConfigureAwait(false);
             return new ManifestSkill(skillResponse.Manifest);
+        }
+        catch (Exception ex) when (ex is Newtonsoft.Json.JsonSerializationException
+            || (ex.InnerException is Newtonsoft.Json.JsonSerializationException))
+        {
+            _logger.LogError(ex, "Failed to deserialize skill {SkillId} manifest from cloud. " +
+                "This is typically caused by an unrecognized Alexa event type. " +
+                "Skipping cloud manifest fetch and using local manifest.", skillId);
+            return null;
         }
         catch (Exception ex)
         {

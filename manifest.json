@@ -119,6 +119,14 @@
                 "changelog": "Add hot config propagation via ConfigurationChanged event. Add scheduled tasks for LWA token refresh (6h) and cache cleanup (1h). Fix missing Alexa.NET.Reminders, ProactiveEvents, and Profile DLLs in release package.",
                 "targetAbi": "10.11.0.0",
                 "timestamp": "2026-05-07 14:13:12"
+            },
+            {
+                "version": "0.2.0.13",
+                "checksum": "da485172597221b01cafa2f786bf9288",
+                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.13/AlexaSkill_0.2.0.13.zip",
+                "changelog": "Fix fatal Jellyfin startup crash when Alexa manifest contains unknown EventName enum values (e.g. AMAZON.MediaContent.Available). Gracefully fall back to local manifest when cloud deserialization fails. Add safety net around SkillStartup to prevent Kestrel crash.",
+                "targetAbi": "10.11.0.0",
+                "timestamp": "2026-05-07 18:30:00"
             }
         ]
     }
