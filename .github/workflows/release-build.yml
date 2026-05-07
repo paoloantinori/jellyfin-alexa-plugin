@@ -46,6 +46,9 @@ jobs:
           zip -j ${GITHUB_WORKSPACE}/AlexaSkill_${{ steps.version.outputs.VERSION }}.zip \
             Alexa.NET.dll \
             Alexa.NET.Management.dll \
+            Alexa.NET.ProactiveEvents.dll \
+            Alexa.NET.Profile.dll \
+            Alexa.NET.Reminders.dll \
             Amazon.Lambda.Core.dll \
             Amazon.Lambda.Serialization.Json.dll \
             Jellyfin.Plugin.AlexaSkill.dll \
