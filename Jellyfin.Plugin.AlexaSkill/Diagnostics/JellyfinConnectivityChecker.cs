@@ -69,6 +69,23 @@ public class JellyfinConnectivityChecker
         }
     }
 
+    /// <summary>
+    /// Invalidate the cached connectivity result, forcing a fresh check on the next <see cref="CheckAsync"/> call.
+    /// </summary>
+    public void InvalidateCache()
+    {
+        _semaphore.Wait();
+        try
+        {
+            _cachedAt = DateTimeOffset.MinValue;
+            _lastServerAddress = string.Empty;
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
+    }
+
     private async Task<ConnectivityResult> PingServerAsync(string serverAddress)
     {
         try
