@@ -26,11 +26,7 @@ public class LibrarySyncService
     private const string ArtistSlotType = "JELLYFIN_ARTIST";
     private const string AlbumSlotType = "JELLYFIN_ALBUM";
 
-    private static readonly Dictionary<CatalogType, string> SlotTypeSignatures = new()
-    {
-        [CatalogType.Artist] = "AMAZON.Musician",
-        [CatalogType.Album] = "AMAZON.Album"
-    };
+    private static readonly Dictionary<CatalogType, string> SlotTypeSignatures = CatalogSlotTypes.Names;
 
     private readonly ILibraryManager _libraryManager;
     private readonly CatalogManager _catalogManager;
