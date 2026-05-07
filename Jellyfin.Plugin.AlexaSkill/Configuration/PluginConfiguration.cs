@@ -153,13 +153,22 @@ public class PluginConfiguration : BasePluginConfiguration
             return;
         }
 
-        if (Plugin.Instance.ManifestSkill == null)
+        try
         {
-            Plugin.Instance.ManifestSkill = new ManifestSkill("Jellyfin.Plugin.AlexaSkill.Alexa.Manifest.manifest.json", serverAddress, sslCertType);
+            if (Plugin.Instance.ManifestSkill == null)
+            {
+                Plugin.Instance.ManifestSkill = new ManifestSkill("Jellyfin.Plugin.AlexaSkill.Alexa.Manifest.manifest.json", serverAddress, sslCertType);
+            }
+            else
+            {
+                Plugin.Instance.ManifestSkill.SetApiEndpoint(serverAddress, sslCertType);
+            }
         }
-        else
+        catch (Exception)
         {
-            Plugin.Instance.ManifestSkill.SetApiEndpoint(serverAddress, sslCertType);
+            // Manifest loading can fail when embedded resources are unavailable
+            // (e.g., during testing or partial initialization). Config setters
+            // must not throw — the manifest will be updated on next successful load.
         }
     }
 

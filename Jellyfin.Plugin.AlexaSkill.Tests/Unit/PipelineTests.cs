@@ -17,6 +17,7 @@ using AlexaSession = Alexa.NET.Request.Session;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 
+[Collection("Plugin")]
 public class PipelineTests
 {
     private readonly ILoggerFactory _loggerFactory;

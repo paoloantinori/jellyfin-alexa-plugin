@@ -103,6 +103,14 @@
                 "changelog": "Add SearchMediaIntent for unified search, PlayPodcastIntent, PlayByDecadeIntent, time-of-day mood playlists. Add artist metadata and rich now-playing follow-ups to MediaInfoIntent. Add time-period filtering to PlayLastAddedIntent. Enhance MarkFavoriteIntent with natural utterances. Show artist name in AudioPlayer subtitle. Fix ENQUEUE directive missing ExpectedPreviousToken. Add NLU and E2E integration test suites.",
                 "targetAbi": "10.11.0.0",
                 "timestamp": "2026-05-06 08:01:47"
+            },
+            {
+                "version": "0.2.0.11",
+                "checksum": "PLACEHOLDER",
+                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.11/AlexaSkill_0.2.0.11.zip",
+                "changelog": "Add circuit breaker, correlation ID tracing, retry jitter, error categorization, cache metrics, response body logging. Refactor handler registration to DI auto-discovery. Add Jellyfin connectivity ping. Update APL to v1.9. Add Proactive Events API, Reminders API, Customer Profile API, and Skill Connections.",
+                "targetAbi": "10.11.0.0",
+                "timestamp": "2026-05-07T08:30:00Z"
             }
         ]
     }
