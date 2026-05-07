@@ -27,6 +27,8 @@
   "NoSongsForArtist": "Es gibt keine Lieder vom Kuenstler {0}.",
   "Welcome": "Willkommen bei Jellyfin Skill, was soll ich abspielen?",
   "WelcomeReprompt": "Bitte sag mir, was ich abspielen soll.",
+  "WelcomePersonalized": "Willkommen bei Jellyfin, {0}! Was soll ich abspielen?",
+  "WelcomePersonalizedSsml": "Willkommen bei Jellyfin, {0}!<break time=\"300ms\"/>Was soll ich abspielen?",
   "NowPlaying": "Jetzt laeuft: {0}",
   "NowPlayingWithPosition": "Jetzt laeuft: {0}. Position: {1}",
   "UnknownMedia": "Unbekannte Medien",

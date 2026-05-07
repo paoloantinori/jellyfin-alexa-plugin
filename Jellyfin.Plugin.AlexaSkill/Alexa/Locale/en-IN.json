@@ -27,6 +27,8 @@
   "NoSongsForArtist": "There are no songs with the artist {0}.",
   "Welcome": "Welcome to Jellyfin Skill, what can I play?",
   "WelcomeReprompt": "Please tell me, what should I play?",
+  "WelcomePersonalized": "Welcome to Jellyfin, {0}! What can I play?",
+  "WelcomePersonalizedSsml": "Welcome to Jellyfin, {0}!<break time=\"300ms\"/>What can I play?",
   "NowPlaying": "Now playing: {0}",
   "NowPlayingWithPosition": "Now playing: {0}. Position: {1}",
   "UnknownMedia": "Unknown media",

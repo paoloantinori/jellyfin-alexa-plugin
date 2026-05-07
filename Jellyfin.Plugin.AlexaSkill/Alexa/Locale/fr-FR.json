@@ -27,6 +27,8 @@
   "NoSongsForArtist": "Il n'y a aucune chanson de l'artiste {0}.",
   "Welcome": "Bienvenue dans la compétence Jellyfin, que puis-je lire ?",
   "WelcomeReprompt": "Dites-moi, que souhaitez-vous écouter ?",
+  "WelcomePersonalized": "Bienvenue sur Jellyfin, {0}! Que puis-je lire?",
+  "WelcomePersonalizedSsml": "Bienvenue sur Jellyfin, {0}!<break time=\"300ms\"/>Que puis-je lire?",
   "NowPlaying": "En cours de lecture : {0}",
   "NowPlayingWithPosition": "En cours de lecture : {0}. Position : {1}",
   "UnknownMedia": "Média inconnu",

@@ -209,14 +209,4 @@ public class SetReminderIntentHandler : BaseHandler
 
         return null;
     }
-
-    private static string EscapeXml(string text)
-    {
-        return text
-            .Replace("&", "&amp;", StringComparison.Ordinal)
-            .Replace("<", "&lt;", StringComparison.Ordinal)
-            .Replace(">", "&gt;", StringComparison.Ordinal)
-            .Replace("\"", "&quot;", StringComparison.Ordinal)
-            .Replace("'", "&apos;", StringComparison.Ordinal);
-    }
 }

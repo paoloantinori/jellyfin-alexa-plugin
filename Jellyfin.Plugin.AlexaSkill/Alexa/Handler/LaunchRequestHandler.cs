@@ -1,3 +1,5 @@
+using System;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
@@ -19,7 +21,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public class LaunchRequestHandler : BaseHandler
 {
-    private ILibraryManager _libraryManager;
+    private readonly ILibraryManager _libraryManager;
+    private readonly CustomerProfileService _profileService;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LaunchRequestHandler"/> class.
@@ -35,6 +38,7 @@ public class LaunchRequestHandler : BaseHandler
         ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
+        _profileService = new CustomerProfileService(loggerFactory.CreateLogger<CustomerProfileService>());
     }
 
     /// <inheritdoc/>
@@ -54,12 +58,21 @@ public class LaunchRequestHandler : BaseHandler
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
-        LaunchRequest launchRequest = (LaunchRequest)request;
 
         // check if we have any media in the queue
         if (session.NowPlayingQueue.Count == 0)
         {
-            string? welcomeSsml = GetSsml("WelcomeSsml", locale);
+            string? givenName = await _profileService.GetGivenNameAsync(context, cancellationToken).ConfigureAwait(false);
+
+            string welcomeText = !string.IsNullOrEmpty(givenName)
+                ? ResponseStrings.Get("WelcomePersonalized", locale, givenName!)
+                : ResponseStrings.Get("Welcome", locale);
+
+            string welcomeSsmlKey = !string.IsNullOrEmpty(givenName) ? "WelcomePersonalizedSsml" : "WelcomeSsml";
+            string? welcomeSsml = !string.IsNullOrEmpty(givenName)
+                ? string.Format(CultureInfo.InvariantCulture, ResponseStrings.Get(welcomeSsmlKey, locale), EscapeXml(givenName!))
+                : GetSsml("WelcomeSsml", locale);
+
             string? repromptSsml = GetSsml("WelcomeRepromptSsml", locale);
 
             if (welcomeSsml != null && repromptSsml != null)
@@ -68,7 +81,7 @@ public class LaunchRequestHandler : BaseHandler
             }
 
             return ResponseBuilder.Ask(
-                ResponseStrings.Get("Welcome", locale),
+                welcomeText,
                 new Reprompt(ResponseStrings.Get("WelcomeReprompt", locale)));
         }
 

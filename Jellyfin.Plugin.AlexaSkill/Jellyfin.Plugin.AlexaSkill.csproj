@@ -17,6 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Alexa.NET.Profile" Version="1.0.0" />
     <PackageReference Include="Alexa.NET.Reminders" Version="*" />
     <PackageReference Include="Jellyfin.Controller" Version="10.11.8">
       <ExcludeAssets>runtime</ExcludeAssets>

@@ -548,4 +548,17 @@ public abstract class BaseHandler
 
         return allResults;
     }
+
+    /// <summary>
+    /// Escapes special XML characters in text for safe inclusion in SSML.
+    /// </summary>
+    protected static string EscapeXml(string text)
+    {
+        return text
+            .Replace("&", "&amp;", StringComparison.Ordinal)
+            .Replace("<", "&lt;", StringComparison.Ordinal)
+            .Replace(">", "&gt;", StringComparison.Ordinal)
+            .Replace("\"", "&quot;", StringComparison.Ordinal)
+            .Replace("'", "&apos;", StringComparison.Ordinal);
+    }
 }
