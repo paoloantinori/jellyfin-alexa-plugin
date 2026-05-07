@@ -44,7 +44,8 @@ public class LaunchRequestHandler : BaseHandler
     /// <inheritdoc/>
     public override bool CanHandle(Request request)
     {
-        return request is LaunchRequest;
+        // Task-bearing LaunchRequests are handled by SkillConnectionHandler
+        return request is LaunchRequest { Task: null };
     }
 
     /// <summary>
