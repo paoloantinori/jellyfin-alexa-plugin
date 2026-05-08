@@ -44,7 +44,15 @@ jobs:
           cd Jellyfin.Plugin.AlexaSkill/bin/Release/net9.0/publish
           cp ${GITHUB_WORKSPACE}/Jellyfin.Plugin.AlexaSkill/icon.png .
           zip -j ${GITHUB_WORKSPACE}/AlexaSkill_${{ steps.version.outputs.VERSION }}.zip \
-            *.dll \
+            Alexa.NET.dll \
+            Alexa.NET.Management.dll \
+            Alexa.NET.ProactiveEvents.dll \
+            Alexa.NET.Profile.dll \
+            Alexa.NET.Reminders.dll \
+            Amazon.Lambda.Core.dll \
+            Amazon.Lambda.Serialization.Json.dll \
+            Jellyfin.Plugin.AlexaSkill.dll \
+            Refit.dll \
             icon.png
 
       - name: Create github release
