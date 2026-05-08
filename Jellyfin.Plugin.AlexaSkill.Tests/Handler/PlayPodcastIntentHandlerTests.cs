@@ -254,7 +254,7 @@ public class PlayPodcastIntentHandlerTests
             .Returns(new List<BaseItem> { podcast });
 
         _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Episode))))
-            .Returns(new List<BaseItem> { oldEpisode, newEpisode });
+            .Returns(new List<BaseItem> { newEpisode, oldEpisode });
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 

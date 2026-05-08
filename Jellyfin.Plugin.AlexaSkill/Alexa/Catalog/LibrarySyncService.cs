@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
+using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Controller;
 using MediaBrowser.Controller.Dto;
@@ -143,7 +144,8 @@ public class LibrarySyncService
             User = jellyfinUser,
             Recursive = true,
             IncludeItemTypes = new[] { itemKind },
-            DtoOptions = new DtoOptions(true)
+            DtoOptions = new DtoOptions(true),
+            OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) }
         });
 
         if (items.Count == 0)

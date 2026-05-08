@@ -8,6 +8,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
+using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
@@ -90,6 +91,7 @@ public class PlayByGenreIntentHandler : BaseHandler
             Limit = MaxQueryResults,
             Genres = new[] { genreSlot },
             IncludeItemTypes = new[] { BaseItemKind.Audio },
+            OrderBy = new[] { (ItemSortBy.Random, SortOrder.Ascending) },
             DtoOptions = new DtoOptions(true)
         };
 

@@ -9,6 +9,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Data.Enums;
+using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
@@ -145,6 +146,7 @@ public class BrowseLibraryIntentHandler : BaseHandler
             Recursive = true,
             IncludeItemTypes = new[] { itemType },
             Limit = MaxResults,
+            OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
             DtoOptions = new DtoOptions(true)
         };
 
@@ -179,6 +181,7 @@ public class BrowseLibraryIntentHandler : BaseHandler
             IncludeItemTypes = new[] { BaseItemKind.Audio, BaseItemKind.Movie },
             Genres = new[] { filter },
             Limit = MaxResults,
+            OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
             DtoOptions = new DtoOptions(true)
         };
 

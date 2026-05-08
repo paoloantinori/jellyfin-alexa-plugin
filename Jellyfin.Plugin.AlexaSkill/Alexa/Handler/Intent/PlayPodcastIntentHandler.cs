@@ -9,6 +9,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
+using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
@@ -106,6 +107,7 @@ public class PlayPodcastIntentHandler : BaseHandler
             IncludeItemTypes = new[] { BaseItemKind.Episode },
             AncestorIds = new[] { podcast.Id },
             MediaTypes = new[] { MediaType.Audio },
+            OrderBy = new[] { (ItemSortBy.DateCreated, SortOrder.Descending) },
             DtoOptions = new DtoOptions(true)
         };
 
@@ -118,7 +120,7 @@ public class PlayPodcastIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("NoEpisodesInPodcast", locale, podcast.Name));
         }
 
-        BaseItem episode = episodes.OrderByDescending(e => e.DateCreated).First();
+        BaseItem episode = episodes[0];
         string itemId = episode.Id.ToString();
 
         List<QueueItem> queueItems = new()
