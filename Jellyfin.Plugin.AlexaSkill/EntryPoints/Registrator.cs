@@ -69,7 +69,8 @@ public class Registrator : IPluginServiceRegistrator
 
         var handlerTypes = allTypes
             .Where(t => t.IsClass && !t.IsAbstract && t.IsSubclassOf(typeof(BaseHandler)))
-            .OrderBy(t => t.Name);
+            .OrderBy(t => t.Name == nameof(FallbackIntentHandler) ? 1 : 0)
+            .ThenBy(t => t.Name);
 
         foreach (var handlerType in handlerTypes)
         {

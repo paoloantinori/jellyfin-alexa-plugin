@@ -79,6 +79,12 @@ public class User
     public bool ProactiveEventsEnabled { get; set; }
 
     /// <summary>
+    /// Gets or sets the SMAPI vendor ID for the developer account.
+    /// Fetched from the Alexa Vendors API during startup and persisted.
+    /// </summary>
+    public string? VendorId { get; set; }
+
+    /// <summary>
     /// Gets or sets the SMAPI catalog ID for the user's artist library.
     /// Null if catalog has not been created yet.
     /// </summary>

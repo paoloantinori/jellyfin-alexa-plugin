@@ -27,7 +27,7 @@ public class LWAController : ControllerBase
 
     private readonly ILogger<LWAController> _logger;
 
-    private LwaAuthorizationRequestHandler lwaAuthorizationRequestHandler;
+    private readonly LwaAuthorizationRequestHandler lwaAuthorizationRequestHandler;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LWAController"/> class.
@@ -69,7 +69,7 @@ public class LWAController : ControllerBase
         string serverAddress = Plugin.Instance.Configuration.ServerAddress.TrimEnd('/');
         string redirectUri = $"{serverAddress}/{Config.LwaCallbackPath}";
 
-        string scope = $"{ScopeMethods.ScopeToString(Scope.SkillsReadWrite)} {ScopeMethods.ScopeToString(Scope.ModelsReadWrite)}";
+        string scope = $"{ScopeMethods.ScopeToString(Scope.SkillsReadWrite)} {ScopeMethods.ScopeToString(Scope.ModelsReadWrite)} {ScopeMethods.ScopeToString(Scope.CatalogsReadWrite)}";
 
         string authUrl = $"https://www.amazon.com/ap/oa?client_id={Uri.EscapeDataString(Plugin.Instance.Configuration.LwaClientId)}&scope={Uri.EscapeDataString(scope)}&response_type=code&redirect_uri={Uri.EscapeDataString(redirectUri)}&state={Uri.EscapeDataString(token)}";
 
@@ -135,42 +135,55 @@ public class LWAController : ControllerBase
             user.UserSkill = new UserSkill { InvocationName = Config.InvocationName };
         }
 
-        user.UserSkill.UserSkillStatus = UserSkillStatus.SkillCreating;
         Plugin.Instance!.SaveConfiguration();
         lwaAuthorizationRequestHandler.RemoveLwaAuthorizeRequest(state);
 
-        // Create the skill in background
-        _ = Task.Run(async () =>
+        // If the skill already exists, this is a re-authorization — just refresh the token
+        bool skillExists = !string.IsNullOrEmpty(user.UserSkill.SkillId);
+        if (skillExists)
         {
-            if (user.SmapiManagement == null)
+            _logger.LogInformation("Re-authorization completed for user {UserId}, token refreshed with updated scopes", user.Id);
+        }
+        else
+        {
+            user.UserSkill.UserSkillStatus = UserSkillStatus.SkillCreating;
+            Plugin.Instance!.SaveConfiguration();
+
+            // Create the skill in background
+            _ = Task.Run(async () =>
             {
-                _logger.LogError("SmapiManagement is null for user with id {UserId}", user.Id);
-                return;
-            }
+                if (user.SmapiManagement == null)
+                {
+                    _logger.LogError("SmapiManagement is null for user with id {UserId}", user.Id);
+                    return;
+                }
 
-            _logger.LogInformation("Creating skill for user with id {UserId}", user.Id);
-            Collection<SkillInteractionModel> skillInteractionModels = Plugin.Instance.BuildSkillInteractionModels(user.UserSkill.InvocationName);
+                _logger.LogInformation("Creating skill for user with id {UserId}", user.Id);
+                Collection<SkillInteractionModel> skillInteractionModels = Plugin.Instance.BuildSkillInteractionModels(user.UserSkill.InvocationName);
 
-            try
-            {
-                Uri endpointUri = new Uri(new Uri(configuration.ServerAddress), AlexaSkillController.ApiBaseUri);
-                string endpointUriString = new Uri(endpointUri, "account-linking").ToString();
+                try
+                {
+                    Uri endpointUri = new Uri(new Uri(configuration.ServerAddress), AlexaSkillController.ApiBaseUri);
+                    string endpointUriString = new Uri(endpointUri, "account-linking").ToString();
 
-                string skillId = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.CreateSkillAsync(
-                    Plugin.Instance.ManifestSkill!,
-                    skillInteractionModels,
-                    endpointUriString,
-                    configuration.AccountLinkingClientId)).ConfigureAwait(false);
+                    string skillId = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.CreateSkillAsync(
+                        Plugin.Instance.ManifestSkill!,
+                        skillInteractionModels,
+                        endpointUriString,
+                        configuration.AccountLinkingClientId)).ConfigureAwait(false);
 
-                user.UserSkill.SkillId = skillId;
-                user.UserSkill.UserSkillStatus = UserSkillStatus.AccountLinkPending;
-                Plugin.Instance!.SaveConfiguration();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error creating skill for user {UserId}", user.Id);
-            }
-        });
+                    user.UserSkill.SkillId = skillId;
+                    user.UserSkill.UserSkillStatus = UserSkillStatus.AccountLinkPending;
+                    Plugin.Instance!.SaveConfiguration();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error creating skill for user {UserId}", user.Id);
+                    user.UserSkill.UserSkillStatus = UserSkillStatus.LwaAuthPending;
+                    Plugin.Instance!.SaveConfiguration();
+                }
+            });
+        }
 
         // Return success page
         var assembly = typeof(Util).Assembly;

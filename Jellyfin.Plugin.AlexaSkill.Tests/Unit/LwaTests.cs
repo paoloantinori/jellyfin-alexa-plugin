@@ -40,6 +40,8 @@ public class ScopeTests
     [InlineData(Scope.SkillsReadWrite, "alexa::ask:skills:readwrite")]
     [InlineData(Scope.ModelsRead, "alexa::ask:models:read")]
     [InlineData(Scope.ModelsReadWrite, "alexa::ask:models:readwrite")]
+    [InlineData(Scope.CatalogsRead, "alexa::ask:catalogs:read")]
+    [InlineData(Scope.CatalogsReadWrite, "alexa::ask:catalogs:readwrite")]
     public void ScopeToString_ReturnsCorrectString(Scope scope, string expected)
     {
         Assert.Equal(expected, ScopeMethods.ScopeToString(scope));

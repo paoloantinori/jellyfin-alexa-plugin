@@ -64,7 +64,7 @@ public class FallbackIntentHandlerTests
     }
 
     [Fact]
-    public void CanHandle_RepeatIntent_ReturnsTrue()
+    public void CanHandle_RepeatIntent_ReturnsFalse()
     {
         var handler = CreateHandler();
         var request = new IntentRequest
@@ -73,11 +73,11 @@ public class FallbackIntentHandlerTests
             RequestId = "test-req"
         };
 
-        Assert.True(handler.CanHandle(request));
+        Assert.False(handler.CanHandle(request));
     }
 
     [Fact]
-    public void CanHandle_OtherAmazonIntent_ReturnsTrue()
+    public void CanHandle_OtherAmazonIntent_ReturnsFalse()
     {
         var handler = CreateHandler();
         var request = new IntentRequest
@@ -86,7 +86,7 @@ public class FallbackIntentHandlerTests
             RequestId = "test-req"
         };
 
-        Assert.True(handler.CanHandle(request));
+        Assert.False(handler.CanHandle(request));
     }
 
     [Fact]

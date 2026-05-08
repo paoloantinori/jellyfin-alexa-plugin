@@ -12,10 +12,10 @@ public static class Config
 
     /// <summary>
     /// The default invocation name of the Alexa skill.
-    /// Amazon requires at least two words (e.g. "jelly fin").
+    /// Amazon requires at least two words (e.g. "jellyfin player").
     /// Each user can override this with their own invocation name.
     /// </summary>
-    public const string InvocationName = "jelly fin";
+    public const string InvocationName = "jellyfin player";
 
     /// <summary>
     /// Length of the CSRF token.

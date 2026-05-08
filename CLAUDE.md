@@ -61,6 +61,8 @@ Env vars: `ASK_SKILL_ID`, `SMAPI_DELAY` (default 1.5s), `SMAPI_TIMEOUT`.
 
 ### E2E Tests
 
+E2E tests use SMAPI `simulate-skill` (full Alexa pipeline including NLU + skill execution) rather than `profile-nlu` (NLU-only). The `smapi_client.py` automatically prefixes utterances with locale-aware invocation patterns (e.g. `"chiedi a jellyfin player di ..."` for it-IT).
+
 ```bash
 ./scripts/run_e2e_tests.sh                                         # requires live Jellyfin
 ./scripts/run_e2e_tests.sh --dry-run                               # validate fixtures only
@@ -68,6 +70,10 @@ Env vars: `ASK_SKILL_ID`, `SMAPI_DELAY` (default 1.5s), `SMAPI_TIMEOUT`.
 
 E2E tests are auto-skipped without Jellyfin connection. Provide via CLI flags or env vars:
 `--jellyfin-url` / `JELLYFIN_URL`, `--jellyfin-api-key` / `JELLYFIN_API_KEY`, `--jellyfin-user` / `JELLYFIN_USER`
+
+**E2E fixture files**: `tests/integration/fixtures/e2e_*.yaml` (e.g. `e2e_en-US.yaml`, `e2e_it-IT.yaml`). Each fixture requires `locale`, `invocation_name`, and a `tests` list with `utterance`, `expected_intent`, `expected_slots`, and `expected_response_type`.
+
+**Important**: `simulate-skill` routes through Alexa's full NLU which competes with built-in Amazon skills. en-US E2E tests are unreliable for this reason — prefer it-IT for simulate-skill testing. Use `expected_response_type: any` since SMAPI simulate-skill does not reliably return skill execution payload (outputSpeech/directives).
 
 ## Key Gotchas
 

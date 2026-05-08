@@ -1,0 +1,94 @@
+[sandbox]
+extra_rw = [
+    "~/.cache/firebase",
+    "~/.cache/pip",
+    "~/.npm",
+    "~/.cc-mirror/zai/config",
+    "~/.config/configstore",
+    "~/.dotnet",
+    "~/.google_workspace_mcp",
+    "~/.local/share/gvfs-metadata",
+    "~/.local/share/keyrings",
+    "~/.serena",
+    "~/.ask",
+]
+ro_dirs = [
+    "~/project",
+    "~/claude",
+]
+persist_toolchains = true
+auto_expose_path = true
+home_ro_dirs = [
+    ".config/gcloud",
+]
+default_profile = ""
+backend = "auto"
+
+[claude]
+config_dir = "~/.agent-sandbox/claude-config"
+use_real_config = false
+
+[agents.claude]
+command = "claude"
+default_args = ["--dangerously-skip-permissions"]
+
+[agents.zai]
+command = "zai"
+default_args = ["--dangerously-skip-permissions"]
+home_rw_dirs = [
+    ".cc-mirror/zai/config",
+]
+home_ro_dirs = [
+    ".cc-mirror/zai/native",
+]
+
+[git]
+strip_sections = [
+    "credential",
+    "url \".*\"",
+]
+
+[git.overrides]
+"push.default" = "nothing"
+"credential.helper" = "!/usr/bin/gh auth git-credential"
+
+[env]
+passthrough = [
+    "TERM",
+    "COLORTERM",
+    "TERM_PROGRAM",
+    "LANG",
+    "LC_ALL",
+    "EDITOR",
+    "VISUAL",
+    "ZELLIJ",
+    "ZELLIJ_SESSION_NAME",
+    "LINCE_AGENT_ID",
+    "GITHUB_TOKEN",
+    "GH_TOKEN",
+]
+
+[logging]
+enabled = false
+dir = "~/.agent-sandbox/logs"
+
+[snapshot]
+auto_project = false
+auto_config = true
+max_project_snapshots = 3
+max_config_snapshots = 5
+project_exclude = [
+    ".git",
+    "node_modules",
+    "target",
+    "__pycache__",
+    ".venv",
+    "build",
+    "dist",
+]
+
+[security]
+unshare_pid = true
+new_session = false
+block_git_push = false
+credential_proxy = false

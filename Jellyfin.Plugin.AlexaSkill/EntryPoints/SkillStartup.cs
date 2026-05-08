@@ -135,6 +135,21 @@ public class SkillStartup : IHostedService, IDisposable
                         }
                     }
 
+                    // Fetch and persist SMAPI vendor ID if missing
+                    if (string.IsNullOrEmpty(user.VendorId) && user.SmapiManagement != null)
+                    {
+                        try
+                        {
+                            user.VendorId = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.GetVendorIdAsync()).ConfigureAwait(false);
+                            Plugin.Instance.SaveConfiguration();
+                            _logger.LogInformation("Persisted vendor ID {VendorId} for user {UserId}", user.VendorId, user.Id);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Failed to fetch vendor ID for user {UserId}. Catalog sync will be unavailable.", user.Id);
+                        }
+                    }
+
                     if (user.UserSkill != null)
                     {
                         Collection<SkillInteractionModel> skillInteractionModels = Plugin.Instance.BuildSkillInteractionModels(user.UserSkill.InvocationName);

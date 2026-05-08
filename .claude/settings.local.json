@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"jf-[0-9]+.*\\\\.md$\")",
+      "mcp__tavily2__tavily_search",
+      "mcp__tavily2__tavily_extract",
+      "mcp__backlog__get_backlog_instructions",
+      "mcp__backlog__task_search",
+      "mcp__backlog__task_create",
+      "mcp__backlog__task_archive",
+      "mcp__backlog__task_edit",
+      "Bash(ask --version)",
+      "mcp__backlog__task_view",
+      "Bash(dotnet test *)",
+      "Bash(./scripts/run_nlu_tests.sh *)",
+      "Bash(ask smapi *)",
+      "Bash(git add *)",
+      "Bash(git push *)",
+      "Bash(python3 -c \"import sys,json; c=json.load\\(sys.stdin\\); print\\('profiles:', list\\(c.get\\('profiles',{}\\).keys\\(\\)\\)\\); print\\('skill_id:', [v.get\\('skill_id',''\\) for v in c.get\\('profiles',{}\\).values\\(\\)]\\)\")"
+    ]
+  }
+}

@@ -3,10 +3,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
+using Jellyfin.Plugin.AlexaSkill.Controller;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -23,10 +25,6 @@ public class LibrarySyncService
     private const int MaxCatalogValues = 50000;
     private const string DevelopmentStage = "development";
     private const string ItalianLocale = "it-IT";
-    private const string ArtistSlotType = "JELLYFIN_ARTIST";
-    private const string AlbumSlotType = "JELLYFIN_ALBUM";
-
-    private static readonly Dictionary<CatalogType, string> SlotTypeSignatures = CatalogSlotTypes.Names;
 
     private readonly ILibraryManager _libraryManager;
     private readonly CatalogManager _catalogManager;
@@ -69,14 +67,14 @@ public class LibrarySyncService
             return result;
         }
 
-        if (string.IsNullOrEmpty(user.SmapiDeviceToken.VendorId))
+        if (string.IsNullOrEmpty(user.VendorId))
         {
             _logger.LogWarning("Skipping catalog sync for user {UserId}: no vendor ID configured", user.Id);
             return result;
         }
 
         string accessToken = user.SmapiDeviceToken.AccessToken;
-        string vendorId = user.SmapiDeviceToken.VendorId;
+        string vendorId = user.VendorId;
 
         // Sync artists and albums in parallel
         var artistTask = SyncCatalogAsync(
@@ -97,18 +95,37 @@ public class LibrarySyncService
 
         await Task.WhenAll(artistTask, albumTask).ConfigureAwait(false);
 
-        result.ArtistCount = await artistTask.ConfigureAwait(false);
-        result.AlbumCount = await albumTask.ConfigureAwait(false);
+        var artistResult = await artistTask.ConfigureAwait(false);
+        var albumResult = await albumTask.ConfigureAwait(false);
+
+        result.ArtistCount = artistResult.Count;
+        result.AlbumCount = albumResult.Count;
         result.Success = true;
         result.SyncTime = DateTime.UtcNow;
 
-        _logger.LogInformation("Catalog sync completed for user {UserId}: {Artists} artists, {Albums} albums",
-            user.Id, result.ArtistCount, result.AlbumCount);
+        _logger.LogInformation("Catalog sync completed for user {UserId}: {Artists} artists (v{ArtistVer}), {Albums} albums (v{AlbumVer})",
+            user.Id, result.ArtistCount, artistResult.Version, result.AlbumCount, albumResult.Version);
+
+        if (result.ArtistCount > 0 || result.AlbumCount > 0)
+        {
+            try
+            {
+                await _catalogManager.UpdateInteractionModelAsync(
+                    accessToken, user.UserSkill!.SkillId!, DevelopmentStage, ItalianLocale,
+                    user.ArtistCatalogId, user.AlbumCatalogId,
+                    artistResult.Version, albumResult.Version,
+                    cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to update interaction model for skill {SkillId}", user.UserSkill!.SkillId);
+            }
+        }
 
         return result;
     }
 
-    private async Task<int> SyncCatalogAsync(
+    private async Task<(int Count, string? Version)> SyncCatalogAsync(
         Entities.User user,
         Jellyfin.Database.Implementations.Entities.User jellyfinUser,
         string accessToken,
@@ -132,7 +149,7 @@ public class LibrarySyncService
         if (items.Count == 0)
         {
             _logger.LogInformation("No {Type} items found in library for user {UserId}", catalogType, user.Id);
-            return 0;
+            return (0, null);
         }
 
         // Limit items before generating synonyms to avoid wasted work
@@ -153,11 +170,9 @@ public class LibrarySyncService
 
         if (string.IsNullOrEmpty(existingCatalogId))
         {
-            string slotTypeSignature = SlotTypeSignatures[catalogType];
-
             catalogId = await _catalogManager.CreateCatalogAsync(
                 accessToken, vendorId, catalogName, catalogDescription,
-                slotTypeSignature, cancellationToken).ConfigureAwait(false);
+                cancellationToken).ConfigureAwait(false);
 
             if (catalogType == CatalogType.Artist)
             {
@@ -173,31 +188,17 @@ public class LibrarySyncService
             catalogId = existingCatalogId;
         }
 
-        // Upload values
-        string version = await _catalogManager.UploadCatalogValuesAsync(
-            accessToken, catalogId, payload, cancellationToken).ConfigureAwait(false);
+        // Store payload for SMAPI to pull, then create version
+        string payloadJson = JsonSerializer.Serialize(payload, CatalogManager.JsonOptions);
+        string cacheKey = CatalogController.StorePayload(payloadJson);
 
-        // Create or update slot type referencing the catalog
-        string slotTypeName = catalogType == CatalogType.Artist ? ArtistSlotType : AlbumSlotType;
-        await _catalogManager.CreateOrUpdateSlotTypeAsync(
-            accessToken, vendorId, slotTypeName, catalogId, cancellationToken).ConfigureAwait(false);
+        string serverAddress = Plugin.Instance!.Configuration.ServerAddress.TrimEnd('/');
+        string catalogUrl = $"{serverAddress}/alexaskill/catalog/{cacheKey}";
 
-        // Trigger model update for Italian locale
-        if (user.UserSkill?.SkillId != null)
-        {
-            try
-            {
-                await _catalogManager.TriggerModelUpdateAsync(
-                    accessToken, user.UserSkill.SkillId, DevelopmentStage, ItalianLocale,
-                    catalogId, version, cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to trigger model update for catalog {CatalogId}", catalogId);
-            }
-        }
+        string catalogVersion = await _catalogManager.UploadCatalogValuesAsync(
+            accessToken, catalogId, payload, catalogUrl, cancellationToken).ConfigureAwait(false);
 
-        return payload.Values.Count;
+        return (payload.Values.Count, catalogVersion);
     }
 
     /// <summary>

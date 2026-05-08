@@ -1,11 +1,14 @@
 #nullable enable
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,7 +29,7 @@ public class CatalogManager
 
     private const string SmapiEndpoint = "https://api.amazonalexa.com";
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    internal static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
@@ -50,9 +53,6 @@ public class CatalogManager
     /// <param name="vendorId">The vendor ID for the skill owner.</param>
     /// <param name="catalogName">A human-readable name for the catalog.</param>
     /// <param name="description">A description for the catalog.</param>
-    /// <param name="slotTypeSignature">
-    /// The slot type signature this catalog backs (e.g. "AMAZON.Musician" or a custom type name).
-    /// </param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The created catalog ID.</returns>
     public async Task<string> CreateCatalogAsync(
@@ -60,22 +60,20 @@ public class CatalogManager
         string vendorId,
         string catalogName,
         string description,
-        string slotTypeSignature,
         CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Creating SMAPI catalog '{CatalogName}' with slot type signature '{SlotTypeSignature}'",
-            catalogName, slotTypeSignature);
+        _logger.LogInformation("Creating SMAPI catalog '{CatalogName}' for vendor {VendorId}",
+            catalogName, vendorId);
 
         var client = _httpClientFactory.CreateClient("AlexaSkill");
 
         var body = new
         {
+            vendorId,
             catalog = new
             {
                 name = catalogName,
-                description,
-                slotTypeSignature,
-                vendorId
+                description
             }
         };
 
@@ -91,7 +89,7 @@ public class CatalogManager
         string json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         using var doc = JsonDocument.Parse(json);
 
-        string catalogId = doc.RootElement.GetProperty("catalog").GetProperty("id").GetString()
+        string catalogId = doc.RootElement.GetProperty("catalogId").GetString()
             ?? throw new InvalidOperationException($"Catalog creation response missing catalog ID. Response: {json}");
 
         _logger.LogInformation("Catalog created successfully: {CatalogId}", catalogId);
@@ -99,28 +97,34 @@ public class CatalogManager
     }
 
     /// <summary>
-    /// Uploads a set of values to a catalog via the presigned-URL flow.
-    /// SMAPI flow: create version -> get upload URL -> PUT JSON -> commit version.
+    /// Creates a catalog version by providing a hosted URL for SMAPI to pull.
+    /// SMAPI flow: store payload in cache -> create version with source URL -> poll status.
     /// </summary>
     /// <param name="accessToken">The SMAPI access token.</param>
     /// <param name="catalogId">The target catalog ID.</param>
     /// <param name="payload">The catalog values payload to upload.</param>
+    /// <param name="catalogUrl">The public URL where SMAPI can fetch the catalog JSON.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The committed version string.</returns>
     public async Task<string> UploadCatalogValuesAsync(
         string accessToken,
         string catalogId,
         CatalogPayload payload,
+        string catalogUrl,
         CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Uploading {ValueCount} values to catalog {CatalogId}",
-            payload.Values.Count, catalogId);
+        _logger.LogInformation("Creating catalog version for {CatalogId} with {ValueCount} values from {Url}",
+            catalogId, payload.Values.Count, catalogUrl);
 
         var client = _httpClientFactory.CreateClient("AlexaSkill");
 
-        // Step 1: Create a new catalog version to get the presigned upload URL
         var versionBody = new
         {
+            source = new
+            {
+                type = "URL",
+                url = catalogUrl
+            },
             description = $"Library sync {DateTime.UtcNow:O}"
         };
 
@@ -133,73 +137,49 @@ public class CatalogManager
         using var versionResponse = await client.SendAsync(versionRequest, cancellationToken).ConfigureAwait(false);
         await EnsureSuccessAsync(versionResponse, cancellationToken).ConfigureAwait(false);
 
-        string versionJson = await versionResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        using var versionDoc = JsonDocument.Parse(versionJson);
-
-        string? uploadUrl = versionDoc.RootElement.GetProperty("uploadUrl").GetString();
-        string version = versionDoc.RootElement.GetProperty("version").GetString() ?? "1";
-
-        if (string.IsNullOrEmpty(uploadUrl))
+        // 202 Accepted with Location header for polling
+        Uri? locationUri = versionResponse.Headers.Location;
+        if (locationUri == null)
         {
-            throw new InvalidOperationException(
-                $"Catalog version creation returned no upload URL. Response: {versionJson}");
+            _logger.LogWarning("Catalog version creation returned no Location header");
+            return "1";
         }
 
-        _logger.LogDebug("Created catalog version {Version}, uploading to presigned URL", version);
+        locationUri = ResolveLocationUri(locationUri);
 
-        // Step 2: Upload the catalog JSON to the presigned URL
-        string payloadJson = JsonSerializer.Serialize(payload, JsonOptions);
-        using var uploadRequest = new HttpRequestMessage(HttpMethod.Put, uploadUrl);
-        uploadRequest.Content = new StringContent(payloadJson, Encoding.UTF8, "application/json");
+        string? version = await PollSmapiOperationAsync(
+            accessToken, client, locationUri, "Catalog version", cancellationToken).ConfigureAwait(false);
 
-        using var uploadResponse = await client.SendAsync(uploadRequest, cancellationToken).ConfigureAwait(false);
-        await EnsureSuccessAsync(uploadResponse, cancellationToken).ConfigureAwait(false);
-
-        _logger.LogDebug("Upload complete, committing version {Version}", version);
-
-        // Step 3: Commit the version
-        using var commitRequest = new HttpRequestMessage(
-            HttpMethod.Post,
-            $"{SmapiEndpoint}/v1/skills/api/custom/interactionModel/catalogs/{catalogId}/versions/{version}");
-        commitRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-
-        using var commitResponse = await client.SendAsync(commitRequest, cancellationToken).ConfigureAwait(false);
-        await EnsureSuccessAsync(commitResponse, cancellationToken).ConfigureAwait(false);
-
-        _logger.LogInformation("Catalog {CatalogId} version {Version} committed successfully", catalogId, version);
+        _logger.LogInformation("Catalog {CatalogId} version {Version} created successfully", catalogId, version);
         return version;
     }
 
     /// <summary>
-    /// Creates a custom slot type backed by a catalog.
-    /// The slot type will be dynamically populated from the catalog values.
+    /// Creates a new slot type entity in SMAPI.
+    /// Step 1 of the 3-step slot type process: create the entity, then create a version.
     /// </summary>
     /// <param name="accessToken">The SMAPI access token.</param>
     /// <param name="vendorId">The vendor ID for the skill owner.</param>
     /// <param name="slotTypeName">The name for the new slot type (e.g. "JELLYFIN_ARTIST").</param>
-    /// <param name="catalogId">The catalog ID that supplies values.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    public async Task CreateSlotTypeAsync(
+    /// <returns>The created slot type ID.</returns>
+    public async Task<string> CreateSlotTypeAsync(
         string accessToken,
         string vendorId,
         string slotTypeName,
-        string catalogId,
         CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Creating slot type '{SlotTypeName}' referencing catalog {CatalogId}",
-            slotTypeName, catalogId);
+        _logger.LogInformation("Creating slot type entity '{SlotTypeName}'", slotTypeName);
 
         var client = _httpClientFactory.CreateClient("AlexaSkill");
 
         var body = new
         {
+            vendorId,
             slotType = new
             {
                 name = slotTypeName,
-                vendorId,
-                values = Array.Empty<object>(),
-                catalogValueSupplier = new { catalogId }
+                description = $"Dynamic slot type for {slotTypeName}"
             }
         };
 
@@ -212,27 +192,34 @@ public class CatalogManager
         using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
         await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
 
-        _logger.LogInformation("Slot type '{SlotTypeName}' created successfully", slotTypeName);
+        string json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(json);
+
+        string slotTypeId = doc.RootElement.GetProperty("slotType").GetProperty("id").GetString()
+            ?? throw new InvalidOperationException($"Slot type creation response missing slotType.id. Response: {json}");
+
+        _logger.LogInformation("Slot type '{SlotTypeName}' created with ID {SlotTypeId}", slotTypeName, slotTypeId);
+        return slotTypeId;
     }
 
     /// <summary>
-    /// Updates an existing slot type to reference a catalog.
+    /// Creates a new version of a slot type backed by a catalog.
+    /// Step 2 of the 3-step slot type process: the version binds the slot type to catalog values.
     /// </summary>
     /// <param name="accessToken">The SMAPI access token.</param>
-    /// <param name="slotTypeName">The name of the existing slot type to update.</param>
+    /// <param name="slotTypeId">The slot type ID (from CreateSlotTypeAsync or GetSlotTypeAsync).</param>
     /// <param name="catalogId">The catalog ID that supplies values.</param>
-    /// <param name="etag">Optional ETag for optimistic concurrency control.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
-    public async Task UpdateSlotTypeAsync(
+    public async Task CreateSlotTypeVersionAsync(
         string accessToken,
-        string slotTypeName,
+        string slotTypeId,
         string catalogId,
-        string? etag,
+        string catalogVersion,
         CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Updating slot type '{SlotTypeName}' to reference catalog {CatalogId}",
-            slotTypeName, catalogId);
+        _logger.LogInformation("Creating slot type version for {SlotTypeId} referencing catalog {CatalogId} version {Version}",
+            slotTypeId, catalogId, catalogVersion);
 
         var client = _httpClientFactory.CreateClient("AlexaSkill");
 
@@ -240,87 +227,96 @@ public class CatalogManager
         {
             slotType = new
             {
-                name = slotTypeName,
-                values = Array.Empty<object>(),
-                catalogValueSupplier = new { catalogId }
-            }
-        };
-
-        using var request = new HttpRequestMessage(
-            HttpMethod.Put,
-            $"{SmapiEndpoint}/v1/skills/api/custom/interactionModel/slotTypes/{slotTypeName}");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-
-        if (!string.IsNullOrEmpty(etag))
-        {
-            request.Headers.IfMatch.Add(new EntityTagHeaderValue($"\"{etag}\""));
-        }
-
-        request.Content = JsonContent.Create(body, options: JsonOptions);
-
-        using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
-
-        _logger.LogInformation("Slot type '{SlotTypeName}' updated successfully", slotTypeName);
-    }
-
-    /// <summary>
-    /// Triggers an interaction model update after a catalog version change.
-    /// This propagates catalog updates to the skill's interaction model so
-    /// the new values are available for NLU resolution.
-    /// </summary>
-    /// <param name="accessToken">The SMAPI access token.</param>
-    /// <param name="skillId">The skill ID whose model should be updated.</param>
-    /// <param name="stage">The skill stage (e.g. "development").</param>
-    /// <param name="locale">The locale to update (e.g. "en-US").</param>
-    /// <param name="catalogId">The catalog ID that was updated.</param>
-    /// <param name="version">The new catalog version.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    public async Task TriggerModelUpdateAsync(
-        string accessToken,
-        string skillId,
-        string stage,
-        string locale,
-        string catalogId,
-        string version,
-        CancellationToken cancellationToken)
-    {
-        _logger.LogInformation(
-            "Triggering interaction model update for skill {SkillId}, stage {Stage}, locale {Locale}, " +
-            "catalog {CatalogId} version {Version}",
-            skillId, stage, locale, catalogId, version);
-
-        var client = _httpClientFactory.CreateClient("AlexaSkill");
-
-        var body = new
-        {
-            update = new
-            {
-                type = "ReferencedResourceVersionUpdate",
-                @params = new
+                definition = new
                 {
-                    catalogId,
-                    version
+                    valueSupplier = new
+                    {
+                        type = "CatalogValueSupplier",
+                        valueCatalog = new { catalogId, version = catalogVersion }
+                    }
                 }
             }
         };
 
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
-            $"{SmapiEndpoint}/v1/skills/{skillId}/stages/{stage}/interactionModel/locales/{locale}/update");
+            $"{SmapiEndpoint}/v1/skills/api/custom/interactionModel/slotTypes/{slotTypeId}/versions");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         request.Content = JsonContent.Create(body, options: JsonOptions);
 
         using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
         await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
 
-        _logger.LogInformation("Model update triggered successfully for skill {SkillId} locale {Locale}",
-            skillId, locale);
+        // 202 Accepted with Location header for polling
+        Uri? locationUri = response.Headers.Location;
+        if (locationUri == null)
+        {
+            _logger.LogWarning("Slot type version creation returned no Location header, assuming success");
+            return;
+        }
+
+        locationUri = ResolveLocationUri(locationUri);
+
+        await PollSmapiOperationAsync(
+            accessToken, client, locationUri, "Slot type version", cancellationToken).ConfigureAwait(false);
+
+        _logger.LogInformation("Slot type version for {SlotTypeId} created successfully", slotTypeId);
     }
 
     /// <summary>
-    /// Creates a slot type, or updates it if it already exists (HTTP 409).
+    /// Gets an existing slot type by name, returning its slotTypeId.
+    /// Used when the slot type already exists (409 conflict on create).
+    /// </summary>
+    /// <param name="accessToken">The SMAPI access token.</param>
+    /// <param name="vendorId">The vendor ID.</param>
+    /// <param name="slotTypeName">The slot type name to look up.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The slot type ID.</returns>
+    public async Task<string> GetSlotTypeIdAsync(
+        string accessToken,
+        string vendorId,
+        string slotTypeName,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Looking up slot type '{SlotTypeName}' via list endpoint", slotTypeName);
+
+        var client = _httpClientFactory.CreateClient("AlexaSkill");
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"{SmapiEndpoint}/v1/skills/api/custom/interactionModel/slotTypes?vendorId={Uri.EscapeDataString(vendorId)}&maxResults=50");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
+
+        string json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(json);
+
+        if (!doc.RootElement.TryGetProperty("slotTypes", out var slotTypes))
+        {
+            throw new InvalidOperationException($"Slot type list response missing 'slotTypes'. Response: {json}");
+        }
+
+        foreach (var st in slotTypes.EnumerateArray())
+        {
+            string? name = st.TryGetProperty("name", out var nameEl) ? nameEl.GetString() : null;
+            if (name == slotTypeName)
+            {
+                string slotTypeId = st.GetProperty("id").GetString()
+                    ?? throw new InvalidOperationException($"Slot type entry missing id. Response: {json}");
+
+                _logger.LogInformation("Found slot type '{SlotTypeName}' with ID {SlotTypeId}", slotTypeName, slotTypeId);
+                return slotTypeId;
+            }
+        }
+
+        throw new InvalidOperationException($"Slot type '{slotTypeName}' not found in vendor's slot types. Response: {json}");
+    }
+
+    /// <summary>
+    /// Creates a slot type with catalog-backed values, or updates it if it already exists.
+    /// Implements the full 3-step SMAPI process: create entity → create version with CatalogValueSupplier.
     /// </summary>
     /// <param name="accessToken">The SMAPI access token.</param>
     /// <param name="vendorId">The vendor ID for the skill owner.</param>
@@ -332,19 +328,270 @@ public class CatalogManager
         string vendorId,
         string slotTypeName,
         string catalogId,
+        string catalogVersion,
         CancellationToken cancellationToken)
     {
+        string slotTypeId;
+
         try
         {
-            await CreateSlotTypeAsync(accessToken, vendorId, slotTypeName, catalogId, cancellationToken)
+            slotTypeId = await CreateSlotTypeAsync(accessToken, vendorId, slotTypeName, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
         {
-            _logger.LogInformation("Slot type '{SlotTypeName}' already exists, updating instead", slotTypeName);
-            await UpdateSlotTypeAsync(accessToken, slotTypeName, catalogId, null, cancellationToken)
+            _logger.LogInformation("Slot type '{SlotTypeName}' already exists, looking up ID", slotTypeName);
+            slotTypeId = await GetSlotTypeIdAsync(accessToken, vendorId, slotTypeName, cancellationToken)
                 .ConfigureAwait(false);
         }
+
+        await CreateSlotTypeVersionAsync(accessToken, slotTypeId, catalogId, catalogVersion, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Updates the interaction model to reference the artist and album catalogs.
+    /// Uses GET-modify-PUT: fetches the current model, injects catalog-backed
+    /// slot type definitions, and pushes the modified model back.
+    /// This replaces the broken POST /update incremental endpoint.
+    /// </summary>
+    /// <param name="accessToken">The SMAPI access token.</param>
+    /// <param name="skillId">The skill ID whose model should be updated.</param>
+    /// <param name="stage">The skill stage (e.g. "development").</param>
+    /// <param name="locale">The locale to update (e.g. "it-IT").</param>
+    /// <param name="artistCatalogId">The artist catalog ID (may be null).</param>
+    /// <param name="albumCatalogId">The album catalog ID (may be null).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    public async Task UpdateInteractionModelAsync(
+        string accessToken,
+        string skillId,
+        string stage,
+        string locale,
+        string? artistCatalogId,
+        string? albumCatalogId,
+        string? artistCatalogVersion,
+        string? albumCatalogVersion,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(artistCatalogId) && string.IsNullOrEmpty(albumCatalogId))
+        {
+            _logger.LogInformation("No catalogs to inject into interaction model, skipping update");
+            return;
+        }
+
+        var client = _httpClientFactory.CreateClient("AlexaSkill");
+        string modelUrl = $"{SmapiEndpoint}/v1/skills/{skillId}/stages/{stage}/interactionModel/locales/{locale}";
+
+        _logger.LogInformation("Fetching interaction model for skill {SkillId} locale {Locale}", skillId, locale);
+
+        using var getRequest = new HttpRequestMessage(HttpMethod.Get, modelUrl);
+        getRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var getResponse = await client.SendAsync(getRequest, cancellationToken).ConfigureAwait(false);
+        await EnsureSuccessAsync(getResponse, cancellationToken).ConfigureAwait(false);
+
+        string modelJson = await getResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+        string modifiedJson = InjectCatalogReferences(modelJson, artistCatalogId, albumCatalogId, artistCatalogVersion, albumCatalogVersion);
+
+        _logger.LogInformation("Pushing updated interaction model for skill {SkillId} locale {Locale}", skillId, locale);
+
+        using var putRequest = new HttpRequestMessage(HttpMethod.Put, modelUrl);
+        putRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        putRequest.Content = new StringContent(modifiedJson, Encoding.UTF8, "application/json");
+
+        using var putResponse = await client.SendAsync(putRequest, cancellationToken).ConfigureAwait(false);
+        await EnsureSuccessAsync(putResponse, cancellationToken).ConfigureAwait(false);
+
+        _logger.LogInformation("Interaction model update submitted for skill {SkillId} locale {Locale}", skillId, locale);
+    }
+
+    /// <summary>
+    /// Injects catalog-backed slot type definitions into the interaction model.
+    /// Uses JsonNode for efficient in-place mutation without serialize/deserialize round-trips.
+    /// </summary>
+    internal string InjectCatalogReferences(string modelJson, string? artistCatalogId, string? albumCatalogId, string? artistCatalogVersion, string? albumCatalogVersion)
+    {
+        JsonNode? root = JsonNode.Parse(modelJson);
+        if (root == null)
+        {
+            return modelJson;
+        }
+
+        var lmNode = root["interactionModel"]?["languageModel"] as JsonObject;
+        if (lmNode == null)
+        {
+            _logger.LogWarning("Interaction model has unexpected structure, skipping catalog injection");
+            return modelJson;
+        }
+
+        var typesArray = lmNode["types"] as JsonArray;
+        if (typesArray == null)
+        {
+            typesArray = new JsonArray();
+            lmNode["types"] = typesArray;
+        }
+
+        var catalogMappings = new List<(string CatalogId, string Version, string SlotTypeName, string? ReplacesType)>();
+        if (!string.IsNullOrEmpty(artistCatalogId))
+        {
+            catalogMappings.Add((artistCatalogId!, artistCatalogVersion ?? "1",
+                CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Artist],
+                CatalogSlotTypes.Names[CatalogType.Artist]));
+        }
+
+        if (!string.IsNullOrEmpty(albumCatalogId))
+        {
+            catalogMappings.Add((albumCatalogId!, albumCatalogVersion ?? "1",
+                CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Album],
+                null));
+        }
+
+        _logger.LogInformation("Injecting {Count} catalog references into interaction model ({SlotTypes})",
+            catalogMappings.Count, string.Join(", ", catalogMappings.Select(m => m.SlotTypeName)));
+
+        foreach (var (catalogId, catalogVersion, slotTypeName, replacesType) in catalogMappings)
+        {
+            int existingIndex = Enumerable.Range(0, typesArray.Count)
+                .FirstOrDefault(i => typesArray[i]?["name"]?.GetValue<string>() == slotTypeName, -1);
+
+            var catalogType = new JsonObject
+            {
+                ["name"] = slotTypeName,
+                ["valueSupplier"] = new JsonObject
+                {
+                    ["type"] = "CatalogValueSupplier",
+                    ["valueCatalog"] = new JsonObject
+                    {
+                        ["catalogId"] = catalogId,
+                        ["version"] = catalogVersion
+                    }
+                }
+            };
+
+            if (existingIndex >= 0)
+            {
+                _logger.LogInformation("Replacing slot type {SlotTypeName} (index {Index}) with catalog {CatalogId}",
+                    slotTypeName, existingIndex, catalogId);
+                typesArray[existingIndex] = catalogType;
+            }
+            else
+            {
+                _logger.LogInformation("Adding new catalog-backed slot type {SlotTypeName} with catalog {CatalogId}",
+                    slotTypeName, catalogId);
+                typesArray.Add(catalogType);
+            }
+
+            if (replacesType != null)
+            {
+                UpdateIntentSlotTypes(lmNode, replacesType, slotTypeName);
+            }
+        }
+
+        return root.ToJsonString();
+    }
+
+    /// <summary>
+    /// Updates all intent slot type references from <paramref name="oldType"/> to <paramref name="newType"/>.
+    /// </summary>
+    internal void UpdateIntentSlotTypes(JsonObject languageModel, string oldType, string newType)
+    {
+        var intentsArray = languageModel["intents"] as JsonArray;
+        if (intentsArray == null)
+        {
+            return;
+        }
+
+        int updatedCount = 0;
+        foreach (var intentNode in intentsArray)
+        {
+            var slotsArray = intentNode?["slots"] as JsonArray;
+            if (slotsArray == null)
+            {
+                continue;
+            }
+
+            foreach (var slotNode in slotsArray)
+            {
+                if (slotNode is JsonObject slotObj &&
+                    slotObj["type"]?.GetValue<string>() == oldType)
+                {
+                    slotObj["type"] = newType;
+                    updatedCount++;
+                }
+            }
+        }
+
+        _logger.LogInformation("Updated {Count} intent slot references from {OldType} to {NewType}",
+            updatedCount, oldType, newType);
+    }
+
+    /// <summary>
+    /// Resolves a potentially relative Location URI against the SMAPI base endpoint.
+    /// </summary>
+    private static Uri ResolveLocationUri(Uri locationUri)
+    {
+        if (!locationUri.IsAbsoluteUri)
+        {
+            locationUri = new Uri(new Uri(SmapiEndpoint), locationUri);
+        }
+
+        return locationUri;
+    }
+
+    /// <summary>
+    /// Polls a SMAPI async operation until SUCCEEDED or FAILED.
+    /// Returns the "version" property from the final response if present, otherwise null.
+    /// </summary>
+    private async Task<string?> PollSmapiOperationAsync(
+        string accessToken,
+        HttpClient client,
+        Uri locationUri,
+        string operationName,
+        CancellationToken cancellationToken)
+    {
+        string location = locationUri.ToString();
+        _logger.LogDebug("{Operation} creation accepted, polling at {Location}", operationName, location);
+
+        int delay = 500;
+        for (int i = 0; i < 30; i++)
+        {
+            await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+            delay = Math.Min(delay * 2, 2000);
+
+            using var pollRequest = new HttpRequestMessage(HttpMethod.Get, location);
+            pollRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+            using var pollResponse = await client.SendAsync(pollRequest, cancellationToken).ConfigureAwait(false);
+            await EnsureSuccessAsync(pollResponse, cancellationToken).ConfigureAwait(false);
+
+            string pollJson = await pollResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            using var pollDoc = JsonDocument.Parse(pollJson);
+
+            string? status = pollDoc.RootElement.TryGetProperty("status", out var statusEl)
+                ? statusEl.GetString()
+                : null;
+
+            _logger.LogDebug("{Operation} poll {Iteration}: status={Status}", operationName, i + 1, status);
+
+            if (status == "SUCCEEDED")
+            {
+                string? version = pollDoc.RootElement.TryGetProperty("version", out var versionEl)
+                    ? versionEl.GetString()
+                    : null;
+                return version;
+            }
+
+            if (status == "FAILED")
+            {
+                string reason = pollDoc.RootElement.TryGetProperty("errors", out var errors)
+                    ? errors.GetRawText() : "unknown";
+                throw new InvalidOperationException($"{operationName} failed: {reason}");
+            }
+        }
+
+        _logger.LogWarning("{Operation} polling timed out at {Location}", operationName, location);
+        throw new TimeoutException($"{operationName} polling timed out after 30 attempts at {location}");
     }
 
     /// <summary>

@@ -4,7 +4,7 @@ title: Update GitHub Actions CI/CD for .NET 9.0 and Jellyfin 10.11
 status: Done
 assignee: []
 created_date: '2026-05-01 05:17'
-updated_date: '2026-05-01 05:20'
+updated_date: '2026-05-07 16:56'
 labels:
   - ci-cd
 dependencies: []
@@ -38,5 +38,5 @@ Current state:
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Updated all three CI/CD files: release-build.yml and dev-build.yml now target .NET 9.x / net9.0 paths, add_release_to_manifest.py reads targetAbi and changelog from build.yaml instead of hardcoding.
+Completed exhaustive research with 3 parallel agents investigating AMAZON.SearchQuery, custom slot types, and dialog strategies. Key findings: (1) Current slot architecture is already well-designed, (2) Amazon it-IT models include popular English artists but struggle with niche ones, (3) AMAZON.SearchQuery is per-utterance not per-intent limitation, (4) Music Skill API unavailable for custom skills, (5) Three improvement paths identified: utterance expansion + self-managed elicitation (quick win), catalog-based slot types (high impact), dynamic entities (session-scoped). Report saved to claudedocs/research_slot_types_mixed_language_2026-05-07.md
 <!-- SECTION:FINAL_SUMMARY:END -->

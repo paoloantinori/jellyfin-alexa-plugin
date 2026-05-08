@@ -25,5 +25,15 @@ public enum Scope
     /// <summary>
     /// Read and write access to interaction models.
     /// </summary>
-    ModelsReadWrite = 3
+    ModelsReadWrite = 3,
+
+    /// <summary>
+    /// Read access to SMAPI catalogs.
+    /// </summary>
+    CatalogsRead = 4,
+
+    /// <summary>
+    /// Read and write access to SMAPI catalogs.
+    /// </summary>
+    CatalogsReadWrite = 5
 }

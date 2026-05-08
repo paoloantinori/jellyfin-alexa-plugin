@@ -32,6 +32,16 @@ public class SmapiManagement : ManagementApi
     }
 
     /// <summary>
+    /// Gets the SMAPI vendor ID for the authenticated developer account.
+    /// </summary>
+    /// <returns>The vendor ID string.</returns>
+    public async Task<string> GetVendorIdAsync()
+    {
+        VendorResponse vendor = await this.Vendors.Get().ConfigureAwait(false);
+        return vendor.Vendors[0].Id;
+    }
+
+    /// <summary>
     /// Creates a new skill.
     /// </summary>
     /// <param name="manifestSkill">The manifest skill.</param>
