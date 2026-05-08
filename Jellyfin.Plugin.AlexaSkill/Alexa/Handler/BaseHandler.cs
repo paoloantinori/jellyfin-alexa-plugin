@@ -9,6 +9,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
+using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -512,6 +513,7 @@ public abstract class BaseHandler
                 Genres = current.Genres,
                 IncludeItemTypes = new[] { BaseItemKind.Audio },
                 Limit = 50,
+                OrderBy = new[] { (ItemSortBy.Random, SortOrder.Ascending) },
                 DtoOptions = new DtoOptions(true)
             }), "GetRadioGenreTracks", cancellationToken).ConfigureAwait(false);
 

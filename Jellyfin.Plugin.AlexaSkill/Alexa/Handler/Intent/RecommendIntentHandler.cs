@@ -9,6 +9,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
+using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -95,6 +96,7 @@ public class RecommendIntentHandler : BaseHandler
             IncludeItemTypes = itemTypes,
             IsPlayed = true,
             Limit = 20,
+            OrderBy = new[] { (ItemSortBy.DatePlayed, SortOrder.Descending) },
             DtoOptions = new DtoOptions(true)
         };
 
@@ -120,6 +122,7 @@ public class RecommendIntentHandler : BaseHandler
                 Genres = genres.ToArray(),
                 IsPlayed = false,
                 Limit = 10,
+                OrderBy = new[] { (ItemSortBy.Random, SortOrder.Ascending) },
                 DtoOptions = new DtoOptions(true)
             };
 
@@ -140,6 +143,7 @@ public class RecommendIntentHandler : BaseHandler
                 IncludeItemTypes = itemTypes,
                 IsPlayed = false,
                 Limit = 10,
+                OrderBy = new[] { (ItemSortBy.Random, SortOrder.Ascending) },
                 DtoOptions = new DtoOptions(true)
             };
 

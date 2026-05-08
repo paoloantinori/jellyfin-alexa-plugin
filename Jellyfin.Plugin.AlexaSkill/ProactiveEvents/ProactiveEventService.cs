@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
+using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -120,6 +121,7 @@ internal class ProactiveEventService : IHostedService, IDisposable
             IncludeItemTypes = new[] { BaseItemKind.Audio, BaseItemKind.Movie, BaseItemKind.Episode },
             MinDateCreated = DateTime.UtcNow.AddHours(-1),
             Limit = 5,
+            OrderBy = new[] { (ItemSortBy.DateCreated, SortOrder.Descending) },
             DtoOptions = new DtoOptions(true)
         };
 

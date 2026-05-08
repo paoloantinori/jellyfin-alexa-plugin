@@ -8,6 +8,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Data.Enums;
+using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
@@ -84,6 +85,7 @@ public class InProgressMediaListIntentHandler : BaseHandler
             IncludeItemTypes = new[] { BaseItemKind.Audio, BaseItemKind.Movie, BaseItemKind.Episode },
             MinDateLastSavedForUser = DateTime.UtcNow.AddDays(-30),
             Limit = MaxCandidates,
+            OrderBy = new[] { (ItemSortBy.DatePlayed, SortOrder.Descending) },
             DtoOptions = new DtoOptions(true)
         };
 

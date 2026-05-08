@@ -9,6 +9,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
+using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
@@ -95,6 +96,7 @@ public class PlayByDecadeIntentHandler : BaseHandler
             User = jellyfinUser,
             Recursive = true,
             Limit = MaxQueryResults,
+            OrderBy = new[] { (ItemSortBy.Random, SortOrder.Ascending) },
             Years = years,
             IncludeItemTypes = new[] { BaseItemKind.Audio },
             DtoOptions = new DtoOptions(true)

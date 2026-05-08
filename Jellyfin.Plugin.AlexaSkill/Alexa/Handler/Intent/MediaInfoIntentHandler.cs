@@ -8,6 +8,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Data.Enums;
+using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
@@ -273,6 +274,7 @@ public class MediaInfoIntentHandler : BaseHandler
                     SearchTerm = artistName,
                     IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
                     Limit = 1,
+                    OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
                     DtoOptions = new DtoOptions(false)
                 }), "GetArtistInfo", cancellationToken).ConfigureAwait(false);
 
@@ -303,6 +305,7 @@ public class MediaInfoIntentHandler : BaseHandler
                             Recursive = true,
                             ArtistIds = new[] { artistItem.Id },
                             IncludeItemTypes = new[] { BaseItemKind.MusicAlbum },
+                            OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
                             DtoOptions = new DtoOptions(false)
                         }), "GetArtistAlbumCount", cancellationToken).ConfigureAwait(false);
 

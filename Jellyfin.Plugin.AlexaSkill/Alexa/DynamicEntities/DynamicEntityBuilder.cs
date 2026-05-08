@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using Jellyfin.Data.Enums;
+using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -112,7 +113,8 @@ public class DynamicEntityBuilder
             Recursive = true,
             IncludeItemTypes = new[] { itemKind },
             DtoOptions = new DtoOptions(true),
-            Limit = QueryLimit
+            Limit = QueryLimit,
+            OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) }
         });
 
         var values = new List<DynamicSlotValue>();
