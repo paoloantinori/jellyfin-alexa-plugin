@@ -19,6 +19,16 @@ public static class CatalogSlotTypes
         [CatalogType.Artist] = "AMAZON.Musician",
         [CatalogType.Album] = "AMAZON.Album"
     };
+
+    /// <summary>
+    /// Catalog-backed slot type names used in the interaction model.
+    /// These replace the built-in AMAZON types with catalog-supplied values.
+    /// </summary>
+    public static readonly Dictionary<CatalogType, string> CatalogSlotTypeNames = new()
+    {
+        [CatalogType.Artist] = "JellyfinArtist",
+        [CatalogType.Album] = "AlbumName"
+    };
 }
 
 /// <summary>

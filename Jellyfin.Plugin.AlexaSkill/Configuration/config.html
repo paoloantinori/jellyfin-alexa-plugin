@@ -131,6 +131,18 @@
                 }
             }
 
+            function updateAuthorizeButton(button, user, config) {
+                var canAuthorize = user.UserSkill && config.ServerAddress != "" && config.LwaClientId != "" && config.LwaClientSecret != "";
+                if (canAuthorize) {
+                    button.style.display = "block";
+                    var label = user.UserSkill.UserSkillStatus !== "LwaAuthPending" ? "Re-authorize" : "Authorize";
+                    button.title = label;
+                    button.innerHTML = label;
+                } else {
+                    button.style.display = "none";
+                }
+            }
+
             function createUserRow(user, config) {
                 let tr = document.createElement("tr");
                 tr.setAttribute("data-id", user.Id);
@@ -160,14 +172,14 @@
                 input.type = "text";
                 input.is = "emby-input";
                 input.classList.add("emby-input")
-                input.value = (user.UserSkill)? user.UserSkill.InvocationName : "jelly fin";
+                input.value = (user.UserSkill)? user.UserSkill.InvocationName : "jellyfin player";
                 input.addEventListener("input", function() { validateInvocationName(this); });
                 input.addEventListener("blur", function() { validateInvocationName(this); });
                 td.appendChild(input);
                 let desc = document.createElement("div");
                 desc.classList.add("fieldDescription");
                 desc.style.marginTop = "0.25em";
-                desc.textContent = 'Two or more words (e.g. "jelly fin"). This is what you say to invoke the skill.';
+                desc.textContent = 'Two or more words (e.g. "jellyfin player"). This is what you say to invoke the skill.';
                 td.appendChild(desc);
                 let errMsg = document.createElement("div");
                 errMsg.classList.add("invocation-name-error");
@@ -250,11 +262,7 @@
                 tdDetailTableBodyCell.appendChild(deleteButton);
 
                 let authorizeButton = document.createElement("button");
-                if (user.UserSkill && user.UserSkill.UserSkillStatus === "LwaAuthPending" && config.ServerAddress != "" && config.LwaClientId != "" && config.LwaClientSecret != "") {
-                    authorizeButton.style.display = "block";
-                } else {
-                    authorizeButton.style.display = "none";
-                }
+                updateAuthorizeButton(authorizeButton, user, config);
                 authorizeButton.setAttribute("data-id", user.Id);
                 authorizeButton.type = "button";
                 authorizeButton.is = "emby-button";
@@ -263,8 +271,6 @@
                 authorizeButton.classList.add("raised-mini");
                 authorizeButton.classList.add("emby-button");
                 authorizeButton.setAttribute("data-mini", "true");
-                authorizeButton.title = "Authorize";
-                authorizeButton.innerHTML = "Authorize";
                 authorizeButton.addEventListener("click", e => {
                     Dashboard.showLoadingMsg();
 
@@ -337,11 +343,7 @@
                                     row.cells[1].innerHTML = user.UserSkill.SkillId;
                                     row.cells[2].firstChild.value = user.UserSkill.InvocationName;
                                     row.cells[3].innerHTML = user.UserSkill.UserSkillStatus;
-                                    if (user.UserSkill.UserSkillStatus === "LwaAuthPending" && config.ServerAddress != "" && config.LwaClientId != "" && config.LwaClientSecret != "") {
-                                        row.cells[5].children[1].style.display = "block";
-                                    } else {
-                                        row.cells[5].children[1].style.display = "none";
-                                    }
+                                    updateAuthorizeButton(row.cells[5].children[1], user, config);
                                 });
                             }, function (res) {
                                 Dashboard.alert("Could not create a new user skill");
@@ -372,11 +374,7 @@
                                     row.cells[2].firstChild.value = user.UserSkill.InvocationName;
                                     row.cells[3].innerHTML = user.UserSkill.UserSkillStatus;
 
-                                    if (user.UserSkill.UserSkillStatus === "LwaAuthPending" && config.ServerAddress != "" && config.LwaClientId != "" && config.LwaClientSecret != "") {
-                                        row.cells[5].children[1].style.display = "block";
-                                    } else {
-                                        row.cells[5].children[1].style.display = "none";
-                                    }
+                                    updateAuthorizeButton(row.cells[5].children[1], user, config);
                                 });
                             }, function (res) {
                                 Dashboard.alert("Could not update user skill");
@@ -464,7 +462,7 @@
                     ApiClient.getPluginConfiguration(Config.pluginUniqueId).then(function (config) {
                         let newUserRow = createUserRow({
                             "Username": username,
-                            "InvocationName": "jelly fin",
+                            "InvocationName": "jellyfin player",
                             "SkillStatus": "unsaved"
                         }, config);
 

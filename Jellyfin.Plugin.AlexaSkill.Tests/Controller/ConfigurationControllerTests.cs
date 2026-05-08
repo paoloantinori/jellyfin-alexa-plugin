@@ -9,7 +9,7 @@ public class ConfigurationControllerTests
 {
     /// <summary>
     /// Regression test for JF-29: CreateNewUserSkill was ignoring the user-provided
-    /// invocation name and always using Config.InvocationName ("jelly fin") instead.
+    /// invocation name and always using Config.InvocationName ("jellyfin player") instead.
     /// </summary>
     [Fact]
     public void UserSkill_StoresProvidedInvocationName()

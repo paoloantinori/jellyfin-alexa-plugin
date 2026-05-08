@@ -80,11 +80,27 @@ class SmapiClient:
         self.delay = delay
         self.invocation_name = invocation_name
 
+    INVOCATION_PREFIX: dict[str, str] = {
+        "en-US": "ask {inv} to ",
+        "en-GB": "ask {inv} to ",
+        "en-IN": "ask {inv} to ",
+        "en-AU": "ask {inv} to ",
+        "en-CA": "ask {inv} to ",
+        "it-IT": "chiedi a {inv} di ",
+        "fr-FR": "demande à {inv} de ",
+        "fr-CA": "demande à {inv} de ",
+        "de-DE": "frage {inv} nach ",
+        "es-ES": "pide a {inv} que ",
+        "es-MX": "pide a {inv} que ",
+        "ja-JP": "{inv} を開いて ",
+        "pt-BR": "peça para {inv} ",
+    }
+
     def simulate(self, utterance: str, stage: str = "development") -> dict[str, Any]:
         """Run simulate-skill and return the completed simulation result.
 
-        If invocation_name is set, the utterance is prefixed with
-        "ask <invocation_name> to " so the simulation resolves to this skill.
+        If invocation_name is set, the utterance is prefixed with a
+        locale-aware invocation pattern so the simulation resolves to this skill.
         """
         global _last_smapi_call
         elapsed = time.time() - _last_smapi_call
@@ -95,7 +111,10 @@ class SmapiClient:
 
         full_utterance = utterance
         if self.invocation_name:
-            full_utterance = f"ask {self.invocation_name} to {utterance}"
+            template = self.INVOCATION_PREFIX.get(
+                self.locale, "ask {inv} to "
+            )
+            full_utterance = f"{template.format(inv=self.invocation_name)}{utterance}"
 
         # Initiate simulation with rate-limit retry
         init_response = self._initiate_simulation(full_utterance, stage)

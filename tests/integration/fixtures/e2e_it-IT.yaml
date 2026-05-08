@@ -1,0 +1,46 @@
+locale: it-IT
+invocation_name: jellyfin player
+tests:
+  # --- Playback intents ---
+  - utterance: "riproduci i miei preferiti"
+    expected_intent: PlayFavoritesIntent
+    expected_slots:
+      media_type: {}
+    expected_response_type: any
+
+  - utterance: "suonare musica rilassante"
+    expected_intent: PlayMoodMusicIntent
+    expected_slots:
+      mood: {}
+    expected_response_type: any
+
+  - utterance: "riprodurre brani a caso"
+    expected_intent: PlayRandomIntent
+    expected_slots:
+      media_type: {}
+    expected_response_type: any
+
+  # --- Playback controls ---
+  - utterance: "pausa"
+    expected_intent: AMAZON.PauseIntent
+    expected_slots: {}
+    expected_response_type: any
+
+  # --- Info queries ---
+  - utterance: "cosa sta suonando"
+    expected_intent: MediaInfoIntent
+    expected_slots: {}
+    expected_response_type: any
+
+  # --- State change intents ---
+  - utterance: "aggiungi ai preferiti"
+    expected_intent: MarkFavoriteIntent
+    expected_slots: {}
+    expected_response_type: any
+
+  # --- Search ---
+  - utterance: "cerca bohemian rhapsody"
+    expected_intent: SearchMediaIntent
+    expected_slots:
+      query: {}
+    expected_response_type: any

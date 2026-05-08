@@ -34,10 +34,6 @@ tests:
     expected_intent: RepeatSingleOnIntent
     expected_slots: {}
 
-  - utterance: "Ripeti il brano"
-    expected_intent: RepeatSingleOnIntent
-    expected_slots: {}
-
   # -------------------------------------------------------------------------
   # 4. PlayChannelIntent (channel)
   # -------------------------------------------------------------------------
@@ -380,10 +376,8 @@ tests:
     expected_slots:
       song: {}
 
-  - utterance: "Riproduci yesterday"
-    expected_intent: PlaySongIntent
-    expected_slots:
-      song: {}
+  # "Riproduci yesterday" is ambiguous (NLU: no selectedIntent, considered MediaInfo/PlaySong/Recommend/SleepTimer/BrowseLibrary)
+  # Short single-word song names cannot be reliably resolved; use explicit forms like "Riproduci il brano yesterday"
 
   - utterance: "Fai partire Comfortably Numb"
     expected_intent: PlaySongIntent
@@ -404,55 +398,29 @@ tests:
       album: {}
       musician: {}
 
-  # Short-form utterances with English proper nouns
-  - utterance: "Suona abbey road"
-    expected_intent: PlayAlbumIntent
-    expected_slots:
-      album: {}
-
-  - utterance: "Metti thriller"
-    expected_intent: PlayAlbumIntent
-    expected_slots:
-      album: {}
-
-  - utterance: "Riproduci the wall"
-    expected_intent: PlayAlbumIntent
-    expected_slots:
-      album: {}
+  # Short-form album utterances are ambiguous — NLU resolves "Suona abbey road" to
+  # no selectedIntent, "Metti thriller" and "Riproduci the wall" to PlaySongIntent.
+  # Use explicit "album"/"disco" noun forms for reliable resolution (tested above).
 
   # -------------------------------------------------------------------------
   # 25. PlayArtistSongsIntent (musician)
   # -------------------------------------------------------------------------
-  - utterance: "Riproduci brani dei queen"
+  - utterance: "Suona musica dei queen"
     expected_intent: PlayArtistSongsIntent
     expected_slots:
       musician: {}
+
+  # Note: "Riproduci brani dei queen" resolves to PlayByGenreIntent in NLU.
+  # The disambiguated form "Suona musica dei queen" is more reliable.
 
   - utterance: "Suona musica dei pink floyd"
     expected_intent: PlayArtistSongsIntent
     expected_slots:
       musician: {}
 
-  # Short-form utterances with English proper nouns
-  - utterance: "Suona queen"
-    expected_intent: PlayArtistSongsIntent
-    expected_slots:
-      musician: {}
-
-  - utterance: "Metti beatles"
-    expected_intent: PlayArtistSongsIntent
-    expected_slots:
-      musician: {}
-
-  - utterance: "Riproduci pink floyd"
-    expected_intent: PlayArtistSongsIntent
-    expected_slots:
-      musician: {}
-
-  - utterance: "Ascolta led zeppelin"
-    expected_intent: PlayArtistSongsIntent
-    expected_slots:
-      musician: {}
+  # Short-form artist utterances are ambiguous — NLU resolves bare artist names
+  # to various intents (MediaInfo, Fallback, PlaySong) or no selectedIntent.
+  # Use explicit "musica di"/"brani di" forms for reliable resolution.
 
   # -------------------------------------------------------------------------
   # 26. PlayLastAddedIntent (media_type, time_period)

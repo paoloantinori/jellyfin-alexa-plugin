@@ -31,17 +31,7 @@ public class FallbackIntentHandler : BaseHandler
     {
         if (request is IntentRequest intentRequest)
         {
-            // Handle AMAZON.FallbackIntent specifically
-            if (string.Equals(intentRequest.Intent.Name, IntentNames.AmazonFallback, System.StringComparison.Ordinal))
-            {
-                return true;
-            }
-
-            // Also catch any other AMAZON.* built-in intents not handled by specific handlers
-            if (intentRequest.Intent.Name.StartsWith("AMAZON.", System.StringComparison.Ordinal))
-            {
-                return true;
-            }
+            return string.Equals(intentRequest.Intent.Name, IntentNames.AmazonFallback, System.StringComparison.Ordinal);
         }
 
         return false;

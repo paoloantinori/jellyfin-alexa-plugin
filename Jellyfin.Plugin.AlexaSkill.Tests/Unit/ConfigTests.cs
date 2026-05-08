@@ -13,7 +13,7 @@ public class ConfigTests
     [Fact]
     public void InvocationName_IsJellyFin()
     {
-        Assert.Equal("jelly fin", Config.InvocationName);
+        Assert.Equal("jellyfin player", Config.InvocationName);
     }
 
     [Fact]

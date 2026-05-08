@@ -24,6 +24,10 @@ public static class ScopeMethods
                 return "alexa::ask:models:read";
             case Scope.ModelsReadWrite:
                 return "alexa::ask:models:readwrite";
+            case Scope.CatalogsRead:
+                return "alexa::ask:catalogs:read";
+            case Scope.CatalogsReadWrite:
+                return "alexa::ask:catalogs:readwrite";
             default:
                 throw new ArgumentException("Scope value can not be found");
         }

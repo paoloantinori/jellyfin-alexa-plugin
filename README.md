@@ -164,6 +164,37 @@ The final step links your Jellyfin account to the Alexa skill:
 
 ## Testing
 
+### Automated NLU Tests
+
+Validate that Alexa's NLU resolves utterances to the correct intents using the SMAPI `profile-nlu` endpoint:
+
+```bash
+./scripts/run_nlu_tests.sh                  # all locales
+./scripts/run_nlu_tests.sh -k "it-IT"       # single locale
+./scripts/run_nlu_tests.sh --dry-run         # validate fixture structure only
+```
+
+Requires the `ask` CLI authenticated and either `~/.ask/ask_states.json` with a skill ID or the `ASK_SKILL_ID` environment variable. Test fixtures live in `tests/integration/fixtures/*.yaml`.
+
+### Automated E2E Tests
+
+Full-chain integration tests that send utterances through Alexa's complete pipeline (NLU + skill execution + Jellyfin API) via SMAPI `simulate-skill`:
+
+```bash
+./scripts/run_e2e_tests.sh                                         # requires live Jellyfin server
+./scripts/run_e2e_tests.sh --dry-run                               # validate fixtures only
+```
+
+E2E tests are auto-skipped if no Jellyfin server is configured. Provide connection details via CLI flags or environment variables:
+
+| Flag | Env Var | Description |
+|------|--------|-------------|
+| `--jellyfin-url` | `JELLYFIN_URL` | Jellyfin server base URL (e.g. `https://jellyfin.example.com`) |
+| `--jellyfin-api-key` | `JELLYFIN_API_KEY` | Jellyfin API key |
+| `--jellyfin-user` | `JELLYFIN_USER` | Jellyfin username |
+
+E2E test fixtures are in `tests/integration/fixtures/e2e_*.yaml`. Note that `simulate-skill` routes through Alexa's full NLU which competes with built-in Amazon skills, making some locales (especially en-US) unreliable for automated testing.
+
 ### Using the Alexa Simulator
 
 1. Go to the [Alexa Developer Console](https://developer.amazon.com/alexa/console/ask)
