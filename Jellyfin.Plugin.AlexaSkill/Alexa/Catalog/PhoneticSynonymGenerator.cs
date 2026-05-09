@@ -31,9 +31,8 @@ public static class PhoneticSynonymGenerator
         {
             "it" => ItalianPhoneticSynonyms.Generate(name),
             "de" => GermanPhoneticSynonyms.Generate(name),
-            // Future locale dispatches (JF-107, JF-108):
-            // "es" => SpanishPhoneticSynonyms.Generate(name),
-            // "fr" => FrenchPhoneticSynonyms.Generate(name),
+            "es" => SpanishPhoneticSynonyms.Generate(name),
+            "fr" => FrenchPhoneticSynonyms.Generate(name),
             _ => new List<string>()
         };
     }
