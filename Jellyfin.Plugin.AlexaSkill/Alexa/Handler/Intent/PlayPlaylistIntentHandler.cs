@@ -90,14 +90,22 @@ public class PlayPlaylistIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundPlaylist", locale, playlistName));
         }
 
-        // If multiple playlists found, ask for disambiguation
+        BaseItem playlist;
         if (playlists.TotalRecordCount > 1)
         {
-            var matches = playlists.Items.Take(3).Select(p => (p.Id, p.Name)).ToList();
-            return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypePlaylist, locale);
-        }
+            BaseItem? topMatch = FuzzyMatch(playlistName, playlists.Items, p => p.Name);
+            if (topMatch == null)
+            {
+                var matches = playlists.Items.Take(3).Select(p => (p.Id, p.Name)).ToList();
+                return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypePlaylist, locale);
+            }
 
-        BaseItem playlist = playlists.Items[0];
+            playlist = topMatch;
+        }
+        else
+        {
+            playlist = playlists.Items[0];
+        }
 
         // Get the playlist items
         IReadOnlyList<BaseItem> playlistItems = ((Folder)playlist).GetItemList(new InternalItemsQuery()

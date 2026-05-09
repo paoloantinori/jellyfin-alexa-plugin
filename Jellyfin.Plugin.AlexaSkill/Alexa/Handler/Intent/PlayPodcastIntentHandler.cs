@@ -91,10 +91,16 @@ public class PlayPodcastIntentHandler : BaseHandler
 
         if (podcasts.Count > 1)
         {
-            return DisambiguationHelper.AskFirstMatch(
-                podcasts.Select(p => (p.Id, p.Name)).ToList(),
-                DisambiguationHelper.MediaTypePodcast,
-                locale);
+            BaseItem? topMatch = FuzzyMatch(podcastName, podcasts, p => p.Name);
+            if (topMatch == null)
+            {
+                return DisambiguationHelper.AskFirstMatch(
+                    podcasts.Select(p => (p.Id, p.Name)).ToList(),
+                    DisambiguationHelper.MediaTypePodcast,
+                    locale);
+            }
+
+            podcasts = new List<BaseItem> { topMatch };
         }
 
         BaseItem podcast = podcasts[0];

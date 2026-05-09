@@ -77,11 +77,16 @@ public class PlayVideoIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundVideo", locale, titleQuery));
         }
 
-        // If multiple videos found, ask for disambiguation
         if (videos.Count > 1)
         {
-            var matches = videos.Take(3).Select(v => (v.Id, v.Name)).ToList();
-            return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeVideo, locale);
+            BaseItem? topMatch = FuzzyMatch(titleQuery, videos, v => v.Name);
+            if (topMatch == null)
+            {
+                var matches = videos.Take(3).Select(v => (v.Id, v.Name)).ToList();
+                return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeVideo, locale);
+            }
+
+            videos = new List<BaseItem> { topMatch };
         }
 
         BaseItem video = videos[0];
