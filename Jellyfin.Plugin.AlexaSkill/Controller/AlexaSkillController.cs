@@ -9,6 +9,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Controller.Handler;
 using Jellyfin.Plugin.AlexaSkill.Diagnostics;
@@ -319,8 +320,10 @@ public class AlexaSkillController : ControllerBase
                     }
                 }
 
-                _logger.LogWarning("Unhandled skill request: {RequestType}", req.Request.Type);
-                return SkillResponseContent(ResponseBuilder.Empty());
+                string intentName = req.Request is IntentRequest ir ? ir.Intent?.Name ?? "null" : "n/a";
+                string locale = BaseHandler.GetLocalePublic(req.Request);
+                _logger.LogWarning("Unhandled skill request: {RequestType} intent={IntentName} locale={Locale}", req.Request.Type, intentName, locale);
+                return SkillResponseContent(ResponseBuilder.Tell(ResponseStrings.Get("CouldNotUnderstand", locale)));
             }
         }
         catch (OperationCanceledException)

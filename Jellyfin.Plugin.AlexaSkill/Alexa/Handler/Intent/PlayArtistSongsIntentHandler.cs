@@ -85,11 +85,16 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundArtist", locale, musician));
         }
 
-        // If multiple artists found, ask for disambiguation
         if (artists.Count > 1)
         {
-            var matches = artists.Take(3).Select(a => (a.Id, a.Name)).ToList();
-            return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeArtist, locale);
+            BaseItem? topMatch = FuzzyMatch(musician, artists, a => a.Name);
+            if (topMatch == null)
+            {
+                var matches = artists.Take(3).Select(a => (a.Id, a.Name)).ToList();
+                return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeArtist, locale);
+            }
+
+            artists = new List<BaseItem> { topMatch };
         }
 
         // Get all songs with the artists
