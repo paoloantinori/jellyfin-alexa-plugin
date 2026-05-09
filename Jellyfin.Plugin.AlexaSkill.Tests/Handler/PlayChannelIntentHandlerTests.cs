@@ -182,7 +182,7 @@ public class PlayChannelIntentHandlerTests
         Assert.Null(response.Response.OutputSpeech);
         var directive = response.HasDirective<AudioPlayerPlayDirective>();
         Assert.Contains(channelId.ToString(), directive.AudioItem.Stream.Url);
-        Assert.Contains("Download", directive.AudioItem.Stream.Url);
+        Assert.Contains("Audio", directive.AudioItem.Stream.Url);
     }
 
     [Fact]

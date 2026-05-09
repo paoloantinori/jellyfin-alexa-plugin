@@ -236,7 +236,7 @@ public class PlayVideoIntentHandlerTests
         var directive = response.HasDirective<VideoAppLaunchDirective>();
         Assert.NotNull(directive.VideoItem);
         Assert.Contains(id.ToString(), directive.VideoItem.Source);
-        Assert.Contains("Download", directive.VideoItem.Source);
+        Assert.Contains("Videos", directive.VideoItem.Source);
         Assert.NotNull(directive.VideoItem.Metadata);
         Assert.Equal("The Matrix", directive.VideoItem.Metadata.Title);
     }

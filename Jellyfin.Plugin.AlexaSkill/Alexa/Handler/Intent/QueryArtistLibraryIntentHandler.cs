@@ -142,7 +142,7 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
             User = jellyfinUser,
             Recursive = true,
             ArtistIds = new[] { artistId },
-            OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
+            OrderBy = new[] { (ItemSortBy.PlayCount, SortOrder.Descending), (ItemSortBy.CommunityRating, SortOrder.Descending), (ItemSortBy.SortName, SortOrder.Ascending) },
             DtoOptions = new DtoOptions(true)
         };
 
