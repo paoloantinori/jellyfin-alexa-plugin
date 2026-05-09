@@ -30,8 +30,8 @@ public static class PhoneticSynonymGenerator
         return prefix switch
         {
             "it" => ItalianPhoneticSynonyms.Generate(name),
-            // Future locale dispatches (JF-106, JF-107, JF-108):
-            // "de" => GermanPhoneticSynonyms.Generate(name),
+            "de" => GermanPhoneticSynonyms.Generate(name),
+            // Future locale dispatches (JF-107, JF-108):
             // "es" => SpanishPhoneticSynonyms.Generate(name),
             // "fr" => FrenchPhoneticSynonyms.Generate(name),
             _ => new List<string>()
