@@ -25,7 +25,13 @@ All intent handlers live in `Alexa/Handler/Intent/` and inherit `BaseHandler`. E
 - `CanHandle(Request)` — returns true if this handler should process the request
 - `HandleAsync(Request, Context, User, Session, CancellationToken)` — executes the intent
 
-Handlers are registered in `Alexa/Pipeline/`. New intents need: handler class + entry in `IntentNames.cs` + interaction model samples + locale response strings.
+The `RequestPipeline` in `Alexa/Pipeline/` routes requests to handlers. `BaseHandler` provides shared utilities:
+- `FuzzyMatch(query, candidates, selector)` — best-match selection using FuzzyStrings
+- `DisambiguationHelper.AskFirstMatch()` — voice prompt for ambiguous results
+- `GetStreamUrl()` / `GetVideoStreamUrl()` — Jellyfin `/stream?static=true` endpoints
+- `RetryAsync()` — library query retry with logging
+
+New intents need: handler class + entry in `Alexa/IntentNames.cs` + interaction model samples + locale response strings.
 
 ## Localization
 
@@ -54,6 +60,7 @@ Response strings are defined in `Alexa/Locale/ResponseStrings.cs` as keys, with 
 ./scripts/run_nlu_tests.sh                  # all locales
 ./scripts/run_nlu_tests.sh -k "en-US"       # single locale
 ./scripts/run_nlu_tests.sh --dry-run         # validate fixtures only
+./scripts/validate_model.sh                  # validate interaction model JSON syntax
 ```
 
 Requires `ask` CLI authenticated. Test fixtures in `tests/integration/fixtures/*.yaml`.
@@ -77,8 +84,10 @@ E2E tests are auto-skipped without Jellyfin connection. Provide via CLI flags or
 
 ## Key Gotchas
 
+- **Stream endpoints**: Audio uses `/Audio/{id}/stream?static=true`, video uses `/Videos/{id}/stream?static=true`. The `/Download` endpoint lacks proper HTTP headers (Content-Type, Range support) needed by Alexa AudioPlayer.
 - **AMAZON.SearchQuery cannot coexist with other slot types** in the same utterance. Use custom slot types (e.g. `MediaType`) for slots that appear alongside typed slots like `TimePeriod`.
 - **Slot name consistency**: Alexa requires the same slot name to use the same slot type across all intents in a locale.
+- **Stop vs Pause**: `AMAZON.StopIntent` must return `ResponseBuilder.Empty()` (device already stopped locally). `AMAZON.PauseIntent` must return `AudioPlayerStop()`. Returning the wrong response type causes the device to ignore the request.
 - **NLU competition**: Ambiguous utterances between intents need concrete (non-slotted) samples to disambiguate.
 - **SMAPI rate limits**: Space live NLU tests with `SMAPI_DELAY=1.5`. Model builds take ~15-30s.
 
