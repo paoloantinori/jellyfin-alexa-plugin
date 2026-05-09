@@ -1,5 +1,7 @@
 using System;
 using Jellyfin.Plugin.AlexaSkill.Entities;
+using Microsoft.Extensions.Logging;
+using Moq;
 using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
@@ -25,9 +27,10 @@ public class UserTests
         Assert.Null(user.SmapiManagement);
     }
 
-    [Fact(Skip = "Requires Plugin.Instance to be initialized with LoggerFactory")]
+    [Fact]
     public void SmapiManagement_ReturnsInstance_WhenDeviceTokenSet()
     {
+        EnsurePluginInstance();
         var user = TestHelpers.CreateTestUser();
         user.SmapiDeviceToken = TestHelpers.CreateTestDeviceToken();
 
@@ -51,5 +54,43 @@ public class UserTests
         var user = new User { Id = Guid.Empty, InvocationName = "test" };
 
         Assert.Equal(string.Empty, user.Username);
+    }
+
+    private static void EnsurePluginInstance()
+    {
+        if (Plugin.Instance != null)
+        {
+            return;
+        }
+
+        var tmpDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "alexa-skill-test-" + Guid.NewGuid());
+        System.IO.Directory.CreateDirectory(tmpDir);
+
+        var appPaths = new Mock<MediaBrowser.Common.Configuration.IApplicationPaths>();
+        appPaths.Setup(p => p.PluginsPath).Returns(tmpDir);
+        appPaths.Setup(p => p.PluginConfigurationsPath).Returns(tmpDir);
+        appPaths.Setup(p => p.DataPath).Returns(tmpDir);
+        appPaths.Setup(p => p.CachePath).Returns(tmpDir);
+        appPaths.Setup(p => p.LogDirectoryPath).Returns(tmpDir);
+        appPaths.Setup(p => p.ConfigurationDirectoryPath).Returns(tmpDir);
+        appPaths.Setup(p => p.SystemConfigurationFilePath).Returns(System.IO.Path.Combine(tmpDir, "system.xml"));
+        appPaths.Setup(p => p.ProgramDataPath).Returns(tmpDir);
+        appPaths.Setup(p => p.ProgramSystemPath).Returns(tmpDir);
+        appPaths.Setup(p => p.TempDirectory).Returns(tmpDir);
+        appPaths.Setup(p => p.VirtualDataPath).Returns(tmpDir);
+
+        var xmlSerializer = new Mock<MediaBrowser.Model.Serialization.IXmlSerializer>();
+        xmlSerializer
+            .Setup(x => x.DeserializeFromFile(typeof(Configuration.PluginConfiguration), It.IsAny<string>()))
+            .Returns(new Configuration.PluginConfiguration());
+
+        var userManager = new Mock<MediaBrowser.Controller.Library.IUserManager>();
+        var loggerFactory = LoggerFactory.Create(builder => builder.AddDebug());
+
+        new Plugin(
+            appPaths.Object,
+            xmlSerializer.Object,
+            loggerFactory,
+            userManager.Object);
     }
 }
