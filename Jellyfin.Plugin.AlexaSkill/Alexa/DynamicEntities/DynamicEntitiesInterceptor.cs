@@ -66,7 +66,7 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
         try
         {
             DynamicEntitiesDirective? directive = await Task.Run(
-                () => _builder.BuildFromRecentItems(jellyfinUserId, cancellationToken),
+                () => _builder.BuildFromRecentItems(jellyfinUserId, context.Locale, cancellationToken),
                 cancellationToken).ConfigureAwait(false);
 
             if (directive == null)

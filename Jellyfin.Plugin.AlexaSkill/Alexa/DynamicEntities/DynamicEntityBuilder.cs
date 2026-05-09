@@ -51,10 +51,12 @@ public class DynamicEntityBuilder
     /// Returns null if no items are found.
     /// </summary>
     /// <param name="jellyfinUserId">The Jellyfin user ID to query recent items for.</param>
+    /// <param name="locale">The Alexa request locale for phonetic synonym generation.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A populated directive, or null if no items available.</returns>
     public virtual DynamicEntitiesDirective? BuildFromRecentItems(
         Guid jellyfinUserId,
+        string locale,
         CancellationToken cancellationToken)
     {
         var user = _userManager.GetUserById(jellyfinUserId);
@@ -65,8 +67,8 @@ public class DynamicEntityBuilder
         }
 
         int budget = MaxTotalSlots;
-        var artistValues = BuildSlotValues(user, BaseItemKind.MusicArtist, CatalogType.Artist, ref budget);
-        var albumValues = BuildSlotValues(user, BaseItemKind.MusicAlbum, CatalogType.Album, ref budget);
+        var artistValues = BuildSlotValues(user, BaseItemKind.MusicArtist, CatalogType.Artist, locale, ref budget);
+        var albumValues = BuildSlotValues(user, BaseItemKind.MusicAlbum, CatalogType.Album, locale, ref budget);
 
         if (artistValues.Count == 0 && albumValues.Count == 0)
         {
@@ -105,6 +107,7 @@ public class DynamicEntityBuilder
         Jellyfin.Database.Implementations.Entities.User user,
         BaseItemKind itemKind,
         CatalogType catalogType,
+        string locale,
         ref int budget)
     {
         IReadOnlyList<BaseItem> items = _libraryManager.GetItemList(new InternalItemsQuery
@@ -127,7 +130,7 @@ public class DynamicEntityBuilder
             }
 
             // Each value costs 1 + synonym count toward the Alexa platform limit.
-            var synonyms = PhoneticSynonymGenerator.GenerateSynonyms(item.Name);
+            var synonyms = PhoneticSynonymGenerator.GenerateSynonyms(item.Name, locale);
             int cost = 1 + synonyms.Count;
 
             if (budget < cost)

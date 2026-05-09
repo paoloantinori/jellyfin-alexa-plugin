@@ -82,7 +82,7 @@ public class DynamicEntitiesInterceptorTests
 
         // Should not have called builder
         _builderMock.Verify(
-            b => b.BuildFromRecentItems(It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
+            b => b.BuildFromRecentItems(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -93,7 +93,7 @@ public class DynamicEntitiesInterceptorTests
         var directive = new DynamicEntitiesDirective();
 
         _builderMock
-            .Setup(b => b.BuildFromRecentItems(userId, It.IsAny<CancellationToken>()))
+            .Setup(b => b.BuildFromRecentItems(userId, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(directive);
 
         var interceptor = CreateInterceptor();
@@ -121,7 +121,7 @@ public class DynamicEntitiesInterceptorTests
         var directive = new DynamicEntitiesDirective();
 
         _builderMock
-            .Setup(b => b.BuildFromRecentItems(userId, It.IsAny<CancellationToken>()))
+            .Setup(b => b.BuildFromRecentItems(userId, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(directive);
 
         var interceptor = CreateInterceptor();
@@ -148,7 +148,7 @@ public class DynamicEntitiesInterceptorTests
     {
         var userId = Guid.NewGuid();
         _builderMock
-            .Setup(b => b.BuildFromRecentItems(userId, It.IsAny<CancellationToken>()))
+            .Setup(b => b.BuildFromRecentItems(userId, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns((DynamicEntitiesDirective?)null);
 
         var interceptor = CreateInterceptor();
@@ -187,7 +187,7 @@ public class DynamicEntitiesInterceptorTests
         await interceptor.ProcessAsync(ctx, CancellationToken.None);
 
         _builderMock.Verify(
-            b => b.BuildFromRecentItems(It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
+            b => b.BuildFromRecentItems(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -206,7 +206,7 @@ public class DynamicEntitiesInterceptorTests
 
         var directive = new DynamicEntitiesDirective();
         _builderMock
-            .Setup(b => b.BuildFromRecentItems(testUserId, It.IsAny<CancellationToken>()))
+            .Setup(b => b.BuildFromRecentItems(testUserId, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(directive);
 
         var interceptor = CreateInterceptor();
@@ -225,7 +225,7 @@ public class DynamicEntitiesInterceptorTests
         await interceptor.ProcessAsync(ctx, CancellationToken.None);
 
         _builderMock.Verify(
-            b => b.BuildFromRecentItems(testUserId, It.IsAny<CancellationToken>()),
+            b => b.BuildFromRecentItems(testUserId, It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -257,7 +257,7 @@ public class DynamicEntitiesInterceptorTests
     {
         var userId = Guid.NewGuid();
         _builderMock
-            .Setup(b => b.BuildFromRecentItems(userId, It.IsAny<CancellationToken>()))
+            .Setup(b => b.BuildFromRecentItems(userId, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Throws(new InvalidOperationException("test failure"));
 
         var interceptor = CreateInterceptor();
@@ -285,7 +285,7 @@ public class DynamicEntitiesInterceptorTests
     {
         var userId = Guid.NewGuid();
         _builderMock
-            .Setup(b => b.BuildFromRecentItems(userId, It.IsAny<CancellationToken>()))
+            .Setup(b => b.BuildFromRecentItems(userId, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Throws(new OperationCanceledException());
 
         var interceptor = CreateInterceptor();

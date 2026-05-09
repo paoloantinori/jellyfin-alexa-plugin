@@ -160,7 +160,7 @@ public class LibrarySyncService
             .Where(t => !string.IsNullOrWhiteSpace(t.Name))
             .Take(MaxCatalogValues);
 
-        CatalogPayload payload = CatalogPayload.FromItems(catalogType, itemTuples, PhoneticSynonymGenerator.GenerateSynonyms);
+        CatalogPayload payload = CatalogPayload.FromItems(catalogType, itemTuples, PhoneticSynonymGenerator.GenerateSynonyms, ItalianLocale);
 
         if (payload.Values.Count >= MaxCatalogValues)
         {
