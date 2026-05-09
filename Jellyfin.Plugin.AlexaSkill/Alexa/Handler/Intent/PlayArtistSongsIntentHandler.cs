@@ -97,7 +97,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             artists = new List<BaseItem> { topMatch };
         }
 
-        // Get all songs with the artists
+        string matchedArtistName = artists[0].Name;
         IReadOnlyList<BaseItem> artistsItems = await RetryAsync(() => _libraryManager.GetItemList(new InternalItemsQuery()
         {
             User = jellyfinUser,
@@ -108,7 +108,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         }), "GetArtistSongs", cancellationToken).ConfigureAwait(false);
         if (artistsItems.Count == 0)
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("NoSongsForArtist", locale, musician));
+            return ResponseBuilder.Tell(ResponseStrings.Get("NoSongsForArtist", locale, matchedArtistName));
         }
 
         List<QueueItem> queueItems = new List<QueueItem>();
