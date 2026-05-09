@@ -465,7 +465,17 @@
           "Elenca gli album di {musician}",
           "Quali {query_type} abbiamo di {musician}",
           "Che {query_type} abbiamo di {musician}",
-          "Mostra {query_type} di {musician}"
+          "Mostra {query_type} di {musician}",
+          "Quali brani ci sono di {musician}",
+          "Quali canzoni ci sono di {musician}",
+          "Che brani ci sono di {musician}",
+          "Che canzoni ci sono di {musician}",
+          "Quali album ci sono di {musician}",
+          "Che album ci sono di {musician}",
+          "Quali dischi ci sono di {musician}",
+          "Che dischi ci sono di {musician}",
+          "Quali {query_type} ci sono di {musician}",
+          "Che {query_type} ci sono di {musician}"
         ],
         "slots": [
           {

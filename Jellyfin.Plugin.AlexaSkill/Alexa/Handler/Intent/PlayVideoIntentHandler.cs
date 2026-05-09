@@ -111,7 +111,7 @@ public class PlayVideoIntentHandler : BaseHandler
                     {
                         VideoItem = new VideoItem
                         {
-                            Source = GetStreamUrl(itemId, user),
+                            Source = GetVideoStreamUrl(itemId, user),
                             Metadata = new VideoItemMetadata
                             {
                                 Title = video.Name

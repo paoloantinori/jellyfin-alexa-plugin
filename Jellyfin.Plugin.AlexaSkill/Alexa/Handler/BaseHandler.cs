@@ -169,10 +169,19 @@ public abstract class BaseHandler
     /// <param name="user">The user for which the item should be played.</param>
     /// <returns>Streamable url of the requested item.</returns>
     public string GetStreamUrl(string itemId, Entities.User user)
-    {
-        // TODO: add possible transcoding
-        return new Uri(new Uri(_config.ServerAddress), "Items/" + itemId + "/Download?api_key=" + user.JellyfinToken).ToString();
-    }
+        => BuildStreamUrl("Audio/", itemId, user);
+
+    /// <summary>
+    /// Get a video stream URL for the given item.
+    /// </summary>
+    /// <param name="itemId">Id of the item to stream.</param>
+    /// <param name="user">The user for which the item should be played.</param>
+    /// <returns>Streamable url of the requested item.</returns>
+    public string GetVideoStreamUrl(string itemId, Entities.User user)
+        => BuildStreamUrl("Videos/", itemId, user);
+
+    private string BuildStreamUrl(string pathSegment, string itemId, Entities.User user)
+        => new Uri(new Uri(_config.ServerAddress), $"{pathSegment}{itemId}/stream?static=true&api_key={user.JellyfinToken}").ToString();
 
     /// <summary>
     /// Get a cover art image URL for the given item.

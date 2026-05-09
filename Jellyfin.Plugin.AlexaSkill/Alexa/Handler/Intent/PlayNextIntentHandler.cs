@@ -117,8 +117,14 @@ public class PlayNextIntentHandler : BaseHandler
 
         if (songs.Count > 1)
         {
-            var matches = songs.Take(3).Select(s => (s.Id, s.Name)).ToList();
-            return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeSong, locale);
+            BaseItem? topMatch = FuzzyMatch(songQuery, songs, s => s.Name);
+            if (topMatch == null)
+            {
+                var matches = songs.Take(3).Select(s => (s.Id, s.Name)).ToList();
+                return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeSong, locale);
+            }
+
+            songs = new List<BaseItem> { topMatch };
         }
 
         BaseItem song = songs[0];

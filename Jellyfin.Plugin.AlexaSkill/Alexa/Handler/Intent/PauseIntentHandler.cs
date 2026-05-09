@@ -37,15 +37,19 @@ public class PauseIntentHandler : BaseHandler
     }
 
     /// <summary>
-    /// Pause any currently playing media.
+    /// Pause or stop currently playing media.
+    /// For Stop/Cancel: the device has already stopped audio locally, return an empty response.
+    /// For Pause: send an AudioPlayer.Stop directive to stop the stream.
     /// </summary>
-    /// <param name="request">The skill request which should be handled.</param>
-    /// <param name="context">The context of the skill intent request.</param>
-    /// <param name="user">The user instance.</param>
-    /// <param name="session">The session instance.</param>
-    /// <returns>Player stop skill response.</returns>
-    public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
+    public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
-        return ResponseBuilder.AudioPlayerStop();
+        if (request is IntentRequest ir &&
+            (string.Equals(ir.Intent.Name, IntentNames.AmazonStop, System.StringComparison.Ordinal) ||
+             string.Equals(ir.Intent.Name, IntentNames.AmazonCancel, System.StringComparison.Ordinal)))
+        {
+            return Task.FromResult(ResponseBuilder.Empty());
+        }
+
+        return Task.FromResult(ResponseBuilder.AudioPlayerStop());
     }
 }
