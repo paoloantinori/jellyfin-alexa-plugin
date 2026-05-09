@@ -74,6 +74,7 @@ public class AddToQueueIntentHandler : BaseHandler
         Jellyfin.Database.Implementations.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
 
         List<Guid> artistIds = new();
+        string? matchedArtistName = null;
         if (!string.IsNullOrWhiteSpace(musicianQuery))
         {
             IReadOnlyList<BaseItem> artists = await RetryAsync(() => _libraryManager.GetItemList(new InternalItemsQuery()
@@ -90,6 +91,7 @@ public class AddToQueueIntentHandler : BaseHandler
                 return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByArtist", locale, musicianQuery));
             }
 
+            matchedArtistName = artists[0].Name;
             foreach (BaseItem artist in artists)
             {
                 artistIds.Add(artist.Id);
@@ -109,7 +111,7 @@ public class AddToQueueIntentHandler : BaseHandler
         if (songs.Count == 0)
         {
             return musicianQuery != null
-                ? ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByNameAndArtist", locale, songQuery, musicianQuery))
+                ? ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByNameAndArtist", locale, songQuery, matchedArtistName!))
                 : ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByName", locale, songQuery));
         }
 

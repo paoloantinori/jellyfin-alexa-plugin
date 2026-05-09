@@ -81,6 +81,7 @@ public class PlayAlbumIntentHandler : BaseHandler
         Jellyfin.Database.Implementations.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
 
         List<Guid> artistsIds = new List<Guid>();
+        string? matchedArtistName = null;
         if (musician != null)
         {
             IReadOnlyList<BaseItem> artists = await RetryAsync(() => _libraryManager.GetItemList(new InternalItemsQuery()
@@ -96,6 +97,7 @@ public class PlayAlbumIntentHandler : BaseHandler
                 return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByArtist", locale, musician));
             }
 
+            matchedArtistName = artists[0].Name;
             foreach (BaseItem artist in artists)
             {
                 artistsIds.Add(artist.Id);
@@ -113,7 +115,7 @@ public class PlayAlbumIntentHandler : BaseHandler
         }), "GetAlbums", cancellationToken).ConfigureAwait(false);
         if (albums.Count == 0 && musician != null)
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByNameAndArtist", locale, album, musician));
+            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByNameAndArtist", locale, album, matchedArtistName!));
         }
         else if (albums.Count == 0)
         {
