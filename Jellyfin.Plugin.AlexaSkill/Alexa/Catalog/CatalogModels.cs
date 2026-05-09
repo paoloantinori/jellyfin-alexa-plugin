@@ -110,12 +110,14 @@ public class CatalogPayload
     /// </summary>
     /// <param name="type">The catalog type (artist, album, song).</param>
     /// <param name="items">Collection of (Id, Name) tuples from the library.</param>
-    /// <param name="synonymGenerator">Function that generates phonetic synonyms for a name.</param>
+    /// <param name="synonymGenerator">Function that generates phonetic synonyms for a name given a locale.</param>
+    /// <param name="locale">The Alexa locale for phonetic synonym generation.</param>
     /// <returns>A populated <see cref="CatalogPayload"/>.</returns>
     public static CatalogPayload FromItems(
         CatalogType type,
         IEnumerable<(Guid Id, string Name)> items,
-        Func<string, List<string>> synonymGenerator)
+        Func<string, string, List<string>> synonymGenerator,
+        string locale)
     {
         var payload = new CatalogPayload();
 
@@ -126,7 +128,7 @@ public class CatalogPayload
                 continue;
             }
 
-            List<string> synonyms = synonymGenerator(name);
+            List<string> synonyms = synonymGenerator(name, locale);
             var catalogValue = new CatalogValue
             {
                 Id = CatalogValue.FormatId(type, id),

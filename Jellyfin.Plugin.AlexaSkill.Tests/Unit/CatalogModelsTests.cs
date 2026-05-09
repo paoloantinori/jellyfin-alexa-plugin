@@ -43,7 +43,7 @@ public class CatalogModelsTests
             (Id: Guid.Parse("b2c3d4e5-f6a7-8901-bcde-f12345678901"), Name: "Pink Floyd")
         };
 
-        var payload = CatalogPayload.FromItems(CatalogType.Artist, items, _ => new List<string> { "synonym" });
+        var payload = CatalogPayload.FromItems(CatalogType.Artist, items, (_, _) => new List<string> { "synonym" }, "it-IT");
 
         Assert.Equal(2, payload.Values.Count);
         Assert.Equal("Queen", payload.Values[0].Name.Value);
@@ -61,7 +61,7 @@ public class CatalogModelsTests
             (Id: Guid.NewGuid(), Name: null!)
         };
 
-        var payload = CatalogPayload.FromItems(CatalogType.Artist, items, _ => new List<string>());
+        var payload = CatalogPayload.FromItems(CatalogType.Artist, items, (_, _) => new List<string>(), "it-IT");
         Assert.Single(payload.Values);
         Assert.Equal("Queen", payload.Values[0].Name.Value);
     }
@@ -70,7 +70,7 @@ public class CatalogModelsTests
     public void FromItems_SetsSynonymsWhenGenerated()
     {
         var items = new[] { (Id: Guid.NewGuid(), Name: "Queen") };
-        var payload = CatalogPayload.FromItems(CatalogType.Artist, items, _ => new List<string> { "kuin" });
+        var payload = CatalogPayload.FromItems(CatalogType.Artist, items, (_, _) => new List<string> { "kuin" }, "it-IT");
 
         Assert.NotNull(payload.Values[0].Name.Synonyms);
         Assert.Equal(["kuin"], payload.Values[0].Name.Synonyms);
@@ -80,7 +80,7 @@ public class CatalogModelsTests
     public void FromItems_SetsSynonymsToNullWhenEmpty()
     {
         var items = new[] { (Id: Guid.NewGuid(), Name: "Queen") };
-        var payload = CatalogPayload.FromItems(CatalogType.Artist, items, _ => new List<string>());
+        var payload = CatalogPayload.FromItems(CatalogType.Artist, items, (_, _) => new List<string>(), "it-IT");
 
         Assert.Null(payload.Values[0].Name.Synonyms);
     }
@@ -96,11 +96,11 @@ public class CatalogModelsTests
             (Id: Guid.NewGuid(), Name: "C")
         };
 
-        CatalogPayload.FromItems(CatalogType.Album, items, name =>
+        CatalogPayload.FromItems(CatalogType.Album, items, (name, _) =>
         {
             callCount++;
             return new List<string> { name.ToLowerInvariant() };
-        });
+        }, "it-IT");
 
         Assert.Equal(3, callCount);
     }
@@ -108,7 +108,7 @@ public class CatalogModelsTests
     [Fact]
     public void FromItems_EmptyInput_ReturnsEmptyPayload()
     {
-        var payload = CatalogPayload.FromItems(CatalogType.Artist, [], _ => new List<string>());
+        var payload = CatalogPayload.FromItems(CatalogType.Artist, [], (_, _) => new List<string>(), "it-IT");
         Assert.Empty(payload.Values);
     }
 

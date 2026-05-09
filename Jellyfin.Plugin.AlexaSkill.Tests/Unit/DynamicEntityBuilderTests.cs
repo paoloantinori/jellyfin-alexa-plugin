@@ -68,7 +68,7 @@ public class DynamicEntityBuilderTests
             .Returns((Jellyfin.Database.Implementations.Entities.User?)null);
 
         var builder = CreateBuilder();
-        var result = builder.BuildFromRecentItems(userId, CancellationToken.None);
+        var result = builder.BuildFromRecentItems(userId, "it-IT", CancellationToken.None);
 
         Assert.Null(result);
     }
@@ -81,7 +81,7 @@ public class DynamicEntityBuilderTests
         SetupLibraryMock([], []);
 
         var builder = CreateBuilder();
-        var result = builder.BuildFromRecentItems(userId, CancellationToken.None);
+        var result = builder.BuildFromRecentItems(userId, "it-IT", CancellationToken.None);
 
         Assert.Null(result);
     }
@@ -100,7 +100,7 @@ public class DynamicEntityBuilderTests
         SetupLibraryMock(artists, []);
 
         var builder = CreateBuilder();
-        var result = builder.BuildFromRecentItems(userId, CancellationToken.None);
+        var result = builder.BuildFromRecentItems(userId, "it-IT", CancellationToken.None);
 
         Assert.NotNull(result);
         Assert.Single(result.Types);
@@ -124,7 +124,7 @@ public class DynamicEntityBuilderTests
         SetupLibraryMock([], albums);
 
         var builder = CreateBuilder();
-        var result = builder.BuildFromRecentItems(userId, CancellationToken.None);
+        var result = builder.BuildFromRecentItems(userId, "it-IT", CancellationToken.None);
 
         Assert.NotNull(result);
         Assert.Single(result.Types);
@@ -149,7 +149,7 @@ public class DynamicEntityBuilderTests
         SetupLibraryMock(artists, albums);
 
         var builder = CreateBuilder();
-        var result = builder.BuildFromRecentItems(userId, CancellationToken.None);
+        var result = builder.BuildFromRecentItems(userId, "it-IT", CancellationToken.None);
 
         Assert.NotNull(result);
         Assert.Equal(2, result.Types.Count);
@@ -173,7 +173,7 @@ public class DynamicEntityBuilderTests
         SetupLibraryMock(artists, []);
 
         var builder = CreateBuilder();
-        var result = builder.BuildFromRecentItems(userId, CancellationToken.None);
+        var result = builder.BuildFromRecentItems(userId, "it-IT", CancellationToken.None);
 
         Assert.NotNull(result);
         Assert.Single(result.Types[0].Values);
@@ -194,7 +194,7 @@ public class DynamicEntityBuilderTests
         SetupLibraryMock(artists, []);
 
         var builder = CreateBuilder();
-        var result = builder.BuildFromRecentItems(userId, CancellationToken.None);
+        var result = builder.BuildFromRecentItems(userId, "it-IT", CancellationToken.None);
 
         Assert.NotNull(result);
         // PhoneticSynonymGenerator produces phonetic variants for Italian-friendly names
@@ -217,7 +217,7 @@ public class DynamicEntityBuilderTests
         SetupLibraryMock(artists, []);
 
         var builder = CreateBuilder();
-        var result = builder.BuildFromRecentItems(userId, CancellationToken.None);
+        var result = builder.BuildFromRecentItems(userId, "it-IT", CancellationToken.None);
 
         Assert.NotNull(result);
         Assert.Equal(50, result.Types[0].Values.Count);
@@ -234,7 +234,7 @@ public class DynamicEntityBuilderTests
             []);
 
         var builder = CreateBuilder();
-        var result = builder.BuildFromRecentItems(userId, CancellationToken.None);
+        var result = builder.BuildFromRecentItems(userId, "it-IT", CancellationToken.None);
 
         Assert.NotNull(result);
         Assert.Equal("REPLACE", result.UpdateBehavior);

@@ -7,6 +7,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 
 public class PhoneticSynonymGeneratorTests
 {
+    // --- Italian locale tests (existing behavior preserved) ---
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]
@@ -14,7 +16,7 @@ public class PhoneticSynonymGeneratorTests
     [InlineData("AB")]
     public void GenerateSynonyms_ShortOrNullNames_ReturnEmpty(string? name)
     {
-        var result = PhoneticSynonymGenerator.GenerateSynonyms(name!);
+        var result = PhoneticSynonymGenerator.GenerateSynonyms(name!, "it-IT");
         Assert.Empty(result);
     }
 
@@ -26,7 +28,7 @@ public class PhoneticSynonymGeneratorTests
     [InlineData("Pavarotti")]
     public void GenerateSynonyms_ItalianOriginNames_ReturnEmpty(string name)
     {
-        var result = PhoneticSynonymGenerator.GenerateSynonyms(name);
+        var result = PhoneticSynonymGenerator.GenerateSynonyms(name, "it-IT");
         Assert.Empty(result);
     }
 
@@ -36,14 +38,14 @@ public class PhoneticSynonymGeneratorTests
     [InlineData("Moretti")]
     public void GenerateSynonyms_ItalianEndings_ReturnEmpty(string name)
     {
-        var result = PhoneticSynonymGenerator.GenerateSynonyms(name);
+        var result = PhoneticSynonymGenerator.GenerateSynonyms(name, "it-IT");
         Assert.Empty(result);
     }
 
     [Fact]
     public void GenerateSynonyms_Queen_ProducesPhoneticVariant()
     {
-        var result = PhoneticSynonymGenerator.GenerateSynonyms("Queen");
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Queen", "it-IT");
         Assert.NotEmpty(result);
         Assert.Contains(result, s => s.Contains('u') || s.Contains('v'));
     }
@@ -51,7 +53,7 @@ public class PhoneticSynonymGeneratorTests
     [Fact]
     public void GenerateSynonyms_TheBeatles_StripsArticleAndAddsItalianVariant()
     {
-        var result = PhoneticSynonymGenerator.GenerateSynonyms("The Beatles");
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("The Beatles", "it-IT");
         Assert.NotEmpty(result);
         Assert.Contains(result, s => s.StartsWith("i "));
     }
@@ -59,7 +61,7 @@ public class PhoneticSynonymGeneratorTests
     [Fact]
     public void GenerateSynonyms_PinkFloyd_TransformsPhToF()
     {
-        var result = PhoneticSynonymGenerator.GenerateSynonyms("Pink Floyd");
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Pink Floyd", "it-IT");
         Assert.NotEmpty(result);
         Assert.Contains(result, s => s.Contains("Floid") || !s.Contains("ph"));
     }
@@ -67,7 +69,7 @@ public class PhoneticSynonymGeneratorTests
     [Fact]
     public void GenerateSynonyms_Backstreet_Boys_TransformsCkToK()
     {
-        var result = PhoneticSynonymGenerator.GenerateSynonyms("Backstreet Boys");
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Backstreet Boys", "it-IT");
         Assert.NotEmpty(result);
         Assert.Contains(result, s => !s.Contains("ck"));
     }
@@ -75,7 +77,7 @@ public class PhoneticSynonymGeneratorTests
     [Fact]
     public void GenerateSynonyms_WithTh_TransformsToT()
     {
-        var result = PhoneticSynonymGenerator.GenerateSynonyms("Smiths");
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Smiths", "it-IT");
         Assert.NotEmpty(result);
         Assert.Contains(result, s => !s.Contains("th"));
     }
@@ -83,21 +85,21 @@ public class PhoneticSynonymGeneratorTests
     [Fact]
     public void GenerateSynonyms_ReturnsMaxThreeSynonyms()
     {
-        var result = PhoneticSynonymGenerator.GenerateSynonyms("The Backstreet Boys");
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("The Backstreet Boys", "it-IT");
         Assert.True(result.Count <= 3);
     }
 
     [Fact]
     public void GenerateSynonyms_NoDuplicatesInResult()
     {
-        var result = PhoneticSynonymGenerator.GenerateSynonyms("The Weather Underground");
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("The Weather Underground", "it-IT");
         Assert.Equal(result.Distinct(StringComparer.OrdinalIgnoreCase).ToList(), result);
     }
 
     [Fact]
     public void GenerateSynonyms_LeadingH_DroppedInVariant()
     {
-        var result = PhoneticSynonymGenerator.GenerateSynonyms("Heart");
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Heart", "it-IT");
         Assert.NotEmpty(result);
         Assert.Contains(result, s => !s.StartsWith("H") || s == "Heart");
     }
@@ -105,7 +107,7 @@ public class PhoneticSynonymGeneratorTests
     [Fact]
     public void GenerateSynonyms_WithW_TransformsW()
     {
-        var result = PhoneticSynonymGenerator.GenerateSynonyms("White Stripes");
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("White Stripes", "it-IT");
         Assert.NotEmpty(result);
         Assert.Contains(result, s => s.Contains('v') || s.Contains('V') || s.Contains('u') || s.Contains('U'));
     }
@@ -113,7 +115,7 @@ public class PhoneticSynonymGeneratorTests
     [Fact]
     public void GenerateSynonyms_OughSound_TransformsToOf()
     {
-        var result = PhoneticSynonymGenerator.GenerateSynonyms("Through Fire");
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Through Fire", "it-IT");
         Assert.NotEmpty(result);
         Assert.Contains(result, s => !s.Contains("ough"));
     }
@@ -121,7 +123,7 @@ public class PhoneticSynonymGeneratorTests
     [Fact]
     public void GenerateSynonyms_TionSuffix_TransformsToSionOrZion()
     {
-        var result = PhoneticSynonymGenerator.GenerateSynonyms("Motion Orchestra");
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Motion Orchestra", "it-IT");
         Assert.NotEmpty(result);
         Assert.Contains(result, s => s.Contains("sion") || s.Contains("zion"));
     }
@@ -129,29 +131,76 @@ public class PhoneticSynonymGeneratorTests
     [Fact]
     public void GenerateSynonyms_NoTransformablePhonetics_ReturnsEmpty()
     {
-        // "Nirvana" has no English-specific phonetic transforms (no th, sh, ph, ck, w, ough, tion)
-        var result = PhoneticSynonymGenerator.GenerateSynonyms("Nirvana");
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Nirvana", "it-IT");
         Assert.Empty(result);
     }
 
     [Fact]
     public void GenerateSynonyms_BandWithTransformableFeatures_ProducesVariants()
     {
-        var result = PhoneticSynonymGenerator.GenerateSynonyms("Weather Report");
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Weather Report", "it-IT");
         Assert.NotEmpty(result);
     }
 
     [Fact]
     public void GenerateSynonyms_DoubledConsonantName_DetectedAsItalian()
     {
-        var result = PhoneticSynonymGenerator.GenerateSynonyms("Botticelli");
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Botticelli", "it-IT");
         Assert.Empty(result);
     }
 
     [Fact]
     public void GenerateSynonyms_WithSh_TransformsShToSc()
     {
-        var result = PhoneticSynonymGenerator.GenerateSynonyms("Fleetwood Mac");
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Fleetwood Mac", "it-IT");
         Assert.NotEmpty(result);
+    }
+
+    // --- Locale dispatch tests ---
+
+    [Fact]
+    public void GenerateSynonyms_EnglishLocale_ReturnsEmpty()
+    {
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Pink Floyd", "en-US");
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void GenerateSynonyms_EnglishGBLocale_ReturnsEmpty()
+    {
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("The Beatles", "en-GB");
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void GenerateSynonyms_ItalianLocaleVariant_Works()
+    {
+        // it-IT and it-CH should both dispatch to Italian phonetics
+        var resultIT = PhoneticSynonymGenerator.GenerateSynonyms("Pink Floyd", "it-IT");
+        var resultCH = PhoneticSynonymGenerator.GenerateSynonyms("Pink Floyd", "it-CH");
+        Assert.NotEmpty(resultIT);
+        Assert.NotEmpty(resultCH);
+        Assert.Equal(resultIT.Count, resultCH.Count);
+    }
+
+    [Fact]
+    public void GenerateSynonyms_UnknownLocale_ReturnsEmpty()
+    {
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Pink Floyd", "ja-JP");
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void GenerateSynonyms_NullLocale_ReturnsEmpty()
+    {
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Pink Floyd", null!);
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void GenerateSynonyms_EmptyLocale_ReturnsEmpty()
+    {
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Pink Floyd", "");
+        Assert.Empty(result);
     }
 }
