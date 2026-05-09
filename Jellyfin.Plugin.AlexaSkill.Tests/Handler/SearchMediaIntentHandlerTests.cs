@@ -225,13 +225,13 @@ public class SearchMediaIntentHandlerTests
 
         var item1 = new Audio
         {
-            Name = "Star Wars Theme",
+            Name = "Star Trek Theme",
             Id = Guid.NewGuid()
         };
 
         var item2 = new global::MediaBrowser.Controller.Entities.Movies.Movie
         {
-            Name = "Star Wars: A New Hope",
+            Name = "Stargate",
             Id = Guid.NewGuid()
         };
 

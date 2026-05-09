@@ -118,6 +118,12 @@ public class SearchMediaIntentHandler : BaseHandler
 
         // Disambiguation uses MediaTypeSong; YesIntentHandler will play matches as audio.
         // Mixed-type results (audio + video) are rare for search disambiguation.
+        BaseItem? topMatch = FuzzyMatch(query, deduped, i => i.Name);
+        if (topMatch != null)
+        {
+            return PlayItem(topMatch, user, session, context);
+        }
+
         var matches = deduped.Take(3).Select(i => (i.Id, FormatWithTypeLabel(i))).ToList();
         return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeSong, locale);
     }

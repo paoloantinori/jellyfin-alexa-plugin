@@ -120,11 +120,16 @@ public class PlayAlbumIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByName", locale, album));
         }
 
-        // If multiple albums found, ask for disambiguation
         if (albums.Count > 1)
         {
-            var matches = albums.Take(3).Select(a => (a.Id, a.Name)).ToList();
-            return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeAlbum, locale);
+            BaseItem? topMatch = FuzzyMatch(album, albums, a => a.Name);
+            if (topMatch == null)
+            {
+                var matches = albums.Take(3).Select(a => (a.Id, a.Name)).ToList();
+                return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeAlbum, locale);
+            }
+
+            albums = new List<BaseItem> { topMatch };
         }
 
         // Get all songs from the album

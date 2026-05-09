@@ -376,13 +376,13 @@ public class PlayPodcastIntentHandlerTests
 
         var podcast1 = new global::MediaBrowser.Controller.Entities.TV.Series
         {
-            Name = "The Daily",
+            Name = "Morning Edition",
             Id = Guid.NewGuid()
         };
 
         var podcast2 = new global::MediaBrowser.Controller.Entities.TV.Series
         {
-            Name = "Daily Tech News",
+            Name = "All Things Considered",
             Id = Guid.NewGuid()
         };
 

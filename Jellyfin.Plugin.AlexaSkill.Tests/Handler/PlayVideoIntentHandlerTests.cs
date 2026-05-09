@@ -163,8 +163,8 @@ public class PlayVideoIntentHandlerTests
     [Fact]
     public async Task Handle_FoundMultipleResults_ReturnsDisambiguationPrompt()
     {
-        var movie1 = CreateTestItem("The Matrix");
-        var movie2 = CreateTestItem("The Matrix Reloaded");
+        var movie1 = CreateTestItem("Inception");
+        var movie2 = CreateTestItem("Interstellar");
 
         _libraryManagerMock
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
@@ -172,19 +172,18 @@ public class PlayVideoIntentHandlerTests
 
         var handler = CreateHandler();
         var response = await handler.HandleAsync(
-            CreatePlayVideoRequest("The Matrix"),
+            CreatePlayVideoRequest("Nolan"),
             CreateContext(),
             TestHelpers.CreateTestUser(),
             CreateSession(), CancellationToken.None);
 
-        // Should return an Ask response for disambiguation, not a video directive
         Assert.NotNull(response.Response.OutputSpeech);
         Assert.False(response.Response.ShouldEndSession);
 
         string speechText = response.Response.OutputSpeech is SsmlOutputSpeech ssml
             ? ssml.Ssml
             : Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech).Text;
-        Assert.Contains("The Matrix", speechText);
+        Assert.Contains("Inception", speechText);
     }
 
     [Fact]
