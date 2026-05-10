@@ -188,6 +188,95 @@ public class AplHelperTests
     }
 
     [Fact]
+    public void BuildListDirective_WithEmptyList_ReturnsNull()
+    {
+        var directive = AplHelper.BuildListDirective("Test", new List<ListDisplayItem>(), "testList");
+
+        Assert.Null(directive);
+    }
+
+    [Fact]
+    public void BuildListDirective_WithItems_ReturnsDirective()
+    {
+        var items = new List<ListDisplayItem>
+        {
+            new("Song 1", "id-1", "Artist 1", "https://img.test/1.jpg"),
+            new("Song 2", "id-2", "Artist 2", "https://img.test/2.jpg"),
+            new("Song 3", "id-3") // no subtitle, no art
+        };
+
+        var directive = AplHelper.BuildListDirective("Soul Coughing Songs", items, "browseList");
+
+        Assert.NotNull(directive);
+        Assert.Equal("Alexa.Presentation.APL.RenderDocument", directive.Type);
+        Assert.Equal("browseList", directive.Token);
+        Assert.NotNull(directive.Document);
+        Assert.NotNull(directive.DataSources);
+    }
+
+    [Fact]
+    public void BuildListDirective_Datasources_ContainTitleAndItems()
+    {
+        var items = new List<ListDisplayItem>
+        {
+            new("Track A", "audio-123", "Album X", "https://art/x.jpg")
+        };
+
+        var directive = AplHelper.BuildListDirective("My Library", items, "test");
+
+        Assert.NotNull(directive);
+        var payload = directive.DataSources!["payload"];
+        Assert.Equal("My Library", payload["title"]!.ToString());
+
+        var dataItems = payload["items"] as global::Newtonsoft.Json.Linq.JArray;
+        Assert.NotNull(dataItems);
+        Assert.Single(dataItems);
+
+        var firstItem = dataItems[0];
+        Assert.Equal("Track A", firstItem["title"]!.ToString());
+        Assert.Equal("Album X", firstItem["subtitle"]!.ToString());
+        Assert.Equal("https://art/x.jpg", firstItem["artUrl"]!.ToString());
+        Assert.Equal("audio-123", firstItem["id"]!.ToString());
+    }
+
+    [Fact]
+    public void BuildListDirective_Document_ContainsSequenceWithDataBinding()
+    {
+        var items = new List<ListDisplayItem>
+        {
+            new("Item", "id-1")
+        };
+
+        var directive = AplHelper.BuildListDirective("Test", items, "test");
+
+        Assert.NotNull(directive);
+        var doc = directive.Document!;
+        Assert.Equal("APL", doc["type"]!.ToString());
+        Assert.Equal("1.9", doc["version"]!.ToString());
+        Assert.Equal("dark", doc["theme"]!.ToString());
+    }
+
+    [Fact]
+    public void BuildListDirective_ItemsWithOptionalFields_DefaultToEmpty()
+    {
+        var items = new List<ListDisplayItem>
+        {
+            new("Minimal Item", "min-id")
+        };
+
+        var directive = AplHelper.BuildListDirective("Test", items, "test");
+
+        Assert.NotNull(directive);
+        var payload = directive.DataSources!["payload"];
+        var dataItems = payload["items"] as global::Newtonsoft.Json.Linq.JArray;
+        Assert.NotNull(dataItems);
+
+        var firstItem = dataItems[0];
+        Assert.Equal(string.Empty, firstItem["subtitle"]!.ToString());
+        Assert.Equal(string.Empty, firstItem["artUrl"]!.ToString());
+    }
+
+    [Fact]
     public async Task BuildAudioPlayerResponse_WithoutAplContext_NoAplDirective()
     {
         var sessionManagerMock = new Mock<ISessionManager>();
