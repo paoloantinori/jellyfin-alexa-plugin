@@ -73,8 +73,28 @@
       {
         "name": "PlaySongIntent",
         "samples": [
-          "Play the song {song}",
-          "Play the song {song} from {musician}"
+          "play {song}",
+          "play the song {song}",
+          "play song {song}",
+          "play {song} by {musician}",
+          "play the song {song} by {musician}",
+          "play song {song} by {musician}",
+          "listen to {song}",
+          "listen to the song {song}",
+          "listen to {song} by {musician}",
+          "listen to the song {song} by {musician}",
+          "put on {song}",
+          "put on the song {song}",
+          "I want to hear {song}",
+          "I want to hear {song} by {musician}",
+          "can you play {song}",
+          "start playing {song}",
+          "play the track {song}",
+          "play the track {song} by {musician}",
+          "let's hear {song}",
+          "give me {song}",
+          "stream {song}",
+          "play that song {song}"
         ],
         "slots": [
           {
@@ -90,8 +110,27 @@
       {
         "name": "PlayAlbumIntent",
         "samples": [
-          "Play the album {album}",
-          "Play the album {album} by {musician}"
+          "play {album}",
+          "play the album {album}",
+          "play album {album}",
+          "play {album} by {musician}",
+          "play the album {album} by {musician}",
+          "play album {album} by {musician}",
+          "listen to {album}",
+          "listen to the album {album}",
+          "listen to {album} by {musician}",
+          "listen to the album {album} by {musician}",
+          "put on {album}",
+          "put on the album {album}",
+          "I want to hear {album}",
+          "I want to hear {album} by {musician}",
+          "can you play {album}",
+          "start playing {album}",
+          "play the record {album}",
+          "play the record {album} by {musician}",
+          "let's hear {album}",
+          "give me {album}",
+          "stream {album}"
         ],
         "slots": [
           {
@@ -119,8 +158,32 @@
       {
         "name": "PlayArtistSongsIntent",
         "samples": [
-          "Play songs from {musician}",
-          "Play music from {musician}"
+          "play songs by {musician}",
+          "play music by {musician}",
+          "play tracks by {musician}",
+          "play tunes by {musician}",
+          "play songs from {musician}",
+          "play music from {musician}",
+          "listen to {musician}",
+          "listen to songs by {musician}",
+          "listen to music by {musician}",
+          "listen to songs from {musician}",
+          "put on {musician}",
+          "put on some {musician}",
+          "I want to hear {musician}",
+          "I want to listen to {musician}",
+          "let's hear {musician}",
+          "let's listen to {musician}",
+          "can you play {musician}",
+          "start playing {musician}",
+          "shuffle {musician}",
+          "shuffle songs by {musician}",
+          "play {musician}",
+          "play some {musician}",
+          "play {musician} songs",
+          "play {musician} music",
+          "give me {musician}",
+          "stream {musician}"
         ],
         "slots": [
           {

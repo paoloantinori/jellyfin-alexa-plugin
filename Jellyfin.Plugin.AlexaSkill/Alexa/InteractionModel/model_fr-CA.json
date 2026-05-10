@@ -81,8 +81,27 @@
       {
         "name": "PlaySongIntent",
         "samples": [
+          "Lis {song}",
           "Lis la chanson {song}",
-          "Lis la chanson {song} de {musician}"
+          "Lis chanson {song}",
+          "Lis {song} de {musician}",
+          "Lis la chanson {song} de {musician}",
+          "Écoute {song}",
+          "Écoute la chanson {song}",
+          "Écoute {song} de {musician}",
+          "Écoute la chanson {song} de {musician}",
+          "Mets {song}",
+          "Mets la chanson {song}",
+          "Mets {song} de {musician}",
+          "Je veux écouter {song}",
+          "Lance {song}",
+          "Lance la chanson {song}",
+          "Passe {song}",
+          "Diffuse {song}",
+          "Je veux entendre {song}",
+          "Mets le morceau {song}",
+          "Lis le titre {song}",
+          "Commence {song}"
         ],
         "slots": [
           {
@@ -98,8 +117,26 @@
       {
         "name": "PlayAlbumIntent",
         "samples": [
+          "Lis {album}",
           "Lis l'album {album}",
-          "Lis l'album {album} de {musician}"
+          "Lis album {album}",
+          "Lis {album} de {musician}",
+          "Lis l'album {album} de {musician}",
+          "Écoute {album}",
+          "Écoute l'album {album}",
+          "Écoute {album} de {musician}",
+          "Écoute l'album {album} de {musician}",
+          "Mets {album}",
+          "Mets l'album {album}",
+          "Mets {album} de {musician}",
+          "Je veux écouter {album}",
+          "Lance {album}",
+          "Lance l'album {album}",
+          "Passe {album}",
+          "Diffuse {album}",
+          "Je veux entendre {album}",
+          "Mets le disque {album}",
+          "Commence {album}"
         ],
         "slots": [
           {
@@ -128,7 +165,28 @@
         "name": "PlayArtistSongsIntent",
         "samples": [
           "Lis les chansons de {musician}",
-          "Lis la musique de {musician}"
+          "Lis la musique de {musician}",
+          "Lis les titres de {musician}",
+          "Lis les morceaux de {musician}",
+          "Lis {musician}",
+          "Écoute {musician}",
+          "Écoute les chansons de {musician}",
+          "Écoute la musique de {musician}",
+          "Écoute les titres de {musician}",
+          "Mets {musician}",
+          "Mets les chansons de {musician}",
+          "Mets la musique de {musician}",
+          "Je veux écouter {musician}",
+          "Je veux entendre {musician}",
+          "Lance {musician}",
+          "Lance les chansons de {musician}",
+          "Lance la musique de {musician}",
+          "Diffuse {musician}",
+          "Diffuse les chansons de {musician}",
+          "Mets des titres de {musician}",
+          "Passe {musician}",
+          "Passe les chansons de {musician}",
+          "Commence {musician}"
         ],
         "slots": [
           {
