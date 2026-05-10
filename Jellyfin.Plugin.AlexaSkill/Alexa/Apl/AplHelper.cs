@@ -25,7 +25,7 @@ internal static class AplHelper
 
     private static readonly Lazy<JObject> NowPlayingDocument = new(() => JObject.Parse(@"{
   ""type"": ""APL"",
-  ""version"": ""1.9"",
+  ""version"": ""1.7"",
   ""theme"": ""dark"",
   ""resources"": [
     {
@@ -61,21 +61,11 @@ internal static class AplHelper
           {
             ""type"": ""Image"",
             ""source"": ""${payload.backgroundUrl}"",
-            ""scale"": ""bestFill"",
+            ""scale"": ""best-fill"",
             ""width"": ""100vw"",
             ""height"": ""100vh"",
             ""position"": ""absolute"",
-            ""filter"": [
-              {
-                ""type"": ""Blur"",
-                ""radius"": 20
-              },
-              {
-                ""type"": ""Grayscale"",
-                ""amount"": 0.5
-              }
-            ],
-            ""opacity"": 0.4
+            ""opacity"": 0.3
           },
           {
             ""type"": ""Container"",
@@ -92,7 +82,7 @@ internal static class AplHelper
                 ""width"": ""${artSize}"",
                 ""height"": ""${artSize}"",
                 ""borderRadius"": 10,
-                ""scale"": ""bestFill""
+                ""scale"": ""best-fill""
               },
               {
                 ""type"": ""Text"",
@@ -122,12 +112,12 @@ internal static class AplHelper
                 ""items"": [
                   {
                     ""type"": ""TouchWrapper"",
-                    ""onPress"": {
-                      ""type"": ""SendEvent"",
-                      ""arguments"": [
-                        ""prev""
-                      ]
-                    },
+                    ""onPress"": [
+                      {
+                        ""type"": ""SendEvent"",
+                        ""arguments"": [ ""prev"" ]
+                      }
+                    ],
                     ""width"": ""${controlSize}"",
                     ""height"": ""${controlSize}"",
                     ""item"": {
@@ -140,12 +130,12 @@ internal static class AplHelper
                   },
                   {
                     ""type"": ""TouchWrapper"",
-                    ""onPress"": {
-                      ""type"": ""SendEvent"",
-                      ""arguments"": [
-                        ""pause""
-                      ]
-                    },
+                    ""onPress"": [
+                      {
+                        ""type"": ""SendEvent"",
+                        ""arguments"": [ ""pause"" ]
+                      }
+                    ],
                     ""width"": ""${controlSize}"",
                     ""height"": ""${controlSize}"",
                     ""item"": {
@@ -158,12 +148,12 @@ internal static class AplHelper
                   },
                   {
                     ""type"": ""TouchWrapper"",
-                    ""onPress"": {
-                      ""type"": ""SendEvent"",
-                      ""arguments"": [
-                        ""next""
-                      ]
-                    },
+                    ""onPress"": [
+                      {
+                        ""type"": ""SendEvent"",
+                        ""arguments"": [ ""next"" ]
+                      }
+                    ],
                     ""width"": ""${controlSize}"",
                     ""height"": ""${controlSize}"",
                     ""item"": {
@@ -186,7 +176,7 @@ internal static class AplHelper
 
     private static readonly Lazy<JObject> ListDocument = new(() => JObject.Parse(@"{
   ""type"": ""APL"",
-  ""version"": ""1.9"",
+  ""version"": ""1.7"",
   ""theme"": ""dark"",
   ""resources"": [
     {
@@ -218,7 +208,6 @@ internal static class AplHelper
         ""type"": ""Container"",
         ""height"": ""100vh"",
         ""width"": ""100vw"",
-        ""backgroundColor"": ""#1A1A1A"",
         ""items"": [
           {
             ""type"": ""Text"",
@@ -239,13 +228,12 @@ internal static class AplHelper
             ""items"": [
               {
                 ""type"": ""TouchWrapper"",
-                ""onPress"": {
-                  ""type"": ""SendEvent"",
-                  ""arguments"": [
-                    ""${payload.action}"",
-                    ""${data.id}""
-                  ]
-                },
+                ""onPress"": [
+                  {
+                    ""type"": ""SendEvent"",
+                    ""arguments"": [ ""${payload.action}"", ""${data.id}"" ]
+                  }
+                ],
                 ""item"": {
                   ""type"": ""Container"",
                   ""direction"": ""row"",
@@ -260,7 +248,7 @@ internal static class AplHelper
                       ""width"": ""${thumbSize}"",
                       ""height"": ""${thumbSize}"",
                       ""borderRadius"": 5,
-                      ""scale"": ""bestFill""
+                      ""scale"": ""best-fill""
                     },
                     {
                       ""type"": ""Container"",
