@@ -166,12 +166,14 @@ public class AplHelperTests
         Assert.Equal("queue", result.Token);
 
         var payload = result.DataSources["payload"] as JObject;
-        var tracks = payload?["tracks"] as JArray;
-        Assert.NotNull(tracks);
-        Assert.Single(tracks);
-        Assert.Equal("Track 1", tracks[0]["title"]?.ToString());
-        Assert.Equal("Artist 1", tracks[0]["artist"]?.ToString());
-        Assert.Equal(0, tracks[0]["index"]?.Value<int>());
+        var dataItems = payload?["items"] as JArray;
+        Assert.NotNull(dataItems);
+        Assert.Single(dataItems);
+        Assert.Equal("Track 1", dataItems[0]["title"]?.ToString());
+        Assert.Equal("Artist 1", dataItems[0]["subtitle"]?.ToString());
+        Assert.Equal("0", dataItems[0]["id"]?.ToString());
+        Assert.Equal("Up Next", payload?["title"]?.ToString());
+        Assert.Equal("playTrack", payload?["action"]?.ToString());
     }
 
     [Fact]
@@ -185,12 +187,12 @@ public class AplHelperTests
         };
 
         var result = AplHelper.BuildQueueDirective(items);
-        var tracks = (result!.DataSources["payload"] as JObject)?["tracks"] as JArray;
+        var dataItems = (result!.DataSources["payload"] as JObject)?["items"] as JArray;
 
-        Assert.Equal(3, tracks!.Count);
-        Assert.Equal(0, tracks[0]["index"]?.Value<int>());
-        Assert.Equal(1, tracks[1]["index"]?.Value<int>());
-        Assert.Equal(2, tracks[2]["index"]?.Value<int>());
+        Assert.Equal(3, dataItems!.Count);
+        Assert.Equal("0", dataItems[0]["id"]?.ToString());
+        Assert.Equal("1", dataItems[1]["id"]?.ToString());
+        Assert.Equal("2", dataItems[2]["id"]?.ToString());
     }
 
     [Fact]
@@ -202,10 +204,10 @@ public class AplHelperTests
         };
 
         var result = AplHelper.BuildQueueDirective(items);
-        var tracks = (result!.DataSources["payload"] as JObject)?["tracks"] as JArray;
+        var dataItems = (result!.DataSources["payload"] as JObject)?["items"] as JArray;
 
-        Assert.Equal(string.Empty, tracks![0]["artist"]?.ToString());
-        Assert.Equal(string.Empty, tracks[0]["artUrl"]?.ToString());
+        Assert.Equal(string.Empty, dataItems![0]["subtitle"]?.ToString());
+        Assert.Equal(string.Empty, dataItems[0]["artUrl"]?.ToString());
     }
 
     [Fact]
@@ -216,7 +218,9 @@ public class AplHelperTests
 
         var docStr = result!.Document.ToString();
         Assert.Contains("TouchWrapper", docStr);
-        Assert.Contains("playTrack", docStr);
+        // The action name is data-bound via ${payload.action}, not hardcoded in the template
+        var payload = result.DataSources["payload"] as JObject;
+        Assert.Equal("playTrack", payload?["action"]?.ToString());
     }
 
     [Fact]
