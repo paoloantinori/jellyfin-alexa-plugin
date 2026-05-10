@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -9,6 +10,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
@@ -76,6 +78,7 @@ public class ListQueueIntentHandler : BaseHandler
             return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("QueueEmpty", locale)));
         }
 
+        var resolvedItems = new List<BaseItem>();
         var names = new StringBuilder();
         for (int i = 0; i < upcoming.Count; i++)
         {
@@ -88,6 +91,7 @@ public class ListQueueIntentHandler : BaseHandler
                 }
 
                 names.Append(item.Name);
+                resolvedItems.Add(item);
             }
         }
 
@@ -96,6 +100,19 @@ public class ListQueueIntentHandler : BaseHandler
             return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("QueueEmpty", locale)));
         }
 
-        return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("QueueList", locale, names.ToString())));
+        SkillResponse response = ResponseBuilder.Tell(ResponseStrings.Get("QueueList", locale, names.ToString()));
+
+        if (Apl.AplHelper.DeviceSupportsApl(context))
+        {
+            var queueItems = resolvedItems.Select(i =>
+                new Apl.QueueDisplayItem { Title = i.Name, Artist = GetArtistSubtitle(i), ArtUrl = GetImageUrl(i.Id.ToString("N"), user) }).ToList();
+            var directive = Apl.AplHelper.BuildQueueDirective(queueItems);
+            if (directive != null)
+            {
+                response.Response.Directives.Add(directive);
+            }
+        }
+
+        return Task.FromResult(response);
     }
 }

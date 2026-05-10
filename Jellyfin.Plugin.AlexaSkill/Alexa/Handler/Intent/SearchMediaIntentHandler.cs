@@ -8,6 +8,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -116,8 +117,15 @@ public class SearchMediaIntentHandler : BaseHandler
 
         // Disambiguation uses MediaTypeSong; YesIntentHandler will play matches as audio.
         // Mixed-type results (audio + video) are rare for search disambiguation.
-        var matches = deduped.Take(3).Select(i => (i.Id, FormatWithTypeLabel(i))).ToList();
-        return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeSong, locale);
+        var topItems = deduped.Take(3).ToList();
+        var matches = topItems.Select(i => (i.Id, FormatWithTypeLabel(i))).ToList();
+        SkillResponse response = DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeSong, locale);
+
+        var aplItems = topItems.Select(i =>
+            new Apl.ListDisplayItem(i.Name, i.Id.ToString("N"), GetTypeName(i), GetImageUrl(i.Id.ToString("N"), user))).ToList();
+        TryAttachListDirective(response, context, query, aplItems, "search");
+
+        return response;
     }
 
     private SkillResponse PlayItem(

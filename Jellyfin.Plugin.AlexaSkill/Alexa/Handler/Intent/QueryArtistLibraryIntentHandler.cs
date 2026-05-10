@@ -175,17 +175,9 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
             response = ResponseBuilder.Tell(ResponseStrings.Get(partialKey, locale, artistName, total, MaxListedItems, partialList));
         }
 
-        if (AplHelper.DeviceSupportsApl(context))
-        {
-            var aplItems = items.Take(MaxListedItems).Select(i =>
-                new ListDisplayItem(i.Name, i.Id.ToString("N"), artistName, GetImageUrl(i.Id.ToString("N"), user))).ToList();
-
-            var directive = AplHelper.BuildListDirective(artistName, aplItems, "queryArtist");
-            if (directive != null)
-            {
-                response.Response.Directives.Add(directive);
-            }
-        }
+        var aplItems = items.Take(MaxListedItems).Select(i =>
+            new Apl.ListDisplayItem(i.Name, i.Id.ToString("N"), artistName, GetImageUrl(i.Id.ToString("N"), user))).ToList();
+        TryAttachListDirective(response, context, artistName, aplItems, "queryArtist");
 
         return response;
     }

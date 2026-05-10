@@ -323,4 +323,294 @@ public class AplHelperTests
         Assert.Single(response.Response.Directives);
         Assert.Equal("AudioPlayer.Play", response.Response.Directives[0].Type);
     }
+
+    [Fact]
+    public async Task SearchMedia_Disambiguation_WithApl_IncludesAplDirective()
+    {
+        var sessionManagerMock = new Mock<ISessionManager>();
+        var libraryManagerMock = new Mock<ILibraryManager>();
+        var userManagerMock = new Mock<IUserManager>();
+        var config = new PluginConfiguration();
+        TestHelpers.SetServerAddress(config, "https://test.example.com");
+        var loggerFactory = LoggerFactory.Create(b => { });
+
+        var handler = new SearchMediaIntentHandler(
+            sessionManagerMock.Object, config, libraryManagerMock.Object, userManagerMock.Object, loggerFactory);
+
+        var audio1 = new Audio { Name = "Song A", Id = Guid.NewGuid() };
+        audio1.Artists = new List<string> { "Artist 1" };
+        var audio2 = new Audio { Name = "Song B", Id = Guid.NewGuid() };
+        audio2.Artists = new List<string> { "Artist 2" };
+
+        var request = new IntentRequest
+        {
+            Intent = new Intent
+            {
+                Name = IntentNames.SearchMedia,
+                Slots = new Dictionary<string, Slot>
+                {
+                    ["query"] = new Slot { Value = "test song" }
+                }
+            },
+            DialogState = "COMPLETED",
+            Locale = "en-US"
+        };
+
+        userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
+            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+
+        libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { audio1, audio2 });
+
+        var session = TestHelpers.CreateTestSession(sessionManagerMock.Object, loggerFactory);
+        var context = CreateContextWithApl();
+
+        SkillResponse response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.Contains(response.Response.Directives, d => d.Type == "Alexa.Presentation.APL.RenderDocument");
+    }
+
+    [Fact]
+    public async Task SearchMedia_Disambiguation_WithoutApl_NoAplDirective()
+    {
+        var sessionManagerMock = new Mock<ISessionManager>();
+        var libraryManagerMock = new Mock<ILibraryManager>();
+        var userManagerMock = new Mock<IUserManager>();
+        var config = new PluginConfiguration();
+        TestHelpers.SetServerAddress(config, "https://test.example.com");
+        var loggerFactory = LoggerFactory.Create(b => { });
+
+        var handler = new SearchMediaIntentHandler(
+            sessionManagerMock.Object, config, libraryManagerMock.Object, userManagerMock.Object, loggerFactory);
+
+        var audio1 = new Audio { Name = "Song A", Id = Guid.NewGuid() };
+        audio1.Artists = new List<string> { "Artist 1" };
+        var audio2 = new Audio { Name = "Song B", Id = Guid.NewGuid() };
+        audio2.Artists = new List<string> { "Artist 2" };
+
+        var request = new IntentRequest
+        {
+            Intent = new Intent
+            {
+                Name = IntentNames.SearchMedia,
+                Slots = new Dictionary<string, Slot>
+                {
+                    ["query"] = new Slot { Value = "test song" }
+                }
+            },
+            DialogState = "COMPLETED",
+            Locale = "en-US"
+        };
+
+        userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
+            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+
+        libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { audio1, audio2 });
+
+        var session = TestHelpers.CreateTestSession(sessionManagerMock.Object, loggerFactory);
+        var context = CreateContextWithoutApl();
+
+        SkillResponse response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.DoesNotContain(response.Response.Directives, d => d.Type == "Alexa.Presentation.APL.RenderDocument");
+    }
+
+    [Fact]
+    public async Task ListQueue_WithApl_IncludesAplDirective()
+    {
+        var sessionManagerMock = new Mock<ISessionManager>();
+        var libraryManagerMock = new Mock<ILibraryManager>();
+        var config = new PluginConfiguration();
+        TestHelpers.SetServerAddress(config, "https://test.example.com");
+        var loggerFactory = LoggerFactory.Create(b => { });
+
+        var handler = new ListQueueIntentHandler(
+            sessionManagerMock.Object, config, libraryManagerMock.Object, loggerFactory);
+
+        var audio1 = new Audio { Name = "Song A", Id = Guid.NewGuid() };
+        audio1.Artists = new List<string> { "Artist 1" };
+        var audio2 = new Audio { Name = "Song B", Id = Guid.NewGuid() };
+        audio2.Artists = new List<string> { "Artist 2" };
+
+        var request = new IntentRequest
+        {
+            Intent = new Intent
+            {
+                Name = IntentNames.ListQueue,
+                Slots = new Dictionary<string, Slot>()
+            },
+            DialogState = "COMPLETED",
+            Locale = "en-US"
+        };
+
+        libraryManagerMock.Setup(l => l.GetItemById(audio1.Id)).Returns(audio1);
+        libraryManagerMock.Setup(l => l.GetItemById(audio2.Id)).Returns(audio2);
+
+        var session = TestHelpers.CreateTestSession(sessionManagerMock.Object, loggerFactory);
+        session.NowPlayingQueue = new List<MediaBrowser.Model.Session.QueueItem>
+        {
+            new() { Id = audio1.Id },
+            new() { Id = audio2.Id }
+        };
+
+        var context = CreateContextWithApl();
+
+        SkillResponse response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.Contains(response.Response.Directives, d => d.Type == "Alexa.Presentation.APL.RenderDocument");
+    }
+
+    [Fact]
+    public async Task ListQueue_WithoutApl_NoAplDirective()
+    {
+        var sessionManagerMock = new Mock<ISessionManager>();
+        var libraryManagerMock = new Mock<ILibraryManager>();
+        var config = new PluginConfiguration();
+        TestHelpers.SetServerAddress(config, "https://test.example.com");
+        var loggerFactory = LoggerFactory.Create(b => { });
+
+        var handler = new ListQueueIntentHandler(
+            sessionManagerMock.Object, config, libraryManagerMock.Object, loggerFactory);
+
+        var audio1 = new Audio { Name = "Song A", Id = Guid.NewGuid() };
+        audio1.Artists = new List<string> { "Artist 1" };
+        var audio2 = new Audio { Name = "Song B", Id = Guid.NewGuid() };
+        audio2.Artists = new List<string> { "Artist 2" };
+
+        var request = new IntentRequest
+        {
+            Intent = new Intent
+            {
+                Name = IntentNames.ListQueue,
+                Slots = new Dictionary<string, Slot>()
+            },
+            DialogState = "COMPLETED",
+            Locale = "en-US"
+        };
+
+        libraryManagerMock.Setup(l => l.GetItemById(audio1.Id)).Returns(audio1);
+        libraryManagerMock.Setup(l => l.GetItemById(audio2.Id)).Returns(audio2);
+
+        var session = TestHelpers.CreateTestSession(sessionManagerMock.Object, loggerFactory);
+        session.NowPlayingQueue = new List<MediaBrowser.Model.Session.QueueItem>
+        {
+            new() { Id = audio1.Id },
+            new() { Id = audio2.Id }
+        };
+
+        var context = CreateContextWithoutApl();
+
+        SkillResponse response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.DoesNotContain(response.Response.Directives, d => d.Type == "Alexa.Presentation.APL.RenderDocument");
+    }
+
+    [Fact]
+    public async Task InProgressMediaList_WithApl_IncludesAplDirective()
+    {
+        var sessionManagerMock = new Mock<ISessionManager>();
+        var libraryManagerMock = new Mock<ILibraryManager>();
+        var userManagerMock = new Mock<IUserManager>();
+        var userDataManagerMock = new Mock<IUserDataManager>();
+        var config = new PluginConfiguration();
+        TestHelpers.SetServerAddress(config, "https://test.example.com");
+        var loggerFactory = LoggerFactory.Create(b => { });
+
+        var handler = new InProgressMediaListIntentHandler(
+            sessionManagerMock.Object, config, libraryManagerMock.Object,
+            userManagerMock.Object, userDataManagerMock.Object, loggerFactory);
+
+        var audio = new Audio { Name = "Halfway Song", Id = Guid.NewGuid() };
+        audio.Artists = new List<string> { "Artist" };
+
+        var request = new IntentRequest
+        {
+            Intent = new Intent
+            {
+                Name = IntentNames.InProgressMediaList,
+                Slots = new Dictionary<string, Slot>()
+            },
+            DialogState = "COMPLETED",
+            Locale = "en-US"
+        };
+
+        userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
+            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+
+        libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { audio });
+
+        userDataManagerMock.Setup(u => u.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), audio))
+            .Returns(new MediaBrowser.Controller.Entities.UserItemData
+            {
+                Key = "test",
+                Played = false,
+                PlaybackPositionTicks = TimeSpan.FromMinutes(45).Ticks
+            });
+
+        var session = TestHelpers.CreateTestSession(sessionManagerMock.Object, loggerFactory);
+        var context = CreateContextWithApl();
+
+        SkillResponse response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.Contains(response.Response.Directives, d => d.Type == "Alexa.Presentation.APL.RenderDocument");
+    }
+
+    [Fact]
+    public async Task InProgressMediaList_WithoutApl_NoAplDirective()
+    {
+        var sessionManagerMock = new Mock<ISessionManager>();
+        var libraryManagerMock = new Mock<ILibraryManager>();
+        var userManagerMock = new Mock<IUserManager>();
+        var userDataManagerMock = new Mock<IUserDataManager>();
+        var config = new PluginConfiguration();
+        TestHelpers.SetServerAddress(config, "https://test.example.com");
+        var loggerFactory = LoggerFactory.Create(b => { });
+
+        var handler = new InProgressMediaListIntentHandler(
+            sessionManagerMock.Object, config, libraryManagerMock.Object,
+            userManagerMock.Object, userDataManagerMock.Object, loggerFactory);
+
+        var audio = new Audio { Name = "Halfway Song", Id = Guid.NewGuid() };
+        audio.Artists = new List<string> { "Artist" };
+
+        var request = new IntentRequest
+        {
+            Intent = new Intent
+            {
+                Name = IntentNames.InProgressMediaList,
+                Slots = new Dictionary<string, Slot>()
+            },
+            DialogState = "COMPLETED",
+            Locale = "en-US"
+        };
+
+        userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
+            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+
+        libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { audio });
+
+        userDataManagerMock.Setup(u => u.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), audio))
+            .Returns(new MediaBrowser.Controller.Entities.UserItemData
+            {
+                Key = "test",
+                Played = false,
+                PlaybackPositionTicks = TimeSpan.FromMinutes(45).Ticks
+            });
+
+        var session = TestHelpers.CreateTestSession(sessionManagerMock.Object, loggerFactory);
+        var context = CreateContextWithoutApl();
+
+        SkillResponse response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.DoesNotContain(response.Response.Directives, d => d.Type == "Alexa.Presentation.APL.RenderDocument");
+    }
 }
