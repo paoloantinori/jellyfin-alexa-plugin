@@ -219,7 +219,7 @@ public class AplHelperTests
         Assert.NotNull(directive);
         var doc = directive.Document!;
         Assert.Equal("APL", doc["type"]!.ToString());
-        Assert.Equal("1.9", doc["version"]!.ToString());
+        Assert.Equal("1.7", doc["version"]!.ToString());
         Assert.Equal("dark", doc["theme"]!.ToString());
     }
 

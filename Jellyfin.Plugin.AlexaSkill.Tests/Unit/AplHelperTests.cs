@@ -136,13 +136,13 @@ public class AplHelperTests
     }
 
     [Fact]
-    public void BuildNowPlayingDirective_DocumentVersionIs19()
+    public void BuildNowPlayingDirective_DocumentVersionIs17()
     {
         var audio = new Audio { Name = "Song" };
         var result = AplHelper.BuildNowPlayingDirective(audio, "art", "bg");
 
         var doc = result!.Document as JObject;
-        Assert.Equal("1.9", doc?["version"]?.ToString());
+        Assert.Equal("1.7", doc?["version"]?.ToString());
     }
 
     [Fact]
