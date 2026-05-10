@@ -582,4 +582,38 @@ public abstract class BaseHandler
 
         return (user, null);
     }
+
+    /// <summary>
+    /// Conditionally attach an APL list directive to a response if the device supports APL.
+    /// </summary>
+    private protected static void TryAttachListDirective(
+        SkillResponse response,
+        Context? context,
+        string title,
+        List<Apl.ListDisplayItem> items,
+        string token,
+        string action = "selectItem")
+    {
+        if (Apl.AplHelper.DeviceSupportsApl(context))
+        {
+            var directive = Apl.AplHelper.BuildListDirective(title, items, token, action);
+            if (directive != null)
+            {
+                response.Response.Directives.Add(directive);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Extract the first artist name from an audio item, or null for non-audio items.
+    /// </summary>
+    protected static string? GetArtistSubtitle(MediaBrowser.Controller.Entities.BaseItem item)
+    {
+        if (item is MediaBrowser.Controller.Entities.Audio.Audio a && a.Artists is { Count: > 0 })
+        {
+            return a.Artists[0];
+        }
+
+        return null;
+    }
 }

@@ -823,4 +823,130 @@ public class MediaInfoIntentHandlerTests
         Assert.Contains("Artist", text);
         Assert.Contains("Album", text);
     }
+
+    // --- APL visual card tests ---
+
+    [Fact]
+    public async Task Handle_DefaultNowPlaying_WithApl_IncludesAplDirective()
+    {
+        TestHelpers.SetServerAddress(_config, "https://test.example.com");
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Id = Guid.NewGuid(),
+            Name = "Super Bon Bon",
+            Type = BaseItemKind.Audio,
+            AlbumArtist = "Soul Coughing",
+            Album = "Irresistible Bliss"
+        };
+
+        var context = TestHelpers.CreateContextWithApl();
+        var response = await handler.HandleAsync(
+            CreateMediaInfoRequest(), context,
+            TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.Contains(response.Response.Directives, d => d.Type == "Alexa.Presentation.APL.RenderDocument");
+    }
+
+    [Fact]
+    public async Task Handle_DefaultNowPlaying_WithoutApl_NoAplDirective()
+    {
+        TestHelpers.SetServerAddress(_config, "https://test.example.com");
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Id = Guid.NewGuid(),
+            Name = "Super Bon Bon",
+            Type = BaseItemKind.Audio,
+            AlbumArtist = "Soul Coughing",
+            Album = "Irresistible Bliss"
+        };
+
+        var context = TestHelpers.CreateContextWithoutApl();
+        var response = await handler.HandleAsync(
+            CreateMediaInfoRequest(), context,
+            TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.DoesNotContain(response.Response.Directives, d => d.Type == "Alexa.Presentation.APL.RenderDocument");
+    }
+
+    [Fact]
+    public async Task Handle_SpecificTitle_WithApl_IncludesAplDirective()
+    {
+        TestHelpers.SetServerAddress(_config, "https://test.example.com");
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Id = Guid.NewGuid(),
+            Name = "Super Bon Bon",
+            Type = BaseItemKind.Audio,
+            AlbumArtist = "Soul Coughing"
+        };
+
+        var context = TestHelpers.CreateContextWithApl();
+        var response = await handler.HandleAsync(
+            CreateMediaInfoRequest("title"), context,
+            TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.Contains(response.Response.Directives, d => d.Type == "Alexa.Presentation.APL.RenderDocument");
+    }
+
+    [Fact]
+    public async Task Handle_SpecificTitle_WithoutApl_NoAplDirective()
+    {
+        TestHelpers.SetServerAddress(_config, "https://test.example.com");
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Id = Guid.NewGuid(),
+            Name = "Super Bon Bon",
+            Type = BaseItemKind.Audio,
+            AlbumArtist = "Soul Coughing"
+        };
+
+        var context = TestHelpers.CreateContextWithoutApl();
+        var response = await handler.HandleAsync(
+            CreateMediaInfoRequest("title"), context,
+            TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.DoesNotContain(response.Response.Directives, d => d.Type == "Alexa.Presentation.APL.RenderDocument");
+    }
+
+    [Fact]
+    public async Task Handle_DefaultNowPlaying_EmptyItemId_NoAplDirective()
+    {
+        TestHelpers.SetServerAddress(_config, "https://test.example.com");
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Id = Guid.Empty,
+            Name = "Unknown",
+            Type = BaseItemKind.Audio
+        };
+
+        var context = TestHelpers.CreateContextWithApl();
+        var response = await handler.HandleAsync(
+            CreateMediaInfoRequest(), context,
+            TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.DoesNotContain(response.Response.Directives, d => d.Type == "Alexa.Presentation.APL.RenderDocument");
+    }
 }

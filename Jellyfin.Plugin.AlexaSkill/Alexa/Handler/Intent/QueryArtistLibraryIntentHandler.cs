@@ -9,6 +9,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Enums;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
@@ -110,14 +111,14 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
                 artistId, artistName, jellyfinUser, locale,
                 new[] { BaseItemKind.MusicAlbum }, null,
                 "NoAlbumsByArtist", "AlbumsByArtistList", "AlbumsByArtistPartial",
-                "GetArtistAlbums", cancellationToken).ConfigureAwait(false);
+                "GetArtistAlbums", context, user, cancellationToken).ConfigureAwait(false);
         }
 
         return await ListItemsByArtistAsync(
             artistId, artistName, jellyfinUser, locale,
             null, new[] { MediaType.Audio },
             "NoSongsForArtist", "TracksByArtistList", "TracksByArtistPartial",
-            "GetArtistTracks", cancellationToken).ConfigureAwait(false);
+            "GetArtistTracks", context, user, cancellationToken).ConfigureAwait(false);
     }
 
     private static bool IsAlbumQuery(string? queryType)
@@ -139,7 +140,7 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
         Jellyfin.Database.Implementations.Entities.User jellyfinUser, string locale,
         BaseItemKind[]? includeItemTypes, MediaType[]? mediaTypes,
         string emptyKey, string listKey, string partialKey,
-        string operationName, CancellationToken cancellationToken)
+        string operationName, Context? context, Entities.User user, CancellationToken cancellationToken)
     {
         var query = new InternalItemsQuery
         {
@@ -168,14 +169,23 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
         }
 
         int total = items.Count;
+        SkillResponse response;
 
         if (total <= MaxListedItems)
         {
             string list = string.Join(", ", items.Select(i => i.Name));
-            return ResponseBuilder.Tell(ResponseStrings.Get(listKey, locale, artistName, total, list));
+            response = ResponseBuilder.Tell(ResponseStrings.Get(listKey, locale, artistName, total, list));
+        }
+        else
+        {
+            string partialList = string.Join(", ", items.Take(MaxListedItems).Select(i => i.Name));
+            response = ResponseBuilder.Tell(ResponseStrings.Get(partialKey, locale, artistName, total, MaxListedItems, partialList));
         }
 
-        string partialList = string.Join(", ", items.Take(MaxListedItems).Select(i => i.Name));
-        return ResponseBuilder.Tell(ResponseStrings.Get(partialKey, locale, artistName, total, MaxListedItems, partialList));
+        var aplItems = items.Take(MaxListedItems).Select(i =>
+            new Apl.ListDisplayItem(i.Name, i.Id.ToString("N"), artistName, GetImageUrl(i.Id.ToString("N"), user))).ToList();
+        TryAttachListDirective(response, context, artistName, aplItems, "queryArtist");
+
+        return response;
     }
 }
