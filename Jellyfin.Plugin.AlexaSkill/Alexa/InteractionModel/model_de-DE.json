@@ -101,9 +101,7 @@
           "Lass uns {song} hören",
           "Starte {song}",
           "Spiele das Stück {song}",
-          "Kannst du {song} spielen",
-          "Drfte {song}",
-          "Drfte das Lied {song}"
+          "Kannst du {song} spielen"
         ],
         "slots": [
           {
@@ -138,9 +136,7 @@
           "Starte {album}",
           "Kannst du {album} spielen",
           "Lass uns {album} hören",
-          "Mach {album} an",
-          "Drfte {album}",
-          "Drfte das Album {album}"
+          "Mach {album} an"
         ],
         "slots": [
           {
@@ -189,10 +185,7 @@
           "Spiele {musician} Musik",
           "Schalte {musician} ein",
           "Starte Musik von {musician}",
-          "Gib etwas von {musician} wieder",
-          "Drfte {musician}",
-          "Drfte Lieder von {musician}",
-          "Drfte Musik von {musician}"
+          "Gib etwas von {musician} wieder"
         ],
         "slots": [
           {
