@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using Alexa.NET;
 using Alexa.NET.Request;
+using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Entities;
@@ -45,6 +47,43 @@ internal static class TestHelpers
             {
                 User = new global::Alexa.NET.Request.User { AccessToken = Guid.NewGuid().ToString() },
                 Device = new Device { DeviceID = "test-device" }
+            }
+        };
+    }
+
+    internal static Context CreateContextWithApl()
+    {
+        return new Context
+        {
+            System = new AlexaSystem
+            {
+                Device = new Device
+                {
+                    DeviceID = "test-device",
+                    SupportedInterfaces = new Dictionary<string, object>
+                    {
+                        { "Alexa.Presentation.APL", new { } }
+                    }
+                },
+                ApiAccessToken = "test-token",
+                Application = new Application { ApplicationId = "test-app" }
+            }
+        };
+    }
+
+    internal static Context CreateContextWithoutApl()
+    {
+        return new Context
+        {
+            System = new AlexaSystem
+            {
+                Device = new Device
+                {
+                    DeviceID = "test-device",
+                    SupportedInterfaces = new Dictionary<string, object>()
+                },
+                ApiAccessToken = "test-token",
+                Application = new Application { ApplicationId = "test-app" }
             }
         };
     }
