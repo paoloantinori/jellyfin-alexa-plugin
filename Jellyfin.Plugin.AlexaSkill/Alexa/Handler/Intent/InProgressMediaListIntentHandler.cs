@@ -57,7 +57,7 @@ public class InProgressMediaListIntentHandler : BaseHandler
     public override bool CanHandle(Request request)
     {
         IntentRequest? intentRequest = request as IntentRequest;
-        return intentRequest != null && string.Equals(intentRequest.Intent.Name, "InProgressMediaListIntent", StringComparison.Ordinal);
+        return intentRequest != null && string.Equals(intentRequest.Intent.Name, IntentNames.InProgressMediaList, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -89,7 +89,7 @@ public class InProgressMediaListIntentHandler : BaseHandler
 
         IReadOnlyList<BaseItem> recentItems = await RetryAsync(() => _libraryManager.GetItemList(query), "GetRecentItems", cancellationToken).ConfigureAwait(false);
 
-        var inProgressItems = new List<(BaseItem Item, long PlaybackPositionTicks)>();
+        var inProgressItems = new List<(BaseItem Item, string Position)>();
 
         foreach (BaseItem item in recentItems)
         {
@@ -99,7 +99,7 @@ public class InProgressMediaListIntentHandler : BaseHandler
                 continue;
             }
 
-            inProgressItems.Add((item, userData.PlaybackPositionTicks));
+            inProgressItems.Add((item, FormatPosition(userData.PlaybackPositionTicks)));
 
             if (inProgressItems.Count >= MaxResults)
             {
@@ -115,14 +115,19 @@ public class InProgressMediaListIntentHandler : BaseHandler
         var itemDescriptions = new List<string>();
         for (int i = 0; i < inProgressItems.Count; i++)
         {
-            string position = FormatPosition(inProgressItems[i].PlaybackPositionTicks);
-            itemDescriptions.Add(ResponseStrings.Get("InProgressItemWithPosition", locale, inProgressItems[i].Item.Name, position));
+            itemDescriptions.Add(ResponseStrings.Get("InProgressItemWithPosition", locale, inProgressItems[i].Item.Name, inProgressItems[i].Position));
         }
 
         string listText = string.Join(". ", itemDescriptions);
         string speech = ResponseStrings.Get("InProgressList", locale, inProgressItems.Count, listText);
 
-        return ResponseBuilder.Tell(speech);
+        SkillResponse response = ResponseBuilder.Tell(speech);
+
+        var aplItems = inProgressItems.Select(i =>
+            new Apl.ListDisplayItem(i.Item.Name, i.Item.Id.ToString("N"), i.Position, GetImageUrl(i.Item.Id.ToString("N"), user))).ToList();
+        TryAttachListDirective(response, context, "In Progress", aplItems, "inProgress");
+
+        return response;
     }
 
     /// <summary>

@@ -207,24 +207,10 @@ public class BrowseLibraryIntentHandler : BaseHandler
 
         SkillResponse response = ResponseBuilder.Tell(speech);
 
-        if (AplHelper.DeviceSupportsApl(context))
-        {
-            var aplItems = items.Select(i =>
-            {
-                string? subtitle = i is Audio a && a.Artists != null && a.Artists.Count > 0 ? a.Artists[0] : null;
-                return new ListDisplayItem(i.Name, i.Id.ToString("N"), subtitle, GetImageUrl(i.Id.ToString("N"), user));
-            }).ToList();
-
-            var directive = AplHelper.BuildListDirective(
-                char.ToUpper(browseCategory[0], CultureInfo.InvariantCulture) + browseCategory[1..],
-                aplItems,
-                "browse");
-
-            if (directive != null)
-            {
-                response.Response.Directives.Add(directive);
-            }
-        }
+        string title = char.ToUpper(browseCategory[0], CultureInfo.InvariantCulture) + browseCategory[1..];
+        var aplItems = items.Select(i =>
+            new Apl.ListDisplayItem(i.Name, i.Id.ToString("N"), GetArtistSubtitle(i), GetImageUrl(i.Id.ToString("N"), user))).ToList();
+        TryAttachListDirective(response, context, title, aplItems, "browse");
 
         return response;
     }
