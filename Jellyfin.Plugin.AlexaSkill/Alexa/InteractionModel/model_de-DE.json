@@ -81,8 +81,29 @@
       {
         "name": "PlaySongIntent",
         "samples": [
+          "Spiele {song}",
           "Spiele das Lied {song}",
-          "Spiele das Lied {song} von {musician}"
+          "Spiele Lied {song}",
+          "Spiele {song} von {musician}",
+          "Spiele das Lied {song} von {musician}",
+          "Spiele Lied {song} von {musician}",
+          "Höre {song}",
+          "Höre das Lied {song}",
+          "Höre {song} von {musician}",
+          "Höre das Lied {song} von {musician}",
+          "Gib {song} wieder",
+          "Gib das Lied {song} wieder",
+          "Gib {song} von {musician} wieder",
+          "Mach {song} an",
+          "Ich möchte {song} hören",
+          "Spiele den Titel {song}",
+          "Spiele den Titel {song} von {musician}",
+          "Lass uns {song} hören",
+          "Starte {song}",
+          "Spiele das Stück {song}",
+          "Kannst du {song} spielen",
+          "Drfte {song}",
+          "Drfte das Lied {song}"
         ],
         "slots": [
           {
@@ -98,8 +119,28 @@
       {
         "name": "PlayAlbumIntent",
         "samples": [
+          "Spiele {album}",
           "Spiele das Album {album}",
-          "Spiele das Album {album} von {musician}"
+          "Spiele Album {album}",
+          "Spiele {album} von {musician}",
+          "Spiele das Album {album} von {musician}",
+          "Spiele Album {album} von {musician}",
+          "Höre {album}",
+          "Höre das Album {album}",
+          "Höre {album} von {musician}",
+          "Höre das Album {album} von {musician}",
+          "Gib {album} wieder",
+          "Gib das Album {album} wieder",
+          "Gib {album} von {musician} wieder",
+          "Ich möchte {album} hören",
+          "Spiele die Platte {album}",
+          "Spiele die Platte {album} von {musician}",
+          "Starte {album}",
+          "Kannst du {album} spielen",
+          "Lass uns {album} hören",
+          "Mach {album} an",
+          "Drfte {album}",
+          "Drfte das Album {album}"
         ],
         "slots": [
           {
@@ -128,7 +169,30 @@
         "name": "PlayArtistSongsIntent",
         "samples": [
           "Spiele Lieder von {musician}",
-          "Spiele Musik von {musician}"
+          "Spiele Musik von {musician}",
+          "Spiele Titel von {musician}",
+          "Spiele Songs von {musician}",
+          "Spiele {musician}",
+          "Spiele etwas von {musician}",
+          "Höre {musician}",
+          "Höre Lieder von {musician}",
+          "Höre Musik von {musician}",
+          "Höre Titel von {musician}",
+          "Gib {musician} wieder",
+          "Gib Lieder von {musician} wieder",
+          "Gib Musik von {musician} wieder",
+          "Mach {musician} an",
+          "Lass uns {musician} hören",
+          "Ich möchte {musician} hören",
+          "Ich will {musician} hören",
+          "Starte {musician}",
+          "Spiele {musician} Musik",
+          "Schalte {musician} ein",
+          "Starte Musik von {musician}",
+          "Gib etwas von {musician} wieder",
+          "Drfte {musician}",
+          "Drfte Lieder von {musician}",
+          "Drfte Musik von {musician}"
         ],
         "slots": [
           {

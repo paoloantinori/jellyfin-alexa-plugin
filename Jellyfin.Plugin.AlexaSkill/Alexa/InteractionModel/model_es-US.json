@@ -73,8 +73,27 @@
       {
         "name": "PlaySongIntent",
         "samples": [
+          "Reproduce {song}",
           "Reproduce la canción {song}",
-          "Reproduce la canción {song} de {musician}"
+          "Reproduce canción {song}",
+          "Reproduce {song} de {musician}",
+          "Reproduce la canción {song} de {musician}",
+          "Escucha {song}",
+          "Escucha la canción {song}",
+          "Escucha {song} de {musician}",
+          "Escucha la canción {song} de {musician}",
+          "Pon {song}",
+          "Pon la canción {song}",
+          "Pon {song} de {musician}",
+          "Quiero escuchar {song}",
+          "Toca {song}",
+          "Toca la canción {song}",
+          "Pon el tema {song}",
+          "Reproduce el tema {song}",
+          "Quiero oír {song}",
+          "Inicia {song}",
+          "Dame {song}",
+          "Suelta {song}"
         ],
         "slots": [
           {
@@ -90,8 +109,26 @@
       {
         "name": "PlayAlbumIntent",
         "samples": [
+          "Reproduce {album}",
           "Reproduce el álbum {album}",
-          "Reproduce el álbum {album} de {musician}"
+          "Reproduce álbum {album}",
+          "Reproduce {album} de {musician}",
+          "Reproduce el álbum {album} de {musician}",
+          "Escucha {album}",
+          "Escucha el álbum {album}",
+          "Escucha {album} de {musician}",
+          "Escucha el álbum {album} de {musician}",
+          "Pon {album}",
+          "Pon el álbum {album}",
+          "Pon {album} de {musician}",
+          "Quiero escuchar {album}",
+          "Toca {album}",
+          "Pon el disco {album}",
+          "Reproduce el disco {album}",
+          "Quiero oír {album}",
+          "Inicia {album}",
+          "Dame {album}",
+          "Suelta {album}"
         ],
         "slots": [
           {
@@ -125,7 +162,28 @@
         "name": "PlayArtistSongsIntent",
         "samples": [
           "Reproduce canciones de {musician}",
-          "Reproduce música de {musician}"
+          "Reproduce música de {musician}",
+          "Reproduce temas de {musician}",
+          "Reproduce {musician}",
+          "Escucha {musician}",
+          "Escucha canciones de {musician}",
+          "Escucha música de {musician}",
+          "Escucha temas de {musician}",
+          "Pon {musician}",
+          "Pon canciones de {musician}",
+          "Pon música de {musician}",
+          "Pon temas de {musician}",
+          "Quiero escuchar {musician}",
+          "Quiero oír {musician}",
+          "Toca {musician}",
+          "Toca canciones de {musician}",
+          "Inicia {musician}",
+          "Empieza con {musician}",
+          "Dame {musician}",
+          "Pon algo de {musician}",
+          "Reproduce algo de {musician}",
+          "Dime algo de {musician}",
+          "Suelta canciones de {musician}"
         ],
         "slots": [
           {
