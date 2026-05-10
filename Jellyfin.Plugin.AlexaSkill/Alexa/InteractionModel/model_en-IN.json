@@ -531,6 +531,197 @@
           "find {query} in my library",
           "check if {query} is available"
         ]
+      },
+      {
+        "name": "AddToQueueIntent",
+        "slots": [
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
+        ],
+        "samples": [
+          "add {song} to my queue",
+          "add {song} to the queue",
+          "add {song} by {musician} to my queue",
+          "add {song} by {musician} to the queue",
+          "queue {song}",
+          "queue {song} by {musician}",
+          "put {song} in my queue",
+          "add {song} to my playlist"
+        ]
+      },
+      {
+        "name": "PlayNextIntent",
+        "slots": [
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
+        ],
+        "samples": [
+          "play {song} next",
+          "play {song} by {musician} next",
+          "play {song} up next",
+          "play {song} by {musician} up next",
+          "I want to hear {song} next",
+          "hear {song} next",
+          "play {song} after this"
+        ]
+      },
+      {
+        "name": "ClearQueueIntent",
+        "slots": [],
+        "samples": [
+          "clear my queue",
+          "clear the queue",
+          "empty my queue",
+          "empty the queue",
+          "remove everything from my queue",
+          "clear my playlist"
+        ]
+      },
+      {
+        "name": "ListQueueIntent",
+        "slots": [],
+        "samples": [
+          "what's in my queue",
+          "what's in the queue",
+          "what's coming up",
+          "what's up next",
+          "show my queue",
+          "list my queue",
+          "what's playing next"
+        ]
+      },
+      {
+        "name": "PlayRadioIntent",
+        "slots": [],
+        "samples": [
+          "play radio",
+          "play radio mode",
+          "start radio",
+          "play more like this",
+          "keep playing similar music",
+          "play similar songs",
+          "start a radio station",
+          "play songs like this"
+        ]
+      },
+      {
+        "name": "TurnRadioOnIntent",
+        "slots": [],
+        "samples": [
+          "turn on radio mode",
+          "enable radio mode",
+          "radio mode on",
+          "turn on radio",
+          "enable radio"
+        ]
+      },
+      {
+        "name": "TurnRadioOffIntent",
+        "slots": [],
+        "samples": [
+          "turn off radio mode",
+          "disable radio mode",
+          "radio mode off",
+          "turn off radio",
+          "disable radio",
+          "stop radio mode"
+        ]
+      },
+      {
+        "name": "LearnMyVoiceIntent",
+        "slots": [],
+        "samples": [
+          "learn my voice",
+          "remember my voice",
+          "recognize me",
+          "link my voice",
+          "this is my voice",
+          "set up my voice profile",
+          "associate my voice"
+        ]
+      },
+      {
+        "name": "WhoAmIIntent",
+        "slots": [],
+        "samples": [
+          "who am i",
+          "which account is this",
+          "what account am i using",
+          "who is speaking",
+          "which profile is active",
+          "am i recognized"
+        ]
+      },
+      {
+        "name": "QueryArtistLibraryIntent",
+        "slots": [
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          },
+          {
+            "name": "query_type",
+            "type": "LibraryQueryType"
+          }
+        ],
+        "samples": [
+          "which tracks do we have by {musician}",
+          "which songs do we have by {musician}",
+          "what tracks are available from {musician}",
+          "what songs are available from {musician}",
+          "which albums do we have by {musician}",
+          "what albums are available from {musician}",
+          "what do we have by {musician}",
+          "show me tracks by {musician}",
+          "show me albums by {musician}",
+          "list tracks by {musician}",
+          "list albums by {musician}",
+          "which {query_type} do we have by {musician}",
+          "what {query_type} are available from {musician}",
+          "show me {query_type} by {musician}"
+        ]
+      },
+      {
+        "name": "PlayByDecadeIntent",
+        "slots": [
+          {
+            "name": "decade",
+            "type": "Decade"
+          },
+          {
+            "name": "genre",
+            "type": "AMAZON.Genre"
+          }
+        ],
+        "samples": [
+          "play songs from the {decade}",
+          "play tracks from the {decade}",
+          "play hits from the {decade}",
+          "play music from the {decade}",
+          "play {decade} hits",
+          "play {decade} songs",
+          "play {decade} tracks",
+          "play {decade} music",
+          "play {genre} from the {decade}",
+          "play {genre} songs from the {decade}",
+          "I want to hear {decade} music",
+          "play something from the {decade}",
+          "listen to {decade} music",
+          "give me {decade} songs",
+          "shuffle {decade} music"
+        ]
       }
     ],
     "types": [
@@ -719,6 +910,151 @@
                 "bio",
                 "about the artist"
               ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "Decade",
+        "values": [
+          {
+            "id": "50s",
+            "name": {
+              "value": "50s",
+              "synonyms": [
+                "fifties",
+                "the 50s",
+                "the fifties",
+                "1950s"
+              ]
+            }
+          },
+          {
+            "id": "60s",
+            "name": {
+              "value": "60s",
+              "synonyms": [
+                "sixties",
+                "the 60s",
+                "the sixties",
+                "1960s"
+              ]
+            }
+          },
+          {
+            "id": "70s",
+            "name": {
+              "value": "70s",
+              "synonyms": [
+                "seventies",
+                "the 70s",
+                "the seventies",
+                "1970s"
+              ]
+            }
+          },
+          {
+            "id": "80s",
+            "name": {
+              "value": "80s",
+              "synonyms": [
+                "eighties",
+                "the 80s",
+                "the eighties",
+                "1980s"
+              ]
+            }
+          },
+          {
+            "id": "90s",
+            "name": {
+              "value": "90s",
+              "synonyms": [
+                "nineties",
+                "the 90s",
+                "the nineties",
+                "1990s"
+              ]
+            }
+          },
+          {
+            "id": "2000s",
+            "name": {
+              "value": "2000s",
+              "synonyms": [
+                "two thousands",
+                "the 2000s",
+                "the two thousands"
+              ]
+            }
+          },
+          {
+            "id": "2010s",
+            "name": {
+              "value": "2010s",
+              "synonyms": [
+                "twenty tens",
+                "the 2010s"
+              ]
+            }
+          },
+          {
+            "id": "2020s",
+            "name": {
+              "value": "2020s",
+              "synonyms": [
+                "twenty twenties",
+                "the 2020s"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "LibraryQueryType",
+        "values": [
+          {
+            "id": "tracks",
+            "name": {
+              "value": "tracks",
+              "synonyms": [
+                "songs",
+                "music"
+              ]
+            }
+          },
+          {
+            "id": "albums",
+            "name": {
+              "value": "albums",
+              "synonyms": [
+                "records"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "records"
+            }
+          },
+          {
+            "name": {
+              "value": "record"
+            }
+          },
+          {
+            "name": {
+              "value": "songs"
+            }
+          },
+          {
+            "name": {
+              "value": "song"
+            }
+          },
+          {
+            "name": {
+              "value": "track"
             }
           }
         ]

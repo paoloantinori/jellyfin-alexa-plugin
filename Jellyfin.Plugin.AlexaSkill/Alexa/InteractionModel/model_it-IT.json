@@ -1027,6 +1027,113 @@
           "Cerca il contenuto {query}",
           "Trova il brano {query}"
         ]
+      },
+      {
+        "name": "AddToQueueIntent",
+        "slots": [
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
+        ],
+        "samples": [
+          "Aggiungi {song} alla coda",
+          "Aggiungi {song} di {musician} alla coda",
+          "Metti {song} in coda",
+          "Metti {song} di {musician} in coda",
+          "Accoda {song}",
+          "Accoda {song} di {musician}",
+          "Aggiungi {song} alla mia lista",
+          "Inserisci {song} nella coda"
+        ]
+      },
+      {
+        "name": "PlayNextIntent",
+        "slots": [
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
+        ],
+        "samples": [
+          "Suona {song} dopo",
+          "Suona {song} di {musician} dopo",
+          "Riproduci {song} dopo",
+          "Riproduci {song} di {musician} dopo",
+          "Metti {song} come prossimo",
+          "Metti {song} di {musician} come prossimo",
+          "Voglio sentire {song} dopo"
+        ]
+      },
+      {
+        "name": "ClearQueueIntent",
+        "slots": [],
+        "samples": [
+          "Cancella la coda",
+          "Svuota la coda",
+          "Pulisci la coda",
+          "Elimina tutto dalla coda",
+          "Cancella la mia lista",
+          "Svuota la mia lista"
+        ]
+      },
+      {
+        "name": "ListQueueIntent",
+        "slots": [],
+        "samples": [
+          "Cosa c'è nella coda",
+          "Cosa c'è in coda",
+          "Cosa viene dopo",
+          "Cosa c'è dopo",
+          "Mostra la coda",
+          "Elenca la coda",
+          "Cosa suona dopo"
+        ]
+      },
+      {
+        "name": "PlayRadioIntent",
+        "slots": [],
+        "samples": [
+          "Suona la radio",
+          "Riproduci la radio",
+          "Attiva la radio",
+          "Metti musica simile",
+          "Suona brani simili",
+          "Inizia una stazione radio",
+          "Continua con musica simile",
+          "Suona canzoni come questa"
+        ]
+      },
+      {
+        "name": "TurnRadioOnIntent",
+        "slots": [],
+        "samples": [
+          "Attiva la modalità radio",
+          "Accendi la modalità radio",
+          "Modalità radio attiva",
+          "Attiva la radio",
+          "Accendi la radio"
+        ]
+      },
+      {
+        "name": "TurnRadioOffIntent",
+        "slots": [],
+        "samples": [
+          "Disattiva la modalità radio",
+          "Spegni la modalità radio",
+          "Modalità radio disattivata",
+          "Disattiva la radio",
+          "Spegni la radio",
+          "Ferma la modalità radio"
+        ]
       }
     ],
     "types": [
