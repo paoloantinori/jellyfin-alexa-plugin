@@ -65,7 +65,9 @@ public static class Util
     /// <returns>Version of the skill plugin.</returns>
     public static string GetVersion()
     {
-        return Assembly.GetExecutingAssembly()!.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion;
+        string version = Assembly.GetExecutingAssembly()!.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion;
+        int plusIndex = version.IndexOf('+', StringComparison.Ordinal);
+        return plusIndex >= 0 ? version[..plusIndex] : version;
     }
 
     /// <summary>
