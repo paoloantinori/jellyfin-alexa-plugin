@@ -24,42 +24,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
 public class AplHelperTests
 {
-    private static Context CreateContextWithApl()
-    {
-        return new Context
-        {
-            System = new AlexaSystem
-            {
-                Device = new Device
-                {
-                    DeviceID = "test-device",
-                    SupportedInterfaces = new Dictionary<string, object>
-                    {
-                        { "Alexa.Presentation.APL", new { } }
-                    }
-                },
-                ApiAccessToken = "test-token",
-                Application = new Application { ApplicationId = "test-app" }
-            }
-        };
-    }
+    private static Context CreateContextWithApl() => TestHelpers.CreateContextWithApl();
 
-    private static Context CreateContextWithoutApl()
-    {
-        return new Context
-        {
-            System = new AlexaSystem
-            {
-                Device = new Device
-                {
-                    DeviceID = "test-device",
-                    SupportedInterfaces = new Dictionary<string, object>()
-                },
-                ApiAccessToken = "test-token",
-                Application = new Application { ApplicationId = "test-app" }
-            }
-        };
-    }
+    private static Context CreateContextWithoutApl() => TestHelpers.CreateContextWithoutApl();
 
     [Fact]
     public void DeviceSupportsApl_WithAplInterface_ReturnsTrue()

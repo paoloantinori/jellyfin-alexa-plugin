@@ -8,6 +8,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
@@ -80,12 +81,12 @@ public class MediaInfoIntentHandler : BaseHandler
         if (!string.IsNullOrEmpty(infoType))
         {
             Logger.LogInformation("MediaInfoIntent: specific query '{InfoType}' for {ItemName}", infoType, item.Name);
-            return await HandleSpecificInfoType(infoType, item, session, locale, cancellationToken).ConfigureAwait(false);
+            return await HandleSpecificInfoType(infoType, item, session, locale, context, user, cancellationToken).ConfigureAwait(false);
         }
 
         // Default: return full now-playing info
         Logger.LogInformation("MediaInfoIntent: reporting {ItemName}", item.Name);
-        return await BuildNowPlayingResponse(item, session, locale, cancellationToken).ConfigureAwait(false);
+        return await BuildNowPlayingResponse(item, session, locale, context, user, cancellationToken).ConfigureAwait(false);
     }
 
     private static string? GetInfoType(IntentRequest? intentRequest)
@@ -101,9 +102,9 @@ public class MediaInfoIntentHandler : BaseHandler
     }
 
     private async Task<SkillResponse> HandleSpecificInfoType(
-        string infoType, BaseItemDto item, SessionInfo session, string locale, CancellationToken cancellationToken)
+        string infoType, BaseItemDto item, SessionInfo session, string locale, Context context, Entities.User user, CancellationToken cancellationToken)
     {
-        return infoType switch
+        SkillResponse response = infoType switch
         {
             "title" => HandleTitleQuery(item, locale),
             "album" => HandleAlbumQuery(item, locale),
@@ -112,8 +113,11 @@ public class MediaInfoIntentHandler : BaseHandler
             "duration" => HandleDurationQuery(item, locale),
             "genre" => HandleGenreQuery(item, locale),
             "biography" => await HandleBiographyQuery(item, session, locale, cancellationToken).ConfigureAwait(false),
-            _ => await BuildNowPlayingResponse(item, session, locale, cancellationToken).ConfigureAwait(false)
+            _ => await BuildNowPlayingResponse(item, session, locale, context, user, cancellationToken).ConfigureAwait(false)
         };
+
+        TryAttachNowPlayingCard(response, item, context, user);
+        return response;
     }
 
     private static SkillResponse HandleTitleQuery(BaseItemDto item, string locale)
@@ -202,7 +206,7 @@ public class MediaInfoIntentHandler : BaseHandler
         return ResponseBuilder.Tell(artistInfo);
     }
 
-    private async Task<SkillResponse> BuildNowPlayingResponse(BaseItemDto item, SessionInfo session, string locale, CancellationToken cancellationToken)
+    private async Task<SkillResponse> BuildNowPlayingResponse(BaseItemDto item, SessionInfo session, string locale, Context context, Entities.User user, CancellationToken cancellationToken)
     {
         string description;
         string? descriptionSsml;
@@ -217,25 +221,16 @@ public class MediaInfoIntentHandler : BaseHandler
         }
 
         string position = BuildPositionInfo(session, locale);
+        var response = string.IsNullOrEmpty(position)
+            ? GetSsml("NowPlayingSsml", locale, descriptionSsml ?? description) is { } ssml
+                ? TellSsml(ssml)
+                : ResponseBuilder.Tell(ResponseStrings.Get("NowPlaying", locale, description))
+            : GetSsml("NowPlayingWithPositionSsml", locale, descriptionSsml ?? description, position) is { } ssmlFull
+                ? TellSsml(ssmlFull)
+                : ResponseBuilder.Tell(ResponseStrings.Get("NowPlayingWithPosition", locale, description, position));
 
-        if (string.IsNullOrEmpty(position))
-        {
-            string? ssml = GetSsml("NowPlayingSsml", locale, descriptionSsml ?? description);
-            if (ssml != null)
-            {
-                return TellSsml(ssml);
-            }
-
-            return ResponseBuilder.Tell(ResponseStrings.Get("NowPlaying", locale, description));
-        }
-
-        string? ssmlFull = GetSsml("NowPlayingWithPositionSsml", locale, descriptionSsml ?? description, position);
-        if (ssmlFull != null)
-        {
-            return TellSsml(ssmlFull);
-        }
-
-        return ResponseBuilder.Tell(ResponseStrings.Get("NowPlayingWithPosition", locale, description, position));
+        TryAttachNowPlayingCard(response, item, context, user);
+        return response;
     }
 
     private async Task<(string description, string? ssml)> BuildAudioDescriptionWithArtistInfo(
@@ -496,5 +491,24 @@ public class MediaInfoIntentHandler : BaseHandler
         }
 
         return ResponseStrings.Get("SecondsOnly", locale, span.Seconds);
+    }
+
+    private void TryAttachNowPlayingCard(SkillResponse response, BaseItemDto item, Context context, Entities.User user)
+    {
+        if (!AplHelper.DeviceSupportsApl(context) || item.Id == Guid.Empty)
+        {
+            return;
+        }
+
+        string imageUrl = GetImageUrl(item.Id.ToString("N"), user);
+        var audio = new MediaBrowser.Controller.Entities.Audio.Audio { Name = item.Name ?? string.Empty };
+        audio.Artists = !string.IsNullOrEmpty(item.AlbumArtist) ? new List<string> { item.AlbumArtist } : new List<string>();
+        audio.Album = item.Album;
+
+        var directive = AplHelper.BuildNowPlayingDirective(audio, imageUrl, imageUrl);
+        if (directive != null)
+        {
+            response.Response.Directives.Add(directive);
+        }
     }
 }
