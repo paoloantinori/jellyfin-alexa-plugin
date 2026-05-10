@@ -1019,7 +1019,9 @@
               "value": "tracks",
               "synonyms": [
                 "songs",
-                "music"
+                "music",
+                "song",
+                "track"
               ]
             }
           },
@@ -1028,33 +1030,10 @@
             "name": {
               "value": "albums",
               "synonyms": [
-                "records"
+                "records",
+                "record",
+                "album"
               ]
-            }
-          },
-          {
-            "name": {
-              "value": "records"
-            }
-          },
-          {
-            "name": {
-              "value": "record"
-            }
-          },
-          {
-            "name": {
-              "value": "songs"
-            }
-          },
-          {
-            "name": {
-              "value": "song"
-            }
-          },
-          {
-            "name": {
-              "value": "track"
             }
           }
         ]

@@ -997,7 +997,9 @@
               "value": "Titel",
               "synonyms": [
                 "Lieder",
-                "Songs"
+                "Songs",
+                "Lied",
+                "Song"
               ]
             }
           },
@@ -1006,33 +1008,10 @@
             "name": {
               "value": "Alben",
               "synonyms": [
-                "Platten"
+                "Platten",
+                "Platte",
+                "Album"
               ]
-            }
-          },
-          {
-            "name": {
-              "value": "Platte"
-            }
-          },
-          {
-            "name": {
-              "value": "Lied"
-            }
-          },
-          {
-            "name": {
-              "value": "Song"
-            }
-          },
-          {
-            "name": {
-              "value": "Album"
-            }
-          },
-          {
-            "name": {
-              "value": "Titel"
             }
           }
         ]
