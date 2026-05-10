@@ -997,7 +997,10 @@
               "value": "chansons",
               "synonyms": [
                 "titres",
-                "morceaux"
+                "morceaux",
+                "chanson",
+                "titre",
+                "morceau"
               ]
             }
           },
@@ -1006,33 +1009,10 @@
             "name": {
               "value": "albums",
               "synonyms": [
-                "disques"
+                "disques",
+                "disque",
+                "album"
               ]
-            }
-          },
-          {
-            "name": {
-              "value": "disque"
-            }
-          },
-          {
-            "name": {
-              "value": "chanson"
-            }
-          },
-          {
-            "name": {
-              "value": "titre"
-            }
-          },
-          {
-            "name": {
-              "value": "morceau"
-            }
-          },
-          {
-            "name": {
-              "value": "album"
             }
           }
         ]

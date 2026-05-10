@@ -1276,46 +1276,24 @@
         "name": "LibraryQueryType",
         "values": [
           {
+            "id": "tracks",
             "name": {
               "value": "brani",
               "synonyms": [
-                "canzoni"
+                "canzoni",
+                "canzone",
+                "brano"
               ]
-            },
-            "id": "tracks"
+            }
           },
           {
+            "id": "albums",
             "name": {
               "value": "album",
               "synonyms": [
-                "dischi"
+                "dischi",
+                "disco"
               ]
-            },
-            "id": "albums"
-          },
-          {
-            "name": {
-              "value": "dischi"
-            }
-          },
-          {
-            "name": {
-              "value": "disco"
-            }
-          },
-          {
-            "name": {
-              "value": "canzoni"
-            }
-          },
-          {
-            "name": {
-              "value": "canzone"
-            }
-          },
-          {
-            "name": {
-              "value": "brano"
             }
           }
         ]

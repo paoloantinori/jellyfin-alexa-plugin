@@ -991,7 +991,10 @@
               "value": "canciones",
               "synonyms": [
                 "temas",
-                "pistas"
+                "pistas",
+                "canción",
+                "tema",
+                "pista"
               ]
             }
           },
@@ -1000,33 +1003,10 @@
             "name": {
               "value": "álbumes",
               "synonyms": [
-                "discos"
+                "discos",
+                "disco",
+                "álbum"
               ]
-            }
-          },
-          {
-            "name": {
-              "value": "disco"
-            }
-          },
-          {
-            "name": {
-              "value": "canción"
-            }
-          },
-          {
-            "name": {
-              "value": "tema"
-            }
-          },
-          {
-            "name": {
-              "value": "pista"
-            }
-          },
-          {
-            "name": {
-              "value": "álbum"
             }
           }
         ]
