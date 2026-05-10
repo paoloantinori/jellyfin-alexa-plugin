@@ -190,7 +190,7 @@ internal static class AplHelper
   }
 }"));
 
-    private static readonly Lazy<JObject> QueueDocument = new(() => JObject.Parse(@"{
+    private static readonly Lazy<JObject> ListDocument = new(() => JObject.Parse(@"{
   ""type"": ""APL"",
   ""version"": ""1.9"",
   ""theme"": ""dark"",
@@ -198,6 +198,27 @@ internal static class AplHelper
     {
       ""name"": ""alexa-layouts"",
       ""version"": ""1.5.0""
+    }
+  ],
+  ""resources"": [
+    {
+      ""dimensions"": {
+        ""thumbSize"": 60,
+        ""titleSize"": 20,
+        ""subtitleSize"": 16,
+        ""headerSize"": 32,
+        ""rowPaddingH"": 30
+      }
+    },
+    {
+      ""when"": ""${@viewportProfile == @viewportProfileRound}"",
+      ""dimensions"": {
+        ""thumbSize"": 48,
+        ""titleSize"": 16,
+        ""subtitleSize"": 14,
+        ""headerSize"": 24,
+        ""rowPaddingH"": 20
+      }
     }
   ],
   ""mainTemplate"": {
@@ -213,11 +234,12 @@ internal static class AplHelper
         ""items"": [
           {
             ""type"": ""Text"",
-            ""text"": ""Up Next"",
-            ""fontSize"": 32,
+            ""text"": ""${payload.title}"",
+            ""fontSize"": ""${headerSize}"",
             ""fontWeight"": ""bold"",
             ""color"": ""white"",
-            ""paddingLeft"": 30,
+            ""paddingLeft"": ""${rowPaddingH}"",
+            ""paddingRight"": ""${rowPaddingH}"",
             ""paddingTop"": 20,
             ""paddingBottom"": 10
           },
@@ -225,30 +247,30 @@ internal static class AplHelper
             ""type"": ""Sequence"",
             ""scrollDirection"": ""vertical"",
             ""height"": ""85vh"",
-            ""data"": ""${payload.tracks}"",
+            ""data"": ""${payload.items}"",
             ""items"": [
               {
                 ""type"": ""TouchWrapper"",
                 ""onPress"": {
                   ""type"": ""SendEvent"",
                   ""arguments"": [
-                    ""playTrack"",
-                    ""${data.index}""
+                    ""${payload.action}"",
+                    ""${data.id}""
                   ]
                 },
                 ""item"": {
                   ""type"": ""Container"",
                   ""direction"": ""row"",
-                  ""paddingLeft"": 30,
-                  ""paddingRight"": 30,
+                  ""paddingLeft"": ""${rowPaddingH}"",
+                  ""paddingRight"": ""${rowPaddingH}"",
                   ""paddingTop"": 8,
                   ""paddingBottom"": 8,
                   ""items"": [
                     {
                       ""type"": ""Image"",
                       ""source"": ""${data.artUrl}"",
-                      ""width"": 60,
-                      ""height"": 60,
+                      ""width"": ""${thumbSize}"",
+                      ""height"": ""${thumbSize}"",
                       ""borderRadius"": 5,
                       ""scale"": ""bestFill""
                     },
@@ -261,14 +283,14 @@ internal static class AplHelper
                         {
                           ""type"": ""Text"",
                           ""text"": ""${data.title}"",
-                          ""fontSize"": 20,
+                          ""fontSize"": ""${titleSize}"",
                           ""color"": ""white"",
                           ""maxLines"": 1
                         },
                         {
                           ""type"": ""Text"",
-                          ""text"": ""${data.artist}"",
-                          ""fontSize"": 16,
+                          ""text"": ""${data.subtitle}"",
+                          ""fontSize"": ""${subtitleSize}"",
                           ""color"": ""#B0B0B0"",
                           ""maxLines"": 1
                         }
@@ -297,10 +319,6 @@ internal static class AplHelper
     /// Build an APL Now Playing screen directive showing track info, album art,
     /// and interactive playback controls (prev, pause, next) for Echo Show devices.
     /// </summary>
-    /// <param name="item">The media item currently playing.</param>
-    /// <param name="imageUrl">URL of the album/item art.</param>
-    /// <param name="backgroundImageUrl">URL for the background image.</param>
-    /// <returns>An APL RenderDocument directive, or null if item data is insufficient.</returns>
     public static AplRenderDocumentDirective? BuildNowPlayingDirective(BaseItem item, string imageUrl, string backgroundImageUrl)
     {
         var subtitle = GetSubtitle(item);
@@ -324,8 +342,6 @@ internal static class AplHelper
     /// Build an APL queue list directive showing upcoming tracks with
     /// tap-to-play touch handlers for each item.
     /// </summary>
-    /// <param name="queueItems">List of queue entries with track info.</param>
-    /// <returns>An APL RenderDocument directive for the queue screen.</returns>
     public static AplRenderDocumentDirective? BuildQueueDirective(List<QueueDisplayItem> queueItems)
     {
         if (queueItems.Count == 0)
@@ -333,12 +349,32 @@ internal static class AplHelper
             return null;
         }
 
-        var document = QueueDocument.Value;
-        var datasources = BuildQueueDatasources(queueItems);
+        var items = queueItems.Select((q, i) => new ListDisplayItem(q.Title, i.ToString(System.Globalization.CultureInfo.InvariantCulture), q.Artist, q.ArtUrl)).ToList();
+        return BuildListDirective("Up Next", items, "queue", "playTrack");
+    }
+
+    /// <summary>
+    /// Build a reusable APL list directive showing selectable items with
+    /// thumbnails, titles, and subtitles for Echo Show devices.
+    /// </summary>
+    /// <param name="title">Header text displayed above the list.</param>
+    /// <param name="items">Items to display in the list.</param>
+    /// <param name="token">Token identifying this APL document for subsequent commands.</param>
+    /// <param name="action">SendEvent action name fired when a list item is tapped (default: "selectItem").</param>
+    /// <returns>An APL RenderDocument directive, or null if the item list is empty.</returns>
+    public static AplRenderDocumentDirective? BuildListDirective(string title, List<ListDisplayItem> items, string token, string action = "selectItem")
+    {
+        if (items.Count == 0)
+        {
+            return null;
+        }
+
+        var document = ListDocument.Value;
+        var datasources = BuildListDatasources(title, items, action);
 
         return new AplRenderDocumentDirective
         {
-            Token = "queue",
+            Token = token,
             Document = document,
             DataSources = datasources
         };
@@ -346,7 +382,7 @@ internal static class AplHelper
 
     /// <summary>
     /// Extract an APL touch event argument from a UserEvent request.
-    /// Returns the first argument (e.g., "prev", "pause", "next", "playTrack")
+    /// Returns the first argument (e.g., "prev", "pause", "next", "playTrack", "selectItem")
     /// or null if the request is not an APL UserEvent.
     /// </summary>
     public static string? GetTouchEventArgument(Request request)
@@ -404,18 +440,17 @@ internal static class AplHelper
         };
     }
 
-    private static JObject BuildQueueDatasources(List<QueueDisplayItem> queueItems)
+    private static JObject BuildListDatasources(string title, List<ListDisplayItem> items, string action)
     {
-        var tracks = new JArray();
-        for (int i = 0; i < queueItems.Count; i++)
+        var dataItems = new JArray();
+        foreach (var item in items)
         {
-            var item = queueItems[i];
-            tracks.Add(new JObject
+            dataItems.Add(new JObject
             {
                 ["title"] = item.Title,
-                ["artist"] = item.Artist ?? string.Empty,
+                ["subtitle"] = item.Subtitle ?? string.Empty,
                 ["artUrl"] = item.ArtUrl ?? string.Empty,
-                ["index"] = i
+                ["id"] = item.Id
             });
         }
 
@@ -423,15 +458,16 @@ internal static class AplHelper
         {
             ["payload"] = new JObject
             {
-                ["tracks"] = tracks
+                ["title"] = title,
+                ["action"] = action,
+                ["items"] = dataItems
             }
         };
     }
-
 }
 
 /// <summary>
-/// Display item for APL queue rendering.
+/// Display item for APL queue rendering (kept for caller compatibility).
 /// </summary>
 internal class QueueDisplayItem
 {
@@ -439,3 +475,8 @@ internal class QueueDisplayItem
     public string? Artist { get; set; }
     public string? ArtUrl { get; set; }
 }
+
+/// <summary>
+/// Display item for generic APL list rendering (browse, search, artist queries).
+/// </summary>
+internal sealed record ListDisplayItem(string Title, string Id, string? Subtitle = null, string? ArtUrl = null);
