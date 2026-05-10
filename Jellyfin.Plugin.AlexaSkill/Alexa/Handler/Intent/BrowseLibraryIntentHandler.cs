@@ -9,10 +9,12 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
@@ -108,7 +110,7 @@ public class BrowseLibraryIntentHandler : BaseHandler
                 break;
             case "genres":
             case "generi":
-                return await HandleGenresQuery(filter, locale, jellyfinUser, cancellationToken).ConfigureAwait(false);
+                return await HandleGenresQuery(filter, locale, jellyfinUser, context, user, cancellationToken).ConfigureAwait(false);
             case "movies":
             case "film":
                 items = await QueryItems(BaseItemKind.Movie, filter, jellyfinUser, cancellationToken).ConfigureAwait(false);
@@ -127,7 +129,7 @@ public class BrowseLibraryIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("NoBrowseResults", locale, browseCategory));
         }
 
-        return BuildListResponse(items, locale);
+        return BuildListResponse(items, locale, browseCategory, context, user);
     }
 
     /// <summary>
@@ -165,7 +167,7 @@ public class BrowseLibraryIntentHandler : BaseHandler
     /// <param name="locale">The locale for localized responses.</param>
     /// <param name="jellyfinUser">The Jellyfin user for the query.</param>
     /// <returns>A skill response.</returns>
-    private async Task<SkillResponse> HandleGenresQuery(string? filter, string locale, Jellyfin.Database.Implementations.Entities.User jellyfinUser, CancellationToken cancellationToken)
+    private async Task<SkillResponse> HandleGenresQuery(string? filter, string locale, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Context context, Entities.User user, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(filter))
         {
@@ -189,16 +191,10 @@ public class BrowseLibraryIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("NoBrowseResults", locale, filter));
         }
 
-        return BuildListResponse(items, locale);
+        return BuildListResponse(items, locale, filter, context, user);
     }
 
-    /// <summary>
-    /// Builds a spoken response listing up to MaxResults item names in a numbered list.
-    /// </summary>
-    /// <param name="items">The items to list.</param>
-    /// <param name="locale">The locale for localized responses.</param>
-    /// <returns>A skill response with the numbered list.</returns>
-    private static SkillResponse BuildListResponse(IReadOnlyList<BaseItem> items, string locale)
+    private SkillResponse BuildListResponse(IReadOnlyList<BaseItem> items, string locale, string browseCategory, Context? context, Entities.User user)
     {
         var itemEntries = new List<string>();
         for (int i = 0; i < items.Count; i++)
@@ -209,6 +205,27 @@ public class BrowseLibraryIntentHandler : BaseHandler
         string listText = string.Join(". ", itemEntries);
         string speech = ResponseStrings.Get("BrowseResults", locale, items.Count.ToString(CultureInfo.InvariantCulture), listText);
 
-        return ResponseBuilder.Tell(speech);
+        SkillResponse response = ResponseBuilder.Tell(speech);
+
+        if (AplHelper.DeviceSupportsApl(context))
+        {
+            var aplItems = items.Select(i =>
+            {
+                string? subtitle = i is Audio a && a.Artists != null && a.Artists.Count > 0 ? a.Artists[0] : null;
+                return new ListDisplayItem(i.Name, i.Id.ToString("N"), subtitle, GetImageUrl(i.Id.ToString("N"), user));
+            }).ToList();
+
+            var directive = AplHelper.BuildListDirective(
+                char.ToUpper(browseCategory[0], CultureInfo.InvariantCulture) + browseCategory[1..],
+                aplItems,
+                "browse");
+
+            if (directive != null)
+            {
+                response.Response.Directives.Add(directive);
+            }
+        }
+
+        return response;
     }
 }
