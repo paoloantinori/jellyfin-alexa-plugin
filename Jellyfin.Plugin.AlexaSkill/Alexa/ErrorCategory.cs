@@ -35,7 +35,8 @@ public static class ErrorCategoryInfo
         ErrorCategory.PermanentBackend => "ErrorPermanentBackend",
         ErrorCategory.UserError => "ErrorUserError",
         ErrorCategory.SkillError => "ErrorSkillError",
-        ErrorCategory.Timeout => "ErrorTimeout"
+        ErrorCategory.Timeout => "ErrorTimeout",
+        _ => "ErrorSkillError"
     };
 
     /// <summary>Gets the appropriate log level for the given category.</summary>
@@ -45,6 +46,7 @@ public static class ErrorCategoryInfo
         ErrorCategory.PermanentBackend => Microsoft.Extensions.Logging.LogLevel.Error,
         ErrorCategory.UserError => Microsoft.Extensions.Logging.LogLevel.Information,
         ErrorCategory.SkillError => Microsoft.Extensions.Logging.LogLevel.Critical,
-        ErrorCategory.Timeout => Microsoft.Extensions.Logging.LogLevel.Warning
+        ErrorCategory.Timeout => Microsoft.Extensions.Logging.LogLevel.Warning,
+        _ => Microsoft.Extensions.Logging.LogLevel.Error
     };
 }

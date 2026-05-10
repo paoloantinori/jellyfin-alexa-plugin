@@ -92,7 +92,12 @@ public class PlayFavoritesIntentHandler : BaseHandler
 
         session.NowPlayingQueue = queueItems;
 
-        BaseItem firstItem = _libraryManager.GetItemById(queueItems[0].Id);
+        BaseItem? firstItem = _libraryManager.GetItemById(queueItems[0].Id);
+        if (firstItem == null)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale));
+        }
+
         session.FullNowPlayingItem = firstItem;
 
         string item_id = firstItem.Id.ToString();

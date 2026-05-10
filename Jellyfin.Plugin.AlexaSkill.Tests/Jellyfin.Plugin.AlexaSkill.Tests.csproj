@@ -3,6 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
+    <NoWarn>CS8602;CS8604;CS8620;CS1998</NoWarn>
     <IsPackable>false</IsPackable>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <RootNamespace>Jellyfin.Plugin.AlexaSkill.Tests</RootNamespace>

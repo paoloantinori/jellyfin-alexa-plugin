@@ -684,6 +684,31 @@
                 "records"
               ]
             }
+          },
+          {
+            "name": {
+              "value": "records"
+            }
+          },
+          {
+            "name": {
+              "value": "record"
+            }
+          },
+          {
+            "name": {
+              "value": "songs"
+            }
+          },
+          {
+            "name": {
+              "value": "song"
+            }
+          },
+          {
+            "name": {
+              "value": "track"
+            }
           }
         ]
       },

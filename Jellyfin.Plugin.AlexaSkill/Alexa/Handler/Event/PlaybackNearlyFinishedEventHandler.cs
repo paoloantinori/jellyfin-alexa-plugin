@@ -96,7 +96,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             return ResponseBuilder.Empty();
         }
 
-        BaseItem item = _libraryManager.GetItemById((Guid)nextItemId);
+        BaseItem? item = _libraryManager.GetItemById((Guid)nextItemId);
         if (item == null)
         {
             return ResponseBuilder.Empty();
@@ -120,7 +120,12 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             return null;
         }
 
-        Jellyfin.Database.Implementations.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
+        Jellyfin.Database.Implementations.Entities.User? jellyfinUser = _userManager.GetUserById(session.UserId);
+        if (jellyfinUser == null)
+        {
+            return null;
+        }
+
         IReadOnlyList<BaseItem> similar = await FindRadioTracksAsync(currentAudio, jellyfinUser, _libraryManager, cancellationToken).ConfigureAwait(false);
 
         if (similar.Count == 0)

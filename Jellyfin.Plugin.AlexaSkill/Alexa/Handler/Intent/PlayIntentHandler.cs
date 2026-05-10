@@ -43,21 +43,21 @@ public class PlayIntentHandler : BaseHandler
     /// <param name="user">The user instance.</param>
     /// <param name="session">The session instance.</param>
     /// <returns>A skill response.</returns>
-    public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
+    public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         // check if something is currently playing which we can resume
         if (session.FullNowPlayingItem != null)
         {
             string item_id = session.FullNowPlayingItem.Id.ToString();
-            return BuildAudioPlayerResponse(PlayBehavior.Enqueue, GetStreamUrl(item_id, user), item_id, session.FullNowPlayingItem, user, context);
+            return Task.FromResult<SkillResponse>(BuildAudioPlayerResponse(PlayBehavior.Enqueue, GetStreamUrl(item_id, user), item_id, session.FullNowPlayingItem, user, context));
         }
         else if (session.NowPlayingQueue.Count > 0)
         {
             // resume the first item in the queue
             string item_id = session.NowPlayingQueue[0].Id.ToString();
-            return BuildAudioPlayerResponse(PlayBehavior.Enqueue, GetStreamUrl(item_id, user), item_id, null, user, context);
+            return Task.FromResult<SkillResponse>(BuildAudioPlayerResponse(PlayBehavior.Enqueue, GetStreamUrl(item_id, user), item_id, null, user, context));
         }
 
-        return ResponseBuilder.Empty();
+        return Task.FromResult<SkillResponse>(ResponseBuilder.Empty());
     }
 }

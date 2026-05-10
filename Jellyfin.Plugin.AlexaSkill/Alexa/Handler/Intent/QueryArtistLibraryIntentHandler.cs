@@ -80,7 +80,11 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
 
         await SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)).ConfigureAwait(false);
 
-        Jellyfin.Database.Implementations.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
+        var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
+        if (userError != null)
+        {
+            return userError;
+        }
 
         IReadOnlyList<BaseItem> artists = await RetryAsync(() => _libraryManager.GetItemList(new InternalItemsQuery
         {
@@ -142,7 +146,7 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
             User = jellyfinUser,
             Recursive = true,
             ArtistIds = new[] { artistId },
-            OrderBy = new[] { (ItemSortBy.PlayCount, SortOrder.Descending), (ItemSortBy.CommunityRating, SortOrder.Descending), (ItemSortBy.SortName, SortOrder.Ascending) },
+            OrderBy = PopularitySort,
             DtoOptions = new DtoOptions(true)
         };
 

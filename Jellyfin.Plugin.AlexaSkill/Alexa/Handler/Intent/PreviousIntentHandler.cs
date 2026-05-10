@@ -53,12 +53,12 @@ public class PreviousIntentHandler : BaseHandler
     /// <param name="user">The user instance.</param>
     /// <param name="session">The session instance.</param>
     /// <returns>A play directive of the previous item in the queue or empty response if the queue is empty.</returns>
-    public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
+    public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         // check if we have any media in the queue and there is currently something playing
         if (session.NowPlayingQueue.Count == 0 || session.FullNowPlayingItem == null)
         {
-            return ResponseBuilder.Empty();
+            return Task.FromResult<SkillResponse>(ResponseBuilder.Empty());
         }
 
         // get the previous item in the queue
@@ -68,15 +68,19 @@ public class PreviousIntentHandler : BaseHandler
             {
                 System.Guid prevItemId = session.NowPlayingQueue[i - 1].Id;
                 string item_id = session.NowPlayingQueue[i - 1].Id.ToString();
-                BaseItem prevItem = _libraryManager.GetItemById(prevItemId);
+                BaseItem? prevItem = _libraryManager.GetItemById(prevItemId);
+                if (prevItem == null)
+                {
+                    return Task.FromResult<SkillResponse>(ResponseBuilder.Empty());
+                }
 
                 string previousItemId = session.NowPlayingQueue[i - 1].Id.ToString();
                 session.FullNowPlayingItem = prevItem;
 
-                return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, prevItem, user);
+                return Task.FromResult<SkillResponse>(BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, prevItem, user));
             }
         }
 
-        return ResponseBuilder.Empty();
+        return Task.FromResult<SkillResponse>(ResponseBuilder.Empty());
     }
 }

@@ -45,7 +45,7 @@ public class FallbackIntentHandler : BaseHandler
     /// <param name="user">The user instance.</param>
     /// <param name="session">The session instance.</param>
     /// <returns>Notification about an error.</returns>
-    public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
+    public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
@@ -54,9 +54,9 @@ public class FallbackIntentHandler : BaseHandler
         if (intentRequest.Intent.Name.StartsWith("AMAZON.", System.StringComparison.Ordinal)
             && !string.Equals(intentRequest.Intent.Name, IntentNames.AmazonFallback, System.StringComparison.Ordinal))
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("UnsupportedIntent", locale));
+            return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("UnsupportedIntent", locale)));
         }
 
-        return ResponseBuilder.Tell(ResponseStrings.Get("CouldNotUnderstand", locale));
+        return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("CouldNotUnderstand", locale)));
     }
 }

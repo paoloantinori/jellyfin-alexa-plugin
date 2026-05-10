@@ -44,5 +44,5 @@ public class UserSkill
     /// <summary>
     /// Gets or sets the invocation name.
     /// </summary>
-    public string InvocationName { get; set; }
+    public string InvocationName { get; set; } = string.Empty;
 }

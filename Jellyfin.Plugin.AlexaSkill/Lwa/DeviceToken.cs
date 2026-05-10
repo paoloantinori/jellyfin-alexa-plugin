@@ -34,17 +34,17 @@ public class DeviceToken
     /// <summary>
     /// Gets or sets the access token for the user.
     /// </summary>
-    public string AccessToken { get; set; }
+    public string AccessToken { get; set; } = string.Empty;
 
     /// <summary>
     /// Gets or sets the refresh token that can be used to request a new access token.
     /// </summary>
-    public string RefreshToken { get; set; }
+    public string RefreshToken { get; set; } = string.Empty;
 
     /// <summary>
     /// Gets or sets the type of the token.
     /// </summary>
-    public string TokenType { get; set; }
+    public string TokenType { get; set; } = string.Empty;
 
     /// <summary>
     /// Gets or sets the epoch timetstamp when the access token expires.

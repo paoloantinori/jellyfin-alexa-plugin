@@ -63,14 +63,14 @@ public class ConfigurationController : ControllerBase
     {
         if (!TryResolvePluginUser(userId, out var pluginUser, out var error))
         {
-            return error;
+            return error!;
         }
 
         Dictionary<string, string> req = JsonConvert.DeserializeObject<Dictionary<string, string>>(json.ToString());
         if (req.TryGetValue("InvocationName", out var invocationName)
             && IsValidInvocationName(invocationName))
         {
-            if (pluginUser.UserSkill == null)
+            if (pluginUser!.UserSkill == null)
             {
                 return new JsonResult(new { error = "User has no skill" }, StatusCode(404));
             }
@@ -107,7 +107,7 @@ public class ConfigurationController : ControllerBase
             return new JsonResult(new { error = "Invalid invocation name" }) { StatusCode = 400 };
         }
 
-        Jellyfin.Database.Implementations.Entities.User jellyfinUser = _userManager.GetUserByName(username);
+        Jellyfin.Database.Implementations.Entities.User? jellyfinUser = _userManager.GetUserByName(username);
         if (jellyfinUser == null)
         {
             return new JsonResult(new { error = "Could not find jellyfin user" }) { StatusCode = 404 };
@@ -150,10 +150,10 @@ public class ConfigurationController : ControllerBase
     {
         if (!TryResolvePluginUser(userId, out var pluginUser, out var error))
         {
-            return error;
+            return error!;
         }
 
-        string? skillId = pluginUser.UserSkill?.SkillId;
+        string? skillId = pluginUser!.UserSkill?.SkillId;
         Plugin.Instance!.Configuration.DeleteUser(pluginUser.Id);
         Plugin.Instance!.SaveConfiguration();
 
@@ -202,10 +202,10 @@ public class ConfigurationController : ControllerBase
     {
         if (!TryResolvePluginUser(userId, out var pluginUser, out var error))
         {
-            return error;
+            return error!;
         }
 
-        if (pluginUser.UserSkill == null)
+        if (pluginUser!.UserSkill == null)
         {
             return new JsonResult(new { error = "User has no skill" }) { StatusCode = 404 };
         }

@@ -125,7 +125,12 @@ public class PlayLastAddedIntentHandler : BaseHandler
 
         session.NowPlayingQueue = queueItems;
 
-        BaseItem prevItem = _libraryManager.GetItemById(latestItems[0].Id);
+        BaseItem? prevItem = _libraryManager.GetItemById(latestItems[0].Id);
+        if (prevItem == null)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale));
+        }
+
         session.FullNowPlayingItem = prevItem;
 
         string item_id = prevItem.Id.ToString();

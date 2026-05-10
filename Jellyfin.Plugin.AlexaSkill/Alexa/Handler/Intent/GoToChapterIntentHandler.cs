@@ -62,14 +62,14 @@ public class GoToChapterIntentHandler : BaseHandler
     /// <param name="session">The session instance.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A skill response.</returns>
-    public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
+    public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
 
         if (session.FullNowPlayingItem == null)
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale));
+            return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale)));
         }
 
         Guid itemId = session.FullNowPlayingItem.Id;
@@ -77,7 +77,7 @@ public class GoToChapterIntentHandler : BaseHandler
 
         if (chapters.Count == 0)
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("NoChapters", locale));
+            return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("NoChapters", locale)));
         }
 
         // Determine navigation direction or specific chapter
@@ -105,7 +105,7 @@ public class GoToChapterIntentHandler : BaseHandler
             targetIndex = requestedChapter - 1;
             if (targetIndex < 0 || targetIndex >= chapters.Count)
             {
-                return ResponseBuilder.Tell(ResponseStrings.Get("ChapterNotFound", locale, requestedChapter.ToString(System.Globalization.CultureInfo.InvariantCulture), chapters.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("ChapterNotFound", locale, requestedChapter.ToString(System.Globalization.CultureInfo.InvariantCulture), chapters.Count.ToString(System.Globalization.CultureInfo.InvariantCulture))));
             }
         }
         else
@@ -130,13 +130,13 @@ public class GoToChapterIntentHandler : BaseHandler
         string itemIdStr = itemId.ToString();
         string chapterName = chapters[targetIndex].Name ?? $"Chapter {targetIndex + 1}";
 
-        return BuildAudioPlayerResponse(
+        return Task.FromResult<SkillResponse>(BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll,
             GetStreamUrl(itemIdStr, user),
             itemIdStr,
             session.FullNowPlayingItem,
             user,
-            offsetMs);
+            offsetMs));
     }
 
     /// <summary>

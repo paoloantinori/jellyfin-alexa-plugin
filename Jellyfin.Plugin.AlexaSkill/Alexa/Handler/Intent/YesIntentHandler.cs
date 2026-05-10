@@ -85,13 +85,17 @@ public class YesIntentHandler : BaseHandler
         }
 
         Guid itemId = Guid.Parse(matches[index].Id);
-        BaseItem item = _libraryManager.GetItemById(itemId);
+        BaseItem? item = _libraryManager.GetItemById(itemId);
         if (item == null)
         {
             return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale)));
         }
 
-        Jellyfin.Database.Implementations.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
+        var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
+        if (userError != null)
+        {
+            return Task.FromResult<SkillResponse>(userError);
+        }
 
         SkillResponse response = mediaType switch
         {

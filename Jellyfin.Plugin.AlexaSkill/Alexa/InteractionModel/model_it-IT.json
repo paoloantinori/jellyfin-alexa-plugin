@@ -1185,6 +1185,31 @@
               ]
             },
             "id": "albums"
+          },
+          {
+            "name": {
+              "value": "dischi"
+            }
+          },
+          {
+            "name": {
+              "value": "disco"
+            }
+          },
+          {
+            "name": {
+              "value": "canzoni"
+            }
+          },
+          {
+            "name": {
+              "value": "canzone"
+            }
+          },
+          {
+            "name": {
+              "value": "brano"
+            }
           }
         ]
       },

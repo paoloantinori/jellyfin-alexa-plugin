@@ -96,7 +96,12 @@ public class LaunchRequestHandler : BaseHandler
         else
         {
             // resume the first item in the queue
-            BaseItem item = _libraryManager.GetItemById(session.NowPlayingQueue[0].Id);
+            BaseItem? item = _libraryManager.GetItemById(session.NowPlayingQueue[0].Id);
+            if (item == null)
+            {
+                return ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", GetLocale(request)));
+            }
+
             string item_id = item.Id.ToString();
             session.FullNowPlayingItem = item;
 
