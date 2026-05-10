@@ -506,6 +506,193 @@
           "recherche {query} dans ma médiathèque",
           "vérifie si {query} est disponible"
         ]
+      },
+      {
+        "name": "AddToQueueIntent",
+        "slots": [
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
+        ],
+        "samples": [
+          "Ajoute {song} à ma file d'attente",
+          "Ajoute {song} à la file d'attente",
+          "Ajoute {song} de {musician} à ma file d'attente",
+          "Ajoute {song} de {musician} à la file d'attente",
+          "Mets {song} dans la file d'attente",
+          "Mets {song} de {musician} dans la file d'attente",
+          "Ajoute {song} à ma liste",
+          "Ajoute {song} de {musician} à ma liste"
+        ]
+      },
+      {
+        "name": "PlayNextIntent",
+        "slots": [
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
+        ],
+        "samples": [
+          "Lis {song} ensuite",
+          "Lis {song} de {musician} ensuite",
+          "Lis {song} après",
+          "Lis {song} de {musician} après",
+          "Je veux entendre {song} ensuite",
+          "Passe {song} ensuite"
+        ]
+      },
+      {
+        "name": "ClearQueueIntent",
+        "slots": [],
+        "samples": [
+          "Efface ma file d'attente",
+          "Efface la file d'attente",
+          "Vide ma file d'attente",
+          "Vide la file d'attente",
+          "Supprime tout de ma file d'attente",
+          "Efface ma liste"
+        ]
+      },
+      {
+        "name": "ListQueueIntent",
+        "slots": [],
+        "samples": [
+          "Qu'est-ce qu'il y a dans ma file d'attente",
+          "Qu'est-ce qu'il y a dans la file d'attente",
+          "Qu'est-ce qui vient après",
+          "Qu'est-ce qui suit",
+          "Affiche ma file d'attente",
+          "Liste ma file d'attente",
+          "Qu'est-ce qui passe ensuite"
+        ]
+      },
+      {
+        "name": "PlayRadioIntent",
+        "slots": [],
+        "samples": [
+          "Lis la radio",
+          "Démarre la radio",
+          "Lis le mode radio",
+          "Lis de la musique similaire",
+          "Lis des chansons similaires",
+          "Démarre une station de radio",
+          "Continue avec de la musique similaire",
+          "Lis des chansons comme celle-ci"
+        ]
+      },
+      {
+        "name": "TurnRadioOnIntent",
+        "slots": [],
+        "samples": [
+          "Active le mode radio",
+          "Allume le mode radio",
+          "Mode radio activé",
+          "Active la radio",
+          "Allume la radio"
+        ]
+      },
+      {
+        "name": "TurnRadioOffIntent",
+        "slots": [],
+        "samples": [
+          "Désactive le mode radio",
+          "Éteins le mode radio",
+          "Mode radio désactivé",
+          "Désactive la radio",
+          "Éteins la radio",
+          "Arrête le mode radio"
+        ]
+      },
+      {
+        "name": "LearnMyVoiceIntent",
+        "slots": [],
+        "samples": [
+          "Apprends ma voix",
+          "Reconnais ma voix",
+          "Lie ma voix",
+          "C'est ma voix",
+          "Reconnais-moi",
+          "Configure mon profil vocal",
+          "Associe ma voix"
+        ]
+      },
+      {
+        "name": "WhoAmIIntent",
+        "slots": [],
+        "samples": [
+          "Qui suis-je",
+          "Quel compte est-ce",
+          "Quel compte j'utilise",
+          "Qui parle",
+          "Quel profil est actif",
+          "Suis-je reconnu"
+        ]
+      },
+      {
+        "name": "QueryArtistLibraryIntent",
+        "slots": [
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          },
+          {
+            "name": "query_type",
+            "type": "LibraryQueryType"
+          }
+        ],
+        "samples": [
+          "Quelles chansons avons-nous de {musician}",
+          "Quels titres avons-nous de {musician}",
+          "Quels albums avons-nous de {musician}",
+          "Quels disques avons-nous de {musician}",
+          "Qu'avons-nous de {musician}",
+          "Affiche les chansons de {musician}",
+          "Affiche les albums de {musician}",
+          "Liste les chansons de {musician}",
+          "Liste les albums de {musician}",
+          "Quels {query_type} avons-nous de {musician}",
+          "Affiche {query_type} de {musician}",
+          "Quelles chansons y a-t-il de {musician}",
+          "Quels albums y a-t-il de {musician}"
+        ]
+      },
+      {
+        "name": "PlayByDecadeIntent",
+        "slots": [
+          {
+            "name": "decade",
+            "type": "Decade"
+          },
+          {
+            "name": "genre",
+            "type": "AMAZON.Genre"
+          }
+        ],
+        "samples": [
+          "Lis des chansons des {decade}",
+          "Lis des titres des {decade}",
+          "Lis des succès des {decade}",
+          "Lis de la musique des {decade}",
+          "Lis les succès des {decade}",
+          "Lis les chansons des {decade}",
+          "Lis du {genre} des {decade}",
+          "Lis des chansons {genre} des {decade}",
+          "Je veux entendre de la musique des {decade}",
+          "Lis quelque chose des {decade}",
+          "Écoute de la musique des {decade}",
+          "Donne-moi des chansons des {decade}",
+          "Mélange de la musique des {decade}"
+        ]
       }
     ],
     "types": [
@@ -701,6 +888,151 @@
                 "bio",
                 "sur l'artiste"
               ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "Decade",
+        "values": [
+          {
+            "id": "50s",
+            "name": {
+              "value": "cinquante",
+              "synonyms": [
+                "les cinquante",
+                "années cinquante",
+                "50",
+                "les 50"
+              ]
+            }
+          },
+          {
+            "id": "60s",
+            "name": {
+              "value": "soixante",
+              "synonyms": [
+                "les soixante",
+                "années soixante",
+                "60",
+                "les 60"
+              ]
+            }
+          },
+          {
+            "id": "70s",
+            "name": {
+              "value": "soixante-dix",
+              "synonyms": [
+                "les soixante-dix",
+                "années soixante-dix",
+                "70",
+                "les 70"
+              ]
+            }
+          },
+          {
+            "id": "80s",
+            "name": {
+              "value": "quatre-vingts",
+              "synonyms": [
+                "les quatre-vingts",
+                "années quatre-vingts",
+                "80",
+                "les 80"
+              ]
+            }
+          },
+          {
+            "id": "90s",
+            "name": {
+              "value": "quatre-vingt-dix",
+              "synonyms": [
+                "les quatre-vingt-dix",
+                "années quatre-vingt-dix",
+                "90",
+                "les 90"
+              ]
+            }
+          },
+          {
+            "id": "2000s",
+            "name": {
+              "value": "deux mille",
+              "synonyms": [
+                "les deux mille",
+                "années deux mille",
+                "2000"
+              ]
+            }
+          },
+          {
+            "id": "2010s",
+            "name": {
+              "value": "deux mille dix",
+              "synonyms": [
+                "les deux mille dix",
+                "2010"
+              ]
+            }
+          },
+          {
+            "id": "2020s",
+            "name": {
+              "value": "deux mille vingt",
+              "synonyms": [
+                "les deux mille vingt",
+                "2020"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "LibraryQueryType",
+        "values": [
+          {
+            "id": "tracks",
+            "name": {
+              "value": "chansons",
+              "synonyms": [
+                "titres",
+                "morceaux"
+              ]
+            }
+          },
+          {
+            "id": "albums",
+            "name": {
+              "value": "albums",
+              "synonyms": [
+                "disques"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "disque"
+            }
+          },
+          {
+            "name": {
+              "value": "chanson"
+            }
+          },
+          {
+            "name": {
+              "value": "titre"
+            }
+          },
+          {
+            "name": {
+              "value": "morceau"
+            }
+          },
+          {
+            "name": {
+              "value": "album"
             }
           }
         ]
