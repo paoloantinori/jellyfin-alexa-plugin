@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
@@ -19,7 +20,13 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.DynamicEntities;
 /// </summary>
 public class DynamicEntityBuilder
 {
-    private const int MaxDynamicValues = 50;
+    /// <summary>
+    /// Alexa allows at most 100 total values+synonyms across all slot types in a
+    /// single Dialog.UpdateDynamicEntities directive. We reserve headroom so
+    /// artists + albums together stay under this limit.
+    /// </summary>
+    private const int MaxTotalValueCount = 90;
+
     private const int QueryLimit = 55;
 
     private static readonly Dictionary<CatalogType, string> SlotTypeNames = CatalogSlotTypes.Names;
@@ -62,8 +69,9 @@ public class DynamicEntityBuilder
             return null;
         }
 
-        var artistValues = BuildSlotValues(user, BaseItemKind.MusicArtist, CatalogType.Artist);
-        var albumValues = BuildSlotValues(user, BaseItemKind.MusicAlbum, CatalogType.Album);
+        int budget = MaxTotalValueCount;
+        var artistValues = BuildSlotValues(user, BaseItemKind.MusicArtist, CatalogType.Artist, ref budget);
+        var albumValues = BuildSlotValues(user, BaseItemKind.MusicAlbum, CatalogType.Album, ref budget);
 
         if (artistValues.Count == 0 && albumValues.Count == 0)
         {
@@ -92,8 +100,8 @@ public class DynamicEntityBuilder
         }
 
         _logger.LogDebug(
-            "Built dynamic entities directive with {Artists} artists and {Albums} albums",
-            artistValues.Count, albumValues.Count);
+            "Built dynamic entities directive with {Artists} artists and {Albums} albums ({Total} total values+synonyms)",
+            artistValues.Count, albumValues.Count, MaxTotalValueCount - budget);
 
         return directive;
     }
@@ -101,7 +109,8 @@ public class DynamicEntityBuilder
     private List<DynamicSlotValue> BuildSlotValues(
         Jellyfin.Database.Implementations.Entities.User user,
         BaseItemKind itemKind,
-        CatalogType catalogType)
+        CatalogType catalogType,
+        ref int budget)
     {
         IReadOnlyList<BaseItem> items = _libraryManager.GetItemList(new InternalItemsQuery
         {
@@ -121,7 +130,36 @@ public class DynamicEntityBuilder
                 continue;
             }
 
+            if (budget <= 0)
+            {
+                break;
+            }
+
             var synonyms = PhoneticSynonymGenerator.GenerateSynonyms(item.Name);
+
+            // Each value counts as 1, plus 1 per synonym toward the Alexa limit.
+            int cost = 1 + synonyms.Count;
+            if (cost > budget)
+            {
+                // Try trimming synonyms to fit.
+                int fitSynonyms = Math.Max(0, budget - 1);
+                if (fitSynonyms == 0 && budget >= 1)
+                {
+                    synonyms = new List<string>();
+                    cost = 1;
+                }
+                else
+                {
+                    synonyms = synonyms.Take(fitSynonyms).ToList();
+                    cost = 1 + synonyms.Count;
+                }
+            }
+
+            if (cost > budget)
+            {
+                break;
+            }
+
             values.Add(new DynamicSlotValue
             {
                 Id = CatalogValue.FormatId(catalogType, item.Id),
@@ -132,10 +170,7 @@ public class DynamicEntityBuilder
                 }
             });
 
-            if (values.Count >= MaxDynamicValues)
-            {
-                break;
-            }
+            budget -= cost;
         }
 
         return values;

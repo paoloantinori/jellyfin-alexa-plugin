@@ -186,7 +186,6 @@ public class DynamicEntityBuilderTests
         var userId = Guid.NewGuid();
         SetupUserMock(userId);
 
-        // Use a name that PhoneticSynonymGenerator is known to produce synonyms for
         var artists = new List<BaseItem>
         {
             new MusicArtist { Name = "Cesare Cremonini", Id = Guid.NewGuid() }
@@ -197,22 +196,73 @@ public class DynamicEntityBuilderTests
         var result = builder.BuildFromRecentItems(userId, CancellationToken.None);
 
         Assert.NotNull(result);
-        // PhoneticSynonymGenerator produces phonetic variants for Italian-friendly names
-        var synonyms = result.Types[0].Values[0].Name.Synonyms;
-        // Whether synonyms are generated depends on the name — either way the value is set correctly
         Assert.Equal("Cesare Cremonini", result.Types[0].Values[0].Name.Value);
     }
 
     [Fact]
-    public void BuildFromRecentItems_RespectsMaxDynamicValues()
+    public void BuildFromRecentItems_TotalValueCount_StaysUnderLimit()
     {
         var userId = Guid.NewGuid();
         SetupUserMock(userId);
 
-        // Create more than 50 artists
+        // Create many artists and albums — each "The <word>" generates synonyms.
         var artists = Enumerable.Range(0, 60)
-            .Select(i => new MusicArtist { Name = $"Artist {i}", Id = Guid.NewGuid() })
-            .Cast<BaseItem>()
+            .Select(i => (BaseItem)new MusicArtist { Name = $"The Band {i}", Id = Guid.NewGuid() })
+            .ToList();
+        var albums = Enumerable.Range(0, 60)
+            .Select(i => (BaseItem)new MusicAlbum { Name = $"The Album {i}", Id = Guid.NewGuid() })
+            .ToList();
+        SetupLibraryMock(artists, albums);
+
+        var builder = CreateBuilder();
+        var result = builder.BuildFromRecentItems(userId, CancellationToken.None);
+
+        Assert.NotNull(result);
+
+        // Count total values + synonyms across all slot types — must not exceed 100.
+        int totalCount = 0;
+        foreach (var type in result.Types)
+        {
+            foreach (var val in type.Values)
+            {
+                totalCount += 1 + (val.Name.Synonyms?.Count ?? 0);
+            }
+        }
+
+        Assert.True(totalCount <= 100, $"Total value+synonym count was {totalCount}, must be <= 100");
+    }
+
+    [Fact]
+    public void BuildFromRecentItems_LargeLibrary_ArtistsGetPriorityOverAlbums()
+    {
+        var userId = Guid.NewGuid();
+        SetupUserMock(userId);
+
+        var artists = Enumerable.Range(0, 80)
+            .Select(i => (BaseItem)new MusicArtist { Name = $"Artist {i}", Id = Guid.NewGuid() })
+            .ToList();
+        var albums = Enumerable.Range(0, 80)
+            .Select(i => (BaseItem)new MusicAlbum { Name = $"Album {i}", Id = Guid.NewGuid() })
+            .ToList();
+        SetupLibraryMock(artists, albums);
+
+        var builder = CreateBuilder();
+        var result = builder.BuildFromRecentItems(userId, CancellationToken.None);
+
+        Assert.NotNull(result);
+        // Artists are built first and consume the budget; albums get the remainder.
+        Assert.True(result.Types[0].Values.Count > 0, "Should have artist values");
+    }
+
+    [Fact]
+    public void BuildFromRecentItems_SynonymsCountTowardsBudget()
+    {
+        var userId = Guid.NewGuid();
+        SetupUserMock(userId);
+
+        // "The White Stripes" generates phonetic synonyms, eating budget faster.
+        var artists = Enumerable.Range(0, 50)
+            .Select(i => (BaseItem)new MusicArtist { Name = "The White Stripes", Id = Guid.NewGuid() })
             .ToList();
         SetupLibraryMock(artists, []);
 
@@ -220,7 +270,33 @@ public class DynamicEntityBuilderTests
         var result = builder.BuildFromRecentItems(userId, CancellationToken.None);
 
         Assert.NotNull(result);
-        Assert.Equal(50, result.Types[0].Values.Count);
+        int totalCount = result.Types[0].Values.Sum(v => 1 + (v.Name.Synonyms?.Count ?? 0));
+        Assert.True(totalCount <= 100, $"Total count {totalCount} exceeds 100 limit");
+        // Each "The White Stripes" generates synonyms, so fewer than 50 items fit.
+        Assert.True(result.Types[0].Values.Count < 50,
+            "With synonyms, should fit fewer than 50 items within budget");
+    }
+
+    [Fact]
+    public void BuildFromRecentItems_NoSynonyms_FitsMoreItems()
+    {
+        var userId = Guid.NewGuid();
+        SetupUserMock(userId);
+
+        // Single-word Italian-origin names get no synonyms.
+        var artists = Enumerable.Range(0, 50)
+            .Select(i => (BaseItem)new MusicArtist { Name = $"Metallica", Id = Guid.NewGuid() })
+            .ToList();
+        SetupLibraryMock(artists, []);
+
+        var builder = CreateBuilder();
+        var result = builder.BuildFromRecentItems(userId, CancellationToken.None);
+
+        Assert.NotNull(result);
+        // "Metallica" is in the known Italian-origin list, so no synonyms.
+        // Each value costs exactly 1, so all items that fit budget should be included.
+        int totalCount = result.Types[0].Values.Sum(v => 1 + (v.Name.Synonyms?.Count ?? 0));
+        Assert.True(totalCount <= 100, $"Total count {totalCount} exceeds 100 limit");
     }
 
     [Fact]

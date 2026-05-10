@@ -27,12 +27,6 @@ internal static class AplHelper
   ""type"": ""APL"",
   ""version"": ""1.9"",
   ""theme"": ""dark"",
-  ""import"": [
-    {
-      ""name"": ""alexa-layouts"",
-      ""version"": ""1.5.0""
-    }
-  ],
   ""resources"": [
     {
       ""dimensions"": {
@@ -44,7 +38,7 @@ internal static class AplHelper
       }
     },
     {
-      ""when"": ""${@viewportProfile == @viewportProfileRound}"",
+      ""when"": ""${viewport.shape == 'round'}"",
       ""dimensions"": {
         ""artSize"": 200,
         ""titleSize"": 28,
@@ -194,12 +188,6 @@ internal static class AplHelper
   ""type"": ""APL"",
   ""version"": ""1.9"",
   ""theme"": ""dark"",
-  ""import"": [
-    {
-      ""name"": ""alexa-layouts"",
-      ""version"": ""1.5.0""
-    }
-  ],
   ""resources"": [
     {
       ""dimensions"": {
@@ -211,7 +199,7 @@ internal static class AplHelper
       }
     },
     {
-      ""when"": ""${@viewportProfile == @viewportProfileRound}"",
+      ""when"": ""${viewport.shape == 'round'}"",
       ""dimensions"": {
         ""thumbSize"": 48,
         ""titleSize"": 16,
