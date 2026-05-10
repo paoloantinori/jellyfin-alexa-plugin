@@ -18,6 +18,7 @@ using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
+using Jellyfin.Database.Implementations.Entities;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
@@ -34,6 +35,9 @@ public class PlayVideoIntentHandlerTests
         _sessionManagerMock = new Mock<ISessionManager>();
         _libraryManagerMock = new Mock<ILibraryManager>();
         _userManagerMock = new Mock<IUserManager>();
+        _userManagerMock
+            .Setup(um => um.GetUserById(It.IsAny<Guid>()))
+            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
         _config = new PluginConfiguration();
         TestHelpers.SetServerAddress(_config, "http://localhost:8096");
         _loggerFactory = LoggerFactory.Create(b => { });

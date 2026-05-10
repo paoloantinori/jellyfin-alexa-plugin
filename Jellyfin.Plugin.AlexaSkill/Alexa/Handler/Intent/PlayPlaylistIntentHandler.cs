@@ -73,7 +73,11 @@ public class PlayPlaylistIntentHandler : BaseHandler
 
         Logger.LogDebug("Play playlist: {0}", playlistName);
 
-        Jellyfin.Database.Implementations.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
+        var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
+        if (userError != null)
+        {
+            return userError;
+        }
 
         InternalItemsQuery query = new InternalItemsQuery()
         {
@@ -134,7 +138,12 @@ public class PlayPlaylistIntentHandler : BaseHandler
 
         session.NowPlayingQueue = queueItems;
 
-        BaseItem firstItem = _libraryManager.GetItemById(queueItems[0].Id);
+        BaseItem? firstItem = _libraryManager.GetItemById(queueItems[0].Id);
+        if (firstItem == null)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale));
+        }
+
         session.FullNowPlayingItem = firstItem;
 
         string item_id = firstItem.Id.ToString();

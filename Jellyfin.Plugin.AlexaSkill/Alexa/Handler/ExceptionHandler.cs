@@ -42,7 +42,7 @@ public class ExceptionHandler : BaseHandler
     /// <param name="user">The user instance.</param>
     /// <param name="session">The session instance.</param>
     /// <returns>Notification about an error.</returns>
-    public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
+    public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         SystemExceptionRequest exceptionRequest = (SystemExceptionRequest)request;
         string locale = GetLocale(request);
@@ -59,6 +59,6 @@ public class ExceptionHandler : BaseHandler
             request.RequestId,
             context.System.Device?.DeviceID);
 
-        return ResponseBuilder.Tell(ResponseStrings.Get(localeKey, locale));
+        return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get(localeKey, locale)));
     }
 }

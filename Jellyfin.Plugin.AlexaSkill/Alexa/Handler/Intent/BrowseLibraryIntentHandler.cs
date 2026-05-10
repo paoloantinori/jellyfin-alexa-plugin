@@ -94,7 +94,11 @@ public class BrowseLibraryIntentHandler : BaseHandler
 
         await SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)).ConfigureAwait(false);
 
-        Jellyfin.Database.Implementations.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
+        var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
+        if (userError != null)
+        {
+            return userError;
+        }
 
         IReadOnlyList<BaseItem> items;
 

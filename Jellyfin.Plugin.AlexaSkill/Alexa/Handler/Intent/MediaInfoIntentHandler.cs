@@ -361,17 +361,17 @@ public class MediaInfoIntentHandler : BaseHandler
 
         if (hasBio && hasGenres && hasAlbums)
         {
-            return ResponseStrings.Get("ArtistInfoBioGenreAlbums", locale, artistName, genreList, albumCount, bio);
+            return ResponseStrings.Get("ArtistInfoBioGenreAlbums", locale, artistName, genreList, albumCount, bio!);
         }
 
         if (hasBio && hasGenres)
         {
-            return ResponseStrings.Get("ArtistInfoBioGenre", locale, artistName, genreList, bio);
+            return ResponseStrings.Get("ArtistInfoBioGenre", locale, artistName, genreList, bio!);
         }
 
         if (hasBio && hasAlbums)
         {
-            return ResponseStrings.Get("ArtistInfoBioAlbums", locale, artistName, albumCount, bio);
+            return ResponseStrings.Get("ArtistInfoBioAlbums", locale, artistName, albumCount, bio!);
         }
 
         if (hasGenres && hasAlbums)
@@ -381,7 +381,7 @@ public class MediaInfoIntentHandler : BaseHandler
 
         if (hasBio)
         {
-            return ResponseStrings.Get("ArtistInfoBioOnly", locale, artistName, bio);
+            return ResponseStrings.Get("ArtistInfoBioOnly", locale, artistName, bio!);
         }
 
         if (hasGenres)

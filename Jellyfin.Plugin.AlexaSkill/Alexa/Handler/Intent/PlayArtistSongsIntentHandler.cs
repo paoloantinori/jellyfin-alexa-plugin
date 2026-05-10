@@ -71,7 +71,11 @@ public class PlayArtistSongsIntentHandler : BaseHandler
 
         await SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)).ConfigureAwait(false);
 
-        Jellyfin.Database.Implementations.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
+        var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
+        if (userError != null)
+        {
+            return userError;
+        }
 
         IReadOnlyList<BaseItem> artists = await RetryAsync(() => _libraryManager.GetItemList(new InternalItemsQuery()
         {
@@ -103,6 +107,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             User = jellyfinUser,
             Recursive = true,
             MediaTypes = new[] { MediaType.Audio },
+            OrderBy = PopularitySort,
             DtoOptions = new DtoOptions(true),
             ArtistIds = new[] { artists[0].Id }
         }), "GetArtistSongs", cancellationToken).ConfigureAwait(false);

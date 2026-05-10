@@ -151,7 +151,7 @@ public class CatalogManager
             accessToken, client, locationUri, "Catalog version", cancellationToken).ConfigureAwait(false);
 
         _logger.LogInformation("Catalog {CatalogId} version {Version} created successfully", catalogId, version);
-        return version;
+        return version ?? "1";
     }
 
     /// <summary>

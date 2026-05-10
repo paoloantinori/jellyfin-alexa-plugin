@@ -51,7 +51,7 @@ public class SleepTimerIntentHandler : BaseHandler
     /// <param name="user">The user instance.</param>
     /// <param name="session">The session instance.</param>
     /// <returns>Skill response with updated AudioPlayer directive.</returns>
-    public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
+    public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
@@ -66,13 +66,13 @@ public class SleepTimerIntentHandler : BaseHandler
 
         if (string.IsNullOrEmpty(durationSlot) || !int.TryParse(durationSlot, NumberStyles.Integer, CultureInfo.InvariantCulture, out int durationMinutes))
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchSleepTimer", locale));
+            return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchSleepTimer", locale)));
         }
 
         // Nothing currently playing.
-        if (session?.FullNowPlayingItem == null)
+        if (session.FullNowPlayingItem == null)
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale));
+            return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale)));
         }
 
         string itemId = context.AudioPlayer?.Token ?? session.FullNowPlayingItem.Id.ToString();
@@ -104,7 +104,7 @@ public class SleepTimerIntentHandler : BaseHandler
                 }
             };
 
-            return new SkillResponse
+            return Task.FromResult<SkillResponse>(new SkillResponse
             {
                 Version = "1.0",
                 Response = new ResponseBody
@@ -113,7 +113,7 @@ public class SleepTimerIntentHandler : BaseHandler
                     OutputSpeech = new PlainTextOutputSpeech(ResponseStrings.Get("CancelSleepTimer", locale)),
                     Directives = new List<IDirective> { cancelDirective }
                 }
-            };
+            });
         }
 
         // Encode the sleep deadline into the token.
@@ -134,7 +134,7 @@ public class SleepTimerIntentHandler : BaseHandler
             }
         };
 
-        return new SkillResponse
+        return Task.FromResult<SkillResponse>(new SkillResponse
         {
             Version = "1.0",
             Response = new ResponseBody
@@ -144,6 +144,6 @@ public class SleepTimerIntentHandler : BaseHandler
                     ResponseStrings.Get("SleepTimerSet", locale, durationMinutes.ToString(CultureInfo.InvariantCulture))),
                 Directives = new List<IDirective> { directive }
             }
-        };
+        });
     }
 }

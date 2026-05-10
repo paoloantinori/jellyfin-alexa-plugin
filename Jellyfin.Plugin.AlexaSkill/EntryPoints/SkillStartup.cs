@@ -170,10 +170,10 @@ public class SkillStartup : IHostedService, IDisposable
                                     || status.Manifest.LastModified.Status == SkillStatusState.FAILED)
                                 {
                                     _logger.LogInformation("Skill for user {UserId} is outdated. Updating...", user.Id);
-                                    await AlexaUtil.CallAsync<object?>(user, () =>
+                                    await AlexaUtil.CallAsync<object?>(user, async () =>
                                     {
-                                        user.SmapiManagement.UpdateSkillAsync(user.UserSkill.SkillId, manifestSkill, skillInteractionModels);
-                                        return Task.FromResult<object?>(null);
+                                        await user.SmapiManagement.UpdateSkillAsync(user.UserSkill.SkillId, manifestSkill, skillInteractionModels).ConfigureAwait(false);
+                                        return null;
                                     }).ConfigureAwait(false);
                                 }
 

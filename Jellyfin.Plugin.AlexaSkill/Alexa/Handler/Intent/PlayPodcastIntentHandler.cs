@@ -67,7 +67,11 @@ public class PlayPodcastIntentHandler : BaseHandler
 
         await SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingPodcast", locale)).ConfigureAwait(false);
 
-        Jellyfin.Database.Implementations.Entities.User jellyfinUser = _userManager.GetUserById(session.UserId);
+        var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
+        if (userError != null)
+        {
+            return userError;
+        }
 
         // Search for podcast series (Series with audio media type = podcast)
         var podcastQuery = new InternalItemsQuery

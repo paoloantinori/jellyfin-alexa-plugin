@@ -131,7 +131,12 @@ public class SkillConnectionHandler : BaseHandler
         }
 
         session.NowPlayingQueue = queueItems;
-        BaseItem firstItem = _libraryManager.GetItemById(queueItems[0].Id);
+        BaseItem? firstItem = _libraryManager.GetItemById(queueItems[0].Id);
+        if (firstItem == null)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale));
+        }
+
         session.FullNowPlayingItem = firstItem;
 
         string itemId = firstItem.Id.ToString();

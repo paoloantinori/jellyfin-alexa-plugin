@@ -9,6 +9,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
+using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
@@ -19,6 +20,7 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
 using AlexaSession = Alexa.NET.Request.Session;
+using JellyfinUser = Jellyfin.Database.Implementations.Entities.User;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
@@ -32,6 +34,9 @@ public abstract class BaseHandler
     /// Matches the CancellationTokenSource(TimeSpan.FromSeconds(6)) in AlexaSkillController.
     /// </summary>
     private const int AlexaRequestTimeoutMs = 6000;
+
+    protected static readonly (ItemSortBy SortBy, SortOrder Order)[] PopularitySort =
+        { (ItemSortBy.PlayCount, SortOrder.Descending), (ItemSortBy.CommunityRating, SortOrder.Descending), (ItemSortBy.SortName, SortOrder.Ascending) };
 
     private PluginConfiguration _config;
 
@@ -90,7 +95,7 @@ public abstract class BaseHandler
         // Account linking via access token serves as the fallback for devices without speaker recognition.
         if (user == null)
         {
-            if (!Guid.TryParse(context.System.User.AccessToken, out Guid userId))
+            if (!Guid.TryParse(context.System!.User!.AccessToken, out Guid userId))
             {
                 return ResponseBuilder.Tell(ResponseStrings.Get("UserNotFound", GetLocale(request)));
             }
@@ -105,14 +110,20 @@ public abstract class BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("UserNotFound", GetLocale(request)));
         }
 
-        SessionInfo session = await RetryHelper.ExecuteWithRetryAsync(
-            () => SessionManager.GetSessionByAuthenticationToken(user.JellyfinToken, context.System.Device.DeviceID, Plugin.Instance!.Configuration.ServerAddress),
+        SessionInfo? session = await RetryHelper.ExecuteWithRetryAsync(
+            () => SessionManager.GetSessionByAuthenticationToken(user.JellyfinToken, context.System!.Device!.DeviceID, Plugin.Instance!.Configuration.ServerAddress),
             Logger,
             "GetSessionByAuthToken",
             cancellationToken: cancellationToken,
             timeoutMs: AlexaRequestTimeoutMs).ConfigureAwait(false);
 
         string serverUrl = _config.ServerAddress;
+
+        if (session == null)
+        {
+            Logger.LogError("Session not found for user {UserId}", user.Id);
+            return ResponseBuilder.Tell(ResponseStrings.Get("UserNotFound", GetLocale(request)));
+        }
 
         try
         {
@@ -549,5 +560,26 @@ public abstract class BaseHandler
             .Replace(">", "&gt;", StringComparison.Ordinal)
             .Replace("\"", "&quot;", StringComparison.Ordinal)
             .Replace("'", "&apos;", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Resolves a Jellyfin user by ID and returns either the user or an error response.
+    /// </summary>
+    /// <param name="userManager">The user manager to look up the user from.</param>
+    /// <param name="userId">The Jellyfin user ID to resolve.</param>
+    /// <param name="locale">The locale for the error response string.</param>
+    /// <returns>A tuple: use <paramref name="User"/> when not null, otherwise return <paramref name="Error"/>.</returns>
+    protected static (JellyfinUser? User, SkillResponse? Error) ResolveJellyfinUser(
+        IUserManager userManager,
+        Guid userId,
+        string locale)
+    {
+        JellyfinUser? user = userManager.GetUserById(userId);
+        if (user == null)
+        {
+            return (null, ResponseBuilder.Tell(ResponseStrings.Get("UserNotFound", locale)));
+        }
+
+        return (user, null);
     }
 }

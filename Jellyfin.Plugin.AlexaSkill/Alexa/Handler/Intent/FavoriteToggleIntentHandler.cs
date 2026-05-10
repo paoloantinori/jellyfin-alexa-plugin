@@ -48,26 +48,36 @@ public abstract class FavoriteToggleIntentHandler : BaseHandler
         return intentRequest != null && string.Equals(intentRequest.Intent.Name, IntentName, StringComparison.Ordinal);
     }
 
-    public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
+    public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
         BaseItemDto? item = session.NowPlayingItem;
         if (item == null)
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale));
+            return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale)));
         }
 
-        var jellyfinUser = _userManager.GetUserById(user.Id);
+        var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, user.Id, locale);
+        if (userError != null)
+        {
+            return Task.FromResult<SkillResponse>(userError);
+        }
+
         var baseItem = _libraryManager.GetItemById(item.Id);
         if (baseItem == null)
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale));
+            return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale)));
         }
 
         var data = _userDataManager.GetUserData(jellyfinUser, baseItem);
+        if (data == null)
+        {
+            return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale)));
+        }
+
         data.IsFavorite = FavoriteValue;
         _userDataManager.SaveUserData(jellyfinUser, baseItem, data, UserDataSaveReason.UpdateUserRating, CancellationToken.None);
 
-        return ResponseBuilder.Tell(ResponseStrings.Get(ResponseKey, locale));
+        return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get(ResponseKey, locale)));
     }
 }

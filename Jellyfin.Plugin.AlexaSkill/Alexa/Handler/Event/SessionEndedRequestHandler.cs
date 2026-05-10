@@ -38,7 +38,7 @@ public class SessionEndedRequestHandler : BaseHandler
     }
 
     /// <inheritdoc/>
-    public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
+    public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         SessionEndedRequest sessionEnded = (SessionEndedRequest)request;
         if (sessionEnded.Error != null)
@@ -58,6 +58,6 @@ public class SessionEndedRequestHandler : BaseHandler
                 request.RequestId);
         }
 
-        return ResponseBuilder.Empty();
+        return Task.FromResult<SkillResponse>(ResponseBuilder.Empty());
     }
 }
