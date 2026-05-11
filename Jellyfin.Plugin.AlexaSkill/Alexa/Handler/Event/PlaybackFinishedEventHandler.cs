@@ -13,6 +13,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
+#pragma warning disable CA1711
 public class PlaybackFinishedEventHandler : BaseHandler
 {
     public PlaybackFinishedEventHandler(
@@ -45,3 +46,4 @@ public class PlaybackFinishedEventHandler : BaseHandler
         return ResponseBuilder.Empty();
     }
 }
+#pragma warning restore CA1711

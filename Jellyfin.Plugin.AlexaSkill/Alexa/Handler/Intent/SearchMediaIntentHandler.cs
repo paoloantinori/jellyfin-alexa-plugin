@@ -221,12 +221,12 @@ public class SearchMediaIntentHandler : BaseHandler
         }
 
         var runtimeName = item.GetType().Name;
-        if (runtimeName.Contains("AudioBook"))
+        if (runtimeName.Contains("AudioBook", StringComparison.Ordinal))
         {
             return "audiobook";
         }
 
-        if (runtimeName.Contains("Playlist"))
+        if (runtimeName.Contains("Playlist", StringComparison.Ordinal))
         {
             return "playlist";
         }

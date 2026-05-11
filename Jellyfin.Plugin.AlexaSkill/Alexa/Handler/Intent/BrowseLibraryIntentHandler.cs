@@ -102,28 +102,30 @@ public class BrowseLibraryIntentHandler : BaseHandler
             return userError;
         }
 
+        Jellyfin.Database.Implementations.Entities.User resolvedUser = jellyfinUser!;
+
         IReadOnlyList<BaseItem> items;
 
         switch (browseCategory.ToLowerInvariant())
         {
             case "artists":
             case "artisti":
-                items = await QueryItems(BaseItemKind.MusicArtist, filter, jellyfinUser, cancellationToken).ConfigureAwait(false);
+                items = await QueryItems(BaseItemKind.MusicArtist, filter, resolvedUser, cancellationToken).ConfigureAwait(false);
                 break;
             case "albums":
-                items = await QueryItems(BaseItemKind.MusicAlbum, filter, jellyfinUser, cancellationToken).ConfigureAwait(false);
+                items = await QueryItems(BaseItemKind.MusicAlbum, filter, resolvedUser, cancellationToken).ConfigureAwait(false);
                 break;
             case "genres":
             case "generi":
-                return await HandleGenresQuery(filter, locale, jellyfinUser, context, user, cancellationToken).ConfigureAwait(false);
+                return await HandleGenresQuery(filter, locale, resolvedUser, context, user, cancellationToken).ConfigureAwait(false);
             case "movies":
             case "film":
-                items = await QueryItems(BaseItemKind.Movie, filter, jellyfinUser, cancellationToken).ConfigureAwait(false);
+                items = await QueryItems(BaseItemKind.Movie, filter, resolvedUser, cancellationToken).ConfigureAwait(false);
                 break;
             case "songs":
             case "brani":
             case "canzoni":
-                items = await QueryItems(BaseItemKind.Audio, filter, jellyfinUser, cancellationToken).ConfigureAwait(false);
+                items = await QueryItems(BaseItemKind.Audio, filter, resolvedUser, cancellationToken).ConfigureAwait(false);
                 break;
             default:
                 return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchBrowseCategory", locale));

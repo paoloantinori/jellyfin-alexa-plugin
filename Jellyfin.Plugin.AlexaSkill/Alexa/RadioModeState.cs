@@ -26,6 +26,7 @@ internal static class RadioModeState
     /// <summary>
     /// Remove all entries for a given user (cleanup on session end).
     /// </summary>
+    /// <param name="userId">The user ID whose entries should be removed.</param>
     public static void DisableAllForUser(Guid userId)
     {
         string prefix = $"{userId}:";

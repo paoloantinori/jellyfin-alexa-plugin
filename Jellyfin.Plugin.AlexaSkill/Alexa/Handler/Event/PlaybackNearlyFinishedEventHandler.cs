@@ -32,6 +32,11 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     /// <summary>
     /// Initializes a new instance of the <see cref="PlaybackNearlyFinishedEventHandler"/> class.
     /// </summary>
+    /// <param name="sessionManager">Instance of the <see cref="ISessionManager"/> interface.</param>
+    /// <param name="config">The plugin configuration.</param>
+    /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
+    /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
+    /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
     public PlaybackNearlyFinishedEventHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
@@ -54,6 +59,12 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     /// Respond with next item in the queue. If radio mode is enabled and the
     /// queue is about to run out, auto-populate with similar tracks.
     /// </summary>
+    /// <param name="request">The skill request which should be handled.</param>
+    /// <param name="context">The context of the skill intent request.</param>
+    /// <param name="user">The user instance.</param>
+    /// <param name="session">The session instance.</param>
+    /// <param name="cancellationToken">Cancellation token for request timeout.</param>
+    /// <returns>A task representing the async operation.</returns>
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         // Check for sleep timer deadline encoded in the current token

@@ -1,9 +1,10 @@
 ---
 id: JF-112
 title: Backport 11 en-US-only intents to all locales
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-05-09 20:30'
+updated_date: '2026-05-10 07:19'
 labels:
   - nlu
   - multi-locale
@@ -37,3 +38,9 @@ Discovered in JF-98 audit.
 <!-- DOD:BEGIN -->
 - [ ] #1 /simplify
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added all 11 en-US-only intents to all 12 locales with translated sample utterances. English locales got 89 samples, German 84, Spanish 85, French 85, Italian 47 (7 missing queue/radio intents). Also added Decade and LibraryQueryType custom slot types to 10 locales that lacked them, with localized values/synonyms.
+<!-- SECTION:FINAL_SUMMARY:END -->

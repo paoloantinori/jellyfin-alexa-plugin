@@ -80,14 +80,17 @@ public class CatalogSyncTask : IScheduledTask
                     continue;
                 }
 
-                LibrarySyncService.SyncResult result = await _syncService.SyncUserLibraryAsync(
+                SyncResult result = await _syncService.SyncUserLibraryAsync(
                     user, jellyfinUser, cancellationToken).ConfigureAwait(false);
 
                 if (result.Success)
                 {
                     user.LastCatalogSync = result.SyncTime;
-                    _logger.LogInformation("Catalog sync succeeded for user {UserId}: {Artists} artists, {Albums} albums",
-                        user.Id, result.ArtistCount, result.AlbumCount);
+                    _logger.LogInformation(
+                        "Catalog sync succeeded for user {UserId}: {Artists} artists, {Albums} albums",
+                        user.Id,
+                        result.ArtistCount,
+                        result.AlbumCount);
                 }
             }
             catch (Exception ex)

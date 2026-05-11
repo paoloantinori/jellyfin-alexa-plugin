@@ -81,9 +81,11 @@ public class ContinueWatchingIntentHandler : BaseHandler
             return userError;
         }
 
+        Jellyfin.Database.Implementations.Entities.User resolvedUser = jellyfinUser!;
+
         var query = new InternalItemsQuery
         {
-            User = jellyfinUser,
+            User = resolvedUser,
             Recursive = true,
             IncludeItemTypes = new[] { BaseItemKind.Audio, BaseItemKind.Movie, BaseItemKind.Episode },
             MinDateLastSavedForUser = DateTime.UtcNow.AddDays(-30),
@@ -100,7 +102,7 @@ public class ContinueWatchingIntentHandler : BaseHandler
 
         foreach (BaseItem item in recentItems)
         {
-            UserItemData? userData = _userDataManager.GetUserData(jellyfinUser, item);
+            UserItemData? userData = _userDataManager.GetUserData(resolvedUser, item);
             if (userData == null || userData.Played || userData.PlaybackPositionTicks <= 0)
             {
                 continue;
@@ -146,16 +148,5 @@ public class ContinueWatchingIntentHandler : BaseHandler
         }
 
         return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, resumeItem, user, offsetMs);
-    }
-
-    private static string FormatPosition(long ticks)
-    {
-        var ts = TimeSpan.FromTicks(ticks);
-        if (ts.TotalHours >= 1)
-        {
-            return $"{(int)ts.TotalHours}h {ts.Minutes}m";
-        }
-
-        return ts.TotalMinutes >= 1 ? $"{(int)ts.TotalMinutes}m {ts.Seconds}s" : $"{ts.Seconds}s";
     }
 }

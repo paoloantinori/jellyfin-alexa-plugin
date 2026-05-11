@@ -27,7 +27,7 @@ public class LoopSongOnIntentHandler : BaseHandler
     public override bool CanHandle(Request request)
     {
         IntentRequest? intentRequest = request as IntentRequest;
-        return intentRequest != null && string.Equals(intentRequest.Intent.Name, IntentNames.LoopSongOn);
+        return intentRequest != null && string.Equals(intentRequest.Intent.Name, IntentNames.LoopSongOn, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -37,6 +37,7 @@ public class LoopSongOnIntentHandler : BaseHandler
     /// <param name="context">The context of the skill intent request.</param>
     /// <param name="user">The user instance.</param>
     /// <param name="session">The session instance.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>Empty response.</returns>
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {

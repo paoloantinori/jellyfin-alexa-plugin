@@ -33,6 +33,31 @@ public class RequestCounters
     private ConcurrentDictionary<string, IntentMetrics> PerIntentMetrics { get; } = new();
 
     /// <summary>
+    /// Gets the total number of requests processed.
+    /// </summary>
+    public int TotalRequests => Volatile.Read(ref _totalRequests);
+
+    /// <summary>
+    /// Gets the total number of errors encountered.
+    /// </summary>
+    public int TotalErrors => Volatile.Read(ref _totalErrors);
+
+    /// <summary>
+    /// Gets the total number of cache hits.
+    /// </summary>
+    public int CacheHits => Volatile.Read(ref _cacheHits);
+
+    /// <summary>
+    /// Gets the total number of cache misses.
+    /// </summary>
+    public int CacheMisses => Volatile.Read(ref _cacheMisses);
+
+    /// <summary>
+    /// Gets the plugin uptime as a TimeSpan.
+    /// </summary>
+    public TimeSpan Uptime => DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeSeconds(Volatile.Read(ref _startedAt));
+
+    /// <summary>
     /// Increment total request count.
     /// </summary>
     public void IncrementRequests() => Interlocked.Increment(ref _totalRequests);
@@ -84,33 +109,9 @@ public class RequestCounters
     }
 
     /// <summary>
-    /// Gets the total number of requests processed.
-    /// </summary>
-    public int TotalRequests => Volatile.Read(ref _totalRequests);
-
-    /// <summary>
-    /// Gets the total number of errors encountered.
-    /// </summary>
-    public int TotalErrors => Volatile.Read(ref _totalErrors);
-
-    /// <summary>
-    /// Gets the total number of cache hits.
-    /// </summary>
-    public int CacheHits => Volatile.Read(ref _cacheHits);
-
-    /// <summary>
-    /// Gets the total number of cache misses.
-    /// </summary>
-    public int CacheMisses => Volatile.Read(ref _cacheMisses);
-
-    /// <summary>
-    /// Gets the plugin uptime as a TimeSpan.
-    /// </summary>
-    public TimeSpan Uptime => DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeSeconds(Volatile.Read(ref _startedAt));
-
-    /// <summary>
     /// Gets a snapshot of per-intent metrics.
     /// </summary>
+    /// <returns>A read-only dictionary mapping intent names to their metric snapshots.</returns>
     public IReadOnlyDictionary<string, IntentMetricsSnapshot> GetIntentMetrics()
     {
         return PerIntentMetrics.ToDictionary(

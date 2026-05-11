@@ -36,3 +36,5 @@ test_media
 
 # Local Claude overrides (not shared with team)
 .claude.local.md
+.claude/worktrees/
+__pycache__/

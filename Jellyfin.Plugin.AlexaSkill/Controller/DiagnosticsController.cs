@@ -52,7 +52,7 @@ public class DiagnosticsController : ControllerBase
             SmapiTokenExpired = u.SmapiDeviceToken != null
                 && u.SmapiDeviceToken.ExpireTimestamp > 0
                 && DateTimeOffset.FromUnixTimeSeconds(u.SmapiDeviceToken.ExpireTimestamp) < DateTimeOffset.UtcNow,
-                SmapiRefreshTokenPresent = !string.IsNullOrEmpty(u.SmapiRefreshToken)
+            SmapiRefreshTokenPresent = !string.IsNullOrEmpty(u.SmapiRefreshToken)
         }).ToList();
 
         var locales = Plugin.Instance.InteractionModels
@@ -167,7 +167,7 @@ public class DiagnosticsController : ControllerBase
     private double ComputeErrorRate() =>
         _counters.TotalRequests > 0 ? (double)_counters.TotalErrors / _counters.TotalRequests : 0;
 
-    private static string DetermineHealthStatus(Configuration.PluginConfiguration config, List<string> validationErrors)
+    private static string DetermineHealthStatus(Configuration.PluginConfiguration config, IReadOnlyList<string> validationErrors)
     {
         if (string.IsNullOrWhiteSpace(config.ServerAddress))
         {

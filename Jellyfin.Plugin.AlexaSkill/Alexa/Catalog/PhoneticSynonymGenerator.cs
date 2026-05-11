@@ -18,7 +18,9 @@ public static class PhoneticSynonymGenerator
     /// <param name="name">The artist or album name to generate synonyms for.</param>
     /// <param name="locale">The Alexa request locale (e.g. "it-IT", "de-DE").</param>
     /// <returns>A list of phonetic variant strings, or empty if no transformation is needed.</returns>
+#pragma warning disable CA1002 // Collection return type is intentional for caller convenience
     public static List<string> GenerateSynonyms(string name, string locale)
+#pragma warning restore CA1002
     {
         if (string.IsNullOrWhiteSpace(locale))
         {

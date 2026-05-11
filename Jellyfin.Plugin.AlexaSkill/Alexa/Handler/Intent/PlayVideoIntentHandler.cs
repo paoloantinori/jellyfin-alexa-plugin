@@ -67,14 +67,17 @@ public class PlayVideoIntentHandler : BaseHandler
             return userError;
         }
 
-        IReadOnlyList<BaseItem> videos = await RetryAsync(() => _libraryManager.GetItemList(new InternalItemsQuery()
-        {
-            User = jellyfinUser,
-            Recursive = true,
-            SearchTerm = titleQuery,
-            IncludeItemTypes = new[] { BaseItemKind.Movie, BaseItemKind.Episode },
-            DtoOptions = new DtoOptions(true)
-        }), "GetVideos", cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<BaseItem> videos = await RetryAsync(
+            () => _libraryManager.GetItemList(new InternalItemsQuery()
+            {
+                User = jellyfinUser,
+                Recursive = true,
+                SearchTerm = titleQuery,
+                IncludeItemTypes = new[] { BaseItemKind.Movie, BaseItemKind.Episode },
+                DtoOptions = new DtoOptions(true)
+            }),
+            "GetVideos",
+            cancellationToken).ConfigureAwait(false);
 
         if (videos.Count == 0)
         {

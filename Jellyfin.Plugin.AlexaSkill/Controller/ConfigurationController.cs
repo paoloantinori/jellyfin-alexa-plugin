@@ -288,7 +288,7 @@ public class ConfigurationController : ControllerBase
     /// Validates that an invocation name meets Amazon's requirements (at least 2 words).
     /// </summary>
     private static bool IsValidInvocationName(string name) =>
-        name.Length > 0 && name.Contains(' ');
+        name.Length > 0 && name.Contains(' ', StringComparison.Ordinal);
 
     private bool TryResolvePluginUser(string userId, out Jellyfin.Plugin.AlexaSkill.Entities.User? pluginUser, out ActionResult? error)
     {

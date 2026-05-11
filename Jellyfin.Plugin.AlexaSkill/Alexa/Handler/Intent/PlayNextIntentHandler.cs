@@ -81,14 +81,17 @@ public class PlayNextIntentHandler : BaseHandler
         string? matchedArtistName = null;
         if (!string.IsNullOrWhiteSpace(musicianQuery))
         {
-            IReadOnlyList<BaseItem> artists = await RetryAsync(() => _libraryManager.GetItemList(new InternalItemsQuery()
-            {
-                User = jellyfinUser,
-                Recursive = true,
-                SearchTerm = musicianQuery,
-                IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
-                DtoOptions = new DtoOptions(true)
-            }), "GetArtistsForPlayNext", cancellationToken).ConfigureAwait(false);
+            IReadOnlyList<BaseItem> artists = await RetryAsync(
+                () => _libraryManager.GetItemList(new InternalItemsQuery()
+                {
+                    User = jellyfinUser,
+                    Recursive = true,
+                    SearchTerm = musicianQuery,
+                    IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
+                    DtoOptions = new DtoOptions(true)
+                }),
+                "GetArtistsForPlayNext",
+                cancellationToken).ConfigureAwait(false);
 
             if (artists.Count == 0)
             {
@@ -102,15 +105,18 @@ public class PlayNextIntentHandler : BaseHandler
             }
         }
 
-        IReadOnlyList<BaseItem> songs = await RetryAsync(() => _libraryManager.GetItemList(new InternalItemsQuery()
-        {
-            User = jellyfinUser,
-            Recursive = true,
-            SearchTerm = songQuery,
-            ArtistIds = artistIds.ToArray(),
-            IncludeItemTypes = new[] { BaseItemKind.Audio },
-            DtoOptions = new DtoOptions(true)
-        }), "GetSongsForPlayNext", cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<BaseItem> songs = await RetryAsync(
+            () => _libraryManager.GetItemList(new InternalItemsQuery()
+            {
+                User = jellyfinUser,
+                Recursive = true,
+                SearchTerm = songQuery,
+                ArtistIds = artistIds.ToArray(),
+                IncludeItemTypes = new[] { BaseItemKind.Audio },
+                DtoOptions = new DtoOptions(true)
+            }),
+            "GetSongsForPlayNext",
+            cancellationToken).ConfigureAwait(false);
 
         if (songs.Count == 0)
         {

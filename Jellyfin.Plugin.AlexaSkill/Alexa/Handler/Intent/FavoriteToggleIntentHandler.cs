@@ -24,10 +24,15 @@ public abstract class FavoriteToggleIntentHandler : BaseHandler
     private readonly IUserManager _userManager;
     private readonly ILibraryManager _libraryManager;
 
-    protected abstract string IntentName { get; }
-    protected abstract bool FavoriteValue { get; }
-    protected abstract string ResponseKey { get; }
-
+    /// <summary>
+    /// Initializes a new instance of the <see cref="FavoriteToggleIntentHandler"/> class.
+    /// </summary>
+    /// <param name="sessionManager">Instance of the <see cref="ISessionManager"/> interface.</param>
+    /// <param name="config">The plugin configuration.</param>
+    /// <param name="userDataManager">Instance of the <see cref="IUserDataManager"/> interface.</param>
+    /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
+    /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
+    /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
     protected FavoriteToggleIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
@@ -40,6 +45,21 @@ public abstract class FavoriteToggleIntentHandler : BaseHandler
         _userManager = userManager;
         _libraryManager = libraryManager;
     }
+
+    /// <summary>
+    /// Gets the intent name for this handler.
+    /// </summary>
+    protected abstract string IntentName { get; }
+
+    /// <summary>
+    /// Gets a value indicating whether the favorite flag should be set or cleared.
+    /// </summary>
+    protected abstract bool FavoriteValue { get; }
+
+    /// <summary>
+    /// Gets the response key for the result message.
+    /// </summary>
+    protected abstract string ResponseKey { get; }
 
     /// <inheritdoc/>
     public override bool CanHandle(Request request)
@@ -63,20 +83,22 @@ public abstract class FavoriteToggleIntentHandler : BaseHandler
             return Task.FromResult<SkillResponse>(userError);
         }
 
+        Jellyfin.Database.Implementations.Entities.User resolvedUser = jellyfinUser!;
+
         var baseItem = _libraryManager.GetItemById(item.Id);
         if (baseItem == null)
         {
             return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale)));
         }
 
-        var data = _userDataManager.GetUserData(jellyfinUser, baseItem);
+        var data = _userDataManager.GetUserData(resolvedUser, baseItem);
         if (data == null)
         {
             return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale)));
         }
 
         data.IsFavorite = FavoriteValue;
-        _userDataManager.SaveUserData(jellyfinUser, baseItem, data, UserDataSaveReason.UpdateUserRating, CancellationToken.None);
+        _userDataManager.SaveUserData(resolvedUser, baseItem, data, UserDataSaveReason.UpdateUserRating, CancellationToken.None);
 
         return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get(ResponseKey, locale)));
     }

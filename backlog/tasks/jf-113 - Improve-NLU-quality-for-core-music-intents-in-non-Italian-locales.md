@@ -1,9 +1,10 @@
 ---
 id: JF-113
 title: Improve NLU quality for core music intents in non-Italian locales
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-05-09 20:31'
+updated_date: '2026-05-10 07:13'
 labels:
   - nlu
   - multi-locale
@@ -35,3 +36,9 @@ Discovered in JF-98 audit.
 <!-- DOD:BEGIN -->
 - [ ] #1 /simplify
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added 20-26 diverse NLU sample utterances for PlayArtistSongsIntent, PlaySongIntent, and PlayAlbumIntent across all 11 non-IT locales. English locales got 69 samples, German 70, Spanish 64, French 64 — up from 2 samples each. Uses natural language variations per language (different verbs, noun forms, with/without musician slot).
+<!-- SECTION:FINAL_SUMMARY:END -->

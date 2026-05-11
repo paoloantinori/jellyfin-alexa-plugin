@@ -82,9 +82,11 @@ public class InProgressMediaListIntentHandler : BaseHandler
             return userError;
         }
 
+        Jellyfin.Database.Implementations.Entities.User resolvedUser = jellyfinUser!;
+
         var query = new InternalItemsQuery
         {
-            User = jellyfinUser,
+            User = resolvedUser,
             Recursive = true,
             IncludeItemTypes = new[] { BaseItemKind.Audio, BaseItemKind.Movie, BaseItemKind.Episode },
             MinDateLastSavedForUser = DateTime.UtcNow.AddDays(-30),
@@ -99,7 +101,7 @@ public class InProgressMediaListIntentHandler : BaseHandler
 
         foreach (BaseItem item in recentItems)
         {
-            UserItemData? userData = _userDataManager.GetUserData(jellyfinUser, item);
+            UserItemData? userData = _userDataManager.GetUserData(resolvedUser, item);
             if (userData == null || userData.Played || userData.PlaybackPositionTicks <= 0)
             {
                 continue;
@@ -134,21 +136,5 @@ public class InProgressMediaListIntentHandler : BaseHandler
         TryAttachListDirective(response, context, "In Progress", aplItems, "inProgress");
 
         return response;
-    }
-
-    /// <summary>
-    /// Formats a tick-based playback position into a human-readable string.
-    /// </summary>
-    /// <param name="ticks">The playback position in ticks.</param>
-    /// <returns>A formatted position string (e.g. "1h 30m", "45m 12s", "30s").</returns>
-    private static string FormatPosition(long ticks)
-    {
-        var ts = TimeSpan.FromTicks(ticks);
-        if (ts.TotalHours >= 1)
-        {
-            return $"{(int)ts.TotalHours}h {ts.Minutes}m";
-        }
-
-        return ts.TotalMinutes >= 1 ? $"{(int)ts.TotalMinutes}m {ts.Seconds}s" : $"{ts.Seconds}s";
     }
 }

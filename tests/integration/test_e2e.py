@@ -94,6 +94,25 @@ def test_e2e_full_chain(request, e2e_fixture, e2e_smapi_client, jellyfin_client)
         utterance, locale, skill_response, expected_response_type, e2e_fixture
     )
 
+    # --- APL directive validation (when expected) ---
+    expected_apl = e2e_fixture.get("expected_apl")
+    if expected_apl:
+        apl_directives = _extract_apl_directives(skill_response)
+        assert apl_directives, (
+            f"Expected APL directives for '{utterance}' ({locale}), "
+            f"but none found in response"
+        )
+        for d in apl_directives:
+            apl_errors = _validate_apl_directive(d, utterance, locale)
+            assert not apl_errors, (
+                f"APL validation errors for '{utterance}' ({locale}):\n"
+                + "\n".join(f"  - {e}" for e in apl_errors)
+            )
+        logger.info(
+            "  APL OK: %d directive(s) validated for [%s]",
+            len(apl_directives), utterance[:30],
+        )
+
     # --- Jellyfin side-effect checks ---
     if jellyfin_client is not None:
         _check_side_effects(
@@ -167,6 +186,62 @@ def _parse_skill_response(skill_response: dict) -> tuple[list[str], bool]:
             has_speech = True
 
     return directives, has_speech
+
+
+def _extract_apl_directives(skill_response: dict) -> list[dict]:
+    """Extract all APL RenderDocument directives from the skill response."""
+    apl_directives = []
+
+    for resp in skill_response.get("responses", []):
+        resp_body = resp.get("response", {})
+        for d in resp_body.get("directives", []):
+            if isinstance(d, dict) and "APL" in d.get("type", ""):
+                apl_directives.append(d)
+
+    payload = skill_response.get("invocationResponse", {})
+    body = payload.get("body", {})
+    if isinstance(body, dict):
+        for d in body.get("directives", []):
+            if isinstance(d, dict) and "APL" in d.get("type", ""):
+                apl_directives.append(d)
+
+    return apl_directives
+
+
+def _validate_apl_directive(directive: dict, utterance: str, locale: str) -> list[str]:
+    """Validate an APL RenderDocument directive. Returns list of errors."""
+    errors = []
+    dtype = directive.get("type", "")
+
+    if dtype == "Alexa.Presentation.APL.RenderDocument":
+        doc = directive.get("document")
+        ds = directive.get("datasources")
+
+        if not doc:
+            errors.append("APL RenderDocument missing 'document'")
+        else:
+            if doc.get("type") != "APL":
+                errors.append(f"APL document type is {doc.get('type')!r}, expected 'APL'")
+            mt = doc.get("mainTemplate", {})
+            if "parameters" not in mt:
+                errors.append("APL mainTemplate missing 'parameters' — datasource binding broken")
+            if "items" not in mt:
+                errors.append("APL mainTemplate missing 'items'")
+
+        if not ds:
+            errors.append("APL RenderDocument missing 'datasources' — nothing to render")
+        elif not isinstance(ds, dict) or not ds:
+            errors.append("APL datasources is empty or not an object")
+        else:
+            for ds_name, ds_val in ds.items():
+                if not isinstance(ds_val, dict):
+                    errors.append(f"APL datasources.{ds_name} is not an object")
+                elif ds_val.get("type") != "object":
+                    errors.append(f"APL datasources.{ds_name}.type should be 'object', got {ds_val.get('type')!r}")
+                elif "properties" not in ds_val:
+                    errors.append(f"APL datasources.{ds_name} missing 'properties'")
+
+    return errors
 
 
 def _check_side_effects(

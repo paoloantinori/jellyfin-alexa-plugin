@@ -53,6 +53,12 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
     /// <summary>
     /// Query the library for content by a specific artist and return a spoken list.
     /// </summary>
+    /// <param name="request">The skill request which should be handled.</param>
+    /// <param name="context">The context of the skill intent request.</param>
+    /// <param name="user">The user instance.</param>
+    /// <param name="session">The session instance.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task representing the async operation.</returns>
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
@@ -87,15 +93,18 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
             return userError;
         }
 
-        IReadOnlyList<BaseItem> artists = await RetryAsync(() => _libraryManager.GetItemList(new InternalItemsQuery
-        {
-            Recursive = true,
-            SearchTerm = musician,
-            IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
-            Limit = 1,
-            OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
-            DtoOptions = new DtoOptions(true)
-        }), "GetArtists", cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<BaseItem> artists = await RetryAsync(
+            () => _libraryManager.GetItemList(new InternalItemsQuery
+            {
+                Recursive = true,
+                SearchTerm = musician,
+                IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
+                Limit = 1,
+                OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
+                DtoOptions = new DtoOptions(true)
+            }),
+            "GetArtists",
+            cancellationToken).ConfigureAwait(false);
 
         if (artists.Count == 0)
         {
@@ -108,17 +117,35 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
         if (IsAlbumQuery(queryType))
         {
             return await ListItemsByArtistAsync(
-                artistId, artistName, jellyfinUser, locale,
-                new[] { BaseItemKind.MusicAlbum }, null,
-                "NoAlbumsByArtist", "AlbumsByArtistList", "AlbumsByArtistPartial",
-                "GetArtistAlbums", context, user, cancellationToken).ConfigureAwait(false);
+                artistId,
+                artistName,
+                jellyfinUser!,
+                locale,
+                new[] { BaseItemKind.MusicAlbum },
+                null,
+                "NoAlbumsByArtist",
+                "AlbumsByArtistList",
+                "AlbumsByArtistPartial",
+                "GetArtistAlbums",
+                context,
+                user,
+                cancellationToken).ConfigureAwait(false);
         }
 
         return await ListItemsByArtistAsync(
-            artistId, artistName, jellyfinUser, locale,
-            null, new[] { MediaType.Audio },
-            "NoSongsForArtist", "TracksByArtistList", "TracksByArtistPartial",
-            "GetArtistTracks", context, user, cancellationToken).ConfigureAwait(false);
+            artistId,
+            artistName,
+            jellyfinUser!,
+            locale,
+            null,
+            new[] { MediaType.Audio },
+            "NoSongsForArtist",
+            "TracksByArtistList",
+            "TracksByArtistPartial",
+            "GetArtistTracks",
+            context,
+            user,
+            cancellationToken).ConfigureAwait(false);
     }
 
     private static bool IsAlbumQuery(string? queryType)
@@ -136,11 +163,19 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
     }
 
     private async Task<SkillResponse> ListItemsByArtistAsync(
-        Guid artistId, string artistName,
-        Jellyfin.Database.Implementations.Entities.User jellyfinUser, string locale,
-        BaseItemKind[]? includeItemTypes, MediaType[]? mediaTypes,
-        string emptyKey, string listKey, string partialKey,
-        string operationName, Context? context, Entities.User user, CancellationToken cancellationToken)
+        Guid artistId,
+        string artistName,
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser,
+        string locale,
+        BaseItemKind[]? includeItemTypes,
+        MediaType[]? mediaTypes,
+        string emptyKey,
+        string listKey,
+        string partialKey,
+        string operationName,
+        Context? context,
+        Entities.User user,
+        CancellationToken cancellationToken)
     {
         var query = new InternalItemsQuery
         {

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using Alexa.NET.Management;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Manifest;
 using Jellyfin.Plugin.AlexaSkill.Entities;
@@ -27,8 +28,6 @@ public class PluginConfiguration : BasePluginConfiguration
 
         serverAddress = string.Empty;
         AccountLinkingClientId = Guid.NewGuid().ToString();
-
-        Users = new List<User>();
     }
 
     /// <summary>
@@ -60,22 +59,6 @@ public class PluginConfiguration : BasePluginConfiguration
     }
 
     /// <summary>
-    /// Ensure the URL ends with a trailing slash so that relative URI construction
-    /// preserves path segments. Without this, <c>new Uri("https://host/path", "Items/1")</c>
-    /// resolves to <c>https://host/Items/1</c> instead of <c>https://host/path/Items/1</c>.
-    /// </summary>
-    private static string NormalizeTrailingSlash(string? address)
-    {
-        if (string.IsNullOrWhiteSpace(address))
-        {
-            return string.Empty;
-        }
-
-        address = address.TrimEnd('/');
-        return address + "/";
-    }
-
-    /// <summary>
     /// Gets or sets the client id for LWA.
     /// </summary>
     public string LwaClientId { get; set; }
@@ -93,13 +76,31 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>
     /// Gets or sets the list of users.
     /// </summary>
-    public List<User> Users { get; set; }
+#pragma warning disable CA2227
+    public Collection<User> Users { get; set; } = new Collection<User>();
+#pragma warning restore CA2227
+
+    /// <summary>
+    /// Ensure the URL ends with a trailing slash so that relative URI construction
+    /// preserves path segments. Without this, <c>new Uri("https://host/path", "Items/1")</c>
+    /// resolves to <c>https://host/Items/1</c> instead of <c>https://host/path/Items/1</c>.
+    /// </summary>
+    private static string NormalizeTrailingSlash(string? address)
+    {
+        if (string.IsNullOrWhiteSpace(address))
+        {
+            return string.Empty;
+        }
+
+        address = address.TrimEnd('/');
+        return address + "/";
+    }
 
     /// <summary>
     /// Validate the configuration and return a list of error messages.
     /// </summary>
     /// <returns>A list of validation error messages. Empty if valid.</returns>
-    public List<string> Validate()
+    public IReadOnlyList<string> Validate()
     {
         var errors = new List<string>();
 

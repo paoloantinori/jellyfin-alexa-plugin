@@ -40,6 +40,8 @@ public partial class ResponseBodyLoggingInterceptor : IResponseInterceptor
     /// <summary>
     /// Strip known PII fields from the JSON response body.
     /// </summary>
+    /// <param name="json">The JSON string to sanitize.</param>
+    /// <returns>The sanitized JSON string.</returns>
     internal static string Sanitize(string json)
     {
         // Strip apiAccessToken values (appear in session attributes and context)

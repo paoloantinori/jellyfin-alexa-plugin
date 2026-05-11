@@ -15,7 +15,11 @@ public static class ItalianPhoneticSynonyms
     /// Generates up to 3 Italian phonetic variant strings for an English name.
     /// Returns an empty list for names that are already Italian/Latin origin or are too short.
     /// </summary>
+    /// <param name="name">The artist or album name to generate variants for.</param>
+    /// <returns>A list of Italian phonetic variant strings.</returns>
+#pragma warning disable CA1002 // List<T> return type is intentional for caller convenience
     public static List<string> Generate(string name)
+#pragma warning restore CA1002
     {
         if (string.IsNullOrWhiteSpace(name) || name.Length <= 2)
         {

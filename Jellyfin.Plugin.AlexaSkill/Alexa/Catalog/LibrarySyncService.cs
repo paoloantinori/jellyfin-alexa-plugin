@@ -79,7 +79,11 @@ public class LibrarySyncService
 
         // Sync artists and albums in parallel
         var artistTask = SyncCatalogAsync(
-            user, jellyfinUser, accessToken, vendorId, CatalogType.Artist,
+            user,
+            jellyfinUser,
+            accessToken,
+            vendorId,
+            CatalogType.Artist,
             BaseItemKind.MusicArtist,
             user.ArtistCatalogId,
             "Jellyfin Artists",
@@ -87,7 +91,11 @@ public class LibrarySyncService
             cancellationToken);
 
         var albumTask = SyncCatalogAsync(
-            user, jellyfinUser, accessToken, vendorId, CatalogType.Album,
+            user,
+            jellyfinUser,
+            accessToken,
+            vendorId,
+            CatalogType.Album,
             BaseItemKind.MusicAlbum,
             user.AlbumCatalogId,
             "Jellyfin Albums",
@@ -104,17 +112,27 @@ public class LibrarySyncService
         result.Success = true;
         result.SyncTime = DateTime.UtcNow;
 
-        _logger.LogInformation("Catalog sync completed for user {UserId}: {Artists} artists (v{ArtistVer}), {Albums} albums (v{AlbumVer})",
-            user.Id, result.ArtistCount, artistResult.Version, result.AlbumCount, albumResult.Version);
+        _logger.LogInformation(
+            "Catalog sync completed for user {UserId}: {Artists} artists (v{ArtistVer}), {Albums} albums (v{AlbumVer})",
+            user.Id,
+            result.ArtistCount,
+            artistResult.Version,
+            result.AlbumCount,
+            albumResult.Version);
 
         if (result.ArtistCount > 0 || result.AlbumCount > 0)
         {
             try
             {
                 await _catalogManager.UpdateInteractionModelAsync(
-                    accessToken, user.UserSkill!.SkillId!, DevelopmentStage, ItalianLocale,
-                    user.ArtistCatalogId, user.AlbumCatalogId,
-                    artistResult.Version, albumResult.Version,
+                    accessToken,
+                    user.UserSkill!.SkillId!,
+                    DevelopmentStage,
+                    ItalianLocale,
+                    user.ArtistCatalogId,
+                    user.AlbumCatalogId,
+                    artistResult.Version,
+                    albumResult.Version,
                     cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -164,8 +182,11 @@ public class LibrarySyncService
 
         if (payload.Values.Count >= MaxCatalogValues)
         {
-            _logger.LogWarning("Truncated {Type} catalog to {Limit} items for user {UserId}",
-                catalogType, MaxCatalogValues, user.Id);
+            _logger.LogWarning(
+                "Truncated {Type} catalog to {Limit} items for user {UserId}",
+                catalogType,
+                MaxCatalogValues,
+                user.Id);
         }
 
         string catalogId;
@@ -173,7 +194,10 @@ public class LibrarySyncService
         if (string.IsNullOrEmpty(existingCatalogId))
         {
             catalogId = await _catalogManager.CreateCatalogAsync(
-                accessToken, vendorId, catalogName, catalogDescription,
+                accessToken,
+                vendorId,
+                catalogName,
+                catalogDescription,
                 cancellationToken).ConfigureAwait(false);
 
             if (catalogType == CatalogType.Artist)
@@ -198,19 +222,12 @@ public class LibrarySyncService
         string catalogUrl = $"{serverAddress}/alexaskill/catalog/{cacheKey}";
 
         string catalogVersion = await _catalogManager.UploadCatalogValuesAsync(
-            accessToken, catalogId, payload, catalogUrl, cancellationToken).ConfigureAwait(false);
+            accessToken,
+            catalogId,
+            payload,
+            catalogUrl,
+            cancellationToken).ConfigureAwait(false);
 
         return (payload.Values.Count, catalogVersion);
-    }
-
-    /// <summary>
-    /// Result of a catalog sync operation.
-    /// </summary>
-    public class SyncResult
-    {
-        public bool Success { get; set; }
-        public DateTime SyncTime { get; set; }
-        public int ArtistCount { get; set; }
-        public int AlbumCount { get; set; }
     }
 }

@@ -40,6 +40,7 @@ public class ResumeIntentHandler : BaseHandler
     /// <param name="context">The context of the skill intent request.</param>
     /// <param name="user">The user instance.</param>
     /// <param name="session">The session instance.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>Emptry skill response.</returns>
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
@@ -48,7 +49,7 @@ public class ResumeIntentHandler : BaseHandler
             return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", GetLocale(request))));
         }
 
-        if (string.Equals(context.AudioPlayer.PlayerActivity, "PLAYING"))
+        if (string.Equals(context.AudioPlayer.PlayerActivity, "PLAYING", StringComparison.Ordinal))
         {
             return Task.FromResult<SkillResponse>(ResponseBuilder.Empty());
         }

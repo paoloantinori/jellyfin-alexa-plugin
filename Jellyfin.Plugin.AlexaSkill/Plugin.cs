@@ -24,6 +24,10 @@ namespace Jellyfin.Plugin.AlexaSkill;
 /// </summary>
 public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 {
+    private static readonly HttpClient _fallbackHttpClient = new();
+    private string? _lastKnownServerAddress;
+    private IHttpClientFactory? _httpClientFactory;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="Plugin"/> class.
     /// </summary>
@@ -56,6 +60,11 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public override Guid Id => Guid.Parse("c5df7de0-8777-4b3c-a70d-5c3dae359c9e");
 
     /// <summary>
+    /// Gets the current plugin instance.
+    /// </summary>
+    public static Plugin? Instance { get; private set; }
+
+    /// <summary>
     /// Gets an HttpClient from the registered IHttpClientFactory.
     /// Falls back to a static HttpClient if DI is not available.
     /// </summary>
@@ -72,40 +81,13 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         }
     }
 
-    private static readonly HttpClient _fallbackHttpClient = new();
-
-    /// <summary>
-    /// Sets the HttpClientFactory from DI registration.
-    /// </summary>
-    internal IHttpClientFactory? _httpClientFactory;
-
-    /// <summary>
-    /// Gets the search result cache for fallback on API failures.
-    /// </summary>
-    public SearchResultCache SearchCache { get; internal set; } = SearchResultCache.Noop;
-
-    /// <summary>
-    /// Gets the circuit breaker for tracking Jellyfin backend API health.
-    /// </summary>
-    public CircuitBreaker CircuitBreaker { get; internal set; } = new CircuitBreaker();
-
-    /// <summary>
-    /// Gets the connectivity checker for Jellyfin server health diagnostics.
-    /// </summary>
-    public JellyfinConnectivityChecker? ConnectivityChecker { get; internal set; }
-
-    /// <summary>
-    /// Gets the request counters for metrics tracking.
-    /// </summary>
-    public RequestCounters RequestCounters { get; internal set; } = new RequestCounters();
-
     /// <summary>
     /// Gets or sets the skill manifest.
     /// </summary>
     public ManifestSkill? ManifestSkill { get; set; }
 
     /// <summary>
-    /// Gets the dictionary of device ids to session tokens.
+    /// Gets the user manager for resolving Jellyfin users.
     /// </summary>
     public IUserManager UserManager { get; private set; }
 
@@ -131,6 +113,39 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public Collection<Tuple<string, string>> InteractionModels { get; } = Util.GetLocalInteractionModels();
 
     /// <summary>
+    /// Gets the CSRF token handler.
+    /// </summary>
+    public CsrfTokenHandler CsrfTokenHandler { get; } = new CsrfTokenHandler();
+
+    /// <summary>
+    /// Gets the search result cache for fallback on API failures.
+    /// </summary>
+    public SearchResultCache SearchCache { get; internal set; } = SearchResultCache.Noop;
+
+    /// <summary>
+    /// Gets the circuit breaker for tracking Jellyfin backend API health.
+    /// </summary>
+    public CircuitBreaker CircuitBreaker { get; internal set; } = new CircuitBreaker();
+
+    /// <summary>
+    /// Gets the connectivity checker for Jellyfin server health diagnostics.
+    /// </summary>
+    public JellyfinConnectivityChecker? ConnectivityChecker { get; internal set; }
+
+    /// <summary>
+    /// Gets the request counters for metrics tracking.
+    /// </summary>
+    public RequestCounters RequestCounters { get; internal set; } = new RequestCounters();
+
+    /// <summary>
+    /// Sets the HttpClientFactory from DI registration.
+    /// </summary>
+    internal IHttpClientFactory? HttpClientFactory
+    {
+        set => _httpClientFactory = value;
+    }
+
+    /// <summary>
     /// Builds the skill interaction model collection for a given invocation name.
     /// Each user gets their own skill with their own invocation name, which replaces
     /// the template's default in all locale models.
@@ -148,17 +163,18 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         return models;
     }
 
-    /// <summary>
-    /// Gets the CSRF token handler.
-    /// </summary>
-    public CsrfTokenHandler CsrfTokenHandler { get; } = new CsrfTokenHandler();
-
-    /// <summary>
-    /// Gets the current plugin instance.
-    /// </summary>
-    public static Plugin? Instance { get; private set; }
-
-    private string? _lastKnownServerAddress;
+    /// <inheritdoc />
+    public IEnumerable<PluginPageInfo> GetPages()
+    {
+        return new[]
+        {
+            new PluginPageInfo
+            {
+                Name = this.Name,
+                EmbeddedResourcePath = GetType().Namespace + ".Configuration.config.html"
+            }
+        };
+    }
 
     /// <summary>
     /// Handle configuration changes by propagating them to active services.
@@ -180,18 +196,5 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         ConnectivityChecker?.InvalidateCache();
         CircuitBreaker.Reset();
         SearchCache.Clear();
-    }
-
-    /// <inheritdoc />
-    public IEnumerable<PluginPageInfo> GetPages()
-    {
-        return new[]
-        {
-            new PluginPageInfo
-            {
-                Name = this.Name,
-                EmbeddedResourcePath = GetType().Namespace + ".Configuration.config.html"
-            }
-        };
     }
 }

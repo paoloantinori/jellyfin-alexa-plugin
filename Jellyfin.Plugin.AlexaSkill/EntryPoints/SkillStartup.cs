@@ -17,6 +17,7 @@ using Jellyfin.Plugin.AlexaSkill.Lwa;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Refit;
 
 namespace Jellyfin.Plugin.AlexaSkill.EntryPoints;
 
@@ -45,7 +46,15 @@ public class SkillStartup : IHostedService, IDisposable
     /// <param name="searchCache">Search result cache for fallback.</param>
     /// <param name="circuitBreaker">Circuit breaker for backend health tracking.</param>
     /// <param name="requestCounters">Request counters for metrics tracking.</param>
-    public SkillStartup(ISessionManager sessionManager, ILoggerFactory loggerFactory, IHttpClientFactory httpClientFactory, SearchResultCache searchCache, CircuitBreaker circuitBreaker, RequestCounters requestCounters, JellyfinConnectivityChecker connectivityChecker)
+    /// <param name="connectivityChecker">Connectivity checker for Jellyfin server health.</param>
+    public SkillStartup(
+        ISessionManager sessionManager,
+        ILoggerFactory loggerFactory,
+        IHttpClientFactory httpClientFactory,
+        SearchResultCache searchCache,
+        CircuitBreaker circuitBreaker,
+        RequestCounters requestCounters,
+        JellyfinConnectivityChecker connectivityChecker)
     {
         _sessionManager = sessionManager;
         _httpClientFactory = httpClientFactory;
@@ -61,7 +70,7 @@ public class SkillStartup : IHostedService, IDisposable
     {
         _logger.LogInformation("Skill version (local): v{Version}", Util.GetVersion());
 
-        Plugin.Instance!._httpClientFactory = _httpClientFactory;
+        Plugin.Instance!.HttpClientFactory = _httpClientFactory;
         Plugin.Instance!.SearchCache = _searchCache;
         Plugin.Instance!.CircuitBreaker = _circuitBreaker;
         Plugin.Instance!.RequestCounters = _requestCounters;
@@ -94,7 +103,8 @@ public class SkillStartup : IHostedService, IDisposable
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var token = _cts.Token;
 
-        _runningTask = Task.Run(async () =>
+        _runningTask = Task.Run(
+            async () =>
         {
             foreach (User user in configuration.Users)
             {
@@ -213,12 +223,19 @@ public class SkillStartup : IHostedService, IDisposable
                         }
                     }
                 }
+                catch (Exception ex) when (ex is Refit.ApiException or UnauthorizedAccessException)
+                {
+                    _logger.LogWarning(
+                        "SMAPI API error for user {UserId} during startup — skill sync deferred. Error: {Message}",
+                        user.Id, ex.Message);
+                }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error processing skill for user {UserId}. Continuing with other users.", user.Id);
                 }
             }
-        }, token);
+        },
+        token);
 
         try
         {
@@ -237,7 +254,7 @@ public class SkillStartup : IHostedService, IDisposable
 
         if (_cts != null)
         {
-            _cts.Cancel();
+            await _cts.CancelAsync().ConfigureAwait(false);
         }
 
         if (_runningTask != null)

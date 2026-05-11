@@ -10,6 +10,7 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.InteractionModel;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Manifest;
 using Jellyfin.Plugin.AlexaSkill.Lwa;
 using Microsoft.Extensions.Logging;
+using Refit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa;
 
@@ -88,6 +89,7 @@ public class SmapiManagement : ManagementApi
     /// <param name="skillId">The id of the skill to update.</param>
     /// <param name="manifestSkill">The new manifest skill.</param>
     /// <param name="interactionModels">The new interaction models.</param>
+    /// <returns>A task representing the async operation.</returns>
     public async Task UpdateSkillAsync(string skillId, ManifestSkill manifestSkill, Collection<SkillInteractionModel> interactionModels)
     {
         _logger.LogInformation("Updating skill {SkillId}...", skillId);
@@ -130,14 +132,24 @@ public class SmapiManagement : ManagementApi
         catch (Exception ex) when (ex is Newtonsoft.Json.JsonSerializationException
             || (ex.InnerException is Newtonsoft.Json.JsonSerializationException))
         {
-            _logger.LogError(ex, "Failed to deserialize skill {SkillId} manifest from cloud. " +
+            _logger.LogWarning(
+                ex,
+                "Failed to deserialize skill {SkillId} manifest from cloud. " +
                 "This is typically caused by an unrecognized Alexa event type. " +
-                "Skipping cloud manifest fetch and using local manifest.", skillId);
+                "Skipping cloud manifest fetch and using local manifest.",
+                skillId);
             return null;
+        }
+        catch (Refit.ApiException ex)
+        {
+            _logger.LogWarning(
+                "SMAPI call to get skill {SkillId} returned {StatusCode} — will retry with token refresh if available",
+                skillId, (int)ex.StatusCode);
+            throw;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to get skill {SkillId}", skillId);
+            _logger.LogError(ex, "Unexpected error getting skill {SkillId}", skillId);
             throw;
         }
     }
@@ -146,6 +158,7 @@ public class SmapiManagement : ManagementApi
     /// Deletes a skill.
     /// </summary>
     /// <param name="skillId">The id of the skill to delete.</param>
+    /// <returns>A task representing the async operation.</returns>
     public async Task DeleteSkillAsync(string skillId)
     {
         _logger.LogInformation("Deleting skill {SkillId}...", skillId);
@@ -175,9 +188,16 @@ public class SmapiManagement : ManagementApi
         {
             return await this.AccountLinking.Get(skillId, SkillStage.Development).ConfigureAwait(false);
         }
+        catch (Refit.ApiException ex)
+        {
+            _logger.LogWarning(
+                "SMAPI call to get account link data for skill {SkillId} returned {StatusCode}",
+                skillId, (int)ex.StatusCode);
+            throw;
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to get account link data for skill {SkillId}", skillId);
+            _logger.LogError(ex, "Unexpected error getting account link data for skill {SkillId}", skillId);
             throw;
         }
     }

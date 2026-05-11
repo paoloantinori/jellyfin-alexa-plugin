@@ -55,6 +55,7 @@ public class LaunchRequestHandler : BaseHandler
     /// <param name="context">The context of the skill intent request.</param>
     /// <param name="user">The user instance.</param>
     /// <param name="session">The session instance.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A play directive or a question what should be played.</returns>
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {

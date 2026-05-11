@@ -62,6 +62,7 @@ public class PlaySongIntentHandler : BaseHandler
     /// <param name="context">The context of the skill intent request.</param>
     /// <param name="user">The user instance.</param>
     /// <param name="session">The session instance.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A skill response.</returns>
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
@@ -88,14 +89,17 @@ public class PlaySongIntentHandler : BaseHandler
         string? matchedArtistName = null;
         if (musicianQuery != null)
         {
-            IReadOnlyList<BaseItem> artists = await RetryAsync(() => _libraryManager.GetItemList(new InternalItemsQuery()
-            {
-                User = jellyfinUser,
-                Recursive = true,
-                SearchTerm = musicianQuery,
-                IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
-                DtoOptions = new DtoOptions(true)
-            }), "GetArtists", cancellationToken).ConfigureAwait(false);
+            IReadOnlyList<BaseItem> artists = await RetryAsync(
+                () => _libraryManager.GetItemList(new InternalItemsQuery()
+                {
+                    User = jellyfinUser,
+                    Recursive = true,
+                    SearchTerm = musicianQuery,
+                    IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
+                    DtoOptions = new DtoOptions(true)
+                }),
+                "GetArtists",
+                cancellationToken).ConfigureAwait(false);
             if (artists.Count == 0)
             {
                 return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByArtist", locale, musicianQuery));
@@ -108,15 +112,18 @@ public class PlaySongIntentHandler : BaseHandler
             }
         }
 
-        IReadOnlyList<BaseItem> songs = await RetryAsync(() => _libraryManager.GetItemList(new InternalItemsQuery()
-        {
-            User = jellyfinUser,
-            Recursive = true,
-            SearchTerm = songQuery,
-            ArtistIds = artistsIds.ToArray(),
-            IncludeItemTypes = new[] { BaseItemKind.Audio },
-            DtoOptions = new DtoOptions(true)
-        }), "GetSongs", cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<BaseItem> songs = await RetryAsync(
+            () => _libraryManager.GetItemList(new InternalItemsQuery()
+            {
+                User = jellyfinUser,
+                Recursive = true,
+                SearchTerm = songQuery,
+                ArtistIds = artistsIds.ToArray(),
+                IncludeItemTypes = new[] { BaseItemKind.Audio },
+                DtoOptions = new DtoOptions(true)
+            }),
+            "GetSongs",
+            cancellationToken).ConfigureAwait(false);
         if (songs.Count == 0 && musicianQuery != null)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByNameAndArtist", locale, songQuery, matchedArtistName!));

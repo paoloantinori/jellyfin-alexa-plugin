@@ -12,10 +12,15 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public class UnmarkFavoriteIntentHandler : FavoriteToggleIntentHandler
 {
-    protected override string IntentName => IntentNames.UnmarkFavorite;
-    protected override bool FavoriteValue => false;
-    protected override string ResponseKey => "RemovedFromFavorites";
-
+    /// <summary>
+    /// Initializes a new instance of the <see cref="UnmarkFavoriteIntentHandler"/> class.
+    /// </summary>
+    /// <param name="sessionManager">Session manager instance.</param>
+    /// <param name="config">The plugin configuration.</param>
+    /// <param name="userDataManager">The user data manager.</param>
+    /// <param name="userManager">The user manager.</param>
+    /// <param name="libraryManager">The library manager.</param>
+    /// <param name="loggerFactory">Logger factory instance.</param>
     public UnmarkFavoriteIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
@@ -25,4 +30,13 @@ public class UnmarkFavoriteIntentHandler : FavoriteToggleIntentHandler
         ILoggerFactory loggerFactory) : base(sessionManager, config, userDataManager, userManager, libraryManager, loggerFactory)
     {
     }
+
+    /// <inheritdoc/>
+    protected override string IntentName => IntentNames.UnmarkFavorite;
+
+    /// <inheritdoc/>
+    protected override bool FavoriteValue => false;
+
+    /// <inheritdoc/>
+    protected override string ResponseKey => "RemovedFromFavorites";
 }

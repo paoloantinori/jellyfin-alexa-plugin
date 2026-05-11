@@ -32,11 +32,16 @@ public class UtilTests
     }
 
     [Theory]
-    [InlineData(null!)]
     [InlineData("")]
     public void DeserializeFromFile_InvalidPath_ThrowsArgumentException(string path)
     {
         Assert.Throws<ArgumentException>(() => Util.DeserializeFromFile<string>(path));
+    }
+
+    [Fact]
+    public void DeserializeFromFile_NullPath_ThrowsArgumentException()
+    {
+        Assert.Throws<ArgumentException>(() => Util.DeserializeFromFile<string>(null!));
     }
 
     [Fact]

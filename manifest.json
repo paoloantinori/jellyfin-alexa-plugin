@@ -159,6 +159,14 @@
                 "changelog": "Fix missing Alexa.NET.Reminders, ProactiveEvents, Profile DLLs in release package. Fix fatal startup crash from local manifest EventName enum.",
                 "targetAbi": "10.11.0.0",
                 "timestamp": "2026-05-08 05:24:25"
+            },
+            {
+                "version": "0.2.0.18",
+                "checksum": "PLACEHOLDER",
+                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.18/AlexaSkill_0.2.0.18.zip",
+                "changelog": "Fix APL black screen on Echo Show (template syntax errors, datasource binding). Add APL visual support for search, browse, queue, and now-playing screens. Improve dynamic entities budget management with synonym trimming. Add cached certificate verification. Replace plugin icon with landscape format. Add APL template validation and HTTP test harness scripts.",
+                "targetAbi": "10.11.0.0",
+                "timestamp": "2026-05-11T00:00:00Z"
             }
         ]
     }

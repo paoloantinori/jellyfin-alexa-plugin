@@ -8,7 +8,6 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
-using VideoAppDirective = Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -19,6 +18,7 @@ using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
+using VideoAppDirective = Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
@@ -60,6 +60,12 @@ public class YesIntentHandler : BaseHandler
     /// <summary>
     /// Handle without session attributes - no disambiguation in progress.
     /// </summary>
+    /// <param name="request">The skill request which should be handled.</param>
+    /// <param name="context">The context of the skill intent request.</param>
+    /// <param name="user">The user instance.</param>
+    /// <param name="session">The session instance.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A task representing the async operation.</returns>
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("UnexpectedYes", GetLocale(request))));
@@ -68,6 +74,13 @@ public class YesIntentHandler : BaseHandler
     /// <summary>
     /// Handle with session attributes - resolve disambiguation by playing the selected match.
     /// </summary>
+    /// <param name="request">The skill request which should be handled.</param>
+    /// <param name="context">The context of the skill intent request.</param>
+    /// <param name="user">The user instance.</param>
+    /// <param name="session">The session instance.</param>
+    /// <param name="sessionAttributes">The session attributes containing disambiguation state.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A task representing the async operation.</returns>
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, Dictionary<string, object>? sessionAttributes, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
@@ -100,10 +113,10 @@ public class YesIntentHandler : BaseHandler
         SkillResponse response = mediaType switch
         {
             DisambiguationHelper.MediaTypeSong => PlaySong(item, user, session),
-            DisambiguationHelper.MediaTypeAlbum => PlayAlbum(item, jellyfinUser, user, session, locale),
-            DisambiguationHelper.MediaTypeArtist => PlayArtist(item, jellyfinUser, user, session, locale),
+            DisambiguationHelper.MediaTypeAlbum => PlayAlbum(item, jellyfinUser!, user, session, locale),
+            DisambiguationHelper.MediaTypeArtist => PlayArtist(item, jellyfinUser!, user, session, locale),
             DisambiguationHelper.MediaTypeVideo => PlayVideo(item, user, session),
-            DisambiguationHelper.MediaTypePlaylist => PlayPlaylist(item, jellyfinUser, user, session, locale),
+            DisambiguationHelper.MediaTypePlaylist => PlayPlaylist(item, jellyfinUser!, user, session, locale),
             _ => ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale))
         };
 

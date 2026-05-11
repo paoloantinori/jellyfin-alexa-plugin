@@ -64,6 +64,7 @@ public class MediaInfoIntentHandler : BaseHandler
     /// <param name="context">The context of the skill intent request.</param>
     /// <param name="user">The user instance.</param>
     /// <param name="session">The session instance.</param>
+    /// <param name="cancellationToken">Cancellation token for request timeout.</param>
     /// <returns>A skill response with media information or an error message.</returns>
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
@@ -234,7 +235,7 @@ public class MediaInfoIntentHandler : BaseHandler
         return response;
     }
 
-    private async Task<(string description, string? ssml)> BuildAudioDescriptionWithArtistInfo(
+    private async Task<(string Description, string? Ssml)> BuildAudioDescriptionWithArtistInfo(
         BaseItemDto item, SessionInfo session, string locale, CancellationToken cancellationToken)
     {
         (string trackDescription, string? trackSsml) = BuildTrackDescription(item, locale);
@@ -271,7 +272,9 @@ public class MediaInfoIntentHandler : BaseHandler
                     Limit = 1,
                     OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
                     DtoOptions = new DtoOptions(false)
-                }), "GetArtistInfo", cancellationToken).ConfigureAwait(false);
+                }),
+                "GetArtistInfo",
+                cancellationToken).ConfigureAwait(false);
 
             if (artists.Count == 0)
             {
@@ -302,7 +305,9 @@ public class MediaInfoIntentHandler : BaseHandler
                             IncludeItemTypes = new[] { BaseItemKind.MusicAlbum },
                             OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
                             DtoOptions = new DtoOptions(false)
-                        }), "GetArtistAlbumCount", cancellationToken).ConfigureAwait(false);
+                        }),
+                        "GetArtistAlbumCount",
+                        cancellationToken).ConfigureAwait(false);
 
                     albumCount = albums.Count;
                 }
@@ -392,7 +397,7 @@ public class MediaInfoIntentHandler : BaseHandler
         return null;
     }
 
-    private static (string description, string? ssml) BuildTrackDescription(BaseItemDto item, string locale)
+    private static (string Description, string? Ssml) BuildTrackDescription(BaseItemDto item, string locale)
     {
         string artist = item.AlbumArtist ?? string.Empty;
         string album = item.Album ?? string.Empty;

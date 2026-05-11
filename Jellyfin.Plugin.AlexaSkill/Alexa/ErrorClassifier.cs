@@ -12,6 +12,8 @@ public static class ErrorClassifier
     /// <summary>
     /// Classifies a .NET exception into an error category.
     /// </summary>
+    /// <param name="ex">The exception to classify.</param>
+    /// <returns>The classified error category.</returns>
     public static ErrorCategory Classify(Exception ex)
     {
         switch (ex)
@@ -36,8 +38,10 @@ public static class ErrorClassifier
 
     /// <summary>
     /// Classifies an Alexa <c>SystemExceptionRequest.Error.Type</c> value.
-    /// See https://developer.amazon.com/en-US/docs/alexa/custom-skills/request-and-response-json-reference.html#system-exception-request
+    /// See https://developer.amazon.com/en-US/docs/alexa/custom-skills/request-and-response-json-reference.html#system-exception-request.
     /// </summary>
+    /// <param name="errorType">The Alexa error type string.</param>
+    /// <returns>The classified error category.</returns>
     public static ErrorCategory ClassifyAlexaError(string? errorType)
     {
         return errorType switch
