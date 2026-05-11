@@ -31,16 +31,19 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
 
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
+    private readonly IUserDataManager _userDataManager;
 
     public QueryArtistLibraryIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
+        IUserDataManager userDataManager,
         ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
+        _userDataManager = userDataManager;
     }
 
     /// <inheritdoc/>
@@ -197,6 +200,8 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
         }
 
         IReadOnlyList<BaseItem> items = await RetryAsync(() => _libraryManager.GetItemList(query), operationName, cancellationToken).ConfigureAwait(false);
+
+        items = FavoritesFirst(items, jellyfinUser, _userDataManager);
 
         if (items.Count == 0)
         {

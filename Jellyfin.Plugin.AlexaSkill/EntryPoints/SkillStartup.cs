@@ -170,13 +170,14 @@ public class SkillStartup : IHostedService, IDisposable
 
                             if (cloudManifestSkill != null)
                             {
-                                _logger.LogInformation("Skill version (cloud) for user {UserId}: {Version}", user.Id, cloudManifestSkill.GetVersionTag());
+                                string? cloudVersion = cloudManifestSkill.GetVersionTag();
+                                _logger.LogInformation("Skill version (cloud) for user {UserId}: {Version}", user.Id, cloudVersion ?? "(no tag)");
 
                                 AccountLinkData accountLinkingData = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.GetAccountLinkDataAsync(user.UserSkill.SkillId)).ConfigureAwait(false);
 
                                 SkillStatus status = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.GetSkillStatusAsync(user.UserSkill.SkillId)).ConfigureAwait(false);
 
-                                if (cloudManifestSkill.GetVersionTag() != Util.GetVersion()
+                                if (cloudVersion != Util.GetVersion()
                                     || status.Manifest.LastModified.Status == SkillStatusState.FAILED)
                                 {
                                     _logger.LogInformation("Skill for user {UserId} is outdated. Updating...", user.Id);

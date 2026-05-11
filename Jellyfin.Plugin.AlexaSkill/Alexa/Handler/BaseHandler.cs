@@ -42,6 +42,49 @@ public abstract class BaseHandler
         (ItemSortBy.SortName, SortOrder.Ascending)
     };
 
+    /// <summary>
+    /// Reorder items so favorites appear first while preserving the original
+    /// relative order within each group (stable partition).
+    /// </summary>
+    /// <param name="items">Items to reorder.</param>
+    /// <param name="user">Jellyfin user for favorite lookup.</param>
+    /// <param name="userDataManager">User data manager for favorite status.</param>
+    /// <returns>Items with favorites first, or original list if no favorites found.</returns>
+    protected static IReadOnlyList<BaseItem> FavoritesFirst(
+        IReadOnlyList<BaseItem> items,
+        Jellyfin.Database.Implementations.Entities.User user,
+        IUserDataManager userDataManager)
+    {
+        if (items.Count <= 1)
+        {
+            return items;
+        }
+
+        var favorites = new List<BaseItem>();
+        var rest = new List<BaseItem>(items.Count);
+
+        foreach (BaseItem item in items)
+        {
+            UserItemData? data = userDataManager.GetUserData(user, item);
+            if (data?.IsFavorite == true)
+            {
+                favorites.Add(item);
+            }
+            else
+            {
+                rest.Add(item);
+            }
+        }
+
+        if (favorites.Count == 0)
+        {
+            return items;
+        }
+
+        favorites.AddRange(rest);
+        return favorites;
+    }
+
     private PluginConfiguration _config;
 
     /// <summary>

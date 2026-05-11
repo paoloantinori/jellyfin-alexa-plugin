@@ -32,12 +32,14 @@ public class ManifestSkill : Skill
         };
 
         Manifest = Util.DeserializeFromFile<Skill>(ressourcePath).Manifest;
+        StampVersionTag();
 
         SetApiEndpoint(serverAddress, sslCertType);
     }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ManifestSkill"/> class.
+    /// Used for cloud manifests — does NOT stamp version (cloud already has it).
     /// </summary>
     /// <param name="manifest">Manifest of the skill.</param>
     /// <param name="serverAddress">Server address.</param>
@@ -58,6 +60,7 @@ public class ManifestSkill : Skill
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ManifestSkill"/> class.
+    /// Used for cloud manifests — does NOT stamp version (cloud already has it).
     /// </summary>
     /// <param name="manifest">Manifest of the skill.</param>
     public ManifestSkill(SkillManifest manifest)
@@ -73,12 +76,31 @@ public class ManifestSkill : Skill
     }
 
     /// <summary>
-    /// Get the version of this skill from the assembly metadata.
+    /// Get the version tag stored in the manifest's testingInstructions.
+    /// Returns null if no version tag is found (e.g. cloud manifest from before this feature).
     /// </summary>
-    /// <returns>The version string.</returns>
-    public string GetVersionTag()
+    /// <returns>The version string, or null.</returns>
+    public string? GetVersionTag()
     {
-        return Util.GetVersion();
+        string? instructions = Manifest.PublishingInformation.TestingInstructions;
+        if (instructions != null && instructions.StartsWith("version:", StringComparison.Ordinal))
+        {
+            string afterPrefix = instructions["version:".Length..];
+            int spaceIndex = afterPrefix.IndexOf(' ');
+            return spaceIndex >= 0 ? afterPrefix[..spaceIndex] : afterPrefix.Trim();
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Stamp the current assembly version into the manifest's testingInstructions
+    /// so it round-trips through the SMAPI cloud API for version comparison.
+    /// </summary>
+    public void StampVersionTag()
+    {
+        string version = Util.GetVersion();
+        Manifest.PublishingInformation.TestingInstructions = $"version:{version} Say 'Alexa ask jellyfin play my favorite music' or 'Alexa ask jellyfin what's playing'";
     }
 
     /// <summary>
@@ -115,6 +137,13 @@ public class ManifestSkill : Skill
 
                 customApi.Endpoint.Uri = endpointUriString;
                 customApi.Endpoint.SslCertificateType = certificateType;
+
+                // Also set events endpoint to the same URI (required by SMAPI for proactive events)
+                if (Manifest.Events?.Endpoint != null)
+                {
+                    Manifest.Events.Endpoint.Uri = endpointUriString;
+                    Manifest.Events.Endpoint.SslCertificateType = certificateType;
+                }
 
                 return;
             }

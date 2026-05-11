@@ -39,20 +39,20 @@
 				{
 					"eventName": "AMAZON.MediaContent.Available"
 				}
-			]
+			],
+			"endpoint": {
+				"uri": ""
+			}
 		},
 		"permissions": [
 			{
-				"name": "alexa::alerts:skillnotifications:write"
+				"name": "alexa::devices:all:notifications:write"
 			},
 			{
 				"name": "alexa::alerts:reminders:skill:readwrite"
 			},
 			{
 				"name": "alexa::profile:name:read"
-			},
-			{
-				"name": "alexa::profile:given_name:read"
 			}
 		],
 		"manifestVersion": "1.0",

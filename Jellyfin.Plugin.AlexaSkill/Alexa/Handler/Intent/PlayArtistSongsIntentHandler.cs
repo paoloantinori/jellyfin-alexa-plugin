@@ -26,8 +26,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public class PlayArtistSongsIntentHandler : BaseHandler
 {
-    private ILibraryManager _libraryManager;
-    private IUserManager _userManager;
+    private readonly ILibraryManager _libraryManager;
+    private readonly IUserManager _userManager;
+    private readonly IUserDataManager _userDataManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PlayArtistSongsIntentHandler"/> class.
@@ -36,16 +37,19 @@ public class PlayArtistSongsIntentHandler : BaseHandler
     /// <param name="config">The plugin configuration.</param>
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
+    /// <param name="userDataManager">Instance of the <see cref="IUserDataManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
     public PlayArtistSongsIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
+        IUserDataManager userDataManager,
         ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
+        _userDataManager = userDataManager;
     }
 
     /// <inheritdoc/>
@@ -118,6 +122,9 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             }),
             "GetArtistSongs",
             cancellationToken).ConfigureAwait(false);
+
+        artistsItems = FavoritesFirst(artistsItems, jellyfinUser, _userDataManager);
+
         if (artistsItems.Count == 0)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NoSongsForArtist", locale, matchedArtistName));

@@ -378,11 +378,23 @@ public class AlexaSkillController : ControllerBase
 
         try
         {
-            return await RequestVerification.Verify(
+            using var cts = new CancellationTokenSource(timeout);
+            var verifyTask = RequestVerification.Verify(
                 signature,
                 new Uri(certChainUrl),
                 body,
-                GetCertificateWithCache).ConfigureAwait(false);
+                GetCertificateWithCache);
+
+            if (await Task.WhenAny(verifyTask, Task.Delay(timeout, cts.Token)).ConfigureAwait(false) != verifyTask)
+            {
+                _logger.LogWarning("Signature verification timed out after {Timeout}ms", timeout.TotalMilliseconds);
+                _ = verifyTask.ContinueWith(
+                    t => _logger.LogDebug(t.Exception, "Timed-out verification task faulted"),
+                    TaskContinuationOptions.OnlyOnFaulted);
+                return false;
+            }
+
+            return await verifyTask.ConfigureAwait(false);
         }
         catch (Exception ex)
         {

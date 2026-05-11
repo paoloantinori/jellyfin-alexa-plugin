@@ -6,7 +6,7 @@
         "description": "Alexa skill plugin for Jellyfin, based on work by infinityofspace",
         "owner": "Paolo Antinori",
         "overview": "Alexa skill plugin for Jellyfin",
-        "imageUrl": "https://raw.githubusercontent.com/paoloantinori/jellyfin-alexa-plugin/main/Jellyfin.Plugin.AlexaSkill/icon.png",
+        "imageUrl": "https://raw.githubusercontent.com/paoloantinori/jellyfin-alexa-plugin/main/skill_icon.png",
         "versions": [
             {
                 "version": "0.1.0.0",

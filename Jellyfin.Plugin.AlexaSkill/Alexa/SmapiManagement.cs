@@ -94,7 +94,15 @@ public class SmapiManagement : ManagementApi
     {
         _logger.LogInformation("Updating skill {SkillId}...", skillId);
 
-        _ = await this.Skills.Update(skillId, SkillStage.Development, manifestSkill).ConfigureAwait(false);
+        try
+        {
+            _ = await this.Skills.Update(skillId, SkillStage.Development, manifestSkill).ConfigureAwait(false);
+        }
+        catch (Refit.ApiException ex)
+        {
+            _logger.LogError(ex, "SMAPI skill update failed for {SkillId}: {StatusCode} — {Body}", skillId, (int)ex.StatusCode, ex.Content);
+            throw;
+        }
 
         await WaitForSkillStatusAsync(skillId).ConfigureAwait(false);
 
