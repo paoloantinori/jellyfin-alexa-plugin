@@ -1,0 +1,21 @@
+locale: it-IT
+invocation_name: jellyfin player
+tests:
+  - utterance: "riprodurre brani a caso"
+    expected_intent: PlayRandomIntent
+    expected_slots: {}
+    expected_response_type: any
+    iterations: 5
+
+  - utterance: "riproduci i miei preferiti"
+    expected_intent: PlayFavoritesIntent
+    expected_slots:
+      media_type: {}
+    expected_response_type: any
+    iterations: 5
+
+  - utterance: "pausa"
+    expected_intent: AMAZON.PauseIntent
+    expected_slots: {}
+    expected_response_type: any
+    iterations: 3

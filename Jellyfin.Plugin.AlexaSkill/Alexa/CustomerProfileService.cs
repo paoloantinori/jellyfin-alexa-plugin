@@ -16,7 +16,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa;
 /// </summary>
 internal class CustomerProfileService
 {
-    private static readonly HttpClient Http = new();
+    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(3) };
     private readonly ILogger _logger;
 
     public CustomerProfileService(ILogger<CustomerProfileService> logger)
@@ -27,6 +27,9 @@ internal class CustomerProfileService
     /// <summary>
     /// Gets the customer's given (first) name. Returns null if unavailable or permission denied.
     /// </summary>
+    /// <param name="context">The Alexa request context containing API credentials.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The customer's given name, or null if unavailable.</returns>
     public async Task<string?> GetGivenNameAsync(Context context, CancellationToken cancellationToken)
     {
         string? token = context?.System?.ApiAccessToken;
@@ -59,6 +62,9 @@ internal class CustomerProfileService
     /// <summary>
     /// Gets the customer's timezone (e.g. "America/New_York"). Returns null if unavailable.
     /// </summary>
+    /// <param name="context">The Alexa request context containing API credentials.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The customer's timezone, or null if unavailable.</returns>
     public async Task<string?> GetTimezoneAsync(Context context, CancellationToken cancellationToken)
     {
         string? token = context?.System?.ApiAccessToken;

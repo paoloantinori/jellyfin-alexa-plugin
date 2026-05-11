@@ -11,6 +11,7 @@ Requires:
 from __future__ import annotations
 
 import logging
+import time
 
 import pytest
 
@@ -192,3 +193,106 @@ def _check_side_effects(
                 "  Side-effect OK: %s is playing '%s'",
                 intent, now_playing.get("Name", "?"),
             )
+
+
+# ---------------------------------------------------------------------------
+# Reliability E2E test — runs each intent multiple times to catch hangs
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def reliability_fixture(request):
+    """Indirect fixture: each parametrized case from e2e_reliability_*.yaml."""
+    return request.param
+
+
+@pytest.fixture
+def reliability_smapi_client(skill_id, smapi_delay, reliability_fixture):
+    """Per-locale SmapiClient for reliability tests."""
+    return SmapiClient(
+        skill_id=skill_id,
+        locale=reliability_fixture["locale"],
+        delay=smapi_delay,
+        invocation_name=reliability_fixture.get("invocation_name", ""),
+    )
+
+
+_MAX_PER_ITERATION_S = 30.0
+
+
+@pytest.mark.e2e
+def test_e2e_reliability(request, reliability_fixture, reliability_smapi_client, jellyfin_client):
+    """Run each intent multiple times, tracking timing to detect intermittent hangs.
+
+    Each fixture case can specify an ``iterations`` count (default 3).
+    Fails if any iteration exceeds the per-iteration timeout or SMAPI fails.
+    """
+    utterance = reliability_fixture["utterance"]
+    expected_intent = reliability_fixture["expected_intent"]
+    locale = reliability_fixture["locale"]
+    iterations = reliability_fixture.get("iterations", 3)
+
+    if request.config.getoption("--dry-run"):
+        assert utterance, f"Empty utterance in {reliability_fixture.get('source', '?')}"
+        pytest.skip("dry-run mode: reliability simulation skipped")
+
+    logger.info(
+        "RELIABILITY [%s] (%s) x%d iterations, expecting %s",
+        utterance, locale, iterations, expected_intent,
+    )
+
+    timings: list[float] = []
+    failures: list[str] = []
+
+    for i in range(iterations):
+        label = f"iter {i + 1}/{iterations}"
+        start = time.monotonic()
+
+        try:
+            response = reliability_smapi_client.simulate(utterance)
+        except SmapiError as exc:
+            elapsed = time.monotonic() - start
+            failures.append(f"{label}: SMAPI error after {elapsed:.1f}s — {exc}")
+            logger.error("  %s FAILED: %s", label, exc)
+            continue
+
+        elapsed = time.monotonic() - start
+        timings.append(elapsed)
+
+        # Parse NLU result
+        result = SmapiClient.parse_nlu_result(response)
+        resolved_intent = result["intent"]
+
+        if resolved_intent != expected_intent:
+            failures.append(
+                f"{label}: intent mismatch (expected {expected_intent}, got {resolved_intent})"
+            )
+            logger.error(
+                "  %s INTENT MISMATCH: expected=%s got=%s (%.1fs)",
+                label, expected_intent, resolved_intent, elapsed,
+            )
+        elif elapsed > _MAX_PER_ITERATION_S:
+            failures.append(f"{label}: slow response ({elapsed:.1f}s > {_MAX_PER_ITERATION_S}s)")
+            logger.warning("  %s SLOW: %.1fs", label, elapsed)
+        else:
+            logger.info("  %s OK (%.1fs) -> %s", label, elapsed, resolved_intent)
+
+        # Stop playback between iterations to avoid state leakage
+        if jellyfin_client is not None:
+            try:
+                jellyfin_client.stop_playback()
+            except Exception:  # noqa: BLE001
+                pass
+
+    # --- Summary ---
+    avg_time = sum(timings) / len(timings) if timings else 0.0
+    max_time = max(timings) if timings else 0.0
+    logger.info(
+        "RELIABILITY SUMMARY [%s]: %d/%d passed, avg=%.1fs, max=%.1fs",
+        utterance, iterations - len(failures), iterations, avg_time, max_time,
+    )
+
+    assert not failures, (
+        f"Reliability failures for '{utterance}' ({locale}) over {iterations} iterations:\n"
+        + "\n".join(f"  - {f}" for f in failures)
+    )
