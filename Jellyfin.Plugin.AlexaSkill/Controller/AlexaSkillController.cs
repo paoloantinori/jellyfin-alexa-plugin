@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
@@ -340,15 +343,18 @@ public class AlexaSkillController : ControllerBase
 
     private ContentResult SkillResponseContent(SkillResponse response)
     {
+        string json = JsonConvert.SerializeObject(response);
+        _logger.LogInformation("Skill response: {Len} bytes, directives: {Directives}", json.Length, response.Response.Directives.Count);
         return new ContentResult
         {
-            Content = JsonConvert.SerializeObject(response),
+            Content = json,
             ContentType = "application/json"
         };
     }
 
     /// <summary>
     /// Verifies the Alexa request signature using the Signature and SignatureCertChainUrl headers.
+    /// Uses a cached certificate with a short download timeout to avoid blocking the response.
     /// </summary>
     /// <param name="body">The raw request body.</param>
     /// <returns>True if the signature is valid, false otherwise.</returns>
@@ -365,12 +371,36 @@ public class AlexaSkillController : ControllerBase
 
         try
         {
-            return await RequestVerification.Verify(signature, new Uri(certChainUrl), body).ConfigureAwait(false);
+            return await RequestVerification.Verify(
+                signature,
+                new Uri(certChainUrl),
+                body,
+                GetCertificateWithCache).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during Alexa request signature verification");
             return false;
         }
+    }
+
+    private static readonly ConcurrentDictionary<string, X509Certificate2> CertificateCache = new();
+    private static readonly HttpClient CertHttpClient = new() { Timeout = TimeSpan.FromSeconds(3) };
+
+    private async Task<X509Certificate2> GetCertificateWithCache(Uri url)
+    {
+        var key = url.ToString();
+
+        if (CertificateCache.TryGetValue(key, out var cached))
+        {
+            return cached;
+        }
+
+        var response = await CertHttpClient.GetAsync(url).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        var bytes = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+        var cert = new X509Certificate2(bytes);
+        CertificateCache[key] = cert;
+        return cert;
     }
 }

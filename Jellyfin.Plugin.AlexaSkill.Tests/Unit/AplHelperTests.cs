@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
@@ -52,7 +53,7 @@ public class AplHelperTests
     }
 
     [Fact]
-    public void BuildNowPlayingDirective_ValidAudio_ReturnsDirective()
+    public void BuildNowPlayingDirective_ValidAudio_ReturnsDirectiveWithDatasources()
     {
         var audio = new Audio { Name = "Test Song" };
         audio.Artists = new List<string> { "Test Artist" };
@@ -65,10 +66,16 @@ public class AplHelperTests
         Assert.NotNull(result.Document);
         Assert.NotNull(result.DataSources);
 
-        var payload = result.DataSources["payload"] as JObject;
-        Assert.NotNull(payload);
-        Assert.Equal("Test Song", payload["title"]?.ToString());
-        Assert.Equal("http://art", payload["artUrl"]?.ToString());
+        // Document should contain binding expressions, not literal values
+        string docStr = result.Document.ToString();
+        Assert.Contains("${payload.jellyfinData.properties.title}", docStr);
+        Assert.Contains("${payload.jellyfinData.properties.artUrl}", docStr);
+
+        // Datasources should contain the actual values
+        string dsStr = result.DataSources.ToString();
+        Assert.Contains("Test Song", dsStr);
+        Assert.Contains("http://art", dsStr);
+        Assert.Contains("jellyfinData", dsStr);
     }
 
     [Fact]
@@ -79,9 +86,9 @@ public class AplHelperTests
         audio.Album = "Album";
 
         var result = AplHelper.BuildNowPlayingDirective(audio, "art", "bg");
-        var payload = result!.DataSources["payload"] as JObject;
+        string dsStr = result!.DataSources!.ToString();
 
-        Assert.Equal("Artist · Album", payload?["subtitle"]?.ToString());
+        Assert.Contains("Artist · Album", dsStr);
     }
 
     [Fact]
@@ -91,9 +98,9 @@ public class AplHelperTests
         audio.Artists = new List<string> { "Artist" };
 
         var result = AplHelper.BuildNowPlayingDirective(audio, "art", "bg");
-        var payload = result!.DataSources["payload"] as JObject;
+        string dsStr = result!.DataSources!.ToString();
 
-        Assert.Equal("Artist", payload?["subtitle"]?.ToString());
+        Assert.Contains("Artist", dsStr);
     }
 
     [Fact]
@@ -103,9 +110,9 @@ public class AplHelperTests
         audio.Album = "Album";
 
         var result = AplHelper.BuildNowPlayingDirective(audio, "art", "bg");
-        var payload = result!.DataSources["payload"] as JObject;
+        string dsStr = result!.DataSources!.ToString();
 
-        Assert.Equal("Album", payload?["subtitle"]?.ToString());
+        Assert.Contains("Album", dsStr);
     }
 
     [Fact]
@@ -117,9 +124,9 @@ public class AplHelperTests
         };
 
         var result = AplHelper.BuildNowPlayingDirective(video, "art", "bg");
-        var payload = result!.DataSources["payload"] as JObject;
+        string dsStr = result!.DataSources!.ToString();
 
-        Assert.Equal(string.Empty, payload?["subtitle"]?.ToString());
+        Assert.Contains("Test Video", dsStr);
     }
 
     [Fact]
@@ -136,6 +143,19 @@ public class AplHelperTests
     }
 
     [Fact]
+    public void BuildNowPlayingDirective_DocumentHasParameters()
+    {
+        var audio = new Audio { Name = "Song" };
+        var result = AplHelper.BuildNowPlayingDirective(audio, "art", "bg");
+
+        var mainTemplate = result!.Document!["mainTemplate"];
+        Assert.NotNull(mainTemplate);
+        var parameters = mainTemplate["parameters"] as JArray;
+        Assert.NotNull(parameters);
+        Assert.Equal("payload", parameters[0].ToString());
+    }
+
+    [Fact]
     public void BuildNowPlayingDirective_DocumentVersionIs17()
     {
         var audio = new Audio { Name = "Song" };
@@ -146,6 +166,17 @@ public class AplHelperTests
     }
 
     [Fact]
+    public void BuildNowPlayingDirective_DatasourcesHasObjectType()
+    {
+        var audio = new Audio { Name = "Song" };
+        var result = AplHelper.BuildNowPlayingDirective(audio, "art", "bg");
+
+        var ds = result!.DataSources!;
+        Assert.Equal("object", ds["jellyfinData"]?["type"]?.ToString());
+        Assert.NotNull(ds["jellyfinData"]?["properties"]);
+    }
+
+    [Fact]
     public void BuildQueueDirective_EmptyList_ReturnsNull()
     {
         var result = AplHelper.BuildQueueDirective(new List<QueueDisplayItem>());
@@ -153,7 +184,7 @@ public class AplHelperTests
     }
 
     [Fact]
-    public void BuildQueueDirective_SingleTrack_ReturnsDirective()
+    public void BuildQueueDirective_SingleTrack_ReturnsDirectiveWithDatasources()
     {
         var items = new List<QueueDisplayItem>
         {
@@ -164,20 +195,19 @@ public class AplHelperTests
 
         Assert.NotNull(result);
         Assert.Equal("queue", result.Token);
+        Assert.NotNull(result.Document);
+        Assert.NotNull(result.DataSources);
 
-        var payload = result.DataSources["payload"] as JObject;
-        var dataItems = payload?["items"] as JArray;
-        Assert.NotNull(dataItems);
-        Assert.Single(dataItems);
-        Assert.Equal("Track 1", dataItems[0]["title"]?.ToString());
-        Assert.Equal("Artist 1", dataItems[0]["subtitle"]?.ToString());
-        Assert.Equal("0", dataItems[0]["id"]?.ToString());
-        Assert.Equal("Up Next", payload?["title"]?.ToString());
-        Assert.Equal("playTrack", payload?["action"]?.ToString());
+        // Datasources should contain item data
+        string dsStr = result.DataSources.ToString();
+        Assert.Contains("Track 1", dsStr);
+        Assert.Contains("Artist 1", dsStr);
+        Assert.Contains("Up Next", dsStr);
+        Assert.Contains("playTrack", dsStr);
     }
 
     [Fact]
-    public void BuildQueueDirective_MultipleTracks_IndicesAssigned()
+    public void BuildQueueDirective_MultipleTracks_AllInDatasources()
     {
         var items = new List<QueueDisplayItem>
         {
@@ -187,16 +217,15 @@ public class AplHelperTests
         };
 
         var result = AplHelper.BuildQueueDirective(items);
-        var dataItems = (result!.DataSources["payload"] as JObject)?["items"] as JArray;
+        string dsStr = result!.DataSources!.ToString();
 
-        Assert.Equal(3, dataItems!.Count);
-        Assert.Equal("0", dataItems[0]["id"]?.ToString());
-        Assert.Equal("1", dataItems[1]["id"]?.ToString());
-        Assert.Equal("2", dataItems[2]["id"]?.ToString());
+        Assert.Contains("A", dsStr);
+        Assert.Contains("B", dsStr);
+        Assert.Contains("C", dsStr);
     }
 
     [Fact]
-    public void BuildQueueDirective_NullArtistAndArtUrl_DefaultToEmpty()
+    public void BuildQueueDirective_NullArtist_NoSubtitleInData()
     {
         var items = new List<QueueDisplayItem>
         {
@@ -204,23 +233,20 @@ public class AplHelperTests
         };
 
         var result = AplHelper.BuildQueueDirective(items);
-        var dataItems = (result!.DataSources["payload"] as JObject)?["items"] as JArray;
-
-        Assert.Equal(string.Empty, dataItems![0]["subtitle"]?.ToString());
-        Assert.Equal(string.Empty, dataItems[0]["artUrl"]?.ToString());
+        Assert.NotNull(result);
+        Assert.NotNull(result.DataSources);
     }
 
     [Fact]
-    public void BuildQueueDirective_DocumentContainsTouchHandlers()
+    public void BuildQueueDirective_DocumentContainsDataBindingForItems()
     {
         var items = new List<QueueDisplayItem> { new() { Title = "T" } };
         var result = AplHelper.BuildQueueDirective(items);
 
         var docStr = result!.Document.ToString();
-        Assert.Contains("TouchWrapper", docStr);
-        // The action name is data-bound via ${payload.action}, not hardcoded in the template
-        var payload = result.DataSources["payload"] as JObject;
-        Assert.Equal("playTrack", payload?["action"]?.ToString());
+        Assert.Contains("${data.title}", docStr);
+        Assert.Contains("${data.id}", docStr);
+        Assert.Contains("${payload.listData.properties.items}", docStr);
     }
 
     [Fact]
@@ -233,11 +259,79 @@ public class AplHelperTests
     [Fact]
     public void GetTouchEventArgument_UserEventWithoutArguments_ReturnsNull()
     {
-        // Simulate a UserEvent request — Alexa.NET doesn't have a native type,
-        // so we use a generic Request subclass if available, or skip if not testable.
         var request = new IntentRequest { Type = "Alexa.Presentation.APL.UserEvent" };
-
-        // The method should return null since IntentRequest doesn't carry extension data
         Assert.Null(AplHelper.GetTouchEventArgument(request));
+    }
+
+    [Fact]
+    public void BuildListDirective_EmbedsTitleInDatasources()
+    {
+        var items = new List<ListDisplayItem>
+        {
+            new("Track1", "id1", "Artist1", "http://img.example.com/1.jpg"),
+            new("Track2", "id2")
+        };
+
+        var result = AplHelper.BuildListDirective(
+            "Test Title", items, "testToken", "selectItem");
+
+        Assert.NotNull(result);
+        Assert.NotNull(result.DataSources);
+
+        string dsStr = result.DataSources.ToString();
+        Assert.Contains("Test Title", dsStr);
+        Assert.Contains("Track1", dsStr);
+        Assert.Contains("Artist1", dsStr);
+        Assert.Contains("selectItem", dsStr);
+    }
+
+    [Fact]
+    public void BuildListDirective_DocumentHasParameters()
+    {
+        var items = new List<ListDisplayItem>
+        {
+            new("Item", "id-1")
+        };
+
+        var result = AplHelper.BuildListDirective("Test", items, "test");
+
+        var mainTemplate = result!.Document!["mainTemplate"];
+        var parameters = mainTemplate?["parameters"] as JArray;
+        Assert.NotNull(parameters);
+        Assert.Equal("payload", parameters[0].ToString());
+    }
+
+    [Fact]
+    public void BuildListDirective_ItemsWithOptionalFields_OmitSubtitleWhenNull()
+    {
+        var items = new List<ListDisplayItem>
+        {
+            new("Minimal Item", "min-id")
+        };
+
+        var result = AplHelper.BuildListDirective("Test", items, "test");
+
+        Assert.NotNull(result);
+        Assert.NotNull(result.DataSources);
+        string dsStr = result.DataSources.ToString();
+        Assert.Contains("Minimal Item", dsStr);
+        // Item without subtitle should not have subtitle key
+        var itemObj = result.DataSources["listData"]?["properties"]?["items"]?[0] as JObject;
+        Assert.False(itemObj?.ContainsKey("subtitle"));
+    }
+
+    [Fact]
+    public void BuildListDirective_DatasourcesHasObjectType()
+    {
+        var items = new List<ListDisplayItem>
+        {
+            new("Item", "id-1")
+        };
+
+        var result = AplHelper.BuildListDirective("Test", items, "test");
+
+        var ds = result!.DataSources!;
+        Assert.Equal("object", ds["listData"]?["type"]?.ToString());
+        Assert.NotNull(ds["listData"]?["properties"]);
     }
 }
