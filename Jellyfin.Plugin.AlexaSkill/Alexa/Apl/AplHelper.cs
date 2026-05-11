@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using Alexa.NET.Request;
@@ -14,7 +15,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
 
 /// <summary>
 /// Helper for building APL (Alexa Presentation Language) directives
-/// for screen-capable devices.
+/// for screen-capable devices. Uses proper datasource binding:
+/// mainTemplate.parameters declares "payload", datasources provides
+/// the data, and ${payload.xxx.properties.yyy} expressions resolve values.
 /// </summary>
 internal static class AplHelper
 {
@@ -23,16 +26,13 @@ internal static class AplHelper
     private static readonly PropertyInfo? ExtensionsProperty =
         typeof(Request).GetProperty("Extensions", BindingFlags.Public | BindingFlags.Instance);
 
-    private static readonly Lazy<JObject> NowPlayingDocument = new(() => JObject.Parse(@"{
+    // NowPlaying APL template with proper datasource binding.
+    // ${payload.jellyfinData.properties.xxx} resolves via datasources.
+    // ${artSize}, ${titleSize} etc. resolve from the resources section.
+    private static readonly string NowPlayingTemplate = @"{
   ""type"": ""APL"",
-  ""version"": ""1.9"",
+  ""version"": ""1.7"",
   ""theme"": ""dark"",
-  ""import"": [
-    {
-      ""name"": ""alexa-layouts"",
-      ""version"": ""1.5.0""
-    }
-  ],
   ""resources"": [
     {
       ""dimensions"": {
@@ -44,7 +44,7 @@ internal static class AplHelper
       }
     },
     {
-      ""when"": ""${@viewportProfile == @viewportProfileRound}"",
+      ""when"": ""${viewport.shape == 'round'}"",
       ""dimensions"": {
         ""artSize"": 200,
         ""titleSize"": 28,
@@ -55,9 +55,7 @@ internal static class AplHelper
     }
   ],
   ""mainTemplate"": {
-    ""parameters"": [
-      ""payload""
-    ],
+    ""parameters"": [""payload""],
     ""items"": [
       {
         ""type"": ""Container"",
@@ -66,22 +64,12 @@ internal static class AplHelper
         ""items"": [
           {
             ""type"": ""Image"",
-            ""source"": ""${payload.backgroundUrl}"",
-            ""scale"": ""bestFill"",
+            ""source"": ""${payload.jellyfinData.properties.backgroundUrl}"",
+            ""scale"": ""best-fill"",
             ""width"": ""100vw"",
             ""height"": ""100vh"",
             ""position"": ""absolute"",
-            ""filter"": [
-              {
-                ""type"": ""Blur"",
-                ""radius"": 20
-              },
-              {
-                ""type"": ""Grayscale"",
-                ""amount"": 0.5
-              }
-            ],
-            ""opacity"": 0.4
+            ""opacity"": 0.3
           },
           {
             ""type"": ""Container"",
@@ -94,15 +82,15 @@ internal static class AplHelper
             ""items"": [
               {
                 ""type"": ""Image"",
-                ""source"": ""${payload.artUrl}"",
+                ""source"": ""${payload.jellyfinData.properties.artUrl}"",
                 ""width"": ""${artSize}"",
                 ""height"": ""${artSize}"",
                 ""borderRadius"": 10,
-                ""scale"": ""bestFill""
+                ""scale"": ""best-fill""
               },
               {
                 ""type"": ""Text"",
-                ""text"": ""${payload.title}"",
+                ""text"": ""${payload.jellyfinData.properties.title}"",
                 ""fontSize"": ""${titleSize}"",
                 ""fontWeight"": ""bold"",
                 ""color"": ""white"",
@@ -112,7 +100,7 @@ internal static class AplHelper
               },
               {
                 ""type"": ""Text"",
-                ""text"": ""${payload.subtitle}"",
+                ""text"": ""${payload.jellyfinData.properties.subtitle}"",
                 ""fontSize"": ""${subtitleSize}"",
                 ""color"": ""#B0B0B0"",
                 ""textAlign"": ""center"",
@@ -128,12 +116,7 @@ internal static class AplHelper
                 ""items"": [
                   {
                     ""type"": ""TouchWrapper"",
-                    ""onPress"": {
-                      ""type"": ""SendEvent"",
-                      ""arguments"": [
-                        ""prev""
-                      ]
-                    },
+                    ""onPress"": [{ ""type"": ""SendEvent"", ""arguments"": [ ""prev"" ] }],
                     ""width"": ""${controlSize}"",
                     ""height"": ""${controlSize}"",
                     ""item"": {
@@ -146,12 +129,7 @@ internal static class AplHelper
                   },
                   {
                     ""type"": ""TouchWrapper"",
-                    ""onPress"": {
-                      ""type"": ""SendEvent"",
-                      ""arguments"": [
-                        ""pause""
-                      ]
-                    },
+                    ""onPress"": [{ ""type"": ""SendEvent"", ""arguments"": [ ""pause"" ] }],
                     ""width"": ""${controlSize}"",
                     ""height"": ""${controlSize}"",
                     ""item"": {
@@ -164,12 +142,7 @@ internal static class AplHelper
                   },
                   {
                     ""type"": ""TouchWrapper"",
-                    ""onPress"": {
-                      ""type"": ""SendEvent"",
-                      ""arguments"": [
-                        ""next""
-                      ]
-                    },
+                    ""onPress"": [{ ""type"": ""SendEvent"", ""arguments"": [ ""next"" ] }],
                     ""width"": ""${controlSize}"",
                     ""height"": ""${controlSize}"",
                     ""item"": {
@@ -188,124 +161,77 @@ internal static class AplHelper
       }
     ]
   }
-}"));
+}";
 
-    private static readonly Lazy<JObject> ListDocument = new(() => JObject.Parse(@"{
+    private static readonly JObject NowPlayingDocument = JObject.Parse(NowPlayingTemplate);
+
+    // List APL template with datasource binding and data array iteration.
+    // Sequence.data iterates over ${payload.listData.properties.items},
+    // creating a ${data} context for each element.
+    private static readonly string ListTemplate = @"{
   ""type"": ""APL"",
-  ""version"": ""1.9"",
+  ""version"": ""1.7"",
   ""theme"": ""dark"",
-  ""import"": [
-    {
-      ""name"": ""alexa-layouts"",
-      ""version"": ""1.5.0""
-    }
-  ],
-  ""resources"": [
-    {
-      ""dimensions"": {
-        ""thumbSize"": 60,
-        ""titleSize"": 20,
-        ""subtitleSize"": 16,
-        ""headerSize"": 32,
-        ""rowPaddingH"": 30
-      }
-    },
-    {
-      ""when"": ""${@viewportProfile == @viewportProfileRound}"",
-      ""dimensions"": {
-        ""thumbSize"": 48,
-        ""titleSize"": 16,
-        ""subtitleSize"": 14,
-        ""headerSize"": 24,
-        ""rowPaddingH"": 20
-      }
-    }
-  ],
   ""mainTemplate"": {
-    ""parameters"": [
-      ""payload""
-    ],
+    ""parameters"": [""payload""],
     ""items"": [
       {
         ""type"": ""Container"",
         ""height"": ""100vh"",
         ""width"": ""100vw"",
-        ""backgroundColor"": ""#1A1A1A"",
+        ""paddingTop"": 20,
         ""items"": [
           {
             ""type"": ""Text"",
-            ""text"": ""${payload.title}"",
-            ""fontSize"": ""${headerSize}"",
+            ""text"": ""${payload.listData.properties.title}"",
+            ""fontSize"": 30,
             ""fontWeight"": ""bold"",
             ""color"": ""white"",
-            ""paddingLeft"": ""${rowPaddingH}"",
-            ""paddingRight"": ""${rowPaddingH}"",
-            ""paddingTop"": 20,
-            ""paddingBottom"": 10
+            ""paddingLeft"": 16,
+            ""paddingBottom"": 16
           },
           {
             ""type"": ""Sequence"",
             ""scrollDirection"": ""vertical"",
-            ""height"": ""85vh"",
-            ""data"": ""${payload.items}"",
-            ""items"": [
-              {
-                ""type"": ""TouchWrapper"",
-                ""onPress"": {
-                  ""type"": ""SendEvent"",
-                  ""arguments"": [
-                    ""${payload.action}"",
-                    ""${data.id}""
-                  ]
-                },
-                ""item"": {
-                  ""type"": ""Container"",
-                  ""direction"": ""row"",
-                  ""paddingLeft"": ""${rowPaddingH}"",
-                  ""paddingRight"": ""${rowPaddingH}"",
-                  ""paddingTop"": 8,
-                  ""paddingBottom"": 8,
-                  ""items"": [
-                    {
-                      ""type"": ""Image"",
-                      ""source"": ""${data.artUrl}"",
-                      ""width"": ""${thumbSize}"",
-                      ""height"": ""${thumbSize}"",
-                      ""borderRadius"": 5,
-                      ""scale"": ""bestFill""
-                    },
-                    {
-                      ""type"": ""Container"",
-                      ""paddingLeft"": 15,
-                      ""direction"": ""column"",
-                      ""justifyContent"": ""center"",
-                      ""items"": [
-                        {
-                          ""type"": ""Text"",
-                          ""text"": ""${data.title}"",
-                          ""fontSize"": ""${titleSize}"",
-                          ""color"": ""white"",
-                          ""maxLines"": 1
-                        },
-                        {
-                          ""type"": ""Text"",
-                          ""text"": ""${data.subtitle}"",
-                          ""fontSize"": ""${subtitleSize}"",
-                          ""color"": ""#B0B0B0"",
-                          ""maxLines"": 1
-                        }
-                      ]
-                    }
-                  ]
-                }
+            ""grow"": 1,
+            ""data"": ""${payload.listData.properties.items}"",
+            ""items"": {
+              ""type"": ""TouchWrapper"",
+              ""onPress"": [{ ""type"": ""SendEvent"", ""arguments"": [ ""${payload.listData.properties.action}"", ""${data.id}"" ] }],
+              ""item"": {
+                ""type"": ""Container"",
+                ""paddingTop"": 8,
+                ""paddingBottom"": 8,
+                ""paddingLeft"": 16,
+                ""paddingRight"": 16,
+                ""items"": [
+                  {
+                    ""type"": ""Text"",
+                    ""text"": ""${data.title}"",
+                    ""fontSize"": 24,
+                    ""color"": ""white"",
+                    ""maxLines"": 1
+                  },
+                  {
+                    ""type"": ""Text"",
+                    ""text"": ""${data.subtitle}"",
+                    ""fontSize"": 18,
+                    ""color"": ""#B0B0B0"",
+                    ""maxLines"": 1,
+                    ""paddingTop"": 2,
+                    ""when"": ""${data.subtitle}""
+                  }
+                ]
               }
-            ]
+            }
           }
         ]
       }
     ]
   }
-}"));
+}";
+
+    private static readonly JObject ListDocument = JObject.Parse(ListTemplate);
 
     /// <summary>
     /// Check if the requesting device supports APL rendering.
@@ -321,20 +247,31 @@ internal static class AplHelper
     /// </summary>
     public static AplRenderDocumentDirective? BuildNowPlayingDirective(BaseItem item, string imageUrl, string backgroundImageUrl)
     {
-        var subtitle = GetSubtitle(item);
         if (string.IsNullOrEmpty(item.Name))
         {
             return null;
         }
 
-        var document = NowPlayingDocument.Value;
-        var datasources = BuildNowPlayingDatasources(item.Name, subtitle, imageUrl, backgroundImageUrl);
+        var subtitle = GetSubtitle(item);
 
         return new AplRenderDocumentDirective
         {
             Token = "nowPlaying",
-            Document = document,
-            DataSources = datasources
+            Document = NowPlayingDocument,
+            DataSources = new JObject
+            {
+                ["jellyfinData"] = new JObject
+                {
+                    ["type"] = "object",
+                    ["properties"] = new JObject
+                    {
+                        ["title"] = item.Name,
+                        ["subtitle"] = subtitle,
+                        ["artUrl"] = imageUrl,
+                        ["backgroundUrl"] = backgroundImageUrl
+                    }
+                }
+            }
         };
     }
 
@@ -349,13 +286,13 @@ internal static class AplHelper
             return null;
         }
 
-        var items = queueItems.Select((q, i) => new ListDisplayItem(q.Title, i.ToString(System.Globalization.CultureInfo.InvariantCulture), q.Artist, q.ArtUrl)).ToList();
+        var items = queueItems.Select((q, i) => new ListDisplayItem(q.Title, i.ToString(CultureInfo.InvariantCulture), q.Artist, q.ArtUrl)).ToList();
         return BuildListDirective("Up Next", items, "queue", "playTrack");
     }
 
     /// <summary>
     /// Build a reusable APL list directive showing selectable items with
-    /// thumbnails, titles, and subtitles for Echo Show devices.
+    /// titles and subtitles for Echo Show devices.
     /// </summary>
     /// <param name="title">Header text displayed above the list.</param>
     /// <param name="items">Items to display in the list.</param>
@@ -369,14 +306,40 @@ internal static class AplHelper
             return null;
         }
 
-        var document = ListDocument.Value;
-        var datasources = BuildListDatasources(title, items, action);
+        var itemArray = new JArray();
+        foreach (var item in items)
+        {
+            var itemObj = new JObject
+            {
+                ["title"] = item.Title,
+                ["id"] = item.Id
+            };
+
+            if (!string.IsNullOrEmpty(item.Subtitle))
+            {
+                itemObj["subtitle"] = item.Subtitle;
+            }
+
+            itemArray.Add(itemObj);
+        }
 
         return new AplRenderDocumentDirective
         {
             Token = token,
-            Document = document,
-            DataSources = datasources
+            Document = ListDocument,
+            DataSources = new JObject
+            {
+                ["listData"] = new JObject
+                {
+                    ["type"] = "object",
+                    ["properties"] = new JObject
+                    {
+                        ["title"] = title,
+                        ["action"] = action,
+                        ["items"] = itemArray
+                    }
+                }
+            }
         };
     }
 
@@ -405,17 +368,13 @@ internal static class AplHelper
     {
         if (item is Audio audio)
         {
-            if (!string.IsNullOrEmpty(audio.Album) && audio.Artists != null && audio.Artists.Count > 0)
+            var firstArtist = audio.Artists?.FirstOrDefault();
+            if (firstArtist is not null && !string.IsNullOrEmpty(audio.Album))
             {
-                return $"{audio.Artists[0]} · {audio.Album}";
+                return $"{firstArtist} · {audio.Album}";
             }
 
-            if (audio.Artists != null && audio.Artists.Count > 0)
-            {
-                return audio.Artists[0];
-            }
-
-            return audio.Album ?? string.Empty;
+            return firstArtist ?? audio.Album ?? string.Empty;
         }
 
         if (item is Episode episode)
@@ -424,45 +383,6 @@ internal static class AplHelper
         }
 
         return string.Empty;
-    }
-
-    private static JObject BuildNowPlayingDatasources(string title, string subtitle, string artUrl, string backgroundUrl)
-    {
-        return new JObject
-        {
-            ["payload"] = new JObject
-            {
-                ["title"] = title,
-                ["subtitle"] = subtitle,
-                ["artUrl"] = artUrl,
-                ["backgroundUrl"] = backgroundUrl
-            }
-        };
-    }
-
-    private static JObject BuildListDatasources(string title, List<ListDisplayItem> items, string action)
-    {
-        var dataItems = new JArray();
-        foreach (var item in items)
-        {
-            dataItems.Add(new JObject
-            {
-                ["title"] = item.Title,
-                ["subtitle"] = item.Subtitle ?? string.Empty,
-                ["artUrl"] = item.ArtUrl ?? string.Empty,
-                ["id"] = item.Id
-            });
-        }
-
-        return new JObject
-        {
-            ["payload"] = new JObject
-            {
-                ["title"] = title,
-                ["action"] = action,
-                ["items"] = dataItems
-            }
-        };
     }
 }
 

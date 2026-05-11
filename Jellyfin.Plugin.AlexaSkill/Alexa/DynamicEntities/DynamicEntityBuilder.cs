@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Enums;
@@ -20,8 +21,14 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.DynamicEntities;
 /// </summary>
 public class DynamicEntityBuilder
 {
-    // Alexa limits Dialog.UpdateDynamicEntities to 100 total values + synonyms across all slot types.
-    private const int MaxTotalSlots = 100;
+    /// <summary>
+    /// Alexa allows at most 100 total values+synonyms across all slot types in a
+    /// single Dialog.UpdateDynamicEntities directive. We reserve headroom so
+    /// artists + albums together stay under this limit.
+    /// </summary>
+    private const int MaxTotalValueCount = 90;
+
+
     private const int QueryLimit = 55;
 
     private static readonly Dictionary<CatalogType, string> SlotTypeNames = CatalogSlotTypes.Names;
@@ -66,9 +73,10 @@ public class DynamicEntityBuilder
             return null;
         }
 
-        int budget = MaxTotalSlots;
+        int budget = MaxTotalValueCount;
         var artistValues = BuildSlotValues(user, BaseItemKind.MusicArtist, CatalogType.Artist, locale, ref budget);
         var albumValues = BuildSlotValues(user, BaseItemKind.MusicAlbum, CatalogType.Album, locale, ref budget);
+
 
         if (artistValues.Count == 0 && albumValues.Count == 0)
         {
@@ -97,8 +105,9 @@ public class DynamicEntityBuilder
         }
 
         _logger.LogDebug(
-            "Built dynamic entities directive with {Artists} artists and {Albums} albums ({Remaining} budget remaining)",
-            artistValues.Count, albumValues.Count, budget);
+            "Built dynamic entities directive with {Artists} artists and {Albums} albums ({Total} total values+synonyms)",
+            artistValues.Count, albumValues.Count, MaxTotalValueCount - budget);
+
 
         return directive;
     }
@@ -129,11 +138,33 @@ public class DynamicEntityBuilder
                 continue;
             }
 
-            // Each value costs 1 + synonym count toward the Alexa platform limit.
-            var synonyms = PhoneticSynonymGenerator.GenerateSynonyms(item.Name, locale);
-            int cost = 1 + synonyms.Count;
+            if (budget <= 0)
+            {
+                break;
+            }
 
-            if (budget < cost)
+            var synonyms = PhoneticSynonymGenerator.GenerateSynonyms(item.Name, locale);
+
+            // Each value counts as 1, plus 1 per synonym toward the Alexa limit.
+            int cost = 1 + synonyms.Count;
+            if (cost > budget)
+            {
+                // Try trimming synonyms to fit.
+                int fitSynonyms = Math.Max(0, budget - 1);
+                if (fitSynonyms == 0 && budget >= 1)
+                {
+                    synonyms = new List<string>();
+                    cost = 1;
+                }
+                else
+                {
+                    synonyms = synonyms.Take(fitSynonyms).ToList();
+                    cost = 1 + synonyms.Count;
+                }
+            }
+
+            if (cost > budget)
+
             {
                 break;
             }

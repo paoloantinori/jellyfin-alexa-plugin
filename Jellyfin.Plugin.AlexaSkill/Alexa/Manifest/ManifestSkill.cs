@@ -32,7 +32,6 @@ public class ManifestSkill : Skill
         };
 
         Manifest = Util.DeserializeFromFile<Skill>(ressourcePath).Manifest;
-        AddVersionTag();
 
         SetApiEndpoint(serverAddress, sslCertType);
     }
@@ -53,7 +52,6 @@ public class ManifestSkill : Skill
         };
 
         Manifest = manifest;
-        AddVersionTag();
 
         SetApiEndpoint(serverAddress, sslCertType);
     }
@@ -75,37 +73,12 @@ public class ManifestSkill : Skill
     }
 
     /// <summary>
-    /// Add the current version of this skill to the name of the skill.
+    /// Get the version of this skill from the assembly metadata.
     /// </summary>
-    private void AddVersionTag()
-    {
-        string version = Util.GetVersion();
-
-        foreach (KeyValuePair<string, ManifestLocale> l in Manifest.PublishingInformation.Locales)
-        {
-            if (l.Value != null)
-            {
-                l.Value.Name += " v" + version;
-            }
-        }
-    }
-
-    /// <summary>
-    /// Add the current version of this skill to the name of the skill.
-    /// </summary>
-    /// <returns>The version tag of the skill.</returns>
+    /// <returns>The version string.</returns>
     public string GetVersionTag()
     {
-        ManifestLocale? baseLocale = Manifest.PublishingInformation.Locales.GetValueOrDefault<string, ManifestLocale?>("en-US", null);
-        if (baseLocale != null)
-        {
-            string[] split = baseLocale.Name.Split(" ");
-            return split[split.Length - 1].Replace("v", string.Empty, StringComparison.OrdinalIgnoreCase);
-        }
-        else
-        {
-            return "unknown";
-        }
+        return Util.GetVersion();
     }
 
     /// <summary>
