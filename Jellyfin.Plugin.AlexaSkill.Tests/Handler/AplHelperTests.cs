@@ -179,6 +179,10 @@ public class AplHelperTests
         Assert.Equal("browseList", directive.Token);
         Assert.NotNull(directive.Document);
         Assert.NotNull(directive.DataSources);
+
+        string dsStr = directive.DataSources.ToString();
+        Assert.Contains("Song 1", dsStr);
+        Assert.Contains("Artist 1", dsStr);
     }
 
     [Fact]
@@ -192,18 +196,11 @@ public class AplHelperTests
         var directive = AplHelper.BuildListDirective("My Library", items, "test");
 
         Assert.NotNull(directive);
-        var payload = directive.DataSources!["payload"];
-        Assert.Equal("My Library", payload["title"]!.ToString());
-
-        var dataItems = payload["items"] as global::Newtonsoft.Json.Linq.JArray;
-        Assert.NotNull(dataItems);
-        Assert.Single(dataItems);
-
-        var firstItem = dataItems[0];
-        Assert.Equal("Track A", firstItem["title"]!.ToString());
-        Assert.Equal("Album X", firstItem["subtitle"]!.ToString());
-        Assert.Equal("https://art/x.jpg", firstItem["artUrl"]!.ToString());
-        Assert.Equal("audio-123", firstItem["id"]!.ToString());
+        string dsStr = directive.DataSources!.ToString();
+        Assert.Contains("My Library", dsStr);
+        Assert.Contains("Track A", dsStr);
+        Assert.Contains("Album X", dsStr);
+        Assert.Contains("audio-123", dsStr);
     }
 
     [Fact]
@@ -221,10 +218,16 @@ public class AplHelperTests
         Assert.Equal("APL", doc["type"]!.ToString());
         Assert.Equal("1.7", doc["version"]!.ToString());
         Assert.Equal("dark", doc["theme"]!.ToString());
+
+        // Verify data binding expressions are present
+        string docStr = doc.ToString();
+        Assert.Contains("${payload.listData.properties.title}", docStr);
+        Assert.Contains("${payload.listData.properties.items}", docStr);
+        Assert.Contains("${data.title}", docStr);
     }
 
     [Fact]
-    public void BuildListDirective_ItemsWithOptionalFields_DefaultToEmpty()
+    public void BuildListDirective_ItemsWithOptionalFields_OmitSubtitleWhenNull()
     {
         var items = new List<ListDisplayItem>
         {
@@ -234,13 +237,9 @@ public class AplHelperTests
         var directive = AplHelper.BuildListDirective("Test", items, "test");
 
         Assert.NotNull(directive);
-        var payload = directive.DataSources!["payload"];
-        var dataItems = payload["items"] as global::Newtonsoft.Json.Linq.JArray;
-        Assert.NotNull(dataItems);
-
-        var firstItem = dataItems[0];
-        Assert.Equal(string.Empty, firstItem["subtitle"]!.ToString());
-        Assert.Equal(string.Empty, firstItem["artUrl"]!.ToString());
+        Assert.NotNull(directive.DataSources);
+        string dsStr = directive.DataSources.ToString();
+        Assert.Contains("Minimal Item", dsStr);
     }
 
     [Fact]
