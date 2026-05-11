@@ -251,7 +251,7 @@ public class AlexaSkillController : ControllerBase
                 return SkillResponseContent(ResponseBuilder.Empty());
             }
 
-            if (!await VerifyAlexaSignature(body).ConfigureAwait(false))
+            if (!await VerifyAlexaSignature(body, TimeSpan.FromSeconds(3)).ConfigureAwait(false))
             {
                 _logger.LogWarning("Alexa request signature verification failed");
                 return SkillResponseContent(ResponseBuilder.Tell("Unable to verify request authenticity."));
@@ -265,7 +265,10 @@ public class AlexaSkillController : ControllerBase
                 return SkillResponseContent(ResponseBuilder.Tell("Unable to process your request. Please try linking your account again."));
             }
 
-            Guid.TryParse(req.Context.System.User?.AccessToken, out Guid userId);
+            if (!Guid.TryParse(req.Context.System.User?.AccessToken, out Guid userId))
+            {
+                userId = Guid.Empty;
+            }
 
             string requestId = req.Request?.RequestId ?? Guid.NewGuid().ToString("N")[..8];
             string deviceId = req.Context.System.Device?.DeviceID ?? "unknown";
@@ -352,10 +355,12 @@ public class AlexaSkillController : ControllerBase
 
     /// <summary>
     /// Verifies the Alexa request signature using the Signature and SignatureCertChainUrl headers.
+    /// Enforces a timeout to prevent indefinite hangs on slow certificate fetches.
     /// </summary>
     /// <param name="body">The raw request body.</param>
+    /// <param name="timeout">Maximum time allowed for verification.</param>
     /// <returns>True if the signature is valid, false otherwise.</returns>
-    private async Task<bool> VerifyAlexaSignature(string body)
+    private async Task<bool> VerifyAlexaSignature(string body, TimeSpan timeout)
     {
         string? signature = Request.Headers["Signature"].FirstOrDefault();
         string? certChainUrl = Request.Headers["SignatureCertChainUrl"].FirstOrDefault();
@@ -368,7 +373,19 @@ public class AlexaSkillController : ControllerBase
 
         try
         {
-            return await RequestVerification.Verify(signature, new Uri(certChainUrl), body).ConfigureAwait(false);
+            Task<bool> verifyTask = RequestVerification.Verify(signature, new Uri(certChainUrl), body);
+            Task completed = await Task.WhenAny(verifyTask, Task.Delay(timeout)).ConfigureAwait(false);
+
+            if (completed != verifyTask)
+            {
+                _logger.LogWarning("Alexa signature verification timed out after {Timeout}s", timeout.TotalSeconds);
+                _ = verifyTask.ContinueWith(
+                    t => _logger.LogDebug(t.Exception, "Timed-out verification task completed with error"),
+                    TaskContinuationOptions.OnlyOnFaulted);
+                return false;
+            }
+
+            return await verifyTask.ConfigureAwait(false);
         }
         catch (Exception ex)
         {

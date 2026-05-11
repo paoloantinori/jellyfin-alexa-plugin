@@ -36,7 +36,11 @@ public abstract class BaseHandler
     private const int AlexaRequestTimeoutMs = 6000;
 
     protected static readonly (ItemSortBy SortBy, SortOrder Order)[] PopularitySort =
-        { (ItemSortBy.PlayCount, SortOrder.Descending), (ItemSortBy.CommunityRating, SortOrder.Descending), (ItemSortBy.SortName, SortOrder.Ascending) };
+    {
+        (ItemSortBy.PlayCount, SortOrder.Descending),
+        (ItemSortBy.CommunityRating, SortOrder.Descending),
+        (ItemSortBy.SortName, SortOrder.Ascending)
+    };
 
     private PluginConfiguration _config;
 
@@ -414,16 +418,18 @@ public abstract class BaseHandler
     /// <param name="context">The Alexa context containing API access token.</param>
     /// <param name="request">The request containing the request ID.</param>
     /// <param name="message">The message to speak to the user.</param>
+    /// <returns>A task representing the async operation.</returns>
+    private static readonly HttpClient ProgressiveResponseHttp = new() { Timeout = TimeSpan.FromSeconds(2) };
+
     protected async Task SendProgressiveResponse(Context context, Request request, string message)
     {
         try
         {
-            using var httpClient = new HttpClient();
             var progressiveResponse = new ProgressiveResponse(
                 context.System.ApiAccessToken,
                 request.RequestId,
                 context.System?.ApiEndpoint ?? "https://api.amazonalexa.com",
-                httpClient);
+                ProgressiveResponseHttp);
             await progressiveResponse.SendSpeech(message).ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -493,7 +499,8 @@ public abstract class BaseHandler
     /// <param name="selector">Function to extract the comparable string.</param>
     /// <param name="threshold">Minimum similarity score (0-100).</param>
     /// <returns>The best matching item, or null.</returns>
-    protected static T? FuzzyMatch<T>(string query, IEnumerable<T> candidates, Func<T, string> selector, int threshold = FuzzyMatcher.DefaultThreshold) where T : class
+    protected static T? FuzzyMatch<T>(string query, IEnumerable<T> candidates, Func<T, string> selector, int threshold = FuzzyMatcher.DefaultThreshold)
+        where T : class
     {
         return FuzzyMatcher.FindBestMatch(query, candidates, selector, threshold);
     }
@@ -501,7 +508,9 @@ public abstract class BaseHandler
     /// <summary>
     /// Shuffle a list in place using Fisher-Yates algorithm.
     /// </summary>
-    protected static void Shuffle<T>(List<T> list)
+    /// <typeparam name="T">The element type of the list.</typeparam>
+    /// <param name="list">The list to shuffle.</param>
+    protected static void Shuffle<T>(IList<T> list)
     {
         int n = list.Count;
         for (int i = n - 1; i > 0; i--)
@@ -515,6 +524,11 @@ public abstract class BaseHandler
     /// Find tracks with genres matching the given audio item.
     /// Returns deduplicated results excluding the current item.
     /// </summary>
+    /// <param name="current">The current audio item to match genres from.</param>
+    /// <param name="jellyfinUser">The Jellyfin user for the query.</param>
+    /// <param name="libraryManager">The library manager instance.</param>
+    /// <param name="cancellationToken">Cancellation token for request timeout.</param>
+    /// <returns>A list of similar tracks.</returns>
     protected async Task<IReadOnlyList<BaseItem>> FindRadioTracksAsync(
         MediaBrowser.Controller.Entities.Audio.Audio current,
         Jellyfin.Database.Implementations.Entities.User jellyfinUser,
@@ -526,16 +540,19 @@ public abstract class BaseHandler
 
         if (current.Genres != null && current.Genres.Length > 0)
         {
-            IReadOnlyList<BaseItem> byGenre = await RetryAsync(() => libraryManager.GetItemList(new InternalItemsQuery
-            {
-                User = jellyfinUser,
-                Recursive = true,
-                Genres = current.Genres,
-                IncludeItemTypes = new[] { BaseItemKind.Audio },
-                Limit = 50,
-                OrderBy = new[] { (ItemSortBy.Random, SortOrder.Ascending) },
-                DtoOptions = new DtoOptions(true)
-            }), "GetRadioGenreTracks", cancellationToken).ConfigureAwait(false);
+            IReadOnlyList<BaseItem> byGenre = await RetryAsync(
+                () => libraryManager.GetItemList(new InternalItemsQuery
+                {
+                    User = jellyfinUser,
+                    Recursive = true,
+                    Genres = current.Genres,
+                    IncludeItemTypes = new[] { BaseItemKind.Audio },
+                    Limit = 50,
+                    OrderBy = new[] { (ItemSortBy.Random, SortOrder.Ascending) },
+                    DtoOptions = new DtoOptions(true)
+                }),
+                "GetRadioGenreTracks",
+                cancellationToken).ConfigureAwait(false);
 
             foreach (BaseItem item in byGenre)
             {
@@ -552,6 +569,8 @@ public abstract class BaseHandler
     /// <summary>
     /// Escapes special XML characters in text for safe inclusion in SSML.
     /// </summary>
+    /// <param name="text">The text to escape.</param>
+    /// <returns>The XML-escaped text.</returns>
     protected static string EscapeXml(string text)
     {
         return text
@@ -568,7 +587,7 @@ public abstract class BaseHandler
     /// <param name="userManager">The user manager to look up the user from.</param>
     /// <param name="userId">The Jellyfin user ID to resolve.</param>
     /// <param name="locale">The locale for the error response string.</param>
-    /// <returns>A tuple: use <paramref name="User"/> when not null, otherwise return <paramref name="Error"/>.</returns>
+    /// <returns>A tuple: use <see cref="JellyfinUser"/> when not null, otherwise return <see cref="SkillResponse"/>.</returns>
     protected static (JellyfinUser? User, SkillResponse? Error) ResolveJellyfinUser(
         IUserManager userManager,
         Guid userId,
@@ -586,6 +605,12 @@ public abstract class BaseHandler
     /// <summary>
     /// Conditionally attach an APL list directive to a response if the device supports APL.
     /// </summary>
+    /// <param name="response">The skill response to attach the directive to.</param>
+    /// <param name="context">The Alexa context for APL device detection.</param>
+    /// <param name="title">The title for the APL list.</param>
+    /// <param name="items">The items to display in the list.</param>
+    /// <param name="token">A token identifying the APL directive.</param>
+    /// <param name="action">The action for the APL list items.</param>
     private protected static void TryAttachListDirective(
         SkillResponse response,
         Context? context,
@@ -607,6 +632,8 @@ public abstract class BaseHandler
     /// <summary>
     /// Extract the first artist name from an audio item, or null for non-audio items.
     /// </summary>
+    /// <param name="item">The media item.</param>
+    /// <returns>The first artist name, or null.</returns>
     protected static string? GetArtistSubtitle(MediaBrowser.Controller.Entities.BaseItem item)
     {
         if (item is MediaBrowser.Controller.Entities.Audio.Audio a && a.Artists is { Count: > 0 })
@@ -615,5 +642,21 @@ public abstract class BaseHandler
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Formats a tick-based playback position into a human-readable string.
+    /// </summary>
+    /// <param name="ticks">The playback position in ticks.</param>
+    /// <returns>A formatted position string (e.g. "1h 30m", "45m 12s", "30s").</returns>
+    protected static string FormatPosition(long ticks)
+    {
+        var ts = TimeSpan.FromTicks(ticks);
+        if (ts.TotalHours >= 1)
+        {
+            return $"{(int)ts.TotalHours}h {ts.Minutes}m";
+        }
+
+        return ts.TotalMinutes >= 1 ? $"{(int)ts.TotalMinutes}m {ts.Seconds}s" : $"{ts.Seconds}s";
     }
 }

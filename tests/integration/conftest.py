@@ -314,6 +314,13 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
             id_prefix="e2e",
         )
 
+    if "reliability_fixture" in metafunc.fixturenames:
+        _parametrize_fixtures(
+            metafunc, "reliability_fixture",
+            load_locale_fixtures(FIXTURES_DIR, prefix="e2e_reliability_", exclude_prefix=""),
+            id_prefix="reliability",
+        )
+
 
 # ---------------------------------------------------------------------------
 # Per-test timeout for live SMAPI tests
@@ -329,13 +336,15 @@ def _timeout_handler(signum: int, frame: Any) -> None:  # noqa: ARG001
 
 @pytest.fixture(autouse=True)
 def _smapi_test_timeout(request: pytest.FixtureRequest) -> Any:
-    """Apply a per-test timeout to NLU tests to prevent indefinite hangs.
+    """Apply a per-test timeout to NLU and E2E tests to prevent indefinite hangs.
 
-    Only active for tests marked with @pytest.mark.nlu and not in dry-run mode.
+    Only active for tests marked with @pytest.mark.nlu or @pytest.mark.e2e
+    and not in dry-run mode.
     Uses SIGALRM on Linux/macOS. Controlled by --smapi-timeout CLI option.
     """
     marker = request.node.get_closest_marker("nlu")
-    if marker is None:
+    e2e_marker = request.node.get_closest_marker("e2e")
+    if marker is None and e2e_marker is None:
         yield
         return
 
