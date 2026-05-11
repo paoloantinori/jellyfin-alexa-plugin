@@ -29,6 +29,8 @@ internal static class DisambiguationHelper
     /// <summary>
     /// Check if session attributes contain active disambiguation state.
     /// </summary>
+    /// <param name="sessionAttributes">The session attributes dictionary.</param>
+    /// <returns>True if active disambiguation state is present.</returns>
     public static bool HasDisambiguationState(Dictionary<string, object>? sessionAttributes)
     {
         return sessionAttributes != null
@@ -39,6 +41,10 @@ internal static class DisambiguationHelper
     /// <summary>
     /// Build a disambiguation Ask response for the first match.
     /// </summary>
+    /// <param name="matches">The list of candidate matches.</param>
+    /// <param name="mediaType">The media type being disambiguated.</param>
+    /// <param name="locale">The locale for localized responses.</param>
+    /// <returns>A disambiguation Ask response.</returns>
     public static SkillResponse AskFirstMatch(
         List<(Guid Id, string Name)> matches,
         string mediaType,
@@ -68,6 +74,11 @@ internal static class DisambiguationHelper
     /// <summary>
     /// Build a disambiguation Ask response for the next match (after No).
     /// </summary>
+    /// <param name="matches">The list of candidate matches.</param>
+    /// <param name="nextIndex">The index of the next match to present.</param>
+    /// <param name="mediaType">The media type being disambiguated.</param>
+    /// <param name="locale">The locale for localized responses.</param>
+    /// <returns>A disambiguation Ask response.</returns>
     public static SkillResponse AskNextMatch(
         List<MatchInfo> matches,
         int nextIndex,
@@ -95,6 +106,8 @@ internal static class DisambiguationHelper
     /// <summary>
     /// Build a "no more matches" Tell response.
     /// </summary>
+    /// <param name="locale">The locale for localized responses.</param>
+    /// <returns>A Tell response indicating no more matches.</returns>
     public static SkillResponse NoMoreMatches(string locale)
     {
         return ResponseBuilder.Tell(ResponseStrings.Get("NoMoreMatches", locale));
@@ -103,6 +116,8 @@ internal static class DisambiguationHelper
     /// <summary>
     /// Read disambiguation state from session attributes.
     /// </summary>
+    /// <param name="sessionAttributes">The session attributes dictionary.</param>
+    /// <returns>The disambiguation state tuple, or null if not present.</returns>
     public static (List<MatchInfo> Matches, int Index, string MediaType)? ReadState(Dictionary<string, object>? sessionAttributes)
     {
         if (!HasDisambiguationState(sessionAttributes))

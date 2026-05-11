@@ -86,7 +86,8 @@ public class PlayPodcastIntentHandler : BaseHandler
 
         IReadOnlyList<BaseItem> podcasts = await RetryAsync(
             () => _libraryManager.GetItemList(podcastQuery),
-            "GetPodcasts", cancellationToken).ConfigureAwait(false);
+            "GetPodcasts",
+            cancellationToken).ConfigureAwait(false);
 
         if (podcasts.Count == 0)
         {
@@ -123,7 +124,8 @@ public class PlayPodcastIntentHandler : BaseHandler
 
         IReadOnlyList<BaseItem> episodes = await RetryAsync(
             () => _libraryManager.GetItemList(episodeQuery),
-            "GetPodcastEpisodes", cancellationToken).ConfigureAwait(false);
+            "GetPodcastEpisodes",
+            cancellationToken).ConfigureAwait(false);
 
         if (episodes.Count == 0)
         {

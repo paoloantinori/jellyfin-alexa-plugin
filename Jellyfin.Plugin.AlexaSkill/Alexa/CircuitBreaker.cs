@@ -13,21 +13,6 @@ public class CircuitBreaker
     private readonly ConcurrentDictionary<string, CircuitState> _circuits = new();
 
     /// <summary>
-    /// Number of consecutive failures required to open the circuit.
-    /// </summary>
-    public int FailureThreshold { get; }
-
-    /// <summary>
-    /// Duration in seconds the circuit stays OPEN before transitioning to HALF_OPEN.
-    /// </summary>
-    public int OpenDurationSeconds { get; }
-
-    /// <summary>
-    /// Time window in seconds within which failures must occur to open the circuit.
-    /// </summary>
-    public int FailureWindowSeconds { get; }
-
-    /// <summary>
     /// Initializes a new instance of the <see cref="CircuitBreaker"/> class.
     /// </summary>
     /// <param name="failureThreshold">Consecutive failures to trigger OPEN (default 5).</param>
@@ -39,6 +24,21 @@ public class CircuitBreaker
         OpenDurationSeconds = openDurationSeconds;
         FailureWindowSeconds = failureWindowSeconds;
     }
+
+    /// <summary>
+    /// Gets the number of consecutive failures required to open the circuit.
+    /// </summary>
+    public int FailureThreshold { get; }
+
+    /// <summary>
+    /// Gets the duration in seconds the circuit stays OPEN before transitioning to HALF_OPEN.
+    /// </summary>
+    public int OpenDurationSeconds { get; }
+
+    /// <summary>
+    /// Gets the time window in seconds within which failures must occur to open the circuit.
+    /// </summary>
+    public int FailureWindowSeconds { get; }
 
     /// <summary>
     /// Check whether a request to the given server URL is allowed.
@@ -161,30 +161,12 @@ public class CircuitBreaker
 
     private sealed class CircuitState
     {
-        public CircuitStatus Status = CircuitStatus.Closed;
-        public int ConsecutiveFailures;
-        public DateTimeOffset? FirstFailureAt;
-        public DateTimeOffset OpenedAt;
+        public CircuitStatus Status { get; set; } = CircuitStatus.Closed;
+
+        public int ConsecutiveFailures { get; set; }
+
+        public DateTimeOffset? FirstFailureAt { get; set; }
+
+        public DateTimeOffset OpenedAt { get; set; }
     }
-}
-
-/// <summary>
-/// Circuit breaker states.
-/// </summary>
-public enum CircuitStatus
-{
-    /// <summary>
-    /// Normal operation — requests flow through.
-    /// </summary>
-    Closed,
-
-    /// <summary>
-    /// Backend confirmed down — requests are short-circuited.
-    /// </summary>
-    Open,
-
-    /// <summary>
-    /// Testing recovery — one probe request is allowed.
-    /// </summary>
-    HalfOpen
 }

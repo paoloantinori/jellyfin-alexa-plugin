@@ -18,7 +18,7 @@ public class SearchResultCache
     private readonly ILogger? _logger;
 
     /// <summary>
-    /// A no-op cache instance that never stores or returns results.
+    /// Gets a no-op cache instance that never stores or returns results.
     /// Used when the real cache is not available from DI.
     /// </summary>
     public static SearchResultCache Noop { get; } = new NoopSearchResultCache();
@@ -43,6 +43,11 @@ public class SearchResultCache
         _maxEntriesPerUser = maxEntriesPerUser;
         _expiration = TimeSpan.FromMinutes(expirationMinutes);
     }
+
+    /// <summary>
+    /// Gets the current number of entries in the cache (for diagnostics).
+    /// </summary>
+    public int Count => _cache.Count;
 
     /// <summary>
     /// Store search results for a user query.
@@ -100,11 +105,6 @@ public class SearchResultCache
     {
         _cache.Clear();
     }
-
-    /// <summary>
-    /// Get the current number of entries in the cache (for diagnostics).
-    /// </summary>
-    public int Count => _cache.Count;
 
     /// <summary>
     /// Remove all expired entries from the cache.

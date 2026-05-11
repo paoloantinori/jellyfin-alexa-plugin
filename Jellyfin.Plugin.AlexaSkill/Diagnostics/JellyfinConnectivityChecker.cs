@@ -10,7 +10,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Diagnostics;
 /// Lightweight Jellyfin API connectivity check with time-based caching.
 /// Calls GET /System/Info/Public to verify the server is reachable.
 /// </summary>
-public class JellyfinConnectivityChecker
+public class JellyfinConnectivityChecker : IDisposable
 {
     private readonly ILogger<JellyfinConnectivityChecker> _logger;
     private readonly TimeSpan _cacheDuration;
@@ -119,6 +119,27 @@ public class JellyfinConnectivityChecker
             _logger.LogWarning(ex, "Jellyfin connectivity check failed");
             return new ConnectivityResult(false, ex.Message, 0, null);
         }
+    }
+
+    /// <summary>
+    /// Releases the managed resources used by the <see cref="JellyfinConnectivityChecker"/>.
+    /// </summary>
+    /// <param name="disposing">True if disposing managed resources.</param>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _semaphore.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Disposes the semaphore and other resources.
+    /// </summary>
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
     }
 }
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,7 +20,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 public class RequestPipeline
 {
     private readonly IReadOnlyList<IRequestInterceptor> _requestInterceptors;
-    private readonly IReadOnlyList<IResponseInterceptor> _responseInterceptors;
+    private readonly ReadOnlyCollection<IResponseInterceptor> _responseInterceptors;
     private readonly ILogger _logger;
 
     /// <summary>
@@ -34,7 +35,7 @@ public class RequestPipeline
         ILogger<RequestPipeline> logger)
     {
         _requestInterceptors = requestInterceptors.ToList().AsReadOnly();
-        _responseInterceptors = responseInterceptors.ToList().AsReadOnly();
+        _responseInterceptors = responseInterceptors.ToList().AsReadOnly(); // already ReadOnlyCollection
         _logger = logger;
     }
 

@@ -31,15 +31,13 @@ public class SkillConnectionHandler : BaseHandler
     private readonly IUserManager _userManager;
 
     /// <summary>
-    /// Well-known task names declared in the skill manifest under apis.custom.tasks.
+    /// Initializes a new instance of the <see cref="SkillConnectionHandler"/> class.
     /// </summary>
-    public static class TaskNames
-    {
-        public const string PlayFavorites = "PlayFavorites";
-        public const string PlayMedia = "PlayMedia";
-        public const string SearchLibrary = "SearchLibrary";
-    }
-
+    /// <param name="sessionManager">Session manager instance.</param>
+    /// <param name="config">The plugin configuration.</param>
+    /// <param name="libraryManager">The library manager.</param>
+    /// <param name="userManager">The user manager.</param>
+    /// <param name="loggerFactory">Logger factory instance.</param>
     public SkillConnectionHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
@@ -49,6 +47,16 @@ public class SkillConnectionHandler : BaseHandler
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
+    }
+
+    /// <summary>
+    /// Well-known task names declared in the skill manifest under apis.custom.tasks.
+    /// </summary>
+    private static class TaskNames
+    {
+        public const string PlayFavorites = "PlayFavorites";
+        public const string PlayMedia = "PlayMedia";
+        public const string SearchLibrary = "SearchLibrary";
     }
 
     /// <inheritdoc/>
@@ -66,6 +74,12 @@ public class SkillConnectionHandler : BaseHandler
     /// Handle an incoming skill connection task request.
     /// Routes to the appropriate intent logic based on the task name.
     /// </summary>
+    /// <param name="request">The skill request which should be handled.</param>
+    /// <param name="context">The context of the skill intent request.</param>
+    /// <param name="user">The user instance.</param>
+    /// <param name="session">The session instance.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A task representing the async operation.</returns>
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);

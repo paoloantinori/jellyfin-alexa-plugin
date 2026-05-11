@@ -16,7 +16,7 @@ namespace Jellyfin.Plugin.AlexaSkill.ProactiveEvents;
 /// Uses the LWA <c>client_credentials</c> grant with <c>alexa::proactive_events</c> scope
 /// to obtain a token independent of the per-user SMAPI device tokens.
 /// </summary>
-internal class ProactiveEventClient
+internal class ProactiveEventClient : IDisposable
 {
     private readonly ILogger<ProactiveEventClient> _logger;
     private readonly SemaphoreSlim _tokenLock = new(1, 1);
@@ -225,5 +225,14 @@ internal class ProactiveEventClient
                 ["metadata"] = mediaContent
             }
         };
+    }
+
+    /// <summary>
+    /// Disposes the token lock and other resources.
+    /// </summary>
+    public void Dispose()
+    {
+        _tokenLock.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

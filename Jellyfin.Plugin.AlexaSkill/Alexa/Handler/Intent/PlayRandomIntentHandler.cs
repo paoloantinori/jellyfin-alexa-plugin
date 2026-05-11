@@ -64,6 +64,7 @@ public class PlayRandomIntentHandler : BaseHandler
     /// <param name="context">The context of the skill intent request.</param>
     /// <param name="user">The user instance.</param>
     /// <param name="session">The session instance.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>Play directive with random items.</returns>
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
@@ -127,7 +128,7 @@ public class PlayRandomIntentHandler : BaseHandler
         // For albums, expand the first album to tracks
         if (shuffled[0] is MediaBrowser.Controller.Entities.Audio.MusicAlbum album)
         {
-            IReadOnlyList<BaseItem> tracks = await ExpandAlbumToTracks(album, jellyfinUser, cancellationToken).ConfigureAwait(false);
+            IReadOnlyList<BaseItem> tracks = await ExpandAlbumToTracks(album, jellyfinUser!, cancellationToken).ConfigureAwait(false);
             if (tracks.Count > 0)
             {
                 shuffled = tracks.ToList();
@@ -203,13 +204,16 @@ public class PlayRandomIntentHandler : BaseHandler
 
     private async Task<IReadOnlyList<BaseItem>> ExpandAlbumToTracks(MediaBrowser.Controller.Entities.Audio.MusicAlbum album, Jellyfin.Database.Implementations.Entities.User jellyfinUser, CancellationToken cancellationToken)
     {
-        return await RetryAsync(() => _libraryManager.GetItemList(new InternalItemsQuery
-        {
-            User = jellyfinUser,
-            ParentId = album.Id,
-            IncludeItemTypes = new[] { BaseItemKind.Audio },
-            Recursive = true,
-            DtoOptions = new DtoOptions(true)
-        }), "GetAlbumTracks", cancellationToken).ConfigureAwait(false);
+        return await RetryAsync(
+            () => _libraryManager.GetItemList(new InternalItemsQuery
+            {
+                User = jellyfinUser,
+                ParentId = album.Id,
+                IncludeItemTypes = new[] { BaseItemKind.Audio },
+                Recursive = true,
+                DtoOptions = new DtoOptions(true)
+            }),
+            "GetAlbumTracks",
+            cancellationToken).ConfigureAwait(false);
     }
 }

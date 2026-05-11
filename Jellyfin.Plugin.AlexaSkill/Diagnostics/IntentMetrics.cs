@@ -7,13 +7,14 @@ namespace Jellyfin.Plugin.AlexaSkill.Diagnostics;
 /// </summary>
 public sealed class IntentMetrics
 {
-    internal long _count;
-    internal long _errorCount;
-    internal double _totalMs;
-    internal double _minMs;
-    internal double _maxMs;
-    internal long _lastErrorAt;
     private readonly object _lock = new();
+
+    private long _count;
+    private long _errorCount;
+    private double _totalMs;
+    private double _minMs;
+    private double _maxMs;
+    private long _lastErrorAt;
 
     public IntentMetrics()
     {
@@ -42,8 +43,16 @@ public sealed class IntentMetrics
         {
             _count++;
             _totalMs += elapsedMs;
-            if (_minMs == 0 || elapsedMs < _minMs) _minMs = elapsedMs;
-            if (elapsedMs > _maxMs) _maxMs = elapsedMs;
+            if (_minMs == 0 || elapsedMs < _minMs)
+            {
+                _minMs = elapsedMs;
+            }
+
+            if (elapsedMs > _maxMs)
+            {
+                _maxMs = elapsedMs;
+            }
+
             return this;
         }
     }

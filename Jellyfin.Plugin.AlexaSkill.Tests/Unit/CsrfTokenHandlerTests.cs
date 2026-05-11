@@ -18,12 +18,18 @@ public class CsrfTokenHandlerTests
 
     [Theory]
     [InlineData("nonexistent-token")]
-    [InlineData(null!)]
     [InlineData("")]
     public void ValidateCsrfToken_InvalidToken_ReturnsFalse(string input)
     {
         var handler = new CsrfTokenHandler();
         Assert.False(handler.ValidateCsrfToken(input));
+    }
+
+    [Fact]
+    public void ValidateCsrfToken_NullToken_ReturnsFalse()
+    {
+        var handler = new CsrfTokenHandler();
+        Assert.False(handler.ValidateCsrfToken(null!));
     }
 
     [Fact]

@@ -27,59 +27,7 @@ public class DynamicEntitiesDirective : IDirective
     /// Gets or sets the list of slot types with their dynamic values.
     /// </summary>
     [JsonProperty("types")]
+#pragma warning disable CA1002, CA2227 // List<T> and setter required for JSON serialization
     public List<DynamicSlotType> Types { get; set; } = new();
-}
-
-/// <summary>
-/// A slot type with dynamic values for entity resolution.
-/// </summary>
-public class DynamicSlotType
-{
-    /// <summary>
-    /// Gets or sets the slot type name (e.g. "AMAZON.Musician").
-    /// </summary>
-    [JsonProperty("name")]
-    public string Name { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Gets or sets the dynamic values for this slot type.
-    /// </summary>
-    [JsonProperty("values")]
-    public List<DynamicSlotValue> Values { get; set; } = new();
-}
-
-/// <summary>
-/// A single dynamic entity value with optional synonyms.
-/// </summary>
-public class DynamicSlotValue
-{
-    /// <summary>
-    /// Gets or sets the entity ID.
-    /// </summary>
-    [JsonProperty("id")]
-    public string Id { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Gets or sets the display name and optional synonyms.
-    /// </summary>
-    [JsonProperty("name")]
-    public DynamicSlotValueName Name { get; set; } = new();
-}
-
-/// <summary>
-/// The display name and phonetic synonyms for a dynamic entity value.
-/// </summary>
-public class DynamicSlotValueName
-{
-    /// <summary>
-    /// Gets or sets the canonical display value.
-    /// </summary>
-    [JsonProperty("value")]
-    public string Value { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Gets or sets optional synonyms for improved recognition.
-    /// </summary>
-    [JsonProperty("synonyms", NullValueHandling = NullValueHandling.Ignore)]
-    public List<string>? Synonyms { get; set; }
+#pragma warning restore CA1002, CA2227
 }

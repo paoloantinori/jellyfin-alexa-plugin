@@ -55,10 +55,13 @@ internal static class RetryHelper
     /// Calculate exponential backoff delay with random jitter to prevent thundering herd.
     /// Formula: initialDelay * 2^attempt + random(0, initialDelay/2).
     /// </summary>
+    /// <param name="initialDelayMs">Initial delay in milliseconds.</param>
+    /// <param name="attempt">The current attempt number (zero-based).</param>
+    /// <returns>The calculated delay in milliseconds.</returns>
     internal static int CalculateDelay(int initialDelayMs, int attempt)
     {
         int baseDelay = initialDelayMs * (int)Math.Pow(2, attempt);
-        int jitter = initialDelayMs > 1 ? Random.Shared.Next(0, initialDelayMs / 2 + 1) : 0;
+        int jitter = initialDelayMs > 1 ? Random.Shared.Next(0, (initialDelayMs / 2) + 1) : 0;
         return baseDelay + jitter;
     }
 
@@ -73,9 +76,9 @@ internal static class RetryHelper
     /// <param name="operationName">Descriptive name for logging.</param>
     /// <param name="maxRetries">Maximum retry attempts (default 3).</param>
     /// <param name="initialDelayMs">Initial delay in ms before first retry (default 500).</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
     /// <param name="timeoutMs">Optional total timeout budget in ms. Retries are skipped if elapsed + delay + minOperation would exceed this.</param>
     /// <param name="minOperationMs">Minimum estimated time for one operation attempt in ms (default 500).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The result of the operation.</returns>
     public static async Task<T> ExecuteWithRetryAsync<T>(
         Func<T> operation,
@@ -83,9 +86,9 @@ internal static class RetryHelper
         string operationName,
         int maxRetries = DefaultMaxRetries,
         int initialDelayMs = DefaultInitialDelayMs,
-        CancellationToken cancellationToken = default,
         int? timeoutMs = null,
-        int minOperationMs = DefaultMinOperationMs)
+        int minOperationMs = DefaultMinOperationMs,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(operation);
 
@@ -132,9 +135,9 @@ internal static class RetryHelper
     /// <param name="operationName">Descriptive name for logging.</param>
     /// <param name="maxRetries">Maximum retry attempts (default 3).</param>
     /// <param name="initialDelayMs">Initial delay in ms before first retry (default 500).</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
     /// <param name="timeoutMs">Optional total timeout budget in ms. Retries are skipped if elapsed + delay + minOperation would exceed this.</param>
     /// <param name="minOperationMs">Minimum estimated time for one operation attempt in ms (default 500).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The result of the operation.</returns>
     public static async Task<T> ExecuteWithRetryAsync<T>(
         Func<Task<T>> operation,
@@ -142,9 +145,9 @@ internal static class RetryHelper
         string operationName,
         int maxRetries = DefaultMaxRetries,
         int initialDelayMs = DefaultInitialDelayMs,
-        CancellationToken cancellationToken = default,
         int? timeoutMs = null,
-        int minOperationMs = DefaultMinOperationMs)
+        int minOperationMs = DefaultMinOperationMs,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(operation);
 

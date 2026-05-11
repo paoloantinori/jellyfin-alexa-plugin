@@ -21,6 +21,7 @@ public static class LwaClient
     /// Create a device authorization request to LWA.
     /// </summary>
     /// <param name="clientId">LWA client id.</param>
+    /// <param name="clientSecret">LWA client secret.</param>
     /// <param name="scopes">List scopes of the request.</param>
     /// <returns>Access token.</returns>
     public static async Task<DeviceAuthorizationRequest?> CreateLwaDeviceAuthorizationRequest(string clientId, string clientSecret, Scope[] scopes)
@@ -113,7 +114,7 @@ public static class LwaClient
             }
             else if (json != null && json.TryGetValue("error", out var error) && error == "authorization_pending")
             {
-                Thread.Sleep(deviceAuthorizationRequest.Interval * 1000);
+                await Task.Delay(deviceAuthorizationRequest.Interval * 1000).ConfigureAwait(false);
             }
             else
             {
@@ -165,10 +166,10 @@ public static class LwaClient
     /// <summary>
     /// Refreshes the access token.
     /// </summary>
-    /// <param name="deviceToken">Device token.</param>
+    /// <param name="deviceToken">The current device token containing the refresh token.</param>
     /// <param name="clientId">LWA client id.</param>
     /// <param name="clientSecret">LWA client secret.</param>
-    /// <returns>Device token.</returns>
+    /// <returns>A refreshed device token.</returns>
     public static async Task<DeviceToken?> RefreshDeviceToken(DeviceToken deviceToken, string clientId, string clientSecret)
     {
         string url = "https://api.amazon.com/auth/o2/token";
@@ -209,7 +210,10 @@ public static class LwaClient
             && json.TryGetValue("expires_in", out var expiresInStr)
             && int.TryParse(expiresInStr, out int expiresIn))
         {
-            return new DeviceToken(token, refreshToken, tokenType,
+            return new DeviceToken(
+                token,
+                refreshToken,
+                tokenType,
                 new DateTimeOffset(DateTime.UtcNow).AddSeconds(expiresIn).ToUnixTimeSeconds());
         }
 

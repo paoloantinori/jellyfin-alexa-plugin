@@ -16,11 +16,10 @@ namespace Jellyfin.Plugin.AlexaSkill.Controller;
 [Route("alexaskill/catalog/")]
 public class CatalogController : ControllerBase
 {
+    private const int MaxCacheSize = 20;
+    private static readonly TimeSpan EntryTtl = TimeSpan.FromMinutes(10);
     private static readonly ConcurrentDictionary<string, CacheEntry> CatalogCache = new();
     private readonly ILogger<CatalogController> _logger;
-
-    private static readonly TimeSpan EntryTtl = TimeSpan.FromMinutes(10);
-    private const int MaxCacheSize = 20;
 
     public CatalogController(ILogger<CatalogController> logger)
     {
@@ -81,7 +80,8 @@ public class CatalogController : ControllerBase
             }
         }
 
-        // If still over limit, evict oldest remaining entries
+        // If still over limit, evict oldest remaining entries.
+
         if (CatalogCache.Count > MaxCacheSize)
         {
             foreach (var kvp in CatalogCache.OrderBy(k => k.Value.Created))
@@ -99,6 +99,7 @@ public class CatalogController : ControllerBase
     private sealed class CacheEntry(string payload, DateTime created)
     {
         public string Payload { get; } = payload;
+
         public DateTime Created { get; } = created;
     }
 }

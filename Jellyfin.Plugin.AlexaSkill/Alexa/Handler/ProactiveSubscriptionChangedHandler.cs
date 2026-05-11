@@ -26,6 +26,12 @@ public class ProactiveSubscriptionChangedHandler : BaseHandler
         ?? _subscriptionsProp?.PropertyType?.GetProperty("Item")?.PropertyType;
     private static readonly PropertyInfo? _eventNameProp = _elementType?.GetProperty("EventName");
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ProactiveSubscriptionChangedHandler"/> class.
+    /// </summary>
+    /// <param name="sessionManager">Session manager instance.</param>
+    /// <param name="config">The plugin configuration.</param>
+    /// <param name="loggerFactory">Logger factory instance.</param>
     public ProactiveSubscriptionChangedHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,

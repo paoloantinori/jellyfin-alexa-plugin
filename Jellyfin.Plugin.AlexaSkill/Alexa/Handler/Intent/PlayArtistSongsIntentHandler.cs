@@ -62,6 +62,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
     /// <param name="context">The context of the skill intent request.</param>
     /// <param name="user">The user instance.</param>
     /// <param name="session">The session instance.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A skill response.</returns>
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
@@ -77,13 +78,16 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             return userError;
         }
 
-        IReadOnlyList<BaseItem> artists = await RetryAsync(() => _libraryManager.GetItemList(new InternalItemsQuery()
-        {
-            Recursive = true,
-            SearchTerm = musician,
-            IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
-            DtoOptions = new DtoOptions(true)
-        }), "GetArtists", cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<BaseItem> artists = await RetryAsync(
+            () => _libraryManager.GetItemList(new InternalItemsQuery()
+            {
+                Recursive = true,
+                SearchTerm = musician,
+                IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
+                DtoOptions = new DtoOptions(true)
+            }),
+            "GetArtists",
+            cancellationToken).ConfigureAwait(false);
         if (artists.Count == 0)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundArtist", locale, musician));
@@ -102,15 +106,18 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         }
 
         string matchedArtistName = artists[0].Name;
-        IReadOnlyList<BaseItem> artistsItems = await RetryAsync(() => _libraryManager.GetItemList(new InternalItemsQuery()
-        {
-            User = jellyfinUser,
-            Recursive = true,
-            MediaTypes = new[] { MediaType.Audio },
-            OrderBy = PopularitySort,
-            DtoOptions = new DtoOptions(true),
-            ArtistIds = new[] { artists[0].Id }
-        }), "GetArtistSongs", cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<BaseItem> artistsItems = await RetryAsync(
+            () => _libraryManager.GetItemList(new InternalItemsQuery()
+            {
+                User = jellyfinUser,
+                Recursive = true,
+                MediaTypes = new[] { MediaType.Audio },
+                OrderBy = PopularitySort,
+                DtoOptions = new DtoOptions(true),
+                ArtistIds = new[] { artists[0].Id }
+            }),
+            "GetArtistSongs",
+            cancellationToken).ConfigureAwait(false);
         if (artistsItems.Count == 0)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NoSongsForArtist", locale, matchedArtistName));

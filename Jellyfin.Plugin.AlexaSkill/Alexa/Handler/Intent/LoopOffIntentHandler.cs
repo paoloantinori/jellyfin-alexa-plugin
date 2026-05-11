@@ -27,7 +27,7 @@ public class LoopOffIntentHandler : BaseHandler
     public override bool CanHandle(Request request)
     {
         IntentRequest? intentRequest = request as IntentRequest;
-        return intentRequest != null && string.Equals(intentRequest.Intent.Name, IntentNames.AmazonLoopOff);
+        return intentRequest != null && string.Equals(intentRequest.Intent.Name, IntentNames.AmazonLoopOff, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -37,6 +37,7 @@ public class LoopOffIntentHandler : BaseHandler
     /// <param name="context">The context of the skill intent request.</param>
     /// <param name="user">The user instance.</param>
     /// <param name="session">The session instance.</param>
+    /// <param name="cancellationToken">Cancellation token for request timeout.</param>
     /// <returns>Empty response.</returns>
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {

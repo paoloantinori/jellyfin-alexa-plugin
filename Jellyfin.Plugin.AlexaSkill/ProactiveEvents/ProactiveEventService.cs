@@ -63,6 +63,7 @@ internal class ProactiveEventService : IHostedService, IDisposable
     /// <summary>
     /// Manually trigger a content check and notification cycle.
     /// </summary>
+    /// <returns>A task representing the async operation.</returns>
     public async Task CheckAndNotifyAsync()
     {
         if (!await _semaphore.WaitAsync(0).ConfigureAwait(false))
@@ -177,12 +178,13 @@ internal class ProactiveEventService : IHostedService, IDisposable
                 seasonNumber,
                 episodeNumber);
 
-            bool sent = await _client.SendEventAsync(alexaUserId, eventPayload).ConfigureAwait(false);
+            bool sent = await _client.SendEventAsync(
+                alexaUserId,
+                eventPayload).ConfigureAwait(false);
             if (sent)
             {
                 _rateLimiter.RecordSend(alexaUserId);
-                _logger.LogDebug("Sent proactive event for {ContentType} '{Name}' to user {Username}",
-                    contentType, item.Name, user.Username);
+                _logger.LogDebug("Sent proactive event for {ContentType} '{Name}' to user {Username}", contentType, item.Name, user.Username);
             }
 
             await Task.Delay(100).ConfigureAwait(false);

@@ -63,13 +63,3 @@ internal static class IntentNames
     /// </summary>
     public const string ProactiveSubscriptionChanged = "AlexaSkillEvent.ProactiveSubscriptionChanged";
 }
-
-/// <summary>
-/// Alexa dialog state values from IntentRequest.DialogState.
-/// </summary>
-internal static class DialogStates
-{
-    public const string Started = "STARTED";
-    public const string InProgress = "IN_PROGRESS";
-    public const string Completed = "COMPLETED";
-}

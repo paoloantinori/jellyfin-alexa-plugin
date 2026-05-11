@@ -26,11 +26,12 @@ tests:
     expected_slots: {}
     expected_response_type: any
 
-  # --- Info queries ---
+  # --- Info queries (APL now-playing card on Echo Show) ---
   - utterance: "cosa sta suonando"
     expected_intent: MediaInfoIntent
     expected_slots: {}
     expected_response_type: any
+    expected_apl: nowPlaying
 
   # --- State change intents ---
   - utterance: "aggiungi ai preferiti"

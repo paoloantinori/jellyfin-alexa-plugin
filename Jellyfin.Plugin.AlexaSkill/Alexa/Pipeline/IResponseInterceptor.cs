@@ -14,5 +14,6 @@ public interface IResponseInterceptor
     /// </summary>
     /// <param name="context">The request context containing the generated response.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A task representing the async operation.</returns>
     Task ProcessAsync(RequestContext context, CancellationToken cancellationToken);
 }

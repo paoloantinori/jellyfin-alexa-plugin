@@ -16,7 +16,19 @@
       "Bash(ask smapi *)",
       "Bash(git add *)",
       "Bash(git push *)",
-      "Bash(python3 -c \"import sys,json; c=json.load\\(sys.stdin\\); print\\('profiles:', list\\(c.get\\('profiles',{}\\).keys\\(\\)\\)\\); print\\('skill_id:', [v.get\\('skill_id',''\\) for v in c.get\\('profiles',{}\\).values\\(\\)]\\)\")"
+      "Bash(python3 -c \"import sys,json; c=json.load\\(sys.stdin\\); print\\('profiles:', list\\(c.get\\('profiles',{}\\).keys\\(\\)\\)\\); print\\('skill_id:', [v.get\\('skill_id',''\\) for v in c.get\\('profiles',{}\\).values\\(\\)]\\)\")",
+      "mcp__backlog__task_list",
+      "Bash(ssh *)",
+      "Bash(ssh -F /dev/null minix \"podman exec jellyfin cat /config/logging.default.json\")",
+      "Read(//tmp/**)",
+      "Bash(scp *)",
+      "Bash(dotnet publish *)",
+      "Bash(./scripts/run_e2e_tests.sh *)",
+      "Bash(dotnet build *)",
+      "Bash(git status *)",
+      "Bash(git commit *)",
+      "Bash(git log *)",
+      "Bash(git stash *)"
     ]
   }
 }

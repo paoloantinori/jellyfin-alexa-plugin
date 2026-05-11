@@ -30,6 +30,19 @@ public class PlayByDecadeIntentHandler : BaseHandler
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
 
+    private static readonly Dictionary<string, int> WordDecadeMap = new()
+    {
+        { "fifties", 1950 },
+        { "sixties", 1960 },
+        { "seventies", 1970 },
+        { "eighties", 1980 },
+        { "nineties", 1990 },
+        { "noughties", 2000 },
+        { "two thousands", 2000 },
+        { "twenty tens", 2010 },
+        { "twenty twenties", 2020 },
+    };
+
     /// <summary>
     /// Initializes a new instance of the <see cref="PlayByDecadeIntentHandler"/> class.
     /// </summary>
@@ -133,23 +146,12 @@ public class PlayByDecadeIntentHandler : BaseHandler
         return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, items[0], user);
     }
 
-    private static readonly Dictionary<string, int> WordDecadeMap = new()
-    {
-        { "fifties", 1950 },
-        { "sixties", 1960 },
-        { "seventies", 1970 },
-        { "eighties", 1980 },
-        { "nineties", 1990 },
-        { "noughties", 2000 },
-        { "two thousands", 2000 },
-        { "twenty tens", 2010 },
-        { "twenty twenties", 2020 },
-    };
-
     /// <summary>
     /// Parse a decade string into an array of years for InternalItemsQuery.Years.
     /// Handles formats like: "80s", "eighties", "1980s", "1980", "the 80s".
     /// </summary>
+    /// <param name="decade">The decade string to parse.</param>
+    /// <returns>An array of years in the decade, or null if parsing fails.</returns>
     internal static int[]? ParseDecadeYears(string decade)
     {
         if (string.IsNullOrWhiteSpace(decade))

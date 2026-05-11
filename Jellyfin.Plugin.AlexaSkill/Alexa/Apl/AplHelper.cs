@@ -236,6 +236,8 @@ internal static class AplHelper
     /// <summary>
     /// Check if the requesting device supports APL rendering.
     /// </summary>
+    /// <param name="context">The Alexa request context containing device capabilities.</param>
+    /// <returns>True if the device supports APL, false otherwise.</returns>
     public static bool DeviceSupportsApl(Context? context)
     {
         return context?.System?.Device?.SupportedInterfaces?.ContainsKey(AplInterfaceKey) == true;
@@ -245,6 +247,10 @@ internal static class AplHelper
     /// Build an APL Now Playing screen directive showing track info, album art,
     /// and interactive playback controls (prev, pause, next) for Echo Show devices.
     /// </summary>
+    /// <param name="item">The media item to display.</param>
+    /// <param name="imageUrl">The URL for the album art image.</param>
+    /// <param name="backgroundImageUrl">The URL for the background image.</param>
+    /// <returns>An APL RenderDocument directive, or null if the item has no name.</returns>
     public static AplRenderDocumentDirective? BuildNowPlayingDirective(BaseItem item, string imageUrl, string backgroundImageUrl)
     {
         if (string.IsNullOrEmpty(item.Name))
@@ -279,6 +285,8 @@ internal static class AplHelper
     /// Build an APL queue list directive showing upcoming tracks with
     /// tap-to-play touch handlers for each item.
     /// </summary>
+    /// <param name="queueItems">The queue items to display.</param>
+    /// <returns>An APL RenderDocument directive, or null if the queue is empty.</returns>
     public static AplRenderDocumentDirective? BuildQueueDirective(List<QueueDisplayItem> queueItems)
     {
         if (queueItems.Count == 0)
@@ -348,6 +356,8 @@ internal static class AplHelper
     /// Returns the first argument (e.g., "prev", "pause", "next", "playTrack", "selectItem")
     /// or null if the request is not an APL UserEvent.
     /// </summary>
+    /// <param name="request">The Alexa request to extract the argument from.</param>
+    /// <returns>The first touch event argument, or null if not an APL UserEvent.</returns>
     public static string? GetTouchEventArgument(Request request)
     {
         if (!string.Equals(request.Type, "Alexa.Presentation.APL.UserEvent", StringComparison.Ordinal))
@@ -385,18 +395,3 @@ internal static class AplHelper
         return string.Empty;
     }
 }
-
-/// <summary>
-/// Display item for APL queue rendering (kept for caller compatibility).
-/// </summary>
-internal class QueueDisplayItem
-{
-    public string Title { get; set; } = string.Empty;
-    public string? Artist { get; set; }
-    public string? ArtUrl { get; set; }
-}
-
-/// <summary>
-/// Display item for generic APL list rendering (browse, search, artist queries).
-/// </summary>
-internal sealed record ListDisplayItem(string Title, string Id, string? Subtitle = null, string? ArtUrl = null);

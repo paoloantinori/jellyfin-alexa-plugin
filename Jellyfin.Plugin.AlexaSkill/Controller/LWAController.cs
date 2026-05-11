@@ -193,7 +193,7 @@ public class LWAController : ControllerBase
             return new JsonResult(new { error = "Could not load success page" }) { StatusCode = 500 };
         }
 
-        string page = new StreamReader(resource).ReadToEnd();
+        string page = await new StreamReader(resource).ReadToEndAsync().ConfigureAwait(false);
         return Content(page, "text/html");
     }
 
