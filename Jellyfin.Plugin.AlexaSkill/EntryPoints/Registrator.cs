@@ -77,8 +77,10 @@ public class Registrator : IPluginServiceRegistrator
             serviceCollection.AddSingleton(typeof(BaseHandler), handlerType);
         }
 
-        // Request pipeline interceptors (order matters: circuit breaker first for fail-fast)
+        // Request pipeline interceptors (order matters: circuit breaker first for fail-fast,
+        // then audio device capability check before any Jellyfin API calls)
         serviceCollection.AddSingleton<IRequestInterceptor, CircuitBreakerInterceptor>();
+        serviceCollection.AddSingleton<IRequestInterceptor, AudioDeviceCapabilityInterceptor>();
         serviceCollection.AddSingleton<IRequestInterceptor, LoggingRequestInterceptor>();
         serviceCollection.AddSingleton<IResponseInterceptor, SessionAttributesInterceptor>();
         serviceCollection.AddSingleton<IResponseInterceptor, DynamicEntitiesInterceptor>();
