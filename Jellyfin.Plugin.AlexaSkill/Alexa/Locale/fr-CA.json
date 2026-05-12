@@ -98,6 +98,7 @@
   "NotFoundPodcast": "Je n'ai pas trouvé de podcast appelé {0}.",
   "NoEpisodesInPodcast": "Je n'ai trouvé aucun épisode de {0}.",
   "ServerUnavailable": "Je n'arrive pas à joindre votre serveur multimédia pour le moment. Veuillez réessayer dans un instant.",
+  "AudioPlayerNotSupported": "Desole, cet appareil ne prend pas en charge la lecture audio. Essayez depuis un haut-parleur Echo ou un Fire TV.",
   "ErrorPermanentBackend": "Ce média est introuvable ou non disponible.",
   "ErrorUserError": "Je n'ai pas compris, veuillez réessayer.",
   "ErrorSkillError": "Un problème est survenu. Veuillez réessayer.",
@@ -120,5 +121,6 @@
   "QueryRecentlyAddedItem": "{0}. {1} par {2}",
   "QueryRecentlyAddedItemNoArtist": "{0}. {1}",
   "QueryRecentlyAddedEmpty": "Aucun élément récent trouvé.",
-  "QueryRecentlyAddedPrompt": "Dites le numéro pour en écouter un."
+  "QueryRecentlyAddedPrompt": "Dites le numéro pour en écouter un.",
+  "UserByNameNotFound": "Je n'ai pas trouvé d'utilisateur nommé {0}."
 }

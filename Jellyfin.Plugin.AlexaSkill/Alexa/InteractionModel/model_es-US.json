@@ -300,12 +300,21 @@
         "samples": [
           "Reproduce mis {media_type} favoritos",
           "Reproduce mis favoritos",
-          "Reproduce mi {media_type} favorito"
+          "Reproduce mi {media_type} favorito",
+          "reproduce los favoritos de {username}",
+          "pon los favoritos de {username}",
+          "escucha los favoritos de {username}",
+          "reproduce las canciones favoritas de {username}",
+          "reproduce {media_type} favoritos de {username}"
         ],
         "slots": [
           {
             "name": "media_type",
             "type": "MediaType"
+          },
+          {
+            "name": "username",
+            "type": "AMAZON.Person"
           }
         ]
       },

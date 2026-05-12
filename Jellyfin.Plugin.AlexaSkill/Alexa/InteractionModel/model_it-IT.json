@@ -1090,12 +1090,23 @@
           "Di mettere i miei preferiti",
           "Di mettere {media_type} preferiti",
           "Di pleiare i miei preferiti",
-          "Di pleiare {media_type} preferiti"
+          "Di pleiare {media_type} preferiti",
+          "suona i preferiti di {username}",
+          "metti i preferiti di {username}",
+          "riproduci i preferiti di {username}",
+          "suona {media_type} preferiti di {username}",
+          "metti {media_type} preferiti di {username}",
+          "di suonare i preferiti di {username}",
+          "di mettere i preferiti di {username}"
         ],
         "slots": [
           {
             "name": "media_type",
             "type": "MediaType"
+          },
+          {
+            "name": "username",
+            "type": "AMAZON.Person"
           }
         ]
       },

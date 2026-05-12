@@ -301,12 +301,21 @@
         "name": "PlayFavoritesIntent",
         "samples": [
           "Lis mes {media_type} préférés",
-          "Lis mes favoris"
+          "Lis mes favoris",
+          "joue les favoris de {username}",
+          "mets les favoris de {username}",
+          "écoute les favoris de {username}",
+          "joue les chansons favorites de {username}",
+          "joue {media_type} favoris de {username}"
         ],
         "slots": [
           {
             "name": "media_type",
             "type": "MediaType"
+          },
+          {
+            "name": "username",
+            "type": "AMAZON.Person"
           }
         ]
       },

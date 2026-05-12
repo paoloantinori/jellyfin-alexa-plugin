@@ -423,12 +423,22 @@
           "can you play my favourites",
           "play what I like",
           "play my best of",
-          "stick on my favourite {media_type}"
+          "stick on my favourite {media_type}",
+          "play {username}'s favourites",
+          "play {username}'s favourite songs",
+          "play {username}'s favourite music",
+          "play {username}'s favourites playlist",
+          "listen to {username}'s favourites",
+          "play {username}'s favourite {media_type}"
         ],
         "slots": [
           {
             "name": "media_type",
             "type": "MediaType"
+          },
+          {
+            "name": "username",
+            "type": "AMAZON.Person"
           }
         ]
       },

@@ -308,12 +308,23 @@
         "samples": [
           "Play my favorite {media_type}",
           "Play my {media_type} favorite",
-          "Play my favorites"
+          "Play my favorites",
+          "play {username}'s favorites",
+          "play {username}'s favourite songs",
+          "play {username}'s favourite music",
+          "play {username}'s favorites playlist",
+          "listen to {username}'s favorites",
+          "play {username}'s favorite {media_type}",
+          "play {username}'s favourite {media_type}"
         ],
         "slots": [
           {
             "name": "media_type",
             "type": "MediaType"
+          },
+          {
+            "name": "username",
+            "type": "AMAZON.Person"
           }
         ]
       },

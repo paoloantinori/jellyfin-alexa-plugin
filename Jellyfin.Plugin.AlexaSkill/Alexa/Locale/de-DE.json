@@ -98,6 +98,7 @@
   "NotFoundPodcast": "Ich konnte keinen Podcast namens {0} finden.",
   "NoEpisodesInPodcast": "Ich konnte keine Folgen von {0} finden.",
   "ServerUnavailable": "Ich kann deinen Medienserver gerade nicht erreichen. Bitte versuche es gleich nochmal.",
+  "AudioPlayerNotSupported": "Leider unterstuetzt dieses Geraet keine Audiowiedergabe. Versuche es mit einem Echo-Lautsprecher oder Fire TV.",
   "ErrorPermanentBackend": "Dieses Medium wurde nicht gefunden oder ist nicht verfuegbar.",
   "ErrorUserError": "Ich konnte das nicht verstehen, bitte versuche es erneut.",
   "ErrorSkillError": "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
@@ -120,5 +121,6 @@
   "QueryRecentlyAddedItem": "{0}. {1} von {2}",
   "QueryRecentlyAddedItemNoArtist": "{0}. {1}",
   "QueryRecentlyAddedEmpty": "Keine kürzlich hinzugefügten Elemente gefunden.",
-  "QueryRecentlyAddedPrompt": "Sag die Nummer, um eines abzuspielen."
+  "QueryRecentlyAddedPrompt": "Sag die Nummer, um eines abzuspielen.",
+  "UserByNameNotFound": "Ich konnte keinen Benutzer namens {0} finden."
 }

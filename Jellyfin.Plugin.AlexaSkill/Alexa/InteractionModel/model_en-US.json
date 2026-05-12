@@ -452,12 +452,23 @@
           "Play my favorite music",
           "Play my favorites playlist",
           "Play my favourite songs",
-          "Play my favourite music"
+          "Play my favourite music",
+          "play {username}'s favorites",
+          "play {username}'s favourite songs",
+          "play {username}'s favourite music",
+          "play {username}'s favorites playlist",
+          "listen to {username}'s favorites",
+          "play {username}'s favorite {media_type}",
+          "play {username}'s favourite {media_type}"
         ],
         "slots": [
           {
             "name": "media_type",
             "type": "MediaType"
+          },
+          {
+            "name": "username",
+            "type": "AMAZON.Person"
           }
         ]
       },
