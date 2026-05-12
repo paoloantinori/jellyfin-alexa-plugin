@@ -47,6 +47,11 @@ public class PlayRadioIntentHandler : BaseHandler
 
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
+        if (IfFeatureDisabled(c => c.RadioModeEnabled, request) is { } disabled)
+        {
+            return disabled;
+        }
+
         string locale = GetLocale(request);
 
         if (session.FullNowPlayingItem == null)

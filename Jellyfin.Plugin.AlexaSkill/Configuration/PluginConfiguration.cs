@@ -85,6 +85,17 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public bool SimulatorEnabled { get; set; }
 
+    // Feature flags — disable intent groups via config page
+    public bool RadioModeEnabled { get; set; } = true;
+    public bool PodcastsEnabled { get; set; } = true;
+    public bool LiveTvEnabled { get; set; } = true;
+    public bool SleepTimerEnabled { get; set; } = true;
+    public bool QueueManagementEnabled { get; set; } = true;
+    public bool BrowseLibraryEnabled { get; set; } = true;
+    public bool RecommendationsEnabled { get; set; } = true;
+    public bool AplVisualsEnabled { get; set; } = true;
+    public bool VideoPlaybackEnabled { get; set; } = true;
+
     /// <summary>
     /// Gets or sets the list of users.
     /// </summary>

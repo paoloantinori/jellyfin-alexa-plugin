@@ -49,6 +49,11 @@ public class PlayChannelIntentHandler : BaseHandler
     /// <inheritdoc/>
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
+        if (IfFeatureDisabled(c => c.LiveTvEnabled, request) is { } disabled)
+        {
+            return disabled;
+        }
+
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
         string? channelQuery = intentRequest.Intent.Slots?.TryGetValue("channel", out var slot) == true ? slot.Value : null;

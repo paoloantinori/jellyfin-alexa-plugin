@@ -478,6 +478,22 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// Returns a "feature disabled" response if the flag is off, or null if enabled.
+    /// Reads from live configuration so config page changes take effect immediately.
+    /// </summary>
+    protected SkillResponse? IfFeatureDisabled(Func<PluginConfiguration, bool> isEnabled, Request request)
+    {
+        var config = Plugin.Instance?.Configuration;
+        if (config != null && !isEnabled(config))
+        {
+            Logger.LogInformation("Feature is disabled via configuration");
+            return ResponseBuilder.Tell(ResponseStrings.Get("FeatureDisabled", GetLocale(request)));
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Send a progressive response to keep the Alexa session alive during long operations.
     /// Resets the 8-second timeout. Only works with IntentRequest/LaunchRequest.
     /// A fresh HttpClient is created per call because ProgressiveResponse sets BaseAddress

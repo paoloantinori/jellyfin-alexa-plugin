@@ -54,6 +54,11 @@ public class SleepTimerIntentHandler : BaseHandler
     /// <returns>Skill response with updated AudioPlayer directive.</returns>
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
+        if (IfFeatureDisabled(c => c.SleepTimerEnabled, request) is { } disabled)
+        {
+            return Task.FromResult(disabled);
+        }
+
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
 

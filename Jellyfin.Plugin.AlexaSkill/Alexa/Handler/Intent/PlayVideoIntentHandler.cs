@@ -50,6 +50,11 @@ public class PlayVideoIntentHandler : BaseHandler
     /// <inheritdoc/>
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
+        if (IfFeatureDisabled(c => c.VideoPlaybackEnabled, request) is { } disabled)
+        {
+            return disabled;
+        }
+
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
         string? titleQuery = intentRequest.Intent.Slots?.TryGetValue("title", out var slot) == true ? slot.Value : null;

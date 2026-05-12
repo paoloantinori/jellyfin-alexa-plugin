@@ -73,6 +73,11 @@ public class RecommendIntentHandler : BaseHandler
     /// <returns>A skill response with a recommended item or a no-results message.</returns>
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
+        if (IfFeatureDisabled(c => c.RecommendationsEnabled, request) is { } disabled)
+        {
+            return disabled;
+        }
+
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
 

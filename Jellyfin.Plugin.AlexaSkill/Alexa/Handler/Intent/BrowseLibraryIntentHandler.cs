@@ -70,6 +70,11 @@ public class BrowseLibraryIntentHandler : BaseHandler
     /// <returns>A skill response.</returns>
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
+        if (IfFeatureDisabled(c => c.BrowseLibraryEnabled, request) is { } disabled)
+        {
+            return disabled;
+        }
+
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
 

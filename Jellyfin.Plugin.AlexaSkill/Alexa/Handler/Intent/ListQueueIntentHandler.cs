@@ -51,6 +51,11 @@ public class ListQueueIntentHandler : BaseHandler
     /// <inheritdoc/>
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
+        if (IfFeatureDisabled(c => c.QueueManagementEnabled, request) is { } disabled)
+        {
+            return Task.FromResult(disabled);
+        }
+
         string locale = GetLocale(request);
 
         if (session.NowPlayingQueue.Count == 0)

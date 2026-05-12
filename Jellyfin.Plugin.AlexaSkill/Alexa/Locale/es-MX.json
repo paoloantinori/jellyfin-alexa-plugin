@@ -127,5 +127,6 @@
   "UserByNameNotFound": "No pude encontrar un usuario llamado {0}.",
   "GenreExpanded": "Reproduciendo {0} y géneros similares.",
   "FollowMeSuccess": "Continuando {0} donde lo dejaste.",
-  "FollowMeNothingPlaying": "No hay nada reproduciéndose en otros dispositivos."
+  "FollowMeNothingPlaying": "No hay nada reproduciéndose en otros dispositivos.",
+  "FeatureDisabled": "Esta función está desactivada. Pide a tu administrador que la active."
 }

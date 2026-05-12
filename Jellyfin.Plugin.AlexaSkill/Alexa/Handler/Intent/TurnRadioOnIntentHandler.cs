@@ -33,6 +33,11 @@ public class TurnRadioOnIntentHandler : BaseHandler
 
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
+        if (IfFeatureDisabled(c => c.RadioModeEnabled, request) is { } disabled)
+        {
+            return Task.FromResult(disabled);
+        }
+
         string locale = GetLocale(request);
         RadioModeState.Enable(session.UserId, context.System.Device.DeviceID);
         Logger.LogInformation("Radio mode enabled for user {UserId}", session.UserId);

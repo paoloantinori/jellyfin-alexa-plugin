@@ -171,5 +171,6 @@
   "GenreExpanded": "Riproduco {0} e generi simili.",
   "FollowMeSuccess": "Riprendo {0} da dove eri rimasto.",
   "FollowMeSuccessSsml": "<say-as interpret-as=\"interjection\">eccoci</say-as><break time=\"200ms\"/>Riprendo <emphasis level=\"moderate\">{0}</emphasis> da dove eri rimasto.",
-  "FollowMeNothingPlaying": "Nessun contenuto in riproduzione sugli altri dispositivi."
+  "FollowMeNothingPlaying": "Nessun contenuto in riproduzione sugli altri dispositivi.",
+  "FeatureDisabled": "Questa funzione è attualmente disabilitata. Chiedi al tuo amministratore di attivarla."
 }
