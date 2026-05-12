@@ -87,14 +87,28 @@
           "put on the song {song}",
           "I want to hear {song}",
           "I want to hear {song} by {musician}",
+          "I want to hear the song {song} by {musician}",
           "can you play {song}",
+          "can you play {song} by {musician}",
+          "can you play the song {song} by {musician}",
           "start playing {song}",
           "play the track {song}",
           "play the track {song} by {musician}",
           "let's hear {song}",
           "give me {song}",
           "stream {song}",
-          "play that song {song}"
+          "play that song {song}",
+          "play that song {song} by {musician}",
+          "put on {song} by {musician}",
+          "put on the song {song} by {musician}",
+          "start playing {song} by {musician}",
+          "stream {song} by {musician}",
+          "let's hear {song} by {musician}",
+          "give me {song} by {musician}",
+          "play a song called {song}",
+          "play the song called {song}",
+          "play a song called {song} by {musician}",
+          "play the song called {song} by {musician}"
         ],
         "slots": [
           {
@@ -282,7 +296,20 @@
           "play something from the {decade}",
           "listen to {decade} music",
           "give me {decade} songs",
-          "shuffle {decade} music"
+          "shuffle {decade} music",
+          "play me some {decade} hits",
+          "I want to hear {decade} hits",
+          "play me {decade} hits",
+          "listen to {decade} hits",
+          "give me {decade} hits",
+          "play some {decade} hits",
+          "let's hear {decade} hits",
+          "play hits of the {decade}",
+          "play the hits from the {decade}",
+          "play the {decade} hits",
+          "stream {decade} hits",
+          "play {decade} greatest hits",
+          "play greatest hits of the {decade}"
         ],
         "slots": [
           {
