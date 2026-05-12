@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Net.Http;
+using Alexa.NET.Request.Type;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Alexa.InteractionModel;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
@@ -54,6 +57,11 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         logger.LogInformation("AlexaSkill plugin loaded v{Version}", Util.GetVersion());
 
         ResponseStrings.SetLogger(loggerFactory.CreateLogger("Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings"));
+
+        if (!RequestConverter.RequestConverters.Any(c => c is AplUserEventRequestConverter))
+        {
+            RequestConverter.RequestConverters.Add(new AplUserEventRequestConverter());
+        }
     }
 
     /// <inheritdoc />

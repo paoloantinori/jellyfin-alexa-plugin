@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Reflection;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
@@ -22,9 +21,6 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
 internal static class AplHelper
 {
     private const string AplInterfaceKey = "Alexa.Presentation.APL";
-
-    private static readonly PropertyInfo? ExtensionsProperty =
-        typeof(Request).GetProperty("Extensions", BindingFlags.Public | BindingFlags.Instance);
 
     // NowPlaying APL template with proper datasource binding.
     // ${payload.jellyfinData.properties.xxx} resolves via datasources.
@@ -360,15 +356,23 @@ internal static class AplHelper
     /// <returns>The first touch event argument, or null if not an APL UserEvent.</returns>
     public static string? GetTouchEventArgument(Request request)
     {
-        if (!string.Equals(request.Type, "Alexa.Presentation.APL.UserEvent", StringComparison.Ordinal))
+        if (request is AplUserEventRequest aplEvent)
         {
-            return null;
+            return aplEvent.Arguments?.FirstOrDefault()?.ToString();
         }
 
-        if (ExtensionsProperty?.GetValue(request) is IDictionary<string, JToken> extData
-            && extData.TryGetValue("arguments", out var argsToken))
+        return null;
+    }
+
+    /// <summary>
+    /// Extract all APL touch event arguments from a UserEvent request.
+    /// Returns the arguments array (e.g., ["selectItem", "itemId"]) or null.
+    /// </summary>
+    public static JArray? GetTouchEventArguments(Request request)
+    {
+        if (request is AplUserEventRequest aplEvent)
         {
-            return (argsToken as JArray)?.FirstOrDefault()?.ToString();
+            return aplEvent.Arguments;
         }
 
         return null;
