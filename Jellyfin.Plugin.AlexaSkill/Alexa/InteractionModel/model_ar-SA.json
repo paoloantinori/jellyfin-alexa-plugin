@@ -1,0 +1,625 @@
+{
+  "languageModel": {
+    "invocationName": "jellyfin player",
+    "intents": [
+      {
+        "name": "QueryRecentlyAddedIntent",
+        "samples": [
+          "ما الجديد",
+          "ما الذي أضيف مؤخراً",
+          "ما الجديد في مكتبتي",
+          "أرني ما أضيف مؤخراً",
+          "هل هناك شيء جديد",
+          "ما الذي تمت إضافته مؤخراً",
+          "أعرض آخر العناصر المضافة",
+          "ما هي أحدث العناصر"
+        ]
+      },
+      { "name": "AMAZON.CancelIntent" },
+      { "name": "AMAZON.HelpIntent" },
+      { "name": "AMAZON.StopIntent" },
+      { "name": "AMAZON.FallbackIntent" },
+      { "name": "AMAZON.PauseIntent" },
+      { "name": "AMAZON.ResumeIntent" },
+      { "name": "AMAZON.NextIntent" },
+      { "name": "AMAZON.PreviousIntent" },
+      { "name": "AMAZON.YesIntent" },
+      { "name": "AMAZON.NoIntent" },
+      { "name": "AMAZON.LoopOnIntent" },
+      { "name": "AMAZON.LoopOffIntent" },
+      {
+        "name": "LoopSongOnIntent",
+        "samples": [
+          "كرر هذه الأغنية",
+          "كرر هذه الأغنية دائماً",
+          "أعد الأغنية",
+          "أعد هذه الأغنية",
+          "أعد هذه الأغنية دائماً"
+        ]
+      },
+      { "name": "AMAZON.ShuffleOnIntent" },
+      { "name": "AMAZON.ShuffleOffIntent" },
+      { "name": "AMAZON.StartOverIntent" },
+      {
+        "name": "PlayChannelIntent",
+        "samples": [
+          "شغل القناة {channel}",
+          "شغل الراديو {channel}"
+        ],
+        "slots": [
+          { "name": "channel", "type": "AMAZON.SearchQuery" }
+        ]
+      },
+      {
+        "name": "PlaySongIntent",
+        "samples": [
+          "شغل {song}",
+          "شغل الأغنية {song}",
+          "شغل أغنية {song}",
+          "شغل {song} لـ {musician}",
+          "شغل الأغنية {song} لـ {musician}",
+          "شغل أغنية {song} لـ {musician}",
+          "استمع إلى {song}",
+          "استمع إلى الأغنية {song}",
+          "استمع إلى {song} لـ {musician}",
+          "استمع إلى الأغنية {song} لـ {musician}",
+          "أريد سماع {song}",
+          "أريد سماع {song} لـ {musician}",
+          "هل يمكنك تشغيل {song}",
+          "هل يمكنك تشغيل {song} لـ {musician}",
+          "ابدأ تشغيل {song}",
+          "شغل الأغنية المسماة {song}",
+          "شغل الأغنية المسماة {song} لـ {musician}"
+        ],
+        "slots": [
+          { "name": "song", "type": "AMAZON.MusicRecording" },
+          { "name": "musician", "type": "AMAZON.Musician" }
+        ]
+      },
+      {
+        "name": "PlayAlbumIntent",
+        "samples": [
+          "شغل {album}",
+          "شغل الألبوم {album}",
+          "شغل ألبوم {album}",
+          "شغل {album} لـ {musician}",
+          "شغل الألبوم {album} لـ {musician}",
+          "شغل ألبوم {album} لـ {musician}",
+          "استمع إلى {album}",
+          "استمع إلى الألبوم {album}",
+          "استمع إلى {album} لـ {musician}",
+          "أريد سماع {album}",
+          "أريد سماع {album} لـ {musician}",
+          "هل يمكنك تشغيل {album}",
+          "ابدأ تشغيل {album}"
+        ],
+        "slots": [
+          { "name": "album", "type": "AMAZON.MusicRecording" },
+          { "name": "musician", "type": "AMAZON.Musician" }
+        ]
+      },
+      {
+        "name": "PlayVideoIntent",
+        "samples": [
+          "شغل الفيديو {title}",
+          "شغل {title}",
+          "شاهد {title}",
+          "هل يمكنك تشغيل {title}",
+          "أريد مشاهدة {title}",
+          "شغل الفيلم {title}",
+          "ابدأ تشغيل الفيديو {title}",
+          "أريد أن أرى {title}"
+        ],
+        "slots": [
+          { "name": "title", "type": "AMAZON.SearchQuery" }
+        ]
+      },
+      {
+        "name": "PlayArtistSongsIntent",
+        "samples": [
+          "شغل أغاني {musician}",
+          "شغل موسيقى {musician}",
+          "شغل أغانٍ لـ {musician}",
+          "استمع إلى {musician}",
+          "استمع إلى أغاني {musician}",
+          "استمع إلى موسيقى {musician}",
+          "أريد سماع {musician}",
+          "هل يمكنك تشغيل {musician}",
+          "ابدأ تشغيل {musician}",
+          "اخلط أغاني {musician}",
+          "شغل {musician}",
+          "شغل بعض {musician}"
+        ],
+        "slots": [
+          { "name": "musician", "type": "AMAZON.Musician" }
+        ]
+      },
+      {
+        "name": "PlayLastAddedIntent",
+        "samples": [
+          "شغل آخر ما أضيف من {media_type}",
+          "شغل ما أضيف مؤخراً من {media_type}",
+          "شغل {media_type} جديدة",
+          "شغل {media_type} المضافة {time_period}",
+          "شغل آخر ما أضيف من أغاني",
+          "شغل ما أضيف مؤخراً",
+          "ما الجديد في {media_type}",
+          "شغل أحدث {media_type}"
+        ],
+        "slots": [
+          { "name": "media_type", "type": "MediaType" },
+          { "name": "time_period", "type": "TimePeriod" }
+        ]
+      },
+      {
+        "name": "PlayRandomIntent",
+        "samples": [
+          "شغل {media_type} عشوائي",
+          "اخلط {media_type}",
+          "شغل شيء عشوائي",
+          "شغل {media_type} عشوائي من {genre}",
+          "شغل أغانٍ عشوائية",
+          "شغل موسيقى عشوائية",
+          "شغل {genre} عشوائي",
+          "فاجئني ببعض {media_type}",
+          "أريد شيء عشوائي"
+        ],
+        "slots": [
+          { "name": "media_type", "type": "MediaType" },
+          { "name": "genre", "type": "AMAZON.Genre" }
+        ]
+      },
+      {
+        "name": "PlayByGenreIntent",
+        "samples": [
+          "شغل موسيقى {genre}",
+          "شغل أغاني {genre}",
+          "شغل {genre}",
+          "أريد الاستماع إلى {genre}",
+          "أعطني موسيقى {genre}",
+          "شغل {genre}",
+          "هل يمكنك تشغيل {genre}"
+        ],
+        "slots": [
+          { "name": "genre", "type": "AMAZON.Genre" }
+        ]
+      },
+      {
+        "name": "PlayByDecadeIntent",
+        "samples": [
+          "شغل أغانٍ من {decade}",
+          "شغل أغاني {decade}",
+          "شغل موسيقى {decade}",
+          "شغل أفضل {decade}",
+          "شغل {genre} من {decade}",
+          "أريد سماع موسيقى {decade}",
+          "استمع إلى {decade}"
+        ],
+        "slots": [
+          { "name": "decade", "type": "Decade" },
+          { "name": "genre", "type": "AMAZON.Genre" }
+        ]
+      },
+      {
+        "name": "ContinueWatchingIntent",
+        "samples": [
+          "أكمل المشاهدة",
+          "أكمل الاستماع",
+          "أكمل من حيث توقفت",
+          "ما كنت أشاهده",
+          "أكمل"
+        ]
+      },
+      {
+        "name": "GoToChapterIntent",
+        "samples": [
+          "الفصل التالي",
+          "الفصل السابق",
+          "اذهب إلى الفصل {chapter_number}",
+          "انتقل إلى الفصل {chapter_number}",
+          "تخطى فصلاً"
+        ],
+        "slots": [
+          { "name": "chapter_number", "type": "AMAZON.NUMBER" }
+        ]
+      },
+      {
+        "name": "PlayPlaylistIntent",
+        "samples": [
+          "شغل قائمة التشغيل {playlist}",
+          "شغل قائمة تشغيلي {playlist}",
+          "ابدأ قائمة التشغيل {playlist}",
+          "استمع إلى قائمة التشغيل {playlist}",
+          "هل يمكنك تشغيل قائمة التشغيل {playlist}",
+          "أريد سماع قائمة التشغيل {playlist}"
+        ],
+        "slots": [
+          { "name": "playlist", "type": "AMAZON.SearchQuery" }
+        ]
+      },
+      {
+        "name": "PlayFavoritesIntent",
+        "samples": [
+          "شغل مفضلاتي",
+          "شغل {media_type} المفضلة",
+          "شغل أغاني المفضلة",
+          "شغل مفضلات {username}",
+          "استمع إلى مفضلات {username}",
+          "شغل {media_type} المفضلة لـ {username}"
+        ],
+        "slots": [
+          { "name": "media_type", "type": "MediaType" },
+          { "name": "username", "type": "AMAZON.Person" }
+        ]
+      },
+      {
+        "name": "MarkFavoriteIntent",
+        "samples": [
+          "أعجبني هذا",
+          "أعجبني الفيديو",
+          "أعجبني الأغنية",
+          "أعجبني الموسيقى",
+          "أضف الفيديو إلى المفضلة",
+          "أضف الأغنية إلى المفضلة",
+          "احفظ هذا في المفضلة",
+          "أضف هذا إلى المفضلة"
+        ]
+      },
+      {
+        "name": "UnmarkFavoriteIntent",
+        "samples": [
+          "لم يعجبني هذا",
+          "لم يعجبني الفيديو",
+          "لم يعجبني الأغنية",
+          "أزل الفيديو من المفضلة",
+          "أزل الأغنية من المفضلة"
+        ]
+      },
+      {
+        "name": "MediaInfoIntent",
+        "slots": [
+          { "name": "media_info_type", "type": "MediaInfoType" }
+        ],
+        "samples": [
+          "ما اسم الأغنية",
+          "ما اسم الفيديو",
+          "ما الذي يشغل الآن",
+          "ما {media_info_type} هذا",
+          "أخبرني عن {media_info_type}",
+          "من يغني هذا",
+          "ما هو هذا الفنان",
+          "ما هو {media_info_type}",
+          "كم مدة هذه الأغنية",
+          "ما هو الجنس الموسيقي",
+          "متى صدر هذا",
+          "أخبرني عن هذا الفنان",
+          "من أي ألبوم هذا"
+        ]
+      },
+      {
+        "name": "InProgressMediaListIntent",
+        "samples": [
+          "ماذا كنت أستمع",
+          "ماذا كنت أشاهد",
+          "ما الذي قيد التقدم",
+          "أظهر تقدمي",
+          "ما كنت ألعب",
+          "ما الذي بدأته"
+        ]
+      },
+      {
+        "name": "PlayEpisodeIntent",
+        "slots": [
+          { "name": "series_name", "type": "SeriesName" },
+          { "name": "season_number", "type": "AMAZON.NUMBER" },
+          { "name": "episode_number", "type": "AMAZON.NUMBER" }
+        ],
+        "samples": [
+          "شغل الموسم {season_number} الحلقة {episode_number} من {series_name}",
+          "شغل {series_name} الموسم {season_number} الحلقة {episode_number}",
+          "شاهد الموسم {season_number} الحلقة {episode_number} من {series_name}",
+          "شاهد {series_name} الموسم {season_number} الحلقة {episode_number}"
+        ]
+      },
+      {
+        "name": "PlayPodcastIntent",
+        "samples": [
+          "شغل البودكاست {podcast_name}",
+          "استمع إلى البودكاست {podcast_name}",
+          "شغل آخر حلقة من {podcast_name}",
+          "شغل أحدث حلقة من {podcast_name}",
+          "ابدأ البودكاست {podcast_name}"
+        ],
+        "slots": [
+          { "name": "podcast_name", "type": "AMAZON.SearchQuery" }
+        ]
+      },
+      {
+        "name": "BrowseLibraryIntent",
+        "slots": [
+          { "name": "browse_category", "type": "BrowseCategory" }
+        ],
+        "samples": [
+          "تصفح {browse_category}",
+          "أرني {browse_category}",
+          "أعرض {browse_category}"
+        ]
+      },
+      {
+        "name": "RecommendIntent",
+        "slots": [
+          { "name": "media_type", "type": "MediaType" }
+        ],
+        "samples": [
+          "أوصني بشيء",
+          "أوصني بموسيقى",
+          "أوصني بفيلم",
+          "اقترح شيئاً لمشاهدته",
+          "اقترح {media_type}",
+          "شغل شيئاً قد يعجبني"
+        ]
+      },
+      {
+        "name": "SleepTimerIntent",
+        "slots": [
+          { "name": "duration_minutes", "type": "AMAZON.NUMBER" }
+        ],
+        "samples": [
+          "أوقف التشغيل بعد {duration_minutes} دقيقة",
+          "اضبط مؤقت النوم لـ {duration_minutes} دقيقة",
+          "مؤقت نوم {duration_minutes} دقيقة",
+          "أوقف بعد {duration_minutes} دقيقة"
+        ]
+      },
+      {
+        "name": "PlayMoodMusicIntent",
+        "slots": [
+          { "name": "mood", "type": "AMAZON.SearchQuery" }
+        ],
+        "samples": [
+          "شغل موسيقى {mood}",
+          "شغل {mood}",
+          "شغل أغانٍ {mood}",
+          "أريد موسيقى {mood}",
+          "شغل موسيقى مريحة",
+          "شغل موسيقى صباحية",
+          "شغل موسيقى مسائية",
+          "شغل موسيقى للتمارين",
+          "شغل موسيقى للتركيز",
+          "شغل موسيقى للحفلات"
+        ]
+      },
+      {
+        "name": "AddToQueueIntent",
+        "slots": [
+          { "name": "song", "type": "AMAZON.MusicRecording" },
+          { "name": "musician", "type": "AMAZON.Musician" }
+        ],
+        "samples": [
+          "أضف {song} إلى قائمة الانتظار",
+          "أضف {song} لـ {musician} إلى قائمة الانتظار",
+          "ضع {song} في قائمة الانتظار",
+          "أضف {song} إلى القائمة"
+        ]
+      },
+      {
+        "name": "PlayNextIntent",
+        "slots": [
+          { "name": "song", "type": "AMAZON.MusicRecording" },
+          { "name": "musician", "type": "AMAZON.Musician" }
+        ],
+        "samples": [
+          "شغل {song} بعد ذلك",
+          "شغل {song} لـ {musician} بعد ذلك",
+          "أريد سماع {song} بعد ذلك",
+          "شغل {song} بعد هذا"
+        ]
+      },
+      {
+        "name": "ClearQueueIntent",
+        "samples": [
+          "امسح قائمة الانتظار",
+          "أفرغ قائمة الانتظار",
+          "أزل كل شيء من قائمة الانتظار"
+        ]
+      },
+      {
+        "name": "ListQueueIntent",
+        "samples": [
+          "ماذا في قائمة الانتظار",
+          "ماذا يأتي بعد ذلك",
+          "أظهر قائمة الانتظار",
+          "ماذا سيشغل بعد ذلك"
+        ]
+      },
+      {
+        "name": "PlayRadioIntent",
+        "samples": [
+          "شغل الراديو",
+          "شغل وضع الراديو",
+          "ابدأ الراديو",
+          "شغل موسيقى مشابهة",
+          "شغل أغانٍ مشابهة",
+          "ابدأ محطة راديو"
+        ]
+      },
+      {
+        "name": "TurnRadioOnIntent",
+        "samples": [
+          "شغل وضع الراديو",
+          "فعّل وضع الراديو",
+          "وضع الراديو قيد التشغيل",
+          "شغل الراديو"
+        ]
+      },
+      {
+        "name": "TurnRadioOffIntent",
+        "samples": [
+          "أوقف وضع الراديو",
+          "عطّل وضع الراديو",
+          "وضع الراديو متوقف",
+          "أوقف الراديو"
+        ]
+      },
+      {
+        "name": "LearnMyVoiceIntent",
+        "samples": [
+          "تعلم صوتي",
+          "تذكر صوتي",
+          "تعرف علي",
+          "اربط صوتي",
+          "هذا صوتي",
+          "اضبط ملفي الصوتي",
+          "اربط صوتي"
+        ]
+      },
+      {
+        "name": "WhoAmIIntent",
+        "samples": [
+          "من أنا",
+          "أي حساب هذا",
+          "ما الحساب الذي أستخدمه",
+          "من يتحدث",
+          "أي ملف نشط"
+        ]
+      },
+      {
+        "name": "QueryArtistLibraryIntent",
+        "samples": [
+          "ما الأغاني لدينا لـ {musician}",
+          "ما الألبومات لدينا لـ {musician}",
+          "ما الذي لدينا لـ {musician}",
+          "أعرض الأغاني لـ {musician}",
+          "أعرض الألبومات لـ {musician}",
+          "ما {query_type} لدينا لـ {musician}",
+          "أعرض {query_type} لـ {musician}"
+        ],
+        "slots": [
+          { "name": "musician", "type": "AMAZON.Musician" },
+          { "name": "query_type", "type": "LibraryQueryType" }
+        ]
+      },
+      {
+        "name": "SearchMediaIntent",
+        "slots": [
+          { "name": "query", "type": "AMAZON.SearchQuery" }
+        ],
+        "samples": [
+          "ابحث عن {query}",
+          "جد {query}",
+          "ابحث {query}",
+          "هل لديك {query}",
+          "أريد أن أجد {query}",
+          "هل يمكنك أن تجد {query}"
+        ]
+      }
+    ],
+    "types": [
+      {
+        "name": "LibraryQueryType",
+        "values": [
+          { "id": "tracks", "name": { "value": "أغانٍ", "synonyms": ["أغاني", "موسيقى", "أغنية", "مسار"] } },
+          { "id": "albums", "name": { "value": "ألبومات", "synonyms": ["ألبوم"] } }
+        ]
+      },
+      {
+        "name": "MediaType",
+        "values": [
+          { "id": "media", "name": { "value": "وسائط" } },
+          { "id": "video", "name": { "value": "فيديو" } },
+          { "id": "audio", "name": { "value": "صوت", "synonyms": ["موسيقى", "أغنية"] } }
+        ]
+      },
+      {
+        "name": "BrowseCategory",
+        "values": [
+          { "name": { "value": "فنانون" } },
+          { "name": { "value": "ألبومات" } },
+          { "name": { "value": "أفلام" } },
+          { "name": { "value": "أغانٍ" } },
+          { "name": { "value": "أنواع" } }
+        ]
+      },
+      {
+        "name": "SeriesName",
+        "values": [
+          { "name": { "value": "Breaking Bad" } },
+          { "name": { "value": "Game of Thrones" } },
+          { "name": { "value": "Stranger Things" } },
+          { "name": { "value": "Money Heist" } },
+          { "name": { "value": "Peaky Blinders" } },
+          { "name": { "value": "The Walking Dead" } },
+          { "name": { "value": "Dark" } },
+          { "name": { "value": "Sherlock" } }
+        ]
+      },
+      {
+        "name": "TimePeriod",
+        "values": [
+          { "id": "today", "name": { "value": "اليوم", "synonyms": ["في وقت سابق اليوم"] } },
+          { "id": "this_week", "name": { "value": "هذا الأسبوع", "synonyms": ["الأسبوع الماضي", "آخر أسبوع"] } },
+          { "id": "this_month", "name": { "value": "هذا الشهر", "synonyms": ["الشهر الماضي", "آخر شهر"] } }
+        ]
+      },
+      {
+        "name": "MediaInfoType",
+        "values": [
+          { "id": "title", "name": { "value": "العنوان", "synonyms": ["أغنية", "مسار", "اسم"] } },
+          { "id": "album", "name": { "value": "الألبوم", "synonyms": ["قرص"] } },
+          { "id": "artist", "name": { "value": "الفنان", "synonyms": ["مغني", "فرقة", "مؤدي"] } },
+          { "id": "year", "name": { "value": "السنة", "synonyms": ["سنة الإصدار"] } },
+          { "id": "duration", "name": { "value": "المدة", "synonyms": ["الطول", "وقت التشغيل"] } },
+          { "id": "genre", "name": { "value": "النوع", "synonyms": ["الأسلوب", "نوع الموسيقى"] } },
+          { "id": "biography", "name": { "value": "السيرة", "synonyms": ["نبذة", "عن الفنان"] } }
+        ]
+      },
+      {
+        "name": "Decade",
+        "values": [
+          { "id": "50s", "name": { "value": "الخمسينيات", "synonyms": ["50", "1950"] } },
+          { "id": "60s", "name": { "value": "الستينيات", "synonyms": ["60", "1960"] } },
+          { "id": "70s", "name": { "value": "السبعينيات", "synonyms": ["70", "1970"] } },
+          { "id": "80s", "name": { "value": "الثمانينيات", "synonyms": ["80", "1980"] } },
+          { "id": "90s", "name": { "value": "التسعينيات", "synonyms": ["90", "1990"] } },
+          { "id": "2000s", "name": { "value": "الألفينات", "synonyms": ["2000"] } },
+          { "id": "2010s", "name": { "value": "العشرينيات", "synonyms": ["2010"] } },
+          { "id": "2020s", "name": { "value": "العشرينات", "synonyms": ["2020"] } }
+        ]
+      }
+    ]
+  },
+  "dialog": {
+    "intents": [
+      {
+        "name": "PlayEpisodeIntent",
+        "confirmationRequired": false,
+        "slots": [
+          { "name": "series_name", "type": "SeriesName", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.SeriesName" } },
+          { "name": "season_number", "type": "AMAZON.NUMBER", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.SeasonNumber" } },
+          { "name": "episode_number", "type": "AMAZON.NUMBER", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.EpisodeNumber" } }
+        ]
+      },
+      {
+        "name": "PlaySongIntent",
+        "confirmationRequired": false,
+        "slots": [
+          { "name": "song", "type": "AMAZON.MusicRecording", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.SongName" } }
+        ]
+      },
+      {
+        "name": "PlayAlbumIntent",
+        "confirmationRequired": false,
+        "slots": [
+          { "name": "album", "type": "AMAZON.MusicRecording", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.AlbumName" } }
+        ]
+      }
+    ]
+  },
+  "prompts": [
+    { "id": "Elicit.SeriesName", "variations": [ { "type": "PlainText", "value": "أي.series تريد مشاهدتها؟" }, { "type": "PlainText", "value": "ما اسم المسلسل؟" } ] },
+    { "id": "Elicit.SeasonNumber", "variations": [ { "type": "PlainText", "value": "أي موسم؟" }, { "type": "PlainText", "value": "ما رقم الموسم؟" } ] },
+    { "id": "Elicit.EpisodeNumber", "variations": [ { "type": "PlainText", "value": "أي رقم حلقة؟" }, { "type": "PlainText", "value": "أي حلقة تريد مشاهدتها؟" } ] },
+    { "id": "Elicit.SongName", "variations": [ { "type": "PlainText", "value": "أي أغنية تريد سماعها؟" }, { "type": "PlainText", "value": "أي أغنية؟" } ] },
+    { "id": "Elicit.AlbumName", "variations": [ { "type": "PlainText", "value": "أي ألبوم تريد سماعه؟" }, { "type": "PlainText", "value": "ما اسم الألبوم؟" } ] }
+  ]
+}

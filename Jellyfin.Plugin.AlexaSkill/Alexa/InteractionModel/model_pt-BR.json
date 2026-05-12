@@ -1,0 +1,327 @@
+{
+  "languageModel": {
+    "invocationName": "jellyfin player",
+    "intents": [
+      {
+        "name": "QueryRecentlyAddedIntent",
+        "samples": ["o que há de novo", "o que foi adicionado recentemente", "o que há de novo na minha biblioteca", "mostrar adicionados recentemente", "alguma novidade", "mostrar os itens mais recentes", "quais são os itens mais novos"]
+      },
+      { "name": "AMAZON.CancelIntent" },
+      { "name": "AMAZON.HelpIntent" },
+      { "name": "AMAZON.StopIntent" },
+      { "name": "AMAZON.FallbackIntent" },
+      { "name": "AMAZON.PauseIntent" },
+      { "name": "AMAZON.ResumeIntent" },
+      { "name": "AMAZON.NextIntent" },
+      { "name": "AMAZON.PreviousIntent" },
+      { "name": "AMAZON.YesIntent" },
+      { "name": "AMAZON.NoIntent" },
+      { "name": "AMAZON.LoopOnIntent" },
+      { "name": "AMAZON.LoopOffIntent" },
+      {
+        "name": "LoopSongOnIntent",
+        "samples": ["repetir esta música", "colocar esta música em loop", "repetir a música", "repetir essa música para sempre", "loop nesta música"]
+      },
+      { "name": "AMAZON.ShuffleOnIntent" },
+      { "name": "AMAZON.ShuffleOffIntent" },
+      { "name": "AMAZON.StartOverIntent" },
+      {
+        "name": "PlayChannelIntent",
+        "samples": ["tocar canal {channel}", "tocar rádio {channel}"],
+        "slots": [{ "name": "channel", "type": "AMAZON.SearchQuery" }]
+      },
+      {
+        "name": "PlaySongIntent",
+        "samples": ["tocar {song}", "tocar a música {song}", "tocar música {song}", "tocar {song} de {musician}", "tocar a música {song} de {musician}", "ouvir {song}", "ouvir a música {song}", "ouvir {song} de {musician}", "colocar {song}", "quero ouvir {song}", "quero ouvir {song} de {musician}", "pode tocar {song}", "pode tocar {song} de {musician}", "começar a tocar {song}", "tocar a faixa {song}", "tocar a faixa {song} de {musician}", "tocar {song}", "me dá {song}", "stream {song}"],
+        "slots": [
+          { "name": "song", "type": "AMAZON.MusicRecording" },
+          { "name": "musician", "type": "AMAZON.Musician" }
+        ]
+      },
+      {
+        "name": "PlayAlbumIntent",
+        "samples": ["tocar {album}", "tocar o álbum {album}", "tocar álbum {album}", "tocar {album} de {musician}", "tocar o álbum {album} de {musician}", "ouvir {album}", "ouvir o álbum {album}", "ouvir {album} de {musician}", "colocar {album}", "quero ouvir {album}", "pode tocar {album}", "começar a tocar {album}", "me dá {album}", "stream {album}"],
+        "slots": [
+          { "name": "album", "type": "AMAZON.MusicRecording" },
+          { "name": "musician", "type": "AMAZON.Musician" }
+        ]
+      },
+      {
+        "name": "PlayVideoIntent",
+        "samples": ["tocar o vídeo {title}", "colocar o vídeo {title}", "começar a tocar {title}", "assistir {title}", "pode tocar {title}", "quero assistir {title}", "vamos assistir {title}", "stream {title}", "me dá o vídeo {title}", "mostrar {title}", "tocar o filme {title}", "pode tocar o vídeo {title}", "iniciar o vídeo {title}"],
+        "slots": [{ "name": "title", "type": "AMAZON.SearchQuery" }]
+      },
+      {
+        "name": "PlayArtistSongsIntent",
+        "samples": ["tocar músicas de {musician}", "tocar música de {musician}", "tocar faixas de {musician}", "ouvir {musician}", "ouvir músicas de {musician}", "ouvir música de {musician}", "colocar {musician}", "quero ouvir {musician}", "vamos ouvir {musician}", "pode tocar {musician}", "começar a tocar {musician}", "embaralhar {musician}", "embaralhar músicas de {musician}", "tocar {musician}", "tocar um pouco de {musician}", "me dá {musician}", "stream {musician}"],
+        "slots": [{ "name": "musician", "type": "AMAZON.Musician" }]
+      },
+      {
+        "name": "PlayLastAddedIntent",
+        "samples": ["tocar últimos {media_type} adicionados", "tocar {media_type} adicionados recentemente", "tocar mídias novas", "tocar algo novo", "tocar {media_type} adicionados {time_period}", "tocar {media_type} novos de {time_period}", "o que há de novo em {media_type}", "tocar as novidades de {media_type}", "mostrar {media_type} novos", "quero ouvir {media_type} novos"],
+        "slots": [
+          { "name": "media_type", "type": "MediaType" },
+          { "name": "time_period", "type": "TimePeriod" }
+        ]
+      },
+      {
+        "name": "PlayRandomIntent",
+        "samples": ["tocar um {media_type} aleatório", "tocar {media_type} aleatório", "embaralhar meus {media_type}", "tocar algo aleatório", "tocar um {media_type} aleatório de {genre}", "surpreender-me com {media_type}", "embaralhar {genre} {media_type}", "tocar músicas aleatórias", "tocar música aleatória", "tocar {genre} aleatório", "me dá um {media_type} aleatório", "quero algo aleatório", "embaralhar {media_type}", "escolher um {media_type} aleatório"],
+        "slots": [
+          { "name": "media_type", "type": "MediaType" },
+          { "name": "genre", "type": "AMAZON.Genre" }
+        ]
+      },
+      {
+        "name": "PlayByGenreIntent",
+        "samples": ["tocar música {genre}", "tocar músicas {genre}", "tocar {genre}", "quero ouvir {genre}", "me dá música {genre}", "colocar um {genre}", "pode tocar {genre}", "stream {genre}", "tocar faixas {genre}", "vamos ouvir {genre}"],
+        "slots": [{ "name": "genre", "type": "AMAZON.Genre" }]
+      },
+      {
+        "name": "PlayByDecadeIntent",
+        "samples": ["tocar músicas dos {decade}", "tocar faixas dos {decade}", "tocar hits dos {decade}", "tocar música dos {decade}", "tocar {decade} hits", "tocar {decade} músicas", "tocar {genre} dos {decade}", "quero ouvir {decade}", "ouvir {decade}", "me dá {decade} músicas", "embaralhar {decade}", "tocar {decade}"],
+        "slots": [
+          { "name": "decade", "type": "Decade" },
+          { "name": "genre", "type": "AMAZON.Genre" }
+        ]
+      },
+      {
+        "name": "ContinueWatchingIntent",
+        "samples": ["continuar assistindo", "continuar ouvindo", "retomar de onde parei", "o que eu estava assistindo", "continuar tocando", "continuar"]
+      },
+      {
+        "name": "GoToChapterIntent",
+        "samples": ["próximo capítulo", "capítulo anterior", "ir para o capítulo {chapter_number}", "pular para o capítulo {chapter_number}", "avançar um capítulo", "voltar um capítulo", "pular capítulo"],
+        "slots": [{ "name": "chapter_number", "type": "AMAZON.NUMBER" }]
+      },
+      {
+        "name": "PlayPlaylistIntent",
+        "samples": ["tocar a playlist {playlist}", "tocar minha playlist {playlist}", "colocar a playlist {playlist}", "iniciar a playlist {playlist}", "ouvir a playlist {playlist}", "pode tocar a playlist {playlist}", "quero ouvir a playlist {playlist}", "me dá a playlist {playlist}", "stream a playlist {playlist}"],
+        "slots": [{ "name": "playlist", "type": "AMAZON.SearchQuery" }]
+      },
+      {
+        "name": "PlayFavoritesIntent",
+        "samples": ["tocar meus favoritos", "tocar {media_type} favoritos", "tocar minhas músicas favoritas", "tocar minha música favorita", "tocar os favoritos de {username}", "ouvir os favoritos de {username}", "tocar {media_type} favoritos de {username}"],
+        "slots": [
+          { "name": "media_type", "type": "MediaType" },
+          { "name": "username", "type": "AMAZON.Person" }
+        ]
+      },
+      {
+        "name": "MarkFavoriteIntent",
+        "samples": ["eu gostei", "eu gostei do vídeo", "eu gostei da música", "adicionar o vídeo aos favoritos", "adicionar a música aos favoritos", "salvar nos favoritos", "marcar como favorito", "eu curti isso", "eu curti a música", "eu curti o vídeo"]
+      },
+      {
+        "name": "UnmarkFavoriteIntent",
+        "samples": ["eu não gostei disso", "eu não gostei do vídeo", "eu não gostei da música", "remover o vídeo dos favoritos", "remover a música dos favoritos", "tirar dos favoritos"]
+      },
+      {
+        "name": "MediaInfoIntent",
+        "slots": [{ "name": "media_info_type", "type": "MediaInfoType" }],
+        "samples": ["qual é o nome da música", "qual é o nome do vídeo", "qual é o nome da música", "qual é o título da música", "o que está tocando", "qual {media_info_type} é essa", "me diga a {media_info_type}", "quem canta isso", "quem está tocando", "qual é o gênero", "quando foi lançado", "me fale sobre esse artista", "de qual álbum é essa"]
+      },
+      {
+        "name": "InProgressMediaListIntent",
+        "samples": ["o que eu estava ouvindo", "o que eu estava assistindo", "o que está em andamento", "mostrar meu progresso", "o que eu estava tocando", "listar mídias em andamento"]
+      },
+      {
+        "name": "PlayEpisodeIntent",
+        "slots": [
+          { "name": "series_name", "type": "SeriesName" },
+          { "name": "season_number", "type": "AMAZON.NUMBER" },
+          { "name": "episode_number", "type": "AMAZON.NUMBER" }
+        ],
+        "samples": ["tocar temporada {season_number} episódio {episode_number} de {series_name}", "tocar {series_name} temporada {season_number} episódio {episode_number}", "assistir temporada {season_number} episódio {episode_number} de {series_name}", "assistir {series_name} temporada {season_number} episódio {episode_number}"]
+      },
+      {
+        "name": "PlayPodcastIntent",
+        "samples": ["tocar o podcast {podcast_name}", "tocar podcast {podcast_name}", "ouvir o podcast {podcast_name}", "ouvir podcast {podcast_name}", "tocar o último episódio de {podcast_name}", "iniciar o podcast {podcast_name}", "quero ouvir o podcast {podcast_name}"],
+        "slots": [{ "name": "podcast_name", "type": "AMAZON.SearchQuery" }]
+      },
+      {
+        "name": "BrowseLibraryIntent",
+        "slots": [{ "name": "browse_category", "type": "BrowseCategory" }],
+        "samples": ["navegar {browse_category}", "mostrar {browse_category}", "listar {browse_category}", "quais {browse_category} eu tenho"]
+      },
+      {
+        "name": "RecommendIntent",
+        "slots": [{ "name": "media_type", "type": "MediaType" }],
+        "samples": ["recomendar algo", "recomendar uma música", "recomendar um filme", "sugerir algo para assistir", "sugerir uma música", "tocar algo que eu goste", "recomendar {media_type}", "sugerir {media_type}"]
+      },
+      {
+        "name": "SleepTimerIntent",
+        "slots": [{ "name": "duration_minutes", "type": "AMAZON.NUMBER" }],
+        "samples": ["parar de tocar em {duration_minutes} minutos", "definir timer de sono para {duration_minutes} minutos", "timer de sono {duration_minutes} minutos", "parar após {duration_minutes} minutos", "desligar em {duration_minutes} minutos", "definir timer de sono {duration_minutes}"]
+      },
+      {
+        "name": "PlayMoodMusicIntent",
+        "slots": [{ "name": "mood", "type": "AMAZON.SearchQuery" }],
+        "samples": ["tocar música {mood}", "tocar algo {mood}", "tocar músicas {mood}", "quero música {mood}", "tocar música relaxante", "tocar música de manhã", "tocar música de noite", "tocar música de treino", "tocar música para focar", "tocar música de festa"]
+      },
+      {
+        "name": "AddToQueueIntent",
+        "slots": [
+          { "name": "song", "type": "AMAZON.MusicRecording" },
+          { "name": "musician", "type": "AMAZON.Musician" }
+        ],
+        "samples": ["adicionar {song} à minha fila", "adicionar {song} à fila", "adicionar {song} de {musician} à minha fila", "adicionar {song} de {musician} à fila", "enfileirar {song}", "enfileirar {song} de {musician}", "colocar {song} na minha fila"]
+      },
+      {
+        "name": "PlayNextIntent",
+        "slots": [
+          { "name": "song", "type": "AMAZON.MusicRecording" },
+          { "name": "musician", "type": "AMAZON.Musician" }
+        ],
+        "samples": ["tocar {song} depois", "tocar {song} de {musician} depois", "quero ouvir {song} depois", "tocar {song} a seguir", "tocar {song} de {musician} a seguir", "tocar {song} após essa"]
+      },
+      {
+        "name": "ClearQueueIntent",
+        "samples": ["limpar minha fila", "limpar a fila", "esvaziar minha fila", "esvaziar a fila", "remover tudo da minha fila", "limpar minha playlist"]
+      },
+      {
+        "name": "ListQueueIntent",
+        "samples": ["o que tem na minha fila", "o que tem na fila", "o que vem aí", "o que vem depois", "mostrar minha fila", "listar minha fila", "o que toca depois"]
+      },
+      {
+        "name": "PlayRadioIntent",
+        "samples": ["tocar rádio", "tocar modo rádio", "iniciar rádio", "tocar mais como esse", "continuar tocando música similar", "tocar músicas parecidas", "iniciar uma estação de rádio", "tocar músicas como esta"]
+      },
+      {
+        "name": "TurnRadioOnIntent",
+        "samples": ["ativar modo rádio", "habilitar modo rádio", "modo rádio ligado", "ligar rádio", "habilitar rádio"]
+      },
+      {
+        "name": "TurnRadioOffIntent",
+        "samples": ["desativar modo rádio", "desabilitar modo rádio", "modo rádio desligado", "desligar rádio", "desabilitar rádio", "parar modo rádio"]
+      },
+      {
+        "name": "LearnMyVoiceIntent",
+        "samples": ["aprender minha voz", "lembrar minha voz", "me reconhecer", "vincular minha voz", "essa é minha voz", "configurar meu perfil de voz", "associar minha voz"]
+      },
+      {
+        "name": "WhoAmIIntent",
+        "samples": ["quem sou eu", "qual conta é essa", "qual conta estou usando", "quem está falando", "qual perfil está ativo", "estou sendo reconhecido"]
+      },
+      {
+        "name": "QueryArtistLibraryIntent",
+        "samples": ["quais faixas temos de {musician}", "quais músicas temos de {musician}", "quais álbuns temos de {musician}", "o que temos de {musician}", "mostrar faixas de {musician}", "mostrar álbuns de {musician}", "quais {query_type} temos de {musician}", "mostrar {query_type} de {musician}"],
+        "slots": [
+          { "name": "musician", "type": "AMAZON.Musician" },
+          { "name": "query_type", "type": "LibraryQueryType" }
+        ]
+      },
+      {
+        "name": "SearchMediaIntent",
+        "slots": [{ "name": "query", "type": "AMAZON.SearchQuery" }],
+        "samples": ["procurar {query}", "encontrar {query}", "buscar {query}", "vocês têm {query}", "quero encontrar {query}", "pode encontrar {query}", "buscar {query}"]
+      }
+    ],
+    "types": [
+      {
+        "name": "LibraryQueryType",
+        "values": [
+          { "id": "tracks", "name": { "value": "faixas", "synonyms": ["músicas", "música", "canções", "canção"] } },
+          { "id": "albums", "name": { "value": "álbuns", "synonyms": ["discos", "disco", "álbum"] } }
+        ]
+      },
+      {
+        "name": "MediaType",
+        "values": [
+          { "id": "media", "name": { "value": "mídia" } },
+          { "id": "video", "name": { "value": "vídeo" } },
+          { "id": "audio", "name": { "value": "áudio", "synonyms": ["música", "canção"] } }
+        ]
+      },
+      {
+        "name": "BrowseCategory",
+        "values": [
+          { "name": { "value": "artistas" } },
+          { "name": { "value": "álbuns" } },
+          { "name": { "value": "filmes" } },
+          { "name": { "value": "músicas" } },
+          { "name": { "value": "gêneros" } }
+        ]
+      },
+      {
+        "name": "SeriesName",
+        "values": [
+          { "name": { "value": "Breaking Bad" } },
+          { "name": { "value": "Game of Thrones" } },
+          { "name": { "value": "Stranger Things" } },
+          { "name": { "value": "La Casa de Papel" } },
+          { "name": { "value": "Peaky Blinders" } },
+          { "name": { "value": "The Walking Dead" } },
+          { "name": { "value": "Dark" } },
+          { "name": { "value": "Sherlock" } }
+        ]
+      },
+      {
+        "name": "TimePeriod",
+        "values": [
+          { "id": "today", "name": { "value": "hoje", "synonyms": ["mais cedo hoje"] } },
+          { "id": "this_week", "name": { "value": "esta semana", "synonyms": ["na última semana", "semana passada", "na semana passada"] } },
+          { "id": "this_month", "name": { "value": "este mês", "synonyms": ["no último mês", "mês passado", "no mês passado"] } }
+        ]
+      },
+      {
+        "name": "MediaInfoType",
+        "values": [
+          { "id": "title", "name": { "value": "título", "synonyms": ["música", "faixa", "nome"] } },
+          { "id": "album", "name": { "value": "álbum", "synonyms": ["disco"] } },
+          { "id": "artist", "name": { "value": "artista", "synonyms": ["cantor", "banda", "músico"] } },
+          { "id": "year", "name": { "value": "ano", "synonyms": ["ano de lançamento"] } },
+          { "id": "duration", "name": { "value": "duração", "synonyms": ["tempo", "tempo de reprodução"] } },
+          { "id": "genre", "name": { "value": "gênero", "synonyms": ["estilo", "tipo de música"] } },
+          { "id": "biography", "name": { "value": "biografia", "synonyms": ["bio", "sobre o artista"] } }
+        ]
+      },
+      {
+        "name": "Decade",
+        "values": [
+          { "id": "50s", "name": { "value": "anos 50", "synonyms": ["cinquententa", "50", "1950"] } },
+          { "id": "60s", "name": { "value": "anos 60", "synonyms": ["sessenta", "60", "1960"] } },
+          { "id": "70s", "name": { "value": "anos 70", "synonyms": ["setenta", "70", "1970"] } },
+          { "id": "80s", "name": { "value": "anos 80", "synonyms": ["oitenta", "80", "1980"] } },
+          { "id": "90s", "name": { "value": "anos 90", "synonyms": ["noventa", "90", "1990"] } },
+          { "id": "2000s", "name": { "value": "anos 2000", "synonyms": ["dois mil", "2000"] } },
+          { "id": "2010s", "name": { "value": "anos 2010", "synonyms": ["dois mil e dez", "2010"] } },
+          { "id": "2020s", "name": { "value": "anos 2020", "synonyms": ["dois mil e vinte", "2020"] } }
+        ]
+      }
+    ]
+  },
+  "dialog": {
+    "intents": [
+      {
+        "name": "PlayEpisodeIntent",
+        "confirmationRequired": false,
+        "slots": [
+          { "name": "series_name", "type": "SeriesName", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.SeriesName" } },
+          { "name": "season_number", "type": "AMAZON.NUMBER", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.SeasonNumber" } },
+          { "name": "episode_number", "type": "AMAZON.NUMBER", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.EpisodeNumber" } }
+        ]
+      },
+      {
+        "name": "PlaySongIntent",
+        "confirmationRequired": false,
+        "slots": [
+          { "name": "song", "type": "AMAZON.MusicRecording", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.SongName" } }
+        ]
+      },
+      {
+        "name": "PlayAlbumIntent",
+        "confirmationRequired": false,
+        "slots": [
+          { "name": "album", "type": "AMAZON.MusicRecording", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.AlbumName" } }
+        ]
+      }
+    ]
+  },
+  "prompts": [
+    { "id": "Elicit.SeriesName", "variations": [ { "type": "PlainText", "value": "Qual série você gostaria de assistir?" }, { "type": "PlainText", "value": "Qual é o nome da série?" } ] },
+    { "id": "Elicit.SeasonNumber", "variations": [ { "type": "PlainText", "value": "Qual temporada?" }, { "type": "PlainText", "value": "Qual número da temporada?" } ] },
+    { "id": "Elicit.EpisodeNumber", "variations": [ { "type": "PlainText", "value": "Qual número do episódio?" }, { "type": "PlainText", "value": "Qual episódio você gostaria de assistir?" } ] },
+    { "id": "Elicit.SongName", "variations": [ { "type": "PlainText", "value": "Qual música você gostaria de ouvir?" }, { "type": "PlainText", "value": "Qual música?" } ] },
+    { "id": "Elicit.AlbumName", "variations": [ { "type": "PlainText", "value": "Qual álbum você gostaria de ouvir?" }, { "type": "PlainText", "value": "Qual é o nome do álbum?" } ] }
+  ]
+}

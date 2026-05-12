@@ -1,0 +1,327 @@
+{
+  "languageModel": {
+    "invocationName": "jellyfin player",
+    "intents": [
+      {
+        "name": "QueryRecentlyAddedIntent",
+        "samples": ["新着はある？", "最近追加されたものは？", "ライブラリの新着は？", "最近追加されたものを見せて", "最近何か新しいものある？", "最新のアイテムは何？"]
+      },
+      { "name": "AMAZON.CancelIntent" },
+      { "name": "AMAZON.HelpIntent" },
+      { "name": "AMAZON.StopIntent" },
+      { "name": "AMAZON.FallbackIntent" },
+      { "name": "AMAZON.PauseIntent" },
+      { "name": "AMAZON.ResumeIntent" },
+      { "name": "AMAZON.NextIntent" },
+      { "name": "AMAZON.PreviousIntent" },
+      { "name": "AMAZON.YesIntent" },
+      { "name": "AMAZON.NoIntent" },
+      { "name": "AMAZON.LoopOnIntent" },
+      { "name": "AMAZON.LoopOffIntent" },
+      {
+        "name": "LoopSongOnIntent",
+        "samples": ["この曲をループして", "この曲をずっとループして", "曲をリピートして", "この曲をリピートして"]
+      },
+      { "name": "AMAZON.ShuffleOnIntent" },
+      { "name": "AMAZON.ShuffleOffIntent" },
+      { "name": "AMAZON.StartOverIntent" },
+      {
+        "name": "PlayChannelIntent",
+        "samples": ["チャンネル {channel} を再生して", "ラジオ {channel} を再生して"],
+        "slots": [{ "name": "channel", "type": "AMAZON.SearchQuery" }]
+      },
+      {
+        "name": "PlaySongIntent",
+        "samples": ["{song} を再生して", "曲 {song} を再生して", "{musician} の {song} を再生して", "{musician} の曲 {song} を再生して", "{song} を聴かせて", "{musician} の {song} を聴かせて", "{song} を流して", "{song} を聞きたい", "ストリーム {song}", "{musician} のストリーム {song}"],
+        "slots": [
+          { "name": "song", "type": "AMAZON.MusicRecording" },
+          { "name": "musician", "type": "AMAZON.Musician" }
+        ]
+      },
+      {
+        "name": "PlayAlbumIntent",
+        "samples": ["{album} を再生して", "アルバム {album} を再生して", "{musician} の {album} を再生して", "アルバム {album} {musician} を再生して", "{album} を聴かせて", "{musician} の {album} を聴かせて", "{album} を流して", "{album} を聞きたい", "ストリーム {album}"],
+        "slots": [
+          { "name": "album", "type": "AMAZON.MusicRecording" },
+          { "name": "musician", "type": "AMAZON.Musician" }
+        ]
+      },
+      {
+        "name": "PlayVideoIntent",
+        "samples": ["ビデオ {title} を再生して", "動画 {title} を流して", "{title} を再生して", "{title} を見たい", "{title} を見せて", "映画 {title} を再生して", "ビデオ {title} をスタートして"],
+        "slots": [{ "name": "title", "type": "AMAZON.SearchQuery" }]
+      },
+      {
+        "name": "PlayArtistSongsIntent",
+        "samples": ["{musician} の曲を再生して", "{musician} の音楽を再生して", "{musician} のトラックを再生して", "{musician} を聴かせて", "{musician} の曲を聴かせて", "{musician} を流して", "{musician} を聞きたい", "{musician} をシャッフルして", "{musician} を再生して", "{musician} のストリーム"],
+        "slots": [{ "name": "musician", "type": "AMAZON.Musician" }]
+      },
+      {
+        "name": "PlayLastAddedIntent",
+        "samples": ["最新の {media_type} を再生して", "最近追加された {media_type} を再生して", "新しいメディアを再生して", "何か新しいものを再生して", "{time_period} 追加された {media_type} を再生して", "新着 {media_type} を再生して", "{media_type} の新着は？", "最新の {media_type} を見せて"],
+        "slots": [
+          { "name": "media_type", "type": "MediaType" },
+          { "name": "time_period", "type": "TimePeriod" }
+        ]
+      },
+      {
+        "name": "PlayRandomIntent",
+        "samples": ["ランダムな {media_type} を再生して", "{media_type} をシャッフルして", "ランダムに何か再生して", "ランダムな {genre} {media_type} を再生して", "ランダムな曲を再生して", "ランダムな音楽を再生して", "何かランダムに流して", "サプライズ {media_type} を再生して"],
+        "slots": [
+          { "name": "media_type", "type": "MediaType" },
+          { "name": "genre", "type": "AMAZON.Genre" }
+        ]
+      },
+      {
+        "name": "PlayByGenreIntent",
+        "samples": ["{genre} の音楽を再生して", "{genre} の曲を再生して", "{genre} を再生して", "{genre} を聴きたい", "{genre} の音楽を流して", "{genre} のストリーム"],
+        "slots": [{ "name": "genre", "type": "AMAZON.Genre" }]
+      },
+      {
+        "name": "PlayByDecadeIntent",
+        "samples": ["{decade} の曲を再生して", "{decade} の音楽を再生して", "{decade} のヒットを再生して", "{genre} の {decade} を再生して", "{decade} の音楽を聴きたい", "{decade} の曲を聴かせて"],
+        "slots": [
+          { "name": "decade", "type": "Decade" },
+          { "name": "genre", "type": "AMAZON.Genre" }
+        ]
+      },
+      {
+        "name": "ContinueWatchingIntent",
+        "samples": ["続きを見て", "続きを聴いて", "途中から再開して", "何を見てたっけ", "続き"]
+      },
+      {
+        "name": "GoToChapterIntent",
+        "samples": ["次のチャプター", "前のチャプター", "チャプター {chapter_number} へ行って", "チャプター {chapter_number} へスキップして", "チャプターをスキップして"],
+        "slots": [{ "name": "chapter_number", "type": "AMAZON.NUMBER" }]
+      },
+      {
+        "name": "PlayPlaylistIntent",
+        "samples": ["プレイリスト {playlist} を再生して", "プレイリスト {playlist} を流して", "プレイリスト {playlist} をスタートして", "プレイリスト {playlist} を聴かせて", "プレイリスト {playlist} を聞きたい"],
+        "slots": [{ "name": "playlist", "type": "AMAZON.SearchQuery" }]
+      },
+      {
+        "name": "PlayFavoritesIntent",
+        "samples": ["お気に入りの {media_type} を再生して", "お気に入りを再生して", "お気に入りの曲を再生して", "お気に入りの音楽を再生して", "{username} のお気に入りを再生して", "{username} のお気に入りの {media_type} を再生して"],
+        "slots": [
+          { "name": "media_type", "type": "MediaType" },
+          { "name": "username", "type": "AMAZON.Person" }
+        ]
+      },
+      {
+        "name": "MarkFavoriteIntent",
+        "samples": ["いいね", "ビデオいいね", "曲いいね", "音楽いいね", "この曲いいね", "これいいね", "ビデオをお気に入りに追加して", "曲をお気に入りに追加して", "これをお気に入りに保存して", "お気に入りに追加して"]
+      },
+      {
+        "name": "UnmarkFavoriteIntent",
+        "samples": ["これ嫌い", "ビデオ嫌い", "曲嫌い", "音楽嫌い", "ビデオをお気に入りから削除して", "曲をお気に入りから削除して"]
+      },
+      {
+        "name": "MediaInfoIntent",
+        "slots": [{ "name": "media_info_type", "type": "MediaInfoType" }],
+        "samples": ["曲の名前は何？", "ビデオの名前は何？", "音楽の名前は何？", "曲のタイトルは何？", "今何が再生中？", "{media_info_type} は何？", "{media_info_type} を教えて", "この曲の長さは？", "誰が歌ってる？", "ジャンルは何？", "いつリリースされた？", "このアーティストについて教えて", "何のアルバムから？"]
+      },
+      {
+        "name": "InProgressMediaListIntent",
+        "samples": ["何聴いてたっけ", "何見てたっけ", "進行中のものは？", "進捗を見せて", "何再生してたっけ", "開始したものは何？"]
+      },
+      {
+        "name": "PlayEpisodeIntent",
+        "slots": [
+          { "name": "series_name", "type": "SeriesName" },
+          { "name": "season_number", "type": "AMAZON.NUMBER" },
+          { "name": "episode_number", "type": "AMAZON.NUMBER" }
+        ],
+        "samples": ["{series_name} のシーズン {season_number} エピソード {episode_number} を再生して", "シーズン {season_number} エピソード {episode_number} の {series_name} を再生して", "{series_name} のシーズン {season_number} エピソード {episode_number} を見たい"]
+      },
+      {
+        "name": "PlayPodcastIntent",
+        "samples": ["ポッドキャスト {podcast_name} を再生して", "ポッドキャスト {podcast_name} を聴かせて", "{podcast_name} の最新エピソードを再生して", "ポッドキャスト {podcast_name} をスタートして", "{podcast_name} ポッドキャストを聴きたい"],
+        "slots": [{ "name": "podcast_name", "type": "AMAZON.SearchQuery" }]
+      },
+      {
+        "name": "BrowseLibraryIntent",
+        "slots": [{ "name": "browse_category", "type": "BrowseCategory" }],
+        "samples": ["{browse_category} をブラウズして", "{browse_category} を見せて", "{browse_category} のリスト"]
+      },
+      {
+        "name": "RecommendIntent",
+        "slots": [{ "name": "media_type", "type": "MediaType" }],
+        "samples": ["何かおすすめは？", "音楽のおすすめは？", "映画のおすすめは？", "何か見るものを提案して", "{media_type} をおすすめして"]
+      },
+      {
+        "name": "SleepTimerIntent",
+        "slots": [{ "name": "duration_minutes", "type": "AMAZON.NUMBER" }],
+        "samples": ["{duration_minutes} 分後に止めて", "スリープタイマー {duration_minutes} 分", "{duration_minutes} 分後におやすみタイマー", "{duration_minutes} 分でスリープタイマーをセットして"]
+      },
+      {
+        "name": "PlayMoodMusicIntent",
+        "slots": [{ "name": "mood", "type": "AMAZON.SearchQuery" }],
+        "samples": ["{mood} の音楽を再生して", "{mood} な音楽を再生して", "{mood} な曲を再生して", "{mood} の音楽が聴きたい", "リラックスできる音楽を再生して", "朝の音楽を再生して", "夜の音楽を再生して", "ワークアウトミュージックを再生して", "集中できる音楽を再生して", "パーティーミュージックを再生して"]
+      },
+      {
+        "name": "AddToQueueIntent",
+        "slots": [
+          { "name": "song", "type": "AMAZON.MusicRecording" },
+          { "name": "musician", "type": "AMAZON.Musician" }
+        ],
+        "samples": ["{song} をキューに追加して", "{musician} の {song} をキューに追加して", "{song} をキューに入れて", "{musician} の {song} をキューに入れて"]
+      },
+      {
+        "name": "PlayNextIntent",
+        "slots": [
+          { "name": "song", "type": "AMAZON.MusicRecording" },
+          { "name": "musician", "type": "AMAZON.Musician" }
+        ],
+        "samples": ["次に {song} を再生して", "次に {musician} の {song} を再生して", "{song} を次に聴きたい", "{song} をこの後に再生して"]
+      },
+      {
+        "name": "ClearQueueIntent",
+        "samples": ["キューをクリアして", "キューを空にして", "キューから全部消して"]
+      },
+      {
+        "name": "ListQueueIntent",
+        "samples": ["キューには何がある？", "次は何？", "キューを見せて", "次に何が来る？", "キューのリスト"]
+      },
+      {
+        "name": "PlayRadioIntent",
+        "samples": ["ラジオを再生して", "ラジオモードを再生して", "ラジオをスタートして", "似たような音楽を再生して", "似た曲を再生して", "ラジオステーションを始めて"]
+      },
+      {
+        "name": "TurnRadioOnIntent",
+        "samples": ["ラジオモードをオンにして", "ラジオモードを有効にして", "ラジオをオンにして", "ラジオを有効にして"]
+      },
+      {
+        "name": "TurnRadioOffIntent",
+        "samples": ["ラジオモードをオフにして", "ラジオモードを無効にして", "ラジオをオフにして", "ラジオを無効にして", "ラジオモードを止めて"]
+      },
+      {
+        "name": "LearnMyVoiceIntent",
+        "samples": ["私の声を覚えて", "私の声を記憶して", "私を認識して", "私の声をリンクして", "これは私の声", "ボイスプロフィールを設定して", "私の声を関連付けて"]
+      },
+      {
+        "name": "WhoAmIIntent",
+        "samples": ["私は誰？", "どのアカウント？", "どのアカウントを使ってる？", "誰が話してる？", "どのプロフィールがアクティブ？"]
+      },
+      {
+        "name": "QueryArtistLibraryIntent",
+        "samples": ["{musician} のトラックは何がある？", "{musician} の曲は何がある？", "{musician} のアルバムは何がある？", "{musician} には何がある？", "{musician} のトラックを見せて", "{musician} のアルバムを見せて", "{musician} の {query_type} を見せて", "{musician} の {query_type} は何がある？"],
+        "slots": [
+          { "name": "musician", "type": "AMAZON.Musician" },
+          { "name": "query_type", "type": "LibraryQueryType" }
+        ]
+      },
+      {
+        "name": "SearchMediaIntent",
+        "slots": [{ "name": "query", "type": "AMAZON.SearchQuery" }],
+        "samples": ["{query} を検索して", "{query} を見つけて", "{query} を探して", "{query} ある？", "{query} を見つけたい", "{query} を探せる？"]
+      }
+    ],
+    "types": [
+      {
+        "name": "LibraryQueryType",
+        "values": [
+          { "id": "tracks", "name": { "value": "トラック", "synonyms": ["曲", "音楽", "歌"] } },
+          { "id": "albums", "name": { "value": "アルバム", "synonyms": ["レコード"] } }
+        ]
+      },
+      {
+        "name": "MediaType",
+        "values": [
+          { "id": "media", "name": { "value": "メディア" } },
+          { "id": "video", "name": { "value": "ビデオ" } },
+          { "id": "audio", "name": { "value": "オーディオ", "synonyms": ["音楽", "曲"] } }
+        ]
+      },
+      {
+        "name": "BrowseCategory",
+        "values": [
+          { "name": { "value": "アーティスト" } },
+          { "name": { "value": "アルバム" } },
+          { "name": { "value": "映画" } },
+          { "name": { "value": "曲" } },
+          { "name": { "value": "ジャンル" } }
+        ]
+      },
+      {
+        "name": "SeriesName",
+        "values": [
+          { "name": { "value": "Breaking Bad" } },
+          { "name": { "value": "Game of Thrones" } },
+          { "name": { "value": "Stranger Things" } },
+          { "name": { "value": "Money Heist" } },
+          { "name": { "value": "Peaky Blinders" } },
+          { "name": { "value": "The Walking Dead" } },
+          { "name": { "value": "Dark" } },
+          { "name": { "value": "Sherlock" } }
+        ]
+      },
+      {
+        "name": "TimePeriod",
+        "values": [
+          { "id": "today", "name": { "value": "今日", "synonyms": ["きょう"] } },
+          { "id": "this_week", "name": { "value": "今週", "synonyms": ["この週", "先週"] } },
+          { "id": "this_month", "name": { "value": "今月", "synonyms": ["この月", "先月"] } }
+        ]
+      },
+      {
+        "name": "MediaInfoType",
+        "values": [
+          { "id": "title", "name": { "value": "タイトル", "synonyms": ["曲", "トラック", "名前"] } },
+          { "id": "album", "name": { "value": "アルバム", "synonyms": ["レコード"] } },
+          { "id": "artist", "name": { "value": "アーティスト", "synonyms": ["歌手", "バンド", "ミュージシャン"] } },
+          { "id": "year", "name": { "value": "年", "synonyms": ["リリース年"] } },
+          { "id": "duration", "name": { "value": "長さ", "synonyms": ["再生時間"] } },
+          { "id": "genre", "name": { "value": "ジャンル", "synonyms": ["スタイル", "音楽の種類"] } },
+          { "id": "biography", "name": { "value": "バイオグラフィー", "synonyms": ["bio", "アーティストについて"] } }
+        ]
+      },
+      {
+        "name": "Decade",
+        "values": [
+          { "id": "50s", "name": { "value": "50年代", "synonyms": ["50s", "1950年代"] } },
+          { "id": "60s", "name": { "value": "60年代", "synonyms": ["60s", "1960年代"] } },
+          { "id": "70s", "name": { "value": "70年代", "synonyms": ["70s", "1970年代"] } },
+          { "id": "80s", "name": { "value": "80年代", "synonyms": ["80s", "1980年代"] } },
+          { "id": "90s", "name": { "value": "90年代", "synonyms": ["90s", "1990年代"] } },
+          { "id": "2000s", "name": { "value": "2000年代", "synonyms": ["2000s"] } },
+          { "id": "2010s", "name": { "value": "2010年代", "synonyms": ["2010s"] } },
+          { "id": "2020s", "name": { "value": "2020年代", "synonyms": ["2020s"] } }
+        ]
+      }
+    ]
+  },
+  "dialog": {
+    "intents": [
+      {
+        "name": "PlayEpisodeIntent",
+        "confirmationRequired": false,
+        "slots": [
+          { "name": "series_name", "type": "SeriesName", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.SeriesName" } },
+          { "name": "season_number", "type": "AMAZON.NUMBER", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.SeasonNumber" } },
+          { "name": "episode_number", "type": "AMAZON.NUMBER", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.EpisodeNumber" } }
+        ]
+      },
+      {
+        "name": "PlaySongIntent",
+        "confirmationRequired": false,
+        "slots": [
+          { "name": "song", "type": "AMAZON.MusicRecording", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.SongName" } }
+        ]
+      },
+      {
+        "name": "PlayAlbumIntent",
+        "confirmationRequired": false,
+        "slots": [
+          { "name": "album", "type": "AMAZON.MusicRecording", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.AlbumName" } }
+        ]
+      }
+    ]
+  },
+  "prompts": [
+    { "id": "Elicit.SeriesName", "variations": [ { "type": "PlainText", "value": "どのシリーズを見たいですか？" }, { "type": "PlainText", "value": "シリーズ名は何ですか？" } ] },
+    { "id": "Elicit.SeasonNumber", "variations": [ { "type": "PlainText", "value": "シーズンは？" }, { "type": "PlainText", "value": "シーズン番号は？" } ] },
+    { "id": "Elicit.EpisodeNumber", "variations": [ { "type": "PlainText", "value": "エピソード番号は？" }, { "type": "PlainText", "value": "どのエピソードを見たいですか？" } ] },
+    { "id": "Elicit.SongName", "variations": [ { "type": "PlainText", "value": "どの曲を聴きたいですか？" }, { "type": "PlainText", "value": "曲は？" } ] },
+    { "id": "Elicit.AlbumName", "variations": [ { "type": "PlainText", "value": "どのアルバムを聴きたいですか？" }, { "type": "PlainText", "value": "アルバム名は？" } ] }
+  ]
+}

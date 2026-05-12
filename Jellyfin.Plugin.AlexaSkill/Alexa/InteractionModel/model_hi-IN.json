@@ -1,0 +1,643 @@
+{
+  "languageModel": {
+    "invocationName": "jellyfin player",
+    "intents": [
+      {
+        "name": "QueryRecentlyAddedIntent",
+        "samples": [
+          "क्या नया है",
+          "हाल ही में क्या जोड़ा गया",
+          "मेरी लाइब्रेरी में क्या नया है",
+          "हाल ही में जोड़े गए दिखाओ",
+          "कुछ नया है क्या",
+          "नए जोड़े गए आइटम दिखाओ",
+          "सबसे नए आइटम क्या हैं"
+        ]
+      },
+      { "name": "AMAZON.CancelIntent" },
+      { "name": "AMAZON.HelpIntent" },
+      { "name": "AMAZON.StopIntent" },
+      { "name": "AMAZON.FallbackIntent" },
+      { "name": "AMAZON.PauseIntent" },
+      { "name": "AMAZON.ResumeIntent" },
+      { "name": "AMAZON.NextIntent" },
+      { "name": "AMAZON.PreviousIntent" },
+      { "name": "AMAZON.YesIntent" },
+      { "name": "AMAZON.NoIntent" },
+      { "name": "AMAZON.LoopOnIntent" },
+      { "name": "AMAZON.LoopOffIntent" },
+      {
+        "name": "LoopSongOnIntent",
+        "samples": [
+          "इस गाने को लूप करो",
+          "इस गाने को हमेशा लूप करो",
+          "गाना दोहराओ",
+          "इस गाने को दोहराओ",
+          "इस गाने को हमेशा दोहराओ"
+        ]
+      },
+      { "name": "AMAZON.ShuffleOnIntent" },
+      { "name": "AMAZON.ShuffleOffIntent" },
+      { "name": "AMAZON.StartOverIntent" },
+      {
+        "name": "PlayChannelIntent",
+        "samples": [
+          "चैनल {channel} चलाओ",
+          "रेडियो {channel} चलाओ"
+        ],
+        "slots": [
+          { "name": "channel", "type": "AMAZON.SearchQuery" }
+        ]
+      },
+      {
+        "name": "PlaySongIntent",
+        "samples": [
+          "{song} चलाओ",
+          "गाना {song} चलाओ",
+          "{song} गाना चलाओ",
+          "{musician} का {song} चलाओ",
+          "गाना {song} {musician} का चलाओ",
+          "{song} सुनो",
+          "गाना {song} सुनो",
+          "{musician} का {song} सुनो",
+          "{song} लगाओ",
+          "मैं {song} सुनना चाहता हूँ",
+          "क्या तुम {song} चला सकते हो",
+          "{song} शुरू करो",
+          "ट्रैक {song} चलाओ",
+          "{musician} का ट्रैक {song} चलाओ"
+        ],
+        "slots": [
+          { "name": "song", "type": "AMAZON.MusicRecording" },
+          { "name": "musician", "type": "AMAZON.Musician" }
+        ]
+      },
+      {
+        "name": "PlayAlbumIntent",
+        "samples": [
+          "{album} चलाओ",
+          "एल्बम {album} चलाओ",
+          "{musician} का {album} चलाओ",
+          "एल्बम {album} {musician} का चलाओ",
+          "{album} सुनो",
+          "एल्बम {album} सुनो",
+          "{musician} का {album} सुनो",
+          "{album} लगाओ",
+          "मैं {album} सुनना चाहता हूँ",
+          "क्या तुम {album} चला सकते हो",
+          "{album} शुरू करो"
+        ],
+        "slots": [
+          { "name": "album", "type": "AMAZON.MusicRecording" },
+          { "name": "musician", "type": "AMAZON.Musician" }
+        ]
+      },
+      {
+        "name": "PlayVideoIntent",
+        "samples": [
+          "वीडियो {title} चलाओ",
+          "वीडियो {title} लगाओ",
+          "{title} शुरू करो",
+          "{title} देखो",
+          "क्या तुम {title} चला सकते हो",
+          "मैं {title} देखना चाहता हूँ",
+          "चलो {title} देखते हैं",
+          "फिल्म {title} चलाओ",
+          "वीडियो {title} शुरू करो"
+        ],
+        "slots": [
+          { "name": "title", "type": "AMAZON.SearchQuery" }
+        ]
+      },
+      {
+        "name": "PlayArtistSongsIntent",
+        "samples": [
+          "{musician} के गाने चलाओ",
+          "{musician} की म्यूज़िक चलाओ",
+          "{musician} के ट्रैक चलाओ",
+          "{musician} सुनो",
+          "{musician} के गाने सुनो",
+          "{musician} की म्यूज़िक सुनो",
+          "{musician} लगाओ",
+          "मैं {musician} सुनना चाहता हूँ",
+          "क्या तुम {musician} चला सकते हो",
+          "{musician} शुरू करो",
+          "{musician} को शफल करो",
+          "{musician} चलाओ",
+          "कुछ {musician} चलाओ"
+        ],
+        "slots": [
+          { "name": "musician", "type": "AMAZON.Musician" }
+        ]
+      },
+      {
+        "name": "PlayLastAddedIntent",
+        "samples": [
+          "आखिरी जोड़े {media_type} चलाओ",
+          "हाल ही में जोड़े {media_type} चलाओ",
+          "नया मीडिया चलाओ",
+          "कुछ नया चलाओ",
+          "{media_type} जोड़े {time_period} चलाओ",
+          "हाल ही में जोड़े {media_type} {time_period} चलाओ",
+          "नए {media_type} {time_period} चलाओ",
+          "{media_type} में क्या नया है",
+          "ताज़ा {media_type} चलाओ",
+          "नए {media_type} दिखाओ"
+        ],
+        "slots": [
+          { "name": "media_type", "type": "MediaType" },
+          { "name": "time_period", "type": "TimePeriod" }
+        ]
+      },
+      {
+        "name": "PlayRandomIntent",
+        "samples": [
+          "रैंडम {media_type} चलाओ",
+          "अपने {media_type} शफल करो",
+          "कुछ रैंडम चलाओ",
+          "रैंडम {media_type} {genre} से चलाओ",
+          "रैंडम गाने चलाओ",
+          "रैंडम म्यूज़िक चलाओ",
+          "मुझे रैंडम {media_type} दो",
+          "मुझे कुछ रैंडम चाहिए",
+          "{media_type} शफल करो",
+          "{media_type} से मुझे चौंकाओ"
+        ],
+        "slots": [
+          { "name": "media_type", "type": "MediaType" },
+          { "name": "genre", "type": "AMAZON.Genre" }
+        ]
+      },
+      {
+        "name": "PlayByGenreIntent",
+        "samples": [
+          "{genre} म्यूज़िक चलाओ",
+          "{genre} गाने चलाओ",
+          "{genre} म्यूज़िक चलाओ",
+          "मुझे {genre} म्यूज़िक चलाओ",
+          "मैं {genre} सुनना चाहता हूँ",
+          "{genre} चलाओ",
+          "मुझे {genre} म्यूज़िक दो",
+          "{genre} म्यूज़िक सुनो"
+        ],
+        "slots": [
+          { "name": "genre", "type": "AMAZON.Genre" }
+        ]
+      },
+      {
+        "name": "PlayByDecadeIntent",
+        "samples": [
+          "{decade} के गाने चलाओ",
+          "{decade} के ट्रैक चलाओ",
+          "{decade} की म्यूज़िक चलाओ",
+          "{decade} हिट्स चलाओ",
+          "{genre} {decade} से चलाओ",
+          "मैं {decade} म्यूज़िक सुनना चाहता हूँ",
+          "{decade} से कुछ चलाओ",
+          "{decade} म्यूज़िक सुनो",
+          "{decade} हिट्स सुनो"
+        ],
+        "slots": [
+          { "name": "decade", "type": "Decade" },
+          { "name": "genre", "type": "AMAZON.Genre" }
+        ]
+      },
+      {
+        "name": "ContinueWatchingIntent",
+        "samples": [
+          "देखना जारी रखो",
+          "सुनना जारी रखो",
+          "जहाँ छोड़ा था वहाँ से फिर से शुरू करो",
+          "मैं क्या देख रहा था",
+          "जारी रखो",
+          "जारी"
+        ]
+      },
+      {
+        "name": "GoToChapterIntent",
+        "samples": [
+          "अगला चैप्टर",
+          "पिछला चैप्टर",
+          "चैप्टर {chapter_number} पर जाओ",
+          "चैप्टर {chapter_number} पर स्किप करो",
+          "एक चैप्टर आगे जाओ",
+          "एक चैप्टर पीछे जाओ",
+          "चैप्टर स्किप करो"
+        ],
+        "slots": [
+          { "name": "chapter_number", "type": "AMAZON.NUMBER" }
+        ]
+      },
+      {
+        "name": "PlayPlaylistIntent",
+        "samples": [
+          "प्लेलिस्ट {playlist} चलाओ",
+          "मेरी प्लेलिस्ट {playlist} चलाओ",
+          "प्लेलिस्ट {playlist} लगाओ",
+          "प्लेलिस्ट {playlist} शुरू करो",
+          "प्लेलिस्ट {playlist} सुनो",
+          "क्या तुम प्लेलिस्ट {playlist} चला सकते हो",
+          "मैं प्लेलिस्ट {playlist} सुनना चाहता हूँ"
+        ],
+        "slots": [
+          { "name": "playlist", "type": "AMAZON.SearchQuery" }
+        ]
+      },
+      {
+        "name": "PlayFavoritesIntent",
+        "samples": [
+          "मेरी पसंदीदा {media_type} चलाओ",
+          "मेरी पसंदीदा चलाओ",
+          "मेरे पसंदीदा गाने चलाओ",
+          "मेरी पसंदीदा म्यूज़िक चलाओ",
+          "{username} की पसंदीदा चलाओ",
+          "{username} की पसंदीदा {media_type} चलाओ"
+        ],
+        "slots": [
+          { "name": "media_type", "type": "MediaType" },
+          { "name": "username", "type": "AMAZON.Person" }
+        ]
+      },
+      {
+        "name": "MarkFavoriteIntent",
+        "samples": [
+          "मुझे यह पसंद है",
+          "मुझे वीडियो पसंद है",
+          "मुझे गाना पसंद है",
+          "मुझे म्यूज़िक पसंद है",
+          "मुझे यह गाना पसंद है",
+          "मुझे यह पसंद है",
+          "वीडियो को पसंदीदा में जोड़ो",
+          "गाने को पसंदीदा में जोड़ो",
+          "इसे पसंदीदा में सेव करो",
+          "इसे पसंदीदा करो"
+        ]
+      },
+      {
+        "name": "UnmarkFavoriteIntent",
+        "samples": [
+          "मुझे यह पसंद नहीं है",
+          "मुझे वीडियो पसंद नहीं है",
+          "मुझे गाना पसंद नहीं है",
+          "मुझे म्यूज़िक पसंद नहीं है",
+          "वीडियो को पसंदीदा से हटाओ",
+          "गाने को पसंदीदा से हटाओ"
+        ]
+      },
+      {
+        "name": "MediaInfoIntent",
+        "slots": [
+          { "name": "media_info_type", "type": "MediaInfoType" }
+        ],
+        "samples": [
+          "गाने का नाम क्या है",
+          "वीडियो का नाम क्या है",
+          "म्यूज़िक का नाम क्या है",
+          "गाने का शीर्षक क्या है",
+          "अभी क्या चल रहा है",
+          "यह {media_info_type} क्या है",
+          "मुझे {media_info_type} बताओ",
+          "{media_info_type} क्या है",
+          "यह गाना कितना लंबा है",
+          "यह कौन गा रहा है",
+          "यह कौन कर रहा है",
+          "यह किस शैली का है",
+          "यह कब रिलीज़ हुआ",
+          "इस कलाकार के बारे में बताओ",
+          "यह किस एल्बम का है"
+        ]
+      },
+      {
+        "name": "InProgressMediaListIntent",
+        "samples": [
+          "मैं क्या सुन रहा हूँ",
+          "मैं क्या देख रहा हूँ",
+          "क्या प्रगति पर है",
+          "मेरी प्रगति दिखाओ",
+          "मैं क्या चला रहा था",
+          "मेरी प्रगति पर मीडिया दिखाओ"
+        ]
+      },
+      {
+        "name": "PlayEpisodeIntent",
+        "slots": [
+          { "name": "series_name", "type": "SeriesName" },
+          { "name": "season_number", "type": "AMAZON.NUMBER" },
+          { "name": "episode_number", "type": "AMAZON.NUMBER" }
+        ],
+        "samples": [
+          "{series_name} सीज़न {season_number} एपिसोड {episode_number} चलाओ",
+          "सीज़न {season_number} एपिसोड {episode_number} {series_name} का चलाओ",
+          "{series_name} सीज़न {season_number} एपिसोड {episode_number} देखो"
+        ]
+      },
+      {
+        "name": "PlayPodcastIntent",
+        "samples": [
+          "पॉडकास्ट {podcast_name} चलाओ",
+          "पॉडकास्ट {podcast_name} सुनो",
+          "{podcast_name} का ताज़ा एपिसोड चलाओ",
+          "पॉडकास्ट {podcast_name} शुरू करो",
+          "मैं {podcast_name} पॉडकास्ट सुनना चाहता हूँ"
+        ],
+        "slots": [
+          { "name": "podcast_name", "type": "AMAZON.SearchQuery" }
+        ]
+      },
+      {
+        "name": "BrowseLibraryIntent",
+        "slots": [
+          { "name": "browse_category", "type": "BrowseCategory" }
+        ],
+        "samples": [
+          "{browse_category} ब्राउज़ करो",
+          "मुझे {browse_category} दिखाओ",
+          "{browse_category} की लिस्ट दो"
+        ]
+      },
+      {
+        "name": "RecommendIntent",
+        "slots": [
+          { "name": "media_type", "type": "MediaType" }
+        ],
+        "samples": [
+          "कुछ सुझाव दो",
+          "कुछ म्यूज़िक सुझाओ",
+          "एक फिल्म सुझाओ",
+          "देखने के लिए कुछ सुझाओ",
+          "{media_type} सुझाओ"
+        ]
+      },
+      {
+        "name": "SleepTimerIntent",
+        "slots": [
+          { "name": "duration_minutes", "type": "AMAZON.NUMBER" }
+        ],
+        "samples": [
+          "{duration_minutes} मिनट में बंद करो",
+          "स्लीप टाइमर {duration_minutes} मिनट सेट करो",
+          "स्लीप टाइमर {duration_minutes} मिनट",
+          "{duration_minutes} मिनट बाद बंद करो"
+        ]
+      },
+      {
+        "name": "PlayMoodMusicIntent",
+        "slots": [
+          { "name": "mood", "type": "AMAZON.SearchQuery" }
+        ],
+        "samples": [
+          "{mood} म्यूज़िक चलाओ",
+          "कुछ {mood} चलाओ",
+          "{mood} गाने चलाओ",
+          "मुझे {mood} म्यूज़िक चाहिए",
+          "सुबह की म्यूज़िक चलाओ",
+          "शाम की म्यूज़िक चलाओ",
+          "वर्कआउट म्यूज़िक चलाओ",
+          "फोकस म्यूज़िक चलाओ",
+          "पार्टी म्यूज़िक चलाओ",
+          "रिलैक्सिंग म्यूज़िक चलाओ"
+        ]
+      },
+      {
+        "name": "AddToQueueIntent",
+        "slots": [
+          { "name": "song", "type": "AMAZON.MusicRecording" },
+          { "name": "musician", "type": "AMAZON.Musician" }
+        ],
+        "samples": [
+          "{song} कतार में जोड़ो",
+          "{musician} का {song} कतार में जोड़ो",
+          "{song} कतार में डालो",
+          "{musician} का {song} कतार में डालो"
+        ]
+      },
+      {
+        "name": "PlayNextIntent",
+        "slots": [
+          { "name": "song", "type": "AMAZON.MusicRecording" },
+          { "name": "musician", "type": "AMAZON.Musician" }
+        ],
+        "samples": [
+          "{song} अगला चलाओ",
+          "{musician} का {song} अगला चलाओ",
+          "मैं {song} अगला सुनना चाहता हूँ",
+          "{song} इसके बाद चलाओ"
+        ]
+      },
+      {
+        "name": "ClearQueueIntent",
+        "samples": [
+          "कतार साफ़ करो",
+          "कतार खाली करो",
+          "कतार से सब हटाओ"
+        ]
+      },
+      {
+        "name": "ListQueueIntent",
+        "samples": [
+          "कतार में क्या है",
+          "कतार में क्या है",
+          "क्या आने वाला है",
+          "क्या अगला है",
+          "कतार दिखाओ",
+          "अगला क्या चलेगा"
+        ]
+      },
+      {
+        "name": "PlayRadioIntent",
+        "samples": [
+          "रेडियो चलाओ",
+          "रेडियो मोड चलाओ",
+          "रेडियो शुरू करो",
+          "ऐसा ही और चलाओ",
+          "समान म्यूज़िक चलाते रहो",
+          "समान गाने चलाओ",
+          "रेडियो स्टेशन शुरू करो"
+        ]
+      },
+      {
+        "name": "TurnRadioOnIntent",
+        "samples": [
+          "रेडियो मोड चालू करो",
+          "रेडियो मोड एनेबल करो",
+          "रेडियो मोड ऑन",
+          "रेडियो चालू करो",
+          "रेडियो एनेबल करो"
+        ]
+      },
+      {
+        "name": "TurnRadioOffIntent",
+        "samples": [
+          "रेडियो मोड बंद करो",
+          "रेडियो मोड डिसेबल करो",
+          "रेडियो मोड ऑफ",
+          "रेडियो बंद करो",
+          "रेडियो डिसेबल करो"
+        ]
+      },
+      {
+        "name": "LearnMyVoiceIntent",
+        "samples": [
+          "मेरी आवाज़ सीखो",
+          "मेरी आवाज़ याद रखो",
+          "मुझे पहचानो",
+          "मेरी आवाज़ लिंक करो",
+          "यह मेरी आवाज़ है",
+          "मेरा वॉइस प्रोफाइल सेटअप करो",
+          "मेरी आवाज़ जोड़ो"
+        ]
+      },
+      {
+        "name": "WhoAmIIntent",
+        "samples": [
+          "मैं कौन हूँ",
+          "यह कौन सा खाता है",
+          "मैं कौन सा खाता इस्तेमाल कर रहा हूँ",
+          "कौन बोल रहा है",
+          "कौन सा प्रोफाइल एक्टिव है"
+        ]
+      },
+      {
+        "name": "QueryArtistLibraryIntent",
+        "samples": [
+          "{musician} के कौन से ट्रैक हैं",
+          "{musician} के कौन से गाने हैं",
+          "{musician} के कौन से एल्बम हैं",
+          "{musician} के पास क्या है",
+          "{musician} के ट्रैक दिखाओ",
+          "{musician} के एल्बम दिखाओ",
+          "{musician} के {query_type} दिखाओ",
+          "{musician} के कौन से {query_type} हैं"
+        ],
+        "slots": [
+          { "name": "musician", "type": "AMAZON.Musician" },
+          { "name": "query_type", "type": "LibraryQueryType" }
+        ]
+      },
+      {
+        "name": "SearchMediaIntent",
+        "slots": [
+          { "name": "query", "type": "AMAZON.SearchQuery" }
+        ],
+        "samples": [
+          "{query} खोजो",
+          "{query} ढूंढो",
+          "{query} खोजो",
+          "{query} देखो",
+          "क्या तुम्हारे पास {query} है",
+          "मैं {query} खोजना चाहता हूँ",
+          "क्या तुम {query} ढूंढ सकते हो",
+          "{query} खोजो",
+          "मुझे {query} ढूंढो"
+        ]
+      }
+    ],
+    "types": [
+      {
+        "name": "LibraryQueryType",
+        "values": [
+          { "id": "tracks", "name": { "value": "ट्रैक", "synonyms": ["गाने", "म्यूज़िक", "गाना"] } },
+          { "id": "albums", "name": { "value": "एल्बम", "synonyms": ["रिकॉर्ड"] } }
+        ]
+      },
+      {
+        "name": "MediaType",
+        "values": [
+          { "id": "media", "name": { "value": "मीडिया" } },
+          { "id": "video", "name": { "value": "वीडियो" } },
+          { "id": "audio", "name": { "value": "ऑडियो", "synonyms": ["म्यूज़िक", "गाना"] } }
+        ]
+      },
+      {
+        "name": "BrowseCategory",
+        "values": [
+          { "name": { "value": "कलाकार" } },
+          { "name": { "value": "एल्बम" } },
+          { "name": { "value": "फिल्में" } },
+          { "name": { "value": "गाने" } },
+          { "name": { "value": "शैलियाँ" } }
+        ]
+      },
+      {
+        "name": "SeriesName",
+        "values": [
+          { "name": { "value": "Breaking Bad" } },
+          { "name": { "value": "Game of Thrones" } },
+          { "name": { "value": "Stranger Things" } },
+          { "name": { "value": "Money Heist" } },
+          { "name": { "value": "Peaky Blinders" } },
+          { "name": { "value": "The Walking Dead" } },
+          { "name": { "value": "Dark" } },
+          { "name": { "value": "Sherlock" } }
+        ]
+      },
+      {
+        "name": "TimePeriod",
+        "values": [
+          { "id": "today", "name": { "value": "आज", "synonyms": ["आज पहले"] } },
+          { "id": "this_week", "name": { "value": "इस सप्ताह", "synonyms": ["पिछला सप्ताह", "पिछले सप्ताह"] } },
+          { "id": "this_month", "name": { "value": "इस महीने", "synonyms": ["पिछला महीना", "पिछले महीने"] } }
+        ]
+      },
+      {
+        "name": "MediaInfoType",
+        "values": [
+          { "id": "title", "name": { "value": "शीर्षक", "synonyms": ["गाना", "ट्रैक", "नाम"] } },
+          { "id": "album", "name": { "value": "एल्बम", "synonyms": ["रिकॉर्ड"] } },
+          { "id": "artist", "name": { "value": "कलाकार", "synonyms": ["गायक", "बैंड", "म्यूज़िशियन"] } },
+          { "id": "year", "name": { "value": "साल", "synonyms": ["रिलीज़ साल"] } },
+          { "id": "duration", "name": { "value": "अवधि", "synonyms": ["लंबाई", "चलने का समय"] } },
+          { "id": "genre", "name": { "value": "शैली", "synonyms": ["स्टाइल", "म्यूज़िक का प्रकार"] } },
+          { "id": "biography", "name": { "value": "जीवनी", "synonyms": ["बायो", "कलाकार के बारे में"] } }
+        ]
+      },
+      {
+        "name": "Decade",
+        "values": [
+          { "id": "50s", "name": { "value": "50s", "synonyms": ["पचासवां दशक", "1950"] } },
+          { "id": "60s", "name": { "value": "60s", "synonyms": ["साठवां दशक", "1960"] } },
+          { "id": "70s", "name": { "value": "70s", "synonyms": ["सत्तरवां दशक", "1970"] } },
+          { "id": "80s", "name": { "value": "80s", "synonyms": ["अस्सी का दशक", "1980"] } },
+          { "id": "90s", "name": { "value": "90s", "synonyms": ["नब्बे का दशक", "1990"] } },
+          { "id": "2000s", "name": { "value": "2000s", "synonyms": ["दो हज़ार", "2000"] } },
+          { "id": "2010s", "name": { "value": "2010s", "synonyms": ["दो हज़ार दस", "2010"] } },
+          { "id": "2020s", "name": { "value": "2020s", "synonyms": ["दो हज़ार बीस", "2020"] } }
+        ]
+      }
+    ]
+  },
+  "dialog": {
+    "intents": [
+      {
+        "name": "PlayEpisodeIntent",
+        "confirmationRequired": false,
+        "slots": [
+          { "name": "series_name", "type": "SeriesName", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.SeriesName" } },
+          { "name": "season_number", "type": "AMAZON.NUMBER", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.SeasonNumber" } },
+          { "name": "episode_number", "type": "AMAZON.NUMBER", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.EpisodeNumber" } }
+        ]
+      },
+      {
+        "name": "PlaySongIntent",
+        "confirmationRequired": false,
+        "slots": [
+          { "name": "song", "type": "AMAZON.MusicRecording", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.SongName" } }
+        ]
+      },
+      {
+        "name": "PlayAlbumIntent",
+        "confirmationRequired": false,
+        "slots": [
+          { "name": "album", "type": "AMAZON.MusicRecording", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.AlbumName" } }
+        ]
+      }
+    ]
+  },
+  "prompts": [
+    { "id": "Elicit.SeriesName", "variations": [ { "type": "PlainText", "value": "कौन सी सीरीज़ देखना चाहेंगे?" }, { "type": "PlainText", "value": "सीरीज़ का नाम क्या है?" } ] },
+    { "id": "Elicit.SeasonNumber", "variations": [ { "type": "PlainText", "value": "कौन सा सीज़न?" }, { "type": "PlainText", "value": "सीज़न नंबर क्या है?" } ] },
+    { "id": "Elicit.EpisodeNumber", "variations": [ { "type": "PlainText", "value": "एपिसोड नंबर कौन सा?" }, { "type": "PlainText", "value": "कौन सा एपिसोड देखना चाहेंगे?" } ] },
+    { "id": "Elicit.SongName", "variations": [ { "type": "PlainText", "value": "कौन सा गाना सुनना चाहेंगे?" }, { "type": "PlainText", "value": "कौन सा गाना?" } ] },
+    { "id": "Elicit.AlbumName", "variations": [ { "type": "PlainText", "value": "कौन सा एल्बम सुनना चाहेंगे?" }, { "type": "PlainText", "value": "एल्बम का नाम क्या है?" } ] }
+  ]
+}

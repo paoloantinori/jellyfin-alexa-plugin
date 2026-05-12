@@ -79,6 +79,7 @@ public class ResponseStringsTests
     }
 
     [Theory]
+    [InlineData("ar-SA")]
     [InlineData("de-DE")]
     [InlineData("en-AU")]
     [InlineData("en-CA")]
@@ -90,7 +91,11 @@ public class ResponseStringsTests
     [InlineData("es-US")]
     [InlineData("fr-CA")]
     [InlineData("fr-FR")]
+    [InlineData("hi-IN")]
     [InlineData("it-IT")]
+    [InlineData("ja-JP")]
+    [InlineData("nl-NL")]
+    [InlineData("pt-BR")]
     public void Get_AllKeysPresent(string locale)
     {
         foreach (string key in AllExpectedKeys)
@@ -119,7 +124,7 @@ public class ResponseStringsTests
     [Fact]
     public void Get_NonEnglishLocales_ReturnDifferentStringsFromEnUs()
     {
-        string[] nonEnglishLocales = new[] { "de-DE", "es-ES", "fr-FR", "it-IT" };
+        string[] nonEnglishLocales = new[] { "ar-SA", "de-DE", "es-ES", "fr-FR", "hi-IN", "it-IT", "ja-JP", "nl-NL", "pt-BR" };
         foreach (string locale in nonEnglishLocales)
         {
             Assert.NotEqual(
