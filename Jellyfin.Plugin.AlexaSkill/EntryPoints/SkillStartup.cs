@@ -164,18 +164,27 @@ public class SkillStartup : IHostedService, IDisposable
                     {
                         Collection<SkillInteractionModel> skillInteractionModels = Plugin.Instance.BuildSkillInteractionModels(user.UserSkill.InvocationName);
 
-                        if (user.UserSkill.SkillId != null && user.SmapiManagement != null)
+                        if (!string.IsNullOrEmpty(user.UserSkill.SkillId) && user.SmapiManagement != null)
                         {
-                            ManifestSkill? cloudManifestSkill = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.GetSkillAsync(user.UserSkill.SkillId)).ConfigureAwait(false);
+                            ManifestSkill? cloudManifestSkill = null;
+                            try
+                            {
+                                cloudManifestSkill = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.GetSkillAsync(user.UserSkill.SkillId!)).ConfigureAwait(false);
+                            }
+                            catch (Refit.ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+                            {
+                                _logger.LogWarning("Skill {SkillId} no longer exists in the cloud for user {UserId}. Will recreate.", user.UserSkill.SkillId, user.Id);
+                                cloudManifestSkill = null;
+                            }
 
                             if (cloudManifestSkill != null)
                             {
                                 string? cloudVersion = cloudManifestSkill.GetVersionTag();
                                 _logger.LogInformation("Skill version (cloud) for user {UserId}: {Version}", user.Id, cloudVersion ?? "(no tag)");
 
-                                AccountLinkData accountLinkingData = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.GetAccountLinkDataAsync(user.UserSkill.SkillId)).ConfigureAwait(false);
+                                AccountLinkData accountLinkingData = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.GetAccountLinkDataAsync(user.UserSkill.SkillId!)).ConfigureAwait(false);
 
-                                SkillStatus status = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.GetSkillStatusAsync(user.UserSkill.SkillId)).ConfigureAwait(false);
+                                SkillStatus status = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.GetSkillStatusAsync(user.UserSkill.SkillId!)).ConfigureAwait(false);
 
                                 if (cloudVersion != Util.GetVersion()
                                     || status.Manifest.LastModified.Status == SkillStatusState.FAILED)
@@ -183,7 +192,7 @@ public class SkillStartup : IHostedService, IDisposable
                                     _logger.LogInformation("Skill for user {UserId} is outdated. Updating...", user.Id);
                                     await AlexaUtil.CallAsync<object?>(user, async () =>
                                     {
-                                        await user.SmapiManagement.UpdateSkillAsync(user.UserSkill.SkillId, manifestSkill, skillInteractionModels).ConfigureAwait(false);
+                                        await user.SmapiManagement.UpdateSkillAsync(user.UserSkill.SkillId!, manifestSkill, skillInteractionModels).ConfigureAwait(false);
                                         return null;
                                     }).ConfigureAwait(false);
                                 }
@@ -195,7 +204,7 @@ public class SkillStartup : IHostedService, IDisposable
                                     await AlexaUtil.CallAsync<object?>(user, () =>
                                     {
                                         user.SmapiManagement.UpdateAccountLinkData(
-                                            user.UserSkill.SkillId,
+                                            user.UserSkill.SkillId!,
                                             configuration.ServerAddress,
                                             configuration.AccountLinkingClientId);
                                         return Task.FromResult<object?>(null);
@@ -210,13 +219,15 @@ public class SkillStartup : IHostedService, IDisposable
                             }
                             else
                             {
-                                _logger.LogWarning("Could not fetch cloud manifest for user {UserId}. Skipping version comparison and using local manifest.", user.Id);
+                                _logger.LogWarning("Skill {SkillId} not found in cloud for user {UserId}. Clearing stored skill ID to trigger recreation.", user.UserSkill.SkillId, user.Id);
+                                user.UserSkill.SkillId = null;
+                                user.UserSkill.UserSkillStatus = UserSkillStatus.SkillCreating;
+                                Plugin.Instance.SaveConfiguration();
                             }
                         }
-                        else if (user.SmapiManagement != null)
-                        {
-                            user.UserSkill.UserSkillStatus = UserSkillStatus.SkillCreating;
 
+                        if (string.IsNullOrEmpty(user.UserSkill.SkillId) && user.SmapiManagement != null)
+                        {
                             _logger.LogInformation("Skill for user {UserId} not in cloud. Creating...", user.Id);
                             string skillId = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.CreateSkillAsync(
                                 manifestSkill,
