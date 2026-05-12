@@ -689,8 +689,14 @@ public abstract class BaseHandler
         }
 
         T best = bestWithScore.Value.Item;
+        int score = bestWithScore.Value.Score;
 
-        if (_config.FuzzyMatchBehavior == FuzzyMatchBehavior.AutoPlay && autoPlayFunc != null)
+        // High-confidence matches auto-accept regardless of FuzzyMatchBehavior.
+        // Only borderline matches (SuggestionThreshold..DefaultThreshold) consult the config.
+        bool autoAccept = score >= FuzzyMatcher.DefaultThreshold
+            || (_config.FuzzyMatchBehavior == FuzzyMatchBehavior.AutoPlay && autoPlayFunc != null);
+
+        if (autoAccept && autoPlayFunc != null)
         {
             SkillResponse playResponse = autoPlayFunc(best);
             string? ssml = GetSsml("FuzzyAutoPlayAnnouncementSsml", locale, selector(best), query);
