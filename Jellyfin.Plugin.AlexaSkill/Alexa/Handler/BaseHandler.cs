@@ -339,7 +339,8 @@ public abstract class BaseHandler
 
         var directives = new List<IDirective> { directive };
 
-        if (item != null && context != null && Apl.AplHelper.DeviceSupportsApl(context))
+        if (item != null && context != null && Apl.AplHelper.DeviceSupportsApl(context)
+            && Apl.AplHelper.VisualsEnabled)
         {
             var aplDirective = Apl.AplHelper.BuildNowPlayingDirective(item, imageUrl, imageUrl);
             if (aplDirective != null)

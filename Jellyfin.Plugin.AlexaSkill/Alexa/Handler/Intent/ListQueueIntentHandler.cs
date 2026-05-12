@@ -107,7 +107,8 @@ public class ListQueueIntentHandler : BaseHandler
 
         SkillResponse response = ResponseBuilder.Tell(ResponseStrings.Get("QueueList", locale, names.ToString()));
 
-        if (Apl.AplHelper.DeviceSupportsApl(context))
+        if (Apl.AplHelper.DeviceSupportsApl(context)
+            && Apl.AplHelper.VisualsEnabled)
         {
             var queueItems = resolvedItems.Select(i =>
                 new Apl.QueueDisplayItem { Title = i.Name, Artist = GetArtistSubtitle(i), ArtUrl = GetImageUrl(i.Id.ToString("N"), user) }).ToList();

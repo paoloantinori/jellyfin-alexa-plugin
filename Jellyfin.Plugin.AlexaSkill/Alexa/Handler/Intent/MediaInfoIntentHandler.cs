@@ -503,7 +503,8 @@ public class MediaInfoIntentHandler : BaseHandler
 
     private void TryAttachNowPlayingCard(SkillResponse response, BaseItemDto item, Context context, Entities.User user)
     {
-        if (!AplHelper.DeviceSupportsApl(context) || item.Id == Guid.Empty)
+        if (!AplHelper.DeviceSupportsApl(context) || item.Id == Guid.Empty
+            || !AplHelper.VisualsEnabled)
         {
             return;
         }

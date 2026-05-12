@@ -240,6 +240,12 @@ internal static class AplHelper
     }
 
     /// <summary>
+    /// Checks whether APL visual templates are enabled in plugin configuration.
+    /// Reads live config so config page changes take effect immediately.
+    /// </summary>
+    public static bool VisualsEnabled => Plugin.Instance?.Configuration?.AplVisualsEnabled ?? true;
+
+    /// <summary>
     /// Build an APL Now Playing screen directive showing track info, album art,
     /// and interactive playback controls (prev, pause, next) for Echo Show devices.
     /// </summary>

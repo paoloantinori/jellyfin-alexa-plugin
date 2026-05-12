@@ -8,6 +8,7 @@ using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
@@ -303,5 +304,157 @@ public class HandlerFeatureFlagTests : IDisposable
         // NOT the feature disabled message.
         var text = TestHelpers.GetSpeechText(response);
         Assert.Contains("nothing", text, StringComparison.OrdinalIgnoreCase);
+    }
+}
+
+/// <summary>
+/// Tests that AplVisualsEnabled suppresses APL directives while keeping audio functional.
+/// </summary>
+[Collection("Plugin")]
+public class AplVisualsFeatureFlagTests : IDisposable
+{
+    private readonly Mock<ISessionManager> _sessionManagerMock;
+    private readonly PluginConfiguration _config;
+    private readonly ILoggerFactory _loggerFactory;
+
+    public AplVisualsFeatureFlagTests()
+    {
+        _sessionManagerMock = new Mock<ISessionManager>();
+        _config = new PluginConfiguration { ServerAddress = "http://localhost:8096/" };
+        _loggerFactory = LoggerFactory.Create(b => { });
+        EnsurePluginInstance();
+    }
+
+    public void Dispose()
+    {
+        _loggerFactory.Dispose();
+    }
+
+    private void EnsurePluginInstance()
+    {
+        if (Plugin.Instance != null)
+        {
+            Plugin.Instance.Configuration.AplVisualsEnabled = _config.AplVisualsEnabled;
+            return;
+        }
+
+        var tmpDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "alexa-apl-feature-test-" + Guid.NewGuid());
+        System.IO.Directory.CreateDirectory(tmpDir);
+
+        var appPaths = new Mock<MediaBrowser.Common.Configuration.IApplicationPaths>();
+        appPaths.Setup(p => p.PluginsPath).Returns(tmpDir);
+        appPaths.Setup(p => p.PluginConfigurationsPath).Returns(tmpDir);
+        appPaths.Setup(p => p.DataPath).Returns(tmpDir);
+        appPaths.Setup(p => p.CachePath).Returns(tmpDir);
+        appPaths.Setup(p => p.LogDirectoryPath).Returns(tmpDir);
+        appPaths.Setup(p => p.ConfigurationDirectoryPath).Returns(tmpDir);
+        appPaths.Setup(p => p.SystemConfigurationFilePath).Returns(System.IO.Path.Combine(tmpDir, "system.xml"));
+        appPaths.Setup(p => p.ProgramDataPath).Returns(tmpDir);
+        appPaths.Setup(p => p.ProgramSystemPath).Returns(tmpDir);
+        appPaths.Setup(p => p.TempDirectory).Returns(tmpDir);
+        appPaths.Setup(p => p.VirtualDataPath).Returns(tmpDir);
+
+        var xmlSerializer = new Mock<MediaBrowser.Model.Serialization.IXmlSerializer>();
+        xmlSerializer
+            .Setup(x => x.DeserializeFromFile(typeof(PluginConfiguration), It.IsAny<string>()))
+            .Returns(_config);
+
+        var userManager = new Mock<MediaBrowser.Controller.Library.IUserManager>();
+
+        var plugin = new Plugin(
+            appPaths.Object,
+            xmlSerializer.Object,
+            _loggerFactory,
+            userManager.Object);
+
+        plugin.Configuration.ServerAddress = "http://localhost:8096";
+    }
+
+    [Fact]
+    public void BuildAudioPlayerResponse_NoAplDirective_WhenAplVisualsDisabled()
+    {
+        _config.AplVisualsEnabled = false;
+        Plugin.Instance!.Configuration.AplVisualsEnabled = false;
+
+        var handler = new TestAplHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+        var context = TestHelpers.CreateContextWithApl();
+        var user = TestHelpers.CreateTestUser();
+        var itemId = Guid.NewGuid();
+        var item = new MediaBrowser.Controller.Entities.Audio.Audio { Name = "Test Song", Id = itemId };
+
+        var response = handler.TestBuildAudioPlayerResponse(
+            global::Alexa.NET.Response.Directive.PlayBehavior.ReplaceAll,
+            "http://localhost:8096/Audio/" + itemId + "/stream?static=true",
+            itemId.ToString(), item, user, context);
+
+        Assert.NotNull(response);
+        // Should have exactly 1 directive: the AudioPlayerPlayDirective (no APL)
+        Assert.Single(response.Response.Directives);
+        Assert.IsType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>(response.Response.Directives[0]);
+    }
+
+    [Fact]
+    public void BuildAudioPlayerResponse_HasAplDirective_WhenAplVisualsEnabled()
+    {
+        _config.AplVisualsEnabled = true;
+        Plugin.Instance!.Configuration.AplVisualsEnabled = true;
+
+        var handler = new TestAplHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+        var context = TestHelpers.CreateContextWithApl();
+        var user = TestHelpers.CreateTestUser();
+        var itemId = Guid.NewGuid();
+        var item = new MediaBrowser.Controller.Entities.Audio.Audio { Name = "Test Song", Id = itemId };
+
+        var response = handler.TestBuildAudioPlayerResponse(
+            global::Alexa.NET.Response.Directive.PlayBehavior.ReplaceAll,
+            "http://localhost:8096/Audio/" + itemId + "/stream?static=true",
+            itemId.ToString(), item, user, context);
+
+        Assert.NotNull(response);
+        // Should have 2 directives: AudioPlayerPlayDirective + APL RenderDocument
+        Assert.Equal(2, response.Response.Directives.Count);
+        Assert.Contains(response.Response.Directives, d => d is global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective);
+    }
+
+    [Fact]
+    public void BuildAudioPlayerResponse_NoApl_WhenNonAplDevice()
+    {
+        _config.AplVisualsEnabled = true;
+        Plugin.Instance!.Configuration.AplVisualsEnabled = true;
+
+        var handler = new TestAplHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+        var context = TestHelpers.CreateContextWithoutApl();
+        var user = TestHelpers.CreateTestUser();
+        var itemId = Guid.NewGuid();
+        var item = new MediaBrowser.Controller.Entities.Audio.Audio { Name = "Test Song", Id = itemId };
+
+        var response = handler.TestBuildAudioPlayerResponse(
+            global::Alexa.NET.Response.Directive.PlayBehavior.ReplaceAll,
+            "http://localhost:8096/Audio/" + itemId + "/stream?static=true",
+            itemId.ToString(), item, user, context);
+
+        Assert.NotNull(response);
+        // Non-APL device: only AudioPlayer directive regardless of flag
+        Assert.Single(response.Response.Directives);
+    }
+
+    private class TestAplHandler : BaseHandler
+    {
+        public TestAplHandler(ISessionManager sessionManager, PluginConfiguration config, ILoggerFactory loggerFactory)
+            : base(sessionManager, config, loggerFactory)
+        {
+        }
+
+        public override bool CanHandle(Request request) => true;
+
+        public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
+            => Task.FromResult(ResponseBuilder.Tell("test"));
+
+        public SkillResponse TestBuildAudioPlayerResponse(
+            global::Alexa.NET.Response.Directive.PlayBehavior playBehavior,
+            string streamUrl, string itemId,
+            MediaBrowser.Controller.Entities.BaseItem item,
+            Entities.User user, Context context)
+            => BuildAudioPlayerResponse(playBehavior, streamUrl, itemId, item, user, context);
     }
 }
