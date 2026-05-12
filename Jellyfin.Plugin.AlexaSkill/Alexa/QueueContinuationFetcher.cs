@@ -1,0 +1,140 @@
+using System;
+using System.Collections.Generic;
+using Jellyfin.Data.Enums;
+using MediaBrowser.Controller.Dto;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Querying;
+using Microsoft.Extensions.Logging;
+using SortOrder = Jellyfin.Database.Implementations.Enums.SortOrder;
+
+namespace Jellyfin.Plugin.AlexaSkill.Alexa;
+
+/// <summary>
+/// Helper for fetching continuation batches from the Jellyfin library.
+/// </summary>
+internal static class QueueContinuationFetcher
+{
+    /// <summary>
+    /// Fetch the next batch of items based on continuation data.
+    /// Updates the continuation's StartIndex after fetching.
+    /// </summary>
+    /// <param name="continuation">The continuation state.</param>
+    /// <param name="libraryManager">The library manager for queries.</param>
+    /// <param name="userManager">The user manager for resolving Jellyfin users.</param>
+    /// <param name="logger">Logger for diagnostics.</param>
+    /// <returns>The fetched items, or empty list if no more items.</returns>
+    public static IReadOnlyList<BaseItem> FetchNextBatch(
+        QueueContinuation continuation,
+        ILibraryManager libraryManager,
+        IUserManager userManager,
+        ILogger logger)
+    {
+        if (continuation.StartIndex >= continuation.TotalCount)
+        {
+            return Array.Empty<BaseItem>();
+        }
+
+        var jellyfinUser = userManager.GetUserById(continuation.UserId);
+
+        IReadOnlyList<BaseItem> items = continuation.SourceType switch
+        {
+            "Album" => FetchAlbumTracks(continuation, libraryManager, jellyfinUser),
+            "Artist" => FetchArtistSongs(continuation, libraryManager, jellyfinUser),
+            "Playlist" => FetchPlaylistItems(continuation, libraryManager, jellyfinUser),
+            _ => Array.Empty<BaseItem>()
+        };
+
+        if (items.Count > 0)
+        {
+            logger.LogInformation(
+                "Progressive queue: fetched {Count} items for {SourceType} (offset {StartIndex}/{Total})",
+                items.Count,
+                continuation.SourceType,
+                continuation.StartIndex,
+                continuation.TotalCount);
+        }
+
+        return items;
+    }
+
+    private static IReadOnlyList<BaseItem> FetchAlbumTracks(
+        QueueContinuation continuation,
+        ILibraryManager libraryManager,
+        Jellyfin.Database.Implementations.Entities.User? jellyfinUser)
+    {
+        var query = new InternalItemsQuery
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            ParentId = continuation.ParentId ?? Guid.Empty,
+            MediaTypes = new[] { MediaType.Audio },
+            DtoOptions = new DtoOptions(true),
+            StartIndex = continuation.StartIndex,
+            Limit = continuation.BatchSize
+        };
+
+        QueryResult<BaseItem> result = libraryManager.GetItemsResult(query);
+        continuation.StartIndex += result.Items.Count;
+        return result.Items;
+    }
+
+    private static IReadOnlyList<BaseItem> FetchArtistSongs(
+        QueueContinuation continuation,
+        ILibraryManager libraryManager,
+        Jellyfin.Database.Implementations.Entities.User? jellyfinUser)
+    {
+        var query = new InternalItemsQuery
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            MediaTypes = new[] { MediaType.Audio },
+            DtoOptions = new DtoOptions(true),
+            ArtistIds = continuation.ArtistId.HasValue ? new[] { continuation.ArtistId.Value } : Array.Empty<Guid>(),
+            StartIndex = continuation.StartIndex,
+            Limit = continuation.BatchSize
+        };
+
+        if (continuation.SortOrder != null)
+        {
+            query.OrderBy = continuation.SortOrder;
+        }
+
+        QueryResult<BaseItem> result = libraryManager.GetItemsResult(query);
+        continuation.StartIndex += result.Items.Count;
+        return result.Items;
+    }
+
+    private static IReadOnlyList<BaseItem> FetchPlaylistItems(
+        QueueContinuation continuation,
+        ILibraryManager libraryManager,
+        Jellyfin.Database.Implementations.Entities.User? jellyfinUser)
+    {
+        if (continuation.PlaylistId == null)
+        {
+            return Array.Empty<BaseItem>();
+        }
+
+        BaseItem? playlist = libraryManager.GetItemById(continuation.PlaylistId.Value);
+        if (playlist is not Folder folder)
+        {
+            return Array.Empty<BaseItem>();
+        }
+
+        // Playlist items use GetItemList with StartIndex/Limit
+        var query = new InternalItemsQuery
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            ParentId = playlist.Id,
+            MediaTypes = new[] { MediaType.Audio },
+            DtoOptions = new DtoOptions(true),
+            StartIndex = continuation.StartIndex,
+            Limit = continuation.BatchSize
+        };
+
+        QueryResult<BaseItem> result = libraryManager.GetItemsResult(query);
+        continuation.StartIndex += result.Items.Count;
+        return result.Items;
+    }
+}
