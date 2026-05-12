@@ -7,6 +7,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Session;
@@ -20,17 +21,22 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public class ClearQueueIntentHandler : BaseHandler
 {
+    private readonly DeviceQueueManager? _queueManager;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="ClearQueueIntentHandler"/> class.
     /// </summary>
     /// <param name="sessionManager">Instance of the <see cref="ISessionManager"/> interface.</param>
     /// <param name="config">The plugin configuration.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
+    /// <param name="queueManager">Optional per-device queue manager for crash recovery.</param>
     public ClearQueueIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
+        ILoggerFactory loggerFactory,
+        DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
+        _queueManager = queueManager;
     }
 
     /// <inheritdoc/>
@@ -57,6 +63,9 @@ public class ClearQueueIntentHandler : BaseHandler
         {
             session.NowPlayingQueue = new List<QueueItem>();
         }
+
+        // Clear the persisted device queue as well
+        _queueManager?.Clear(context.System.Device.DeviceID);
 
         Logger.LogInformation("ClearQueueIntent: queue cleared");
         return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("QueueCleared", locale)));

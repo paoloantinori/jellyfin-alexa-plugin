@@ -11,6 +11,7 @@ using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -30,6 +31,7 @@ public class PlayPlaylistIntentHandler : BaseHandler
 {
     private ILibraryManager _libraryManager;
     private IUserManager _userManager;
+    private readonly DeviceQueueManager? _queueManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PlayPlaylistIntentHandler"/> class.
@@ -39,15 +41,18 @@ public class PlayPlaylistIntentHandler : BaseHandler
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
+    /// <param name="queueManager">Optional per-device queue manager for crash recovery.</param>
     public PlayPlaylistIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
+        ILoggerFactory loggerFactory,
+        DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
+        _queueManager = queueManager;
     }
 
     /// <inheritdoc/>
@@ -71,7 +76,12 @@ public class PlayPlaylistIntentHandler : BaseHandler
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
 
-        string playlistName = intentRequest.Intent.Slots["playlist"].Value;
+        string? playlistName = intentRequest.Intent.Slots?.TryGetValue("playlist", out var playlistSlot) == true ? playlistSlot.Value : null;
+
+        if (string.IsNullOrWhiteSpace(playlistName))
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchPlaylistName", locale));
+        }
 
         Logger.LogDebug("Play playlist: {0}", playlistName);
 
@@ -140,19 +150,24 @@ public class PlayPlaylistIntentHandler : BaseHandler
 
         BaseItem playlist = playlistMatch!;
 
-        // Get the playlist items
-        IReadOnlyList<BaseItem> playlistItems = ((Folder)playlist).GetItemList(new InternalItemsQuery()
+        // Get playlist items using the library manager for consistent pagination.
+        // Fetch the first page for fast time-to-audio; rest is fetched on demand.
+        QueryResult<BaseItem> playlistResult = _libraryManager.GetItemsResult(new InternalItemsQuery
         {
             User = jellyfinUser,
             Recursive = true,
+            ParentId = playlist.Id,
             MediaTypes = new[] { MediaType.Audio },
             DtoOptions = new DtoOptions(true),
+            Limit = ProgressiveQueueConstants.InitialFetchSize
         });
 
-        if (playlistItems.Count == 0)
+        if (playlistResult.TotalRecordCount == 0)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("PlaylistEmpty", locale));
         }
+
+        IReadOnlyList<BaseItem> playlistItems = playlistResult.Items;
 
         List<QueueItem> queueItems = new List<QueueItem>();
         for (int i = 0; i < playlistItems.Count; i++)
@@ -168,12 +183,38 @@ public class PlayPlaylistIntentHandler : BaseHandler
         session.NowPlayingQueue = queueItems;
 
         BaseItem? firstItem = _libraryManager.GetItemById(queueItems[0].Id);
+
+        // Persist queue to device storage for crash recovery
+        if (firstItem != null)
+        {
+            _queueManager?.SetQueue(
+                context.System.Device.DeviceID,
+                playlistItems.Select(i => i.Id.ToString()).ToList(),
+                0);
+        }
         if (firstItem == null)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale));
         }
 
         session.FullNowPlayingItem = firstItem;
+
+        // Store continuation info so PlaybackNearlyFinished can fetch the rest
+        if (playlistResult.TotalRecordCount > playlistItems.Count)
+        {
+            QueueContinuationStore.Set(
+                session.UserId,
+                context.System.Device.DeviceID,
+                new QueueContinuation
+                {
+                    SourceType = "Playlist",
+                    ParentId = playlist.Id,
+                    PlaylistId = playlist.Id,
+                    StartIndex = playlistItems.Count,
+                    TotalCount = playlistResult.TotalRecordCount,
+                    UserId = jellyfinUser.Id
+                });
+        }
 
         string item_id = firstItem.Id.ToString();
 

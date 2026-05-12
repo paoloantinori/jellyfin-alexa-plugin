@@ -10,12 +10,14 @@ using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Entities;
+using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
 
@@ -29,6 +31,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
     private readonly IUserDataManager _userDataManager;
+    private readonly DeviceQueueManager? _queueManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PlayArtistSongsIntentHandler"/> class.
@@ -39,17 +42,20 @@ public class PlayArtistSongsIntentHandler : BaseHandler
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="userDataManager">Instance of the <see cref="IUserDataManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
+    /// <param name="queueManager">Optional per-device queue manager for crash recovery.</param>
     public PlayArtistSongsIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
         IUserDataManager userDataManager,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
+        ILoggerFactory loggerFactory,
+        DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _userDataManager = userDataManager;
+        _queueManager = queueManager;
     }
 
     /// <inheritdoc/>
@@ -72,7 +78,12 @@ public class PlayArtistSongsIntentHandler : BaseHandler
     {
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
-        string musician = intentRequest.Intent.Slots["musician"].Value;
+        string? musician = intentRequest.Intent.Slots?.TryGetValue("musician", out var musicianSlot) == true ? musicianSlot.Value : null;
+
+        if (string.IsNullOrWhiteSpace(musician))
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchArtistName", locale));
+        }
 
         await SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)).ConfigureAwait(false);
 
@@ -130,25 +141,29 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         }
 
         string matchedArtistName = artists[0].Name;
-        IReadOnlyList<BaseItem> artistsItems = await RetryAsync(
-            () => _libraryManager.GetItemList(new InternalItemsQuery()
+
+        // Fetch the first page of artist songs for fast time-to-audio.
+        // Remaining songs will be fetched on demand by PlaybackNearlyFinished.
+        QueryResult<BaseItem> artistResult = await RetryAsync(
+            () => _libraryManager.GetItemsResult(new InternalItemsQuery()
             {
                 User = jellyfinUser,
                 Recursive = true,
                 MediaTypes = new[] { MediaType.Audio },
                 OrderBy = PopularitySort,
                 DtoOptions = new DtoOptions(true),
-                ArtistIds = new[] { artists[0].Id }
+                ArtistIds = new[] { artists[0].Id },
+                Limit = ProgressiveQueueConstants.InitialFetchSize
             }),
             "GetArtistSongs",
             cancellationToken).ConfigureAwait(false);
 
-        artistsItems = FavoritesFirst(artistsItems, jellyfinUser, _userDataManager);
-
-        if (artistsItems.Count == 0)
+        if (artistResult.TotalRecordCount == 0)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NoSongsForArtist", locale, matchedArtistName));
         }
+
+        IReadOnlyList<BaseItem> artistsItems = FavoritesFirst(artistResult.Items, jellyfinUser, _userDataManager);
 
         List<QueueItem> queueItems = new List<QueueItem>();
         for (int i = 0; i < artistsItems.Count; i++)
@@ -162,6 +177,29 @@ public class PlayArtistSongsIntentHandler : BaseHandler
 
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = artistsItems[0];
+
+        // Persist queue to device storage for crash recovery
+        _queueManager?.SetQueue(
+            context.System.Device.DeviceID,
+            artistsItems.Select(i => i.Id.ToString()).ToList(),
+            0);
+
+        // Store continuation info so PlaybackNearlyFinished can fetch the rest
+        if (artistResult.TotalRecordCount > artistResult.Items.Count)
+        {
+            QueueContinuationStore.Set(
+                session.UserId,
+                context.System.Device.DeviceID,
+                new QueueContinuation
+                {
+                    SourceType = "Artist",
+                    ArtistId = artists[0].Id,
+                    StartIndex = artistResult.Items.Count,
+                    TotalCount = artistResult.TotalRecordCount,
+                    UserId = jellyfinUser.Id,
+                    SortOrder = PopularitySort
+                });
+        }
 
         string item_id = artistsItems[0].Id.ToString();
 

@@ -8,6 +8,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -29,6 +30,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
 {
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
+    private readonly DeviceQueueManager? _queueManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PlaybackNearlyFinishedEventHandler"/> class.
@@ -38,15 +40,18 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
+    /// <param name="queueManager">Optional per-device queue manager for crash recovery.</param>
     public PlaybackNearlyFinishedEventHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
+        ILoggerFactory loggerFactory,
+        DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
+        _queueManager = queueManager;
     }
 
     /// <inheritdoc/>
@@ -58,7 +63,8 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
 
     /// <summary>
     /// Pre-fetch the next item in the queue and enqueue it for gapless playback.
-    /// Handles loop modes (RepeatOne, RepeatAll), shuffle, and radio mode auto-population.
+    /// Handles loop modes (RepeatOne, RepeatAll), shuffle, radio mode auto-population,
+    /// and progressive queue continuation for large libraries.
     /// </summary>
     /// <param name="request">The skill request which should be handled.</param>
     /// <param name="context">The context of the skill intent request.</param>
@@ -84,6 +90,9 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             }
         }
 
+        // Progressive queue building: fetch more items if we're approaching the end
+        TryFetchContinuationBatch(session, context);
+
         Guid? nextItemId = ResolveNextItemId(session, context);
 
         // If no next item and radio mode is on, auto-populate similar tracks
@@ -94,6 +103,9 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
 
         if (nextItemId == null)
         {
+            // Clean up continuation state when queue is exhausted
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID);
+
             Logger.LogDebug("No next item in queue, playback will end after current track");
             return ResponseBuilder.Empty();
         }
@@ -108,6 +120,12 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
 
         string itemId = item.Id.ToString();
 
+        // Update the device queue pointer for crash recovery
+        if (_queueManager != null)
+        {
+            _queueManager.MoveTo(context.System.Device.DeviceID, itemId);
+        }
+
         // Use the optimized /stream?static=true endpoint for pre-fetched playback
         // (the original /universal endpoint adds an extra redirect hop)
         string audioUrl = GetStreamUrl(itemId, user);
@@ -120,6 +138,91 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             session.PlayState?.PlaybackOrder ?? PlaybackOrder.Default);
 
         return BuildAudioPlayerResponse(PlayBehavior.Enqueue, audioUrl, itemId, item, user, context);
+    }
+
+    /// <summary>
+    /// Check if the queue is running low and fetch more items from continuation state.
+    /// This enables progressive queue building: the initial bulk-play handler fetches
+    /// only the first few items, and this method lazily fetches the rest as needed.
+    /// </summary>
+    /// <param name="session">The current Jellyfin session.</param>
+    /// <param name="context">The Alexa context for device identification.</param>
+    private void TryFetchContinuationBatch(SessionInfo session, Context context)
+    {
+        QueueContinuation? continuation = QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID);
+        if (continuation == null)
+        {
+            return;
+        }
+
+        // Find current position in the queue
+        Guid? currentItemId = session.FullNowPlayingItem?.Id;
+        if (currentItemId == null && context.AudioPlayer?.Token != null
+            && Guid.TryParse(context.AudioPlayer.Token, out Guid parsedToken))
+        {
+            currentItemId = parsedToken;
+        }
+
+        if (currentItemId == null)
+        {
+            return;
+        }
+
+        int currentIndex = -1;
+        for (int i = 0; i < session.NowPlayingQueue.Count; i++)
+        {
+            if (session.NowPlayingQueue[i].Id == currentItemId.Value)
+            {
+                currentIndex = i;
+                break;
+            }
+        }
+
+        if (currentIndex < 0)
+        {
+            return;
+        }
+
+        // Only fetch when approaching the end of the current queue
+        int remaining = session.NowPlayingQueue.Count - currentIndex - 1;
+        if (remaining > ProgressiveQueueConstants.PrefetchThreshold)
+        {
+            return;
+        }
+
+        // Fetch the next batch
+        IReadOnlyList<BaseItem> newItems = QueueContinuationFetcher.FetchNextBatch(
+            continuation,
+            _libraryManager,
+            _userManager,
+            Logger);
+
+        if (newItems.Count == 0)
+        {
+            // No more items to fetch, remove continuation state
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID);
+            return;
+        }
+
+        // Append new items to the queue (deduplicating)
+        var queue = new List<QueueItem>(session.NowPlayingQueue);
+        var seen = new HashSet<Guid>(queue.Select(q => q.Id));
+
+        foreach (BaseItem item in newItems)
+        {
+            if (seen.Add(item.Id))
+            {
+                queue.Add(new QueueItem { Id = item.Id });
+            }
+        }
+
+        session.NowPlayingQueue = queue;
+
+        // Remove continuation if we've fetched everything
+        if (continuation.StartIndex >= continuation.TotalCount)
+        {
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID);
+        }
     }
 
     /// <summary>

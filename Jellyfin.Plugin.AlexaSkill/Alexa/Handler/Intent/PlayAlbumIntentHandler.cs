@@ -10,12 +10,14 @@ using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Entities;
+using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
 
@@ -28,6 +30,7 @@ public class PlayAlbumIntentHandler : BaseHandler
 {
     private ILibraryManager _libraryManager;
     private IUserManager _userManager;
+    private readonly DeviceQueueManager? _queueManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PlayAlbumIntentHandler"/> class.
@@ -37,15 +40,18 @@ public class PlayAlbumIntentHandler : BaseHandler
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
+    /// <param name="queueManager">Optional per-device queue manager for crash recovery.</param>
     public PlayAlbumIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
+        ILoggerFactory loggerFactory,
+        DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
+        _queueManager = queueManager;
     }
 
     /// <inheritdoc/>
@@ -165,22 +171,26 @@ public class PlayAlbumIntentHandler : BaseHandler
             }
         }
 
-        // Get all songs from the album
-        IReadOnlyList<BaseItem> albumItems = await RetryAsync(
-            () => _libraryManager.GetItemList(new InternalItemsQuery()
+        // Get the first page of album tracks for fast time-to-audio.
+        // Remaining tracks will be fetched on demand by PlaybackNearlyFinished.
+        QueryResult<BaseItem> albumResult = await RetryAsync(
+            () => _libraryManager.GetItemsResult(new InternalItemsQuery()
             {
                 User = jellyfinUser,
                 Recursive = true,
                 ParentId = albums[0].Id,
                 MediaTypes = new[] { MediaType.Audio },
                 DtoOptions = new DtoOptions(true),
+                Limit = ProgressiveQueueConstants.InitialFetchSize
             }),
             "GetAlbumTracks",
             cancellationToken).ConfigureAwait(false);
-        if (albumItems.Count == 0)
+        if (albumResult.TotalRecordCount == 0)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NoSongsInAlbum", locale, album));
         }
+
+        IReadOnlyList<BaseItem> albumItems = albumResult.Items;
 
         List<QueueItem> queueItems = new List<QueueItem>();
         for (int i = 0; i < albumItems.Count; i++)
@@ -194,6 +204,28 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = albumItems[0];
+
+        // Persist queue to device storage for crash recovery
+        _queueManager?.SetQueue(
+            context.System.Device.DeviceID,
+            albumItems.Select(i => i.Id.ToString()).ToList(),
+            0);
+
+        // Store continuation info so PlaybackNearlyFinished can fetch the rest
+        if (albumResult.TotalRecordCount > albumItems.Count)
+        {
+            QueueContinuationStore.Set(
+                session.UserId,
+                context.System.Device.DeviceID,
+                new QueueContinuation
+                {
+                    SourceType = "Album",
+                    ParentId = albums[0].Id,
+                    StartIndex = albumItems.Count,
+                    TotalCount = albumResult.TotalRecordCount,
+                    UserId = jellyfinUser.Id
+                });
+        }
 
         string item_id = albumItems[0].Id.ToString();
 
