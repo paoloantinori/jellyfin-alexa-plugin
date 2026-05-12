@@ -21,6 +21,7 @@
   "NoSongsInAlbum": "Es gibt keine Lieder im Album {0}.",
   "NotFoundPlaylist": "Ich konnte keine Playlist mit dem Namen {0} finden.",
   "PlaylistEmpty": "Die Playlist ist leer.",
+  "DidNotCatchPlaylistName": "Ich habe den Namen der Playlist nicht verstanden. Welche Playlist möchtest du hören?",
   "NoFavoriteItems": "Keine Favoriten gefunden.",
   "NoNewlyAddedItems": "Keine neu hinzugefuegten Elemente gefunden.",
   "NotFoundArtist": "Entschuldigung, ich konnte keinen Kuenstler mit dem Namen {0} finden.",
@@ -111,5 +112,13 @@
   "FuzzySuggestionPromptSsml": "Ich habe '{0}' nicht gefunden.<break time=\"200ms\"/>Meintest du <emphasis level=\"moderate\">{1}</emphasis>?",
   "FuzzyAutoPlayAnnouncement": "Spiele {0} (beste Übereinstimmung für '{1}')",
   "FuzzyAutoPlayAnnouncementSsml": "Spiele <emphasis level=\"moderate\">{0}</emphasis><break time=\"150ms\"/>beste Übereinstimmung für '{1}'",
-  "FuzzySuggestionReprompt": "Du kannst ja oder nein sagen."
+  "FuzzySuggestionReprompt": "Du kannst ja oder nein sagen.",
+  "ResumePrompt": "Du hast {0} gehört. Möchtest du weiterhören?",
+  "ResumePromptSsml": "",
+  "ResumeReprompt": "Möchtest du dort weitermachen, wo du aufgehört hast?",
+  "QueryRecentlyAddedIntro": "Hier sind die {0} zuletzt hinzugefügten Elemente:",
+  "QueryRecentlyAddedItem": "{0}. {1} von {2}",
+  "QueryRecentlyAddedItemNoArtist": "{0}. {1}",
+  "QueryRecentlyAddedEmpty": "Keine kürzlich hinzugefügten Elemente gefunden.",
+  "QueryRecentlyAddedPrompt": "Sag die Nummer, um eines abzuspielen."
 }

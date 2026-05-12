@@ -3,6 +3,18 @@
     "invocationName": "jellyfin player",
     "intents": [
       {
+        "name": "QueryRecentlyAddedIntent",
+        "samples": [
+          "qué hay de nuevo",
+          "qué se añadió recientemente",
+          "muéstrame las novedades",
+          "hay algo nuevo",
+          "cuáles son los últimos añadidos",
+          "qué hay de nuevo en mi biblioteca",
+          "listar los elementos recientes"
+        ]
+      },
+      {
         "name": "AMAZON.CancelIntent"
       },
       {

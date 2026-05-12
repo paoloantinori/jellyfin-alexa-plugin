@@ -42,6 +42,7 @@ internal static class IntentNames
     public const string PlayPodcast = "PlayPodcastIntent";
     public const string SearchMedia = "SearchMediaIntent";
     public const string SetReminder = "SetReminderIntent";
+    public const string QueryRecentlyAdded = "QueryRecentlyAddedIntent";
 
     public const string AmazonFallback = "AMAZON.FallbackIntent";
     public const string AmazonLoopOff = "AMAZON.LoopOffIntent";
