@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Jellyfin.Plugin.AlexaSkill.Configuration;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa;
 
@@ -21,6 +22,18 @@ internal static class FuzzyMatcher
     /// trigger "Did you mean?" or auto-play behavior depending on config.
     /// </summary>
     public const int SuggestionThreshold = 40;
+
+    /// <summary>
+    /// Gets the configured default fuzzy match threshold, falling back to the compile-time constant.
+    /// </summary>
+    public static int GetDefaultThreshold() =>
+        Plugin.Instance?.Configuration?.FuzzyMatchThreshold ?? DefaultThreshold;
+
+    /// <summary>
+    /// Gets the configured fuzzy suggestion threshold, falling back to the compile-time constant.
+    /// </summary>
+    public static int GetSuggestionThreshold() =>
+        Plugin.Instance?.Configuration?.FuzzySuggestionThreshold ?? SuggestionThreshold;
 
     /// <summary>
     /// Find the best matching item from a list of candidates using partial ratio scoring.

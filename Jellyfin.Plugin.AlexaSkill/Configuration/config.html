@@ -152,6 +152,41 @@
                     </div>
                 </div>
 
+                <div class="verticalSection verticalSection-extrabottompadding">
+                    <h2 class="sectionTitle">Search Preferences</h2>
+                    <div class="fieldDescription" style="margin-bottom:1em;">Control how media search and fuzzy matching behave. Libraries of different sizes need different tuning.</div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="MaxSearchResults">Max Search Results</label>
+                        <input id="MaxSearchResults" name="MaxSearchResults" type="number" is="emby-input" min="1" max="50" />
+                        <div class="fieldDescription">Maximum items returned by media search (1–50).</div>
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="MaxBrowseResults">Max Browse Results</label>
+                        <input id="MaxBrowseResults" name="MaxBrowseResults" type="number" is="emby-input" min="1" max="20" />
+                        <div class="fieldDescription">Items shown when browsing library by category (1–20).</div>
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="MaxRecentlyAddedResults">Max Recently Added Results</label>
+                        <input id="MaxRecentlyAddedResults" name="MaxRecentlyAddedResults" type="number" is="emby-input" min="1" max="50" />
+                        <div class="fieldDescription">Items shown in "recently added" queries (1–50).</div>
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="MaxRecommendationResults">Max Recommendation Results</label>
+                        <input id="MaxRecommendationResults" name="MaxRecommendationResults" type="number" is="emby-input" min="1" max="30" />
+                        <div class="fieldDescription">Items shown in recommendations (1–30).</div>
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="FuzzyMatchThreshold">Fuzzy Match Threshold</label>
+                        <input id="FuzzyMatchThreshold" name="FuzzyMatchThreshold" type="number" is="emby-input" min="0" max="100" />
+                        <div class="fieldDescription">Minimum similarity score for a valid match (0–100). Lower = more permissive, higher = stricter.</div>
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="FuzzySuggestionThreshold">Fuzzy Suggestion Threshold</label>
+                        <input id="FuzzySuggestionThreshold" name="FuzzySuggestionThreshold" type="number" is="emby-input" min="0" max="100" />
+                        <div class="fieldDescription">Minimum score for "did you mean?" suggestions (0–100). Lower = more suggestions shown.</div>
+                    </div>
+                </div>
+
                 <div class="detailSectionHeader">
                     <h2 style="margin:.6em 0;vertical-align:middle;display:inline-block">User Skill Configuration</h2>
                     <button id="newUserSkillButton" is="emby-button" type="button" class="fab submit emby-button" style="margin-left:1em" title="Add NeW User Skill">
@@ -217,6 +252,14 @@
                     document.querySelector("#InitialFetchSize").value = config.InitialFetchSize != null ? config.InitialFetchSize : 5;
                     document.querySelector("#ContinuationBatchSize").value = config.ContinuationBatchSize != null ? config.ContinuationBatchSize : 10;
                     document.querySelector("#PrefetchThreshold").value = config.PrefetchThreshold != null ? config.PrefetchThreshold : 2;
+
+                    // Search preferences
+                    document.querySelector("#MaxSearchResults").value = config.MaxSearchResults != null ? config.MaxSearchResults : 20;
+                    document.querySelector("#MaxBrowseResults").value = config.MaxBrowseResults != null ? config.MaxBrowseResults : 5;
+                    document.querySelector("#MaxRecentlyAddedResults").value = config.MaxRecentlyAddedResults != null ? config.MaxRecentlyAddedResults : 10;
+                    document.querySelector("#MaxRecommendationResults").value = config.MaxRecommendationResults != null ? config.MaxRecommendationResults : 10;
+                    document.querySelector("#FuzzyMatchThreshold").value = config.FuzzyMatchThreshold != null ? config.FuzzyMatchThreshold : 60;
+                    document.querySelector("#FuzzySuggestionThreshold").value = config.FuzzySuggestionThreshold != null ? config.FuzzySuggestionThreshold : 40;
 
                     for (let user of config.Users) {
                         document.querySelector("#userTableBody").appendChild(createUserRow(user, config));
@@ -445,6 +488,20 @@
                     config.ContinuationBatchSize = isNaN(cbRaw) ? 10 : cbRaw;
                     var pfRaw = parseInt(document.querySelector("#PrefetchThreshold").value);
                     config.PrefetchThreshold = isNaN(pfRaw) ? 2 : pfRaw;
+
+                    // Search preferences
+                    var msrRaw = parseInt(document.querySelector("#MaxSearchResults").value);
+                    config.MaxSearchResults = isNaN(msrRaw) ? 20 : msrRaw;
+                    var mbrRaw = parseInt(document.querySelector("#MaxBrowseResults").value);
+                    config.MaxBrowseResults = isNaN(mbrRaw) ? 5 : mbrRaw;
+                    var mraRaw = parseInt(document.querySelector("#MaxRecentlyAddedResults").value);
+                    config.MaxRecentlyAddedResults = isNaN(mraRaw) ? 10 : mraRaw;
+                    var mrrRaw = parseInt(document.querySelector("#MaxRecommendationResults").value);
+                    config.MaxRecommendationResults = isNaN(mrrRaw) ? 10 : mrrRaw;
+                    var fmtRaw = parseInt(document.querySelector("#FuzzyMatchThreshold").value);
+                    config.FuzzyMatchThreshold = isNaN(fmtRaw) ? 60 : fmtRaw;
+                    var fstRaw = parseInt(document.querySelector("#FuzzySuggestionThreshold").value);
+                    config.FuzzySuggestionThreshold = isNaN(fstRaw) ? 40 : fstRaw;
 
                     for (let row of document.querySelector("#userTableBody").rows) {
                         const userId = row.getAttribute("data-id");

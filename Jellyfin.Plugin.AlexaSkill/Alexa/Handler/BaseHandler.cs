@@ -639,10 +639,11 @@ public abstract class BaseHandler
     /// <param name="selector">Function to extract the comparable string.</param>
     /// <param name="threshold">Minimum similarity score (0-100).</param>
     /// <returns>The best matching item, or null.</returns>
-    protected static T? FuzzyMatch<T>(string query, IEnumerable<T> candidates, Func<T, string> selector, int threshold = FuzzyMatcher.DefaultThreshold)
+    protected static T? FuzzyMatch<T>(string query, IEnumerable<T> candidates, Func<T, string> selector, int threshold = -1)
         where T : class
     {
-        return FuzzyMatcher.FindBestMatch(query, candidates, selector, threshold);
+        int effectiveThreshold = threshold >= 0 ? threshold : FuzzyMatcher.GetDefaultThreshold();
+        return FuzzyMatcher.FindBestMatch(query, candidates, selector, effectiveThreshold);
     }
 
     /// <summary>
@@ -683,7 +684,7 @@ public abstract class BaseHandler
     {
         var bestWithScore = FuzzyMatcher.FindBestMatchWithScore(query, candidates, selector);
 
-        if (bestWithScore == null || bestWithScore.Value.Score < FuzzyMatcher.SuggestionThreshold)
+        if (bestWithScore == null || bestWithScore.Value.Score < FuzzyMatcher.GetSuggestionThreshold())
         {
             return (FuzzyMissOutcome.NotFound, null);
         }
@@ -693,7 +694,7 @@ public abstract class BaseHandler
 
         // High-confidence matches auto-accept regardless of FuzzyMatchBehavior.
         // Only borderline matches (SuggestionThreshold..DefaultThreshold) consult the config.
-        bool autoAccept = score >= FuzzyMatcher.DefaultThreshold
+        bool autoAccept = score >= FuzzyMatcher.GetDefaultThreshold()
             || (_config.FuzzyMatchBehavior == FuzzyMatchBehavior.AutoPlay && autoPlayFunc != null);
 
         if (autoAccept && autoPlayFunc != null)

@@ -28,7 +28,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public class BrowseLibraryIntentHandler : BaseHandler
 {
-    private const int MaxResults = 5;
+    private static int MaxResults => Plugin.Instance?.Configuration?.MaxBrowseResults ?? 5;
 
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;

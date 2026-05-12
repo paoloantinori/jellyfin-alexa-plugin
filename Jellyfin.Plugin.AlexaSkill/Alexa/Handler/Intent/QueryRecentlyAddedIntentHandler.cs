@@ -28,7 +28,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public class QueryRecentlyAddedIntentHandler : BaseHandler
 {
-    private const int MaxResults = 10;
+    private static int MaxResults => Plugin.Instance?.Configuration?.MaxRecentlyAddedResults ?? 10;
 
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;

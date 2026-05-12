@@ -106,6 +106,14 @@ public class PluginConfiguration : BasePluginConfiguration
     public int ContinuationBatchSize { get; set; } = 10;
     public int PrefetchThreshold { get; set; } = 2;
 
+    // Search preferences
+    public int MaxSearchResults { get; set; } = 20;
+    public int MaxBrowseResults { get; set; } = 5;
+    public int MaxRecentlyAddedResults { get; set; } = 10;
+    public int MaxRecommendationResults { get; set; } = 10;
+    public int FuzzyMatchThreshold { get; set; } = 60;
+    public int FuzzySuggestionThreshold { get; set; } = 40;
+
     /// <summary>
     /// Gets or sets the list of users.
     /// </summary>
@@ -181,6 +189,36 @@ public class PluginConfiguration : BasePluginConfiguration
         if (PrefetchThreshold < 0 || PrefetchThreshold > 10)
         {
             errors.Add("Pre-fetch Threshold must be between 0 and 10.");
+        }
+
+        if (MaxSearchResults < 1 || MaxSearchResults > 50)
+        {
+            errors.Add("Max Search Results must be between 1 and 50.");
+        }
+
+        if (MaxBrowseResults < 1 || MaxBrowseResults > 20)
+        {
+            errors.Add("Max Browse Results must be between 1 and 20.");
+        }
+
+        if (MaxRecentlyAddedResults < 1 || MaxRecentlyAddedResults > 50)
+        {
+            errors.Add("Max Recently Added Results must be between 1 and 50.");
+        }
+
+        if (MaxRecommendationResults < 1 || MaxRecommendationResults > 30)
+        {
+            errors.Add("Max Recommendation Results must be between 1 and 30.");
+        }
+
+        if (FuzzyMatchThreshold < 0 || FuzzyMatchThreshold > 100)
+        {
+            errors.Add("Fuzzy Match Threshold must be between 0 and 100.");
+        }
+
+        if (FuzzySuggestionThreshold < 0 || FuzzySuggestionThreshold > 100)
+        {
+            errors.Add("Fuzzy Suggestion Threshold must be between 0 and 100.");
         }
 
         return errors;

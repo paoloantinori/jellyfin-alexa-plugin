@@ -98,7 +98,7 @@ public class SearchMediaIntentHandler : BaseHandler
             Recursive = true,
             SearchTerm = query,
             IncludeItemTypes = FilterByContentAccess(_playableTypes),
-            Limit = 20,
+            Limit = Plugin.Instance?.Configuration?.MaxSearchResults ?? 20,
             OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
             DtoOptions = new DtoOptions(true)
         };

@@ -130,7 +130,7 @@ public class RecommendIntentHandler : BaseHandler
                 IncludeItemTypes = itemTypes,
                 Genres = genres.ToArray(),
                 IsPlayed = false,
-                Limit = 10,
+                Limit = Plugin.Instance?.Configuration?.MaxRecommendationResults ?? 10,
                 OrderBy = new[] { (ItemSortBy.Random, SortOrder.Ascending) },
                 DtoOptions = new DtoOptions(true)
             };
@@ -151,7 +151,7 @@ public class RecommendIntentHandler : BaseHandler
                 Recursive = true,
                 IncludeItemTypes = itemTypes,
                 IsPlayed = false,
-                Limit = 10,
+                Limit = Plugin.Instance?.Configuration?.MaxRecommendationResults ?? 10,
                 OrderBy = new[] { (ItemSortBy.Random, SortOrder.Ascending) },
                 DtoOptions = new DtoOptions(true)
             };
