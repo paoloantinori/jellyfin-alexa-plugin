@@ -72,18 +72,26 @@ public class YesIntentHandler : BaseHandler
     }
 
     /// <summary>
-    /// Handle with session attributes - resolve disambiguation by playing the selected match.
+    /// Handle with session attributes - resolve resume confirmation or disambiguation.
+    /// Resume confirmation takes priority over disambiguation when both are present.
     /// </summary>
     /// <param name="request">The skill request which should be handled.</param>
     /// <param name="context">The context of the skill intent request.</param>
     /// <param name="user">The user instance.</param>
     /// <param name="session">The session instance.</param>
-    /// <param name="sessionAttributes">The session attributes containing disambiguation state.</param>
+    /// <param name="sessionAttributes">The session attributes containing disambiguation or resume state.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task representing the async operation.</returns>
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, Dictionary<string, object>? sessionAttributes, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
+
+        // Check for resume confirmation first
+        var resumeState = ResumeHelper.ReadState(sessionAttributes);
+        if (resumeState != null)
+        {
+            return HandleResumeConfirmation(resumeState, user, session, context, locale);
+        }
 
         var state = DisambiguationHelper.ReadState(sessionAttributes);
         if (state == null)
@@ -124,6 +132,51 @@ public class YesIntentHandler : BaseHandler
             DisambiguationHelper.MediaTypePlaylist => PlayPlaylist(item, jellyfinUser!, user, session, locale),
             _ => ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale))
         };
+
+        return Task.FromResult(response);
+    }
+
+    /// <summary>
+    /// Handle resume confirmation: play the stored item from the stored offset.
+    /// </summary>
+    private Task<SkillResponse> HandleResumeConfirmation(
+        ResumeHelper.ResumeState resumeState,
+        Entities.User user,
+        SessionInfo session,
+        Context context,
+        string locale)
+    {
+        BaseItem? item = null;
+        if (Guid.TryParse(resumeState.ItemId, out Guid itemGuid))
+        {
+            item = _libraryManager.GetItemById(itemGuid);
+        }
+
+        if (item == null)
+        {
+            Logger.LogWarning("ResumeConfirmation: could not find item {ItemId}", resumeState.ItemId);
+            return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale)));
+        }
+
+        string itemId = item.Id.ToString();
+        session.FullNowPlayingItem = item;
+
+        int offsetMs = (int)Math.Min(resumeState.OffsetMs, int.MaxValue);
+        SkillResponse response = BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll,
+            GetStreamUrl(itemId, user),
+            itemId,
+            item,
+            user,
+            context,
+            offsetMs);
+
+        // Replace default speech with resume announcement
+        string title = item.Name ?? ResponseStrings.Get("UnknownMedia", locale);
+        string? ssml = GetSsml("ResumingSsml", locale, EscapeXml(title));
+        response.Response.OutputSpeech = ssml != null
+            ? new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" }
+            : new PlainTextOutputSpeech { Text = ResponseStrings.Get("Resuming", locale, title) };
 
         return Task.FromResult(response);
     }

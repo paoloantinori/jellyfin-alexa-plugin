@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,11 +14,15 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
 /// <summary>
 /// Handler for LaunchRequest intents.
+/// When the skill is re-launched while audio was previously active, detects the
+/// prior playback state via the AudioPlayer context and asks the user whether
+/// to resume, using a Yes/No confirmation flow.
 /// </summary>
 public class LaunchRequestHandler : BaseHandler
 {
@@ -50,6 +55,7 @@ public class LaunchRequestHandler : BaseHandler
 
     /// <summary>
     /// Resume any currently playing media or ask the user to say some media name to play.
+    /// When AudioPlayer context indicates prior playback, offer resume confirmation.
     /// </summary>
     /// <param name="request">The skill intent request which should be handled.</param>
     /// <param name="context">The context of the skill intent request.</param>
@@ -61,32 +67,78 @@ public class LaunchRequestHandler : BaseHandler
     {
         string locale = GetLocale(request);
 
-        // check if we have any media in the queue
-        if (session.NowPlayingQueue.Count == 0)
+        // Check if audio was playing before this re-launch (AudioPlayer context carries the token/offset)
+        if (!string.IsNullOrEmpty(context.AudioPlayer?.Token))
         {
-            string? givenName = await _profileService.GetGivenNameAsync(context, cancellationToken).ConfigureAwait(false);
-
-            string welcomeText = !string.IsNullOrEmpty(givenName)
-                ? ResponseStrings.Get("WelcomePersonalized", locale, givenName!)
-                : ResponseStrings.Get("Welcome", locale);
-
-            string welcomeSsmlKey = !string.IsNullOrEmpty(givenName) ? "WelcomePersonalizedSsml" : "WelcomeSsml";
-            string? welcomeSsml = !string.IsNullOrEmpty(givenName)
-                ? string.Format(CultureInfo.InvariantCulture, ResponseStrings.Get(welcomeSsmlKey, locale), EscapeXml(givenName!))
-                : GetSsml("WelcomeSsml", locale);
-
-            string? repromptSsml = GetSsml("WelcomeRepromptSsml", locale);
-
-            if (welcomeSsml != null && repromptSsml != null)
-            {
-                return AskSsml(welcomeSsml, repromptSsml);
-            }
-
-            return ResponseBuilder.Ask(
-                welcomeText,
-                new Reprompt(ResponseStrings.Get("WelcomeReprompt", locale)));
+            return await HandleResumeOfferAsync(request, context, user, session, locale, cancellationToken).ConfigureAwait(false);
         }
 
+        // check if we have any media in the queue (legacy Jellyfin session-based resume)
+        if (session.NowPlayingQueue.Count > 0)
+        {
+            return HandleSessionQueueResume(request, user, session);
+        }
+
+        // No prior playback — show welcome
+        return await BuildWelcomeResponseAsync(context, locale, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Handle the case where AudioPlayer context indicates prior playback.
+    /// Looks up the item, offers a resume confirmation prompt.
+    /// </summary>
+    private async Task<SkillResponse> HandleResumeOfferAsync(
+        Request request, Context context, Entities.User user, SessionInfo session,
+        string locale, CancellationToken cancellationToken)
+    {
+        string itemId = context.AudioPlayer!.Token!;
+        long offsetMs = context.AudioPlayer.OffsetInMilliseconds;
+
+        // Look up the item for its display name
+        BaseItem? item = null;
+        if (Guid.TryParse(itemId, out Guid itemGuid))
+        {
+            item = await RetryAsync(
+                () => _libraryManager.GetItemById(itemGuid),
+                "LaunchResumeLookup",
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        string title = item?.Name ?? ResponseStrings.Get("UnknownMedia", locale);
+        string? resumeSsml = GetSsml("ResumePromptSsml", locale, EscapeXml(title));
+        string repromptText = ResponseStrings.Get("ResumeReprompt", locale);
+
+        SkillResponse response;
+        if (resumeSsml != null)
+        {
+            response = AskSsml(resumeSsml, repromptText);
+        }
+        else
+        {
+            string prompt = ResponseStrings.Get("ResumePrompt", locale, title);
+            response = ResponseBuilder.Ask(prompt, new Reprompt(repromptText));
+        }
+
+        // Store resume state in session attributes using proper DTO for serialization
+        var resumeState = new ResumeHelper.ResumeState
+        {
+            ItemId = itemId,
+            OffsetMs = offsetMs
+        };
+
+        response.SessionAttributes = new Dictionary<string, object>
+        {
+            ["resume_state"] = JsonConvert.SerializeObject(resumeState)
+        };
+
+        return response;
+    }
+
+    /// <summary>
+    /// Handle the legacy Jellyfin session-based queue resume (no confirmation prompt).
+    /// </summary>
+    private SkillResponse HandleSessionQueueResume(Request request, Entities.User user, SessionInfo session)
+    {
         // check if something is currently playing which we can resume
         if (session.FullNowPlayingItem != null)
         {
@@ -108,5 +160,33 @@ public class LaunchRequestHandler : BaseHandler
 
             return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, item, user);
         }
+    }
+
+    /// <summary>
+    /// Build the welcome response with optional personalization.
+    /// </summary>
+    private async Task<SkillResponse> BuildWelcomeResponseAsync(Context context, string locale, CancellationToken cancellationToken)
+    {
+        string? givenName = await _profileService.GetGivenNameAsync(context, cancellationToken).ConfigureAwait(false);
+
+        string welcomeText = !string.IsNullOrEmpty(givenName)
+            ? ResponseStrings.Get("WelcomePersonalized", locale, givenName!)
+            : ResponseStrings.Get("Welcome", locale);
+
+        string welcomeSsmlKey = !string.IsNullOrEmpty(givenName) ? "WelcomePersonalizedSsml" : "WelcomeSsml";
+        string? welcomeSsml = !string.IsNullOrEmpty(givenName)
+            ? string.Format(CultureInfo.InvariantCulture, ResponseStrings.Get(welcomeSsmlKey, locale), EscapeXml(givenName!))
+            : GetSsml("WelcomeSsml", locale);
+
+        string? repromptSsml = GetSsml("WelcomeRepromptSsml", locale);
+
+        if (welcomeSsml != null && repromptSsml != null)
+        {
+            return AskSsml(welcomeSsml, repromptSsml);
+        }
+
+        return ResponseBuilder.Ask(
+            welcomeText,
+            new Reprompt(ResponseStrings.Get("WelcomeReprompt", locale)));
     }
 }

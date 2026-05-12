@@ -14,8 +14,9 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
 /// <summary>
-/// Handles AMAZON.NoIntent during search disambiguation.
-/// Advances to the next match or reports no more matches.
+/// Handles AMAZON.NoIntent during search disambiguation or resume confirmation.
+/// For resume: clears resume state and returns a fresh welcome prompt.
+/// For disambiguation: advances to the next match or reports no more matches.
 /// </summary>
 public class NoIntentHandler : BaseHandler
 {
@@ -40,7 +41,7 @@ public class NoIntentHandler : BaseHandler
     }
 
     /// <summary>
-    /// Handle without session attributes - no disambiguation in progress.
+    /// Handle without session attributes - no disambiguation or resume in progress.
     /// </summary>
     /// <param name="request">The skill request which should be handled.</param>
     /// <param name="context">The context of the skill intent request.</param>
@@ -54,7 +55,8 @@ public class NoIntentHandler : BaseHandler
     }
 
     /// <summary>
-    /// Handle with session attributes - advance to the next match or report no more matches.
+    /// Handle with session attributes - resolve resume rejection or advance disambiguation.
+    /// Resume rejection takes priority over disambiguation when both are present.
     /// </summary>
     /// <param name="request">The skill request which should be handled.</param>
     /// <param name="context">The context of the skill intent request.</param>
@@ -66,6 +68,12 @@ public class NoIntentHandler : BaseHandler
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, Dictionary<string, object>? sessionAttributes, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
+
+        // Check for resume rejection first
+        if (ResumeHelper.HasResumeState(sessionAttributes))
+        {
+            return HandleResumeRejection(locale);
+        }
 
         var state = DisambiguationHelper.ReadState(sessionAttributes);
         if (state == null)
@@ -83,5 +91,18 @@ public class NoIntentHandler : BaseHandler
 
         SkillResponse response = DisambiguationHelper.AskNextMatch(matches, nextIndex, mediaType, locale);
         return Task.FromResult(response);
+    }
+
+    /// <summary>
+    /// Handle resume rejection: clear resume state and return a fresh welcome prompt.
+    /// </summary>
+    /// <param name="locale">The locale for localized responses.</param>
+    /// <returns>A welcome Ask response.</returns>
+    private Task<SkillResponse> HandleResumeRejection(string locale)
+    {
+        string freshStart = ResponseStrings.Get("FreshStart", locale);
+        string reprompt = ResponseStrings.Get("WelcomeReprompt", locale);
+
+        return Task.FromResult(ResponseBuilder.Ask(freshStart, new Reprompt(reprompt)));
     }
 }
