@@ -101,6 +101,11 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool VideosEnabled { get; set; } = true;
     public bool BooksEnabled { get; set; } = true;
 
+    // Playback preferences
+    public int InitialFetchSize { get; set; } = 5;
+    public int ContinuationBatchSize { get; set; } = 10;
+    public int PrefetchThreshold { get; set; } = 2;
+
     /// <summary>
     /// Gets or sets the list of users.
     /// </summary>
@@ -161,6 +166,21 @@ public class PluginConfiguration : BasePluginConfiguration
             {
                 errors.Add($"Duplicate user ID: {u.Id}");
             }
+        }
+
+        if (InitialFetchSize < 1 || InitialFetchSize > 20)
+        {
+            errors.Add("Initial Fetch Size must be between 1 and 20.");
+        }
+
+        if (ContinuationBatchSize < 1 || ContinuationBatchSize > 50)
+        {
+            errors.Add("Continuation Batch Size must be between 1 and 50.");
+        }
+
+        if (PrefetchThreshold < 0 || PrefetchThreshold > 10)
+        {
+            errors.Add("Pre-fetch Threshold must be between 0 and 10.");
         }
 
         return errors;

@@ -159,7 +159,7 @@ public class PlayPlaylistIntentHandler : BaseHandler
             ParentId = playlist.Id,
             MediaTypes = new[] { MediaType.Audio },
             DtoOptions = new DtoOptions(true),
-            Limit = ProgressiveQueueConstants.InitialFetchSize
+            Limit = ProgressiveQueueConstants.GetInitialFetchSize()
         });
 
         if (playlistResult.TotalRecordCount == 0)

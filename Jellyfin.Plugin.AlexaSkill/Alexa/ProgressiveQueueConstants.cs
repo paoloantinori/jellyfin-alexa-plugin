@@ -1,25 +1,32 @@
+using Jellyfin.Plugin.AlexaSkill.Configuration;
+
 namespace Jellyfin.Plugin.AlexaSkill.Alexa;
 
 /// <summary>
 /// Constants for progressive queue building configuration.
+/// Methods read from live plugin config when available, falling back to defaults.
 /// </summary>
 internal static class ProgressiveQueueConstants
 {
+    public const int DefaultInitialFetchSize = 5;
+    public const int DefaultContinuationBatchSize = 10;
+    public const int DefaultPrefetchThreshold = 2;
+
     /// <summary>
     /// Number of items to fetch in the initial bulk-play handler response.
-    /// Kept small for fast time-to-first-audio.
     /// </summary>
-    public const int InitialFetchSize = 5;
+    public static int GetInitialFetchSize() =>
+        Plugin.Instance?.Configuration?.InitialFetchSize ?? DefaultInitialFetchSize;
 
     /// <summary>
     /// Number of items to fetch per continuation batch.
-    /// Larger than initial fetch to reduce fetch frequency.
     /// </summary>
-    public const int ContinuationBatchSize = 10;
+    public static int GetContinuationBatchSize() =>
+        Plugin.Instance?.Configuration?.ContinuationBatchSize ?? DefaultContinuationBatchSize;
 
     /// <summary>
     /// Number of items before queue end that triggers a continuation fetch.
-    /// E.g., if threshold is 2, fetch more when current position is within 2 of the end.
     /// </summary>
-    public const int PrefetchThreshold = 2;
+    public static int GetPrefetchThreshold() =>
+        Plugin.Instance?.Configuration?.PrefetchThreshold ?? DefaultPrefetchThreshold;
 }

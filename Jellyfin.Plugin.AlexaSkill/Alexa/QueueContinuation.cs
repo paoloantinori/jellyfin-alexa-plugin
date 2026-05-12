@@ -44,7 +44,7 @@ public class QueueContinuation
     /// <summary>
     /// Gets or sets the number of items to fetch per continuation batch.
     /// </summary>
-    public int BatchSize { get; set; } = ProgressiveQueueConstants.ContinuationBatchSize;
+    public int BatchSize { get; set; } = ProgressiveQueueConstants.GetContinuationBatchSize();
 
     /// <summary>
     /// Gets the Jellyfin user ID for the query.

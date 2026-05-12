@@ -235,7 +235,7 @@ public class ProgressiveQueueTests : IDisposable
     public void QueueContinuation_DefaultBatchSize_MatchesConstant()
     {
         var continuation = new QueueContinuation();
-        Assert.Equal(ProgressiveQueueConstants.ContinuationBatchSize, continuation.BatchSize);
+        Assert.Equal(ProgressiveQueueConstants.GetContinuationBatchSize(), continuation.BatchSize);
     }
 
     // =====================================================================
@@ -474,7 +474,7 @@ public class ProgressiveQueueTests : IDisposable
         _libraryManagerMock.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q => q.ParentId == albumId)))
             .Returns(new QueryResult<BaseItem>
             {
-                Items = allTracks.Take(ProgressiveQueueConstants.InitialFetchSize).Cast<BaseItem>().ToList(),
+                Items = allTracks.Take(ProgressiveQueueConstants.GetInitialFetchSize()).Cast<BaseItem>().ToList(),
                 TotalRecordCount = 20
             });
 
@@ -484,7 +484,7 @@ public class ProgressiveQueueTests : IDisposable
         var response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
 
         // Should have only initial items in queue
-        Assert.Equal(ProgressiveQueueConstants.InitialFetchSize, session.NowPlayingQueue.Count);
+        Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), session.NowPlayingQueue.Count);
 
         // Should have an AudioPlayer directive (playing first track)
         var directive = response.Response.Directives.OfType<AudioPlayerPlayDirective>().FirstOrDefault();
@@ -496,7 +496,7 @@ public class ProgressiveQueueTests : IDisposable
         Assert.NotNull(continuation);
         Assert.Equal("Album", continuation.SourceType);
         Assert.Equal(albumId, continuation.ParentId);
-        Assert.Equal(ProgressiveQueueConstants.InitialFetchSize, continuation.StartIndex);
+        Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), continuation.StartIndex);
         Assert.Equal(20, continuation.TotalCount);
 
         // Cleanup
@@ -588,7 +588,7 @@ public class ProgressiveQueueTests : IDisposable
         _libraryManagerMock.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Contains(artistId))))
             .Returns(new QueryResult<BaseItem>
             {
-                Items = allTracks.Take(ProgressiveQueueConstants.InitialFetchSize).Cast<MediaBrowser.Controller.Entities.BaseItem>().ToList(),
+                Items = allTracks.Take(ProgressiveQueueConstants.GetInitialFetchSize()).Cast<MediaBrowser.Controller.Entities.BaseItem>().ToList(),
                 TotalRecordCount = 15
             });
 
@@ -602,7 +602,7 @@ public class ProgressiveQueueTests : IDisposable
         var response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
 
         // Should have only initial items in queue
-        Assert.Equal(ProgressiveQueueConstants.InitialFetchSize, session.NowPlayingQueue.Count);
+        Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), session.NowPlayingQueue.Count);
 
         // Continuation should be stored
         QueueContinuation? continuation = QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID);
@@ -622,23 +622,23 @@ public class ProgressiveQueueTests : IDisposable
     [Fact]
     public void ProgressiveQueueConstants_InitialFetchSize_IsSmall()
     {
-        Assert.True(ProgressiveQueueConstants.InitialFetchSize <= 10,
+        Assert.True(ProgressiveQueueConstants.GetInitialFetchSize() <= 10,
             "Initial fetch size should be small for fast time-to-audio");
     }
 
     [Fact]
     public void ProgressiveQueueConstants_ContinuationBatchSize_LargerThanInitial()
     {
-        Assert.True(ProgressiveQueueConstants.ContinuationBatchSize >= ProgressiveQueueConstants.InitialFetchSize,
+        Assert.True(ProgressiveQueueConstants.GetContinuationBatchSize() >= ProgressiveQueueConstants.GetInitialFetchSize(),
             "Continuation batch should be at least as large as initial fetch");
     }
 
     [Fact]
     public void ProgressiveQueueConstants_PrefetchThreshold_IsReasonable()
     {
-        Assert.True(ProgressiveQueueConstants.PrefetchThreshold >= 1,
+        Assert.True(ProgressiveQueueConstants.GetPrefetchThreshold() >= 1,
             "Prefetch threshold should be at least 1 to avoid last-minute fetches");
-        Assert.True(ProgressiveQueueConstants.PrefetchThreshold <= ProgressiveQueueConstants.InitialFetchSize,
+        Assert.True(ProgressiveQueueConstants.GetPrefetchThreshold() <= ProgressiveQueueConstants.GetInitialFetchSize(),
             "Prefetch threshold should not exceed initial fetch size");
     }
 }

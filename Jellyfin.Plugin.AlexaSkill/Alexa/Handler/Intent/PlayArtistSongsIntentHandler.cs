@@ -153,7 +153,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 OrderBy = PopularitySort,
                 DtoOptions = new DtoOptions(true),
                 ArtistIds = new[] { artists[0].Id },
-                Limit = ProgressiveQueueConstants.InitialFetchSize
+                Limit = ProgressiveQueueConstants.GetInitialFetchSize()
             }),
             "GetArtistSongs",
             cancellationToken).ConfigureAwait(false);

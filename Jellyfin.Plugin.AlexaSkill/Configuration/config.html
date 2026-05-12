@@ -132,6 +132,26 @@
                     </div>
                 </div>
 
+                <div class="verticalSection verticalSection-extrabottompadding">
+                    <h2 class="sectionTitle">Playback Preferences</h2>
+                    <div class="fieldDescription" style="margin-bottom:1em;">Fine-tune how audio is delivered to Alexa devices. Changes take effect on the next playback request.</div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="InitialFetchSize">Initial Fetch Size</label>
+                        <input id="InitialFetchSize" name="InitialFetchSize" type="number" is="emby-input" min="1" max="20" />
+                        <div class="fieldDescription">Items loaded on first playback (1–20). Smaller = faster time-to-audio.</div>
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="ContinuationBatchSize">Continuation Batch Size</label>
+                        <input id="ContinuationBatchSize" name="ContinuationBatchSize" type="number" is="emby-input" min="1" max="50" />
+                        <div class="fieldDescription">Items loaded per background fetch (1–50). Larger = fewer interruptions.</div>
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="PrefetchThreshold">Pre-fetch Threshold</label>
+                        <input id="PrefetchThreshold" name="PrefetchThreshold" type="number" is="emby-input" min="0" max="10" />
+                        <div class="fieldDescription">Items remaining before pre-fetching more (0–10). Higher = smoother gapless playback.</div>
+                    </div>
+                </div>
+
                 <div class="detailSectionHeader">
                     <h2 style="margin:.6em 0;vertical-align:middle;display:inline-block">User Skill Configuration</h2>
                     <button id="newUserSkillButton" is="emby-button" type="button" class="fab submit emby-button" style="margin-left:1em" title="Add NeW User Skill">
@@ -192,6 +212,11 @@
                     ["MusicEnabled", "VideosEnabled", "PodcastsEnabled", "LiveTvEnabled", "BooksEnabled"].forEach(function(f) {
                         document.querySelector("#" + f).checked = config[f] !== false;
                     });
+
+                    // Playback preferences
+                    document.querySelector("#InitialFetchSize").value = config.InitialFetchSize != null ? config.InitialFetchSize : 5;
+                    document.querySelector("#ContinuationBatchSize").value = config.ContinuationBatchSize != null ? config.ContinuationBatchSize : 10;
+                    document.querySelector("#PrefetchThreshold").value = config.PrefetchThreshold != null ? config.PrefetchThreshold : 2;
 
                     for (let user of config.Users) {
                         document.querySelector("#userTableBody").appendChild(createUserRow(user, config));
@@ -412,6 +437,14 @@
                     ["MusicEnabled", "VideosEnabled", "PodcastsEnabled", "LiveTvEnabled", "BooksEnabled"].forEach(function(f) {
                         config[f] = document.querySelector("#" + f).checked;
                     });
+
+                    // Playback preferences
+                    var ifRaw = parseInt(document.querySelector("#InitialFetchSize").value);
+                    config.InitialFetchSize = isNaN(ifRaw) ? 5 : ifRaw;
+                    var cbRaw = parseInt(document.querySelector("#ContinuationBatchSize").value);
+                    config.ContinuationBatchSize = isNaN(cbRaw) ? 10 : cbRaw;
+                    var pfRaw = parseInt(document.querySelector("#PrefetchThreshold").value);
+                    config.PrefetchThreshold = isNaN(pfRaw) ? 2 : pfRaw;
 
                     for (let row of document.querySelector("#userTableBody").rows) {
                         const userId = row.getAttribute("data-id");

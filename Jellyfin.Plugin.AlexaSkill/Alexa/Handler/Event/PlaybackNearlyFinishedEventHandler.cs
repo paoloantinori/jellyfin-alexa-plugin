@@ -185,7 +185,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
 
         // Only fetch when approaching the end of the current queue
         int remaining = session.NowPlayingQueue.Count - currentIndex - 1;
-        if (remaining > ProgressiveQueueConstants.PrefetchThreshold)
+        if (remaining > ProgressiveQueueConstants.GetPrefetchThreshold())
         {
             return;
         }

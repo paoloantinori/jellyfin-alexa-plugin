@@ -181,7 +181,7 @@ public class PlayAlbumIntentHandler : BaseHandler
                 ParentId = albums[0].Id,
                 MediaTypes = new[] { MediaType.Audio },
                 DtoOptions = new DtoOptions(true),
-                Limit = ProgressiveQueueConstants.InitialFetchSize
+                Limit = ProgressiveQueueConstants.GetInitialFetchSize()
             }),
             "GetAlbumTracks",
             cancellationToken).ConfigureAwait(false);
