@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Xunit;
 
@@ -12,7 +13,7 @@ public class ResponseStringsTests
         "DidNotCatchVideoTitle", "DidNotCatchChannelName", "NotFoundVideo", "NotFoundChannel",
         "NotFoundSongByArtist", "NotFoundSongByNameAndArtist", "NotFoundSongByName",
         "NotFoundAlbumByArtist", "NotFoundAlbumByNameAndArtist", "NotFoundAlbumByName",
-        "NoSongsInAlbum", "NotFoundPlaylist", "PlaylistEmpty", "NoFavoriteItems",
+        "NoSongsInAlbum", "NotFoundPlaylist", "PlaylistEmpty", "DidNotCatchPlaylistName", "NoFavoriteItems",
         "NoNewlyAddedItems", "NotFoundArtist", "NoSongsForArtist", "Welcome",
         "WelcomeReprompt", "NowPlaying", "NowPlayingWithPosition", "UnknownMedia",
         "HoursAndMinutes", "MinutesAndSeconds", "SecondsOnly", "PositionOfTotal",
@@ -134,5 +135,82 @@ public class ResponseStringsTests
         ResponseStrings.Reset();
         string result = ResponseStrings.Get("Welcome", "en-US");
         Assert.Equal("Welcome to Jellyfin Skill, what can I play?", result);
+    }
+
+    [Fact]
+    public void Get_FallbackToLanguageRoot_ReturnsLanguageRootString()
+    {
+        // Scenario: "es-MX" missing a key, but "es" (language root) has it
+        ResponseStrings.RegisterLocale("es", new Dictionary<string, string> { { "TestKeyRoot", "Valor raiz" } });
+
+        string result = ResponseStrings.Get("TestKeyRoot", "es-MX");
+        Assert.Equal("Valor raiz", result);
+
+        // Clean up test locale
+        ResponseStrings.Reset();
+    }
+
+    [Fact]
+    public void Get_FallbackSkipsLanguageRoot_WhenExactMatchExists()
+    {
+        // Scenario: both "es-MX" and "es" have the key, exact locale wins
+        ResponseStrings.RegisterLocale("es", new Dictionary<string, string> { { "TestExactVsRoot", "Root value" } });
+        ResponseStrings.RegisterLocale("es-MX", new Dictionary<string, string>
+        {
+            { "TestExactVsRoot", "Exact value" },
+        });
+
+        string result = ResponseStrings.Get("TestExactVsRoot", "es-MX");
+        Assert.Equal("Exact value", result);
+
+        ResponseStrings.Reset();
+    }
+
+    [Fact]
+    public void Get_FallbackChain_ExactToRootToEnUs()
+    {
+        // Scenario: "pt-BR" doesn't exist at all, no "pt" root, falls to en-US
+        ResponseStrings.RegisterLocale("pt-BR", new Dictionary<string, string>());
+
+        string result = ResponseStrings.Get("NoMediaPlaying", "pt-BR");
+        Assert.Equal("Nothing is currently playing.", result); // en-US fallback
+
+        ResponseStrings.Reset();
+    }
+
+    [Fact]
+    public void Get_FallbackChain_SkipsRootWhenRootMissing_FallsToEnUs()
+    {
+        // Scenario: regional locale exists but is missing key, no language root, en-US has it
+        ResponseStrings.RegisterLocale("pt-BR", new Dictionary<string, string>());
+
+        string result = ResponseStrings.Get("NoMediaPlaying", "pt-BR");
+        Assert.Equal("Nothing is currently playing.", result);
+
+        ResponseStrings.Reset();
+    }
+
+    [Fact]
+    public void Get_KeyNotFoundAnywhere_ReturnsKey()
+    {
+        ResponseStrings.RegisterLocale("xx-YY", new Dictionary<string, string>());
+
+        string result = ResponseStrings.Get("CompletelyMissingKey", "xx-YY");
+        Assert.Equal("CompletelyMissingKey", result);
+
+        ResponseStrings.Reset();
+    }
+
+    [Fact]
+    public void Get_LanguageRootFallback_DoesNotApplyToNonHyphenatedLocale()
+    {
+        // Scenario: locale "en" (no hyphen) should skip language root step and go to en-US
+        ResponseStrings.RegisterLocale("en", new Dictionary<string, string>());
+
+        string result = ResponseStrings.Get("NoMediaPlaying", "en");
+        // "en" has no keys, language root is "" (no hyphen), so falls to en-US
+        Assert.Equal("Nothing is currently playing.", result);
+
+        ResponseStrings.Reset();
     }
 }

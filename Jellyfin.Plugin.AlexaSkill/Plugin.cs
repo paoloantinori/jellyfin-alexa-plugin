@@ -5,6 +5,7 @@ using System.Net.Http;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Alexa.InteractionModel;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Manifest;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Controller.Handler;
@@ -51,6 +52,8 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 
         ILogger<Plugin> logger = loggerFactory.CreateLogger<Plugin>();
         logger.LogInformation("AlexaSkill plugin loaded v{Version}", Util.GetVersion());
+
+        ResponseStrings.SetLogger(loggerFactory.CreateLogger("Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings"));
     }
 
     /// <inheritdoc />
