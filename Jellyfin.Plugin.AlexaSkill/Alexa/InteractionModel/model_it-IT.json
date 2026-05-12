@@ -153,7 +153,17 @@
           "Ascolta musica degli anni {decade}",
           "Musica degli anni {decade}",
           "Brani degli anni {decade}",
-          "Canzoni degli anni {decade}"
+          "Canzoni degli anni {decade}",
+          "Metti su musica degli anni {decade}",
+          "Fai suonare musica degli anni {decade}",
+          "Vorrei ascoltare musica degli anni {decade}",
+          "Mi andrebbe musica degli anni {decade}",
+          "Comincia a suonare brani degli anni {decade}",
+          "Pleia musica degli anni {decade}",
+          "Pleia brani degli anni {decade}",
+          "Metti canzoni degli anni {decade}",
+          "Fai partire canzoni degli anni {decade}",
+          "Suonami qualcosa degli anni {decade}"
         ],
         "slots": [
           {
@@ -176,7 +186,14 @@
           "Riproduci la playlist {playlist}",
           "Suona la playlist {playlist}",
           "Metti la playlist {playlist}",
-          "Pleia la playlist {playlist}"
+          "Pleia la playlist {playlist}",
+          "Metti su la playlist {playlist}",
+          "Fai partire la playlist {playlist}",
+          "Comincia la playlist {playlist}",
+          "Vorrei ascoltare la playlist {playlist}",
+          "Dammi la playlist {playlist}",
+          "Ascolta la playlist {playlist}",
+          "Fai suonare la playlist {playlist}"
         ],
         "slots": [
           {
@@ -407,7 +424,20 @@
           "Suona {media_type} casuali",
           "Suona {media_type} a caso",
           "Metti {media_type} casuali",
-          "Metti {media_type} a caso"
+          "Metti {media_type} a caso",
+          "Pleia {media_type} casuali",
+          "Pleia {media_type} a caso",
+          "Metti su {media_type} a caso",
+          "Fai suonare {media_type} a caso",
+          "Scegli {media_type} a caso",
+          "Dammi {media_type} a caso",
+          "Vorrei {media_type} a caso",
+          "Mi andrebbe {media_type} a caso",
+          "Comincia {media_type} casuali",
+          "Mescola {media_type}",
+          "Mescola i miei {media_type}",
+          "Qualsiasi {media_type} va bene",
+          "Sorprendimi con {media_type}"
         ],
         "slots": [
           {

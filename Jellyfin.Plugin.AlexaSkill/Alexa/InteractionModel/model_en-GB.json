@@ -94,7 +94,16 @@
           "let's hear {song}",
           "give me {song}",
           "stream {song}",
-          "play that song {song}"
+          "play that song {song}",
+          "stick on {song}",
+          "stick on {song} by {musician}",
+          "bang on {song}",
+          "I fancy hearing {song}",
+          "I fancy hearing {song} by {musician}",
+          "let's have {song}",
+          "let's have {song} by {musician}",
+          "whack on {song}",
+          "whack on {song} by {musician}"
         ],
         "slots": [
           {
@@ -130,7 +139,17 @@
           "play the record {album} by {musician}",
           "let's hear {album}",
           "give me {album}",
-          "stream {album}"
+          "stream {album}",
+          "stick on {album}",
+          "stick on {album} by {musician}",
+          "bang on the album {album}",
+          "bang on the album {album} by {musician}",
+          "I fancy hearing {album}",
+          "I fancy hearing {album} by {musician}",
+          "let's have {album}",
+          "let's have {album} by {musician}",
+          "whack on {album}",
+          "whack on {album} by {musician}"
         ],
         "slots": [
           {
@@ -146,7 +165,25 @@
       {
         "name": "PlayVideoIntent",
         "samples": [
-          "Play the video {title}"
+          "Play the video {title}",
+          "put on the video {title}",
+          "start playing {title}",
+          "watch {title}",
+          "can you play {title}",
+          "I want to watch {title}",
+          "let's watch {title}",
+          "stream {title}",
+          "give me the video {title}",
+          "show me {title}",
+          "play the movie {title}",
+          "put on the movie {title}",
+          "can you play the video {title}",
+          "start the video {title}",
+          "I want to see {title}",
+          "stick on {title}",
+          "stick on the film {title}",
+          "bang on the video {title}",
+          "whack on {title}"
         ],
         "slots": [
           {
@@ -183,7 +220,13 @@
           "play {musician} songs",
           "play {musician} music",
           "give me {musician}",
-          "stream {musician}"
+          "stream {musician}",
+          "stick on some {musician}",
+          "bang on {musician}",
+          "I fancy listening to {musician}",
+          "I fancy hearing {musician}",
+          "whack on some {musician}",
+          "let's have some {musician}"
         ],
         "slots": [
           {
@@ -198,7 +241,23 @@
           "Play last added {media_type}",
           "Play recently added {media_type}",
           "Play newly added {media_type}",
-          "Play new media"
+          "Play new media",
+          "what's new in {media_type}",
+          "play the latest {media_type}",
+          "play my newest {media_type}",
+          "play fresh {media_type}",
+          "show me new {media_type}",
+          "give me the latest {media_type}",
+          "let's hear something new",
+          "put on the newest {media_type}",
+          "start playing new {media_type}",
+          "I want to hear new {media_type}",
+          "play {media_type} I just added",
+          "play recently added",
+          "play new arrivals",
+          "anything new lately",
+          "play what's just been added",
+          "have we got anything new"
         ],
         "slots": [
           {
@@ -217,7 +276,17 @@
           "Play a random {media_type} from {genre}",
           "Play random {genre} {media_type}",
           "Surprise me with some {media_type}",
-          "Shuffle {genre} {media_type}"
+          "Shuffle {genre} {media_type}",
+          "give me a random {media_type}",
+          "put on something random",
+          "I want something random",
+          "shuffle some {media_type}",
+          "let's hear something random",
+          "surprise me with {genre} {media_type}",
+          "pick a random {media_type}",
+          "mix up my {media_type}",
+          "play a surprise {media_type}",
+          "anything will do for {media_type}"
         ],
         "slots": [
           {
@@ -238,7 +307,19 @@
           "Play {genre} music",
           "Play me some {genre}",
           "I want to listen to {genre}",
-          "Play {genre}"
+          "Play {genre}",
+          "give me {genre} music",
+          "put on some {genre}",
+          "let's hear some {genre}",
+          "I feel like {genre} music",
+          "start playing {genre}",
+          "can you play {genre}",
+          "stream {genre} music",
+          "I want to hear {genre}",
+          "play {genre} tracks",
+          "let's listen to {genre}",
+          "bang on some {genre}",
+          "stick on {genre} music"
         ],
         "slots": [
           {
@@ -280,7 +361,29 @@
         "name": "PlayPlaylistIntent",
         "samples": [
           "Play the playlist {playlist}",
-          "Play my playlist {playlist}"
+          "Play my playlist {playlist}",
+          "put on the playlist {playlist}",
+          "put on my playlist {playlist}",
+          "start the playlist {playlist}",
+          "start my playlist {playlist}",
+          "queue up the playlist {playlist}",
+          "queue up my playlist {playlist}",
+          "let's hear the playlist {playlist}",
+          "let's hear my playlist {playlist}",
+          "can you play the playlist {playlist}",
+          "can you play my playlist {playlist}",
+          "I want to hear the playlist {playlist}",
+          "I want to hear my playlist {playlist}",
+          "give me the playlist {playlist}",
+          "give me my playlist {playlist}",
+          "stream the playlist {playlist}",
+          "stream my playlist {playlist}",
+          "listen to the playlist {playlist}",
+          "listen to my playlist {playlist}",
+          "stick on the playlist {playlist}",
+          "stick on my playlist {playlist}",
+          "whack on the playlist {playlist}",
+          "whack on my playlist {playlist}"
         ],
         "slots": [
           {
@@ -294,7 +397,19 @@
         "samples": [
           "Play my favorite {media_type}",
           "Play my {media_type} favorite",
-          "Play my favorites"
+          "Play my favorites",
+          "Play my favourite {media_type}",
+          "Play my {media_type} favourite",
+          "Play my favourites",
+          "put on my favourites",
+          "let's hear my favourite {media_type}",
+          "give me my favourite {media_type}",
+          "start playing my favourites",
+          "I want to hear my favourite {media_type}",
+          "can you play my favourites",
+          "play what I like",
+          "play my best of",
+          "stick on my favourite {media_type}"
         ],
         "slots": [
           {

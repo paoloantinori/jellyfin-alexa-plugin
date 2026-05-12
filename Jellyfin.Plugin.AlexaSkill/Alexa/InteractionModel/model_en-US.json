@@ -160,7 +160,21 @@
       {
         "name": "PlayVideoIntent",
         "samples": [
-          "Play the video {title}"
+          "Play the video {title}",
+          "put on the video {title}",
+          "start playing {title}",
+          "watch {title}",
+          "can you play {title}",
+          "I want to watch {title}",
+          "let's watch {title}",
+          "stream {title}",
+          "give me the video {title}",
+          "show me {title}",
+          "play the movie {title}",
+          "put on the movie {title}",
+          "can you play the video {title}",
+          "start the video {title}",
+          "I want to see {title}"
         ],
         "slots": [
           {
@@ -220,7 +234,20 @@
           "Play {media_type} added {time_period}",
           "Play last added songs",
           "Play recently added songs",
-          "Play last added music"
+          "Play last added music",
+          "what's new in {media_type}",
+          "play the latest {media_type}",
+          "play my newest {media_type}",
+          "play fresh {media_type}",
+          "show me new {media_type}",
+          "give me the latest {media_type}",
+          "let's hear something new",
+          "put on the newest {media_type}",
+          "start playing new {media_type}",
+          "I want to hear new {media_type}",
+          "play {media_type} I just added",
+          "play recently added",
+          "play new arrivals"
         ],
         "slots": [
           {
@@ -249,7 +276,16 @@
           "Play random {genre} songs",
           "Play random {genre} music",
           "Play a random song",
-          "Play some random {genre} songs"
+          "Play some random {genre} songs",
+          "give me a random {media_type}",
+          "put on something random",
+          "I want something random",
+          "shuffle some {media_type}",
+          "let's hear something random",
+          "surprise me with {genre} {media_type}",
+          "pick a random {media_type}",
+          "mix up my {media_type}",
+          "play a surprise {media_type}"
         ],
         "slots": [
           {
@@ -270,7 +306,17 @@
           "Play {genre} music",
           "Play me some {genre}",
           "I want to listen to {genre}",
-          "Play {genre}"
+          "Play {genre}",
+          "give me {genre} music",
+          "put on some {genre}",
+          "let's hear some {genre}",
+          "I feel like {genre} music",
+          "start playing {genre}",
+          "can you play {genre}",
+          "stream {genre} music",
+          "I want to hear {genre}",
+          "play {genre} tracks",
+          "let's listen to {genre}"
         ],
         "slots": [
           {
@@ -355,7 +401,25 @@
         "name": "PlayPlaylistIntent",
         "samples": [
           "Play the playlist {playlist}",
-          "Play my playlist {playlist}"
+          "Play my playlist {playlist}",
+          "put on the playlist {playlist}",
+          "put on my playlist {playlist}",
+          "start the playlist {playlist}",
+          "start my playlist {playlist}",
+          "queue up the playlist {playlist}",
+          "queue up my playlist {playlist}",
+          "let's hear the playlist {playlist}",
+          "let's hear my playlist {playlist}",
+          "can you play the playlist {playlist}",
+          "can you play my playlist {playlist}",
+          "I want to hear the playlist {playlist}",
+          "I want to hear my playlist {playlist}",
+          "give me the playlist {playlist}",
+          "give me my playlist {playlist}",
+          "stream the playlist {playlist}",
+          "stream my playlist {playlist}",
+          "listen to the playlist {playlist}",
+          "listen to my playlist {playlist}"
         ],
         "slots": [
           {
