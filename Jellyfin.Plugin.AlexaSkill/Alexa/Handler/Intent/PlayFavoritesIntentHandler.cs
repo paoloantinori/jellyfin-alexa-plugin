@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
@@ -13,16 +15,18 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
+using JellyfinUser = Jellyfin.Database.Implementations.Entities.User;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
 /// <summary>
-/// Handler for PlayFavorites intents.
+/// Handler for PlayFavorites intents. Supports playing the authenticated user's
+/// favorites or another user's favorites by name (e.g. "Play Paolo's favourites").
 /// </summary>
 public class PlayFavoritesIntentHandler : BaseHandler
 {
-    private ILibraryManager _libraryManager;
-    private IUserManager _userManager;
+    private readonly ILibraryManager _libraryManager;
+    private readonly IUserManager _userManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PlayFavoritesIntentHandler"/> class.
@@ -51,23 +55,50 @@ public class PlayFavoritesIntentHandler : BaseHandler
     }
 
     /// <summary>
-    /// Resume any currently playing media or ask the user to say some media name to play.
+    /// Play favorite items for the authenticated user or another user specified by name.
     /// </summary>
     /// <param name="request">The skill request which should be handled.</param>
     /// <param name="context">The context of the skill intent request.</param>
     /// <param name="user">The user instance.</param>
     /// <param name="session">The session instance.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>Play directive of the last added items.</returns>
+    /// <returns>Play directive of the favorite items.</returns>
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
+        IntentRequest intentRequest = (IntentRequest)request;
+
+        // Check if a username slot was provided
+        string? usernameSlot = intentRequest.Intent.Slots?.TryGetValue("username", out var slot) == true ? slot.Value : null;
+
+        JellyfinUser? jellyfinUser;
+
+        if (!string.IsNullOrWhiteSpace(usernameSlot))
+        {
+            // Resolve the target user by fuzzy matching against all Jellyfin users
+            jellyfinUser = ResolveUserByName(usernameSlot);
+            if (jellyfinUser == null)
+            {
+                return ResponseBuilder.Tell(ResponseStrings.Get("UserByNameNotFound", locale, usernameSlot));
+            }
+
+            Logger.LogInformation("Playing favorites for user {Username} (requested by {RequestedBy})", jellyfinUser.Username, usernameSlot);
+        }
+        else
+        {
+            // Default: use the authenticated user
+            jellyfinUser = _userManager.GetUserById(session.UserId);
+            if (jellyfinUser == null)
+            {
+                return ResponseBuilder.Tell(ResponseStrings.Get("UserNotFound", locale));
+            }
+        }
 
         await SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)).ConfigureAwait(false);
 
         InternalItemsQuery query = new InternalItemsQuery()
         {
-            User = _userManager.GetUserById(session.UserId),
+            User = jellyfinUser,
             IsFavorite = true,
             DtoOptions = new MediaBrowser.Controller.Dto.DtoOptions(true)
         };
@@ -104,5 +135,43 @@ public class PlayFavoritesIntentHandler : BaseHandler
         string item_id = firstItem.Id.ToString();
 
         return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, firstItem, user);
+    }
+
+    /// <summary>
+    /// Resolve a username string to a Jellyfin user using fuzzy matching.
+    /// First tries exact match, then falls back to fuzzy matching.
+    /// </summary>
+    /// <param name="usernameQuery">The username to search for.</param>
+    /// <returns>The matched Jellyfin user, or null if no match found.</returns>
+    internal JellyfinUser? ResolveUserByName(string usernameQuery)
+    {
+        // Get all users from the plugin configuration (registered skill users)
+        // and resolve their Jellyfin user names
+        var candidates = new List<JellyfinUser>();
+        foreach (Entities.User pluginUser in _config.Users)
+        {
+            JellyfinUser? jfUser = _userManager.GetUserById(pluginUser.Id);
+            if (jfUser != null)
+            {
+                candidates.Add(jfUser);
+            }
+        }
+
+        if (candidates.Count == 0)
+        {
+            return null;
+        }
+
+        // Try exact match first (case-insensitive)
+        JellyfinUser? exactMatch = candidates.FirstOrDefault(u =>
+            string.Equals(u.Username, usernameQuery, StringComparison.OrdinalIgnoreCase));
+
+        if (exactMatch != null)
+        {
+            return exactMatch;
+        }
+
+        // Fall back to fuzzy match
+        return FuzzyMatch(usernameQuery, candidates, u => u.Username);
     }
 }
