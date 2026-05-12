@@ -122,5 +122,6 @@
   "QueryRecentlyAddedItemNoArtist": "{0}. {1}",
   "QueryRecentlyAddedEmpty": "Aucun élément récent trouvé.",
   "QueryRecentlyAddedPrompt": "Dites le numéro pour en écouter un.",
-  "UserByNameNotFound": "Je n'ai pas trouvé d'utilisateur nommé {0}."
+  "UserByNameNotFound": "Je n'ai pas trouvé d'utilisateur nommé {0}.",
+  "GenreExpanded": "Lecture de {0} et genres similaires."
 }

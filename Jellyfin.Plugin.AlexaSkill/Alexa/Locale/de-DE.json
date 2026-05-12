@@ -122,5 +122,6 @@
   "QueryRecentlyAddedItemNoArtist": "{0}. {1}",
   "QueryRecentlyAddedEmpty": "Keine kürzlich hinzugefügten Elemente gefunden.",
   "QueryRecentlyAddedPrompt": "Sag die Nummer, um eines abzuspielen.",
-  "UserByNameNotFound": "Ich konnte keinen Benutzer namens {0} finden."
+  "UserByNameNotFound": "Ich konnte keinen Benutzer namens {0} finden.",
+  "GenreExpanded": "Spiele {0} und ähnliche Genres."
 }

@@ -122,5 +122,6 @@
   "QueryRecentlyAddedItemNoArtist": "{0}. {1}",
   "QueryRecentlyAddedEmpty": "No recently added items found.",
   "QueryRecentlyAddedPrompt": "Say the number to play one.",
-  "UserByNameNotFound": "I couldn't find a user named {0}."
+  "UserByNameNotFound": "I couldn't find a user named {0}.",
+  "GenreExpanded": "Playing {0} and similar genres."
 }
