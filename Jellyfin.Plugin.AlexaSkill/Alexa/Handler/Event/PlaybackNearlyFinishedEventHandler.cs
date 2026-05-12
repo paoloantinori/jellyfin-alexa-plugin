@@ -19,8 +19,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
 /// <summary>
 /// Handler for PlaybackNearlyFinished events.
-/// Enqueues the next item in the queue. When radio mode is enabled and the
-/// queue is about to run out, automatically finds and appends similar tracks.
+/// Pre-fetches and enqueues the next stream URL for gapless playback transitions.
+/// Supports loop modes (RepeatOne replays the same track, RepeatAll wraps around),
+/// shuffle order, and radio mode auto-population when the queue runs out.
 /// </summary>
 #pragma warning disable CA1711
 public class PlaybackNearlyFinishedEventHandler : BaseHandler
@@ -56,8 +57,8 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     }
 
     /// <summary>
-    /// Respond with next item in the queue. If radio mode is enabled and the
-    /// queue is about to run out, auto-populate with similar tracks.
+    /// Pre-fetch the next item in the queue and enqueue it for gapless playback.
+    /// Handles loop modes (RepeatOne, RepeatAll), shuffle, and radio mode auto-population.
     /// </summary>
     /// <param name="request">The skill request which should be handled.</param>
     /// <param name="context">The context of the skill intent request.</param>
@@ -77,24 +78,13 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             {
                 if (DateTimeOffset.UtcNow.UtcTicks >= deadlineTicks)
                 {
+                    Logger.LogInformation("Sleep timer expired, stopping playback");
                     return ResponseBuilder.Empty();
                 }
             }
         }
 
-        Guid? nextItemId = null;
-        for (int i = 0; i < session.NowPlayingQueue.Count; i++)
-        {
-            if (session.NowPlayingQueue[i].Id == session.FullNowPlayingItem?.Id)
-            {
-                if (i + 1 < session.NowPlayingQueue.Count)
-                {
-                    nextItemId = session.NowPlayingQueue[i + 1].Id;
-                }
-
-                break;
-            }
-        }
+        Guid? nextItemId = ResolveNextItemId(session, context);
 
         // If no next item and radio mode is on, auto-populate similar tracks
         if (nextItemId == null && RadioModeState.IsEnabled(session.UserId, context.System.Device.DeviceID))
@@ -104,19 +94,122 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
 
         if (nextItemId == null)
         {
+            Logger.LogDebug("No next item in queue, playback will end after current track");
             return ResponseBuilder.Empty();
         }
 
+        // Pre-fetch the next item from the library to resolve metadata eagerly
         BaseItem? item = _libraryManager.GetItemById((Guid)nextItemId);
         if (item == null)
         {
+            Logger.LogWarning("Next queue item {ItemId} not found in library", nextItemId);
             return ResponseBuilder.Empty();
         }
 
         string itemId = item.Id.ToString();
-        string audioUrl = new Uri(new Uri(Plugin.Instance!.Configuration.ServerAddress), "Audio/" + itemId + "/universal").ToString();
+
+        // Use the optimized /stream?static=true endpoint for pre-fetched playback
+        // (the original /universal endpoint adds an extra redirect hop)
+        string audioUrl = GetStreamUrl(itemId, user);
+
+        Logger.LogInformation(
+            "Pre-fetching next track for gapless playback: {ItemName} ({ItemId}), loop={LoopMode}, shuffle={Shuffle}",
+            item.Name,
+            itemId,
+            session.PlayState?.RepeatMode ?? RepeatMode.RepeatNone,
+            session.PlayState?.PlaybackOrder ?? PlaybackOrder.Default);
 
         return BuildAudioPlayerResponse(PlayBehavior.Enqueue, audioUrl, itemId, item, user, context);
+    }
+
+    /// <summary>
+    /// Resolve the next item ID based on the current position in the queue,
+    /// taking loop and shuffle modes into account.
+    /// </summary>
+    /// <param name="session">The current Jellyfin session with play state.</param>
+    /// <param name="context">The Alexa context for current token.</param>
+    /// <returns>The next item ID, or null if playback should end.</returns>
+    private Guid? ResolveNextItemId(SessionInfo session, Context context)
+    {
+        RepeatMode repeatMode = session.PlayState?.RepeatMode ?? RepeatMode.RepeatNone;
+        PlaybackOrder playbackOrder = session.PlayState?.PlaybackOrder ?? PlaybackOrder.Default;
+
+        if (session.NowPlayingQueue.Count == 0)
+        {
+            return null;
+        }
+
+        // Find current position in the queue
+        Guid? currentItemId = session.FullNowPlayingItem?.Id;
+        if (currentItemId == null && context.AudioPlayer?.Token != null
+            && Guid.TryParse(context.AudioPlayer.Token, out Guid parsedToken))
+        {
+            currentItemId = parsedToken;
+        }
+
+        if (currentItemId == null)
+        {
+            return null;
+        }
+
+        int currentIndex = -1;
+        for (int i = 0; i < session.NowPlayingQueue.Count; i++)
+        {
+            if (session.NowPlayingQueue[i].Id == currentItemId.Value)
+            {
+                currentIndex = i;
+                break;
+            }
+        }
+
+        if (currentIndex < 0)
+        {
+            return null;
+        }
+
+        // RepeatOne: replay the same track
+        if (repeatMode == RepeatMode.RepeatOne)
+        {
+            return session.NowPlayingQueue[currentIndex].Id;
+        }
+
+        // Shuffle mode: pick a random next track from the queue (avoiding immediate repeat if possible)
+        if (playbackOrder == PlaybackOrder.Shuffle && session.NowPlayingQueue.Count > 1)
+        {
+            int nextIndex;
+            if (session.NowPlayingQueue.Count == 2)
+            {
+                nextIndex = currentIndex == 0 ? 1 : 0;
+            }
+            else
+            {
+                do
+                {
+                    nextIndex = Random.Shared.Next(session.NowPlayingQueue.Count);
+                }
+                while (nextIndex == currentIndex);
+            }
+
+            return session.NowPlayingQueue[nextIndex].Id;
+        }
+
+        // Sequential: advance to next item
+        int nextPos = currentIndex + 1;
+
+        // RepeatAll: wrap around to the beginning when reaching the end
+        if (nextPos >= session.NowPlayingQueue.Count)
+        {
+            if (repeatMode == RepeatMode.RepeatAll)
+            {
+                nextPos = 0;
+            }
+            else
+            {
+                return null;
+            }
+        }
+
+        return session.NowPlayingQueue[nextPos].Id;
     }
 
     /// <summary>
