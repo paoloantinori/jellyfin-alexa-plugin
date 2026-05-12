@@ -96,6 +96,11 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool AplVisualsEnabled { get; set; } = true;
     public bool VideoPlaybackEnabled { get; set; } = true;
 
+    // Media type visibility — exclude content types from search and library queries
+    public bool MusicEnabled { get; set; } = true;
+    public bool VideosEnabled { get; set; } = true;
+    public bool BooksEnabled { get; set; } = true;
+
     /// <summary>
     /// Gets or sets the list of users.
     /// </summary>

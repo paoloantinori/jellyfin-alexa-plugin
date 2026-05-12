@@ -87,7 +87,7 @@ public class ContinueWatchingIntentHandler : BaseHandler
         {
             User = resolvedUser,
             Recursive = true,
-            IncludeItemTypes = new[] { BaseItemKind.Audio, BaseItemKind.Movie, BaseItemKind.Episode },
+            IncludeItemTypes = FilterByContentAccess(new[] { BaseItemKind.Audio, BaseItemKind.Movie, BaseItemKind.Episode }),
             MinDateLastSavedForUser = DateTime.UtcNow.AddDays(-30),
             Limit = MaxCandidates,
             OrderBy = new[] { (ItemSortBy.DatePlayed, SortOrder.Descending) },

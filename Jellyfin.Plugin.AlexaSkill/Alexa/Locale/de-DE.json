@@ -129,5 +129,6 @@
   "GenreExpanded": "Spiele {0} und ähnliche Genres.",
   "FollowMeSuccess": "Setze {0} fort, wo du aufgehört hast.",
   "FollowMeNothingPlaying": "Auf anderen Geräten wird gerade nichts abgespielt.",
-  "FeatureDisabled": "Diese Funktion ist derzeit deaktiviert. Bitten Sie Ihren Administrator, sie zu aktivieren."
+  "FeatureDisabled": "Diese Funktion ist derzeit deaktiviert. Bitten Sie Ihren Administrator, sie zu aktivieren.",
+  "MediaTypeNotAvailable": "Diese Art von Inhalt ist nicht verfügbar."
 }

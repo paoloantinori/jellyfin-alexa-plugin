@@ -95,7 +95,7 @@ public class RecommendIntentHandler : BaseHandler
             return userError;
         }
 
-        BaseItemKind[] itemTypes = GetItemTypes(mediaType);
+        BaseItemKind[] itemTypes = FilterByContentAccess(GetItemTypes(mediaType));
 
         // Step 1: Get user's most-played items to find their top genres
         var historyQuery = new InternalItemsQuery

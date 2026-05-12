@@ -171,5 +171,6 @@
   "GenreExpanded": "{0} en vergelijkbare genres worden afgespeeld.",
   "FollowMeSuccess": "Ga verder met {0} waar je gebleven was.",
   "FollowMeNothingPlaying": "Er wordt nu niets afgespeeld op andere apparaten.",
-  "FeatureDisabled": "Deze functie is momenteel uitgeschakeld. Vraag uw beheerder om deze in te schakelen."
+  "FeatureDisabled": "Deze functie is momenteel uitgeschakeld. Vraag uw beheerder om deze in te schakelen.",
+  "MediaTypeNotAvailable": "Dit type inhoud is niet beschikbaar."
 }

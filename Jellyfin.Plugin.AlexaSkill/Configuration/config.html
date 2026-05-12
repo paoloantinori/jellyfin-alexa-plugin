@@ -107,6 +107,31 @@
                     </div>
                 </div>
 
+                <div class="verticalSection verticalSection-extrabottompadding">
+                    <h2 class="sectionTitle">Media Type Access</h2>
+                    <div class="fieldDescription" style="margin-bottom:1em;">Control which content types appear in search results and library browsing. Disabled types are excluded from queries entirely.</div>
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label><input type="checkbox" is="emby-checkbox" id="MusicEnabled" /> <span>Music</span></label>
+                        <div class="fieldDescription checkboxFieldDescription">Songs, albums, and artists</div>
+                    </div>
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label><input type="checkbox" is="emby-checkbox" id="VideosEnabled" /> <span>Videos</span></label>
+                        <div class="fieldDescription checkboxFieldDescription">Movies, series, and episodes</div>
+                    </div>
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label><input type="checkbox" is="emby-checkbox" id="PodcastsEnabled" /> <span>Podcasts</span></label>
+                        <div class="fieldDescription checkboxFieldDescription">Podcast series and episodes</div>
+                    </div>
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label><input type="checkbox" is="emby-checkbox" id="LiveTvEnabled" /> <span>Live TV</span></label>
+                        <div class="fieldDescription checkboxFieldDescription">Live TV channels</div>
+                    </div>
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label><input type="checkbox" is="emby-checkbox" id="BooksEnabled" /> <span>Books</span></label>
+                        <div class="fieldDescription checkboxFieldDescription">Audiobooks</div>
+                    </div>
+                </div>
+
                 <div class="detailSectionHeader">
                     <h2 style="margin:.6em 0;vertical-align:middle;display:inline-block">User Skill Configuration</h2>
                     <button id="newUserSkillButton" is="emby-button" type="button" class="fab submit emby-button" style="margin-left:1em" title="Add NeW User Skill">
@@ -160,6 +185,11 @@
                     ["RadioModeEnabled", "PodcastsEnabled", "LiveTvEnabled", "SleepTimerEnabled",
                      "QueueManagementEnabled", "BrowseLibraryEnabled", "RecommendationsEnabled",
                      "AplVisualsEnabled", "VideoPlaybackEnabled"].forEach(function(f) {
+                        document.querySelector("#" + f).checked = config[f] !== false;
+                    });
+
+                    // Media type access
+                    ["MusicEnabled", "VideosEnabled", "PodcastsEnabled", "LiveTvEnabled", "BooksEnabled"].forEach(function(f) {
                         document.querySelector("#" + f).checked = config[f] !== false;
                     });
 
@@ -375,6 +405,11 @@
                     ["RadioModeEnabled", "PodcastsEnabled", "LiveTvEnabled", "SleepTimerEnabled",
                      "QueueManagementEnabled", "BrowseLibraryEnabled", "RecommendationsEnabled",
                      "AplVisualsEnabled", "VideoPlaybackEnabled"].forEach(function(f) {
+                        config[f] = document.querySelector("#" + f).checked;
+                    });
+
+                    // Media type access
+                    ["MusicEnabled", "VideosEnabled", "PodcastsEnabled", "LiveTvEnabled", "BooksEnabled"].forEach(function(f) {
                         config[f] = document.querySelector("#" + f).checked;
                     });
 

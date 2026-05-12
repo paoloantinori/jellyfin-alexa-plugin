@@ -494,6 +494,63 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// Filters an array of BaseItemKind values to only include types whose media type category
+    /// is enabled in configuration.
+    /// </summary>
+    protected static BaseItemKind[] FilterByContentAccess(BaseItemKind[] types)
+    {
+        var config = Plugin.Instance?.Configuration;
+        if (config == null)
+        {
+            return types;
+        }
+
+        var allowed = new List<BaseItemKind>(types.Length);
+        foreach (var type in types)
+        {
+            if (IsTypeAllowed(type, config))
+            {
+                allowed.Add(type);
+            }
+        }
+
+        return allowed.Count == types.Length ? types : allowed.ToArray();
+    }
+
+    private static bool IsTypeAllowed(BaseItemKind type, PluginConfiguration config)
+    {
+        return type switch
+        {
+            BaseItemKind.Audio or BaseItemKind.MusicAlbum or BaseItemKind.MusicArtist => config.MusicEnabled,
+            BaseItemKind.Movie or BaseItemKind.Episode or BaseItemKind.Series => config.VideosEnabled,
+            BaseItemKind.AudioBook => config.BooksEnabled,
+            BaseItemKind.Playlist => true, // playlists are cross-type, always allowed
+            _ => true // unknown types pass through
+        };
+    }
+
+    /// <summary>
+    /// Checks if a media type category is disabled and returns a localized response.
+    /// Use in handlers that target a specific media type.
+    /// </summary>
+    protected SkillResponse? IfMediaTypeDisabled(Func<PluginConfiguration, bool> isEnabled, Request request)
+    {
+        var config = Plugin.Instance?.Configuration;
+        if (config == null)
+        {
+            return null;
+        }
+
+        if (!isEnabled(config))
+        {
+            Logger.LogInformation("Media type is disabled via configuration");
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaTypeNotAvailable", GetLocale(request)));
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Send a progressive response to keep the Alexa session alive during long operations.
     /// Resets the 8-second timeout. Only works with IntentRequest/LaunchRequest.
     /// A fresh HttpClient is created per call because ProgressiveResponse sets BaseAddress

@@ -128,5 +128,6 @@
   "GenreExpanded": "Reproduciendo {0} y géneros similares.",
   "FollowMeSuccess": "Continuando {0} donde lo dejaste.",
   "FollowMeNothingPlaying": "No hay nada reproduciéndose en otros dispositivos.",
-  "FeatureDisabled": "Esta función está desactivada. Pide a tu administrador que la active."
+  "FeatureDisabled": "Esta función está desactivada. Pide a tu administrador que la active.",
+  "MediaTypeNotAvailable": "Este tipo de contenido no está disponible."
 }

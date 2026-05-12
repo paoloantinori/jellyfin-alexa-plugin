@@ -97,7 +97,7 @@ public class SearchMediaIntentHandler : BaseHandler
             User = jellyfinUser,
             Recursive = true,
             SearchTerm = query,
-            IncludeItemTypes = _playableTypes,
+            IncludeItemTypes = FilterByContentAccess(_playableTypes),
             Limit = 20,
             OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
             DtoOptions = new DtoOptions(true)

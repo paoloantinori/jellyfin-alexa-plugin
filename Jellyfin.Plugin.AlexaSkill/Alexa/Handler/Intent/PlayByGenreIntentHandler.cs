@@ -94,7 +94,7 @@ public class PlayByGenreIntentHandler : BaseHandler
             Recursive = true,
             Limit = MaxQueryResults,
             Genres = new[] { genreSlot },
-            IncludeItemTypes = new[] { BaseItemKind.Audio },
+            IncludeItemTypes = FilterByContentAccess(new[] { BaseItemKind.Audio }),
             OrderBy = new[] { (ItemSortBy.Random, SortOrder.Ascending) },
             DtoOptions = new DtoOptions(true)
         };

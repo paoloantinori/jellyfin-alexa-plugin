@@ -129,5 +129,6 @@
   "GenreExpanded": "Playing {0} and similar genres.",
   "FollowMeSuccess": "Resuming {0} from where you left off.",
   "FollowMeNothingPlaying": "Nothing is playing on other devices right now.",
-  "FeatureDisabled": "This feature is currently disabled. Ask your administrator to enable it."
+  "FeatureDisabled": "This feature is currently disabled. Ask your administrator to enable it.",
+  "MediaTypeNotAvailable": "This type of content is not available."
 }

@@ -183,21 +183,21 @@ public class PlayRandomIntentHandler : BaseHandler
         return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, firstItem, user, context);
     }
 
-    private static void ApplyMediaTypeFilter(InternalItemsQuery query, string? mediaTypeSlot)
+    private void ApplyMediaTypeFilter(InternalItemsQuery query, string? mediaTypeSlot)
     {
         if (string.IsNullOrEmpty(mediaTypeSlot))
         {
-            query.IncludeItemTypes = new[] { BaseItemKind.Audio };
+            query.IncludeItemTypes = FilterByContentAccess(new[] { BaseItemKind.Audio });
             return;
         }
 
         switch (mediaTypeSlot.ToLowerInvariant())
         {
             case "video":
-                query.IncludeItemTypes = new[] { BaseItemKind.Movie, BaseItemKind.Episode };
+                query.IncludeItemTypes = FilterByContentAccess(new[] { BaseItemKind.Movie, BaseItemKind.Episode });
                 break;
             default:
-                query.IncludeItemTypes = new[] { BaseItemKind.Audio };
+                query.IncludeItemTypes = FilterByContentAccess(new[] { BaseItemKind.Audio });
                 break;
         }
     }

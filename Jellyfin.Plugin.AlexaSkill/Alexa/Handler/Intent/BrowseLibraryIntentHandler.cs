@@ -157,7 +157,7 @@ public class BrowseLibraryIntentHandler : BaseHandler
         {
             User = jellyfinUser,
             Recursive = true,
-            IncludeItemTypes = new[] { itemType },
+            IncludeItemTypes = FilterByContentAccess(new[] { itemType }),
             Limit = MaxResults,
             OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
             DtoOptions = new DtoOptions(true)
@@ -191,7 +191,7 @@ public class BrowseLibraryIntentHandler : BaseHandler
         {
             User = jellyfinUser,
             Recursive = true,
-            IncludeItemTypes = new[] { BaseItemKind.Audio, BaseItemKind.Movie },
+            IncludeItemTypes = FilterByContentAccess(new[] { BaseItemKind.Audio, BaseItemKind.Movie }),
             Genres = new[] { filter },
             Limit = MaxResults,
             OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },

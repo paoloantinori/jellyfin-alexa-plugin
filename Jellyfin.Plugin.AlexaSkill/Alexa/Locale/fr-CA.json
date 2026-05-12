@@ -129,5 +129,6 @@
   "GenreExpanded": "Lecture de {0} et genres similaires.",
   "FollowMeSuccess": "Reprise de {0} là où vous vous êtes arrêté.",
   "FollowMeNothingPlaying": "Rien ne joue sur les autres appareils pour le moment.",
-  "FeatureDisabled": "Cette fonctionnalité est actuellement désactivée. Demandez à votre administrateur de l'activer."
+  "FeatureDisabled": "Cette fonctionnalité est actuellement désactivée. Demandez à votre administrateur de l'activer.",
+  "MediaTypeNotAvailable": "Ce type de contenu n'est pas disponible."
 }

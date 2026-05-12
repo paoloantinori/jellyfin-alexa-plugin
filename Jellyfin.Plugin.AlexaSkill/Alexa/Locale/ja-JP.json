@@ -171,5 +171,6 @@
   "GenreExpanded": "{0} と類似ジャンルを再生しています。",
   "FollowMeSuccess": "{0} を続きから再生します。",
   "FollowMeNothingPlaying": "他のデバイスでは何も再生されていません。",
-  "FeatureDisabled": "この機能は現在無効になっています。管理者に有効化を依頼してください。"
+  "FeatureDisabled": "この機能は現在無効になっています。管理者に有効化を依頼してください。",
+  "MediaTypeNotAvailable": "この種類のコンテンツは利用できません。"
 }
