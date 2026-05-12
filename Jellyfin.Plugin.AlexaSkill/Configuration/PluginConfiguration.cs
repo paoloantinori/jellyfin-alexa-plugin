@@ -80,6 +80,12 @@ public class PluginConfiguration : BasePluginConfiguration
     public FuzzyMatchBehavior FuzzyMatchBehavior { get; set; } = FuzzyMatchBehavior.Confirm;
 
     /// <summary>
+    /// Gets or sets a value indicating whether the intent simulator endpoint is enabled.
+    /// When disabled, all simulator endpoints return 404. Defaults to false for production safety.
+    /// </summary>
+    public bool SimulatorEnabled { get; set; }
+
+    /// <summary>
     /// Gets or sets the list of users.
     /// </summary>
 #pragma warning disable CA2227
