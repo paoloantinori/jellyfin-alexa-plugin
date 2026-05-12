@@ -105,5 +105,10 @@
   "ReminderSetAbsolute": "Recordatorio configurado para las {0}.",
   "ReminderError": "Lo siento, no pude configurar el recordatorio. Por favor, intenta de nuevo.",
   "ReminderPermissionRequired": "Para configurar recordatorios, necesito permiso. Ve a la app de Alexa para conceder los permisos de recordatorio.",
-  "ReminderDefaultMessage": "Este es tu recordatorio de Jellyfin."
+  "ReminderDefaultMessage": "Este es tu recordatorio de Jellyfin.",
+  "FuzzySuggestionPrompt": "No encontré '{0}'. ¿Quisiste decir '{1}'?",
+  "FuzzySuggestionPromptSsml": "No encontré '{0}'.<break time=\"200ms\"/>¿Quisiste decir <emphasis level=\"moderate\">{1}</emphasis>?",
+  "FuzzyAutoPlayAnnouncement": "Reproduciendo {0} (resultado más cercano a '{1}')",
+  "FuzzyAutoPlayAnnouncementSsml": "Reproduciendo <emphasis level=\"moderate\">{0}</emphasis><break time=\"150ms\"/>resultado más cercano a '{1}'",
+  "FuzzySuggestionReprompt": "Puedes decir sí o no."
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -85,7 +86,7 @@ public abstract class BaseHandler
         return favorites;
     }
 
-    private PluginConfiguration _config;
+    private protected PluginConfiguration _config;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="BaseHandler"/> class.
@@ -546,6 +547,88 @@ public abstract class BaseHandler
         where T : class
     {
         return FuzzyMatcher.FindBestMatch(query, candidates, selector, threshold);
+    }
+
+    /// <summary>
+    /// Result of a fuzzy match attempt with suggestion support.
+    /// </summary>
+    protected enum FuzzyMissOutcome
+    {
+        /// <summary>A close candidate was found and handled (returned as response).</summary>
+        SuggestionHandled,
+        /// <summary>No close candidate found; caller should handle "not found".</summary>
+        NotFound
+    }
+
+    /// <summary>
+    /// Handle the case when FuzzyMatch returns null. Checks config for behavior:
+    /// - Confirm: returns "Did you mean X?" prompt via disambiguation session
+    /// - AutoPlay: invokes playFunc with the closest match and returns an announcement response
+    /// Returns (SuggestionHandled, response) when a suggestion was made, or (NotFound, null) when no close candidate exists.
+    /// </summary>
+    /// <typeparam name="T">The item type.</typeparam>
+    /// <param name="query">The original search query.</param>
+    /// <param name="candidates">The full list of candidate items.</param>
+    /// <param name="selector">Function to extract the display name from an item.</param>
+    /// <param name="matchExtractor">Function to create disambiguation match list from the best candidate.</param>
+    /// <param name="mediaType">The media type for disambiguation state.</param>
+    /// <param name="locale">The locale for localized responses.</param>
+    /// <param name="autoPlayFunc">Optional function to play the suggested item in AutoPlay mode.</param>
+    /// <returns>A tuple indicating the outcome and optional response.</returns>
+    protected (FuzzyMissOutcome Outcome, SkillResponse? Response) HandleFuzzyMiss<T>(
+        string query,
+        IReadOnlyList<T> candidates,
+        Func<T, string> selector,
+        Func<T, List<(Guid Id, string Name)>> matchExtractor,
+        string mediaType,
+        string locale,
+        Func<T, SkillResponse>? autoPlayFunc = null)
+        where T : class
+    {
+        var bestWithScore = FuzzyMatcher.FindBestMatchWithScore(query, candidates, selector);
+
+        if (bestWithScore == null || bestWithScore.Value.Score < FuzzyMatcher.SuggestionThreshold)
+        {
+            return (FuzzyMissOutcome.NotFound, null);
+        }
+
+        T best = bestWithScore.Value.Item;
+
+        if (_config.FuzzyMatchBehavior == FuzzyMatchBehavior.AutoPlay && autoPlayFunc != null)
+        {
+            SkillResponse playResponse = autoPlayFunc(best);
+            string? ssml = GetSsml("FuzzyAutoPlayAnnouncementSsml", locale, selector(best), query);
+            playResponse.Response.OutputSpeech = ssml != null
+                ? new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" }
+                : new PlainTextOutputSpeech { Text = ResponseStrings.Get("FuzzyAutoPlayAnnouncement", locale, selector(best), query) };
+            return (FuzzyMissOutcome.SuggestionHandled, playResponse);
+        }
+
+        // Confirm mode: "Did you mean X?"
+        var matches = matchExtractor(best);
+        string? promptSsml = GetSsml("FuzzySuggestionPromptSsml", locale, query, selector(best));
+
+        SkillResponse response;
+        if (promptSsml != null)
+        {
+            string reprompt = ResponseStrings.Get("FuzzySuggestionReprompt", locale);
+            response = AskSsml(promptSsml, new Reprompt(reprompt));
+        }
+        else
+        {
+            string prompt = ResponseStrings.Get("FuzzySuggestionPrompt", locale, query, selector(best));
+            string reprompt = ResponseStrings.Get("FuzzySuggestionReprompt", locale);
+            response = ResponseBuilder.Ask(prompt, new Reprompt(reprompt));
+        }
+
+        response.SessionAttributes = new Dictionary<string, object>
+        {
+            ["disambig_matches"] = Newtonsoft.Json.JsonConvert.SerializeObject(matches),
+            ["disambig_index"] = 0,
+            ["disambig_type"] = mediaType
+        };
+
+        return (FuzzyMissOutcome.SuggestionHandled, response);
     }
 
     /// <summary>

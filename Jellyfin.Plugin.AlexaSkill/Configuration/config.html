@@ -43,6 +43,15 @@
                             </select>
                         </div>
 
+                        <div class="selectContainer">
+                            <label class="selectLabel" for="FuzzyMatchBehavior">Fuzzy Match Behavior</label>
+                            <select is="emby-select" id="FuzzyMatchBehavior" name="FuzzyMatchBehavior" class="emby-select-withcolor emby-select">
+                                <option id="confirm" value="Confirm">Confirm (did you mean?)</option>
+                                <option id="autoPlay" value="AutoPlay">Auto-play (feeling lucky)</option>
+                            </select>
+                            <div class="fieldDescription">How to handle close but inexact search matches. "Confirm" asks before playing, "Auto-play" plays the closest match immediately.</div>
+                        </div>
+
                         <div class="inputContainer">
                             <label class="inputLabel inputLabelUnfocused" for="LwaClientId">LWA Client ID</label>
                             <input id="LwaClientId" name="LwaClientId" type="text" is="emby-input" />
@@ -101,6 +110,7 @@
                 ApiClient.getPluginConfiguration(Config.pluginUniqueId).then(function (config) {
                     document.querySelector("#ServerAddress").value = config.ServerAddress;
                     document.querySelector("#SslCertType").value = config.SslCertType;
+                    document.querySelector("#FuzzyMatchBehavior").value = config.FuzzyMatchBehavior || "Confirm";
 
                     document.querySelector("#LwaClientId").value = config.LwaClientId;
                     document.querySelector("#LwaClientSecret").value = config.LwaClientSecret;
@@ -310,6 +320,7 @@
 
                     config.ServerAddress = document.querySelector("#ServerAddress").value;
                     config.SslCertType = document.querySelector("#SslCertType").value;
+                    config.FuzzyMatchBehavior = document.querySelector("#FuzzyMatchBehavior").value;
                     config.LwaClientId = document.querySelector("#LwaClientId").value;
                     config.LwaClientSecret = document.querySelector("#LwaClientSecret").value;
                     

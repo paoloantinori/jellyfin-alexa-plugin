@@ -106,5 +106,10 @@
   "ReminderSetAbsolute": "Reminder set for {0}.",
   "ReminderError": "Sorry, I couldn't set that reminder. Please try again.",
   "ReminderPermissionRequired": "To set reminders, I need permission. Please go to the Alexa app to grant reminder permissions.",
-  "ReminderDefaultMessage": "This is your Jellyfin reminder."
+  "ReminderDefaultMessage": "This is your Jellyfin reminder.",
+  "FuzzySuggestionPrompt": "I didn't find '{0}'. Did you mean '{1}'?",
+  "FuzzySuggestionPromptSsml": "I didn't find '{0}'.<break time=\"200ms\"/>Did you mean <emphasis level=\"moderate\">{1}</emphasis>?",
+  "FuzzyAutoPlayAnnouncement": "Playing {0} (closest match for '{1}')",
+  "FuzzyAutoPlayAnnouncementSsml": "Playing <emphasis level=\"moderate\">{0}</emphasis><break time=\"150ms\"/>closest match for '{1}'",
+  "FuzzySuggestionReprompt": "You can say yes or no."
 }

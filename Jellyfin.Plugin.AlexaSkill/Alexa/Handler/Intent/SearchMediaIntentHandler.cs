@@ -128,6 +128,20 @@ public class SearchMediaIntentHandler : BaseHandler
             return PlayItem(topMatch, user, session, context);
         }
 
+        var (missOutcome, missResponse) = HandleFuzzyMiss(
+            query,
+            deduped,
+            i => i.Name,
+            best => new List<(Guid, string)> { (best.Id, FormatWithTypeLabel(best)) },
+            DisambiguationHelper.MediaTypeSong,
+            locale,
+            best => PlayItem(best, user, session, context));
+
+        if (missOutcome != FuzzyMissOutcome.NotFound)
+        {
+            return missResponse!;
+        }
+
         var topItems = deduped.Take(3).ToList();
         var matches = topItems.Select(i => (i.Id, FormatWithTypeLabel(i))).ToList();
         SkillResponse response = DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeSong, locale);

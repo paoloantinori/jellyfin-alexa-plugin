@@ -9,6 +9,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
@@ -95,22 +96,49 @@ public class PlayPlaylistIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundPlaylist", locale, playlistName));
         }
 
-        BaseItem playlist;
+        BaseItem? playlistMatch = null;
         if (playlists.TotalRecordCount > 1)
         {
             BaseItem? topMatch = FuzzyMatch(playlistName, playlists.Items, p => p.Name);
-            if (topMatch == null)
+            if (topMatch != null)
             {
-                var matches = playlists.Items.Take(3).Select(p => (p.Id, p.Name)).ToList();
-                return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypePlaylist, locale);
+                playlistMatch = topMatch;
             }
+            else
+            {
+                var (missOutcome, missResponse) = HandleFuzzyMiss(
+                    playlistName,
+                    playlists.Items,
+                    p => p.Name,
+                    best => new List<(Guid, string)> { (best.Id, best.Name) },
+                    DisambiguationHelper.MediaTypePlaylist,
+                    locale,
+                    best =>
+                    {
+                        playlistMatch = best;
+                        return null!;
+                    });
 
-            playlist = topMatch;
+                if (missOutcome != FuzzyMissOutcome.NotFound)
+                {
+                    if (missResponse != null)
+                    {
+                        return missResponse;
+                    }
+                }
+                else
+                {
+                    var matches = playlists.Items.Take(3).Select(p => (p.Id, p.Name)).ToList();
+                    return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypePlaylist, locale);
+                }
+            }
         }
         else
         {
-            playlist = playlists.Items[0];
+            playlistMatch = playlists.Items[0];
         }
+
+        BaseItem playlist = playlistMatch!;
 
         // Get the playlist items
         IReadOnlyList<BaseItem> playlistItems = ((Folder)playlist).GetItemList(new InternalItemsQuery()

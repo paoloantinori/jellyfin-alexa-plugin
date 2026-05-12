@@ -86,14 +86,34 @@ public class PlayVideoIntentHandler : BaseHandler
 
         if (videos.Count > 1)
         {
-            BaseItem? topMatch = FuzzyMatch(titleQuery, videos, v => v.Name);
-            if (topMatch == null)
+            BaseItem? videoMatch = null;
+            var (missOutcome, missResponse) = HandleFuzzyMiss(
+                titleQuery,
+                videos,
+                v => v.Name,
+                best => new List<(Guid, string)> { (best.Id, best.Name) },
+                DisambiguationHelper.MediaTypeVideo,
+                locale,
+                best =>
+                {
+                    videoMatch = best;
+                    return null!;
+                });
+
+            if (missOutcome != FuzzyMissOutcome.NotFound)
+            {
+                if (missResponse != null)
+                {
+                    return missResponse;
+                }
+
+                videos = new List<BaseItem> { videoMatch! };
+            }
+            else
             {
                 var matches = videos.Take(3).Select(v => (v.Id, v.Name)).ToList();
                 return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeVideo, locale);
             }
-
-            videos = new List<BaseItem> { topMatch };
         }
 
         BaseItem video = videos[0];

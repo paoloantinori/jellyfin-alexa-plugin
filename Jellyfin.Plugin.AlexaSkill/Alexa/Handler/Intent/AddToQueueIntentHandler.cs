@@ -127,14 +127,34 @@ public class AddToQueueIntentHandler : BaseHandler
 
         if (songs.Count > 1)
         {
-            BaseItem? topMatch = FuzzyMatch(songQuery, songs, s => s.Name);
-            if (topMatch == null)
+            BaseItem? songMatch = null;
+            var (missOutcome, missResponse) = HandleFuzzyMiss(
+                songQuery,
+                songs,
+                s => s.Name,
+                best => new List<(Guid, string)> { (best.Id, best.Name) },
+                DisambiguationHelper.MediaTypeSong,
+                locale,
+                best =>
+                {
+                    songMatch = best;
+                    return null!;
+                });
+
+            if (missOutcome != FuzzyMissOutcome.NotFound)
+            {
+                if (missResponse != null)
+                {
+                    return missResponse;
+                }
+
+                songs = new List<BaseItem> { songMatch! };
+            }
+            else
             {
                 var matches = songs.Take(3).Select(s => (s.Id, s.Name)).ToList();
                 return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeSong, locale);
             }
-
-            songs = new List<BaseItem> { topMatch };
         }
 
         // Append to the end of the queue

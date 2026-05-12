@@ -135,14 +135,34 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         if (albums.Count > 1)
         {
-            BaseItem? topMatch = FuzzyMatch(album, albums, a => a.Name);
-            if (topMatch == null)
+            BaseItem? albumMatch = null;
+            var (missOutcome, missResponse) = HandleFuzzyMiss(
+                album,
+                albums,
+                a => a.Name,
+                best => new List<(Guid, string)> { (best.Id, best.Name) },
+                DisambiguationHelper.MediaTypeAlbum,
+                locale,
+                best =>
+                {
+                    albumMatch = best;
+                    return null!;
+                });
+
+            if (missOutcome != FuzzyMissOutcome.NotFound)
+            {
+                if (missResponse != null)
+                {
+                    return missResponse;
+                }
+
+                albums = new List<BaseItem> { albumMatch! };
+            }
+            else
             {
                 var matches = albums.Take(3).Select(a => (a.Id, a.Name)).ToList();
                 return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeAlbum, locale);
             }
-
-            albums = new List<BaseItem> { topMatch };
         }
 
         // Get all songs from the album

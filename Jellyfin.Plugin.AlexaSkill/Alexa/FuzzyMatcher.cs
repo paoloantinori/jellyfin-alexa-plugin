@@ -16,6 +16,13 @@ internal static class FuzzyMatcher
     public const int DefaultThreshold = 60;
 
     /// <summary>
+    /// Minimum similarity score for a candidate to be offered as a suggestion
+    /// when no confident match is found. Scores between this and DefaultThreshold
+    /// trigger "Did you mean?" or auto-play behavior depending on config.
+    /// </summary>
+    public const int SuggestionThreshold = 40;
+
+    /// <summary>
     /// Find the best matching item from a list of candidates using partial ratio scoring.
     /// </summary>
     /// <typeparam name="T">The type of candidate items.</typeparam>
@@ -25,6 +32,22 @@ internal static class FuzzyMatcher
     /// <param name="threshold">Minimum score (0-100) to accept a match.</param>
     /// <returns>The best matching item, or default if no match above threshold.</returns>
     public static T? FindBestMatch<T>(string query, IEnumerable<T> candidates, Func<T, string> selector, int threshold = DefaultThreshold)
+        where T : class
+    {
+        var result = FindBestMatchWithScore(query, candidates, selector);
+        return result.HasValue && result.Value.Score >= threshold ? result.Value.Item : null;
+    }
+
+    /// <summary>
+    /// Find the best matching item regardless of threshold, returning the item with its score.
+    /// Returns null only when query is empty/whitespace or candidates are empty.
+    /// </summary>
+    /// <typeparam name="T">The type of candidate items.</typeparam>
+    /// <param name="query">The user's search query.</param>
+    /// <param name="candidates">Candidate items to match against.</param>
+    /// <param name="selector">Function to extract the comparable string from each candidate.</param>
+    /// <returns>The best match with its score, or null.</returns>
+    public static (T Item, int Score)? FindBestMatchWithScore<T>(string query, IEnumerable<T> candidates, Func<T, string> selector)
         where T : class
     {
         if (string.IsNullOrWhiteSpace(query))
@@ -41,14 +64,14 @@ internal static class FuzzyMatcher
             string candidateText = Normalize(selector(candidate));
             int score = PartialRatio(normalizedQuery, candidateText);
 
-            if (score > bestScore && score >= threshold)
+            if (score > bestScore)
             {
                 bestScore = score;
                 bestMatch = candidate;
             }
         }
 
-        return bestMatch;
+        return bestMatch != null ? (bestMatch, bestScore) : null;
     }
 
     /// <summary>
@@ -146,34 +169,30 @@ internal static class FuzzyMatcher
             return n;
         }
 
-        int[][] d = new int[n + 1][];
-        for (int i = 0; i <= n; i++)
-        {
-            d[i] = new int[m + 1];
-        }
-
-        for (int i = 0; i <= n; i++)
-        {
-            d[i][0] = i;
-        }
+        // Two-row optimization: O(m) space instead of O(n*m).
+        int[] prev = new int[m + 1];
+        int[] curr = new int[m + 1];
 
         for (int j = 0; j <= m; j++)
         {
-            d[0][j] = j;
+            prev[j] = j;
         }
 
         for (int i = 1; i <= n; i++)
         {
+            curr[0] = i;
             for (int j = 1; j <= m; j++)
             {
                 int cost = char.ToLowerInvariant(a[i - 1]) == char.ToLowerInvariant(b[j - 1]) ? 0 : 1;
-                d[i][j] = Math.Min(
-                    Math.Min(d[i - 1][j] + 1, d[i][j - 1] + 1),
-                    d[i - 1][j - 1] + cost);
+                curr[j] = Math.Min(
+                    Math.Min(prev[j] + 1, curr[j - 1] + 1),
+                    prev[j - 1] + cost);
             }
+
+            (prev, curr) = (curr, prev);
         }
 
-        return d[n][m];
+        return prev[m];
     }
 
     private static string Normalize(string input)

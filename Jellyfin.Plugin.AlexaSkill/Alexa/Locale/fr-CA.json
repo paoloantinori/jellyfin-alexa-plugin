@@ -106,5 +106,10 @@
   "ReminderSetAbsolute": "Rappel programme pour {0}.",
   "ReminderError": "Desole, je n'ai pas pu creer le rappel. Veuillez reessayer.",
   "ReminderPermissionRequired": "Pour creer des rappels, j'ai besoin d'une autorisation. Allez dans l'application Alexa pour accorder les permissions.",
-  "ReminderDefaultMessage": "Ceci est votre rappel Jellyfin."
+  "ReminderDefaultMessage": "Ceci est votre rappel Jellyfin.",
+  "FuzzySuggestionPrompt": "Je n'ai pas trouvé '{0}'. Vouliez-vous dire '{1}' ?",
+  "FuzzySuggestionPromptSsml": "Je n'ai pas trouvé '{0}'.<break time=\"200ms\"/>Vouliez-vous dire <emphasis level=\"moderate\">{1}</emphasis> ?",
+  "FuzzyAutoPlayAnnouncement": "Lecture de {0} (résultat le plus proche pour '{1}')",
+  "FuzzyAutoPlayAnnouncementSsml": "Lecture de <emphasis level=\"moderate\">{0}</emphasis><break time=\"150ms\"/>résultat le plus proche pour '{1}'",
+  "FuzzySuggestionReprompt": "Vous pouvez dire oui ou non."
 }

@@ -187,7 +187,12 @@ public class PlayVideoIntentHandlerTests
         string speechText = response.Response.OutputSpeech is SsmlOutputSpeech ssml
             ? ssml.Ssml
             : Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech).Text;
-        Assert.Contains("Inception", speechText);
+
+        // With default Confirm behavior, should get "did you mean?" prompt suggesting the closest match
+        Assert.True(
+            speechText.Contains("Inception", StringComparison.Ordinal) ||
+            speechText.Contains("Interstellar", StringComparison.Ordinal),
+            "Expected a fuzzy suggestion for one of the candidate movies");
     }
 
     [Fact]

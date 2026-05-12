@@ -135,14 +135,30 @@ public class PlaySongIntentHandler : BaseHandler
 
         if (songs.Count > 1)
         {
-            BaseItem? topMatch = FuzzyMatch(songQuery, songs, s => s.Name);
-            if (topMatch == null)
+            var (missOutcome, missResponse) = HandleFuzzyMiss(
+                songQuery,
+                songs,
+                s => s.Name,
+                best => new List<(Guid, string)> { (best.Id, best.Name) },
+                DisambiguationHelper.MediaTypeSong,
+                locale,
+                best =>
+                {
+                    songs = new List<BaseItem> { best };
+                    var qi = new List<QueueItem> { new() { Id = best.Id } };
+                    session.NowPlayingQueue = qi;
+                    session.FullNowPlayingItem = best;
+                    string iid = best.Id.ToString();
+                    return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(iid, user), iid, best, user, context);
+                });
+
+            if (missOutcome != FuzzyMissOutcome.NotFound)
             {
-                var matches = songs.Take(3).Select(s => (s.Id, s.Name)).ToList();
-                return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeSong, locale);
+                return missResponse!;
             }
 
-            songs = new List<BaseItem> { topMatch };
+            var matches = songs.Take(3).Select(s => (s.Id, s.Name)).ToList();
+            return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeSong, locale);
         }
 
         List<QueueItem> queueItems = new List<QueueItem>();

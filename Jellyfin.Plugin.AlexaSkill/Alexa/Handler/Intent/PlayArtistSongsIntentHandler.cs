@@ -99,14 +99,34 @@ public class PlayArtistSongsIntentHandler : BaseHandler
 
         if (artists.Count > 1)
         {
-            BaseItem? topMatch = FuzzyMatch(musician, artists, a => a.Name);
-            if (topMatch == null)
+            BaseItem? artistMatch = null;
+            var (missOutcome, missResponse) = HandleFuzzyMiss(
+                musician,
+                artists,
+                a => a.Name,
+                best => new List<(Guid, string)> { (best.Id, best.Name) },
+                DisambiguationHelper.MediaTypeArtist,
+                locale,
+                best =>
+                {
+                    artistMatch = best;
+                    return null!;
+                });
+
+            if (missOutcome != FuzzyMissOutcome.NotFound)
+            {
+                if (missResponse != null)
+                {
+                    return missResponse;
+                }
+
+                artists = new List<BaseItem> { artistMatch! };
+            }
+            else
             {
                 var matches = artists.Take(3).Select(a => (a.Id, a.Name)).ToList();
                 return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeArtist, locale);
             }
-
-            artists = new List<BaseItem> { topMatch };
         }
 
         string matchedArtistName = artists[0].Name;

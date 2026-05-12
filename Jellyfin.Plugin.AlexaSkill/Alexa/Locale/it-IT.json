@@ -148,5 +148,10 @@
   "ReminderDefaultMessage": "Questo e il tuo promemoria Jellyfin.",
   "ElicitSongName": "Quale canzone vuoi ascoltare?",
   "ElicitAlbumName": "Quale album vuoi ascoltare?",
-  "ElicitSeriesName": "Quale serie vorresti guardare?"
+  "ElicitSeriesName": "Quale serie vorresti guardare?",
+  "FuzzySuggestionPrompt": "Non ho trovato '{0}'. Intendevi '{1}'?",
+  "FuzzySuggestionPromptSsml": "Non ho trovato '{0}'.<break time=\"200ms\"/>Intendevi <emphasis level=\"moderate\">{1}</emphasis>?",
+  "FuzzyAutoPlayAnnouncement": "Riproduco {0} (risultato più simile a '{1}')",
+  "FuzzyAutoPlayAnnouncementSsml": "Riproduco <emphasis level=\"moderate\">{0}</emphasis><break time=\"150ms\"/>risultato più simile a '{1}'",
+  "FuzzySuggestionReprompt": "Puoi dire sì o no."
 }

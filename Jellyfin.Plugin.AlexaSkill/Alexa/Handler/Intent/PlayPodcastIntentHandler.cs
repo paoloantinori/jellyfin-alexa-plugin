@@ -96,16 +96,36 @@ public class PlayPodcastIntentHandler : BaseHandler
 
         if (podcasts.Count > 1)
         {
-            BaseItem? topMatch = FuzzyMatch(podcastName, podcasts, p => p.Name);
-            if (topMatch == null)
+            BaseItem? podcastMatch = null;
+            var (missOutcome, missResponse) = HandleFuzzyMiss(
+                podcastName,
+                podcasts,
+                p => p.Name,
+                best => new List<(Guid, string)> { (best.Id, best.Name) },
+                DisambiguationHelper.MediaTypePodcast,
+                locale,
+                best =>
+                {
+                    podcastMatch = best;
+                    return null!;
+                });
+
+            if (missOutcome != FuzzyMissOutcome.NotFound)
+            {
+                if (missResponse != null)
+                {
+                    return missResponse;
+                }
+
+                podcasts = new List<BaseItem> { podcastMatch! };
+            }
+            else
             {
                 return DisambiguationHelper.AskFirstMatch(
                     podcasts.Select(p => (p.Id, p.Name)).ToList(),
                     DisambiguationHelper.MediaTypePodcast,
                     locale);
             }
-
-            podcasts = new List<BaseItem> { topMatch };
         }
 
         BaseItem podcast = podcasts[0];

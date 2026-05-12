@@ -74,6 +74,12 @@ public class PluginConfiguration : BasePluginConfiguration
     public string AccountLinkingClientId { get; set; }
 
     /// <summary>
+    /// Gets or sets the behavior when a fuzzy match is close but below the confidence threshold.
+    /// Confirm asks "Did you mean X?", AutoPlay plays the closest match immediately.
+    /// </summary>
+    public FuzzyMatchBehavior FuzzyMatchBehavior { get; set; } = FuzzyMatchBehavior.Confirm;
+
+    /// <summary>
     /// Gets or sets the list of users.
     /// </summary>
 #pragma warning disable CA2227
