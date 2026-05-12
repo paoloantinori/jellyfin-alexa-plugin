@@ -32,6 +32,13 @@ tests:
     expected_slots: {}
     expected_response_type: any
 
+  # --- Play by artist ---
+  - utterance: "metti una canzone dei soul coughing"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+    expected_response_type: any
+
   # --- Search ---
   - utterance: "cerca bohemian rhapsody"
     expected_intent: SearchMediaIntent

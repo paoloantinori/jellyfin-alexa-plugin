@@ -458,22 +458,23 @@ public abstract class BaseHandler
     /// <summary>
     /// Send a progressive response to keep the Alexa session alive during long operations.
     /// Resets the 8-second timeout. Only works with IntentRequest/LaunchRequest.
+    /// A fresh HttpClient is created per call because ProgressiveResponse sets BaseAddress
+    /// internally, which cannot be modified on an HttpClient that has already sent a request.
     /// </summary>
     /// <param name="context">The Alexa context containing API access token.</param>
     /// <param name="request">The request containing the request ID.</param>
     /// <param name="message">The message to speak to the user.</param>
     /// <returns>A task representing the async operation.</returns>
-    private static readonly HttpClient ProgressiveResponseHttp = new() { Timeout = TimeSpan.FromSeconds(2) };
-
     protected async Task SendProgressiveResponse(Context context, Request request, string message)
     {
         try
         {
+            using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
             var progressiveResponse = new ProgressiveResponse(
                 context.System.ApiAccessToken,
                 request.RequestId,
                 context.System?.ApiEndpoint ?? "https://api.amazonalexa.com",
-                ProgressiveResponseHttp);
+                httpClient);
             await progressiveResponse.SendSpeech(message).ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -621,9 +622,10 @@ public abstract class BaseHandler
             response = ResponseBuilder.Ask(prompt, new Reprompt(reprompt));
         }
 
+        var matchInfos = matches.Select(m => new DisambiguationHelper.MatchInfo { Id = m.Id.ToString(), Name = m.Name }).ToList();
         response.SessionAttributes = new Dictionary<string, object>
         {
-            ["disambig_matches"] = Newtonsoft.Json.JsonConvert.SerializeObject(matches),
+            ["disambig_matches"] = Newtonsoft.Json.JsonConvert.SerializeObject(matchInfos),
             ["disambig_index"] = 0,
             ["disambig_type"] = mediaType
         };

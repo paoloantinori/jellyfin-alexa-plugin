@@ -97,7 +97,12 @@ public class YesIntentHandler : BaseHandler
             return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("UnexpectedYes", locale)));
         }
 
-        Guid itemId = Guid.Parse(matches[index].Id);
+        if (!Guid.TryParse(matches[index].Id, out Guid itemId))
+        {
+            Logger.LogWarning("Invalid GUID format in disambiguation state: {Id}", matches[index].Id);
+            return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale)));
+        }
+
         BaseItem? item = _libraryManager.GetItemById(itemId);
         if (item == null)
         {

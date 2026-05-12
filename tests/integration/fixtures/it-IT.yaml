@@ -398,6 +398,17 @@ tests:
       album: {}
       musician: {}
 
+  # "Di suonare" prefix patterns (invocation-prefix form)
+  - utterance: "Di suonare album abbey road"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+
+  - utterance: "Di suonare disco thriller"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+
   # Short-form album utterances are ambiguous — NLU resolves "Suona abbey road" to
   # no selectedIntent, "Metti thriller" and "Riproduci the wall" to PlaySongIntent.
   # Use explicit "album"/"disco" noun forms for reliable resolution (tested above).
@@ -414,6 +425,29 @@ tests:
   # The disambiguated form "Suona musica dei queen" is more reliable.
 
   - utterance: "Suona musica dei pink floyd"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  # "Di suonare" patterns (invocation-prefix form used via "chiedi a jellyfin player di ...")
+  - utterance: "Di suonare una canzone dei soul coughing"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "Di suonare musica dei maneskin"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  # "Riproduci" pattern with multi-word artist
+  - utterance: "Riproduci una canzone dei ligabue"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  # "Metti" pattern (real-world test case)
+  - utterance: "Metti una canzone dei soul coughing"
     expected_intent: PlayArtistSongsIntent
     expected_slots:
       musician: {}
