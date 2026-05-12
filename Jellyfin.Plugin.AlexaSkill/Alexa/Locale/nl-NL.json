@@ -165,5 +165,7 @@
   "QueryRecentlyAddedEmpty": "Geen recent toegevoegde items gevonden.",
   "QueryRecentlyAddedPrompt": "Zeg het nummer om er een af te spelen.",
   "UserByNameNotFound": "Ik kon geen gebruiker vinden met de naam {0}.",
-  "GenreExpanded": "{0} en vergelijkbare genres worden afgespeeld."
+  "GenreExpanded": "{0} en vergelijkbare genres worden afgespeeld.",
+  "FollowMeSuccess": "Ga verder met {0} waar je gebleven was.",
+  "FollowMeNothingPlaying": "Er wordt nu niets afgespeeld op andere apparaten."
 }

@@ -228,6 +228,32 @@ public sealed class DeviceQueueManager : IDisposable
     /// </summary>
     public int ActiveQueueCount => _queues.Count;
 
+    /// <summary>
+    /// Returns all active device queues, optionally excluding a specific device.
+    /// Each entry includes the device ID and its queue state.
+    /// </summary>
+    /// <param name="excludeDeviceId">Optional device ID to exclude from results.</param>
+    /// <returns>A list of device-queue pairs for all active devices (excluding the specified one).</returns>
+    public List<(string DeviceId, DeviceQueue Queue)> GetAllActiveQueues(string? excludeDeviceId = null)
+    {
+        var result = new List<(string DeviceId, DeviceQueue Queue)>();
+
+        foreach (var kvp in _queues)
+        {
+            if (excludeDeviceId != null && string.Equals(kvp.Key, excludeDeviceId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (kvp.Value.ItemIds.Count > 0 && kvp.Value.CurrentIndex >= 0)
+            {
+                result.Add((kvp.Key, kvp.Value));
+            }
+        }
+
+        return result;
+    }
+
     private void SchedulePersist(string deviceId)
     {
         _debounceTimers.AddOrUpdate(

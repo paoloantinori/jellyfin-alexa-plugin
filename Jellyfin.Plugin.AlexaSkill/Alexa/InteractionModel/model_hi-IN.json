@@ -14,18 +14,50 @@
           "सबसे नए आइटम क्या हैं"
         ]
       },
-      { "name": "AMAZON.CancelIntent" },
-      { "name": "AMAZON.HelpIntent" },
-      { "name": "AMAZON.StopIntent" },
-      { "name": "AMAZON.FallbackIntent" },
-      { "name": "AMAZON.PauseIntent" },
-      { "name": "AMAZON.ResumeIntent" },
-      { "name": "AMAZON.NextIntent" },
-      { "name": "AMAZON.PreviousIntent" },
-      { "name": "AMAZON.YesIntent" },
-      { "name": "AMAZON.NoIntent" },
-      { "name": "AMAZON.LoopOnIntent" },
-      { "name": "AMAZON.LoopOffIntent" },
+      {
+        "name": "FollowMeIntent",
+        "samples": [
+          "मेरे साथ आओ",
+          "चलाना जारी रखो",
+          "जहां छोड़ा थे वहां से शुरू करो"
+        ]
+      },
+      {
+        "name": "AMAZON.CancelIntent"
+      },
+      {
+        "name": "AMAZON.HelpIntent"
+      },
+      {
+        "name": "AMAZON.StopIntent"
+      },
+      {
+        "name": "AMAZON.FallbackIntent"
+      },
+      {
+        "name": "AMAZON.PauseIntent"
+      },
+      {
+        "name": "AMAZON.ResumeIntent"
+      },
+      {
+        "name": "AMAZON.NextIntent"
+      },
+      {
+        "name": "AMAZON.PreviousIntent"
+      },
+      {
+        "name": "AMAZON.YesIntent"
+      },
+      {
+        "name": "AMAZON.NoIntent"
+      },
+      {
+        "name": "AMAZON.LoopOnIntent"
+      },
+      {
+        "name": "AMAZON.LoopOffIntent"
+      },
       {
         "name": "LoopSongOnIntent",
         "samples": [
@@ -36,9 +68,15 @@
           "इस गाने को हमेशा दोहराओ"
         ]
       },
-      { "name": "AMAZON.ShuffleOnIntent" },
-      { "name": "AMAZON.ShuffleOffIntent" },
-      { "name": "AMAZON.StartOverIntent" },
+      {
+        "name": "AMAZON.ShuffleOnIntent"
+      },
+      {
+        "name": "AMAZON.ShuffleOffIntent"
+      },
+      {
+        "name": "AMAZON.StartOverIntent"
+      },
       {
         "name": "PlayChannelIntent",
         "samples": [
@@ -46,7 +84,10 @@
           "रेडियो {channel} चलाओ"
         ],
         "slots": [
-          { "name": "channel", "type": "AMAZON.SearchQuery" }
+          {
+            "name": "channel",
+            "type": "AMAZON.SearchQuery"
+          }
         ]
       },
       {
@@ -68,8 +109,14 @@
           "{musician} का ट्रैक {song} चलाओ"
         ],
         "slots": [
-          { "name": "song", "type": "AMAZON.MusicRecording" },
-          { "name": "musician", "type": "AMAZON.Musician" }
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
         ]
       },
       {
@@ -88,8 +135,14 @@
           "{album} शुरू करो"
         ],
         "slots": [
-          { "name": "album", "type": "AMAZON.MusicRecording" },
-          { "name": "musician", "type": "AMAZON.Musician" }
+          {
+            "name": "album",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
         ]
       },
       {
@@ -106,7 +159,10 @@
           "वीडियो {title} शुरू करो"
         ],
         "slots": [
-          { "name": "title", "type": "AMAZON.SearchQuery" }
+          {
+            "name": "title",
+            "type": "AMAZON.SearchQuery"
+          }
         ]
       },
       {
@@ -127,7 +183,10 @@
           "कुछ {musician} चलाओ"
         ],
         "slots": [
-          { "name": "musician", "type": "AMAZON.Musician" }
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
         ]
       },
       {
@@ -145,8 +204,14 @@
           "नए {media_type} दिखाओ"
         ],
         "slots": [
-          { "name": "media_type", "type": "MediaType" },
-          { "name": "time_period", "type": "TimePeriod" }
+          {
+            "name": "media_type",
+            "type": "MediaType"
+          },
+          {
+            "name": "time_period",
+            "type": "TimePeriod"
+          }
         ]
       },
       {
@@ -164,8 +229,14 @@
           "{media_type} से मुझे चौंकाओ"
         ],
         "slots": [
-          { "name": "media_type", "type": "MediaType" },
-          { "name": "genre", "type": "AMAZON.Genre" }
+          {
+            "name": "media_type",
+            "type": "MediaType"
+          },
+          {
+            "name": "genre",
+            "type": "AMAZON.Genre"
+          }
         ]
       },
       {
@@ -181,7 +252,10 @@
           "{genre} म्यूज़िक सुनो"
         ],
         "slots": [
-          { "name": "genre", "type": "AMAZON.Genre" }
+          {
+            "name": "genre",
+            "type": "AMAZON.Genre"
+          }
         ]
       },
       {
@@ -198,8 +272,14 @@
           "{decade} हिट्स सुनो"
         ],
         "slots": [
-          { "name": "decade", "type": "Decade" },
-          { "name": "genre", "type": "AMAZON.Genre" }
+          {
+            "name": "decade",
+            "type": "Decade"
+          },
+          {
+            "name": "genre",
+            "type": "AMAZON.Genre"
+          }
         ]
       },
       {
@@ -225,7 +305,10 @@
           "चैप्टर स्किप करो"
         ],
         "slots": [
-          { "name": "chapter_number", "type": "AMAZON.NUMBER" }
+          {
+            "name": "chapter_number",
+            "type": "AMAZON.NUMBER"
+          }
         ]
       },
       {
@@ -240,7 +323,10 @@
           "मैं प्लेलिस्ट {playlist} सुनना चाहता हूँ"
         ],
         "slots": [
-          { "name": "playlist", "type": "AMAZON.SearchQuery" }
+          {
+            "name": "playlist",
+            "type": "AMAZON.SearchQuery"
+          }
         ]
       },
       {
@@ -254,8 +340,14 @@
           "{username} की पसंदीदा {media_type} चलाओ"
         ],
         "slots": [
-          { "name": "media_type", "type": "MediaType" },
-          { "name": "username", "type": "AMAZON.Person" }
+          {
+            "name": "media_type",
+            "type": "MediaType"
+          },
+          {
+            "name": "username",
+            "type": "AMAZON.Person"
+          }
         ]
       },
       {
@@ -287,7 +379,10 @@
       {
         "name": "MediaInfoIntent",
         "slots": [
-          { "name": "media_info_type", "type": "MediaInfoType" }
+          {
+            "name": "media_info_type",
+            "type": "MediaInfoType"
+          }
         ],
         "samples": [
           "गाने का नाम क्या है",
@@ -321,9 +416,18 @@
       {
         "name": "PlayEpisodeIntent",
         "slots": [
-          { "name": "series_name", "type": "SeriesName" },
-          { "name": "season_number", "type": "AMAZON.NUMBER" },
-          { "name": "episode_number", "type": "AMAZON.NUMBER" }
+          {
+            "name": "series_name",
+            "type": "SeriesName"
+          },
+          {
+            "name": "season_number",
+            "type": "AMAZON.NUMBER"
+          },
+          {
+            "name": "episode_number",
+            "type": "AMAZON.NUMBER"
+          }
         ],
         "samples": [
           "{series_name} सीज़न {season_number} एपिसोड {episode_number} चलाओ",
@@ -341,13 +445,19 @@
           "मैं {podcast_name} पॉडकास्ट सुनना चाहता हूँ"
         ],
         "slots": [
-          { "name": "podcast_name", "type": "AMAZON.SearchQuery" }
+          {
+            "name": "podcast_name",
+            "type": "AMAZON.SearchQuery"
+          }
         ]
       },
       {
         "name": "BrowseLibraryIntent",
         "slots": [
-          { "name": "browse_category", "type": "BrowseCategory" }
+          {
+            "name": "browse_category",
+            "type": "BrowseCategory"
+          }
         ],
         "samples": [
           "{browse_category} ब्राउज़ करो",
@@ -358,7 +468,10 @@
       {
         "name": "RecommendIntent",
         "slots": [
-          { "name": "media_type", "type": "MediaType" }
+          {
+            "name": "media_type",
+            "type": "MediaType"
+          }
         ],
         "samples": [
           "कुछ सुझाव दो",
@@ -371,7 +484,10 @@
       {
         "name": "SleepTimerIntent",
         "slots": [
-          { "name": "duration_minutes", "type": "AMAZON.NUMBER" }
+          {
+            "name": "duration_minutes",
+            "type": "AMAZON.NUMBER"
+          }
         ],
         "samples": [
           "{duration_minutes} मिनट में बंद करो",
@@ -383,7 +499,10 @@
       {
         "name": "PlayMoodMusicIntent",
         "slots": [
-          { "name": "mood", "type": "AMAZON.SearchQuery" }
+          {
+            "name": "mood",
+            "type": "AMAZON.SearchQuery"
+          }
         ],
         "samples": [
           "{mood} म्यूज़िक चलाओ",
@@ -401,8 +520,14 @@
       {
         "name": "AddToQueueIntent",
         "slots": [
-          { "name": "song", "type": "AMAZON.MusicRecording" },
-          { "name": "musician", "type": "AMAZON.Musician" }
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
         ],
         "samples": [
           "{song} कतार में जोड़ो",
@@ -414,8 +539,14 @@
       {
         "name": "PlayNextIntent",
         "slots": [
-          { "name": "song", "type": "AMAZON.MusicRecording" },
-          { "name": "musician", "type": "AMAZON.Musician" }
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
         ],
         "samples": [
           "{song} अगला चलाओ",
@@ -510,14 +641,23 @@
           "{musician} के कौन से {query_type} हैं"
         ],
         "slots": [
-          { "name": "musician", "type": "AMAZON.Musician" },
-          { "name": "query_type", "type": "LibraryQueryType" }
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          },
+          {
+            "name": "query_type",
+            "type": "LibraryQueryType"
+          }
         ]
       },
       {
         "name": "SearchMediaIntent",
         "slots": [
-          { "name": "query", "type": "AMAZON.SearchQuery" }
+          {
+            "name": "query",
+            "type": "AMAZON.SearchQuery"
+          }
         ],
         "samples": [
           "{query} खोजो",
@@ -536,72 +676,322 @@
       {
         "name": "LibraryQueryType",
         "values": [
-          { "id": "tracks", "name": { "value": "ट्रैक", "synonyms": ["गाने", "म्यूज़िक", "गाना"] } },
-          { "id": "albums", "name": { "value": "एल्बम", "synonyms": ["रिकॉर्ड"] } }
+          {
+            "id": "tracks",
+            "name": {
+              "value": "ट्रैक",
+              "synonyms": [
+                "गाने",
+                "म्यूज़िक",
+                "गाना"
+              ]
+            }
+          },
+          {
+            "id": "albums",
+            "name": {
+              "value": "एल्बम",
+              "synonyms": [
+                "रिकॉर्ड"
+              ]
+            }
+          }
         ]
       },
       {
         "name": "MediaType",
         "values": [
-          { "id": "media", "name": { "value": "मीडिया" } },
-          { "id": "video", "name": { "value": "वीडियो" } },
-          { "id": "audio", "name": { "value": "ऑडियो", "synonyms": ["म्यूज़िक", "गाना"] } }
+          {
+            "id": "media",
+            "name": {
+              "value": "मीडिया"
+            }
+          },
+          {
+            "id": "video",
+            "name": {
+              "value": "वीडियो"
+            }
+          },
+          {
+            "id": "audio",
+            "name": {
+              "value": "ऑडियो",
+              "synonyms": [
+                "म्यूज़िक",
+                "गाना"
+              ]
+            }
+          }
         ]
       },
       {
         "name": "BrowseCategory",
         "values": [
-          { "name": { "value": "कलाकार" } },
-          { "name": { "value": "एल्बम" } },
-          { "name": { "value": "फिल्में" } },
-          { "name": { "value": "गाने" } },
-          { "name": { "value": "शैलियाँ" } }
+          {
+            "name": {
+              "value": "कलाकार"
+            }
+          },
+          {
+            "name": {
+              "value": "एल्बम"
+            }
+          },
+          {
+            "name": {
+              "value": "फिल्में"
+            }
+          },
+          {
+            "name": {
+              "value": "गाने"
+            }
+          },
+          {
+            "name": {
+              "value": "शैलियाँ"
+            }
+          }
         ]
       },
       {
         "name": "SeriesName",
         "values": [
-          { "name": { "value": "Breaking Bad" } },
-          { "name": { "value": "Game of Thrones" } },
-          { "name": { "value": "Stranger Things" } },
-          { "name": { "value": "Money Heist" } },
-          { "name": { "value": "Peaky Blinders" } },
-          { "name": { "value": "The Walking Dead" } },
-          { "name": { "value": "Dark" } },
-          { "name": { "value": "Sherlock" } }
+          {
+            "name": {
+              "value": "Breaking Bad"
+            }
+          },
+          {
+            "name": {
+              "value": "Game of Thrones"
+            }
+          },
+          {
+            "name": {
+              "value": "Stranger Things"
+            }
+          },
+          {
+            "name": {
+              "value": "Money Heist"
+            }
+          },
+          {
+            "name": {
+              "value": "Peaky Blinders"
+            }
+          },
+          {
+            "name": {
+              "value": "The Walking Dead"
+            }
+          },
+          {
+            "name": {
+              "value": "Dark"
+            }
+          },
+          {
+            "name": {
+              "value": "Sherlock"
+            }
+          }
         ]
       },
       {
         "name": "TimePeriod",
         "values": [
-          { "id": "today", "name": { "value": "आज", "synonyms": ["आज पहले"] } },
-          { "id": "this_week", "name": { "value": "इस सप्ताह", "synonyms": ["पिछला सप्ताह", "पिछले सप्ताह"] } },
-          { "id": "this_month", "name": { "value": "इस महीने", "synonyms": ["पिछला महीना", "पिछले महीने"] } }
+          {
+            "id": "today",
+            "name": {
+              "value": "आज",
+              "synonyms": [
+                "आज पहले"
+              ]
+            }
+          },
+          {
+            "id": "this_week",
+            "name": {
+              "value": "इस सप्ताह",
+              "synonyms": [
+                "पिछला सप्ताह",
+                "पिछले सप्ताह"
+              ]
+            }
+          },
+          {
+            "id": "this_month",
+            "name": {
+              "value": "इस महीने",
+              "synonyms": [
+                "पिछला महीना",
+                "पिछले महीने"
+              ]
+            }
+          }
         ]
       },
       {
         "name": "MediaInfoType",
         "values": [
-          { "id": "title", "name": { "value": "शीर्षक", "synonyms": ["गाना", "ट्रैक", "नाम"] } },
-          { "id": "album", "name": { "value": "एल्बम", "synonyms": ["रिकॉर्ड"] } },
-          { "id": "artist", "name": { "value": "कलाकार", "synonyms": ["गायक", "बैंड", "म्यूज़िशियन"] } },
-          { "id": "year", "name": { "value": "साल", "synonyms": ["रिलीज़ साल"] } },
-          { "id": "duration", "name": { "value": "अवधि", "synonyms": ["लंबाई", "चलने का समय"] } },
-          { "id": "genre", "name": { "value": "शैली", "synonyms": ["स्टाइल", "म्यूज़िक का प्रकार"] } },
-          { "id": "biography", "name": { "value": "जीवनी", "synonyms": ["बायो", "कलाकार के बारे में"] } }
+          {
+            "id": "title",
+            "name": {
+              "value": "शीर्षक",
+              "synonyms": [
+                "गाना",
+                "ट्रैक",
+                "नाम"
+              ]
+            }
+          },
+          {
+            "id": "album",
+            "name": {
+              "value": "एल्बम",
+              "synonyms": [
+                "रिकॉर्ड"
+              ]
+            }
+          },
+          {
+            "id": "artist",
+            "name": {
+              "value": "कलाकार",
+              "synonyms": [
+                "गायक",
+                "बैंड",
+                "म्यूज़िशियन"
+              ]
+            }
+          },
+          {
+            "id": "year",
+            "name": {
+              "value": "साल",
+              "synonyms": [
+                "रिलीज़ साल"
+              ]
+            }
+          },
+          {
+            "id": "duration",
+            "name": {
+              "value": "अवधि",
+              "synonyms": [
+                "लंबाई",
+                "चलने का समय"
+              ]
+            }
+          },
+          {
+            "id": "genre",
+            "name": {
+              "value": "शैली",
+              "synonyms": [
+                "स्टाइल",
+                "म्यूज़िक का प्रकार"
+              ]
+            }
+          },
+          {
+            "id": "biography",
+            "name": {
+              "value": "जीवनी",
+              "synonyms": [
+                "बायो",
+                "कलाकार के बारे में"
+              ]
+            }
+          }
         ]
       },
       {
         "name": "Decade",
         "values": [
-          { "id": "50s", "name": { "value": "50s", "synonyms": ["पचासवां दशक", "1950"] } },
-          { "id": "60s", "name": { "value": "60s", "synonyms": ["साठवां दशक", "1960"] } },
-          { "id": "70s", "name": { "value": "70s", "synonyms": ["सत्तरवां दशक", "1970"] } },
-          { "id": "80s", "name": { "value": "80s", "synonyms": ["अस्सी का दशक", "1980"] } },
-          { "id": "90s", "name": { "value": "90s", "synonyms": ["नब्बे का दशक", "1990"] } },
-          { "id": "2000s", "name": { "value": "2000s", "synonyms": ["दो हज़ार", "2000"] } },
-          { "id": "2010s", "name": { "value": "2010s", "synonyms": ["दो हज़ार दस", "2010"] } },
-          { "id": "2020s", "name": { "value": "2020s", "synonyms": ["दो हज़ार बीस", "2020"] } }
+          {
+            "id": "50s",
+            "name": {
+              "value": "50s",
+              "synonyms": [
+                "पचासवां दशक",
+                "1950"
+              ]
+            }
+          },
+          {
+            "id": "60s",
+            "name": {
+              "value": "60s",
+              "synonyms": [
+                "साठवां दशक",
+                "1960"
+              ]
+            }
+          },
+          {
+            "id": "70s",
+            "name": {
+              "value": "70s",
+              "synonyms": [
+                "सत्तरवां दशक",
+                "1970"
+              ]
+            }
+          },
+          {
+            "id": "80s",
+            "name": {
+              "value": "80s",
+              "synonyms": [
+                "अस्सी का दशक",
+                "1980"
+              ]
+            }
+          },
+          {
+            "id": "90s",
+            "name": {
+              "value": "90s",
+              "synonyms": [
+                "नब्बे का दशक",
+                "1990"
+              ]
+            }
+          },
+          {
+            "id": "2000s",
+            "name": {
+              "value": "2000s",
+              "synonyms": [
+                "दो हज़ार",
+                "2000"
+              ]
+            }
+          },
+          {
+            "id": "2010s",
+            "name": {
+              "value": "2010s",
+              "synonyms": [
+                "दो हज़ार दस",
+                "2010"
+              ]
+            }
+          },
+          {
+            "id": "2020s",
+            "name": {
+              "value": "2020s",
+              "synonyms": [
+                "दो हज़ार बीस",
+                "2020"
+              ]
+            }
+          }
         ]
       }
     ]
@@ -612,32 +1002,132 @@
         "name": "PlayEpisodeIntent",
         "confirmationRequired": false,
         "slots": [
-          { "name": "series_name", "type": "SeriesName", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.SeriesName" } },
-          { "name": "season_number", "type": "AMAZON.NUMBER", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.SeasonNumber" } },
-          { "name": "episode_number", "type": "AMAZON.NUMBER", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.EpisodeNumber" } }
+          {
+            "name": "series_name",
+            "type": "SeriesName",
+            "confirmationRequired": false,
+            "elicitationRequired": true,
+            "prompts": {
+              "elicitation": "Elicit.SeriesName"
+            }
+          },
+          {
+            "name": "season_number",
+            "type": "AMAZON.NUMBER",
+            "confirmationRequired": false,
+            "elicitationRequired": true,
+            "prompts": {
+              "elicitation": "Elicit.SeasonNumber"
+            }
+          },
+          {
+            "name": "episode_number",
+            "type": "AMAZON.NUMBER",
+            "confirmationRequired": false,
+            "elicitationRequired": true,
+            "prompts": {
+              "elicitation": "Elicit.EpisodeNumber"
+            }
+          }
         ]
       },
       {
         "name": "PlaySongIntent",
         "confirmationRequired": false,
         "slots": [
-          { "name": "song", "type": "AMAZON.MusicRecording", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.SongName" } }
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording",
+            "confirmationRequired": false,
+            "elicitationRequired": true,
+            "prompts": {
+              "elicitation": "Elicit.SongName"
+            }
+          }
         ]
       },
       {
         "name": "PlayAlbumIntent",
         "confirmationRequired": false,
         "slots": [
-          { "name": "album", "type": "AMAZON.MusicRecording", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.AlbumName" } }
+          {
+            "name": "album",
+            "type": "AMAZON.MusicRecording",
+            "confirmationRequired": false,
+            "elicitationRequired": true,
+            "prompts": {
+              "elicitation": "Elicit.AlbumName"
+            }
+          }
         ]
       }
     ]
   },
   "prompts": [
-    { "id": "Elicit.SeriesName", "variations": [ { "type": "PlainText", "value": "कौन सी सीरीज़ देखना चाहेंगे?" }, { "type": "PlainText", "value": "सीरीज़ का नाम क्या है?" } ] },
-    { "id": "Elicit.SeasonNumber", "variations": [ { "type": "PlainText", "value": "कौन सा सीज़न?" }, { "type": "PlainText", "value": "सीज़न नंबर क्या है?" } ] },
-    { "id": "Elicit.EpisodeNumber", "variations": [ { "type": "PlainText", "value": "एपिसोड नंबर कौन सा?" }, { "type": "PlainText", "value": "कौन सा एपिसोड देखना चाहेंगे?" } ] },
-    { "id": "Elicit.SongName", "variations": [ { "type": "PlainText", "value": "कौन सा गाना सुनना चाहेंगे?" }, { "type": "PlainText", "value": "कौन सा गाना?" } ] },
-    { "id": "Elicit.AlbumName", "variations": [ { "type": "PlainText", "value": "कौन सा एल्बम सुनना चाहेंगे?" }, { "type": "PlainText", "value": "एल्बम का नाम क्या है?" } ] }
+    {
+      "id": "Elicit.SeriesName",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "कौन सी सीरीज़ देखना चाहेंगे?"
+        },
+        {
+          "type": "PlainText",
+          "value": "सीरीज़ का नाम क्या है?"
+        }
+      ]
+    },
+    {
+      "id": "Elicit.SeasonNumber",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "कौन सा सीज़न?"
+        },
+        {
+          "type": "PlainText",
+          "value": "सीज़न नंबर क्या है?"
+        }
+      ]
+    },
+    {
+      "id": "Elicit.EpisodeNumber",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "एपिसोड नंबर कौन सा?"
+        },
+        {
+          "type": "PlainText",
+          "value": "कौन सा एपिसोड देखना चाहेंगे?"
+        }
+      ]
+    },
+    {
+      "id": "Elicit.SongName",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "कौन सा गाना सुनना चाहेंगे?"
+        },
+        {
+          "type": "PlainText",
+          "value": "कौन सा गाना?"
+        }
+      ]
+    },
+    {
+      "id": "Elicit.AlbumName",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "कौन सा एल्बम सुनना चाहेंगे?"
+        },
+        {
+          "type": "PlainText",
+          "value": "एल्बम का नाम क्या है?"
+        }
+      ]
+    }
   ]
 }

@@ -15,6 +15,17 @@
         ]
       },
       {
+        "name": "FollowMeIntent",
+        "samples": [
+          "folge mir",
+          "weiterhören",
+          "Wiedergabe fortsetzen",
+          "Wiedergabe übernehmen",
+          "weiter abspielen",
+          "musik mitnehmen"
+        ]
+      },
+      {
         "name": "AMAZON.CancelIntent"
       },
       {

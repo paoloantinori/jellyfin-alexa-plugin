@@ -15,6 +15,15 @@
         ]
       },
       {
+        "name": "FollowMeIntent",
+        "samples": [
+          "sígueme",
+          "continuar reproduciendo",
+          "seguir escuchando",
+          "retomar reproducción"
+        ]
+      },
+      {
         "name": "AMAZON.CancelIntent"
       },
       {

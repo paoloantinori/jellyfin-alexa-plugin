@@ -165,5 +165,7 @@
   "QueryRecentlyAddedEmpty": "لم يتم العثور على عناصر مضافة حديثاً.",
   "QueryRecentlyAddedPrompt": "قل الرقم لتشغيل أحدها.",
   "UserByNameNotFound": "لم أجد مستخدماً باسم {0}.",
-  "GenreExpanded": "جاري تشغيل {0} وأنواع مشابهة."
+  "GenreExpanded": "جاري تشغيل {0} وأنواع مشابهة.",
+  "FollowMeSuccess": "استكمال {0} من حيث توقفت.",
+  "FollowMeNothingPlaying": "لا يوجد شيء قيد التشغيل على الأجهزة الأخرى حاليا."
 }

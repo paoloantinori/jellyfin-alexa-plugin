@@ -16,6 +16,19 @@
         ]
       },
       {
+        "name": "FollowMeIntent",
+        "samples": [
+          "continua da qui",
+          "segui la riproduzione",
+          "continua ad ascoltare",
+          "riprendi da dove ero rimasto",
+          "seguimi",
+          "trasferisci la riproduzione",
+          "continua la musica",
+          "riprendi l'ascolto"
+        ]
+      },
+      {
         "name": "AMAZON.CancelIntent"
       },
       {

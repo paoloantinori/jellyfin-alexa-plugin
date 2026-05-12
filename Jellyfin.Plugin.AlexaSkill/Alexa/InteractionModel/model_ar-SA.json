@@ -15,18 +15,50 @@
           "ما هي أحدث العناصر"
         ]
       },
-      { "name": "AMAZON.CancelIntent" },
-      { "name": "AMAZON.HelpIntent" },
-      { "name": "AMAZON.StopIntent" },
-      { "name": "AMAZON.FallbackIntent" },
-      { "name": "AMAZON.PauseIntent" },
-      { "name": "AMAZON.ResumeIntent" },
-      { "name": "AMAZON.NextIntent" },
-      { "name": "AMAZON.PreviousIntent" },
-      { "name": "AMAZON.YesIntent" },
-      { "name": "AMAZON.NoIntent" },
-      { "name": "AMAZON.LoopOnIntent" },
-      { "name": "AMAZON.LoopOffIntent" },
+      {
+        "name": "FollowMeIntent",
+        "samples": [
+          "تابعني",
+          "استمر في التشغيل",
+          "انقل التشغيل"
+        ]
+      },
+      {
+        "name": "AMAZON.CancelIntent"
+      },
+      {
+        "name": "AMAZON.HelpIntent"
+      },
+      {
+        "name": "AMAZON.StopIntent"
+      },
+      {
+        "name": "AMAZON.FallbackIntent"
+      },
+      {
+        "name": "AMAZON.PauseIntent"
+      },
+      {
+        "name": "AMAZON.ResumeIntent"
+      },
+      {
+        "name": "AMAZON.NextIntent"
+      },
+      {
+        "name": "AMAZON.PreviousIntent"
+      },
+      {
+        "name": "AMAZON.YesIntent"
+      },
+      {
+        "name": "AMAZON.NoIntent"
+      },
+      {
+        "name": "AMAZON.LoopOnIntent"
+      },
+      {
+        "name": "AMAZON.LoopOffIntent"
+      },
       {
         "name": "LoopSongOnIntent",
         "samples": [
@@ -37,9 +69,15 @@
           "أعد هذه الأغنية دائماً"
         ]
       },
-      { "name": "AMAZON.ShuffleOnIntent" },
-      { "name": "AMAZON.ShuffleOffIntent" },
-      { "name": "AMAZON.StartOverIntent" },
+      {
+        "name": "AMAZON.ShuffleOnIntent"
+      },
+      {
+        "name": "AMAZON.ShuffleOffIntent"
+      },
+      {
+        "name": "AMAZON.StartOverIntent"
+      },
       {
         "name": "PlayChannelIntent",
         "samples": [
@@ -47,7 +85,10 @@
           "شغل الراديو {channel}"
         ],
         "slots": [
-          { "name": "channel", "type": "AMAZON.SearchQuery" }
+          {
+            "name": "channel",
+            "type": "AMAZON.SearchQuery"
+          }
         ]
       },
       {
@@ -72,8 +113,14 @@
           "شغل الأغنية المسماة {song} لـ {musician}"
         ],
         "slots": [
-          { "name": "song", "type": "AMAZON.MusicRecording" },
-          { "name": "musician", "type": "AMAZON.Musician" }
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
         ]
       },
       {
@@ -94,8 +141,14 @@
           "ابدأ تشغيل {album}"
         ],
         "slots": [
-          { "name": "album", "type": "AMAZON.MusicRecording" },
-          { "name": "musician", "type": "AMAZON.Musician" }
+          {
+            "name": "album",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
         ]
       },
       {
@@ -111,7 +164,10 @@
           "أريد أن أرى {title}"
         ],
         "slots": [
-          { "name": "title", "type": "AMAZON.SearchQuery" }
+          {
+            "name": "title",
+            "type": "AMAZON.SearchQuery"
+          }
         ]
       },
       {
@@ -131,7 +187,10 @@
           "شغل بعض {musician}"
         ],
         "slots": [
-          { "name": "musician", "type": "AMAZON.Musician" }
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
         ]
       },
       {
@@ -147,8 +206,14 @@
           "شغل أحدث {media_type}"
         ],
         "slots": [
-          { "name": "media_type", "type": "MediaType" },
-          { "name": "time_period", "type": "TimePeriod" }
+          {
+            "name": "media_type",
+            "type": "MediaType"
+          },
+          {
+            "name": "time_period",
+            "type": "TimePeriod"
+          }
         ]
       },
       {
@@ -165,8 +230,14 @@
           "أريد شيء عشوائي"
         ],
         "slots": [
-          { "name": "media_type", "type": "MediaType" },
-          { "name": "genre", "type": "AMAZON.Genre" }
+          {
+            "name": "media_type",
+            "type": "MediaType"
+          },
+          {
+            "name": "genre",
+            "type": "AMAZON.Genre"
+          }
         ]
       },
       {
@@ -181,7 +252,10 @@
           "هل يمكنك تشغيل {genre}"
         ],
         "slots": [
-          { "name": "genre", "type": "AMAZON.Genre" }
+          {
+            "name": "genre",
+            "type": "AMAZON.Genre"
+          }
         ]
       },
       {
@@ -196,8 +270,14 @@
           "استمع إلى {decade}"
         ],
         "slots": [
-          { "name": "decade", "type": "Decade" },
-          { "name": "genre", "type": "AMAZON.Genre" }
+          {
+            "name": "decade",
+            "type": "Decade"
+          },
+          {
+            "name": "genre",
+            "type": "AMAZON.Genre"
+          }
         ]
       },
       {
@@ -220,7 +300,10 @@
           "تخطى فصلاً"
         ],
         "slots": [
-          { "name": "chapter_number", "type": "AMAZON.NUMBER" }
+          {
+            "name": "chapter_number",
+            "type": "AMAZON.NUMBER"
+          }
         ]
       },
       {
@@ -234,7 +317,10 @@
           "أريد سماع قائمة التشغيل {playlist}"
         ],
         "slots": [
-          { "name": "playlist", "type": "AMAZON.SearchQuery" }
+          {
+            "name": "playlist",
+            "type": "AMAZON.SearchQuery"
+          }
         ]
       },
       {
@@ -248,8 +334,14 @@
           "شغل {media_type} المفضلة لـ {username}"
         ],
         "slots": [
-          { "name": "media_type", "type": "MediaType" },
-          { "name": "username", "type": "AMAZON.Person" }
+          {
+            "name": "media_type",
+            "type": "MediaType"
+          },
+          {
+            "name": "username",
+            "type": "AMAZON.Person"
+          }
         ]
       },
       {
@@ -278,7 +370,10 @@
       {
         "name": "MediaInfoIntent",
         "slots": [
-          { "name": "media_info_type", "type": "MediaInfoType" }
+          {
+            "name": "media_info_type",
+            "type": "MediaInfoType"
+          }
         ],
         "samples": [
           "ما اسم الأغنية",
@@ -310,9 +405,18 @@
       {
         "name": "PlayEpisodeIntent",
         "slots": [
-          { "name": "series_name", "type": "SeriesName" },
-          { "name": "season_number", "type": "AMAZON.NUMBER" },
-          { "name": "episode_number", "type": "AMAZON.NUMBER" }
+          {
+            "name": "series_name",
+            "type": "SeriesName"
+          },
+          {
+            "name": "season_number",
+            "type": "AMAZON.NUMBER"
+          },
+          {
+            "name": "episode_number",
+            "type": "AMAZON.NUMBER"
+          }
         ],
         "samples": [
           "شغل الموسم {season_number} الحلقة {episode_number} من {series_name}",
@@ -331,13 +435,19 @@
           "ابدأ البودكاست {podcast_name}"
         ],
         "slots": [
-          { "name": "podcast_name", "type": "AMAZON.SearchQuery" }
+          {
+            "name": "podcast_name",
+            "type": "AMAZON.SearchQuery"
+          }
         ]
       },
       {
         "name": "BrowseLibraryIntent",
         "slots": [
-          { "name": "browse_category", "type": "BrowseCategory" }
+          {
+            "name": "browse_category",
+            "type": "BrowseCategory"
+          }
         ],
         "samples": [
           "تصفح {browse_category}",
@@ -348,7 +458,10 @@
       {
         "name": "RecommendIntent",
         "slots": [
-          { "name": "media_type", "type": "MediaType" }
+          {
+            "name": "media_type",
+            "type": "MediaType"
+          }
         ],
         "samples": [
           "أوصني بشيء",
@@ -362,7 +475,10 @@
       {
         "name": "SleepTimerIntent",
         "slots": [
-          { "name": "duration_minutes", "type": "AMAZON.NUMBER" }
+          {
+            "name": "duration_minutes",
+            "type": "AMAZON.NUMBER"
+          }
         ],
         "samples": [
           "أوقف التشغيل بعد {duration_minutes} دقيقة",
@@ -374,7 +490,10 @@
       {
         "name": "PlayMoodMusicIntent",
         "slots": [
-          { "name": "mood", "type": "AMAZON.SearchQuery" }
+          {
+            "name": "mood",
+            "type": "AMAZON.SearchQuery"
+          }
         ],
         "samples": [
           "شغل موسيقى {mood}",
@@ -392,8 +511,14 @@
       {
         "name": "AddToQueueIntent",
         "slots": [
-          { "name": "song", "type": "AMAZON.MusicRecording" },
-          { "name": "musician", "type": "AMAZON.Musician" }
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
         ],
         "samples": [
           "أضف {song} إلى قائمة الانتظار",
@@ -405,8 +530,14 @@
       {
         "name": "PlayNextIntent",
         "slots": [
-          { "name": "song", "type": "AMAZON.MusicRecording" },
-          { "name": "musician", "type": "AMAZON.Musician" }
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
         ],
         "samples": [
           "شغل {song} بعد ذلك",
@@ -495,14 +626,23 @@
           "أعرض {query_type} لـ {musician}"
         ],
         "slots": [
-          { "name": "musician", "type": "AMAZON.Musician" },
-          { "name": "query_type", "type": "LibraryQueryType" }
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          },
+          {
+            "name": "query_type",
+            "type": "LibraryQueryType"
+          }
         ]
       },
       {
         "name": "SearchMediaIntent",
         "slots": [
-          { "name": "query", "type": "AMAZON.SearchQuery" }
+          {
+            "name": "query",
+            "type": "AMAZON.SearchQuery"
+          }
         ],
         "samples": [
           "ابحث عن {query}",
@@ -518,72 +658,320 @@
       {
         "name": "LibraryQueryType",
         "values": [
-          { "id": "tracks", "name": { "value": "أغانٍ", "synonyms": ["أغاني", "موسيقى", "أغنية", "مسار"] } },
-          { "id": "albums", "name": { "value": "ألبومات", "synonyms": ["ألبوم"] } }
+          {
+            "id": "tracks",
+            "name": {
+              "value": "أغانٍ",
+              "synonyms": [
+                "أغاني",
+                "موسيقى",
+                "أغنية",
+                "مسار"
+              ]
+            }
+          },
+          {
+            "id": "albums",
+            "name": {
+              "value": "ألبومات",
+              "synonyms": [
+                "ألبوم"
+              ]
+            }
+          }
         ]
       },
       {
         "name": "MediaType",
         "values": [
-          { "id": "media", "name": { "value": "وسائط" } },
-          { "id": "video", "name": { "value": "فيديو" } },
-          { "id": "audio", "name": { "value": "صوت", "synonyms": ["موسيقى", "أغنية"] } }
+          {
+            "id": "media",
+            "name": {
+              "value": "وسائط"
+            }
+          },
+          {
+            "id": "video",
+            "name": {
+              "value": "فيديو"
+            }
+          },
+          {
+            "id": "audio",
+            "name": {
+              "value": "صوت",
+              "synonyms": [
+                "موسيقى",
+                "أغنية"
+              ]
+            }
+          }
         ]
       },
       {
         "name": "BrowseCategory",
         "values": [
-          { "name": { "value": "فنانون" } },
-          { "name": { "value": "ألبومات" } },
-          { "name": { "value": "أفلام" } },
-          { "name": { "value": "أغانٍ" } },
-          { "name": { "value": "أنواع" } }
+          {
+            "name": {
+              "value": "فنانون"
+            }
+          },
+          {
+            "name": {
+              "value": "ألبومات"
+            }
+          },
+          {
+            "name": {
+              "value": "أفلام"
+            }
+          },
+          {
+            "name": {
+              "value": "أغانٍ"
+            }
+          },
+          {
+            "name": {
+              "value": "أنواع"
+            }
+          }
         ]
       },
       {
         "name": "SeriesName",
         "values": [
-          { "name": { "value": "Breaking Bad" } },
-          { "name": { "value": "Game of Thrones" } },
-          { "name": { "value": "Stranger Things" } },
-          { "name": { "value": "Money Heist" } },
-          { "name": { "value": "Peaky Blinders" } },
-          { "name": { "value": "The Walking Dead" } },
-          { "name": { "value": "Dark" } },
-          { "name": { "value": "Sherlock" } }
+          {
+            "name": {
+              "value": "Breaking Bad"
+            }
+          },
+          {
+            "name": {
+              "value": "Game of Thrones"
+            }
+          },
+          {
+            "name": {
+              "value": "Stranger Things"
+            }
+          },
+          {
+            "name": {
+              "value": "Money Heist"
+            }
+          },
+          {
+            "name": {
+              "value": "Peaky Blinders"
+            }
+          },
+          {
+            "name": {
+              "value": "The Walking Dead"
+            }
+          },
+          {
+            "name": {
+              "value": "Dark"
+            }
+          },
+          {
+            "name": {
+              "value": "Sherlock"
+            }
+          }
         ]
       },
       {
         "name": "TimePeriod",
         "values": [
-          { "id": "today", "name": { "value": "اليوم", "synonyms": ["في وقت سابق اليوم"] } },
-          { "id": "this_week", "name": { "value": "هذا الأسبوع", "synonyms": ["الأسبوع الماضي", "آخر أسبوع"] } },
-          { "id": "this_month", "name": { "value": "هذا الشهر", "synonyms": ["الشهر الماضي", "آخر شهر"] } }
+          {
+            "id": "today",
+            "name": {
+              "value": "اليوم",
+              "synonyms": [
+                "في وقت سابق اليوم"
+              ]
+            }
+          },
+          {
+            "id": "this_week",
+            "name": {
+              "value": "هذا الأسبوع",
+              "synonyms": [
+                "الأسبوع الماضي",
+                "آخر أسبوع"
+              ]
+            }
+          },
+          {
+            "id": "this_month",
+            "name": {
+              "value": "هذا الشهر",
+              "synonyms": [
+                "الشهر الماضي",
+                "آخر شهر"
+              ]
+            }
+          }
         ]
       },
       {
         "name": "MediaInfoType",
         "values": [
-          { "id": "title", "name": { "value": "العنوان", "synonyms": ["أغنية", "مسار", "اسم"] } },
-          { "id": "album", "name": { "value": "الألبوم", "synonyms": ["قرص"] } },
-          { "id": "artist", "name": { "value": "الفنان", "synonyms": ["مغني", "فرقة", "مؤدي"] } },
-          { "id": "year", "name": { "value": "السنة", "synonyms": ["سنة الإصدار"] } },
-          { "id": "duration", "name": { "value": "المدة", "synonyms": ["الطول", "وقت التشغيل"] } },
-          { "id": "genre", "name": { "value": "النوع", "synonyms": ["الأسلوب", "نوع الموسيقى"] } },
-          { "id": "biography", "name": { "value": "السيرة", "synonyms": ["نبذة", "عن الفنان"] } }
+          {
+            "id": "title",
+            "name": {
+              "value": "العنوان",
+              "synonyms": [
+                "أغنية",
+                "مسار",
+                "اسم"
+              ]
+            }
+          },
+          {
+            "id": "album",
+            "name": {
+              "value": "الألبوم",
+              "synonyms": [
+                "قرص"
+              ]
+            }
+          },
+          {
+            "id": "artist",
+            "name": {
+              "value": "الفنان",
+              "synonyms": [
+                "مغني",
+                "فرقة",
+                "مؤدي"
+              ]
+            }
+          },
+          {
+            "id": "year",
+            "name": {
+              "value": "السنة",
+              "synonyms": [
+                "سنة الإصدار"
+              ]
+            }
+          },
+          {
+            "id": "duration",
+            "name": {
+              "value": "المدة",
+              "synonyms": [
+                "الطول",
+                "وقت التشغيل"
+              ]
+            }
+          },
+          {
+            "id": "genre",
+            "name": {
+              "value": "النوع",
+              "synonyms": [
+                "الأسلوب",
+                "نوع الموسيقى"
+              ]
+            }
+          },
+          {
+            "id": "biography",
+            "name": {
+              "value": "السيرة",
+              "synonyms": [
+                "نبذة",
+                "عن الفنان"
+              ]
+            }
+          }
         ]
       },
       {
         "name": "Decade",
         "values": [
-          { "id": "50s", "name": { "value": "الخمسينيات", "synonyms": ["50", "1950"] } },
-          { "id": "60s", "name": { "value": "الستينيات", "synonyms": ["60", "1960"] } },
-          { "id": "70s", "name": { "value": "السبعينيات", "synonyms": ["70", "1970"] } },
-          { "id": "80s", "name": { "value": "الثمانينيات", "synonyms": ["80", "1980"] } },
-          { "id": "90s", "name": { "value": "التسعينيات", "synonyms": ["90", "1990"] } },
-          { "id": "2000s", "name": { "value": "الألفينات", "synonyms": ["2000"] } },
-          { "id": "2010s", "name": { "value": "العشرينيات", "synonyms": ["2010"] } },
-          { "id": "2020s", "name": { "value": "العشرينات", "synonyms": ["2020"] } }
+          {
+            "id": "50s",
+            "name": {
+              "value": "الخمسينيات",
+              "synonyms": [
+                "50",
+                "1950"
+              ]
+            }
+          },
+          {
+            "id": "60s",
+            "name": {
+              "value": "الستينيات",
+              "synonyms": [
+                "60",
+                "1960"
+              ]
+            }
+          },
+          {
+            "id": "70s",
+            "name": {
+              "value": "السبعينيات",
+              "synonyms": [
+                "70",
+                "1970"
+              ]
+            }
+          },
+          {
+            "id": "80s",
+            "name": {
+              "value": "الثمانينيات",
+              "synonyms": [
+                "80",
+                "1980"
+              ]
+            }
+          },
+          {
+            "id": "90s",
+            "name": {
+              "value": "التسعينيات",
+              "synonyms": [
+                "90",
+                "1990"
+              ]
+            }
+          },
+          {
+            "id": "2000s",
+            "name": {
+              "value": "الألفينات",
+              "synonyms": [
+                "2000"
+              ]
+            }
+          },
+          {
+            "id": "2010s",
+            "name": {
+              "value": "العشرينيات",
+              "synonyms": [
+                "2010"
+              ]
+            }
+          },
+          {
+            "id": "2020s",
+            "name": {
+              "value": "العشرينات",
+              "synonyms": [
+                "2020"
+              ]
+            }
+          }
         ]
       }
     ]
@@ -594,32 +982,132 @@
         "name": "PlayEpisodeIntent",
         "confirmationRequired": false,
         "slots": [
-          { "name": "series_name", "type": "SeriesName", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.SeriesName" } },
-          { "name": "season_number", "type": "AMAZON.NUMBER", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.SeasonNumber" } },
-          { "name": "episode_number", "type": "AMAZON.NUMBER", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.EpisodeNumber" } }
+          {
+            "name": "series_name",
+            "type": "SeriesName",
+            "confirmationRequired": false,
+            "elicitationRequired": true,
+            "prompts": {
+              "elicitation": "Elicit.SeriesName"
+            }
+          },
+          {
+            "name": "season_number",
+            "type": "AMAZON.NUMBER",
+            "confirmationRequired": false,
+            "elicitationRequired": true,
+            "prompts": {
+              "elicitation": "Elicit.SeasonNumber"
+            }
+          },
+          {
+            "name": "episode_number",
+            "type": "AMAZON.NUMBER",
+            "confirmationRequired": false,
+            "elicitationRequired": true,
+            "prompts": {
+              "elicitation": "Elicit.EpisodeNumber"
+            }
+          }
         ]
       },
       {
         "name": "PlaySongIntent",
         "confirmationRequired": false,
         "slots": [
-          { "name": "song", "type": "AMAZON.MusicRecording", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.SongName" } }
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording",
+            "confirmationRequired": false,
+            "elicitationRequired": true,
+            "prompts": {
+              "elicitation": "Elicit.SongName"
+            }
+          }
         ]
       },
       {
         "name": "PlayAlbumIntent",
         "confirmationRequired": false,
         "slots": [
-          { "name": "album", "type": "AMAZON.MusicRecording", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.AlbumName" } }
+          {
+            "name": "album",
+            "type": "AMAZON.MusicRecording",
+            "confirmationRequired": false,
+            "elicitationRequired": true,
+            "prompts": {
+              "elicitation": "Elicit.AlbumName"
+            }
+          }
         ]
       }
     ]
   },
   "prompts": [
-    { "id": "Elicit.SeriesName", "variations": [ { "type": "PlainText", "value": "أي.series تريد مشاهدتها؟" }, { "type": "PlainText", "value": "ما اسم المسلسل؟" } ] },
-    { "id": "Elicit.SeasonNumber", "variations": [ { "type": "PlainText", "value": "أي موسم؟" }, { "type": "PlainText", "value": "ما رقم الموسم؟" } ] },
-    { "id": "Elicit.EpisodeNumber", "variations": [ { "type": "PlainText", "value": "أي رقم حلقة؟" }, { "type": "PlainText", "value": "أي حلقة تريد مشاهدتها؟" } ] },
-    { "id": "Elicit.SongName", "variations": [ { "type": "PlainText", "value": "أي أغنية تريد سماعها؟" }, { "type": "PlainText", "value": "أي أغنية؟" } ] },
-    { "id": "Elicit.AlbumName", "variations": [ { "type": "PlainText", "value": "أي ألبوم تريد سماعه؟" }, { "type": "PlainText", "value": "ما اسم الألبوم؟" } ] }
+    {
+      "id": "Elicit.SeriesName",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "أي.series تريد مشاهدتها؟"
+        },
+        {
+          "type": "PlainText",
+          "value": "ما اسم المسلسل؟"
+        }
+      ]
+    },
+    {
+      "id": "Elicit.SeasonNumber",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "أي موسم؟"
+        },
+        {
+          "type": "PlainText",
+          "value": "ما رقم الموسم؟"
+        }
+      ]
+    },
+    {
+      "id": "Elicit.EpisodeNumber",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "أي رقم حلقة؟"
+        },
+        {
+          "type": "PlainText",
+          "value": "أي حلقة تريد مشاهدتها؟"
+        }
+      ]
+    },
+    {
+      "id": "Elicit.SongName",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "أي أغنية تريد سماعها؟"
+        },
+        {
+          "type": "PlainText",
+          "value": "أي أغنية؟"
+        }
+      ]
+    },
+    {
+      "id": "Elicit.AlbumName",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "أي ألبوم تريد سماعه؟"
+        },
+        {
+          "type": "PlainText",
+          "value": "ما اسم الألبوم؟"
+        }
+      ]
+    }
   ]
 }

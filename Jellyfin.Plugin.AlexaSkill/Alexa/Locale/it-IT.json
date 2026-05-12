@@ -165,5 +165,8 @@
   "QueryRecentlyAddedEmpty": "Nessun contenuto aggiunto di recente trovato.",
   "QueryRecentlyAddedPrompt": "Dì il numero per riprodurne uno.",
   "UserByNameNotFound": "Non ho trovato un utente chiamato {0}.",
-  "GenreExpanded": "Riproduco {0} e generi simili."
+  "GenreExpanded": "Riproduco {0} e generi simili.",
+  "FollowMeSuccess": "Riprendo {0} da dove eri rimasto.",
+  "FollowMeSuccessSsml": "<say-as interpret-as=\"interjection\">eccoci</say-as><break time=\"200ms\"/>Riprendo <emphasis level=\"moderate\">{0}</emphasis> da dove eri rimasto.",
+  "FollowMeNothingPlaying": "Nessun contenuto in riproduzione sugli altri dispositivi."
 }

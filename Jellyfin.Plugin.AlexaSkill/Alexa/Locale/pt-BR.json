@@ -165,5 +165,7 @@
   "QueryRecentlyAddedEmpty": "Nenhum item adicionado recentemente encontrado.",
   "QueryRecentlyAddedPrompt": "Diga o número para reproduzir um.",
   "UserByNameNotFound": "Não consegui encontrar um usuário chamado {0}.",
-  "GenreExpanded": "Tocando {0} e gêneros similares."
+  "GenreExpanded": "Tocando {0} e gêneros similares.",
+  "FollowMeSuccess": "Continuando {0} de onde você parou.",
+  "FollowMeNothingPlaying": "Nada está tocando em outros dispositivos no momento."
 }

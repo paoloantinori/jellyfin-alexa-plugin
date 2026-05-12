@@ -17,6 +17,17 @@
         ]
       },
       {
+        "name": "FollowMeIntent",
+        "samples": [
+          "follow me",
+          "continue playing",
+          "resume from where I left off",
+          "take over playback",
+          "keep playing",
+          "pick up where I left off"
+        ]
+      },
+      {
         "name": "AMAZON.CancelIntent"
       },
       {

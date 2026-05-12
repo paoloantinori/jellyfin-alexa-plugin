@@ -123,5 +123,7 @@
   "QueryRecentlyAddedEmpty": "Keine kürzlich hinzugefügten Elemente gefunden.",
   "QueryRecentlyAddedPrompt": "Sag die Nummer, um eines abzuspielen.",
   "UserByNameNotFound": "Ich konnte keinen Benutzer namens {0} finden.",
-  "GenreExpanded": "Spiele {0} und ähnliche Genres."
+  "GenreExpanded": "Spiele {0} und ähnliche Genres.",
+  "FollowMeSuccess": "Setze {0} fort, wo du aufgehört hast.",
+  "FollowMeNothingPlaying": "Auf anderen Geräten wird gerade nichts abgespielt."
 }

@@ -15,6 +15,16 @@
         ]
       },
       {
+        "name": "FollowMeIntent",
+        "samples": [
+          "suis-moi",
+          "continuer la lecture",
+          "reprendre la lecture",
+          "transférer la lecture",
+          "reprendre où j'en étais"
+        ]
+      },
+      {
         "name": "AMAZON.CancelIntent"
       },
       {

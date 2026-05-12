@@ -4,288 +4,1035 @@
     "intents": [
       {
         "name": "QueryRecentlyAddedIntent",
-        "samples": ["wat is er nieuw", "wat is er recentelijk toegevoegd", "wat is er nieuw in mijn bibliotheek", "laat recent toegevoegde zien", "iets nieuws onlangs", "laat de nieuwste items zien", "wat zijn de nieuwste items"]
+        "samples": [
+          "wat is er nieuw",
+          "wat is er recentelijk toegevoegd",
+          "wat is er nieuw in mijn bibliotheek",
+          "laat recent toegevoegde zien",
+          "iets nieuws onlangs",
+          "laat de nieuwste items zien",
+          "wat zijn de nieuwste items"
+        ]
       },
-      { "name": "AMAZON.CancelIntent" },
-      { "name": "AMAZON.HelpIntent" },
-      { "name": "AMAZON.StopIntent" },
-      { "name": "AMAZON.FallbackIntent" },
-      { "name": "AMAZON.PauseIntent" },
-      { "name": "AMAZON.ResumeIntent" },
-      { "name": "AMAZON.NextIntent" },
-      { "name": "AMAZON.PreviousIntent" },
-      { "name": "AMAZON.YesIntent" },
-      { "name": "AMAZON.NoIntent" },
-      { "name": "AMAZON.LoopOnIntent" },
-      { "name": "AMAZON.LoopOffIntent" },
+      {
+        "name": "FollowMeIntent",
+        "samples": [
+          "volg me",
+          "verder met afspelen",
+          "neem het over",
+          "doorgaan met luisteren"
+        ]
+      },
+      {
+        "name": "AMAZON.CancelIntent"
+      },
+      {
+        "name": "AMAZON.HelpIntent"
+      },
+      {
+        "name": "AMAZON.StopIntent"
+      },
+      {
+        "name": "AMAZON.FallbackIntent"
+      },
+      {
+        "name": "AMAZON.PauseIntent"
+      },
+      {
+        "name": "AMAZON.ResumeIntent"
+      },
+      {
+        "name": "AMAZON.NextIntent"
+      },
+      {
+        "name": "AMAZON.PreviousIntent"
+      },
+      {
+        "name": "AMAZON.YesIntent"
+      },
+      {
+        "name": "AMAZON.NoIntent"
+      },
+      {
+        "name": "AMAZON.LoopOnIntent"
+      },
+      {
+        "name": "AMAZON.LoopOffIntent"
+      },
       {
         "name": "LoopSongOnIntent",
-        "samples": ["loop dit nummer", "herhaal dit nummer", "zet dit nummer op repeat", "blijf dit nummer herhalen"]
+        "samples": [
+          "loop dit nummer",
+          "herhaal dit nummer",
+          "zet dit nummer op repeat",
+          "blijf dit nummer herhalen"
+        ]
       },
-      { "name": "AMAZON.ShuffleOnIntent" },
-      { "name": "AMAZON.ShuffleOffIntent" },
-      { "name": "AMAZON.StartOverIntent" },
+      {
+        "name": "AMAZON.ShuffleOnIntent"
+      },
+      {
+        "name": "AMAZON.ShuffleOffIntent"
+      },
+      {
+        "name": "AMAZON.StartOverIntent"
+      },
       {
         "name": "PlayChannelIntent",
-        "samples": ["speel kanaal {channel}", "speel radio {channel}"],
-        "slots": [{ "name": "channel", "type": "AMAZON.SearchQuery" }]
+        "samples": [
+          "speel kanaal {channel}",
+          "speel radio {channel}"
+        ],
+        "slots": [
+          {
+            "name": "channel",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
       },
       {
         "name": "PlaySongIntent",
-        "samples": ["speel {song}", "speel het nummer {song}", "speel nummer {song}", "speel {song} van {musician}", "speel het nummer {song} van {musician}", "luister naar {song}", "luister naar het nummer {song}", "luister naar {song} van {musician}", "zet {song} op", "ik wil {song} horen", "ik wil {song} van {musician} horen", "kun je {song} afspelen", "kun je {song} van {musician} afspelen", "start {song}", "speel het liedje {song}", "speel het liedje {song} van {musician}", "draai {song}", "stream {song}"],
+        "samples": [
+          "speel {song}",
+          "speel het nummer {song}",
+          "speel nummer {song}",
+          "speel {song} van {musician}",
+          "speel het nummer {song} van {musician}",
+          "luister naar {song}",
+          "luister naar het nummer {song}",
+          "luister naar {song} van {musician}",
+          "zet {song} op",
+          "ik wil {song} horen",
+          "ik wil {song} van {musician} horen",
+          "kun je {song} afspelen",
+          "kun je {song} van {musician} afspelen",
+          "start {song}",
+          "speel het liedje {song}",
+          "speel het liedje {song} van {musician}",
+          "draai {song}",
+          "stream {song}"
+        ],
         "slots": [
-          { "name": "song", "type": "AMAZON.MusicRecording" },
-          { "name": "musician", "type": "AMAZON.Musician" }
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
         ]
       },
       {
         "name": "PlayAlbumIntent",
-        "samples": ["speel {album}", "speel het album {album}", "speel album {album}", "speel {album} van {musician}", "speel het album {album} van {musician}", "luister naar {album}", "luister naar het album {album}", "luister naar {album} van {musician}", "zet {album} op", "ik wil {album} horen", "kun je {album} afspelen", "start {album}", "stream {album}"],
+        "samples": [
+          "speel {album}",
+          "speel het album {album}",
+          "speel album {album}",
+          "speel {album} van {musician}",
+          "speel het album {album} van {musician}",
+          "luister naar {album}",
+          "luister naar het album {album}",
+          "luister naar {album} van {musician}",
+          "zet {album} op",
+          "ik wil {album} horen",
+          "kun je {album} afspelen",
+          "start {album}",
+          "stream {album}"
+        ],
         "slots": [
-          { "name": "album", "type": "AMAZON.MusicRecording" },
-          { "name": "musician", "type": "AMAZON.Musician" }
+          {
+            "name": "album",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
         ]
       },
       {
         "name": "PlayVideoIntent",
-        "samples": ["speel de video {title}", "zet de video {title} op", "start {title}", "kijk {title}", "kun je {title} afspelen", "ik wil {title} kijken", "laten we {title} kijken", "stream {title}", "speel de film {title}", "start de video {title}"],
-        "slots": [{ "name": "title", "type": "AMAZON.SearchQuery" }]
+        "samples": [
+          "speel de video {title}",
+          "zet de video {title} op",
+          "start {title}",
+          "kijk {title}",
+          "kun je {title} afspelen",
+          "ik wil {title} kijken",
+          "laten we {title} kijken",
+          "stream {title}",
+          "speel de film {title}",
+          "start de video {title}"
+        ],
+        "slots": [
+          {
+            "name": "title",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
       },
       {
         "name": "PlayArtistSongsIntent",
-        "samples": ["speel nummers van {musician}", "speel muziek van {musician}", "speel tracks van {musician}", "speel liedjes van {musician}", "luister naar {musician}", "luister naar nummers van {musician}", "luister naar muziek van {musician}", "zet {musician} op", "ik wil {musician} horen", "ik wil naar {musician} luisteren", "kun je {musician} afspelen", "start {musician}", "shuffle {musician}", "shuffle nummers van {musician}", "speel {musician}", "speel wat {musician}", "stream {musician}"],
-        "slots": [{ "name": "musician", "type": "AMAZON.Musician" }]
+        "samples": [
+          "speel nummers van {musician}",
+          "speel muziek van {musician}",
+          "speel tracks van {musician}",
+          "speel liedjes van {musician}",
+          "luister naar {musician}",
+          "luister naar nummers van {musician}",
+          "luister naar muziek van {musician}",
+          "zet {musician} op",
+          "ik wil {musician} horen",
+          "ik wil naar {musician} luisteren",
+          "kun je {musician} afspelen",
+          "start {musician}",
+          "shuffle {musician}",
+          "shuffle nummers van {musician}",
+          "speel {musician}",
+          "speel wat {musician}",
+          "stream {musician}"
+        ],
+        "slots": [
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
+        ]
       },
       {
         "name": "PlayLastAddedIntent",
-        "samples": ["speel laatst toegevoegde {media_type}", "speel recent toegevoegde {media_type}", "speel nieuwe media", "speel iets nieuws", "speel {media_type} toegevoegd {time_period}", "speel recent toegevoegde {media_type} van {time_period}", "wat is nieuw in {media_type}", "speel de nieuwste {media_type}", "laat nieuwe {media_type} zien"],
+        "samples": [
+          "speel laatst toegevoegde {media_type}",
+          "speel recent toegevoegde {media_type}",
+          "speel nieuwe media",
+          "speel iets nieuws",
+          "speel {media_type} toegevoegd {time_period}",
+          "speel recent toegevoegde {media_type} van {time_period}",
+          "wat is nieuw in {media_type}",
+          "speel de nieuwste {media_type}",
+          "laat nieuwe {media_type} zien"
+        ],
         "slots": [
-          { "name": "media_type", "type": "MediaType" },
-          { "name": "time_period", "type": "TimePeriod" }
+          {
+            "name": "media_type",
+            "type": "MediaType"
+          },
+          {
+            "name": "time_period",
+            "type": "TimePeriod"
+          }
         ]
       },
       {
         "name": "PlayRandomIntent",
-        "samples": ["speel een willekeurig {media_type}", "speel willekeurig {media_type}", "shuffle mijn {media_type}", "speel iets willekeurigs", "speel een willekeurig {media_type} uit {genre}", "speel willekeurige {genre} {media_type}", "verras me met {media_type}", "shuffle {genre} {media_type}", "speel willekeurige nummers", "speel willekeurige muziek", "geef me een willekeurig {media_type}", "iets willekeurigs afspelen"],
+        "samples": [
+          "speel een willekeurig {media_type}",
+          "speel willekeurig {media_type}",
+          "shuffle mijn {media_type}",
+          "speel iets willekeurigs",
+          "speel een willekeurig {media_type} uit {genre}",
+          "speel willekeurige {genre} {media_type}",
+          "verras me met {media_type}",
+          "shuffle {genre} {media_type}",
+          "speel willekeurige nummers",
+          "speel willekeurige muziek",
+          "geef me een willekeurig {media_type}",
+          "iets willekeurigs afspelen"
+        ],
         "slots": [
-          { "name": "media_type", "type": "MediaType" },
-          { "name": "genre", "type": "AMAZON.Genre" }
+          {
+            "name": "media_type",
+            "type": "MediaType"
+          },
+          {
+            "name": "genre",
+            "type": "AMAZON.Genre"
+          }
         ]
       },
       {
         "name": "PlayByGenreIntent",
-        "samples": ["speel wat {genre} muziek", "speel {genre} nummers", "speel {genre} muziek", "speel me wat {genre}", "ik wil naar {genre} luisteren", "speel {genre}", "geef me {genre} muziek", "zet wat {genre} op", "ik heb zin in {genre} muziek", "start {genre}", "stream {genre} muziek"],
-        "slots": [{ "name": "genre", "type": "AMAZON.Genre" }]
+        "samples": [
+          "speel wat {genre} muziek",
+          "speel {genre} nummers",
+          "speel {genre} muziek",
+          "speel me wat {genre}",
+          "ik wil naar {genre} luisteren",
+          "speel {genre}",
+          "geef me {genre} muziek",
+          "zet wat {genre} op",
+          "ik heb zin in {genre} muziek",
+          "start {genre}",
+          "stream {genre} muziek"
+        ],
+        "slots": [
+          {
+            "name": "genre",
+            "type": "AMAZON.Genre"
+          }
+        ]
       },
       {
         "name": "PlayByDecadeIntent",
-        "samples": ["speel nummers uit de {decade}", "speel hits uit de {decade}", "speel muziek uit de {decade}", "speel {decade} hits", "speel {decade} nummers", "speel {genre} uit de {decade}", "ik wil {decade} muziek horen", "luister naar {decade} muziek", "geef me {decade} nummers", "shuffle {decade} muziek"],
+        "samples": [
+          "speel nummers uit de {decade}",
+          "speel hits uit de {decade}",
+          "speel muziek uit de {decade}",
+          "speel {decade} hits",
+          "speel {decade} nummers",
+          "speel {genre} uit de {decade}",
+          "ik wil {decade} muziek horen",
+          "luister naar {decade} muziek",
+          "geef me {decade} nummers",
+          "shuffle {decade} muziek"
+        ],
         "slots": [
-          { "name": "decade", "type": "Decade" },
-          { "name": "genre", "type": "AMAZON.Genre" }
+          {
+            "name": "decade",
+            "type": "Decade"
+          },
+          {
+            "name": "genre",
+            "type": "AMAZON.Genre"
+          }
         ]
       },
       {
         "name": "ContinueWatchingIntent",
-        "samples": ["verder kijken", "verder luisteren", "hervat waar ik was gebleven", "wat was ik aan het kijken", "doorgaan", "verder gaan"]
+        "samples": [
+          "verder kijken",
+          "verder luisteren",
+          "hervat waar ik was gebleven",
+          "wat was ik aan het kijken",
+          "doorgaan",
+          "verder gaan"
+        ]
       },
       {
         "name": "GoToChapterIntent",
-        "samples": ["volgend hoofdstuk", "vorig hoofdstuk", "ga naar hoofdstuk {chapter_number}", "spring naar hoofdstuk {chapter_number}", "een hoofdstuk vooruit", "een hoofdstuk terug", "hoofdstuk overslaan"],
-        "slots": [{ "name": "chapter_number", "type": "AMAZON.NUMBER" }]
+        "samples": [
+          "volgend hoofdstuk",
+          "vorig hoofdstuk",
+          "ga naar hoofdstuk {chapter_number}",
+          "spring naar hoofdstuk {chapter_number}",
+          "een hoofdstuk vooruit",
+          "een hoofdstuk terug",
+          "hoofdstuk overslaan"
+        ],
+        "slots": [
+          {
+            "name": "chapter_number",
+            "type": "AMAZON.NUMBER"
+          }
+        ]
       },
       {
         "name": "PlayPlaylistIntent",
-        "samples": ["speel de afspeellijst {playlist}", "speel mijn afspeellijst {playlist}", "zet de afspeellijst {playlist} op", "start de afspeellijst {playlist}", "zet mijn afspeellijst {playlist} op", "luister naar de afspeellijst {playlist}", "kun je afspeellijst {playlist} afspelen", "ik wil afspeellijst {playlist} horen", "geef me afspeellijst {playlist}", "stream de afspeellijst {playlist}"],
-        "slots": [{ "name": "playlist", "type": "AMAZON.SearchQuery" }]
+        "samples": [
+          "speel de afspeellijst {playlist}",
+          "speel mijn afspeellijst {playlist}",
+          "zet de afspeellijst {playlist} op",
+          "start de afspeellijst {playlist}",
+          "zet mijn afspeellijst {playlist} op",
+          "luister naar de afspeellijst {playlist}",
+          "kun je afspeellijst {playlist} afspelen",
+          "ik wil afspeellijst {playlist} horen",
+          "geef me afspeellijst {playlist}",
+          "stream de afspeellijst {playlist}"
+        ],
+        "slots": [
+          {
+            "name": "playlist",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
       },
       {
         "name": "PlayFavoritesIntent",
-        "samples": ["speel mijn favoriete {media_type}", "speel mijn favorieten", "speel mijn favoriete nummers", "speel mijn favoriete muziek", "speel de favorieten van {username}", "speel {username} favoriete {media_type}", "luister naar de favorieten van {username}"],
+        "samples": [
+          "speel mijn favoriete {media_type}",
+          "speel mijn favorieten",
+          "speel mijn favoriete nummers",
+          "speel mijn favoriete muziek",
+          "speel de favorieten van {username}",
+          "speel {username} favoriete {media_type}",
+          "luister naar de favorieten van {username}"
+        ],
         "slots": [
-          { "name": "media_type", "type": "MediaType" },
-          { "name": "username", "type": "AMAZON.Person" }
+          {
+            "name": "media_type",
+            "type": "MediaType"
+          },
+          {
+            "name": "username",
+            "type": "AMAZON.Person"
+          }
         ]
       },
       {
         "name": "MarkFavoriteIntent",
-        "samples": ["ik vind dit leuk", "ik vind de video leuk", "ik vind het nummer leuk", "ik vind de muziek leuk", "ik vind dit nummer leuk", "ik vind dit leuk", "voeg de video toe aan favorieten", "voeg het nummer toe aan favorieten", "sla dit op in favorieten", "markeer als favoriet"]
+        "samples": [
+          "ik vind dit leuk",
+          "ik vind de video leuk",
+          "ik vind het nummer leuk",
+          "ik vind de muziek leuk",
+          "ik vind dit nummer leuk",
+          "ik vind dit leuk",
+          "voeg de video toe aan favorieten",
+          "voeg het nummer toe aan favorieten",
+          "sla dit op in favorieten",
+          "markeer als favoriet"
+        ]
       },
       {
         "name": "UnmarkFavoriteIntent",
-        "samples": ["ik vind dit niet leuk", "ik vind de video niet leuk", "ik vind het nummer niet leuk", "verwijder de video uit favorieten", "verwijder het nummer uit favorieten"]
+        "samples": [
+          "ik vind dit niet leuk",
+          "ik vind de video niet leuk",
+          "ik vind het nummer niet leuk",
+          "verwijder de video uit favorieten",
+          "verwijder het nummer uit favorieten"
+        ]
       },
       {
         "name": "MediaInfoIntent",
-        "slots": [{ "name": "media_info_type", "type": "MediaInfoType" }],
-        "samples": ["hoe heet dit nummer", "hoe heet de video", "hoe heet de muziek", "wat is de titel van het nummer", "wat speelt er nu", "wat is de {media_info_type} hiervan", "vertel me de {media_info_type}", "wie zingt dit", "wie speelt dit", "wat is het genre", "wanneer is dit uitgebracht", "vertel me over deze artiest", "van welk album is dit"]
+        "slots": [
+          {
+            "name": "media_info_type",
+            "type": "MediaInfoType"
+          }
+        ],
+        "samples": [
+          "hoe heet dit nummer",
+          "hoe heet de video",
+          "hoe heet de muziek",
+          "wat is de titel van het nummer",
+          "wat speelt er nu",
+          "wat is de {media_info_type} hiervan",
+          "vertel me de {media_info_type}",
+          "wie zingt dit",
+          "wie speelt dit",
+          "wat is het genre",
+          "wanneer is dit uitgebracht",
+          "vertel me over deze artiest",
+          "van welk album is dit"
+        ]
       },
       {
         "name": "InProgressMediaListIntent",
-        "samples": ["waar was ik naar aan het luisteren", "waar was ik naar aan het kijken", "wat is in behandeling", "laat mijn voortgang zien", "wat was ik aan het afspelen", "wat heb ik gestart"]
+        "samples": [
+          "waar was ik naar aan het luisteren",
+          "waar was ik naar aan het kijken",
+          "wat is in behandeling",
+          "laat mijn voortgang zien",
+          "wat was ik aan het afspelen",
+          "wat heb ik gestart"
+        ]
       },
       {
         "name": "PlayEpisodeIntent",
         "slots": [
-          { "name": "series_name", "type": "SeriesName" },
-          { "name": "season_number", "type": "AMAZON.NUMBER" },
-          { "name": "episode_number", "type": "AMAZON.NUMBER" }
+          {
+            "name": "series_name",
+            "type": "SeriesName"
+          },
+          {
+            "name": "season_number",
+            "type": "AMAZON.NUMBER"
+          },
+          {
+            "name": "episode_number",
+            "type": "AMAZON.NUMBER"
+          }
         ],
-        "samples": ["speel seizoen {season_number} aflevering {episode_number} van {series_name}", "speel {series_name} seizoen {season_number} aflevering {episode_number}", "kijk seizoen {season_number} aflevering {episode_number} van {series_name}"]
+        "samples": [
+          "speel seizoen {season_number} aflevering {episode_number} van {series_name}",
+          "speel {series_name} seizoen {season_number} aflevering {episode_number}",
+          "kijk seizoen {season_number} aflevering {episode_number} van {series_name}"
+        ]
       },
       {
         "name": "PlayPodcastIntent",
-        "samples": ["speel de podcast {podcast_name}", "speel podcast {podcast_name}", "luister naar de podcast {podcast_name}", "speel de laatste aflevering van {podcast_name}", "start de podcast {podcast_name}", "ik wil naar podcast {podcast_name} luisteren"],
-        "slots": [{ "name": "podcast_name", "type": "AMAZON.SearchQuery" }]
+        "samples": [
+          "speel de podcast {podcast_name}",
+          "speel podcast {podcast_name}",
+          "luister naar de podcast {podcast_name}",
+          "speel de laatste aflevering van {podcast_name}",
+          "start de podcast {podcast_name}",
+          "ik wil naar podcast {podcast_name} luisteren"
+        ],
+        "slots": [
+          {
+            "name": "podcast_name",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
       },
       {
         "name": "BrowseLibraryIntent",
-        "slots": [{ "name": "browse_category", "type": "BrowseCategory" }],
-        "samples": ["browse {browse_category}", "laat {browse_category} zien", "lijst {browse_category}", "welke {browse_category} heb ik"]
+        "slots": [
+          {
+            "name": "browse_category",
+            "type": "BrowseCategory"
+          }
+        ],
+        "samples": [
+          "browse {browse_category}",
+          "laat {browse_category} zien",
+          "lijst {browse_category}",
+          "welke {browse_category} heb ik"
+        ]
       },
       {
         "name": "RecommendIntent",
-        "slots": [{ "name": "media_type", "type": "MediaType" }],
-        "samples": ["beveel iets aan", "beveel wat muziek aan", "beveel een film aan", "stel iets voor om te kijken", "stel wat muziek voor", "speel iets wat ik leuk vind", "beveel {media_type} aan", "stel {media_type} voor"]
+        "slots": [
+          {
+            "name": "media_type",
+            "type": "MediaType"
+          }
+        ],
+        "samples": [
+          "beveel iets aan",
+          "beveel wat muziek aan",
+          "beveel een film aan",
+          "stel iets voor om te kijken",
+          "stel wat muziek voor",
+          "speel iets wat ik leuk vind",
+          "beveel {media_type} aan",
+          "stel {media_type} voor"
+        ]
       },
       {
         "name": "SleepTimerIntent",
-        "slots": [{ "name": "duration_minutes", "type": "AMAZON.NUMBER" }],
-        "samples": ["stop met afspelen over {duration_minutes} minuten", "stel een slaaptimer in voor {duration_minutes} minuten", "slaaptimer {duration_minutes} minuten", "stop na {duration_minutes} minuten", "zet uit over {duration_minutes} minuten"]
+        "slots": [
+          {
+            "name": "duration_minutes",
+            "type": "AMAZON.NUMBER"
+          }
+        ],
+        "samples": [
+          "stop met afspelen over {duration_minutes} minuten",
+          "stel een slaaptimer in voor {duration_minutes} minuten",
+          "slaaptimer {duration_minutes} minuten",
+          "stop na {duration_minutes} minuten",
+          "zet uit over {duration_minutes} minuten"
+        ]
       },
       {
         "name": "PlayMoodMusicIntent",
-        "slots": [{ "name": "mood", "type": "AMAZON.SearchQuery" }],
-        "samples": ["speel {mood} muziek", "speel iets {mood}", "speel {mood} nummers", "ik wil {mood} muziek", "speel mij iets {mood}", "speel ochtendmuziek", "speel avondmuziek", "speel werkmuziek", "speel focusmuziek", "speel feestmuziek", "speel ontspannende muziek"]
+        "slots": [
+          {
+            "name": "mood",
+            "type": "AMAZON.SearchQuery"
+          }
+        ],
+        "samples": [
+          "speel {mood} muziek",
+          "speel iets {mood}",
+          "speel {mood} nummers",
+          "ik wil {mood} muziek",
+          "speel mij iets {mood}",
+          "speel ochtendmuziek",
+          "speel avondmuziek",
+          "speel werkmuziek",
+          "speel focusmuziek",
+          "speel feestmuziek",
+          "speel ontspannende muziek"
+        ]
       },
       {
         "name": "AddToQueueIntent",
         "slots": [
-          { "name": "song", "type": "AMAZON.MusicRecording" },
-          { "name": "musician", "type": "AMAZON.Musician" }
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
         ],
-        "samples": ["voeg {song} toe aan mijn wachtrij", "voeg {song} toe aan de wachtrij", "voeg {song} van {musician} toe aan mijn wachtrij", "voeg {song} van {musician} toe aan de wachtrij", "wachtrij {song}", "wachtrij {song} van {musician}", "zet {song} in mijn wachtrij"]
+        "samples": [
+          "voeg {song} toe aan mijn wachtrij",
+          "voeg {song} toe aan de wachtrij",
+          "voeg {song} van {musician} toe aan mijn wachtrij",
+          "voeg {song} van {musician} toe aan de wachtrij",
+          "wachtrij {song}",
+          "wachtrij {song} van {musician}",
+          "zet {song} in mijn wachtrij"
+        ]
       },
       {
         "name": "PlayNextIntent",
         "slots": [
-          { "name": "song", "type": "AMAZON.MusicRecording" },
-          { "name": "musician", "type": "AMAZON.Musician" }
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
         ],
-        "samples": ["speel {song} hierna", "speel {song} van {musician} hierna", "ik wil {song} hierna horen", "speel {song} na dit"]
+        "samples": [
+          "speel {song} hierna",
+          "speel {song} van {musician} hierna",
+          "ik wil {song} hierna horen",
+          "speel {song} na dit"
+        ]
       },
       {
         "name": "ClearQueueIntent",
-        "samples": ["wis mijn wachtrij", "wis de wachtrij", "leeg mijn wachtrij", "leeg de wachtrij", "verwijder alles uit mijn wachtrij"]
+        "samples": [
+          "wis mijn wachtrij",
+          "wis de wachtrij",
+          "leeg mijn wachtrij",
+          "leeg de wachtrij",
+          "verwijder alles uit mijn wachtrij"
+        ]
       },
       {
         "name": "ListQueueIntent",
-        "samples": ["wat zit er in mijn wachtrij", "wat zit er in de wachtrij", "wat komt er aan", "wat is het volgende", "laat mijn wachtrij zien", "wat wordt hierna afgespeeld"]
+        "samples": [
+          "wat zit er in mijn wachtrij",
+          "wat zit er in de wachtrij",
+          "wat komt er aan",
+          "wat is het volgende",
+          "laat mijn wachtrij zien",
+          "wat wordt hierna afgespeeld"
+        ]
       },
       {
         "name": "PlayRadioIntent",
-        "samples": ["speel radio", "speel radiomodus", "start radio", "speel meer zoals dit", "blijf vergelijkbare muziek afspelen", "speel vergelijkbare nummers", "start een radiostation", "speel nummers zoals deze"]
+        "samples": [
+          "speel radio",
+          "speel radiomodus",
+          "start radio",
+          "speel meer zoals dit",
+          "blijf vergelijkbare muziek afspelen",
+          "speel vergelijkbare nummers",
+          "start een radiostation",
+          "speel nummers zoals deze"
+        ]
       },
       {
         "name": "TurnRadioOnIntent",
-        "samples": ["zet radiomodus aan", "schakel radiomodus in", "radiomodus aan", "zet radio aan", "schakel radio in"]
+        "samples": [
+          "zet radiomodus aan",
+          "schakel radiomodus in",
+          "radiomodus aan",
+          "zet radio aan",
+          "schakel radio in"
+        ]
       },
       {
         "name": "TurnRadioOffIntent",
-        "samples": ["zet radiomodus uit", "schakel radiomodus uit", "radiomodus uit", "zet radio uit", "schakel radio uit", "stop radiomodus"]
+        "samples": [
+          "zet radiomodus uit",
+          "schakel radiomodus uit",
+          "radiomodus uit",
+          "zet radio uit",
+          "schakel radio uit",
+          "stop radiomodus"
+        ]
       },
       {
         "name": "LearnMyVoiceIntent",
-        "samples": ["leer mijn stem", "onthoud mijn stem", "herken mij", "koppel mijn stem", "dit is mijn stem", "stel mijn stemprofiel in", "koppel mijn stem"]
+        "samples": [
+          "leer mijn stem",
+          "onthoud mijn stem",
+          "herken mij",
+          "koppel mijn stem",
+          "dit is mijn stem",
+          "stel mijn stemprofiel in",
+          "koppel mijn stem"
+        ]
       },
       {
         "name": "WhoAmIIntent",
-        "samples": ["wie ben ik", "welk account is dit", "welk account gebruik ik", "wie spreekt er", "welk profiel is actief", "ben ik herkend"]
+        "samples": [
+          "wie ben ik",
+          "welk account is dit",
+          "welk account gebruik ik",
+          "wie spreekt er",
+          "welk profiel is actief",
+          "ben ik herkend"
+        ]
       },
       {
         "name": "QueryArtistLibraryIntent",
-        "samples": ["welke tracks hebben we van {musician}", "welke nummers hebben we van {musician}", "welke albums hebben we van {musician}", "wat hebben we van {musician}", "laat tracks zien van {musician}", "laat albums zien van {musician}", "welke {query_type} hebben we van {musician}", "laat {query_type} zien van {musician}"],
+        "samples": [
+          "welke tracks hebben we van {musician}",
+          "welke nummers hebben we van {musician}",
+          "welke albums hebben we van {musician}",
+          "wat hebben we van {musician}",
+          "laat tracks zien van {musician}",
+          "laat albums zien van {musician}",
+          "welke {query_type} hebben we van {musician}",
+          "laat {query_type} zien van {musician}"
+        ],
         "slots": [
-          { "name": "musician", "type": "AMAZON.Musician" },
-          { "name": "query_type", "type": "LibraryQueryType" }
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          },
+          {
+            "name": "query_type",
+            "type": "LibraryQueryType"
+          }
         ]
       },
       {
         "name": "SearchMediaIntent",
-        "slots": [{ "name": "query", "type": "AMAZON.SearchQuery" }],
-        "samples": ["zoek naar {query}", "vind {query}", "zoek {query}", "zoek {query} op", "heb je {query}", "ik wil {query} vinden", "kun je {query} vinden", "vind me {query}"]
+        "slots": [
+          {
+            "name": "query",
+            "type": "AMAZON.SearchQuery"
+          }
+        ],
+        "samples": [
+          "zoek naar {query}",
+          "vind {query}",
+          "zoek {query}",
+          "zoek {query} op",
+          "heb je {query}",
+          "ik wil {query} vinden",
+          "kun je {query} vinden",
+          "vind me {query}"
+        ]
       }
     ],
     "types": [
       {
         "name": "LibraryQueryType",
         "values": [
-          { "id": "tracks", "name": { "value": "tracks", "synonyms": ["nummers", "muziek", "nummer", "track"] } },
-          { "id": "albums", "name": { "value": "albums", "synonyms": ["platen", "plaat", "album"] } }
+          {
+            "id": "tracks",
+            "name": {
+              "value": "tracks",
+              "synonyms": [
+                "nummers",
+                "muziek",
+                "nummer",
+                "track"
+              ]
+            }
+          },
+          {
+            "id": "albums",
+            "name": {
+              "value": "albums",
+              "synonyms": [
+                "platen",
+                "plaat",
+                "album"
+              ]
+            }
+          }
         ]
       },
       {
         "name": "MediaType",
         "values": [
-          { "id": "media", "name": { "value": "media" } },
-          { "id": "video", "name": { "value": "video" } },
-          { "id": "audio", "name": { "value": "audio", "synonyms": ["muziek", "nummer"] } }
+          {
+            "id": "media",
+            "name": {
+              "value": "media"
+            }
+          },
+          {
+            "id": "video",
+            "name": {
+              "value": "video"
+            }
+          },
+          {
+            "id": "audio",
+            "name": {
+              "value": "audio",
+              "synonyms": [
+                "muziek",
+                "nummer"
+              ]
+            }
+          }
         ]
       },
       {
         "name": "BrowseCategory",
         "values": [
-          { "name": { "value": "artiesten" } },
-          { "name": { "value": "albums" } },
-          { "name": { "value": "films" } },
-          { "name": { "value": "nummers" } },
-          { "name": { "value": "genres" } }
+          {
+            "name": {
+              "value": "artiesten"
+            }
+          },
+          {
+            "name": {
+              "value": "albums"
+            }
+          },
+          {
+            "name": {
+              "value": "films"
+            }
+          },
+          {
+            "name": {
+              "value": "nummers"
+            }
+          },
+          {
+            "name": {
+              "value": "genres"
+            }
+          }
         ]
       },
       {
         "name": "SeriesName",
         "values": [
-          { "name": { "value": "Breaking Bad" } },
-          { "name": { "value": "Game of Thrones" } },
-          { "name": { "value": "Stranger Things" } },
-          { "name": { "value": "Money Heist" } },
-          { "name": { "value": "Peaky Blinders" } },
-          { "name": { "value": "The Walking Dead" } },
-          { "name": { "value": "Dark" } },
-          { "name": { "value": "Sherlock" } }
+          {
+            "name": {
+              "value": "Breaking Bad"
+            }
+          },
+          {
+            "name": {
+              "value": "Game of Thrones"
+            }
+          },
+          {
+            "name": {
+              "value": "Stranger Things"
+            }
+          },
+          {
+            "name": {
+              "value": "Money Heist"
+            }
+          },
+          {
+            "name": {
+              "value": "Peaky Blinders"
+            }
+          },
+          {
+            "name": {
+              "value": "The Walking Dead"
+            }
+          },
+          {
+            "name": {
+              "value": "Dark"
+            }
+          },
+          {
+            "name": {
+              "value": "Sherlock"
+            }
+          }
         ]
       },
       {
         "name": "TimePeriod",
         "values": [
-          { "id": "today", "name": { "value": "vandaag", "synonyms": ["eerder vandaag"] } },
-          { "id": "this_week", "name": { "value": "deze week", "synonyms": ["afgelopen week", "vorige week", "de afgelopen week"] } },
-          { "id": "this_month", "name": { "value": "deze maand", "synonyms": ["afgelopen maand", "vorige maand", "de afgelopen maand"] } }
+          {
+            "id": "today",
+            "name": {
+              "value": "vandaag",
+              "synonyms": [
+                "eerder vandaag"
+              ]
+            }
+          },
+          {
+            "id": "this_week",
+            "name": {
+              "value": "deze week",
+              "synonyms": [
+                "afgelopen week",
+                "vorige week",
+                "de afgelopen week"
+              ]
+            }
+          },
+          {
+            "id": "this_month",
+            "name": {
+              "value": "deze maand",
+              "synonyms": [
+                "afgelopen maand",
+                "vorige maand",
+                "de afgelopen maand"
+              ]
+            }
+          }
         ]
       },
       {
         "name": "MediaInfoType",
         "values": [
-          { "id": "title", "name": { "value": "titel", "synonyms": ["nummer", "track", "naam"] } },
-          { "id": "album", "name": { "value": "album", "synonyms": ["plaat"] } },
-          { "id": "artist", "name": { "value": "artiest", "synonyms": ["zanger", "band", "muzikant"] } },
-          { "id": "year", "name": { "value": "jaar", "synonyms": ["uitgavejaar"] } },
-          { "id": "duration", "name": { "value": "duur", "synonyms": ["lengte", "speelduur"] } },
-          { "id": "genre", "name": { "value": "genre", "synonyms": ["stijl", "muzieksoort"] } },
-          { "id": "biography", "name": { "value": "biografie", "synonyms": ["bio", "over de artiest"] } }
+          {
+            "id": "title",
+            "name": {
+              "value": "titel",
+              "synonyms": [
+                "nummer",
+                "track",
+                "naam"
+              ]
+            }
+          },
+          {
+            "id": "album",
+            "name": {
+              "value": "album",
+              "synonyms": [
+                "plaat"
+              ]
+            }
+          },
+          {
+            "id": "artist",
+            "name": {
+              "value": "artiest",
+              "synonyms": [
+                "zanger",
+                "band",
+                "muzikant"
+              ]
+            }
+          },
+          {
+            "id": "year",
+            "name": {
+              "value": "jaar",
+              "synonyms": [
+                "uitgavejaar"
+              ]
+            }
+          },
+          {
+            "id": "duration",
+            "name": {
+              "value": "duur",
+              "synonyms": [
+                "lengte",
+                "speelduur"
+              ]
+            }
+          },
+          {
+            "id": "genre",
+            "name": {
+              "value": "genre",
+              "synonyms": [
+                "stijl",
+                "muzieksoort"
+              ]
+            }
+          },
+          {
+            "id": "biography",
+            "name": {
+              "value": "biografie",
+              "synonyms": [
+                "bio",
+                "over de artiest"
+              ]
+            }
+          }
         ]
       },
       {
         "name": "Decade",
         "values": [
-          { "id": "50s", "name": { "value": "jaren 50", "synonyms": ["vijftiger jaren", "50er jaren", "1950er jaren"] } },
-          { "id": "60s", "name": { "value": "jaren 60", "synonyms": ["zestiger jaren", "60er jaren", "1960er jaren"] } },
-          { "id": "70s", "name": { "value": "jaren 70", "synonyms": ["zeventiger jaren", "70er jaren", "1970er jaren"] } },
-          { "id": "80s", "name": { "value": "jaren 80", "synonyms": ["tachtiger jaren", "80er jaren", "1980er jaren"] } },
-          { "id": "90s", "name": { "value": "jaren 90", "synonyms": ["negentiger jaren", "90er jaren", "1990er jaren"] } },
-          { "id": "2000s", "name": { "value": "jaren 2000", "synonyms": ["tweeduizend", "00er"] } },
-          { "id": "2010s", "name": { "value": "jaren 2010", "synonyms": ["tieners", "10er"] } },
-          { "id": "2020s", "name": { "value": "jaren 2020", "synonyms": ["twintigers", "20er"] } }
+          {
+            "id": "50s",
+            "name": {
+              "value": "jaren 50",
+              "synonyms": [
+                "vijftiger jaren",
+                "50er jaren",
+                "1950er jaren"
+              ]
+            }
+          },
+          {
+            "id": "60s",
+            "name": {
+              "value": "jaren 60",
+              "synonyms": [
+                "zestiger jaren",
+                "60er jaren",
+                "1960er jaren"
+              ]
+            }
+          },
+          {
+            "id": "70s",
+            "name": {
+              "value": "jaren 70",
+              "synonyms": [
+                "zeventiger jaren",
+                "70er jaren",
+                "1970er jaren"
+              ]
+            }
+          },
+          {
+            "id": "80s",
+            "name": {
+              "value": "jaren 80",
+              "synonyms": [
+                "tachtiger jaren",
+                "80er jaren",
+                "1980er jaren"
+              ]
+            }
+          },
+          {
+            "id": "90s",
+            "name": {
+              "value": "jaren 90",
+              "synonyms": [
+                "negentiger jaren",
+                "90er jaren",
+                "1990er jaren"
+              ]
+            }
+          },
+          {
+            "id": "2000s",
+            "name": {
+              "value": "jaren 2000",
+              "synonyms": [
+                "tweeduizend",
+                "00er"
+              ]
+            }
+          },
+          {
+            "id": "2010s",
+            "name": {
+              "value": "jaren 2010",
+              "synonyms": [
+                "tieners",
+                "10er"
+              ]
+            }
+          },
+          {
+            "id": "2020s",
+            "name": {
+              "value": "jaren 2020",
+              "synonyms": [
+                "twintigers",
+                "20er"
+              ]
+            }
+          }
         ]
       }
     ]
@@ -296,32 +1043,132 @@
         "name": "PlayEpisodeIntent",
         "confirmationRequired": false,
         "slots": [
-          { "name": "series_name", "type": "SeriesName", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.SeriesName" } },
-          { "name": "season_number", "type": "AMAZON.NUMBER", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.SeasonNumber" } },
-          { "name": "episode_number", "type": "AMAZON.NUMBER", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.EpisodeNumber" } }
+          {
+            "name": "series_name",
+            "type": "SeriesName",
+            "confirmationRequired": false,
+            "elicitationRequired": true,
+            "prompts": {
+              "elicitation": "Elicit.SeriesName"
+            }
+          },
+          {
+            "name": "season_number",
+            "type": "AMAZON.NUMBER",
+            "confirmationRequired": false,
+            "elicitationRequired": true,
+            "prompts": {
+              "elicitation": "Elicit.SeasonNumber"
+            }
+          },
+          {
+            "name": "episode_number",
+            "type": "AMAZON.NUMBER",
+            "confirmationRequired": false,
+            "elicitationRequired": true,
+            "prompts": {
+              "elicitation": "Elicit.EpisodeNumber"
+            }
+          }
         ]
       },
       {
         "name": "PlaySongIntent",
         "confirmationRequired": false,
         "slots": [
-          { "name": "song", "type": "AMAZON.MusicRecording", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.SongName" } }
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording",
+            "confirmationRequired": false,
+            "elicitationRequired": true,
+            "prompts": {
+              "elicitation": "Elicit.SongName"
+            }
+          }
         ]
       },
       {
         "name": "PlayAlbumIntent",
         "confirmationRequired": false,
         "slots": [
-          { "name": "album", "type": "AMAZON.MusicRecording", "confirmationRequired": false, "elicitationRequired": true, "prompts": { "elicitation": "Elicit.AlbumName" } }
+          {
+            "name": "album",
+            "type": "AMAZON.MusicRecording",
+            "confirmationRequired": false,
+            "elicitationRequired": true,
+            "prompts": {
+              "elicitation": "Elicit.AlbumName"
+            }
+          }
         ]
       }
     ]
   },
   "prompts": [
-    { "id": "Elicit.SeriesName", "variations": [ { "type": "PlainText", "value": "Welke serie wil je kijken?" }, { "type": "PlainText", "value": "Hoe heet de serie?" } ] },
-    { "id": "Elicit.SeasonNumber", "variations": [ { "type": "PlainText", "value": "Welk seizoen?" }, { "type": "PlainText", "value": "Welk seizoensnummer?" } ] },
-    { "id": "Elicit.EpisodeNumber", "variations": [ { "type": "PlainText", "value": "Welk afleveringsnummer?" }, { "type": "PlainText", "value": "Welke aflevering wil je kijken?" } ] },
-    { "id": "Elicit.SongName", "variations": [ { "type": "PlainText", "value": "Welk nummer wil je horen?" }, { "type": "PlainText", "value": "Welk nummer?" } ] },
-    { "id": "Elicit.AlbumName", "variations": [ { "type": "PlainText", "value": "Welk album wil je horen?" }, { "type": "PlainText", "value": "Hoe heet het album?" } ] }
+    {
+      "id": "Elicit.SeriesName",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "Welke serie wil je kijken?"
+        },
+        {
+          "type": "PlainText",
+          "value": "Hoe heet de serie?"
+        }
+      ]
+    },
+    {
+      "id": "Elicit.SeasonNumber",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "Welk seizoen?"
+        },
+        {
+          "type": "PlainText",
+          "value": "Welk seizoensnummer?"
+        }
+      ]
+    },
+    {
+      "id": "Elicit.EpisodeNumber",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "Welk afleveringsnummer?"
+        },
+        {
+          "type": "PlainText",
+          "value": "Welke aflevering wil je kijken?"
+        }
+      ]
+    },
+    {
+      "id": "Elicit.SongName",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "Welk nummer wil je horen?"
+        },
+        {
+          "type": "PlainText",
+          "value": "Welk nummer?"
+        }
+      ]
+    },
+    {
+      "id": "Elicit.AlbumName",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "Welk album wil je horen?"
+        },
+        {
+          "type": "PlainText",
+          "value": "Hoe heet het album?"
+        }
+      ]
+    }
   ]
 }

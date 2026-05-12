@@ -123,5 +123,7 @@
   "QueryRecentlyAddedEmpty": "Aucun élément récent trouvé.",
   "QueryRecentlyAddedPrompt": "Dites le numéro pour en écouter un.",
   "UserByNameNotFound": "Je n'ai pas trouvé d'utilisateur nommé {0}.",
-  "GenreExpanded": "Lecture de {0} et genres similaires."
+  "GenreExpanded": "Lecture de {0} et genres similaires.",
+  "FollowMeSuccess": "Reprise de {0} là où vous vous êtes arrêté.",
+  "FollowMeNothingPlaying": "Rien ne joue sur les autres appareils pour le moment."
 }

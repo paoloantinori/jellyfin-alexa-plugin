@@ -165,5 +165,7 @@
   "QueryRecentlyAddedEmpty": "कोई हाल ही में जोड़े गए आइटम नहीं मिले।",
   "QueryRecentlyAddedPrompt": "एक को चलाने के लिए नंबर बोलें।",
   "UserByNameNotFound": "मुझे {0} नाम का उपयोगकर्ता नहीं मिला।",
-  "GenreExpanded": "{0} और समान शैलियाँ चला रहा हूँ।"
+  "GenreExpanded": "{0} और समान शैलियाँ चला रहा हूँ।",
+  "FollowMeSuccess": "{0} जहां आप छोड़े थे, वहां से जारी रख रहा हूं।",
+  "FollowMeNothingPlaying": "अभी अन्य डिवाइस पर कुछ नहीं बज रहा है।"
 }

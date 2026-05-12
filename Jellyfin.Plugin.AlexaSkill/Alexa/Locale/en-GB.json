@@ -123,5 +123,8 @@
   "QueryRecentlyAddedEmpty": "No recently added items found.",
   "QueryRecentlyAddedPrompt": "Say the number to play one.",
   "UserByNameNotFound": "I couldn't find a user named {0}.",
-  "GenreExpanded": "Playing {0} and similar genres."
+  "GenreExpanded": "Playing {0} and similar genres.",
+  "FollowMeSuccess": "Resuming {0} from where you left off.",
+  "FollowMeSuccessSsml": "<say-as interpret-as=\"interjection\">got it</say-as><break time=\"200ms\"/>Resuming <emphasis level=\"moderate\">{0}</emphasis> from where you left off.",
+  "FollowMeNothingPlaying": "Nothing is playing on other devices right now."
 }
