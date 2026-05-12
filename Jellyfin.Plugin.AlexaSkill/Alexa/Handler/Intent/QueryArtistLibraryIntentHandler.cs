@@ -201,7 +201,7 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
 
         IReadOnlyList<BaseItem> items = await RetryAsync(() => _libraryManager.GetItemList(query), operationName, cancellationToken).ConfigureAwait(false);
 
-        items = FavoritesFirst(items, jellyfinUser, _userDataManager);
+        items = FavoritesAndRatingsFirst(items, jellyfinUser, _userDataManager);
 
         if (items.Count == 0)
         {

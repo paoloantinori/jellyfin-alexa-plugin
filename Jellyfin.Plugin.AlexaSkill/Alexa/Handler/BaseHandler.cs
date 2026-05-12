@@ -38,20 +38,22 @@ public abstract class BaseHandler
 
     protected static readonly (ItemSortBy SortBy, SortOrder Order)[] PopularitySort =
     {
+        (ItemSortBy.IsFavoriteOrLiked, SortOrder.Descending),
         (ItemSortBy.PlayCount, SortOrder.Descending),
         (ItemSortBy.CommunityRating, SortOrder.Descending),
         (ItemSortBy.SortName, SortOrder.Ascending)
     };
 
     /// <summary>
-    /// Reorder items so favorites appear first while preserving the original
-    /// relative order within each group (stable partition).
+    /// Reorder items so favorites appear first, then by personal rating descending
+    /// within each group (favorites, non-favorites). Items without a rating keep
+    /// their original relative order (stable sort).
     /// </summary>
     /// <param name="items">Items to reorder.</param>
-    /// <param name="user">Jellyfin user for favorite lookup.</param>
-    /// <param name="userDataManager">User data manager for favorite status.</param>
-    /// <returns>Items with favorites first, or original list if no favorites found.</returns>
-    protected static IReadOnlyList<BaseItem> FavoritesFirst(
+    /// <param name="user">Jellyfin user for favorite and rating lookup.</param>
+    /// <param name="userDataManager">User data manager for favorite/rating status.</param>
+    /// <returns>Items sorted with favorites first and highest-rated within each group.</returns>
+    protected static IReadOnlyList<BaseItem> FavoritesAndRatingsFirst(
         IReadOnlyList<BaseItem> items,
         Jellyfin.Database.Implementations.Entities.User user,
         IUserDataManager userDataManager)
@@ -61,29 +63,49 @@ public abstract class BaseHandler
             return items;
         }
 
-        var favorites = new List<BaseItem>();
-        var rest = new List<BaseItem>(items.Count);
+        var favorites = new List<(int Index, BaseItem Item, double? Rating)>();
+        var rest = new List<(int Index, BaseItem Item, double? Rating)>(items.Count);
+        bool anyRating = false;
 
-        foreach (BaseItem item in items)
+        for (int i = 0; i < items.Count; i++)
         {
+            BaseItem item = items[i];
             UserItemData? data = userDataManager.GetUserData(user, item);
-            if (data?.IsFavorite == true)
+            double? rating = data?.Rating;
+            if (rating.HasValue)
             {
-                favorites.Add(item);
+                anyRating = true;
+            }
+
+            bool isFavorite = data?.IsFavorite == true;
+
+            var entry = (i, item, rating);
+            if (isFavorite)
+            {
+                favorites.Add(entry);
             }
             else
             {
-                rest.Add(item);
+                rest.Add(entry);
             }
         }
 
-        if (favorites.Count == 0)
+        if (!anyRating)
         {
             return items;
         }
 
-        favorites.AddRange(rest);
-        return favorites;
+        List<BaseItem> result = new List<BaseItem>(items.Count);
+        result.AddRange(SortByRating(favorites));
+        result.AddRange(SortByRating(rest));
+        return result;
+    }
+
+    private static IEnumerable<BaseItem> SortByRating(List<(int Index, BaseItem Item, double? Rating)> items)
+    {
+        return items.OrderByDescending(i => i.Rating ?? double.MinValue)
+                    .ThenBy(i => i.Index)
+                    .Select(i => i.Item);
     }
 
     private protected PluginConfiguration _config;

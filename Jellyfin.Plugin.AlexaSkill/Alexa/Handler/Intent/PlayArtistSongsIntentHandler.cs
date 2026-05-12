@@ -163,7 +163,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("NoSongsForArtist", locale, matchedArtistName));
         }
 
-        IReadOnlyList<BaseItem> artistsItems = FavoritesFirst(artistResult.Items, jellyfinUser, _userDataManager);
+        IReadOnlyList<BaseItem> artistsItems = FavoritesAndRatingsFirst(artistResult.Items, jellyfinUser, _userDataManager);
 
         List<QueueItem> queueItems = new List<QueueItem>();
         for (int i = 0; i < artistsItems.Count; i++)
