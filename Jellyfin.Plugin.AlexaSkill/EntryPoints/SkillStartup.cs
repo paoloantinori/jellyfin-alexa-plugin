@@ -201,6 +201,12 @@ public class SkillStartup : IHostedService, IDisposable
                                         return Task.FromResult<object?>(null);
                                     }).ConfigureAwait(false);
                                 }
+
+                                if (user.TryTransitionToReady())
+                                {
+                                    _logger.LogInformation("Transitioning user {UserId} from AccountLinkPending to Ready (skill exists, token present)", user.Id);
+                                    Plugin.Instance.SaveConfiguration();
+                                }
                             }
                             else
                             {

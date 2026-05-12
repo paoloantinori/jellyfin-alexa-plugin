@@ -72,6 +72,27 @@ public class User
     public string? AlexaPersonId { get; set; }
 
     /// <summary>
+    /// Transitions skill status from AccountLinkPending to Ready if the user
+    /// has completed account linking (JellyfinToken is present).
+    /// </summary>
+    /// <returns>True if the status was transitioned, false otherwise.</returns>
+    public bool TryTransitionToReady()
+    {
+        if (UserSkill == null || UserSkill.UserSkillStatus != global::Jellyfin.Plugin.AlexaSkill.Entities.UserSkillStatus.AccountLinkPending)
+        {
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(JellyfinToken))
+        {
+            return false;
+        }
+
+        UserSkill.UserSkillStatus = global::Jellyfin.Plugin.AlexaSkill.Entities.UserSkillStatus.Ready;
+        return true;
+    }
+
+    /// <summary>
     /// Gets or sets a value indicating whether the user has opted into proactive event notifications.
     /// Set to true when the skill receives a <c>ProactiveSubscriptionChangedRequest</c>
     /// indicating the user subscribed via the Alexa app.

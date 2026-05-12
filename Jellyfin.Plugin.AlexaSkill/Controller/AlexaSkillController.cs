@@ -16,6 +16,7 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Controller.Handler;
 using Jellyfin.Plugin.AlexaSkill.Diagnostics;
+using Jellyfin.Plugin.AlexaSkill.Entities;
 using MediaBrowser.Controller.Authentication;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
@@ -228,6 +229,7 @@ public class AlexaSkillController : ControllerBase
         }
 
         user.JellyfinToken = authenticationResult.AccessToken;
+        user.TryTransitionToReady();
         Plugin.Instance!.SaveConfiguration();
 
         string urlParams = $"access_token={user.Id.ToString()}&state={state}&token_type=token";
