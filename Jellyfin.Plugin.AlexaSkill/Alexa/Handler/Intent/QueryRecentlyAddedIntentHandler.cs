@@ -91,6 +91,7 @@ public class QueryRecentlyAddedIntentHandler : BaseHandler
             OrderBy = new[] { (ItemSortBy.DateCreated, SortOrder.Descending) },
             DtoOptions = new DtoOptions(true)
         };
+        ApplyLibraryFilter(query, user);
 
         IReadOnlyList<BaseItem> recentItems = await RetryAsync(() => _libraryManager.GetItemList(query), "GetRecentlyAddedItems", cancellationToken).ConfigureAwait(false);
 

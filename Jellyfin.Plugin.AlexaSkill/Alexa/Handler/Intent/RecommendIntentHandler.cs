@@ -108,6 +108,7 @@ public class RecommendIntentHandler : BaseHandler
             OrderBy = new[] { (ItemSortBy.DatePlayed, SortOrder.Descending) },
             DtoOptions = new DtoOptions(true)
         };
+        ApplyLibraryFilter(historyQuery, user);
 
         IReadOnlyList<BaseItem> playedItems = await RetryAsync(() => _libraryManager.GetItemList(historyQuery), "GetPlayedItems", cancellationToken).ConfigureAwait(false);
 
@@ -134,6 +135,7 @@ public class RecommendIntentHandler : BaseHandler
                 OrderBy = new[] { (ItemSortBy.Random, SortOrder.Ascending) },
                 DtoOptions = new DtoOptions(true)
             };
+            ApplyLibraryFilter(recQuery, user);
 
             recommendations = await RetryAsync(() => _libraryManager.GetItemList(recQuery), "GetGenreRecommendations", cancellationToken).ConfigureAwait(false);
         }
@@ -155,6 +157,7 @@ public class RecommendIntentHandler : BaseHandler
                 OrderBy = new[] { (ItemSortBy.Random, SortOrder.Ascending) },
                 DtoOptions = new DtoOptions(true)
             };
+            ApplyLibraryFilter(fallbackQuery, user);
 
             recommendations = await RetryAsync(() => _libraryManager.GetItemList(fallbackQuery), "GetFallbackRecommendations", cancellationToken).ConfigureAwait(false);
         }

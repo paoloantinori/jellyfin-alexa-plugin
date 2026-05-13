@@ -94,6 +94,7 @@ public class InProgressMediaListIntentHandler : BaseHandler
             OrderBy = new[] { (ItemSortBy.DatePlayed, SortOrder.Descending) },
             DtoOptions = new DtoOptions(true)
         };
+        ApplyLibraryFilter(query, user);
 
         IReadOnlyList<BaseItem> recentItems = await RetryAsync(() => _libraryManager.GetItemList(query), "GetRecentItems", cancellationToken).ConfigureAwait(false);
 

@@ -552,6 +552,42 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// Gets the allowed library IDs for a user, or null if all libraries are accessible.
+    /// Returns null when no restriction is configured (backward compatible default).
+    /// </summary>
+    protected static Guid[]? GetAllowedLibraryIds(Entities.User? user)
+    {
+        if (user?.AllowedLibraryIds == null || user.AllowedLibraryIds.Count == 0)
+        {
+            return null;
+        }
+
+        var ids = new List<Guid>(user.AllowedLibraryIds.Count);
+        foreach (var idStr in user.AllowedLibraryIds)
+        {
+            if (Guid.TryParse(idStr, out var id))
+            {
+                ids.Add(id);
+            }
+        }
+
+        return ids.Count > 0 ? ids.ToArray() : null;
+    }
+
+    /// <summary>
+    /// Applies per-user library filtering to a query by setting TopParentIds.
+    /// No-op when the user has no library restrictions configured.
+    /// </summary>
+    protected static void ApplyLibraryFilter(InternalItemsQuery query, Entities.User? user)
+    {
+        var allowedIds = GetAllowedLibraryIds(user);
+        if (allowedIds != null)
+        {
+            query.TopParentIds = allowedIds;
+        }
+    }
+
+    /// <summary>
     /// Send a progressive response to keep the Alexa session alive during long operations.
     /// Resets the 8-second timeout. Only works with IntentRequest/LaunchRequest.
     /// A fresh HttpClient is created per call because ProgressiveResponse sets BaseAddress
@@ -763,6 +799,7 @@ public abstract class BaseHandler
     protected async Task<IReadOnlyList<BaseItem>> FindRadioTracksAsync(
         MediaBrowser.Controller.Entities.Audio.Audio current,
         Jellyfin.Database.Implementations.Entities.User jellyfinUser,
+        Entities.User user,
         ILibraryManager libraryManager,
         CancellationToken cancellationToken)
     {
@@ -771,17 +808,20 @@ public abstract class BaseHandler
 
         if (current.Genres != null && current.Genres.Length > 0)
         {
+            var genreQuery = new InternalItemsQuery
+            {
+                User = jellyfinUser,
+                Recursive = true,
+                Genres = current.Genres,
+                IncludeItemTypes = new[] { BaseItemKind.Audio },
+                Limit = 50,
+                OrderBy = new[] { (ItemSortBy.Random, SortOrder.Ascending) },
+                DtoOptions = new DtoOptions(true)
+            };
+            ApplyLibraryFilter(genreQuery, user);
+
             IReadOnlyList<BaseItem> byGenre = await RetryAsync(
-                () => libraryManager.GetItemList(new InternalItemsQuery
-                {
-                    User = jellyfinUser,
-                    Recursive = true,
-                    Genres = current.Genres,
-                    IncludeItemTypes = new[] { BaseItemKind.Audio },
-                    Limit = 50,
-                    OrderBy = new[] { (ItemSortBy.Random, SortOrder.Ascending) },
-                    DtoOptions = new DtoOptions(true)
-                }),
+                () => libraryManager.GetItemList(genreQuery),
                 "GetRadioGenreTracks",
                 cancellationToken).ConfigureAwait(false);
 

@@ -86,15 +86,18 @@ public class AddToQueueIntentHandler : BaseHandler
         string? matchedArtistName = null;
         if (!string.IsNullOrWhiteSpace(musicianQuery))
         {
+            var artistSearchQuery = new InternalItemsQuery()
+            {
+                User = jellyfinUser,
+                Recursive = true,
+                SearchTerm = musicianQuery,
+                IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
+                DtoOptions = new DtoOptions(true)
+            };
+            ApplyLibraryFilter(artistSearchQuery, user);
+
             IReadOnlyList<BaseItem> artists = await RetryAsync(
-                () => _libraryManager.GetItemList(new InternalItemsQuery()
-                {
-                    User = jellyfinUser,
-                    Recursive = true,
-                    SearchTerm = musicianQuery,
-                    IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
-                    DtoOptions = new DtoOptions(true)
-                }),
+                () => _libraryManager.GetItemList(artistSearchQuery),
                 "GetArtistsForQueue",
                 cancellationToken).ConfigureAwait(false);
 
@@ -110,16 +113,19 @@ public class AddToQueueIntentHandler : BaseHandler
             }
         }
 
+        var songSearchQuery = new InternalItemsQuery()
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            SearchTerm = songQuery,
+            ArtistIds = artistIds.ToArray(),
+            IncludeItemTypes = new[] { BaseItemKind.Audio },
+            DtoOptions = new DtoOptions(true)
+        };
+        ApplyLibraryFilter(songSearchQuery, user);
+
         IReadOnlyList<BaseItem> songs = await RetryAsync(
-            () => _libraryManager.GetItemList(new InternalItemsQuery()
-            {
-                User = jellyfinUser,
-                Recursive = true,
-                SearchTerm = songQuery,
-                ArtistIds = artistIds.ToArray(),
-                IncludeItemTypes = new[] { BaseItemKind.Audio },
-                DtoOptions = new DtoOptions(true)
-            }),
+            () => _libraryManager.GetItemList(songSearchQuery),
             "GetSongsForQueue",
             cancellationToken).ConfigureAwait(false);
 

@@ -1,6 +1,7 @@
 #pragma warning disable CS8618
 
 using System;
+using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Lwa;
@@ -70,6 +71,15 @@ public class User
     /// When a voice profile is recognized, this maps the speaker to this Jellyfin user.
     /// </summary>
     public string? AlexaPersonId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the list of Jellyfin library IDs this user allows Alexa to access.
+    /// When null or empty, all libraries are accessible (backward compatible default).
+    /// Each ID is the GUID of a Jellyfin media folder (library).
+    /// </summary>
+#pragma warning disable CA2227
+    public List<string>? AllowedLibraryIds { get; set; }
+#pragma warning restore CA2227
 
     /// <summary>
     /// Transitions skill status from AccountLinkPending to Ready if the user

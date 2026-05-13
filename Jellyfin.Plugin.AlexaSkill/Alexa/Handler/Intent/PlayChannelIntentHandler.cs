@@ -71,15 +71,18 @@ public class PlayChannelIntentHandler : BaseHandler
             return userError;
         }
 
+        var channelSearchQuery = new InternalItemsQuery()
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            SearchTerm = channelQuery,
+            IncludeItemTypes = new[] { BaseItemKind.LiveTvChannel },
+            DtoOptions = new DtoOptions(true)
+        };
+        ApplyLibraryFilter(channelSearchQuery, user);
+
         IReadOnlyList<BaseItem> channels = await RetryAsync(
-            () => _libraryManager.GetItemList(new InternalItemsQuery()
-            {
-                User = jellyfinUser,
-                Recursive = true,
-                SearchTerm = channelQuery,
-                IncludeItemTypes = new[] { BaseItemKind.LiveTvChannel },
-                DtoOptions = new DtoOptions(true)
-            }),
+            () => _libraryManager.GetItemList(channelSearchQuery),
             "GetChannels",
             cancellationToken).ConfigureAwait(false);
 

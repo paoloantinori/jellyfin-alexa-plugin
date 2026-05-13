@@ -333,7 +333,8 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             return null;
         }
 
-        IReadOnlyList<BaseItem> similar = await FindRadioTracksAsync(currentAudio, jellyfinUser, _libraryManager, cancellationToken).ConfigureAwait(false);
+        Entities.User? pluginUser = _config.GetUserById(session.UserId);
+        IReadOnlyList<BaseItem> similar = await FindRadioTracksAsync(currentAudio, jellyfinUser, pluginUser, _libraryManager, cancellationToken).ConfigureAwait(false);
 
         if (similar.Count == 0)
         {

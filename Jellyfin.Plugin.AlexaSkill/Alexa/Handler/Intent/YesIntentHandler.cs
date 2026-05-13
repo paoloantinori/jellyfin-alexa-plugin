@@ -214,14 +214,17 @@ public class YesIntentHandler : BaseHandler
 
     private SkillResponse PlayArtist(BaseItem artist, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale)
     {
-        IReadOnlyList<BaseItem> artistItems = _libraryManager.GetItemList(new InternalItemsQuery()
+        var artistQuery = new InternalItemsQuery()
         {
             User = jellyfinUser,
             Recursive = true,
             MediaTypes = new[] { MediaType.Audio },
             DtoOptions = new DtoOptions(true),
             ArtistIds = new[] { artist.Id }
-        });
+        };
+        ApplyLibraryFilter(artistQuery, user);
+
+        IReadOnlyList<BaseItem> artistItems = _libraryManager.GetItemList(artistQuery);
 
         if (artistItems.Count == 0)
         {

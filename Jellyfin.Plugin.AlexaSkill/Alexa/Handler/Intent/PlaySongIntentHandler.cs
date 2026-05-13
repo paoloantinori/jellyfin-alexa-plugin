@@ -89,15 +89,18 @@ public class PlaySongIntentHandler : BaseHandler
         string? matchedArtistName = null;
         if (musicianQuery != null)
         {
+            var artistQuery = new InternalItemsQuery()
+            {
+                User = jellyfinUser,
+                Recursive = true,
+                SearchTerm = musicianQuery,
+                IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
+                DtoOptions = new DtoOptions(true)
+            };
+            ApplyLibraryFilter(artistQuery, user);
+
             IReadOnlyList<BaseItem> artists = await RetryAsync(
-                () => _libraryManager.GetItemList(new InternalItemsQuery()
-                {
-                    User = jellyfinUser,
-                    Recursive = true,
-                    SearchTerm = musicianQuery,
-                    IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
-                    DtoOptions = new DtoOptions(true)
-                }),
+                () => _libraryManager.GetItemList(artistQuery),
                 "GetArtists",
                 cancellationToken).ConfigureAwait(false);
             if (artists.Count == 0)
@@ -112,16 +115,19 @@ public class PlaySongIntentHandler : BaseHandler
             }
         }
 
+        var songSearchQuery = new InternalItemsQuery()
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            SearchTerm = songQuery,
+            ArtistIds = artistsIds.ToArray(),
+            IncludeItemTypes = new[] { BaseItemKind.Audio },
+            DtoOptions = new DtoOptions(true)
+        };
+        ApplyLibraryFilter(songSearchQuery, user);
+
         IReadOnlyList<BaseItem> songs = await RetryAsync(
-            () => _libraryManager.GetItemList(new InternalItemsQuery()
-            {
-                User = jellyfinUser,
-                Recursive = true,
-                SearchTerm = songQuery,
-                ArtistIds = artistsIds.ToArray(),
-                IncludeItemTypes = new[] { BaseItemKind.Audio },
-                DtoOptions = new DtoOptions(true)
-            }),
+            () => _libraryManager.GetItemList(songSearchQuery),
             "GetSongs",
             cancellationToken).ConfigureAwait(false);
         if (songs.Count == 0 && musicianQuery != null)

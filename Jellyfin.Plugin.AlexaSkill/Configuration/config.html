@@ -202,6 +202,7 @@
                                 <th scope="col" class="detailTableHeaderCell">User</th>
                                 <th scope="col" class="detailTableHeaderCell">Skill ID</th>
                                 <th scope="col" class="detailTableHeaderCell">Invocation Name</th>
+                                <th scope="col" class="detailTableHeaderCell">Libraries</th>
                                 <th scope="col" class="detailTableHeaderCell">Status</th>
                                 <th scope="col" class="detailTableHeaderCell">Token</th>
                                 <th scope="col" class="detailTableHeaderCell">Action</th>
@@ -287,6 +288,119 @@
                 }
             }
 
+            var _cachedLibraries = null;
+            function fetchLibraries(callback) {
+                if (_cachedLibraries) { callback(_cachedLibraries); return; }
+                ApiClient.ajax({
+                    type: "GET",
+                    url: ApiClient.getUrl("Library/MediaFolders")
+                }).then(function(res) {
+                    res.json().then(function(data) {
+                        _cachedLibraries = (data.Items || []).filter(function(f) { return f.CollectionType !== "livetv"; });
+                        callback(_cachedLibraries);
+                    });
+                }, function() { callback([]); });
+            }
+
+            function showLibraryPicker(button) {
+                fetchLibraries(function(libraries) {
+                    if (libraries.length === 0) {
+                        Dashboard.alert("No libraries found on this server.");
+                        return;
+                    }
+
+                    var selected = JSON.parse(button.getAttribute("data-libraries") || "[]");
+                    var overlay = document.createElement("div");
+                    overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;";
+
+                    var panel = document.createElement("div");
+                    panel.style.cssText = "background:#222;border-radius:8px;padding:1.5em;max-width:400px;max-height:80vh;overflow-y:auto;min-width:280px;";
+
+                    var title = document.createElement("h3");
+                    title.textContent = "Select Libraries";
+                    title.style.cssText = "margin-top:0;margin-bottom:1em;color:#ccc;";
+                    panel.appendChild(title);
+
+                    var allCb = document.createElement("label");
+                    allCb.style.cssText = "display:flex;align-items:center;margin-bottom:0.8em;padding-bottom:0.5em;border-bottom:1px solid #444;cursor:pointer;color:#ccc;";
+                    var allInput = document.createElement("input");
+                    allInput.type = "checkbox";
+                    allInput.is = "emby-checkbox";
+                    allInput.checked = selected.length === 0;
+                    allInput.style.marginRight = "0.5em";
+                    var allSpan = document.createElement("span");
+                    allSpan.textContent = "All libraries (no restriction)";
+                    allCb.appendChild(allInput);
+                    allCb.appendChild(allSpan);
+                    panel.appendChild(allCb);
+
+                    var cbs = [];
+                    libraries.forEach(function(lib) {
+                        var label = document.createElement("label");
+                        label.style.cssText = "display:flex;align-items:center;margin-bottom:0.5em;cursor:pointer;color:#ccc;";
+                        var cb = document.createElement("input");
+                        cb.type = "checkbox";
+                        cb.is = "emby-checkbox";
+                        cb.value = lib.Id;
+                        cb.checked = selected.indexOf(lib.Id) >= 0;
+                        cb.style.marginRight = "0.5em";
+                        var span = document.createElement("span");
+                        span.textContent = lib.Name;
+                        label.appendChild(cb);
+                        label.appendChild(span);
+                        panel.appendChild(label);
+                        cbs.push({ cb: cb, label: label });
+                    });
+
+                    allInput.addEventListener("change", function() {
+                        cbs.forEach(function(c) { c.cb.checked = false; c.label.style.opacity = allInput.checked ? "0.5" : "1"; });
+                    });
+                    cbs.forEach(function(c) {
+                        c.cb.addEventListener("change", function() {
+                            if (c.cb.checked) { allInput.checked = false; }
+                            cbs.forEach(function(x) { x.label.style.opacity = "1"; });
+                        });
+                    });
+                    if (allInput.checked) {
+                        cbs.forEach(function(c) { c.label.style.opacity = "0.5"; });
+                    }
+
+                    var btnRow = document.createElement("div");
+                    btnRow.style.cssText = "margin-top:1em;display:flex;gap:0.5em;justify-content:flex-end;";
+
+                    var cancelBtn = document.createElement("button");
+                    cancelBtn.type = "button";
+                    cancelBtn.is = "emby-button";
+                    cancelBtn.classList.add("raised", "raised-mini", "emby-button");
+                    cancelBtn.textContent = "Cancel";
+                    cancelBtn.addEventListener("click", function() { document.body.removeChild(overlay); });
+
+                    var okBtn = document.createElement("button");
+                    okBtn.type = "button";
+                    okBtn.is = "emby-button";
+                    okBtn.classList.add("raised", "button-submit", "raised-mini", "emby-button");
+                    okBtn.textContent = "OK";
+                    okBtn.addEventListener("click", function() {
+                        if (allInput.checked) {
+                            button.setAttribute("data-libraries", "[]");
+                            button.textContent = "All";
+                        } else {
+                            var ids = cbs.filter(function(c) { return c.cb.checked; }).map(function(c) { return c.cb.value; });
+                            button.setAttribute("data-libraries", JSON.stringify(ids));
+                            button.textContent = ids.length === 0 ? "All" : ids.length + " / " + libraries.length;
+                        }
+                        document.body.removeChild(overlay);
+                    });
+
+                    btnRow.appendChild(cancelBtn);
+                    btnRow.appendChild(okBtn);
+                    panel.appendChild(btnRow);
+                    overlay.appendChild(panel);
+                    overlay.addEventListener("click", function(e) { if (e.target === overlay) document.body.removeChild(overlay); });
+                    document.body.appendChild(overlay);
+                });
+            }
+
             function updateAuthorizeButton(button, user, config) {
                 var canAuthorize = user.UserSkill && config.ServerAddress != "" && config.LwaClientId != "" && config.LwaClientSecret != "";
                 if (canAuthorize) {
@@ -346,7 +460,23 @@
                 errMsg.textContent = "Invocation name must contain at least 2 words.";
                 td.appendChild(errMsg);
                 tr.appendChild(td);
-                
+
+                // Libraries column
+                td = document.createElement("td");
+                td.classList.add("detailTableBodyCell");
+                td.style.verticalAlign = "middle";
+                let libBtn = document.createElement("button");
+                libBtn.type = "button";
+                libBtn.is = "emby-button";
+                libBtn.classList.add("raised", "raised-mini", "emby-button");
+                libBtn.setAttribute("data-mini", "true");
+                libBtn.setAttribute("data-libraries", JSON.stringify(user.AllowedLibraryIds || []));
+                libBtn.style.minWidth = "80px";
+                libBtn.textContent = "All";
+                libBtn.addEventListener("click", function() { showLibraryPicker(this); });
+                td.appendChild(libBtn);
+                tr.appendChild(td);
+
                 td = document.createElement("td");
                 td.setAttribute("data-id", user.Id);
                 td.classList.add("detailTableBodyCell");
@@ -511,6 +641,10 @@
                             continue;
                         }
 
+                        // Collect library selections from the picker button in cell 3
+                        var libBtn = row.cells[3].querySelector("button[data-libraries]");
+                        var selectedLibs = libBtn ? JSON.parse(libBtn.getAttribute("data-libraries") || "[]") : [];
+
                         if (userId === "undefined") {
                             // create a new user skill
                             let user = {
@@ -544,7 +678,8 @@
                         } else {
                             // update current user skill config
                             let data = {
-                                "InvocationName": row.cells[2].firstChild.value
+                                "InvocationName": row.cells[2].firstChild.value,
+                                "AllowedLibraryIds": selectedLibs
                             };
 
                             ApiClient.ajax({

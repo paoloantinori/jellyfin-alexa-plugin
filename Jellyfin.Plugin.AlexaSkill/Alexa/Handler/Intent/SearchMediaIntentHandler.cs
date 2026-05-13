@@ -102,6 +102,7 @@ public class SearchMediaIntentHandler : BaseHandler
             OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
             DtoOptions = new DtoOptions(true)
         };
+        ApplyLibraryFilter(searchQuery, user);
 
         IReadOnlyList<BaseItem> results = await RetryAsync(
             () => _libraryManager.GetItemList(searchQuery),

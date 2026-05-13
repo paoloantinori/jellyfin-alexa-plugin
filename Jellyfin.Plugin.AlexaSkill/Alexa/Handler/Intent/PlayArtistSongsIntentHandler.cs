@@ -93,14 +93,17 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             return userError;
         }
 
+        var artistSearchQuery = new InternalItemsQuery()
+        {
+            Recursive = true,
+            SearchTerm = musician,
+            IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
+            DtoOptions = new DtoOptions(true)
+        };
+        ApplyLibraryFilter(artistSearchQuery, user);
+
         IReadOnlyList<BaseItem> artists = await RetryAsync(
-            () => _libraryManager.GetItemList(new InternalItemsQuery()
-            {
-                Recursive = true,
-                SearchTerm = musician,
-                IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
-                DtoOptions = new DtoOptions(true)
-            }),
+            () => _libraryManager.GetItemList(artistSearchQuery),
             "GetArtists",
             cancellationToken).ConfigureAwait(false);
         if (artists.Count == 0)
@@ -144,17 +147,20 @@ public class PlayArtistSongsIntentHandler : BaseHandler
 
         // Fetch the first page of artist songs for fast time-to-audio.
         // Remaining songs will be fetched on demand by PlaybackNearlyFinished.
+        var artistSongsQuery = new InternalItemsQuery()
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            MediaTypes = new[] { MediaType.Audio },
+            OrderBy = PopularitySort,
+            DtoOptions = new DtoOptions(true),
+            ArtistIds = new[] { artists[0].Id },
+            Limit = ProgressiveQueueConstants.GetInitialFetchSize()
+        };
+        ApplyLibraryFilter(artistSongsQuery, user);
+
         QueryResult<BaseItem> artistResult = await RetryAsync(
-            () => _libraryManager.GetItemsResult(new InternalItemsQuery()
-            {
-                User = jellyfinUser,
-                Recursive = true,
-                MediaTypes = new[] { MediaType.Audio },
-                OrderBy = PopularitySort,
-                DtoOptions = new DtoOptions(true),
-                ArtistIds = new[] { artists[0].Id },
-                Limit = ProgressiveQueueConstants.GetInitialFetchSize()
-            }),
+            () => _libraryManager.GetItemsResult(artistSongsQuery),
             "GetArtistSongs",
             cancellationToken).ConfigureAwait(false);
 

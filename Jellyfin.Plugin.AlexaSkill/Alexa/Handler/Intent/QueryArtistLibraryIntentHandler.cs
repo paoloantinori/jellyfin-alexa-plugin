@@ -96,16 +96,19 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
             return userError;
         }
 
+        var artistSearchQuery = new InternalItemsQuery
+        {
+            Recursive = true,
+            SearchTerm = musician,
+            IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
+            Limit = 1,
+            OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
+            DtoOptions = new DtoOptions(true)
+        };
+        ApplyLibraryFilter(artistSearchQuery, user);
+
         IReadOnlyList<BaseItem> artists = await RetryAsync(
-            () => _libraryManager.GetItemList(new InternalItemsQuery
-            {
-                Recursive = true,
-                SearchTerm = musician,
-                IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
-                Limit = 1,
-                OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
-                DtoOptions = new DtoOptions(true)
-            }),
+            () => _libraryManager.GetItemList(artistSearchQuery),
             "GetArtists",
             cancellationToken).ConfigureAwait(false);
 
@@ -188,6 +191,7 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
             OrderBy = PopularitySort,
             DtoOptions = new DtoOptions(true)
         };
+        ApplyLibraryFilter(query, user);
 
         if (includeItemTypes != null)
         {

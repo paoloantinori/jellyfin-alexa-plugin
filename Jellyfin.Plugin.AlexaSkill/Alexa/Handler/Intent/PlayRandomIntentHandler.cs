@@ -103,6 +103,7 @@ public class PlayRandomIntentHandler : BaseHandler
             OrderBy = new[] { (ItemSortBy.Random, SortOrder.Ascending) },
             DtoOptions = new DtoOptions(true)
         };
+        ApplyLibraryFilter(query, user);
 
         ApplyMediaTypeFilter(query, mediaTypeSlot);
 

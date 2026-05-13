@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
@@ -456,5 +457,142 @@ public class AplVisualsFeatureFlagTests : IDisposable
             MediaBrowser.Controller.Entities.BaseItem item,
             Entities.User user, Context context)
             => BuildAudioPlayerResponse(playBehavior, streamUrl, itemId, item, user, context);
+    }
+}
+
+/// <summary>
+/// Tests for BaseHandler library filtering methods (GetAllowedLibraryIds, ApplyLibraryFilter).
+/// </summary>
+public class LibraryFilterTests : IDisposable
+{
+    private readonly Mock<ISessionManager> _sessionManagerMock;
+    private readonly PluginConfiguration _config;
+    private readonly ILoggerFactory _loggerFactory;
+    private readonly TestLibraryFilterHandler _handler;
+
+    public LibraryFilterTests()
+    {
+        _sessionManagerMock = new Mock<ISessionManager>();
+        _config = new PluginConfiguration();
+        _loggerFactory = LoggerFactory.Create(b => { });
+        _handler = new TestLibraryFilterHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+    }
+
+    public void Dispose()
+    {
+        _loggerFactory.Dispose();
+    }
+
+    [Fact]
+    public void GetAllowedLibraryIds_ReturnsNull_WhenNull()
+    {
+        var user = new Entities.User { AllowedLibraryIds = null };
+
+        var result = _handler.TestGetAllowedLibraryIds(user);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void GetAllowedLibraryIds_ReturnsNull_WhenEmpty()
+    {
+        var user = new Entities.User { AllowedLibraryIds = new List<string>() };
+
+        var result = _handler.TestGetAllowedLibraryIds(user);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void GetAllowedLibraryIds_ReturnsGuids_WhenValid()
+    {
+        var id1 = Guid.NewGuid().ToString();
+        var id2 = Guid.NewGuid().ToString();
+        var user = new Entities.User { AllowedLibraryIds = new List<string> { id1, id2 } };
+
+        var result = _handler.TestGetAllowedLibraryIds(user);
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result.Length);
+        Assert.Equal(Guid.Parse(id1), result[0]);
+        Assert.Equal(Guid.Parse(id2), result[1]);
+    }
+
+    [Fact]
+    public void GetAllowedLibraryIds_SkipsInvalidGuids()
+    {
+        var validId = Guid.NewGuid().ToString();
+        var user = new Entities.User
+        {
+            AllowedLibraryIds = new List<string> { "not-a-guid", validId, "also-invalid" }
+        };
+
+        var result = _handler.TestGetAllowedLibraryIds(user);
+
+        Assert.NotNull(result);
+        Assert.Single(result);
+        Assert.Equal(Guid.Parse(validId), result[0]);
+    }
+
+    [Fact]
+    public void GetAllowedLibraryIds_ReturnsNull_WhenAllInvalid()
+    {
+        var user = new Entities.User
+        {
+            AllowedLibraryIds = new List<string> { "bad", "also-bad" }
+        };
+
+        var result = _handler.TestGetAllowedLibraryIds(user);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ApplyLibraryFilter_SetsTopParentIds_WhenHasLibraries()
+    {
+        var id1 = Guid.NewGuid();
+        var id2 = Guid.NewGuid();
+        var user = new Entities.User
+        {
+            AllowedLibraryIds = new List<string> { id1.ToString(), id2.ToString() }
+        };
+        var query = new InternalItemsQuery();
+
+        _handler.TestApplyLibraryFilter(query, user);
+
+        Assert.NotNull(query.TopParentIds);
+        Assert.Equal(2, query.TopParentIds.Length);
+        Assert.Contains(id1, query.TopParentIds);
+        Assert.Contains(id2, query.TopParentIds);
+    }
+
+    [Fact]
+    public void ApplyLibraryFilter_DoesNotSetTopParentIds_WhenNull()
+    {
+        var user = new Entities.User { AllowedLibraryIds = null };
+        var query = new InternalItemsQuery();
+
+        _handler.TestApplyLibraryFilter(query, user);
+
+        // TopParentIds is not overwritten when user has no library filter.
+        // InternalItemsQuery initializes it to an empty array, so verify it remains empty.
+        Assert.Empty(query.TopParentIds);
+    }
+
+    private class TestLibraryFilterHandler : BaseHandler
+    {
+        public TestLibraryFilterHandler(ISessionManager sessionManager, PluginConfiguration config, ILoggerFactory loggerFactory)
+            : base(sessionManager, config, loggerFactory) { }
+
+        public override bool CanHandle(Request request) => true;
+
+        public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
+            => Task.FromResult(ResponseBuilder.Tell("test"));
+
+        public Guid[]? TestGetAllowedLibraryIds(Entities.User user)
+            => GetAllowedLibraryIds(user);
+
+        public void TestApplyLibraryFilter(InternalItemsQuery query, Entities.User user)
+            => ApplyLibraryFilter(query, user);
     }
 }

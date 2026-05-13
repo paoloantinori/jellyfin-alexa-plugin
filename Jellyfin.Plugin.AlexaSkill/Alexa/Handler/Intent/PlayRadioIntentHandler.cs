@@ -73,7 +73,7 @@ public class PlayRadioIntentHandler : BaseHandler
             return userError;
         }
 
-        IReadOnlyList<BaseItem> similarTracks = await FindRadioTracksAsync(currentAudio, jellyfinUser!, _libraryManager, cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<BaseItem> similarTracks = await FindRadioTracksAsync(currentAudio, jellyfinUser!, user, _libraryManager, cancellationToken).ConfigureAwait(false);
 
         if (similarTracks.Count == 0)
         {

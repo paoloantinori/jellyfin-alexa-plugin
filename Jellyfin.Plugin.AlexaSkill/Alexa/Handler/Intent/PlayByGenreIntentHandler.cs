@@ -98,6 +98,7 @@ public class PlayByGenreIntentHandler : BaseHandler
             OrderBy = new[] { (ItemSortBy.Random, SortOrder.Ascending) },
             DtoOptions = new DtoOptions(true)
         };
+        ApplyLibraryFilter(query, user);
 
         IReadOnlyList<BaseItem> items = await RetryAsync(() => _libraryManager.GetItemList(query), "GetGenreItems", cancellationToken).ConfigureAwait(false);
 

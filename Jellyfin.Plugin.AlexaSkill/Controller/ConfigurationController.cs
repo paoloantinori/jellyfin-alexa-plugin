@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace Jellyfin.Plugin.AlexaSkill.Controller;
 
@@ -66,24 +67,46 @@ public class ConfigurationController : ControllerBase
             return error!;
         }
 
-        Dictionary<string, string> req = JsonConvert.DeserializeObject<Dictionary<string, string>>(json.ToString());
-        if (req.TryGetValue("InvocationName", out var invocationName)
-            && IsValidInvocationName(invocationName))
+        JObject req = JObject.Parse(json.ToString());
+        bool updated = false;
+
+        // Handle InvocationName (requires UserSkill to exist)
+        if (req.TryGetValue("InvocationName", out var invocationToken)
+            && invocationToken.Type == JTokenType.String)
         {
+            string invocationName = invocationToken.Value<string>();
+            if (!IsValidInvocationName(invocationName))
+            {
+                return new JsonResult(new { error = "Invalid invocation name" }) { StatusCode = 400 };
+            }
+
             if (pluginUser!.UserSkill == null)
             {
-                return new JsonResult(new { error = "User has no skill" }, StatusCode(404));
+                return new JsonResult(new { error = "User has no skill" }) { StatusCode = 404 };
             }
 
             pluginUser.UserSkill.InvocationName = invocationName;
-            Plugin.Instance!.SaveConfiguration();
+            updated = true;
+        }
 
-            return new JsonResult(pluginUser);
-        }
-        else
+        // Handle AllowedLibraryIds (can be updated regardless of UserSkill)
+        if (req.TryGetValue("AllowedLibraryIds", out var libraryIdsToken))
         {
-            return new JsonResult(new { error = "Invalid invocation name" }, StatusCode(400));
+            if (libraryIdsToken.Type == JTokenType.Array)
+            {
+                var ids = libraryIdsToken.ToObject<List<string>>();
+                pluginUser!.AllowedLibraryIds = ids?.Count > 0 ? ids : null;
+                updated = true;
+            }
         }
+
+        if (!updated)
+        {
+            return new JsonResult(new { error = "No valid fields to update" }) { StatusCode = 400 };
+        }
+
+        Plugin.Instance!.SaveConfiguration();
+        return new JsonResult(pluginUser);
     }
 
     /// <summary>
