@@ -150,7 +150,8 @@ public class PlayNextIntentHandler : BaseHandler
                 {
                     songMatch = best;
                     return null!;
-                });
+                },
+                user: user);
 
             if (missOutcome != FuzzyMissOutcome.NotFound)
             {

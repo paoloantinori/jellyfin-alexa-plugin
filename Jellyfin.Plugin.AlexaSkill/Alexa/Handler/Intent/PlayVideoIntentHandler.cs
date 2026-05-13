@@ -106,7 +106,8 @@ public class PlayVideoIntentHandler : BaseHandler
                 {
                     videoMatch = best;
                     return null!;
-                });
+                },
+                user: user);
 
             if (missOutcome != FuzzyMissOutcome.NotFound)
             {

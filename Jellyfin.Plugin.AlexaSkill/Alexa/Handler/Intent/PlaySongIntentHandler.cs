@@ -156,7 +156,8 @@ public class PlaySongIntentHandler : BaseHandler
                     session.FullNowPlayingItem = best;
                     string iid = best.Id.ToString();
                     return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(iid, user), iid, best, user, context);
-                });
+                },
+                user: user);
 
             if (missOutcome != FuzzyMissOutcome.NotFound)
             {

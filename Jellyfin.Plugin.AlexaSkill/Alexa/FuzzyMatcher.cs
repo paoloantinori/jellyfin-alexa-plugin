@@ -24,16 +24,16 @@ internal static class FuzzyMatcher
     public const int SuggestionThreshold = 40;
 
     /// <summary>
-    /// Gets the configured default fuzzy match threshold, falling back to the compile-time constant.
+    /// Gets the fuzzy match threshold from the user, falling back to the compile-time constant.
     /// </summary>
-    public static int GetDefaultThreshold() =>
-        Plugin.Instance?.Configuration?.FuzzyMatchThreshold ?? DefaultThreshold;
+    public static int GetDefaultThreshold(Entities.User? user) =>
+        user?.FuzzyMatchThreshold ?? DefaultThreshold;
 
     /// <summary>
-    /// Gets the configured fuzzy suggestion threshold, falling back to the compile-time constant.
+    /// Gets the fuzzy suggestion threshold from the user, falling back to the compile-time constant.
     /// </summary>
-    public static int GetSuggestionThreshold() =>
-        Plugin.Instance?.Configuration?.FuzzySuggestionThreshold ?? SuggestionThreshold;
+    public static int GetSuggestionThreshold(Entities.User? user) =>
+        user?.FuzzySuggestionThreshold ?? SuggestionThreshold;
 
     /// <summary>
     /// Find the best matching item from a list of candidates using partial ratio scoring.

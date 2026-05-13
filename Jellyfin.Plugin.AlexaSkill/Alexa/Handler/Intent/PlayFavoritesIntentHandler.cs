@@ -173,6 +173,6 @@ public class PlayFavoritesIntentHandler : BaseHandler
         }
 
         // Fall back to fuzzy match
-        return FuzzyMatch(usernameQuery, candidates, u => u.Username);
+        return FuzzyMatch(usernameQuery, candidates, u => u.Username, null);
     }
 }

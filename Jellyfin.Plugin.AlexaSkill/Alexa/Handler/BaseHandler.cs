@@ -676,10 +676,10 @@ public abstract class BaseHandler
     /// <param name="selector">Function to extract the comparable string.</param>
     /// <param name="threshold">Minimum similarity score (0-100).</param>
     /// <returns>The best matching item, or null.</returns>
-    protected static T? FuzzyMatch<T>(string query, IEnumerable<T> candidates, Func<T, string> selector, int threshold = -1)
+    protected static T? FuzzyMatch<T>(string query, IEnumerable<T> candidates, Func<T, string> selector, Entities.User? user = null, int threshold = -1)
         where T : class
     {
-        int effectiveThreshold = threshold >= 0 ? threshold : FuzzyMatcher.GetDefaultThreshold();
+        int effectiveThreshold = threshold >= 0 ? threshold : FuzzyMatcher.GetDefaultThreshold(user);
         return FuzzyMatcher.FindBestMatch(query, candidates, selector, effectiveThreshold);
     }
 
@@ -716,12 +716,13 @@ public abstract class BaseHandler
         Func<T, List<(Guid Id, string Name)>> matchExtractor,
         string mediaType,
         string locale,
-        Func<T, SkillResponse>? autoPlayFunc = null)
+        Func<T, SkillResponse>? autoPlayFunc = null,
+        Entities.User? user = null)
         where T : class
     {
         var bestWithScore = FuzzyMatcher.FindBestMatchWithScore(query, candidates, selector);
 
-        if (bestWithScore == null || bestWithScore.Value.Score < FuzzyMatcher.GetSuggestionThreshold())
+        if (bestWithScore == null || bestWithScore.Value.Score < FuzzyMatcher.GetSuggestionThreshold(user))
         {
             return (FuzzyMissOutcome.NotFound, null);
         }
@@ -730,9 +731,10 @@ public abstract class BaseHandler
         int score = bestWithScore.Value.Score;
 
         // High-confidence matches auto-accept regardless of FuzzyMatchBehavior.
-        // Only borderline matches (SuggestionThreshold..DefaultThreshold) consult the config.
-        bool autoAccept = score >= FuzzyMatcher.GetDefaultThreshold()
-            || (_config.FuzzyMatchBehavior == FuzzyMatchBehavior.AutoPlay && autoPlayFunc != null);
+        // Only borderline matches (SuggestionThreshold..DefaultThreshold) consult the per-user config.
+        FuzzyMatchBehavior behavior = user?.FuzzyMatchBehavior ?? FuzzyMatchBehavior.Confirm;
+        bool autoAccept = score >= FuzzyMatcher.GetDefaultThreshold(user)
+            || (behavior == FuzzyMatchBehavior.AutoPlay && autoPlayFunc != null);
 
         if (autoAccept && autoPlayFunc != null)
         {

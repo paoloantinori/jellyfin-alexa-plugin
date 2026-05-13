@@ -114,7 +114,8 @@ public class PlayPodcastIntentHandler : BaseHandler
                 {
                     podcastMatch = best;
                     return null!;
-                });
+                },
+                user: user);
 
             if (missOutcome != FuzzyMissOutcome.NotFound)
             {

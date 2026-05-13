@@ -332,21 +332,4 @@ public class PluginConfigurationTests
 
         Assert.StartsWith("https://example.com:8096/Items/", streamUrl.ToString());
     }
-
-    // --- FuzzyMatchBehavior Tests ---
-
-    [Fact]
-    public void Constructor_DefaultFuzzyMatchBehavior_IsConfirm()
-    {
-        var config = CreateConfig();
-        Assert.Equal(FuzzyMatchBehavior.Confirm, config.FuzzyMatchBehavior);
-    }
-
-    [Fact]
-    public void FuzzyMatchBehavior_CanBeSetToAutoPlay()
-    {
-        var config = CreateConfig();
-        config.FuzzyMatchBehavior = FuzzyMatchBehavior.AutoPlay;
-        Assert.Equal(FuzzyMatchBehavior.AutoPlay, config.FuzzyMatchBehavior);
-    }
 }

@@ -125,7 +125,8 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 {
                     artistMatch = best;
                     return null!;
-                });
+                },
+                user: user);
 
             if (missOutcome != FuzzyMissOutcome.NotFound)
             {

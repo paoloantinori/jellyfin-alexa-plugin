@@ -100,6 +100,45 @@ public class ConfigurationController : ControllerBase
             }
         }
 
+        // Handle FuzzyMatchBehavior (string enum)
+        if (req.TryGetValue("FuzzyMatchBehavior", out var behaviorToken)
+            && behaviorToken.Type == JTokenType.String)
+        {
+            if (Enum.TryParse<Configuration.FuzzyMatchBehavior>(behaviorToken.Value<string>(), ignoreCase: true, out var behavior))
+            {
+                pluginUser!.FuzzyMatchBehavior = behavior;
+                updated = true;
+            }
+        }
+
+        // Handle FuzzyMatchThreshold (integer, 0-100)
+        if (req.TryGetValue("FuzzyMatchThreshold", out var thresholdToken)
+            && thresholdToken.Type == JTokenType.Integer)
+        {
+            int val = thresholdToken.Value<int>();
+            if (val < 0 || val > 100)
+            {
+                return new JsonResult(new { error = "FuzzyMatchThreshold must be between 0 and 100" }) { StatusCode = 400 };
+            }
+
+            pluginUser!.FuzzyMatchThreshold = val;
+            updated = true;
+        }
+
+        // Handle FuzzySuggestionThreshold (integer, 0-100)
+        if (req.TryGetValue("FuzzySuggestionThreshold", out var suggestionToken)
+            && suggestionToken.Type == JTokenType.Integer)
+        {
+            int val = suggestionToken.Value<int>();
+            if (val < 0 || val > 100)
+            {
+                return new JsonResult(new { error = "FuzzySuggestionThreshold must be between 0 and 100" }) { StatusCode = 400 };
+            }
+
+            pluginUser!.FuzzySuggestionThreshold = val;
+            updated = true;
+        }
+
         if (!updated)
         {
             return new JsonResult(new { error = "No valid fields to update" }) { StatusCode = 400 };

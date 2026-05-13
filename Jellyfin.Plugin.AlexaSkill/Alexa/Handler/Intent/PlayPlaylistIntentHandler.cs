@@ -110,7 +110,7 @@ public class PlayPlaylistIntentHandler : BaseHandler
         BaseItem? playlistMatch = null;
         if (playlists.TotalRecordCount > 1)
         {
-            BaseItem? topMatch = FuzzyMatch(playlistName, playlists.Items, p => p.Name);
+            BaseItem? topMatch = FuzzyMatch(playlistName, playlists.Items, p => p.Name, user);
             if (topMatch != null)
             {
                 playlistMatch = topMatch;
@@ -128,7 +128,8 @@ public class PlayPlaylistIntentHandler : BaseHandler
                     {
                         playlistMatch = best;
                         return null!;
-                    });
+                    },
+                    user: user);
 
                 if (missOutcome != FuzzyMissOutcome.NotFound)
                 {

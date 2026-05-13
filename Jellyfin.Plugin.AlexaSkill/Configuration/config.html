@@ -43,15 +43,6 @@
                             </select>
                         </div>
 
-                        <div class="selectContainer">
-                            <label class="selectLabel" for="FuzzyMatchBehavior">Fuzzy Match Behavior</label>
-                            <select is="emby-select" id="FuzzyMatchBehavior" name="FuzzyMatchBehavior" class="emby-select-withcolor emby-select">
-                                <option id="confirm" value="Confirm">Confirm (did you mean?)</option>
-                                <option id="autoPlay" value="AutoPlay">Auto-play (feeling lucky)</option>
-                            </select>
-                            <div class="fieldDescription">How to handle close but inexact search matches. "Confirm" asks before playing, "Auto-play" plays the closest match immediately.</div>
-                        </div>
-
                         <div class="inputContainer">
                             <label class="inputLabel inputLabelUnfocused" for="LwaClientId">LWA Client ID</label>
                             <input id="LwaClientId" name="LwaClientId" type="text" is="emby-input" />
@@ -154,7 +145,7 @@
 
                 <div class="verticalSection verticalSection-extrabottompadding">
                     <h2 class="sectionTitle">Search Preferences</h2>
-                    <div class="fieldDescription" style="margin-bottom:1em;">Control how media search and fuzzy matching behave. Libraries of different sizes need different tuning.</div>
+                    <div class="fieldDescription" style="margin-bottom:1em;">Control how media search behaves. Fuzzy match settings are per-user (see User table below).</div>
                     <div class="inputContainer">
                         <label class="inputLabel inputLabelUnfocused" for="MaxSearchResults">Max Search Results</label>
                         <input id="MaxSearchResults" name="MaxSearchResults" type="number" is="emby-input" min="1" max="50" />
@@ -175,16 +166,6 @@
                         <input id="MaxRecommendationResults" name="MaxRecommendationResults" type="number" is="emby-input" min="1" max="30" />
                         <div class="fieldDescription">Items shown in recommendations (1–30).</div>
                     </div>
-                    <div class="inputContainer">
-                        <label class="inputLabel inputLabelUnfocused" for="FuzzyMatchThreshold">Fuzzy Match Threshold</label>
-                        <input id="FuzzyMatchThreshold" name="FuzzyMatchThreshold" type="number" is="emby-input" min="0" max="100" />
-                        <div class="fieldDescription">Minimum similarity score for a valid match (0–100). Lower = more permissive, higher = stricter.</div>
-                    </div>
-                    <div class="inputContainer">
-                        <label class="inputLabel inputLabelUnfocused" for="FuzzySuggestionThreshold">Fuzzy Suggestion Threshold</label>
-                        <input id="FuzzySuggestionThreshold" name="FuzzySuggestionThreshold" type="number" is="emby-input" min="0" max="100" />
-                        <div class="fieldDescription">Minimum score for "did you mean?" suggestions (0–100). Lower = more suggestions shown.</div>
-                    </div>
                 </div>
 
                 <div class="detailSectionHeader">
@@ -203,6 +184,7 @@
                                 <th scope="col" class="detailTableHeaderCell">Skill ID</th>
                                 <th scope="col" class="detailTableHeaderCell">Invocation Name</th>
                                 <th scope="col" class="detailTableHeaderCell">Libraries</th>
+                                <th scope="col" class="detailTableHeaderCell">Fuzzy Match</th>
                                 <th scope="col" class="detailTableHeaderCell">Status</th>
                                 <th scope="col" class="detailTableHeaderCell">Token</th>
                                 <th scope="col" class="detailTableHeaderCell">Action</th>
@@ -232,7 +214,6 @@
                 ApiClient.getPluginConfiguration(Config.pluginUniqueId).then(function (config) {
                     document.querySelector("#ServerAddress").value = config.ServerAddress;
                     document.querySelector("#SslCertType").value = config.SslCertType;
-                    document.querySelector("#FuzzyMatchBehavior").value = config.FuzzyMatchBehavior || "Confirm";
 
                     document.querySelector("#LwaClientId").value = config.LwaClientId;
                     document.querySelector("#LwaClientSecret").value = config.LwaClientSecret;
@@ -259,8 +240,6 @@
                     document.querySelector("#MaxBrowseResults").value = config.MaxBrowseResults != null ? config.MaxBrowseResults : 5;
                     document.querySelector("#MaxRecentlyAddedResults").value = config.MaxRecentlyAddedResults != null ? config.MaxRecentlyAddedResults : 10;
                     document.querySelector("#MaxRecommendationResults").value = config.MaxRecommendationResults != null ? config.MaxRecommendationResults : 10;
-                    document.querySelector("#FuzzyMatchThreshold").value = config.FuzzyMatchThreshold != null ? config.FuzzyMatchThreshold : 60;
-                    document.querySelector("#FuzzySuggestionThreshold").value = config.FuzzySuggestionThreshold != null ? config.FuzzySuggestionThreshold : 40;
 
                     for (let user of config.Users) {
                         document.querySelector("#userTableBody").appendChild(createUserRow(user, config));
@@ -477,6 +456,66 @@
                 td.appendChild(libBtn);
                 tr.appendChild(td);
 
+                // Fuzzy Match column
+                td = document.createElement("td");
+                td.classList.add("detailTableBodyCell");
+                td.style.verticalAlign = "middle";
+                let fmWrap = document.createElement("div");
+                fmWrap.style.display = "flex";
+                fmWrap.style.flexDirection = "column";
+                fmWrap.style.gap = "0.3em";
+
+                let fmSel = document.createElement("select");
+                fmSel.is = "emby-select";
+                fmSel.classList.add("emby-select-withcolor", "emby-select");
+                fmSel.setAttribute("data-field", "FuzzyMatchBehavior");
+                fmSel.style.minWidth = "120px";
+                [{v:"Confirm",t:"Confirm"},{v:"AutoPlay",t:"Auto-play"}].forEach(function(o){
+                    let opt = document.createElement("option");
+                    opt.value = o.v; opt.textContent = o.t;
+                    if (o.v === (user.FuzzyMatchBehavior || "Confirm")) opt.selected = true;
+                    fmSel.appendChild(opt);
+                });
+                fmWrap.appendChild(fmSel);
+
+                let threshRow = document.createElement("div");
+                threshRow.style.display = "flex";
+                threshRow.style.gap = "0.5em";
+                threshRow.style.alignItems = "center";
+                let tl1 = document.createElement("label");
+                tl1.textContent = "Match:";
+                tl1.style.fontSize = "0.8em";
+                tl1.style.whiteSpace = "nowrap";
+                threshRow.appendChild(tl1);
+                let ti1 = document.createElement("input");
+                ti1.type = "number"; ti1.min = "0"; ti1.max = "100";
+                ti1.style.width = "3.5em"; ti1.style.fontSize = "0.85em";
+                ti1.setAttribute("data-field", "FuzzyMatchThreshold");
+                ti1.value = user.FuzzyMatchThreshold != null ? user.FuzzyMatchThreshold : 60;
+                threshRow.appendChild(ti1);
+                let tl2 = document.createElement("label");
+                tl2.textContent = "Sug:";
+                tl2.style.fontSize = "0.8em";
+                tl2.style.whiteSpace = "nowrap";
+                threshRow.appendChild(tl2);
+                let ti2 = document.createElement("input");
+                ti2.type = "number"; ti2.min = "0"; ti2.max = "100";
+                ti2.style.width = "3.5em"; ti2.style.fontSize = "0.85em";
+                ti2.setAttribute("data-field", "FuzzySuggestionThreshold");
+                ti2.value = user.FuzzySuggestionThreshold != null ? user.FuzzySuggestionThreshold : 40;
+                threshRow.appendChild(ti2);
+                fmWrap.appendChild(threshRow);
+
+                let fmDesc = document.createElement("div");
+                fmDesc.classList.add("fieldDescription");
+                fmDesc.style.fontSize = "0.75em";
+                fmDesc.textContent = "Match=auto-accept threshold, Sug=did-you-mean threshold";
+                fmWrap.appendChild(fmDesc);
+
+                td.appendChild(fmWrap);
+                tr.appendChild(td);
+
+                // Status column
                 td = document.createElement("td");
                 td.setAttribute("data-id", user.Id);
                 td.classList.add("detailTableBodyCell");
@@ -596,7 +635,6 @@
 
                     config.ServerAddress = document.querySelector("#ServerAddress").value;
                     config.SslCertType = document.querySelector("#SslCertType").value;
-                    config.FuzzyMatchBehavior = document.querySelector("#FuzzyMatchBehavior").value;
                     config.LwaClientId = document.querySelector("#LwaClientId").value;
                     config.LwaClientSecret = document.querySelector("#LwaClientSecret").value;
 
@@ -628,10 +666,6 @@
                     config.MaxRecentlyAddedResults = isNaN(mraRaw) ? 10 : mraRaw;
                     var mrrRaw = parseInt(document.querySelector("#MaxRecommendationResults").value);
                     config.MaxRecommendationResults = isNaN(mrrRaw) ? 10 : mrrRaw;
-                    var fmtRaw = parseInt(document.querySelector("#FuzzyMatchThreshold").value);
-                    config.FuzzyMatchThreshold = isNaN(fmtRaw) ? 60 : fmtRaw;
-                    var fstRaw = parseInt(document.querySelector("#FuzzySuggestionThreshold").value);
-                    config.FuzzySuggestionThreshold = isNaN(fstRaw) ? 40 : fstRaw;
 
                     for (let row of document.querySelector("#userTableBody").rows) {
                         const userId = row.getAttribute("data-id");
@@ -666,8 +700,8 @@
 
                                     row.cells[1].innerHTML = user.UserSkill.SkillId;
                                     row.cells[2].firstChild.value = user.UserSkill.InvocationName;
-                                    row.cells[3].innerHTML = user.UserSkill.UserSkillStatus;
-                                    updateAuthorizeButton(row.cells[5].children[1], user, config);
+                                    row.cells[5].innerHTML = user.UserSkill.UserSkillStatus;
+                                    updateAuthorizeButton(row.cells[6].children[1], user, config);
                                 });
                             }, function (res) {
                                 Dashboard.alert("Could not create a new user skill");
@@ -677,9 +711,15 @@
                             });
                         } else {
                             // update current user skill config
+                            var fmBehavior = row.cells[4].querySelector('[data-field="FuzzyMatchBehavior"]');
+                            var fmThreshold = row.cells[4].querySelector('[data-field="FuzzyMatchThreshold"]');
+                            var fmSuggestion = row.cells[4].querySelector('[data-field="FuzzySuggestionThreshold"]');
                             let data = {
                                 "InvocationName": row.cells[2].firstChild.value,
-                                "AllowedLibraryIds": selectedLibs
+                                "AllowedLibraryIds": selectedLibs,
+                                "FuzzyMatchBehavior": fmBehavior ? fmBehavior.value : "Confirm",
+                                "FuzzyMatchThreshold": fmThreshold ? parseInt(fmThreshold.value) || 60 : 60,
+                                "FuzzySuggestionThreshold": fmSuggestion ? parseInt(fmSuggestion.value) || 40 : 40
                             };
 
                             ApiClient.ajax({
@@ -697,9 +737,9 @@
 
                                     row.cells[1].innerHTML = user.UserSkill.SkillId;
                                     row.cells[2].firstChild.value = user.UserSkill.InvocationName;
-                                    row.cells[3].innerHTML = user.UserSkill.UserSkillStatus;
+                                    row.cells[5].innerHTML = user.UserSkill.UserSkillStatus;
 
-                                    updateAuthorizeButton(row.cells[5].children[1], user, config);
+                                    updateAuthorizeButton(row.cells[6].children[1], user, config);
                                 });
                             }, function (res) {
                                 Dashboard.alert("Could not update user skill");

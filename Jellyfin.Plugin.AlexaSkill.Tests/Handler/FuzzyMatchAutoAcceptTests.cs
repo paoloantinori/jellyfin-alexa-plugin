@@ -75,7 +75,8 @@ public class FuzzyMatchAutoAcceptTests
     [Fact]
     public void HighScore_AutoAccepts_EvenWithConfirmBehavior()
     {
-        var config = new PluginConfiguration { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
+        var config = new PluginConfiguration();
+        var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
         var harness = CreateHarness(config);
 
         var candidates = new List<TestCandidate>
@@ -97,7 +98,8 @@ public class FuzzyMatchAutoAcceptTests
             matchExtractor: c => new List<(Guid, string)> { (c.Id, c.Name) },
             mediaType: "album",
             locale: "en-US",
-            autoPlayFunc: autoPlayFunc);
+            autoPlayFunc: autoPlayFunc,
+            user: user);
 
         Assert.True(autoPlayCalled, "autoPlayFunc should be called for high-confidence match even with Confirm behavior");
         Assert.Null(response!.SessionAttributes?["disambig_matches"]);
@@ -109,7 +111,8 @@ public class FuzzyMatchAutoAcceptTests
     [Fact]
     public void HighScore_AutoAccepts_WhenScoreAtDefaultThreshold()
     {
-        var config = new PluginConfiguration { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
+        var config = new PluginConfiguration();
+        var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
         var harness = CreateHarness(config);
 
         // "Beatles" is a substring of "The Beatles" => PartialRatio returns 90 >= DefaultThreshold
@@ -132,7 +135,8 @@ public class FuzzyMatchAutoAcceptTests
             matchExtractor: c => new List<(Guid, string)> { (c.Id, c.Name) },
             mediaType: "album",
             locale: "en-US",
-            autoPlayFunc: autoPlayFunc);
+            autoPlayFunc: autoPlayFunc,
+            user: user);
 
         Assert.True(autoPlayCalled, "autoPlayFunc should be called for score >= DefaultThreshold with Confirm behavior");
         Assert.Null(response!.SessionAttributes?["disambig_matches"]);
@@ -146,7 +150,8 @@ public class FuzzyMatchAutoAcceptTests
     [Fact]
     public void BorderlineScore_RespectsConfirmBehavior()
     {
-        var config = new PluginConfiguration { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
+        var config = new PluginConfiguration();
+        var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
         var harness = CreateHarness(config);
 
         var (query, candidates) = CreateBorderlineScenario();
@@ -165,7 +170,8 @@ public class FuzzyMatchAutoAcceptTests
             matchExtractor: c => new List<(Guid, string)> { (c.Id, c.Name) },
             mediaType: "album",
             locale: "en-US",
-            autoPlayFunc: autoPlayFunc);
+            autoPlayFunc: autoPlayFunc,
+            user: user);
 
         Assert.False(autoPlayCalled, "autoPlayFunc should NOT be called for borderline score with Confirm behavior");
         Assert.NotNull(response);
@@ -181,7 +187,8 @@ public class FuzzyMatchAutoAcceptTests
     [Fact]
     public void BorderlineScore_AutoPlays_WithAutoPlayBehavior()
     {
-        var config = new PluginConfiguration { FuzzyMatchBehavior = FuzzyMatchBehavior.AutoPlay };
+        var config = new PluginConfiguration();
+        var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.AutoPlay };
         var harness = CreateHarness(config);
 
         var (query, candidates) = CreateBorderlineScenario();
@@ -200,7 +207,8 @@ public class FuzzyMatchAutoAcceptTests
             matchExtractor: c => new List<(Guid, string)> { (c.Id, c.Name) },
             mediaType: "album",
             locale: "en-US",
-            autoPlayFunc: autoPlayFunc);
+            autoPlayFunc: autoPlayFunc,
+            user: user);
 
         Assert.True(autoPlayCalled, "autoPlayFunc should be called for borderline score with AutoPlay behavior");
     }
@@ -211,7 +219,8 @@ public class FuzzyMatchAutoAcceptTests
     [Fact]
     public void LowScore_ReturnsNotFound()
     {
-        var config = new PluginConfiguration { FuzzyMatchBehavior = FuzzyMatchBehavior.AutoPlay };
+        var config = new PluginConfiguration();
+        var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.AutoPlay };
         var harness = CreateHarness(config);
 
         var candidates = new List<TestCandidate>
@@ -234,7 +243,8 @@ public class FuzzyMatchAutoAcceptTests
             matchExtractor: c => new List<(Guid, string)> { (c.Id, c.Name) },
             mediaType: "album",
             locale: "en-US",
-            autoPlayFunc: autoPlayFunc);
+            autoPlayFunc: autoPlayFunc,
+            user: user);
 
         Assert.False(autoPlayCalled, "autoPlayFunc should NOT be called for low score");
         Assert.Equal("NotFound", outcome);
@@ -249,7 +259,8 @@ public class FuzzyMatchAutoAcceptTests
     [Fact]
     public void HighScore_WithConfirmBehavior_NoAutoPlayFunc_ReturnsConfirmPrompt()
     {
-        var config = new PluginConfiguration { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
+        var config = new PluginConfiguration();
+        var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
         var harness = CreateHarness(config);
 
         var candidates = new List<TestCandidate>
@@ -266,7 +277,8 @@ public class FuzzyMatchAutoAcceptTests
             matchExtractor: c => new List<(Guid, string)> { (c.Id, c.Name) },
             mediaType: "album",
             locale: "en-US",
-            autoPlayFunc: null);
+            autoPlayFunc: null,
+            user: user);
 
         Assert.NotNull(response);
         // Confirm path sets session attributes
@@ -284,7 +296,8 @@ public class FuzzyMatchAutoAcceptTests
     [Fact]
     public void HighScore_WithAutoPlayBehavior_AutoPlays()
     {
-        var config = new PluginConfiguration { FuzzyMatchBehavior = FuzzyMatchBehavior.AutoPlay };
+        var config = new PluginConfiguration();
+        var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.AutoPlay };
         var harness = CreateHarness(config);
 
         var candidates = new List<TestCandidate>
@@ -306,7 +319,8 @@ public class FuzzyMatchAutoAcceptTests
             matchExtractor: c => new List<(Guid, string)> { (c.Id, c.Name) },
             mediaType: "album",
             locale: "en-US",
-            autoPlayFunc: autoPlayFunc);
+            autoPlayFunc: autoPlayFunc,
+            user: user);
 
         Assert.True(autoPlayCalled, "autoPlayFunc should be called for exact match with AutoPlay behavior");
         // Verify the response has the announcement speech (not disambiguation session attrs)
@@ -410,10 +424,11 @@ public class FuzzyMatchAutoAcceptTests
             Func<T, List<(Guid Id, string Name)>> matchExtractor,
             string mediaType,
             string locale,
-            Func<T, SkillResponse>? autoPlayFunc = null)
+            Func<T, SkillResponse>? autoPlayFunc = null,
+            Entities.User? user = null)
             where T : class
         {
-            var (outcome, response) = HandleFuzzyMiss(query, candidates, selector, matchExtractor, mediaType, locale, autoPlayFunc);
+            var (outcome, response) = HandleFuzzyMiss(query, candidates, selector, matchExtractor, mediaType, locale, autoPlayFunc, user);
             return (outcome.ToString(), response);
         }
     }

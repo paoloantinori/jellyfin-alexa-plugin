@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Lwa;
 
 namespace Jellyfin.Plugin.AlexaSkill.Entities;
@@ -80,6 +81,12 @@ public class User
 #pragma warning disable CA2227
     public List<string>? AllowedLibraryIds { get; set; }
 #pragma warning restore CA2227
+
+    public FuzzyMatchBehavior FuzzyMatchBehavior { get; set; } = FuzzyMatchBehavior.Confirm;
+
+    public int FuzzyMatchThreshold { get; set; } = 60;
+
+    public int FuzzySuggestionThreshold { get; set; } = 40;
 
     /// <summary>
     /// Transitions skill status from AccountLinkPending to Ready if the user

@@ -159,7 +159,8 @@ public class PlayAlbumIntentHandler : BaseHandler
                 {
                     albumMatch = best;
                     return null!;
-                });
+                },
+                user: user);
 
             if (missOutcome != FuzzyMissOutcome.NotFound)
             {

@@ -74,12 +74,6 @@ public class PluginConfiguration : BasePluginConfiguration
     public string AccountLinkingClientId { get; set; }
 
     /// <summary>
-    /// Gets or sets the behavior when a fuzzy match is close but below the confidence threshold.
-    /// Confirm asks "Did you mean X?", AutoPlay plays the closest match immediately.
-    /// </summary>
-    public FuzzyMatchBehavior FuzzyMatchBehavior { get; set; } = FuzzyMatchBehavior.Confirm;
-
-    /// <summary>
     /// Gets or sets a value indicating whether the intent simulator endpoint is enabled.
     /// When disabled, all simulator endpoints return 404. Defaults to false for production safety.
     /// </summary>
@@ -111,8 +105,6 @@ public class PluginConfiguration : BasePluginConfiguration
     public int MaxBrowseResults { get; set; } = 5;
     public int MaxRecentlyAddedResults { get; set; } = 10;
     public int MaxRecommendationResults { get; set; } = 10;
-    public int FuzzyMatchThreshold { get; set; } = 60;
-    public int FuzzySuggestionThreshold { get; set; } = 40;
 
     /// <summary>
     /// Gets or sets the list of users.
@@ -209,16 +201,6 @@ public class PluginConfiguration : BasePluginConfiguration
         if (MaxRecommendationResults < 1 || MaxRecommendationResults > 30)
         {
             errors.Add("Max Recommendation Results must be between 1 and 30.");
-        }
-
-        if (FuzzyMatchThreshold < 0 || FuzzyMatchThreshold > 100)
-        {
-            errors.Add("Fuzzy Match Threshold must be between 0 and 100.");
-        }
-
-        if (FuzzySuggestionThreshold < 0 || FuzzySuggestionThreshold > 100)
-        {
-            errors.Add("Fuzzy Suggestion Threshold must be between 0 and 100.");
         }
 
         return errors;
