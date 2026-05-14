@@ -7,11 +7,37 @@
 <body>
     <style>
         details { margin-bottom: 1.5em; border-bottom: 1px solid #333; padding-bottom: 0.5em; }
-        details summary { cursor: pointer; list-style: none; }
+        details summary {
+            cursor: pointer;
+            list-style: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5em;
+            padding: 0.2em 0;
+        }
         details summary::-webkit-details-marker { display: none; }
-        details summary::before { content: "▸ "; color: #ccc; }
-        details[open] summary::before { content: "▾ "; }
-        details summary h2 { display: inline; margin: 0.4em 0; }
+        details summary::before {
+            content: "";
+            display: inline-block;
+            width: 0;
+            height: 0;
+            border-top: 8px solid transparent;
+            border-bottom: 8px solid transparent;
+            border-left: 12px solid #ccc;
+            flex-shrink: 0;
+            transition: transform 0.15s ease;
+        }
+        details[open] summary::before {
+            border-top: 8px solid transparent;
+            border-bottom: 8px solid transparent;
+            border-left: 12px solid #ccc;
+            transform: rotate(90deg);
+        }
+        details summary h2 {
+            display: inline;
+            margin: 0;
+            white-space: nowrap;
+        }
         details > .fieldDescription:first-of-type { margin-bottom: 1em; }
     </style>
     <div id="ConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-select,emby-checkbox">
