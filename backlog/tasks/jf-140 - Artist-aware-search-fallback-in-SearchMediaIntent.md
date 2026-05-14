@@ -1,10 +1,10 @@
 ---
 id: JF-140
 title: Artist-aware search fallback in SearchMediaIntent
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-05-14 07:09'
-updated_date: '2026-05-14 07:12'
+updated_date: '2026-05-14 08:22'
 labels:
   - search
   - bug
@@ -63,3 +63,9 @@ After the initial `SearchTerm` search, if results are below a threshold (e.g., `
 - [ ] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 12 locales
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented artist-aware search fallback in SearchMediaIntentHandler. When title search returns ≤3 results, the handler now also queries by artist name using Jellyfin's MusicArtist lookup + ArtistIds filter. Verified on live instance: "Soul Coughing" went from 1 result (album only) to 21 results (album + 20 tracks). Added 5 unit tests covering all fallback paths. All 1337 tests pass.
+<!-- SECTION:FINAL_SUMMARY:END -->
