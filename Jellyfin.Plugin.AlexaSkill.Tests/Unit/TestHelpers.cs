@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text.RegularExpressions;
 using Alexa.NET;
 using Alexa.NET.Request;
@@ -8,8 +9,12 @@ using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Entities;
 using Jellyfin.Plugin.AlexaSkill.Lwa;
+using MediaBrowser.Common.Configuration;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Serialization;
 using Microsoft.Extensions.Logging;
+using Moq;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 
@@ -111,5 +116,54 @@ internal static class TestHelpers
 
         var speech = global::Xunit.Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
         return speech.Text;
+    }
+
+    /// <summary>
+    /// Sets Plugin.Instance with the provided configuration so IfFeatureDisabled
+    /// can read from Plugin.Instance.Configuration. When the instance already exists,
+    /// only the specific flag is synced via <paramref name="syncFlag"/>.
+    /// </summary>
+    internal static void EnsurePluginInstance(
+        PluginConfiguration config,
+        ILoggerFactory loggerFactory,
+        Action<PluginConfiguration> syncFlag,
+        string tempDirSuffix)
+    {
+        if (Plugin.Instance != null)
+        {
+            syncFlag(Plugin.Instance.Configuration);
+            return;
+        }
+
+        var tmpDir = Path.Combine(Path.GetTempPath(), tempDirSuffix + "-" + Guid.NewGuid());
+        Directory.CreateDirectory(tmpDir);
+
+        var appPaths = new Mock<IApplicationPaths>();
+        appPaths.Setup(p => p.PluginsPath).Returns(tmpDir);
+        appPaths.Setup(p => p.PluginConfigurationsPath).Returns(tmpDir);
+        appPaths.Setup(p => p.DataPath).Returns(tmpDir);
+        appPaths.Setup(p => p.CachePath).Returns(tmpDir);
+        appPaths.Setup(p => p.LogDirectoryPath).Returns(tmpDir);
+        appPaths.Setup(p => p.ConfigurationDirectoryPath).Returns(tmpDir);
+        appPaths.Setup(p => p.SystemConfigurationFilePath).Returns(Path.Combine(tmpDir, "system.xml"));
+        appPaths.Setup(p => p.ProgramDataPath).Returns(tmpDir);
+        appPaths.Setup(p => p.ProgramSystemPath).Returns(tmpDir);
+        appPaths.Setup(p => p.TempDirectory).Returns(tmpDir);
+        appPaths.Setup(p => p.VirtualDataPath).Returns(tmpDir);
+
+        var xmlSerializer = new Mock<IXmlSerializer>();
+        xmlSerializer
+            .Setup(x => x.DeserializeFromFile(typeof(PluginConfiguration), It.IsAny<string>()))
+            .Returns(config);
+
+        var userManager = new Mock<IUserManager>();
+
+        var plugin = new Plugin(
+            appPaths.Object,
+            xmlSerializer.Object,
+            loggerFactory,
+            userManager.Object);
+
+        plugin.Configuration.ServerAddress = "http://localhost:8096";
     }
 }
