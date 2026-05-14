@@ -319,8 +319,9 @@ public class SearchMediaIntentHandlerTests
         SetupUserMock();
 
         InternalItemsQuery? capturedQuery = null;
+        int callCount = 0;
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Callback<InternalItemsQuery>(q => capturedQuery = q)
+            .Callback<InternalItemsQuery>(q => { if (++callCount == 1) capturedQuery = q; })
             .Returns(new List<BaseItem>());
 
         await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -332,5 +333,166 @@ public class SearchMediaIntentHandlerTests
         Assert.Contains(BaseItemKind.Movie, capturedQuery.IncludeItemTypes);
         Assert.Contains(BaseItemKind.Episode, capturedQuery.IncludeItemTypes);
         Assert.Contains(BaseItemKind.Series, capturedQuery.IncludeItemTypes);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ZeroResults_ArtistFound_ReturnsArtistSongs()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(query: "Soul Coughing");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+        SetupUserMock();
+
+        var artist = new MusicArtist { Name = "Soul Coughing", Id = Guid.NewGuid() };
+        var song1 = new Audio { Name = "Circles", Id = Guid.NewGuid() };
+        var song2 = new Audio { Name = "Screenwriter's Blues", Id = Guid.NewGuid() };
+
+        int callCount = 0;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(() =>
+            {
+                callCount++;
+                return callCount switch
+                {
+                    1 => new List<BaseItem>(),           // initial title search: empty
+                    2 => new List<BaseItem> { artist },   // artist lookup: found
+                    3 => new List<BaseItem> { song1, song2 }, // artist items
+                    _ => new List<BaseItem>()
+                };
+            });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // 2 songs → disambiguation (not auto-play)
+        Assert.NotNull(response);
+        Assert.False(response.Response.ShouldEndSession);
+        Assert.NotNull(response.SessionAttributes);
+        Assert.True(response.SessionAttributes.ContainsKey("disambig_matches"));
+    }
+
+    [Fact]
+    public async Task HandleAsync_ZeroResults_NoArtist_ReturnsMediaNotFound()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(query: "nonexistent");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+        SetupUserMock();
+
+        int callCount = 0;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(() =>
+            {
+                callCount++;
+                return callCount switch
+                {
+                    1 => new List<BaseItem>(),  // title search: empty
+                    2 => new List<BaseItem>(),  // artist lookup: empty
+                    _ => new List<BaseItem>()
+                };
+            });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        var speech = response.Tells<PlainTextOutputSpeech>();
+        Assert.Contains("not find", speech.Text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task HandleAsync_SparseResults_ArtistFound_MergesResults()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(query: "Soul Coughing");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+        SetupUserMock();
+
+        var titleResult = new Audio { Name = "Lust in Phaze", Id = Guid.NewGuid() };
+        var artist = new MusicArtist { Name = "Soul Coughing", Id = Guid.NewGuid() };
+        var artistSong = new Audio { Name = "Circles", Id = Guid.NewGuid() };
+
+        int callCount = 0;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(() =>
+            {
+                callCount++;
+                return callCount switch
+                {
+                    1 => new List<BaseItem> { titleResult },  // 1 title result (sparse)
+                    2 => new List<BaseItem> { artist },        // artist found
+                    3 => new List<BaseItem> { artistSong },    // artist's songs
+                    _ => new List<BaseItem>()
+                };
+            });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // titleResult + artistSong = 2 items → disambiguation
+        Assert.NotNull(response);
+        Assert.False(response.Response.ShouldEndSession);
+        Assert.True(response.SessionAttributes.ContainsKey("disambig_matches"));
+    }
+
+    [Fact]
+    public async Task HandleAsync_SparseResults_NoArtist_ReturnsOriginalResults()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(query: "nonexistent artist");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+        SetupUserMock();
+
+        // Items whose names won't fuzzy-match the query "nonexistent artist"
+        var song1 = new Audio { Name = "Alpha Track", Id = Guid.NewGuid() };
+        var song2 = new Audio { Name = "Beta Track", Id = Guid.NewGuid() };
+
+        int callCount = 0;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(() =>
+            {
+                callCount++;
+                return callCount switch
+                {
+                    1 => new List<BaseItem> { song1, song2 },  // 2 results (sparse)
+                    2 => new List<BaseItem>(),                  // no artist
+                    _ => new List<BaseItem>()
+                };
+            });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // Original 2 items, no fuzzy match → disambiguation
+        Assert.NotNull(response);
+        Assert.False(response.Response.ShouldEndSession);
+        Assert.True(response.SessionAttributes.ContainsKey("disambig_matches"));
+    }
+
+    [Fact]
+    public async Task HandleAsync_ManyResults_NoArtistFallback()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(query: "test");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+        SetupUserMock();
+
+        var items = Enumerable.Range(0, 5)
+            .Select(i => new Audio { Name = $"Song {i}", Id = Guid.NewGuid() })
+            .ToList<BaseItem>();
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(items);
+
+        await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // With >3 results, artist fallback is NOT triggered → only 1 call to GetItemList
+        _libraryManagerMock.Verify(l => l.GetItemList(It.IsAny<InternalItemsQuery>()), Times.Once());
     }
 }

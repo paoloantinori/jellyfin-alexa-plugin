@@ -41,6 +41,8 @@ public class SearchMediaIntentHandler : BaseHandler
         BaseItemKind.AudioBook
     ];
 
+    private const int ArtistFallbackThreshold = 3;
+
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
 
@@ -109,15 +111,28 @@ public class SearchMediaIntentHandler : BaseHandler
             "UnifiedSearch",
             cancellationToken).ConfigureAwait(false);
 
+        if (results.Count <= ArtistFallbackThreshold)
+        {
+            IReadOnlyList<BaseItem> artistResults = await SearchByArtistNameAsync(query, jellyfinUser!, user, cancellationToken).ConfigureAwait(false);
+            if (artistResults.Count > 0)
+            {
+                Logger.LogInformation("Artist fallback for '{Query}': found {Count} items via artist lookup", query, artistResults.Count);
+                results = results.Concat(artistResults).ToList();
+            }
+        }
+
         if (results.Count == 0)
         {
+            Logger.LogInformation("Search for '{Query}' returned no results", query);
             return ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale));
         }
 
         var deduped = results.GroupBy(i => i.Id).Select(g => g.First()).ToList();
+        Logger.LogInformation("Search for '{Query}' returned {Count} deduplicated results", query, deduped.Count);
 
         if (deduped.Count == 1)
         {
+            Logger.LogInformation("Single result — auto-playing '{Item}'", deduped[0].Name);
             return PlayItem(deduped[0], user, session, context);
         }
 
@@ -126,6 +141,7 @@ public class SearchMediaIntentHandler : BaseHandler
         BaseItem? topMatch = FuzzyMatch(query, deduped, i => i.Name, user);
         if (topMatch != null)
         {
+            Logger.LogInformation("Fuzzy match hit '{Item}' — auto-playing", topMatch.Name);
             return PlayItem(topMatch, user, session, context);
         }
 
@@ -141,11 +157,13 @@ public class SearchMediaIntentHandler : BaseHandler
 
         if (missOutcome != FuzzyMissOutcome.NotFound)
         {
+            Logger.LogInformation("Fuzzy miss outcome: {Outcome}", missOutcome);
             return missResponse!;
         }
 
         var topItems = deduped.Take(3).ToList();
         var matches = topItems.Select(i => (i.Id, FormatWithTypeLabel(i))).ToList();
+        Logger.LogInformation("Disambiguating top {Count} items: {Items}", topItems.Count, string.Join(", ", topItems.Select(i => i.Name)));
         SkillResponse response = DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeSong, locale);
 
         var aplItems = topItems.Select(i =>
@@ -153,6 +171,49 @@ public class SearchMediaIntentHandler : BaseHandler
         TryAttachListDirective(response, context, query, aplItems, "search");
 
         return response;
+    }
+
+    private async Task<IReadOnlyList<BaseItem>> SearchByArtistNameAsync(
+        string query,
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser,
+        Entities.User user,
+        CancellationToken cancellationToken)
+    {
+        var artistSearchQuery = new InternalItemsQuery()
+        {
+            SearchTerm = query,
+            IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
+            DtoOptions = new DtoOptions(true)
+        };
+        ApplyLibraryFilter(artistSearchQuery, user);
+
+        IReadOnlyList<BaseItem> artists = await RetryAsync(
+            () => _libraryManager.GetItemList(artistSearchQuery),
+            "ArtistLookup",
+            cancellationToken).ConfigureAwait(false);
+
+        if (artists.Count == 0)
+        {
+            return Array.Empty<BaseItem>();
+        }
+
+        var artistItemsQuery = new InternalItemsQuery()
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            MediaTypes = new[] { MediaType.Audio },
+            ArtistIds = new[] { artists[0].Id },
+            IncludeItemTypes = FilterByContentAccess(_playableTypes),
+            Limit = Plugin.Instance?.Configuration?.MaxSearchResults ?? 20,
+            OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
+            DtoOptions = new DtoOptions(true)
+        };
+        ApplyLibraryFilter(artistItemsQuery, user);
+
+        return await RetryAsync(
+            () => _libraryManager.GetItemList(artistItemsQuery),
+            "ArtistItemsLookup",
+            cancellationToken).ConfigureAwait(false);
     }
 
     private SkillResponse PlayItem(
