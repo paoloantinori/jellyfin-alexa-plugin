@@ -381,12 +381,19 @@
             }
 
             function updateAuthorizeButton(button, user, config) {
-                var canAuthorize = user.UserSkill && config.ServerAddress != "" && config.LwaClientId != "" && config.LwaClientSecret != "";
+                var hasServerConfig = config.ServerAddress != "" && config.LwaClientId != "" && config.LwaClientSecret != "";
+                var canAuthorize = user.UserSkill && hasServerConfig;
                 if (canAuthorize) {
                     button.style.display = "block";
+                    button.disabled = false;
                     var label = user.UserSkill.UserSkillStatus !== "LwaAuthPending" ? "Re-authorize" : "Authorize";
                     button.title = label;
                     button.innerHTML = label;
+                } else if (hasServerConfig && (!user.UserSkill || user.SkillStatus === "unsaved")) {
+                    button.style.display = "block";
+                    button.disabled = true;
+                    button.title = "Save first to authorize";
+                    button.innerHTML = "Save first to authorize";
                 } else {
                     button.style.display = "none";
                 }
@@ -555,14 +562,15 @@
                 deleteButton.addEventListener("click", e => {
                     Dashboard.showLoadingMsg();
 
-                    const userId = event.target.getAttribute("data-id");
+                    const btn = e.target.closest("button[data-id]") || e.target;
+                    const userId = btn.getAttribute("data-id");
 
-                    // get parent row
+                    // capture row reference before async work
                     const row = e.target.closest("tr");
 
                     if (userId === "undefined") {
                         // just delete the row without calling the API
-                        document.querySelector("#userTableBody").deleteRow(row.rowIndex - 1);
+                        row.remove();
                         Dashboard.hideLoadingMsg();
                         return;
                     }
@@ -571,9 +579,7 @@
                         type: "DELETE",
                         url: ApiClient.getUrl("alexaskill/api/user-skills/" + userId)
                     }).then(function () {
-                        // get parent row
-                        const row = e.target.closest("tr");
-                        document.querySelector("#userTableBody").deleteRow(row.rowIndex - 1);
+                        row.remove();
                         Dashboard.hideLoadingMsg();
                     }, function (res) {
                         Dashboard.hideLoadingMsg();
@@ -750,7 +756,9 @@
                         }                        
                     }
 
-                    ApiClient.updatePluginConfiguration(Config.pluginUniqueId, config).then(function (result) {
+                    // Users are managed by dedicated POST/PATCH/DELETE endpoints above.
+                    const { Users: _users, ...generalConfig } = config;
+                    ApiClient.updatePluginConfiguration(Config.pluginUniqueId, generalConfig).then(function (result) {
                         Dashboard.processPluginConfigurationUpdateResult(result);
                     });
 
