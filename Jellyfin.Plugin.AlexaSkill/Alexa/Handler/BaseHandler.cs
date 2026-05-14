@@ -874,7 +874,7 @@ public abstract class BaseHandler
         string token,
         string action = "selectItem")
     {
-        if (Apl.AplHelper.DeviceSupportsApl(context))
+        if (Apl.AplHelper.VisualsEnabled && Apl.AplHelper.DeviceSupportsApl(context))
         {
             var directive = Apl.AplHelper.BuildListDirective(title, items, token, action);
             if (directive != null)

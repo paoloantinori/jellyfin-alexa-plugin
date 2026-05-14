@@ -177,7 +177,7 @@ public class PlayNextIntentHandler : BaseHandler
         {
             session.FullNowPlayingItem = song;
             string itemId = song.Id.ToString();
-            return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, song, user);
+            return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, song, user, context);
         }
 
         Logger.LogInformation("PlayNext: {SongName} queued to play next", song.Name);

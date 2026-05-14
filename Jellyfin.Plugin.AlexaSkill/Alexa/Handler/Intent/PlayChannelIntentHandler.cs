@@ -101,6 +101,6 @@ public class PlayChannelIntentHandler : BaseHandler
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = channel;
 
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, channel, user);
+        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, channel, user, context);
     }
 }

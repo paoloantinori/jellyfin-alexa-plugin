@@ -179,7 +179,7 @@ public class AddToQueueIntentHandler : BaseHandler
         {
             session.FullNowPlayingItem = song;
             string itemId = song.Id.ToString();
-            return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, song, user);
+            return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, song, user, context);
         }
 
         Logger.LogInformation("AddToQueue: added {SongName} to queue", song.Name);

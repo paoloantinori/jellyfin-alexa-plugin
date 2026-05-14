@@ -154,7 +154,7 @@ public class SkillConnectionHandler : BaseHandler
         session.FullNowPlayingItem = firstItem;
 
         string itemId = firstItem.Id.ToString();
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, firstItem, user);
+        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, firstItem, user, null);
     }
 
     private Task<SkillResponse> HandlePlayMediaTask(LaunchRequest launchRequest, Entities.User user, SessionInfo session, string locale, CancellationToken cancellationToken)

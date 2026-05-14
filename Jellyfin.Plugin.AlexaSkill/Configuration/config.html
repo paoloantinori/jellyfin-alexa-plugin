@@ -16,26 +16,20 @@
             padding: 0.2em 0;
         }
         details summary::-webkit-details-marker { display: none; }
+        details summary::marker { content: ''; }
         details summary::before {
-            content: "";
-            display: inline-block;
-            width: 0;
-            height: 0;
-            border-top: 8px solid transparent;
-            border-bottom: 8px solid transparent;
-            border-left: 12px solid #ccc;
+            content: "\25B6";
+            color: #ccc;
+            font-size: 0.7em;
             flex-shrink: 0;
             transition: transform 0.15s ease;
         }
-        details[open] summary::before {
-            border-top: 8px solid transparent;
-            border-bottom: 8px solid transparent;
-            border-left: 12px solid #ccc;
+        details[open] > summary::before {
             transform: rotate(90deg);
         }
-        details summary h2 {
-            display: inline;
-            margin: 0;
+        .accordion-title {
+            font-size: 1.5em;
+            font-weight: bold;
             white-space: nowrap;
         }
         details > .fieldDescription:first-of-type { margin-bottom: 1em; }
@@ -53,7 +47,7 @@
 
                     <form id="ConfigForm" method="post">
                     <details open>
-                        <summary><h2 class="sectionTitle" >General Configuration</h2></summary>
+                        <summary><span class="accordion-title">General Configuration</span></summary>
                             <div class="inputContainer">
                                 <label class="inputLabel inputLabelUnfocused" for="ServerAddress">Server Address</label>
                                 <input id="ServerAddress" name="ServerAddress" type="text" is="emby-input" />
@@ -91,7 +85,7 @@
                     </details>
 
                     <details>
-                        <summary><h2 class="sectionTitle" >Feature Flags</h2></summary>
+                        <summary><span class="accordion-title">Feature Flags</span></summary>
                             <div class="fieldDescription">Disable intent groups you don't need. Disabled features return a polite "not available" message.</div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="RadioModeEnabled" /> <span>Radio Mode</span></label>
@@ -132,7 +126,7 @@
                     </details>
 
                     <details>
-                        <summary><h2 class="sectionTitle" >Media Type Access</h2></summary>
+                        <summary><span class="accordion-title">Media Type Access</span></summary>
                             <div class="fieldDescription">Control which content types appear in search results and library browsing. Disabled types are excluded from queries entirely.</div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="MusicEnabled" /> <span>Music</span></label>
@@ -149,7 +143,7 @@
                     </details>
 
                     <details>
-                        <summary><h2 class="sectionTitle" >Playback Preferences</h2></summary>
+                        <summary><span class="accordion-title">Playback Preferences</span></summary>
                             <div class="fieldDescription">Fine-tune how audio is delivered to Alexa devices. Changes take effect on the next playback request.</div>
                             <div class="inputContainer">
                                 <label class="inputLabel inputLabelUnfocused" for="InitialFetchSize">Initial Fetch Size</label>
@@ -169,7 +163,7 @@
                     </details>
 
                     <details>
-                        <summary><h2 class="sectionTitle" >Search Preferences</h2></summary>
+                        <summary><span class="accordion-title">Search Preferences</span></summary>
                             <div class="fieldDescription">Control how media search behaves. Fuzzy match settings are per-user (see User table below).</div>
                             <div class="inputContainer">
                                 <label class="inputLabel inputLabelUnfocused" for="MaxSearchResults">Max Search Results</label>

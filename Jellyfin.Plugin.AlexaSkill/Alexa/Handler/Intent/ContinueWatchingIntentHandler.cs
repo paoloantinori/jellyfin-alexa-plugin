@@ -148,6 +148,6 @@ public class ContinueWatchingIntentHandler : BaseHandler
             };
         }
 
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, resumeItem, user, offsetMs);
+        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, resumeItem, user, context, offsetMs);
     }
 }

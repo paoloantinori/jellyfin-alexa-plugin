@@ -135,7 +135,7 @@ public class PlayFavoritesIntentHandler : BaseHandler
 
         string item_id = firstItem.Id.ToString();
 
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, firstItem, user);
+        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, firstItem, user, context);
     }
 
     /// <summary>

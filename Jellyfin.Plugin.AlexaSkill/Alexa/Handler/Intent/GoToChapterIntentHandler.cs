@@ -136,6 +136,7 @@ public class GoToChapterIntentHandler : BaseHandler
             itemIdStr,
             session.FullNowPlayingItem,
             user,
+            context,
             offsetMs));
     }
 
