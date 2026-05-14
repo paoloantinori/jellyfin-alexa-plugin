@@ -118,7 +118,7 @@ public class PlayByDecadeIntentHandler : BaseHandler
             IncludeItemTypes = new[] { BaseItemKind.Audio },
             DtoOptions = new DtoOptions(true)
         };
-        ApplyLibraryFilter(query, user);
+        ApplyLibraryFilter(query, user, _libraryManager);
 
         // Optional genre filter if provided
         if (intentRequest.Intent.Slots != null && intentRequest.Intent.Slots.TryGetValue("genre", out Slot? genreSlotObj) && !string.IsNullOrEmpty(genreSlotObj.Value))

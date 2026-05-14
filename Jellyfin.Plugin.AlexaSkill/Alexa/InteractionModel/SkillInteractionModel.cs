@@ -16,7 +16,7 @@ public class SkillInteractionModel : SkillInteractionContainer
     /// <param name="invocationName">Invocation name of this interaction model.</param>
     public SkillInteractionModel(string locale, string ressourcePath, string invocationName)
     {
-        InteractionModel = Util.DeserializeFromFile<SkillInteraction>(ressourcePath);
+        InteractionModel = global::Jellyfin.Plugin.AlexaSkill.Util.DeserializeFromFile<SkillInteraction>(ressourcePath);
         Locale = locale;
         InvocationName = invocationName;
     }

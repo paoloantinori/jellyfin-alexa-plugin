@@ -103,7 +103,7 @@ public class PlayAlbumIntentHandler : BaseHandler
                 IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
                 DtoOptions = new DtoOptions(true)
             };
-            ApplyLibraryFilter(artistSearchQuery, user);
+            ApplyLibraryFilter(artistSearchQuery, user, _libraryManager);
 
             IReadOnlyList<BaseItem> artists = await RetryAsync(
                 () => _libraryManager.GetItemList(artistSearchQuery),
@@ -130,7 +130,7 @@ public class PlayAlbumIntentHandler : BaseHandler
             IncludeItemTypes = new[] { BaseItemKind.MusicAlbum },
             DtoOptions = new DtoOptions(true)
         };
-        ApplyLibraryFilter(albumSearchQuery, user);
+        ApplyLibraryFilter(albumSearchQuery, user, _libraryManager);
 
         IReadOnlyList<BaseItem> albums = await RetryAsync(
             () => _libraryManager.GetItemList(albumSearchQuery),

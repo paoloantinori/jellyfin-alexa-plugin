@@ -88,7 +88,7 @@ public class PlayPodcastIntentHandler : BaseHandler
             MediaTypes = new[] { MediaType.Audio },
             DtoOptions = new DtoOptions(true)
         };
-        ApplyLibraryFilter(podcastQuery, user);
+        ApplyLibraryFilter(podcastQuery, user, _libraryManager);
 
         IReadOnlyList<BaseItem> podcasts = await RetryAsync(
             () => _libraryManager.GetItemList(podcastQuery),

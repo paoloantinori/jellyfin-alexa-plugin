@@ -104,7 +104,7 @@ public class SearchMediaIntentHandler : BaseHandler
             OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
             DtoOptions = new DtoOptions(true)
         };
-        ApplyLibraryFilter(searchQuery, user);
+        ApplyLibraryFilter(searchQuery, user, _libraryManager);
 
         IReadOnlyList<BaseItem> results = await RetryAsync(
             () => _libraryManager.GetItemList(searchQuery),
@@ -185,7 +185,7 @@ public class SearchMediaIntentHandler : BaseHandler
             IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
             DtoOptions = new DtoOptions(true)
         };
-        ApplyLibraryFilter(artistSearchQuery, user);
+        ApplyLibraryFilter(artistSearchQuery, user, _libraryManager);
 
         IReadOnlyList<BaseItem> artists = await RetryAsync(
             () => _libraryManager.GetItemList(artistSearchQuery),
@@ -208,7 +208,7 @@ public class SearchMediaIntentHandler : BaseHandler
             OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
             DtoOptions = new DtoOptions(true)
         };
-        ApplyLibraryFilter(artistItemsQuery, user);
+        ApplyLibraryFilter(artistItemsQuery, user, _libraryManager);
 
         return await RetryAsync(
             () => _libraryManager.GetItemList(artistItemsQuery),

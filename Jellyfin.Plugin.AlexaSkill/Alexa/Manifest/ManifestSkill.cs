@@ -31,7 +31,7 @@ public class ManifestSkill : Skill
             { "VIDEO_APP", () => new VideoAppInterface() }
         };
 
-        Manifest = Util.DeserializeFromFile<Skill>(ressourcePath).Manifest;
+        Manifest = global::Jellyfin.Plugin.AlexaSkill.Util.DeserializeFromFile<Skill>(ressourcePath).Manifest;
         StampVersionTag();
 
         SetApiEndpoint(serverAddress, sslCertType);
@@ -99,7 +99,7 @@ public class ManifestSkill : Skill
     /// </summary>
     public void StampVersionTag()
     {
-        string version = Util.GetVersion();
+        string version = global::Jellyfin.Plugin.AlexaSkill.Util.GetVersion();
         Manifest.PublishingInformation.TestingInstructions = $"version:{version} Say 'Alexa ask jellyfin play my favorite music' or 'Alexa ask jellyfin what's playing'";
     }
 

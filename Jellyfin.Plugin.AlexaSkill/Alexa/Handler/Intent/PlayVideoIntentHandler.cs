@@ -80,7 +80,7 @@ public class PlayVideoIntentHandler : BaseHandler
             IncludeItemTypes = new[] { BaseItemKind.Movie, BaseItemKind.Episode },
             DtoOptions = new DtoOptions(true)
         };
-        ApplyLibraryFilter(videoSearchQuery, user);
+        ApplyLibraryFilter(videoSearchQuery, user, _libraryManager);
 
         IReadOnlyList<BaseItem> videos = await RetryAsync(
             () => _libraryManager.GetItemList(videoSearchQuery),

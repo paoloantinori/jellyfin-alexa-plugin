@@ -5,6 +5,15 @@
     <title>Alexa Skill</title>
 </head>
 <body>
+    <style>
+        details { margin-bottom: 1.5em; border-bottom: 1px solid #333; padding-bottom: 0.5em; }
+        details summary { cursor: pointer; list-style: none; }
+        details summary::-webkit-details-marker { display: none; }
+        details summary::before { content: "▸ "; color: #ccc; }
+        details[open] summary::before { content: "▾ "; }
+        details summary h2 { display: inline; margin: 0.4em 0; }
+        details > .fieldDescription:first-of-type { margin-bottom: 1em; }
+    </style>
     <div id="ConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-select,emby-checkbox">
         <div data-role="content">
             <div class="content-primary">
@@ -16,159 +25,150 @@
                     </div>
                 </div>
 
-                <div class="verticalSection">
-                    <h2 class="sectionTitle">General Configuration</h2>
-
                     <form id="ConfigForm" method="post">
-                        <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="ServerAddress">Server Address</label>
-                            <input id="ServerAddress" name="ServerAddress" type="text" is="emby-input" />
-                            <div class="fieldDescription">The public accessable https address of this server.</div>
-                        </div>
+                    <details open>
+                        <summary><h2 class="sectionTitle" >General Configuration</h2></summary>
+                            <div class="inputContainer">
+                                <label class="inputLabel inputLabelUnfocused" for="ServerAddress">Server Address</label>
+                                <input id="ServerAddress" name="ServerAddress" type="text" is="emby-input" />
+                                <div class="fieldDescription">The public accessable https address of this server.</div>
+                            </div>
 
-                        <button id="testConnectionButton" is="emby-button" type="button" class="raised button-alt emby-button" style="margin-bottom:1.5em;">
-                            <span>Test Connection</span>
-                        </button>
-                        <div id="testConnectionResult" style="display:none; margin-bottom:1.5em; padding:0.8em; border-radius:4px;"></div>
+                            <button id="testConnectionButton" is="emby-button" type="button" class="raised button-alt emby-button" style="margin-bottom:1.5em;">
+                                <span>Test Connection</span>
+                            </button>
+                            <div id="testConnectionResult" style="display:none; margin-bottom:1.5em; padding:0.8em; border-radius:4px;"></div>
 
-                        <div id="healthSummary" style="display:none; margin-bottom:1.5em; padding:0.8em; border-radius:4px; background:#333;">
-                        </div>
+                            <div id="healthSummary" style="display:none; margin-bottom:1.5em; padding:0.8em; border-radius:4px; background:#333;">
+                            </div>
 
-                        <div class="selectContainer">
-                            <label class="selectLabel" for="SslCertType">SSL Certificate Type</label>
-                            <select is="emby-select" id="SslCertType" name="SslCertType" class="emby-select-withcolor emby-select">
-                                <option id="wildcard" value="Wildcard">Wildcard</option>
-                                <option id="trusted" value="Trusted">Trusted</option>
-                                <option id="selfSigned" value="SelfSigned">SelfSigned</option>
-                            </select>
-                        </div>
+                            <div class="selectContainer">
+                                <label class="selectLabel" for="SslCertType">SSL Certificate Type</label>
+                                <select is="emby-select" id="SslCertType" name="SslCertType" class="emby-select-withcolor emby-select">
+                                    <option id="wildcard" value="Wildcard">Wildcard</option>
+                                    <option id="trusted" value="Trusted">Trusted</option>
+                                    <option id="selfSigned" value="SelfSigned">SelfSigned</option>
+                                </select>
+                            </div>
 
-                        <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="LwaClientId">LWA Client ID</label>
-                            <input id="LwaClientId" name="LwaClientId" type="text" is="emby-input" />
-                            <div class="fieldDescription">The LWA client ID to authorize SMAPI requests.</div>
-                        </div>
+                            <div class="inputContainer">
+                                <label class="inputLabel inputLabelUnfocused" for="LwaClientId">LWA Client ID</label>
+                                <input id="LwaClientId" name="LwaClientId" type="text" is="emby-input" />
+                                <div class="fieldDescription">The LWA client ID to authorize SMAPI requests.</div>
+                            </div>
 
-                        <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="LwaClientSecret">SMAPI Client Secret</label>
-                            <input id="LwaClientSecret" name="LwaClientSecret" type="text" is="emby-input" />
-                            <div class="fieldDescription">The LWA client secret to authorize SMAPI requests.</div>
-                        </div>
+                            <div class="inputContainer">
+                                <label class="inputLabel inputLabelUnfocused" for="LwaClientSecret">SMAPI Client Secret</label>
+                                <input id="LwaClientSecret" name="LwaClientSecret" type="text" is="emby-input" />
+                                <div class="fieldDescription">The LWA client secret to authorize SMAPI requests.</div>
+                            </div>
+                    </details>
+
+                    <details>
+                        <summary><h2 class="sectionTitle" >Feature Flags</h2></summary>
+                            <div class="fieldDescription">Disable intent groups you don't need. Disabled features return a polite "not available" message.</div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="RadioModeEnabled" /> <span>Radio Mode</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">Enable radio mode with auto-similar tracks</div>
+                            </div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="PodcastsEnabled" /> <span>Podcasts</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">Enable podcast playback</div>
+                            </div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="LiveTvEnabled" /> <span>Live TV</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">Enable live TV channel playback</div>
+                            </div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="SleepTimerEnabled" /> <span>Sleep Timer</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">Enable sleep timer functionality</div>
+                            </div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="QueueManagementEnabled" /> <span>Queue Management</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">Enable add to queue, play next, clear queue, list queue</div>
+                            </div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="BrowseLibraryEnabled" /> <span>Browse Library</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">Enable browsing library content by category</div>
+                            </div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="RecommendationsEnabled" /> <span>Recommendations</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">Enable media recommendations</div>
+                            </div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="AplVisualsEnabled" /> <span>APL Visuals</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">Enable visual templates on Echo Show and Fire TV</div>
+                            </div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="VideoPlaybackEnabled" /> <span>Video Playback</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">Enable video playback on supported devices</div>
+                            </div>
+                    </details>
+
+                    <details>
+                        <summary><h2 class="sectionTitle" >Media Type Access</h2></summary>
+                            <div class="fieldDescription">Control which content types appear in search results and library browsing. Disabled types are excluded from queries entirely.</div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="MusicEnabled" /> <span>Music</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">Songs, albums, and artists</div>
+                            </div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="VideosEnabled" /> <span>Videos</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">Movies, series, and episodes</div>
+                            </div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="BooksEnabled" /> <span>Books</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">Audiobooks</div>
+                            </div>
+                    </details>
+
+                    <details>
+                        <summary><h2 class="sectionTitle" >Playback Preferences</h2></summary>
+                            <div class="fieldDescription">Fine-tune how audio is delivered to Alexa devices. Changes take effect on the next playback request.</div>
+                            <div class="inputContainer">
+                                <label class="inputLabel inputLabelUnfocused" for="InitialFetchSize">Initial Fetch Size</label>
+                                <input id="InitialFetchSize" name="InitialFetchSize" type="number" is="emby-input" min="1" max="20" />
+                                <div class="fieldDescription">Items loaded on first playback (1–20). Smaller = faster time-to-audio.</div>
+                            </div>
+                            <div class="inputContainer">
+                                <label class="inputLabel inputLabelUnfocused" for="ContinuationBatchSize">Continuation Batch Size</label>
+                                <input id="ContinuationBatchSize" name="ContinuationBatchSize" type="number" is="emby-input" min="1" max="50" />
+                                <div class="fieldDescription">Items loaded per background fetch (1–50). Larger = fewer interruptions.</div>
+                            </div>
+                            <div class="inputContainer">
+                                <label class="inputLabel inputLabelUnfocused" for="PrefetchThreshold">Pre-fetch Threshold</label>
+                                <input id="PrefetchThreshold" name="PrefetchThreshold" type="number" is="emby-input" min="0" max="10" />
+                                <div class="fieldDescription">Items remaining before pre-fetching more (0–10). Higher = smoother gapless playback.</div>
+                            </div>
+                    </details>
+
+                    <details>
+                        <summary><h2 class="sectionTitle" >Search Preferences</h2></summary>
+                            <div class="fieldDescription">Control how media search behaves. Fuzzy match settings are per-user (see User table below).</div>
+                            <div class="inputContainer">
+                                <label class="inputLabel inputLabelUnfocused" for="MaxSearchResults">Max Search Results</label>
+                                <input id="MaxSearchResults" name="MaxSearchResults" type="number" is="emby-input" min="1" max="50" />
+                                <div class="fieldDescription">Maximum items returned by media search (1–50).</div>
+                            </div>
+                            <div class="inputContainer">
+                                <label class="inputLabel inputLabelUnfocused" for="MaxBrowseResults">Max Browse Results</label>
+                                <input id="MaxBrowseResults" name="MaxBrowseResults" type="number" is="emby-input" min="1" max="20" />
+                                <div class="fieldDescription">Items shown when browsing library by category (1–20).</div>
+                            </div>
+                            <div class="inputContainer">
+                                <label class="inputLabel inputLabelUnfocused" for="MaxRecentlyAddedResults">Max Recently Added Results</label>
+                                <input id="MaxRecentlyAddedResults" name="MaxRecentlyAddedResults" type="number" is="emby-input" min="1" max="50" />
+                                <div class="fieldDescription">Items shown in "recently added" queries (1–50).</div>
+                            </div>
+                            <div class="inputContainer">
+                                <label class="inputLabel inputLabelUnfocused" for="MaxRecommendationResults">Max Recommendation Results</label>
+                                <input id="MaxRecommendationResults" name="MaxRecommendationResults" type="number" is="emby-input" min="1" max="30" />
+                                <div class="fieldDescription">Items shown in recommendations (1–30).</div>
+                            </div>
+                    </details>
                     </form>
-                </div>
 
-                <div class="verticalSection verticalSection-extrabottompadding">
-                    <h2 class="sectionTitle">Feature Flags</h2>
-                    <div class="fieldDescription" style="margin-bottom:1em;">Disable intent groups you don't need. Disabled features return a polite "not available" message.</div>
-                    <div class="checkboxContainer checkboxContainer-withDescription">
-                        <label><input type="checkbox" is="emby-checkbox" id="RadioModeEnabled" /> <span>Radio Mode</span></label>
-                        <div class="fieldDescription checkboxFieldDescription">Enable radio mode with auto-similar tracks</div>
-                    </div>
-                    <div class="checkboxContainer checkboxContainer-withDescription">
-                        <label><input type="checkbox" is="emby-checkbox" id="PodcastsEnabled" /> <span>Podcasts</span></label>
-                        <div class="fieldDescription checkboxFieldDescription">Enable podcast playback</div>
-                    </div>
-                    <div class="checkboxContainer checkboxContainer-withDescription">
-                        <label><input type="checkbox" is="emby-checkbox" id="LiveTvEnabled" /> <span>Live TV</span></label>
-                        <div class="fieldDescription checkboxFieldDescription">Enable live TV channel playback</div>
-                    </div>
-                    <div class="checkboxContainer checkboxContainer-withDescription">
-                        <label><input type="checkbox" is="emby-checkbox" id="SleepTimerEnabled" /> <span>Sleep Timer</span></label>
-                        <div class="fieldDescription checkboxFieldDescription">Enable sleep timer functionality</div>
-                    </div>
-                    <div class="checkboxContainer checkboxContainer-withDescription">
-                        <label><input type="checkbox" is="emby-checkbox" id="QueueManagementEnabled" /> <span>Queue Management</span></label>
-                        <div class="fieldDescription checkboxFieldDescription">Enable add to queue, play next, clear queue, list queue</div>
-                    </div>
-                    <div class="checkboxContainer checkboxContainer-withDescription">
-                        <label><input type="checkbox" is="emby-checkbox" id="BrowseLibraryEnabled" /> <span>Browse Library</span></label>
-                        <div class="fieldDescription checkboxFieldDescription">Enable browsing library content by category</div>
-                    </div>
-                    <div class="checkboxContainer checkboxContainer-withDescription">
-                        <label><input type="checkbox" is="emby-checkbox" id="RecommendationsEnabled" /> <span>Recommendations</span></label>
-                        <div class="fieldDescription checkboxFieldDescription">Enable media recommendations</div>
-                    </div>
-                    <div class="checkboxContainer checkboxContainer-withDescription">
-                        <label><input type="checkbox" is="emby-checkbox" id="AplVisualsEnabled" /> <span>APL Visuals</span></label>
-                        <div class="fieldDescription checkboxFieldDescription">Enable visual templates on Echo Show and Fire TV</div>
-                    </div>
-                    <div class="checkboxContainer checkboxContainer-withDescription">
-                        <label><input type="checkbox" is="emby-checkbox" id="VideoPlaybackEnabled" /> <span>Video Playback</span></label>
-                        <div class="fieldDescription checkboxFieldDescription">Enable video playback on supported devices</div>
-                    </div>
-                </div>
-
-                <div class="verticalSection verticalSection-extrabottompadding">
-                    <h2 class="sectionTitle">Media Type Access</h2>
-                    <div class="fieldDescription" style="margin-bottom:1em;">Control which content types appear in search results and library browsing. Disabled types are excluded from queries entirely.</div>
-                    <div class="checkboxContainer checkboxContainer-withDescription">
-                        <label><input type="checkbox" is="emby-checkbox" id="MusicEnabled" /> <span>Music</span></label>
-                        <div class="fieldDescription checkboxFieldDescription">Songs, albums, and artists</div>
-                    </div>
-                    <div class="checkboxContainer checkboxContainer-withDescription">
-                        <label><input type="checkbox" is="emby-checkbox" id="VideosEnabled" /> <span>Videos</span></label>
-                        <div class="fieldDescription checkboxFieldDescription">Movies, series, and episodes</div>
-                    </div>
-                    <div class="checkboxContainer checkboxContainer-withDescription">
-                        <label><input type="checkbox" is="emby-checkbox" id="PodcastsEnabled" /> <span>Podcasts</span></label>
-                        <div class="fieldDescription checkboxFieldDescription">Podcast series and episodes</div>
-                    </div>
-                    <div class="checkboxContainer checkboxContainer-withDescription">
-                        <label><input type="checkbox" is="emby-checkbox" id="LiveTvEnabled" /> <span>Live TV</span></label>
-                        <div class="fieldDescription checkboxFieldDescription">Live TV channels</div>
-                    </div>
-                    <div class="checkboxContainer checkboxContainer-withDescription">
-                        <label><input type="checkbox" is="emby-checkbox" id="BooksEnabled" /> <span>Books</span></label>
-                        <div class="fieldDescription checkboxFieldDescription">Audiobooks</div>
-                    </div>
-                </div>
-
-                <div class="verticalSection verticalSection-extrabottompadding">
-                    <h2 class="sectionTitle">Playback Preferences</h2>
-                    <div class="fieldDescription" style="margin-bottom:1em;">Fine-tune how audio is delivered to Alexa devices. Changes take effect on the next playback request.</div>
-                    <div class="inputContainer">
-                        <label class="inputLabel inputLabelUnfocused" for="InitialFetchSize">Initial Fetch Size</label>
-                        <input id="InitialFetchSize" name="InitialFetchSize" type="number" is="emby-input" min="1" max="20" />
-                        <div class="fieldDescription">Items loaded on first playback (1–20). Smaller = faster time-to-audio.</div>
-                    </div>
-                    <div class="inputContainer">
-                        <label class="inputLabel inputLabelUnfocused" for="ContinuationBatchSize">Continuation Batch Size</label>
-                        <input id="ContinuationBatchSize" name="ContinuationBatchSize" type="number" is="emby-input" min="1" max="50" />
-                        <div class="fieldDescription">Items loaded per background fetch (1–50). Larger = fewer interruptions.</div>
-                    </div>
-                    <div class="inputContainer">
-                        <label class="inputLabel inputLabelUnfocused" for="PrefetchThreshold">Pre-fetch Threshold</label>
-                        <input id="PrefetchThreshold" name="PrefetchThreshold" type="number" is="emby-input" min="0" max="10" />
-                        <div class="fieldDescription">Items remaining before pre-fetching more (0–10). Higher = smoother gapless playback.</div>
-                    </div>
-                </div>
-
-                <div class="verticalSection verticalSection-extrabottompadding">
-                    <h2 class="sectionTitle">Search Preferences</h2>
-                    <div class="fieldDescription" style="margin-bottom:1em;">Control how media search behaves. Fuzzy match settings are per-user (see User table below).</div>
-                    <div class="inputContainer">
-                        <label class="inputLabel inputLabelUnfocused" for="MaxSearchResults">Max Search Results</label>
-                        <input id="MaxSearchResults" name="MaxSearchResults" type="number" is="emby-input" min="1" max="50" />
-                        <div class="fieldDescription">Maximum items returned by media search (1–50).</div>
-                    </div>
-                    <div class="inputContainer">
-                        <label class="inputLabel inputLabelUnfocused" for="MaxBrowseResults">Max Browse Results</label>
-                        <input id="MaxBrowseResults" name="MaxBrowseResults" type="number" is="emby-input" min="1" max="20" />
-                        <div class="fieldDescription">Items shown when browsing library by category (1–20).</div>
-                    </div>
-                    <div class="inputContainer">
-                        <label class="inputLabel inputLabelUnfocused" for="MaxRecentlyAddedResults">Max Recently Added Results</label>
-                        <input id="MaxRecentlyAddedResults" name="MaxRecentlyAddedResults" type="number" is="emby-input" min="1" max="50" />
-                        <div class="fieldDescription">Items shown in "recently added" queries (1–50).</div>
-                    </div>
-                    <div class="inputContainer">
-                        <label class="inputLabel inputLabelUnfocused" for="MaxRecommendationResults">Max Recommendation Results</label>
-                        <input id="MaxRecommendationResults" name="MaxRecommendationResults" type="number" is="emby-input" min="1" max="30" />
-                        <div class="fieldDescription">Items shown in recommendations (1–30).</div>
-                    </div>
-                </div>
-
-                <div class="detailSectionHeader">
+                    <div class="detailSectionHeader">
                     <h2 style="margin:.6em 0;vertical-align:middle;display:inline-block">User Skill Configuration</h2>
                     <button id="newUserSkillButton" is="emby-button" type="button" class="fab submit emby-button" style="margin-left:1em" title="Add NeW User Skill">
                         <span class="material-icons add" aria-hidden="true"></span>
@@ -226,7 +226,7 @@
                     });
 
                     // Media type access
-                    ["MusicEnabled", "VideosEnabled", "PodcastsEnabled", "LiveTvEnabled", "BooksEnabled"].forEach(function(f) {
+                    ["MusicEnabled", "VideosEnabled", "BooksEnabled"].forEach(function(f) {
                         document.querySelector("#" + f).checked = config[f] !== false;
                     });
 
@@ -645,7 +645,7 @@
                     });
 
                     // Media type access
-                    ["MusicEnabled", "VideosEnabled", "PodcastsEnabled", "LiveTvEnabled", "BooksEnabled"].forEach(function(f) {
+                    ["MusicEnabled", "VideosEnabled", "BooksEnabled"].forEach(function(f) {
                         config[f] = document.querySelector("#" + f).checked;
                     });
 

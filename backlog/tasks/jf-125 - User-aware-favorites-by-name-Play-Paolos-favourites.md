@@ -1,9 +1,10 @@
 ---
 id: JF-125
 title: User-aware favorites by name ("Play Paolo's favourites")
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-05-12 04:45'
+updated_date: '2026-05-12 12:12'
 labels:
   - enhancement
   - favorites
@@ -30,7 +31,21 @@ Implementation: Add an optional `username` slot to PlayFavoritesIntent. If provi
 - [ ] #4 Localized in all 12 locales
 <!-- AC:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+PlayFavoritesIntentHandler accepts optional username slot. Resolves Jellyfin users by name with fuzzy matching. Added username slot to all 12 interaction models and UserByNameNotFound string to all 12 locales. 15 unit tests. Build clean, 1087 tests pass.
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [ ] #1 /simplify
+- [ ] #2 dotnet build passes with 0 errors
+- [ ] #3 dotnet test passes
+- [ ] #4 No new compiler warnings introduced
+- [ ] #5 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [ ] #6 HttpClient instances are not shared across calls that modify BaseAddress
+- [ ] #7 NLU test fixtures updated if interaction model changed
+- [ ] #8 E2E test added for new intent or handler logic
+- [ ] #9 Locale response strings added to all 12 locales
 <!-- DOD:END -->

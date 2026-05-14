@@ -40,7 +40,7 @@ tests:
     expected_response_type: any
 
   # --- Search ---
-  - utterance: "cerca bohemian rhapsody"
+  - utterance: "cerca il brano bohemian rhapsody"
     expected_intent: SearchMediaIntent
     expected_slots:
       query: {}

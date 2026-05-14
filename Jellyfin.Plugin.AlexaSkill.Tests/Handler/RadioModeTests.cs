@@ -20,8 +20,10 @@ using Audio = MediaBrowser.Controller.Entities.Audio.Audio;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
-public class RadioModeTests
+[Collection("PlaybackHandlers")]
+public class RadioModeTests : IDisposable
 {
+    private static readonly string DeviceId = "test-device";
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly PluginConfiguration _config;
     private readonly ILoggerFactory _loggerFactory;
@@ -35,6 +37,16 @@ public class RadioModeTests
         _loggerFactory = LoggerFactory.Create(b => { });
         _libraryManagerMock = new Mock<ILibraryManager>();
         _userManagerMock = new Mock<IUserManager>();
+
+        QueueContinuationStore.Remove(Guid.Empty, DeviceId);
+        RadioModeState.Disable(Guid.Empty, DeviceId);
+    }
+
+    public void Dispose()
+    {
+        QueueContinuationStore.Remove(Guid.Empty, DeviceId);
+        RadioModeState.Disable(Guid.Empty, DeviceId);
+        GC.SuppressFinalize(this);
     }
 
     private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);

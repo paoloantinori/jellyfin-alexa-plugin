@@ -1,9 +1,10 @@
 ---
 id: JF-124
 title: Progressive queue building for faster time-to-audio
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-05-12 04:45'
+updated_date: '2026-05-12 12:50'
 labels:
   - enhancement
   - performance
@@ -30,7 +31,21 @@ Implementation: In bulk-play handlers (PlayAlbumIntent, PlayArtistSongsIntent, e
 - [ ] #4 Works for play-by-artist, play-album, and similar bulk-play intents
 <!-- AC:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Two-stage progressive queue: first 5 items fetched immediately, remaining lazy-fetched via PlaybackNearlyFinished. QueueContinuation DTO + store + fetcher. 15 unit tests. Works with gapless playback and per-device queues.
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [ ] #1 /simplify
+- [ ] #2 dotnet build passes with 0 errors
+- [ ] #3 dotnet test passes
+- [ ] #4 No new compiler warnings introduced
+- [ ] #5 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [ ] #6 HttpClient instances are not shared across calls that modify BaseAddress
+- [ ] #7 NLU test fixtures updated if interaction model changed
+- [ ] #8 E2E test added for new intent or handler logic
+- [ ] #9 Locale response strings added to all 12 locales
 <!-- DOD:END -->

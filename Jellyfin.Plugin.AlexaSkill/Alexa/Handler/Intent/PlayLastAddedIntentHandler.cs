@@ -99,7 +99,7 @@ public class PlayLastAddedIntentHandler : BaseHandler
             MinDateLastSavedForUser = DateTime.UtcNow.Date.AddDays(-lookbackDays),
             DtoOptions = new MediaBrowser.Controller.Dto.DtoOptions(true)
         };
-        ApplyLibraryFilter(query, user);
+        ApplyLibraryFilter(query, user, _libraryManager);
 
         IReadOnlyList<BaseItem> latestItems = await RetryAsync(() => _libraryManager.GetItemList(query), "GetLatestItems", cancellationToken).ConfigureAwait(false);
 

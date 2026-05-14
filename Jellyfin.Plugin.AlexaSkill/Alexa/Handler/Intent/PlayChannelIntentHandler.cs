@@ -79,7 +79,7 @@ public class PlayChannelIntentHandler : BaseHandler
             IncludeItemTypes = new[] { BaseItemKind.LiveTvChannel },
             DtoOptions = new DtoOptions(true)
         };
-        ApplyLibraryFilter(channelSearchQuery, user);
+        ApplyLibraryFilter(channelSearchQuery, user, _libraryManager);
 
         IReadOnlyList<BaseItem> channels = await RetryAsync(
             () => _libraryManager.GetItemList(channelSearchQuery),

@@ -39,6 +39,13 @@ tests:
       song: {}
       musician: {}
 
+  # Combined song + musician slot pattern with multi-word artist
+  - utterance: "play bohemian rhapsody by queen"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+      musician: {}
+
   # -------------------------------------------------------------------------
   # 4. PlayAlbumIntent (album, musician)
   # -------------------------------------------------------------------------
@@ -48,6 +55,13 @@ tests:
       album: {}
 
   - utterance: "Play the album thriller by michael jackson"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+      musician: {}
+
+  # "play album by artist" combined pattern
+  - utterance: "play album abbey road by the beatles"
     expected_intent: PlayAlbumIntent
     expected_slots:
       album: {}
@@ -75,6 +89,17 @@ tests:
       musician: {}
 
   - utterance: "Play music from the beatles"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  # "play songs by" / "play music by" patterns with multi-word artist names
+  - utterance: "play songs by radiohead"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "play music by the rolling stones"
     expected_intent: PlayArtistSongsIntent
     expected_slots:
       musician: {}

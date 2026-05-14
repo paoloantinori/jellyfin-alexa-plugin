@@ -222,7 +222,7 @@ public class YesIntentHandler : BaseHandler
             DtoOptions = new DtoOptions(true),
             ArtistIds = new[] { artist.Id }
         };
-        ApplyLibraryFilter(artistQuery, user);
+        ApplyLibraryFilter(artistQuery, user, _libraryManager);
 
         IReadOnlyList<BaseItem> artistItems = _libraryManager.GetItemList(artistQuery);
 

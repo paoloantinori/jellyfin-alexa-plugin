@@ -231,7 +231,12 @@ public class SimulatorController : ControllerBase
                     },
                     "device": {
                         "deviceId": "{{EscapeJson(deviceId)}}",
-                        "supportedInterfaces": {}
+                        "supportedInterfaces": {
+                            "AudioPlayer": {},
+                            "Alexa.Presentation.APL": {
+                                "runtime": { "maxVersion": "2024.3" }
+                            }
+                        }
                     },
                     "apiEndpoint": "https://api.amazonalexa.com",
                     "apiAccessToken": "simulator-token"

@@ -4,6 +4,7 @@ title: Extract shared SMAPI polling utility
 status: Draft
 assignee: []
 created_date: '2026-05-08 20:51'
+updated_date: '2026-05-12 11:22'
 labels:
   - refactor
   - smapi
@@ -33,4 +34,12 @@ SMAPI polling logic (wait for model build, check skill status, etc.) is duplicat
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [ ] #1 /simplify
+- [ ] #2 dotnet build passes with 0 errors
+- [ ] #3 dotnet test passes
+- [ ] #4 No new compiler warnings introduced
+- [ ] #5 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [ ] #6 HttpClient instances are not shared across calls that modify BaseAddress
+- [ ] #7 NLU test fixtures updated if interaction model changed
+- [ ] #8 E2E test added for new intent or handler logic
+- [ ] #9 Locale response strings added to all 12 locales
 <!-- DOD:END -->

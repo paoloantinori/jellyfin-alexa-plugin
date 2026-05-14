@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET.Request.Type;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -57,7 +58,7 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
             return;
         }
 
-        Guid jellyfinUserId = ResolveJellyfinUserId(context);
+        var (jellyfinUserId, allowedLibraryIds) = ResolveUserWithLibraries(context);
         if (jellyfinUserId == Guid.Empty)
         {
             return;
@@ -66,7 +67,7 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
         try
         {
             DynamicEntitiesDirective? directive = await Task.Run(
-                () => _builder.BuildFromRecentItems(jellyfinUserId, context.Locale, cancellationToken),
+                () => _builder.BuildFromRecentItems(jellyfinUserId, context.Locale, allowedLibraryIds, cancellationToken),
                 cancellationToken).ConfigureAwait(false);
 
             if (directive == null)
@@ -83,7 +84,7 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
         }
     }
 
-    private Guid ResolveJellyfinUserId(RequestContext context)
+    private (Guid UserId, Guid[]? AllowedLibraryIds) ResolveUserWithLibraries(RequestContext context)
     {
         // Voice-based identification takes priority (multi-user households)
         string? personId = context.AlexaContext?.System?.Person?.PersonId;
@@ -92,7 +93,7 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
             Entities.User? user = _config.GetUserByPersonId(personId);
             if (user != null)
             {
-                return user.Id;
+                return (user.Id, LibraryFilter.GetAllowedLibraryIds(user));
             }
         }
 
@@ -100,10 +101,11 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
         string? accessToken = context.AlexaContext?.System?.User?.AccessToken;
         if (Guid.TryParse(accessToken, out Guid userId))
         {
-            return userId;
+            Entities.User? user = _config.GetUserById(userId);
+            return (userId, LibraryFilter.GetAllowedLibraryIds(user));
         }
 
         _logger.LogDebug("Could not resolve Jellyfin user ID for dynamic entities");
-        return Guid.Empty;
+        return (Guid.Empty, null);
     }
 }

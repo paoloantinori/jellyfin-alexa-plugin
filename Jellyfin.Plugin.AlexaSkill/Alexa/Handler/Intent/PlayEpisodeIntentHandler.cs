@@ -91,7 +91,7 @@ public class PlayEpisodeIntentHandler : BaseHandler
             IncludeItemTypes = new[] { BaseItemKind.Series },
             DtoOptions = new DtoOptions(true)
         };
-        ApplyLibraryFilter(seriesQuery, user);
+        ApplyLibraryFilter(seriesQuery, user, _libraryManager);
         IReadOnlyList<BaseItem> seriesList = await RetryAsync(() => _libraryManager.GetItemList(seriesQuery), "GetSeries", cancellationToken).ConfigureAwait(false);
 
         if (seriesList.Count == 0)

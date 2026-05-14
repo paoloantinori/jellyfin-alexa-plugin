@@ -1,9 +1,10 @@
 ---
 id: JF-122
 title: Per-device queue management with crash recovery
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-05-12 04:45'
+updated_date: '2026-05-12 12:50'
 labels:
   - enhancement
   - playback
@@ -30,7 +31,21 @@ Implementation: Track device ID (from Alexa request context) and maintain per-de
 - [ ] #4 Queue state includes: track list, current position, shuffle/loop state
 <!-- AC:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+DeviceQueueManager singleton with ConcurrentDictionary, JSON file persistence, debounced writes, crash recovery on startup. 25 unit tests. Injected as optional dependency in all queue-aware handlers.
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [ ] #1 /simplify
+- [ ] #2 dotnet build passes with 0 errors
+- [ ] #3 dotnet test passes
+- [ ] #4 No new compiler warnings introduced
+- [ ] #5 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [ ] #6 HttpClient instances are not shared across calls that modify BaseAddress
+- [ ] #7 NLU test fixtures updated if interaction model changed
+- [ ] #8 E2E test added for new intent or handler logic
+- [ ] #9 Locale response strings added to all 12 locales
 <!-- DOD:END -->

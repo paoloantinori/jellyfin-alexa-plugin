@@ -105,7 +105,7 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
             OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
             DtoOptions = new DtoOptions(true)
         };
-        ApplyLibraryFilter(artistSearchQuery, user);
+        ApplyLibraryFilter(artistSearchQuery, user, _libraryManager);
 
         IReadOnlyList<BaseItem> artists = await RetryAsync(
             () => _libraryManager.GetItemList(artistSearchQuery),
@@ -191,7 +191,7 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
             OrderBy = PopularitySort,
             DtoOptions = new DtoOptions(true)
         };
-        ApplyLibraryFilter(query, user);
+        ApplyLibraryFilter(query, user, _libraryManager);
 
         if (includeItemTypes != null)
         {

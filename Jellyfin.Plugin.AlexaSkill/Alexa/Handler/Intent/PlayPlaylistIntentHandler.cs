@@ -98,7 +98,7 @@ public class PlayPlaylistIntentHandler : BaseHandler
             IncludeItemTypes = new[] { BaseItemKind.Playlist },
             DtoOptions = new DtoOptions(true),
         };
-        ApplyLibraryFilter(query, user);
+        ApplyLibraryFilter(query, user, _libraryManager);
 
         QueryResult<BaseItem> playlists = await RetryAsync(() => _libraryManager.GetItemsResult(query), "GetPlaylists", cancellationToken).ConfigureAwait(false);
 

@@ -7,6 +7,7 @@ using System.Threading;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -27,8 +28,6 @@ public class DynamicEntityBuilder
     /// artists + albums together stay under this limit.
     /// </summary>
     private const int MaxTotalValueCount = 90;
-
-
     private const int QueryLimit = 55;
 
     private static readonly Dictionary<CatalogType, string> SlotTypeNames = CatalogSlotTypes.Names;
@@ -66,6 +65,25 @@ public class DynamicEntityBuilder
         string locale,
         CancellationToken cancellationToken)
     {
+        return BuildFromRecentItems(jellyfinUserId, locale, null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Builds a Dialog.UpdateDynamicEntities directive from the user's recently added items,
+    /// optionally filtered by allowed library IDs.
+    /// Returns null if no items are found.
+    /// </summary>
+    /// <param name="jellyfinUserId">The Jellyfin user ID to query recent items for.</param>
+    /// <param name="locale">The Alexa request locale for phonetic synonym generation.</param>
+    /// <param name="allowedLibraryIds">Optional library GUIDs to restrict results to. Null = all libraries.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A populated directive, or null if no items available.</returns>
+    public virtual DynamicEntitiesDirective? BuildFromRecentItems(
+        Guid jellyfinUserId,
+        string locale,
+        Guid[]? allowedLibraryIds,
+        CancellationToken cancellationToken)
+    {
         var user = _userManager.GetUserById(jellyfinUserId);
         if (user == null)
         {
@@ -74,9 +92,11 @@ public class DynamicEntityBuilder
         }
 
         int budget = MaxTotalValueCount;
-        var artistValues = BuildSlotValues(user, BaseItemKind.MusicArtist, CatalogType.Artist, locale, ref budget);
-        var albumValues = BuildSlotValues(user, BaseItemKind.MusicAlbum, CatalogType.Album, locale, ref budget);
-
+        Guid[]? topParentIds = allowedLibraryIds != null
+            ? LibraryFilter.ResolveTopParentIds(allowedLibraryIds, _libraryManager)
+            : null;
+        var artistValues = BuildSlotValues(user, BaseItemKind.MusicArtist, CatalogType.Artist, locale, topParentIds, ref budget);
+        var albumValues = BuildSlotValues(user, BaseItemKind.MusicAlbum, CatalogType.Album, locale, topParentIds, ref budget);
 
         if (artistValues.Count == 0 && albumValues.Count == 0)
         {
@@ -117,9 +137,10 @@ public class DynamicEntityBuilder
         BaseItemKind itemKind,
         CatalogType catalogType,
         string locale,
+        Guid[]? topParentIds,
         ref int budget)
     {
-        IReadOnlyList<BaseItem> items = _libraryManager.GetItemList(new InternalItemsQuery
+        var query = new InternalItemsQuery
         {
             User = user,
             Recursive = true,
@@ -127,7 +148,14 @@ public class DynamicEntityBuilder
             DtoOptions = new DtoOptions(true),
             Limit = QueryLimit,
             OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) }
-        });
+        };
+
+        if (topParentIds != null)
+        {
+            query.TopParentIds = topParentIds;
+        }
+
+        IReadOnlyList<BaseItem> items = _libraryManager.GetItemList(query);
 
         var values = new List<DynamicSlotValue>();
 
@@ -164,7 +192,6 @@ public class DynamicEntityBuilder
             }
 
             if (cost > budget)
-
             {
                 break;
             }

@@ -14,6 +14,7 @@ using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -339,8 +340,10 @@ public abstract class BaseHandler
 
         var directives = new List<IDirective> { directive };
 
-        if (item != null && context != null && Apl.AplHelper.DeviceSupportsApl(context)
-            && Apl.AplHelper.VisualsEnabled)
+        bool deviceSupportsApl = context != null && Apl.AplHelper.DeviceSupportsApl(context);
+        bool visualsEnabled = Apl.AplHelper.VisualsEnabled;
+
+        if (item != null && deviceSupportsApl && visualsEnabled)
         {
             var aplDirective = Apl.AplHelper.BuildNowPlayingDirective(item, imageUrl, imageUrl);
             if (aplDirective != null)
@@ -556,36 +559,15 @@ public abstract class BaseHandler
     /// Returns null when no restriction is configured (backward compatible default).
     /// </summary>
     protected static Guid[]? GetAllowedLibraryIds(Entities.User? user)
-    {
-        if (user?.AllowedLibraryIds == null || user.AllowedLibraryIds.Count == 0)
-        {
-            return null;
-        }
-
-        var ids = new List<Guid>(user.AllowedLibraryIds.Count);
-        foreach (var idStr in user.AllowedLibraryIds)
-        {
-            if (Guid.TryParse(idStr, out var id))
-            {
-                ids.Add(id);
-            }
-        }
-
-        return ids.Count > 0 ? ids.ToArray() : null;
-    }
+        => Util.LibraryFilter.GetAllowedLibraryIds(user);
 
     /// <summary>
     /// Applies per-user library filtering to a query by setting TopParentIds.
+    /// Resolves CollectionFolder IDs to physical folder IDs for correct filtering.
     /// No-op when the user has no library restrictions configured.
     /// </summary>
-    protected static void ApplyLibraryFilter(InternalItemsQuery query, Entities.User? user)
-    {
-        var allowedIds = GetAllowedLibraryIds(user);
-        if (allowedIds != null)
-        {
-            query.TopParentIds = allowedIds;
-        }
-    }
+    protected static void ApplyLibraryFilter(InternalItemsQuery query, Entities.User? user, ILibraryManager libraryManager)
+        => Util.LibraryFilter.ApplyLibraryFilter(query, user, libraryManager);
 
     /// <summary>
     /// Send a progressive response to keep the Alexa session alive during long operations.
@@ -820,7 +802,7 @@ public abstract class BaseHandler
                 OrderBy = new[] { (ItemSortBy.Random, SortOrder.Ascending) },
                 DtoOptions = new DtoOptions(true)
             };
-            ApplyLibraryFilter(genreQuery, user);
+            ApplyLibraryFilter(genreQuery, user, libraryManager);
 
             IReadOnlyList<BaseItem> byGenre = await RetryAsync(
                 () => libraryManager.GetItemList(genreQuery),

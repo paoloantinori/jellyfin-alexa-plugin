@@ -12,8 +12,15 @@ dotnet test Jellyfin.Plugin.AlexaSkill.Tests
 ## Project Layout
 
 - `Jellyfin.Plugin.AlexaSkill/Alexa/Handler/Intent/` — Intent handlers (one per intent, inherit `BaseHandler`)
-- `Jellyfin.Plugin.AlexaSkill/Alexa/InteractionModel/` — Per-locale interaction model JSON files (12 locales)
+- `Jellyfin.Plugin.AlexaSkill/Alexa/InteractionModel/` — Per-locale interaction model JSON files (17 locales)
 - `Jellyfin.Plugin.AlexaSkill/Alexa/Locale/` — Response string localizations
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Apl/` — APL visual template helpers
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Cache/` — In-memory caching layer
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Catalog/` — SMAPI catalog management
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Directive/` — Alexa response directives (AudioPlayer, APL)
+- `Jellyfin.Plugin.AlexaSkill/Alexa/DynamicEntities/` — Dynamic entity slot updates
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Manifest/` — Skill manifest generation
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Playback/` — Playback state and queue management
 - `tests/integration/` — NLU and E2E test suites (Python/pytest, use SMAPI)
 - `manifest.json` — Jellyfin plugin manifest (version entries)
 - `build.yaml` — Plugin metadata (version, targetAbi, artifacts)
@@ -49,7 +56,7 @@ Response strings are defined in `Alexa/Locale/ResponseStrings.cs` as keys, with 
 
 ## Interaction Models
 
-12 locale files in `Alexa/InteractionModel/model_*.json`. After editing:
+17 locale files in `Alexa/InteractionModel/model_*.json`. After editing:
 1. Wrap in `{"interactionModel": <model>}` for SMAPI
 2. Deploy: `ask smapi set-interaction-model --skill-id <ID> --stage development --locale <XX> --interaction-model file:payload.json`
 3. Wait for build: `ask smapi get-skill-status --skill-id <ID>`

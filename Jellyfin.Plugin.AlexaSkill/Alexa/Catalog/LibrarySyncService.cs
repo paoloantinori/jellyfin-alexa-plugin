@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Enums;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Controller;
 using MediaBrowser.Controller.Dto;
@@ -157,14 +158,18 @@ public class LibrarySyncService
         CancellationToken cancellationToken)
     {
         // Fetch items from library
-        IReadOnlyList<BaseItem> items = _libraryManager.GetItemList(new InternalItemsQuery
+        var query = new InternalItemsQuery
         {
             User = jellyfinUser,
             Recursive = true,
             IncludeItemTypes = new[] { itemKind },
             DtoOptions = new DtoOptions(true),
             OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) }
-        });
+        };
+
+        LibraryFilter.ApplyLibraryFilter(query, user, _libraryManager);
+
+        IReadOnlyList<BaseItem> items = _libraryManager.GetItemList(query);
 
         if (items.Count == 0)
         {

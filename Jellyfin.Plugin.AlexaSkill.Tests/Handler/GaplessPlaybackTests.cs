@@ -28,6 +28,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// Covers sequential enqueue, loop modes (RepeatOne, RepeatAll), shuffle, radio mode,
 /// sleep timer, end-of-queue, and edge cases.
 /// </summary>
+[Collection("PlaybackHandlers")]
 public class GaplessPlaybackTests : IDisposable
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
@@ -36,6 +37,8 @@ public class GaplessPlaybackTests : IDisposable
     private readonly Mock<ILibraryManager> _libraryManagerMock;
     private readonly Mock<IUserManager> _userManagerMock;
 
+    private static readonly string DeviceId = "test-device";
+
     public GaplessPlaybackTests()
     {
         _sessionManagerMock = new Mock<ISessionManager>();
@@ -43,10 +46,15 @@ public class GaplessPlaybackTests : IDisposable
         _loggerFactory = LoggerFactory.Create(b => { });
         _libraryManagerMock = new Mock<ILibraryManager>();
         _userManagerMock = new Mock<IUserManager>();
+
+        QueueContinuationStore.Remove(Guid.Empty, DeviceId);
+        RadioModeState.Disable(Guid.Empty, DeviceId);
     }
 
     public void Dispose()
     {
+        QueueContinuationStore.Remove(Guid.Empty, DeviceId);
+        RadioModeState.Disable(Guid.Empty, DeviceId);
         GC.SuppressFinalize(this);
     }
 

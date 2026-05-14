@@ -28,7 +28,24 @@
       "Bash(git status *)",
       "Bash(git commit *)",
       "Bash(git log *)",
-      "Bash(git stash *)"
+      "Bash(git stash *)",
+      "Bash(git rm *)",
+      "Bash(git reset *)",
+      "Bash(git tag *)",
+      "Bash(git pull *)",
+      "Bash(gh release *)",
+      "Bash(dotnet tool *)",
+      "mcp__tavily__tavily_search",
+      "Bash(find /home/pantinor/.nuget/packages/jellyfin.* -name \"IUserDataManager.cs\")",
+      "Bash(dotnet list *)",
+      "Bash(dotnet nuget locals *)",
+      "mcp__backlog__definition_of_done_defaults_get",
+      "mcp__backlog__definition_of_done_defaults_upsert",
+      "Bash(curl -sL \"https://api.github.com/search/code?q=ItemSortBy+repo:jellyfin/jellyfin+filename:ItemSortBy.cs\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(i['path']\\) for i in d.get\\('items',[]\\)]\")",
+      "Bash(curl *)",
+      "mcp__sequential-thinking__sequentialthinking",
+      "Bash(dotnet run *)"
     ]
   }
 }

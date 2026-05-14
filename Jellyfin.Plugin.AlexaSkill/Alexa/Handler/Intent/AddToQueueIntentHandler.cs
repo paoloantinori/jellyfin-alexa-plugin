@@ -94,7 +94,7 @@ public class AddToQueueIntentHandler : BaseHandler
                 IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
                 DtoOptions = new DtoOptions(true)
             };
-            ApplyLibraryFilter(artistSearchQuery, user);
+            ApplyLibraryFilter(artistSearchQuery, user, _libraryManager);
 
             IReadOnlyList<BaseItem> artists = await RetryAsync(
                 () => _libraryManager.GetItemList(artistSearchQuery),
@@ -122,7 +122,7 @@ public class AddToQueueIntentHandler : BaseHandler
             IncludeItemTypes = new[] { BaseItemKind.Audio },
             DtoOptions = new DtoOptions(true)
         };
-        ApplyLibraryFilter(songSearchQuery, user);
+        ApplyLibraryFilter(songSearchQuery, user, _libraryManager);
 
         IReadOnlyList<BaseItem> songs = await RetryAsync(
             () => _libraryManager.GetItemList(songSearchQuery),
