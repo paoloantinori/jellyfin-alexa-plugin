@@ -279,7 +279,7 @@ public class PlayVideoIntentHandlerTests
     }
 
     [Fact]
-    public async Task Handle_VideoResponse_EndsSession()
+    public async Task Handle_VideoResponse_DoesNotSetShouldEndSession()
     {
         var movie = CreateTestItem("Test Video");
 
@@ -294,6 +294,6 @@ public class PlayVideoIntentHandlerTests
             TestHelpers.CreateTestUser(),
             CreateSession(), CancellationToken.None);
 
-        Assert.True(response.Response.ShouldEndSession);
+        Assert.Null(response.Response.ShouldEndSession);
     }
 }

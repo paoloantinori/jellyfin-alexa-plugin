@@ -210,7 +210,7 @@ public class PlayRandomIntentHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_WithNoMediaType_DefaultsToAudio()
+    public async Task HandleAsync_WithNoMediaType_DefaultsToVideo()
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest();
@@ -229,8 +229,9 @@ public class PlayRandomIntentHandlerTests
 
         Assert.NotNull(capturedQuery);
         Assert.NotNull(capturedQuery.IncludeItemTypes);
-        Assert.Single(capturedQuery.IncludeItemTypes);
-        Assert.Equal(BaseItemKind.Audio, capturedQuery.IncludeItemTypes[0]);
+        Assert.Equal(2, capturedQuery.IncludeItemTypes.Length);
+        Assert.Equal(BaseItemKind.Movie, capturedQuery.IncludeItemTypes[0]);
+        Assert.Equal(BaseItemKind.Episode, capturedQuery.IncludeItemTypes[1]);
     }
 
     [Fact]
