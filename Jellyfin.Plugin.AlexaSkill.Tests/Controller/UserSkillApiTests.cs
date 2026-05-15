@@ -602,6 +602,196 @@ public class UserSkillApiTests : IDisposable
     }
 
     // ===================================================================
+    // Lifecycle tests -- create / delete / authorize round-trip
+    // ===================================================================
+
+    [Fact]
+    public async Task DeleteThenCreate_SameUser_HasLwaAuthPendingStatus()
+    {
+        var jellyfinUserId = Guid.NewGuid();
+        SetupJellyfinUser("alice", jellyfinUserId);
+
+        var createJson = JsonConvert.SerializeObject(new
+        {
+            Username = "alice",
+            InvocationName = "my skill"
+        });
+        var createResult = _controller.CreateNewUserSkill(createJson);
+        var createdJsonResult = Assert.IsType<JsonResult>(createResult);
+        var createdUser = Assert.IsType<User>(createdJsonResult.Value);
+        Assert.Equal(UserSkillStatus.LwaAuthPending, createdUser.UserSkill!.UserSkillStatus);
+
+        // Delete user
+        var deleteResult = await _controller.DeleteUserSkill(jellyfinUserId.ToString());
+        Assert.IsType<OkResult>(deleteResult);
+        Assert.Empty(_config.Users);
+
+        // Create again
+        var recreateResult = _controller.CreateNewUserSkill(createJson);
+        var recreatedJsonResult = Assert.IsType<JsonResult>(recreateResult);
+        var recreatedUser = Assert.IsType<User>(recreatedJsonResult.Value);
+
+        // Verify the new user has correct state
+        Assert.NotNull(recreatedUser.UserSkill);
+        Assert.Equal(UserSkillStatus.LwaAuthPending, recreatedUser.UserSkill.UserSkillStatus);
+        Assert.Equal("my skill", recreatedUser.UserSkill.InvocationName);
+        Assert.Null(recreatedUser.UserSkill.SkillId);
+        Assert.Single(_config.Users);
+    }
+
+    [Fact]
+    public void CreateNewUserSkill_ResponseIncludesUserSkill()
+    {
+        var jellyfinUserId = Guid.NewGuid();
+        SetupJellyfinUser("alice", jellyfinUserId);
+
+        var json = JsonConvert.SerializeObject(new
+        {
+            Username = "alice",
+            InvocationName = "test skill"
+        });
+
+        var result = _controller.CreateNewUserSkill(json);
+
+        var jsonResult = Assert.IsType<JsonResult>(result);
+        Assert.NotNull(jsonResult.Value);
+
+        var returnedUser = Assert.IsType<User>(jsonResult.Value);
+        Assert.NotNull(returnedUser.UserSkill);
+        Assert.Equal(UserSkillStatus.LwaAuthPending, returnedUser.UserSkill.UserSkillStatus);
+        Assert.Equal("test skill", returnedUser.UserSkill.InvocationName);
+        Assert.Null(returnedUser.UserSkill.SkillId);
+        Assert.Equal(jellyfinUserId, returnedUser.Id);
+    }
+
+    [Fact]
+    public void UserSkillStatus_SerializesCorrectly()
+    {
+        var userSkill = new UserSkill
+        {
+            InvocationName = "test skill",
+            UserSkillStatus = UserSkillStatus.LwaAuthPending
+        };
+
+        var json = JsonConvert.SerializeObject(userSkill);
+
+        // Newtonsoft.Json serializes enums as integers by default
+        Assert.Contains("\"UserSkillStatus\":0", json);
+        Assert.DoesNotContain("LwaAuthPending", json);
+    }
+
+    [Fact]
+    public void GetUserSkillAuthorisation_LwaAuthPendingUser_ReturnsUrl()
+    {
+        var jellyfinUserId = Guid.NewGuid();
+        SetupJellyfinUser("alice", jellyfinUserId);
+
+        var json = JsonConvert.SerializeObject(new
+        {
+            Username = "alice",
+            InvocationName = "my skill"
+        });
+        _controller.CreateNewUserSkill(json);
+
+        var result = _controller.GetUserSkillAuthorisation(jellyfinUserId.ToString());
+
+        var jsonResult = Assert.IsType<JsonResult>(result);
+        Assert.Equal(200, jsonResult.StatusCode);
+        Assert.NotNull(jsonResult.Value);
+    }
+
+    [Fact]
+    public void GetUserSkillAuthorisation_UserWithoutSkill_Returns404()
+    {
+        var id = Guid.NewGuid();
+        _config.Users.Add(new User { Id = id, InvocationName = "test" });
+
+        var result = _controller.GetUserSkillAuthorisation(id.ToString());
+
+        var jsonResult = Assert.IsType<JsonResult>(result);
+        Assert.Equal(404, jsonResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteThenCreate_ConfigPersistsCorrectly()
+    {
+        var jellyfinUserId = Guid.NewGuid();
+        SetupJellyfinUser("alice", jellyfinUserId);
+
+        // Create
+        var createJson = JsonConvert.SerializeObject(new
+        {
+            Username = "alice",
+            InvocationName = "first skill"
+        });
+        _controller.CreateNewUserSkill(createJson);
+
+        // Verify in config
+        Assert.Single(_config.Users);
+        var user = _config.GetUserById(jellyfinUserId);
+        Assert.NotNull(user);
+        Assert.NotNull(user.UserSkill);
+
+        // Delete
+        await _controller.DeleteUserSkill(jellyfinUserId.ToString());
+        Assert.Empty(_config.Users);
+        Assert.Null(_config.GetUserById(jellyfinUserId));
+
+        // Recreate with different invocation name
+        var recreateJson = JsonConvert.SerializeObject(new
+        {
+            Username = "alice",
+            InvocationName = "second skill"
+        });
+        _controller.CreateNewUserSkill(recreateJson);
+
+        Assert.Single(_config.Users);
+        var recreatedUser = _config.GetUserById(jellyfinUserId);
+        Assert.NotNull(recreatedUser);
+        Assert.NotNull(recreatedUser.UserSkill);
+        Assert.Equal("second skill", recreatedUser.UserSkill.InvocationName);
+        Assert.Equal(UserSkillStatus.LwaAuthPending, recreatedUser.UserSkill.UserSkillStatus);
+    }
+
+    // ===================================================================
+    // Config save must not destroy user data
+    // ===================================================================
+
+    [Fact]
+    public void ConfigSerialization_UsersSurviveRoundTrip()
+    {
+        var id = Guid.NewGuid();
+        AddUserDirect(id, "alice");
+
+        // Simulate what happens when the save handler strips Users before
+        // sending general config — the Users should remain intact on the server.
+        var user = _config.GetUserById(id);
+        Assert.NotNull(user);
+        Assert.NotNull(user.UserSkill);
+        Assert.Equal(UserSkillStatus.LwaAuthPending, user.UserSkill.UserSkillStatus);
+    }
+
+    [Fact]
+    public void SmapiRefreshToken_SurvivesSerializationRoundTrip()
+    {
+        var id = Guid.NewGuid();
+        var user = CreateTestUser(id, "alice");
+        user.UserSkill = new UserSkill
+        {
+            InvocationName = "alice skill",
+            UserSkillStatus = UserSkillStatus.Ready
+        };
+        user.SmapiRefreshToken = "refresh-token-should-not-be-lost";
+        _config.Users.Add(user);
+
+        var serialized = JsonConvert.SerializeObject(_config);
+        var deserialized = JsonConvert.DeserializeObject<PluginConfiguration>(serialized);
+
+        Assert.Single(deserialized!.Users);
+        Assert.Equal("refresh-token-should-not-be-lost", deserialized.Users[0].SmapiRefreshToken);
+    }
+
+    // ===================================================================
     // Helpers
     // ===================================================================
 

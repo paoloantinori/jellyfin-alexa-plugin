@@ -407,9 +407,9 @@
                 for (let cell of row.cells) {
                     cell.setAttribute("data-id", user.Id);
                 }
-                row.cells[1].innerHTML = user.UserSkill.SkillId;
-                row.cells[2].firstChild.value = user.UserSkill.InvocationName;
-                row.cells[5].innerHTML = user.UserSkill.UserSkillStatus;
+                row.cells[1].innerHTML = user.UserSkill ? (user.UserSkill.SkillId || "") : "";
+                row.cells[2].firstChild.value = user.UserSkill ? user.UserSkill.InvocationName : "";
+                row.cells[5].innerHTML = user.UserSkill ? normalizeSkillStatus(user.UserSkill.UserSkillStatus) : "unsaved";
                 updateAuthorizeButton(row.cells[7].children[1], user, config);
             }
 
@@ -420,13 +420,22 @@
                 });
             }
 
+            function normalizeSkillStatus(status) {
+                if (status === 0 || status === "LwaAuthPending") return "LwaAuthPending";
+                if (status === 1 || status === "SkillCreating") return "SkillCreating";
+                if (status === 2 || status === "AccountLinkPending") return "AccountLinkPending";
+                if (status === 3 || status === "Ready") return "Ready";
+                return status;
+            }
+
             function updateAuthorizeButton(button, user, config) {
                 var hasServerConfig = config.ServerAddress != "" && config.LwaClientId != "" && config.LwaClientSecret != "";
                 var canAuthorize = user.UserSkill && hasServerConfig;
                 if (canAuthorize) {
                     button.style.display = "block";
                     button.disabled = false;
-                    var label = user.UserSkill.UserSkillStatus !== "LwaAuthPending" ? "Re-authorize" : "Authorize";
+                    var status = normalizeSkillStatus(user.UserSkill.UserSkillStatus);
+                    var label = status !== "LwaAuthPending" ? "Re-authorize" : "Authorize";
                     button.title = label;
                     button.innerHTML = label;
                 } else if (hasServerConfig && (!user.UserSkill || user.SkillStatus === "unsaved")) {
@@ -570,7 +579,7 @@
                 td.setAttribute("data-id", user.Id);
                 td.classList.add("detailTableBodyCell");
                 td.style.verticalAlign = "middle";
-                td.innerHTML = (user.UserSkill)? user.UserSkill.UserSkillStatus : "unsaved";
+                td.innerHTML = user.UserSkill ? normalizeSkillStatus(user.UserSkill.UserSkillStatus) : "unsaved";
                 tr.appendChild(td);
 
                 td = document.createElement("td");
@@ -710,7 +719,15 @@
 
                     // Save general config FIRST so the full-config replacement
                     // completes before user CRUD operations modify users below.
-                    ApiClient.updatePluginConfiguration(Config.pluginUniqueId, config).then(function (result) {
+                    // Strip the Users collection — it is managed exclusively via
+                    // the dedicated POST/PATCH/DELETE /user-skills endpoints.
+                    // Sending it via updatePluginConfiguration would overwrite
+                    // server-side state (e.g. SmapiRefreshToken, SmapiDeviceToken,
+                    // AccountLinkingClientId) with stale or incomplete data, and
+                    // [JsonIgnore] properties would be lost in the round-trip.
+                    var generalConfig = Object.assign({}, config);
+                    delete generalConfig.Users;
+                    ApiClient.updatePluginConfiguration(Config.pluginUniqueId, generalConfig).then(function (result) {
                         Dashboard.processPluginConfigurationUpdateResult(result);
 
                         for (let row of document.querySelector("#userTableBody").rows) {
@@ -739,7 +756,9 @@
                                     contentType: "application/json"
                                 }).then(function (res) {
                                     res.json().then(function (user) {
-                                        refreshUserRow(row, user, config);
+                                        ApiClient.getPluginConfiguration(Config.pluginUniqueId).then(function(freshConfig) {
+                                            refreshUserRow(row, user, freshConfig);
+                                        });
                                     });
                                 }, function (res) {
                                     showAjaxError(res, "create");
@@ -764,7 +783,9 @@
                                     contentType: "application/json"
                                 }).then(function (res) {
                                     res.json().then(function (user) {
-                                        refreshUserRow(row, user, config);
+                                        ApiClient.getPluginConfiguration(Config.pluginUniqueId).then(function(freshConfig) {
+                                            refreshUserRow(row, user, freshConfig);
+                                        });
                                     });
                                 }, function (res) {
                                     showAjaxError(res, "update");
