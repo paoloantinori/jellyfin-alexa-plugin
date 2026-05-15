@@ -164,8 +164,7 @@ public class PlayRandomIntentHandler : BaseHandler
                 Version = "1.0",
                 Response = new ResponseBody
                 {
-                    ShouldEndSession = true,
-                    OutputSpeech = outputSpeech,
+                    ShouldEndSession = null,
                     Directives = new List<IDirective>
                     {
                         new Directive.VideoAppLaunchDirective
@@ -188,13 +187,14 @@ public class PlayRandomIntentHandler : BaseHandler
     {
         if (string.IsNullOrEmpty(mediaTypeSlot))
         {
-            query.IncludeItemTypes = FilterByContentAccess(new[] { BaseItemKind.Audio });
+            query.IncludeItemTypes = FilterByContentAccess(new[] { BaseItemKind.Movie, BaseItemKind.Episode });
             return;
         }
 
         switch (mediaTypeSlot.ToLowerInvariant())
         {
             case "video":
+            case "film":
                 query.IncludeItemTypes = FilterByContentAccess(new[] { BaseItemKind.Movie, BaseItemKind.Episode });
                 break;
             default:

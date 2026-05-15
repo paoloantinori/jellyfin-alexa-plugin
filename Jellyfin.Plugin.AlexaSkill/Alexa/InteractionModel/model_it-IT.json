@@ -126,7 +126,18 @@
           "Metti {title}",
           "Pleia {title}",
           "Di riprodurre {title}",
-          "Di suonare {title}"
+          "Di suonare {title}",
+          "Riproduci il video {title}",
+          "Riproduci il film {title}",
+          "Di riprodurre il video {title}",
+          "Di riprodurre il film {title}",
+          "Metti il video {title}",
+          "Metti il film {title}",
+          "Guarda {title}",
+          "Di guardare {title}",
+          "Voglio guardare {title}",
+          "Metti su il video {title}",
+          "Metti su il film {title}"
         ],
         "slots": [
           {
@@ -463,7 +474,23 @@
           "Mescola {media_type}",
           "Mescola i miei {media_type}",
           "Qualsiasi {media_type} va bene",
-          "Sorprendimi con {media_type}"
+          "Sorprendimi con {media_type}",
+          "Riproduci {media_type}",
+          "Di riprodurre {media_type}",
+          "Metti {media_type}",
+          "Dammi {media_type}",
+          "Riproduci un video",
+          "Riproduci un film",
+          "Di riprodurre un video",
+          "Di riprodurre un film",
+          "Metti un video",
+          "Metti un film",
+          "Dammi un video",
+          "Dammi un film",
+          "Voglio vedere un video",
+          "Voglio vedere un film",
+          "Fai partire un video",
+          "Fai partire un film"
         ],
         "slots": [
           {
