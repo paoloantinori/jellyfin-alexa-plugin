@@ -191,6 +191,14 @@
                 "changelog": "Fix APL visuals not showing after skill recreation. Fix config Save wiping user data. Add dedicated PATCH config endpoint. Remove broken SMAPI icon upload. Replace reflection-based config setting with explicit typed assignments.",
                 "targetAbi": "10.11.0.0",
                 "timestamp": "2026-05-15 22:40:00"
+            },
+            {
+                "version": "0.3.0.4",
+                "checksum": "727bd48bccc09497f8d9eb83eaedee07",
+                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.3.0.4/AlexaSkill_0.3.0.4.zip",
+                "changelog": "Fix APL visuals not showing after skill recreation. Fix config Save wiping user data. Add dedicated PATCH config endpoint. Remove broken SMAPI icon upload. Replace reflection-based config setting with explicit typed assignments.",
+                "targetAbi": "10.11.0.0",
+                "timestamp": "2026-05-15 22:09:56"
             }
         ]
     }
