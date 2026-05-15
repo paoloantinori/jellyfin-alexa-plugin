@@ -115,6 +115,8 @@ The plugin uses **Login with Amazon (LWA)** to create and manage your Alexa skil
 
 ## Plugin Configuration
 
+![Plugin Configuration](screenshots/settings.png)
+
 1. Open your Jellyfin admin dashboard
 2. Go to **Plugins** and find **AlexaSkill** in the installed plugins list
 3. Click on the plugin to open its configuration page
