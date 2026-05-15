@@ -178,11 +178,11 @@
             },
             {
                 "version": "0.3.0.1",
-                "checksum": "0",
+                "checksum": "5b11b88f44926bd2459af00eef3df1e7",
                 "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.3.0.1/AlexaSkill_0.3.0.1.zip",
                 "changelog": "Fix duplicate user config entries and deletion data loss (JF-152). Fix accordion UI layout (JF-153). Add skill icon URL support. Fix stale config reference in LWA callback. Redact leaked API keys from skill files.",
                 "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-15 00:00:00"
+                "timestamp": "2026-05-15 15:12:43"
             }
         ]
     }
