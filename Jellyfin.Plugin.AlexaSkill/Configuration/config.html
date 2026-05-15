@@ -717,18 +717,42 @@
                     var mrrRaw = parseInt(document.querySelector("#MaxRecommendationResults").value);
                     config.MaxRecommendationResults = isNaN(mrrRaw) ? 10 : mrrRaw;
 
-                    // Save general config FIRST so the full-config replacement
-                    // completes before user CRUD operations modify users below.
-                    // Strip the Users collection — it is managed exclusively via
-                    // the dedicated POST/PATCH/DELETE /user-skills endpoints.
-                    // Sending it via updatePluginConfiguration would overwrite
-                    // server-side state (e.g. SmapiRefreshToken, SmapiDeviceToken,
-                    // AccountLinkingClientId) with stale or incomplete data, and
-                    // [JsonIgnore] properties would be lost in the round-trip.
-                    var generalConfig = Object.assign({}, config);
-                    delete generalConfig.Users;
-                    ApiClient.updatePluginConfiguration(Config.pluginUniqueId, generalConfig).then(function (result) {
-                        Dashboard.processPluginConfigurationUpdateResult(result);
+                    // Save general config via dedicated endpoint that preserves
+                    // the Users collection and [JsonIgnore] properties (SmapiDeviceToken, JellyfinToken).
+                    // Do NOT use updatePluginConfiguration — it replaces the entire config object,
+                    // wiping Users when the property is absent from the JSON payload.
+                    var generalConfig = {
+                        ServerAddress: config.ServerAddress,
+                        SslCertType: config.SslCertType,
+                        LwaClientId: config.LwaClientId,
+                        LwaClientSecret: config.LwaClientSecret,
+                        RadioModeEnabled: config.RadioModeEnabled,
+                        PodcastsEnabled: config.PodcastsEnabled,
+                        LiveTvEnabled: config.LiveTvEnabled,
+                        SleepTimerEnabled: config.SleepTimerEnabled,
+                        QueueManagementEnabled: config.QueueManagementEnabled,
+                        BrowseLibraryEnabled: config.BrowseLibraryEnabled,
+                        RecommendationsEnabled: config.RecommendationsEnabled,
+                        AplVisualsEnabled: config.AplVisualsEnabled,
+                        VideoPlaybackEnabled: config.VideoPlaybackEnabled,
+                        MusicEnabled: config.MusicEnabled,
+                        VideosEnabled: config.VideosEnabled,
+                        BooksEnabled: config.BooksEnabled,
+                        SimulatorEnabled: config.SimulatorEnabled,
+                        InitialFetchSize: config.InitialFetchSize,
+                        ContinuationBatchSize: config.ContinuationBatchSize,
+                        PrefetchThreshold: config.PrefetchThreshold,
+                        MaxSearchResults: config.MaxSearchResults,
+                        MaxBrowseResults: config.MaxBrowseResults,
+                        MaxRecentlyAddedResults: config.MaxRecentlyAddedResults,
+                        MaxRecommendationResults: config.MaxRecommendationResults
+                    };
+                    ApiClient.ajax({
+                        type: "PATCH",
+                        url: ApiClient.getUrl("alexaskill/api/config"),
+                        data: JSON.stringify(generalConfig),
+                        contentType: "application/json"
+                    }).then(function () {
 
                         for (let row of document.querySelector("#userTableBody").rows) {
                             const userId = row.getAttribute("data-id");

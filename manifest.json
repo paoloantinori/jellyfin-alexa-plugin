@@ -183,6 +183,14 @@
                 "changelog": "Fix duplicate user config entries and deletion data loss (JF-152). Fix accordion UI layout (JF-153). Add skill icon URL support. Fix stale config reference in LWA callback. Redact leaked API keys from skill files.",
                 "targetAbi": "10.11.0.0",
                 "timestamp": "2026-05-15 15:12:43"
+            },
+            {
+                "version": "0.3.0.2",
+                "checksum": "PLACEHOLDER",
+                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.3.0.2/AlexaSkill_0.3.0.2.zip",
+                "changelog": "Fix APL visuals not showing after skill recreation. Fix config Save wiping user data. Add dedicated PATCH config endpoint. Remove broken SMAPI icon upload. Replace reflection-based config setting with explicit typed assignments.",
+                "targetAbi": "10.11.0.0",
+                "timestamp": "2026-05-15 22:40:00"
             }
         ]
     }

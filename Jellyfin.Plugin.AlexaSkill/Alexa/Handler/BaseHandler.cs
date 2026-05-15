@@ -882,7 +882,8 @@ public abstract class BaseHandler
 
         if (!Apl.AplHelper.DeviceSupportsApl(context))
         {
-            Logger.LogDebug("APL list skipped for '{Token}': device does not support APL", token);
+            var keys = context?.System?.Device?.SupportedInterfaces?.Keys;
+            Logger.LogDebug("APL list skipped for '{Token}': device does not support APL. Interfaces: {Interfaces}", token, keys != null ? string.Join(", ", keys) : "null");
             return;
         }
 

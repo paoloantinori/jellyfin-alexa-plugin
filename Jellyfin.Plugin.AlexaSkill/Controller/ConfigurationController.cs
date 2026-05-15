@@ -5,6 +5,8 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
+using Alexa.NET.Management;
+using Alexa.NET.Management.Api;
 using Jellyfin.Plugin.AlexaSkill.Controller.Handler;
 using Jellyfin.Plugin.AlexaSkill.Entities;
 using MediaBrowser.Controller.Library;
@@ -282,6 +284,122 @@ public class ConfigurationController : ControllerBase
         {
             StatusCode = 200
         };
+    }
+
+    /// <summary>
+    /// Update general (non-user) configuration fields on the live config object.
+    /// Preserves Users collection and all [JsonIgnore] properties (SmapiDeviceToken, JellyfinToken).
+    /// </summary>
+    /// <param name="json">JSON with config fields to update.</param>
+    /// <returns>Success result.</returns>
+    [HttpPatch("config")]
+    [Authorize(Policy = "RequiresElevation")]
+    public ActionResult UpdateGeneralConfig([FromBody] dynamic json)
+    {
+        JObject req = JObject.Parse(json.ToString());
+        var config = Plugin.Instance!.Configuration;
+        bool updated = false;
+
+        if (req.TryGetValue("ServerAddress", out var serverToken) && serverToken.Type == JTokenType.String)
+        {
+            config.ServerAddress = serverToken.Value<string>();
+            updated = true;
+        }
+
+        if (req.TryGetValue("SslCertType", out var sslToken) && sslToken.Type == JTokenType.String)
+        {
+            if (Enum.TryParse<SslCertificateType>(sslToken.Value<string>(), ignoreCase: true, out var ssl))
+            {
+                config.SslCertType = ssl;
+                updated = true;
+            }
+        }
+
+        if (req.TryGetValue("LwaClientId", out var clientIdToken) && clientIdToken.Type == JTokenType.String)
+        {
+            config.LwaClientId = clientIdToken.Value<string>();
+            updated = true;
+        }
+
+        if (req.TryGetValue("LwaClientSecret", out var clientSecretToken) && clientSecretToken.Type == JTokenType.String)
+        {
+            config.LwaClientSecret = clientSecretToken.Value<string>();
+            updated = true;
+        }
+
+        if (req.TryGetValue("RadioModeEnabled", out var radioToken) && radioToken.Type == JTokenType.Boolean)
+        { config.RadioModeEnabled = radioToken.Value<bool>(); updated = true; }
+
+        if (req.TryGetValue("PodcastsEnabled", out var podcastsToken) && podcastsToken.Type == JTokenType.Boolean)
+        { config.PodcastsEnabled = podcastsToken.Value<bool>(); updated = true; }
+
+        if (req.TryGetValue("LiveTvEnabled", out var liveTvToken) && liveTvToken.Type == JTokenType.Boolean)
+        { config.LiveTvEnabled = liveTvToken.Value<bool>(); updated = true; }
+
+        if (req.TryGetValue("SleepTimerEnabled", out var sleepToken) && sleepToken.Type == JTokenType.Boolean)
+        { config.SleepTimerEnabled = sleepToken.Value<bool>(); updated = true; }
+
+        if (req.TryGetValue("QueueManagementEnabled", out var queueToken) && queueToken.Type == JTokenType.Boolean)
+        { config.QueueManagementEnabled = queueToken.Value<bool>(); updated = true; }
+
+        if (req.TryGetValue("BrowseLibraryEnabled", out var browseToken) && browseToken.Type == JTokenType.Boolean)
+        { config.BrowseLibraryEnabled = browseToken.Value<bool>(); updated = true; }
+
+        if (req.TryGetValue("RecommendationsEnabled", out var recToken) && recToken.Type == JTokenType.Boolean)
+        { config.RecommendationsEnabled = recToken.Value<bool>(); updated = true; }
+
+        if (req.TryGetValue("AplVisualsEnabled", out var aplToken) && aplToken.Type == JTokenType.Boolean)
+        { config.AplVisualsEnabled = aplToken.Value<bool>(); updated = true; }
+
+        if (req.TryGetValue("VideoPlaybackEnabled", out var videoToken) && videoToken.Type == JTokenType.Boolean)
+        { config.VideoPlaybackEnabled = videoToken.Value<bool>(); updated = true; }
+
+        if (req.TryGetValue("MusicEnabled", out var musicToken) && musicToken.Type == JTokenType.Boolean)
+        { config.MusicEnabled = musicToken.Value<bool>(); updated = true; }
+
+        if (req.TryGetValue("VideosEnabled", out var videosToken) && videosToken.Type == JTokenType.Boolean)
+        { config.VideosEnabled = videosToken.Value<bool>(); updated = true; }
+
+        if (req.TryGetValue("BooksEnabled", out var booksToken) && booksToken.Type == JTokenType.Boolean)
+        { config.BooksEnabled = booksToken.Value<bool>(); updated = true; }
+
+        if (req.TryGetValue("SimulatorEnabled", out var simToken) && simToken.Type == JTokenType.Boolean)
+        { config.SimulatorEnabled = simToken.Value<bool>(); updated = true; }
+
+        if (req.TryGetValue("InitialFetchSize", out var fetchToken) && fetchToken.Type == JTokenType.Integer)
+        { config.InitialFetchSize = fetchToken.Value<int>(); updated = true; }
+
+        if (req.TryGetValue("ContinuationBatchSize", out var batchToken) && batchToken.Type == JTokenType.Integer)
+        { config.ContinuationBatchSize = batchToken.Value<int>(); updated = true; }
+
+        if (req.TryGetValue("PrefetchThreshold", out var prefetchToken) && prefetchToken.Type == JTokenType.Integer)
+        { config.PrefetchThreshold = prefetchToken.Value<int>(); updated = true; }
+
+        if (req.TryGetValue("MaxSearchResults", out var searchToken) && searchToken.Type == JTokenType.Integer)
+        { config.MaxSearchResults = searchToken.Value<int>(); updated = true; }
+
+        if (req.TryGetValue("MaxBrowseResults", out var browseResultsToken) && browseResultsToken.Type == JTokenType.Integer)
+        { config.MaxBrowseResults = browseResultsToken.Value<int>(); updated = true; }
+
+        if (req.TryGetValue("MaxRecentlyAddedResults", out var recentToken) && recentToken.Type == JTokenType.Integer)
+        { config.MaxRecentlyAddedResults = recentToken.Value<int>(); updated = true; }
+
+        if (req.TryGetValue("MaxRecommendationResults", out var maxRecToken) && maxRecToken.Type == JTokenType.Integer)
+        { config.MaxRecommendationResults = maxRecToken.Value<int>(); updated = true; }
+
+        if (!updated)
+        {
+            return new JsonResult(new { error = "No valid fields to update" }) { StatusCode = 400 };
+        }
+
+        var errors = config.Validate();
+        if (errors.Count > 0)
+        {
+            return new JsonResult(new { error = string.Join("; ", errors) }) { StatusCode = 400 };
+        }
+
+        Plugin.Instance!.SaveConfiguration();
+        return new OkResult();
     }
 
     /// <summary>

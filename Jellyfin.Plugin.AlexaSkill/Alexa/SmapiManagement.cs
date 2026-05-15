@@ -64,8 +64,6 @@ public class SmapiManagement : ManagementApi
 
         await WaitForSkillStatusAsync(skillId.Id).ConfigureAwait(false);
 
-        await UpdateManifestIcons(skillId.Id, manifestSkill).ConfigureAwait(false);
-
         _logger.LogInformation("Skill manifest processed, updating account linking and interaction models");
 
         this.UpdateAccountLinkData(skillId.Id, endpointUri, clientId);
@@ -109,8 +107,6 @@ public class SmapiManagement : ManagementApi
         }
 
         await WaitForSkillStatusAsync(skillId).ConfigureAwait(false);
-
-        await UpdateManifestIcons(skillId, manifestSkill).ConfigureAwait(false);
 
         foreach (var interactionModel in interactionModels)
         {
@@ -263,43 +259,4 @@ public class SmapiManagement : ManagementApi
         return await this.Skills.Status(skillId).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Updates the skill manifest with icon URLs by sending a full manifest update
-    /// using JSON with injected smallIconUri/largeIconUri fields.
-    /// The Alexa.NET.Management library's PublishingInformation class doesn't
-    /// expose these properties, so we use the raw JSON approach.
-    /// </summary>
-    private async Task UpdateManifestIcons(string skillId, ManifestSkill manifestSkill)
-    {
-        if (string.IsNullOrEmpty(manifestSkill.IconSmallUrl) && string.IsNullOrEmpty(manifestSkill.IconLargeUrl))
-        {
-            return;
-        }
-
-        try
-        {
-            string json = manifestSkill.ToManifestJson();
-            using var content = new System.Net.Http.StringContent(json, System.Text.Encoding.UTF8, "application/json");
-
-            string url = $"https://api.amazonalexa.com/v1/skills/{skillId}/stages/development/manifest";
-            using var request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Put, url) { Content = content };
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _accessToken);
-
-            using var response = await Plugin.HttpClient.SendAsync(request).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
-            {
-                string body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                _logger.LogWarning("Icon URL update returned {StatusCode}: {Body}", (int)response.StatusCode, body);
-            }
-            else
-            {
-                _logger.LogInformation("Icon URLs updated in manifest for skill {SkillId}", skillId);
-                await WaitForSkillStatusAsync(skillId).ConfigureAwait(false);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to update icon URLs for skill {SkillId}. Skill will function without icons.", skillId);
-        }
-    }
 }

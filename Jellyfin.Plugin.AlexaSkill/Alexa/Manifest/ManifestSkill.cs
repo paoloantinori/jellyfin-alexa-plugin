@@ -18,6 +18,14 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Manifest;
 /// </summary>
 public class ManifestSkill : Skill
 {
+    private static readonly Dictionary<string, Func<CustomApiInterface>> DefaultInterfaceLookup = new()
+    {
+        { "ALEXA_EXTENSION", () => new ExtensionInterface() },
+        { "AUDIO_PLAYER", () => new AudioPlayerInterface() },
+        { "VIDEO_APP", () => new VideoAppInterface() },
+        { "ALEXA_PRESENTATION_APL", () => new AplInterface() }
+    };
+
     /// <summary>
     /// Initializes a new instance of the <see cref="ManifestSkill"/> class.
     /// </summary>
@@ -26,18 +34,12 @@ public class ManifestSkill : Skill
     /// <param name="sslCertType">SSL certificate type.</param>
     public ManifestSkill(string ressourcePath, string serverAddress, SslCertificateType sslCertType)
     {
-        CustomApiInterfaceConverter.InterfaceLookup = new Dictionary<string, Func<CustomApiInterface>>
-        {
-            { "ALEXA_EXTENSION", () => new ExtensionInterface() },
-            { "AUDIO_PLAYER", () => new AudioPlayerInterface() },
-            { "VIDEO_APP", () => new VideoAppInterface() }
-        };
+        CustomApiInterfaceConverter.InterfaceLookup = DefaultInterfaceLookup;
 
         Manifest = global::Jellyfin.Plugin.AlexaSkill.Util.DeserializeFromFile<Skill>(ressourcePath).Manifest;
         StampVersionTag();
 
         SetApiEndpoint(serverAddress, sslCertType);
-        SetIconUrls(serverAddress);
     }
 
     /// <summary>
@@ -49,17 +51,11 @@ public class ManifestSkill : Skill
     /// <param name="sslCertType">SSL certificate type.</param>
     public ManifestSkill(SkillManifest manifest, string serverAddress, SslCertificateType sslCertType)
     {
-        CustomApiInterfaceConverter.InterfaceLookup = new Dictionary<string, Func<CustomApiInterface>>
-        {
-            { "ALEXA_EXTENSION", () => new ExtensionInterface() },
-            { "AUDIO_PLAYER", () => new AudioPlayerInterface() },
-            { "VIDEO_APP", () => new VideoAppInterface() }
-        };
+        CustomApiInterfaceConverter.InterfaceLookup = DefaultInterfaceLookup;
 
         Manifest = manifest;
 
         SetApiEndpoint(serverAddress, sslCertType);
-        SetIconUrls(serverAddress);
     }
 
     /// <summary>
@@ -69,12 +65,7 @@ public class ManifestSkill : Skill
     /// <param name="manifest">Manifest of the skill.</param>
     public ManifestSkill(SkillManifest manifest)
     {
-        CustomApiInterfaceConverter.InterfaceLookup = new Dictionary<string, Func<CustomApiInterface>>
-        {
-            { "ALEXA_EXTENSION", () => new ExtensionInterface() },
-            { "AUDIO_PLAYER", () => new AudioPlayerInterface() },
-            { "VIDEO_APP", () => new VideoAppInterface() }
-        };
+        CustomApiInterfaceConverter.InterfaceLookup = DefaultInterfaceLookup;
 
         Manifest = manifest;
     }
@@ -163,54 +154,15 @@ public class ManifestSkill : Skill
     }
 
     /// <summary>
-    /// Gets or sets the small icon URL for the skill manifest.
-    /// Injected into serialized JSON since the library's PublishingInformation class
-    /// doesn't expose smallIconUri/largeIconUri properties.
-    /// </summary>
-    public string? IconSmallUrl { get; set; }
-
-    /// <summary>
-    /// Gets or sets the large icon URL for the skill manifest.
-    /// </summary>
-    public string? IconLargeUrl { get; set; }
-
-    /// <summary>
-    /// Set icon URLs based on the server address.
-    /// </summary>
-    /// <param name="serverAddress">The server base URL.</param>
-    public void SetIconUrls(string serverAddress)
-    {
-        Uri baseUri = new Uri(serverAddress);
-        IconSmallUrl = new Uri(baseUri, AlexaSkillController.ApiBaseUri + "icon-small").ToString();
-        IconLargeUrl = new Uri(baseUri, AlexaSkillController.ApiBaseUri + "icon-large").ToString();
-    }
-
-    /// <summary>
-    /// Serialize the manifest to JSON with icon URLs injected.
+    /// Serialize the manifest to JSON.
     /// </summary>
     /// <returns>JSON string of the manifest.</returns>
     public string ToManifestJson()
     {
-        // Serialize only the Manifest (SkillManifest), not the full Skill wrapper,
-        // then wrap in {"manifest": ...} as the SMAPI API expects.
         JObject manifestObj = JObject.FromObject(Manifest, JsonSerializer.Create(new JsonSerializerSettings
         {
             NullValueHandling = NullValueHandling.Ignore,
         }));
-
-        JObject? pubInfo = manifestObj["publishingInformation"] as JObject;
-        if (pubInfo != null)
-        {
-            if (!string.IsNullOrEmpty(IconSmallUrl))
-            {
-                pubInfo["smallIconUri"] = IconSmallUrl;
-            }
-
-            if (!string.IsNullOrEmpty(IconLargeUrl))
-            {
-                pubInfo["largeIconUri"] = IconLargeUrl;
-            }
-        }
 
         return new JObject { ["manifest"] = manifestObj }.ToString(Formatting.None);
     }
