@@ -63,6 +63,12 @@
     <EmbeddedResource Include="Controller/Pages/lwa_device_token_request.html" />
     <EmbeddedResource Include="Controller/Pages/lwa_error.html" />
     <EmbeddedResource Include="Controller/Pages/lwa_success.html" />
+    <EmbeddedResource Include="icon-small.png" />
+    <EmbeddedResource Include="icon-large.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="icon.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

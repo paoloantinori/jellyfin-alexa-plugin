@@ -7,6 +7,8 @@ using Alexa.NET.Management.Manifest;
 using Alexa.NET.Management.Skills;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Interface;
 using Jellyfin.Plugin.AlexaSkill.Controller;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using ManifestLocale = Alexa.NET.Management.Manifest.Locale;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Manifest;
@@ -35,6 +37,7 @@ public class ManifestSkill : Skill
         StampVersionTag();
 
         SetApiEndpoint(serverAddress, sslCertType);
+        SetIconUrls(serverAddress);
     }
 
     /// <summary>
@@ -56,6 +59,7 @@ public class ManifestSkill : Skill
         Manifest = manifest;
 
         SetApiEndpoint(serverAddress, sslCertType);
+        SetIconUrls(serverAddress);
     }
 
     /// <summary>
@@ -125,7 +129,8 @@ public class ManifestSkill : Skill
             return;
         }
 
-        Uri endpointUri = new Uri(new Uri(uri), AlexaSkillController.ApiBaseUri);
+        Uri baseUri = new Uri(uri);
+        Uri endpointUri = new Uri(baseUri, AlexaSkillController.ApiBaseUri);
         string endpointUriString = new Uri(endpointUri, "alexa-request").ToString();
 
         foreach (IApi api in Manifest.Apis)
@@ -155,5 +160,58 @@ public class ManifestSkill : Skill
         newCustomApi.Endpoint.SslCertificateType = certificateType;
 
         Manifest.Apis.Add(newCustomApi);
+    }
+
+    /// <summary>
+    /// Gets or sets the small icon URL for the skill manifest.
+    /// Injected into serialized JSON since the library's PublishingInformation class
+    /// doesn't expose smallIconUri/largeIconUri properties.
+    /// </summary>
+    public string? IconSmallUrl { get; set; }
+
+    /// <summary>
+    /// Gets or sets the large icon URL for the skill manifest.
+    /// </summary>
+    public string? IconLargeUrl { get; set; }
+
+    /// <summary>
+    /// Set icon URLs based on the server address.
+    /// </summary>
+    /// <param name="serverAddress">The server base URL.</param>
+    public void SetIconUrls(string serverAddress)
+    {
+        Uri baseUri = new Uri(serverAddress);
+        IconSmallUrl = new Uri(baseUri, AlexaSkillController.ApiBaseUri + "icon-small").ToString();
+        IconLargeUrl = new Uri(baseUri, AlexaSkillController.ApiBaseUri + "icon-large").ToString();
+    }
+
+    /// <summary>
+    /// Serialize the manifest to JSON with icon URLs injected.
+    /// </summary>
+    /// <returns>JSON string of the manifest.</returns>
+    public string ToManifestJson()
+    {
+        // Serialize only the Manifest (SkillManifest), not the full Skill wrapper,
+        // then wrap in {"manifest": ...} as the SMAPI API expects.
+        JObject manifestObj = JObject.FromObject(Manifest, JsonSerializer.Create(new JsonSerializerSettings
+        {
+            NullValueHandling = NullValueHandling.Ignore,
+        }));
+
+        JObject? pubInfo = manifestObj["publishingInformation"] as JObject;
+        if (pubInfo != null)
+        {
+            if (!string.IsNullOrEmpty(IconSmallUrl))
+            {
+                pubInfo["smallIconUri"] = IconSmallUrl;
+            }
+
+            if (!string.IsNullOrEmpty(IconLargeUrl))
+            {
+                pubInfo["largeIconUri"] = IconLargeUrl;
+            }
+        }
+
+        return new JObject { ["manifest"] = manifestObj }.ToString(Formatting.None);
     }
 }

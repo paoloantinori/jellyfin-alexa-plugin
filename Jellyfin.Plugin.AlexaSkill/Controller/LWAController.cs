@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.IO;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
@@ -150,36 +151,46 @@ public class LWAController : ControllerBase
             Plugin.Instance!.SaveConfiguration();
 
             // Create the skill in background
+            Guid userId = user.Id;
             _ = Task.Run(async () =>
             {
-                if (user.SmapiManagement == null)
+                // Re-resolve the user from the current config to avoid stale references
+                // if a concurrent UI save replaced the configuration object.
+                User? currentUser = Plugin.Instance!.Configuration.Users.FirstOrDefault(u => u.Id == userId);
+                if (currentUser == null)
                 {
-                    _logger.LogError("SmapiManagement is null for user with id {UserId}", user.Id);
+                    _logger.LogError("User {UserId} no longer exists in config after LWA callback", userId);
                     return;
                 }
 
-                _logger.LogInformation("Creating skill for user with id {UserId}", user.Id);
-                Collection<SkillInteractionModel> skillInteractionModels = Plugin.Instance.BuildSkillInteractionModels(user.UserSkill.InvocationName);
+                if (currentUser.SmapiManagement == null)
+                {
+                    _logger.LogError("SmapiManagement is null for user with id {UserId}", userId);
+                    return;
+                }
+
+                _logger.LogInformation("Creating skill for user with id {UserId}", userId);
+                Collection<SkillInteractionModel> skillInteractionModels = Plugin.Instance.BuildSkillInteractionModels(currentUser.UserSkill.InvocationName);
 
                 try
                 {
-                    Uri endpointUri = new Uri(new Uri(configuration.ServerAddress), AlexaSkillController.ApiBaseUri);
+                    Uri endpointUri = new Uri(new Uri(Plugin.Instance.Configuration.ServerAddress), AlexaSkillController.ApiBaseUri);
                     string endpointUriString = new Uri(endpointUri, "account-linking").ToString();
 
-                    string skillId = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.CreateSkillAsync(
+                    string skillId = await AlexaUtil.CallAsync(currentUser, () => currentUser.SmapiManagement.CreateSkillAsync(
                         Plugin.Instance.ManifestSkill!,
                         skillInteractionModels,
                         endpointUriString,
-                        configuration.AccountLinkingClientId)).ConfigureAwait(false);
+                        Plugin.Instance.Configuration.AccountLinkingClientId)).ConfigureAwait(false);
 
-                    user.UserSkill.SkillId = skillId;
-                    user.UserSkill.UserSkillStatus = UserSkillStatus.AccountLinkPending;
+                    currentUser.UserSkill.SkillId = skillId;
+                    currentUser.UserSkill.UserSkillStatus = UserSkillStatus.AccountLinkPending;
                     Plugin.Instance!.SaveConfiguration();
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error creating skill for user {UserId}", user.Id);
-                    user.UserSkill.UserSkillStatus = UserSkillStatus.LwaAuthPending;
+                    _logger.LogError(ex, "Error creating skill for user {UserId}", userId);
+                    currentUser.UserSkill.UserSkillStatus = UserSkillStatus.LwaAuthPending;
                     Plugin.Instance!.SaveConfiguration();
                 }
             });

@@ -20,6 +20,7 @@ using Jellyfin.Plugin.AlexaSkill.Entities;
 using MediaBrowser.Controller.Authentication;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -423,5 +424,20 @@ public class AlexaSkillController : ControllerBase
         var cert = new X509Certificate2(bytes);
         CertificateCache[key] = cert;
         return cert;
+    }
+
+    [HttpGet("icon-small")]
+    [AllowAnonymous]
+    public ActionResult GetSmallIcon() => ServeIcon("icon-small");
+
+    [HttpGet("icon-large")]
+    [AllowAnonymous]
+    public ActionResult GetLargeIcon() => ServeIcon("icon-large");
+
+    private ActionResult ServeIcon(string size)
+    {
+        Stream? resource = typeof(AlexaSkillController).Assembly
+            .GetManifestResourceStream($"Jellyfin.Plugin.AlexaSkill.{size}.png");
+        return resource == null ? NotFound() : File(resource, "image/png");
     }
 }

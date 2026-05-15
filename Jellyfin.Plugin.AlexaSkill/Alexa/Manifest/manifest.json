@@ -59,6 +59,8 @@
 		"publishingInformation": {
 			"name": "jellyfin",
 			"category": "STREAMING_SERVICE",
+			"smallIconUri": "",
+			"largeIconUri": "",
 			"distributionCountries": [],
 			"isAvailableWorldwide": true,
 			"locales": {

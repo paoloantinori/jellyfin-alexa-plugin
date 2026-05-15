@@ -261,8 +261,10 @@
                     document.querySelector("#MaxRecentlyAddedResults").value = config.MaxRecentlyAddedResults != null ? config.MaxRecentlyAddedResults : 10;
                     document.querySelector("#MaxRecommendationResults").value = config.MaxRecommendationResults != null ? config.MaxRecommendationResults : 10;
 
+                    var tbody = document.querySelector("#userTableBody");
+                    tbody.innerHTML = "";
                     for (let user of config.Users) {
-                        document.querySelector("#userTableBody").appendChild(createUserRow(user, config));
+                        tbody.appendChild(createUserRow(user, config));
                     }
 
                     Dashboard.hideLoadingMsg();
@@ -400,6 +402,24 @@
                 });
             }
 
+            function refreshUserRow(row, user, config) {
+                row.setAttribute("data-id", user.Id);
+                for (let cell of row.cells) {
+                    cell.setAttribute("data-id", user.Id);
+                }
+                row.cells[1].innerHTML = user.UserSkill.SkillId;
+                row.cells[2].firstChild.value = user.UserSkill.InvocationName;
+                row.cells[5].innerHTML = user.UserSkill.UserSkillStatus;
+                updateAuthorizeButton(row.cells[7].children[1], user, config);
+            }
+
+            function showAjaxError(res, verb) {
+                Dashboard.alert("Could not " + verb + " user skill");
+                res.json().then(function (data) {
+                    Dashboard.alert("Reason: " + data.error);
+                });
+            }
+
             function updateAuthorizeButton(button, user, config) {
                 var hasServerConfig = config.ServerAddress != "" && config.LwaClientId != "" && config.LwaClientSecret != "";
                 var canAuthorize = user.UserSkill && hasServerConfig;
@@ -493,10 +513,13 @@
                 fmWrap.style.gap = "0.3em";
 
                 let fmSel = document.createElement("select");
-                fmSel.is = "emby-select";
-                fmSel.classList.add("emby-select-withcolor", "emby-select");
                 fmSel.setAttribute("data-field", "FuzzyMatchBehavior");
                 fmSel.style.minWidth = "120px";
+                fmSel.style.padding = "0.3em 0.5em";
+                fmSel.style.borderRadius = "3px";
+                fmSel.style.backgroundColor = "#222";
+                fmSel.style.color = "#ccc";
+                fmSel.style.border = "1px solid #555";
                 [{v:"Confirm",t:"Confirm"},{v:"AutoPlay",t:"Auto-play"}].forEach(function(o){
                     let opt = document.createElement("option");
                     opt.value = o.v; opt.textContent = o.t;
@@ -603,11 +626,7 @@
                         Dashboard.hideLoadingMsg();
                     }, function (res) {
                         Dashboard.hideLoadingMsg();
-
-                        Dashboard.alert("Could not delete user skill");
-                        res.json().then(function (data) {
-                            Dashboard.alert("Reason:"  + data.error);
-                        });
+                        showAjaxError(res, "delete");
                     });
                 });
                 tdDetailTableBodyCell.appendChild(deleteButton);
@@ -639,11 +658,7 @@
                         });
                     }, function (res) {
                         Dashboard.hideLoadingMsg();
-
-                        Dashboard.alert("Could not authorize user skill");
-                        res.json().then(function (data) {
-                            Dashboard.alert("Reason:"  + data.error);
-                        });
+                        showAjaxError(res, "authorize");
                     });
                 });
                 tdDetailTableBodyCell.appendChild(authorizeButton);
@@ -693,96 +708,74 @@
                     var mrrRaw = parseInt(document.querySelector("#MaxRecommendationResults").value);
                     config.MaxRecommendationResults = isNaN(mrrRaw) ? 10 : mrrRaw;
 
-                    for (let row of document.querySelector("#userTableBody").rows) {
-                        const userId = row.getAttribute("data-id");
-                        const invocationInput = row.cells[2].querySelector("input");
-                        if (!isValidInvocationName(invocationInput.value)) {
-                            validateInvocationName(invocationInput);
-                            continue;
-                        }
-
-                        // Collect library selections from the picker button in cell 3
-                        var libBtn = row.cells[3].querySelector("button[data-libraries]");
-                        var selectedLibs = libBtn ? JSON.parse(libBtn.getAttribute("data-libraries") || "[]") : [];
-
-                        if (userId === "undefined") {
-                            // create a new user skill
-                            let user = {
-                                "Username": row.cells[0].innerText,
-                                "InvocationName": row.cells[2].firstChild.value,
-                            };
-
-                            ApiClient.ajax({
-                                type: "POST",
-                                url: ApiClient.getUrl("alexaskill/api/user-skills"),
-                                data: JSON.stringify(user),
-                                contentType: "application/json"
-                            }).then(function (res) {
-                                res.json().then(function (user) {
-                                    row.setAttribute("data-id", user.Id);
-                                    for (let cell of row.cells) {
-                                        cell.setAttribute("data-id", user.Id);
-                                    }
-
-                                    row.cells[1].innerHTML = user.UserSkill.SkillId;
-                                    row.cells[2].firstChild.value = user.UserSkill.InvocationName;
-                                    row.cells[5].innerHTML = user.UserSkill.UserSkillStatus;
-                                    updateAuthorizeButton(row.cells[6].children[1], user, config);
-                                });
-                            }, function (res) {
-                                Dashboard.alert("Could not create a new user skill");
-                                res.json().then(function (data) {
-                                    Dashboard.alert("Reason:"  + data.error);
-                                });
-                            });
-                        } else {
-                            // update current user skill config
-                            var fmBehavior = row.cells[4].querySelector('[data-field="FuzzyMatchBehavior"]');
-                            var fmThreshold = row.cells[4].querySelector('[data-field="FuzzyMatchThreshold"]');
-                            var fmSuggestion = row.cells[4].querySelector('[data-field="FuzzySuggestionThreshold"]');
-                            let data = {
-                                "InvocationName": row.cells[2].firstChild.value,
-                                "AllowedLibraryIds": selectedLibs,
-                                "FuzzyMatchBehavior": fmBehavior ? fmBehavior.value : "Confirm",
-                                "FuzzyMatchThreshold": fmThreshold ? parseInt(fmThreshold.value) || 60 : 60,
-                                "FuzzySuggestionThreshold": fmSuggestion ? parseInt(fmSuggestion.value) || 40 : 40
-                            };
-
-                            ApiClient.ajax({
-                                type: "PATCH",
-                                url: ApiClient.getUrl("alexaskill/api/user-skills/" + userId),
-                                data: JSON.stringify(data),
-                                contentType: "application/json"
-                            }).then(function (res) {
-                                res.json().then(function (user) {
-                                    row.setAttribute("data-id", user.Id);
-
-                                    for (let cell of row.cells) {
-                                        cell.setAttribute("data-id", user.Id);
-                                    }
-
-                                    row.cells[1].innerHTML = user.UserSkill.SkillId;
-                                    row.cells[2].firstChild.value = user.UserSkill.InvocationName;
-                                    row.cells[5].innerHTML = user.UserSkill.UserSkillStatus;
-
-                                    updateAuthorizeButton(row.cells[6].children[1], user, config);
-                                });
-                            }, function (res) {
-                                Dashboard.alert("Could not update user skill");
-                                res.json().then(function (data) {
-                                    Dashboard.alert("Reason:"  + data.error);
-                                });                        
-                            });
-                        }                        
-                    }
-
-                    // Users are managed by dedicated POST/PATCH/DELETE endpoints above.
-                    const { Users: _users, ...generalConfig } = config;
-                    ApiClient.updatePluginConfiguration(Config.pluginUniqueId, generalConfig).then(function (result) {
+                    // Save general config FIRST so the full-config replacement
+                    // completes before user CRUD operations modify users below.
+                    ApiClient.updatePluginConfiguration(Config.pluginUniqueId, config).then(function (result) {
                         Dashboard.processPluginConfigurationUpdateResult(result);
-                    });
 
-                    Dashboard.hideLoadingMsg();
+                        for (let row of document.querySelector("#userTableBody").rows) {
+                            const userId = row.getAttribute("data-id");
+                            const invocationInput = row.cells[2].querySelector("input");
+                            if (!isValidInvocationName(invocationInput.value)) {
+                                validateInvocationName(invocationInput);
+                                continue;
+                            }
+
+                            // Collect library selections from the picker button in cell 3
+                            var libBtn = row.cells[3].querySelector("button[data-libraries]");
+                            var selectedLibs = libBtn ? JSON.parse(libBtn.getAttribute("data-libraries") || "[]") : [];
+
+                            if (userId === "undefined") {
+                                // create a new user skill
+                                let user = {
+                                    "Username": row.cells[0].innerText,
+                                    "InvocationName": row.cells[2].firstChild.value,
+                                };
+
+                                ApiClient.ajax({
+                                    type: "POST",
+                                    url: ApiClient.getUrl("alexaskill/api/user-skills"),
+                                    data: JSON.stringify(user),
+                                    contentType: "application/json"
+                                }).then(function (res) {
+                                    res.json().then(function (user) {
+                                        refreshUserRow(row, user, config);
+                                    });
+                                }, function (res) {
+                                    showAjaxError(res, "create");
+                                });
+                            } else {
+                                // update current user skill config
+                                var fmBehavior = row.cells[4].querySelector('[data-field="FuzzyMatchBehavior"]');
+                                var fmThreshold = row.cells[4].querySelector('[data-field="FuzzyMatchThreshold"]');
+                                var fmSuggestion = row.cells[4].querySelector('[data-field="FuzzySuggestionThreshold"]');
+                                let data = {
+                                    "InvocationName": row.cells[2].firstChild.value,
+                                    "AllowedLibraryIds": selectedLibs,
+                                    "FuzzyMatchBehavior": fmBehavior ? fmBehavior.value : "Confirm",
+                                    "FuzzyMatchThreshold": fmThreshold ? parseInt(fmThreshold.value) || 60 : 60,
+                                    "FuzzySuggestionThreshold": fmSuggestion ? parseInt(fmSuggestion.value) || 40 : 40
+                                };
+
+                                ApiClient.ajax({
+                                    type: "PATCH",
+                                    url: ApiClient.getUrl("alexaskill/api/user-skills/" + userId),
+                                    data: JSON.stringify(data),
+                                    contentType: "application/json"
+                                }).then(function (res) {
+                                    res.json().then(function (user) {
+                                        refreshUserRow(row, user, config);
+                                    });
+                                }, function (res) {
+                                    showAjaxError(res, "update");
+                                });
+                            }
+                        }
+                    }).catch(function () {
+                        Dashboard.alert("Failed to save configuration");
+                    }).finally(function () {
+                        Dashboard.hideLoadingMsg();
+                    });
                 });
 
                 e.preventDefault();

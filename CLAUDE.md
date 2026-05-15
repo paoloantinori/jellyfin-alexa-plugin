@@ -38,6 +38,17 @@ The `RequestPipeline` in `Alexa/Pipeline/` routes requests to handlers. `BaseHan
 - `GetStreamUrl()` / `GetVideoStreamUrl()` — Jellyfin `/stream?static=true` endpoints
 - `RetryAsync()` — library query retry with logging
 
+## Configuration Gating
+
+Three mechanisms control what Alexa users can access:
+
+- **Feature flags** (`IfFeatureDisabled()` in BaseHandler) — 9 boolean flags in `PluginConfiguration` (e.g. `RadioModeEnabled`, `PodcastsEnabled`). Handlers call this first to short-circuit with "feature disabled" response.
+- **Content type visibility** (`FilterByContentAccess()`) — `MusicEnabled`/`VideosEnabled`/`BooksEnabled` toggle which `BaseItemKind` types are queryable.
+- **Per-user library filtering** (`ApplyLibraryFilter()`) — `AllowedLibraryIds` per user restricts queries to specific top-level folders via `TopParentIds`.
+- **Per-user fuzzy match** — `FuzzyMatchBehavior` (Confirm/AutoPlay) and `FuzzyMatchThreshold` (0-100) per user.
+
+Configuration UI: `Jellyfin.Plugin.AlexaSkill/Configuration/config.html`.
+
 New intents need: handler class + entry in `Alexa/IntentNames.cs` + interaction model samples + locale response strings.
 
 ## Localization
@@ -53,6 +64,7 @@ Response strings are defined in `Alexa/Locale/ResponseStrings.cs` as keys, with 
 - `jellyfin.ruleset` controls code analysis (AllEnabledByDefault)
 - `TreatWarningsAsErrors` is false — warnings are advisory
 - Intent handlers use `async/await` with `ConfigureAwait(false)`
+- 1402+ unit tests in `Jellyfin.Plugin.AlexaSkill.Tests/` — feature flag tests use one file per flag, `AssertDisabledWhenFlagOff` helper
 
 ## Interaction Models
 
@@ -105,31 +117,6 @@ E2E tests are auto-skipped without Jellyfin connection. Provide via CLI flags or
 3. Commit, tag with version, push: `git push origin main --tags`
 4. Update `manifest.json` with new version entry (see `release.sh`)
 
-<!-- BACKLOG.MD MCP GUIDELINES START -->
+## Backlog Workflow
 
-<CRITICAL_INSTRUCTION>
-
-## BACKLOG WORKFLOW INSTRUCTIONS
-
-This project uses Backlog.md MCP for all task and project management activities.
-
-**CRITICAL GUIDANCE**
-
-- If your client supports MCP resources, read `backlog://workflow/overview` to understand when and how to use Backlog for this project.
-- If your client only supports tools or the above request fails, call `backlog.get_backlog_instructions()` to load the tool-oriented overview. Use the `instruction` selector when you need `task-creation`, `task-execution`, or `task-finalization`.
-
-- **First time working here?** Read the overview resource IMMEDIATELY to learn the workflow
-- **Already familiar?** You should have the overview cached ("## Backlog.md Overview (MCP)")
-- **When to read it**: BEFORE creating tasks, or when you're unsure whether to track work
-
-These guides cover:
-- Decision framework for when to create tasks
-- Search-first workflow to avoid duplicates
-- Links to detailed guides for task creation, execution, and finalization
-- MCP tools reference
-
-You MUST read the overview resource to understand the complete workflow. The information is NOT summarized here.
-
-</CRITICAL_INSTRUCTION>
-
-<!-- BACKLOG.MD MCP GUIDELINES END -->
+This project uses Backlog.md MCP. Before creating tasks, read `backlog://workflow/overview` (MCP resource) or call `backlog.get_backlog_instructions()`. Use `instruction` selector for `task-creation`, `task-execution`, or `task-finalization` guides.

@@ -144,7 +144,7 @@ public class LaunchRequestHandler : BaseHandler
         {
             string item_id = session.FullNowPlayingItem.Id.ToString();
 
-            return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, session.FullNowPlayingItem, user, null);
+            return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, session.FullNowPlayingItem, user);
         }
         else
         {
@@ -158,7 +158,7 @@ public class LaunchRequestHandler : BaseHandler
             string item_id = item.Id.ToString();
             session.FullNowPlayingItem = item;
 
-            return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, item, user, null);
+            return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, item, user);
         }
     }
 

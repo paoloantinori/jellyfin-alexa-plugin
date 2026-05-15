@@ -2,7 +2,4 @@
 
 ## Deployment
 
-The Jellyfin server runs on `minix` via a podman quadlet.
-
-Deploy commands have been consolidated into `.claude.local.md` to avoid duplication.
-See `.claude.local.md` for full deploy pipeline (build + backup + hot-swap + restart).
+Deploy commands, server credentials, and simulator setup are in `.claude.local.md` (gitignored). Read that file before any deploy or E2E testing task.
