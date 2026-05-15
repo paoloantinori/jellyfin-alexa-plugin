@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using global::Alexa.NET;
@@ -7,6 +8,8 @@ using global::Alexa.NET.Request;
 using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
@@ -285,5 +288,104 @@ public class QueryArtistLibraryIntentHandlerTests
         string speech = TestHelpers.GetSpeechText(response);
         Assert.Contains("Track 0", speech);
         Assert.DoesNotContain("Track 9", speech);
+    }
+
+    [Fact]
+    public async Task HandleAsync_TracksByArtist_WithApl_IncludesAplDirective()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(musician: "Soul Coughing");
+        var context = TestHelpers.CreateContextWithApl();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var artist = new MusicArtist { Name = "Soul Coughing", Id = Guid.NewGuid() };
+        var track1 = new Audio { Name = "Screenwriter's Blues", Id = Guid.NewGuid() };
+        var track2 = new Audio { Name = "Super Bon Bon", Id = Guid.NewGuid() };
+        var track3 = new Audio { Name = "Circles", Id = Guid.NewGuid() };
+
+        int callCount = 0;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(() =>
+            {
+                callCount++;
+                return callCount == 1
+                    ? new List<BaseItem> { artist }
+                    : new List<BaseItem> { track1, track2, track3 };
+            });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.Contains(response.Response.Directives, d => d.Type == "Alexa.Presentation.APL.RenderDocument");
+
+        var aplDirective = response.Response.Directives.First(d => d.Type == "Alexa.Presentation.APL.RenderDocument") as AplRenderDocumentDirective;
+        Assert.NotNull(aplDirective);
+        Assert.Equal("queryArtist", aplDirective.Token);
+        Assert.NotNull(aplDirective.DataSources);
+    }
+
+    [Fact]
+    public async Task HandleAsync_TracksByArtist_WithoutApl_NoAplDirective()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(musician: "Soul Coughing");
+        var context = TestHelpers.CreateContextWithoutApl();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var artist = new MusicArtist { Name = "Soul Coughing", Id = Guid.NewGuid() };
+        var track1 = new Audio { Name = "Screenwriter's Blues", Id = Guid.NewGuid() };
+        var track2 = new Audio { Name = "Super Bon Bon", Id = Guid.NewGuid() };
+
+        int callCount = 0;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(() =>
+            {
+                callCount++;
+                return callCount == 1
+                    ? new List<BaseItem> { artist }
+                    : new List<BaseItem> { track1, track2 };
+            });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.DoesNotContain(response.Response.Directives, d => d.Type == "Alexa.Presentation.APL.RenderDocument");
+    }
+
+    [Fact]
+    public async Task HandleAsync_AlbumsByArtist_WithApl_IncludesAplDirective()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(musician: "Beatles", queryType: "albums");
+        var context = TestHelpers.CreateContextWithApl();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var artist = new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() };
+        var album1 = new MusicAlbum { Name = "Abbey Road", Id = Guid.NewGuid() };
+        var album2 = new MusicAlbum { Name = "Let It Be", Id = Guid.NewGuid() };
+
+        int callCount = 0;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(() =>
+            {
+                callCount++;
+                return callCount == 1
+                    ? new List<BaseItem> { artist }
+                    : new List<BaseItem> { album1, album2 };
+            });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.Contains(response.Response.Directives, d => d.Type == "Alexa.Presentation.APL.RenderDocument");
     }
 }

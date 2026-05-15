@@ -866,7 +866,7 @@ public abstract class BaseHandler
     /// <param name="items">The items to display in the list.</param>
     /// <param name="token">A token identifying the APL directive.</param>
     /// <param name="action">The action for the APL list items.</param>
-    private protected static void TryAttachListDirective(
+    private protected void TryAttachListDirective(
         SkillResponse response,
         Context? context,
         string title,
@@ -874,13 +874,26 @@ public abstract class BaseHandler
         string token,
         string action = "selectItem")
     {
-        if (Apl.AplHelper.VisualsEnabled && Apl.AplHelper.DeviceSupportsApl(context))
+        if (!Apl.AplHelper.VisualsEnabled)
         {
-            var directive = Apl.AplHelper.BuildListDirective(title, items, token, action);
-            if (directive != null)
-            {
-                response.Response.Directives.Add(directive);
-            }
+            Logger.LogDebug("APL list skipped for '{Token}': visuals disabled in config", token);
+            return;
+        }
+
+        if (!Apl.AplHelper.DeviceSupportsApl(context))
+        {
+            Logger.LogDebug("APL list skipped for '{Token}': device does not support APL", token);
+            return;
+        }
+
+        var directive = Apl.AplHelper.BuildListDirective(title, items, token, action);
+        if (directive != null)
+        {
+            response.Response.Directives.Add(directive);
+        }
+        else
+        {
+            Logger.LogWarning("APL BuildListDirective returned null for '{Token}' with {Count} items", token, items.Count);
         }
     }
 

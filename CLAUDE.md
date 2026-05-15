@@ -64,7 +64,7 @@ Response strings are defined in `Alexa/Locale/ResponseStrings.cs` as keys, with 
 - `jellyfin.ruleset` controls code analysis (AllEnabledByDefault)
 - `TreatWarningsAsErrors` is false — warnings are advisory
 - Intent handlers use `async/await` with `ConfigureAwait(false)`
-- 1402+ unit tests in `Jellyfin.Plugin.AlexaSkill.Tests/` — feature flag tests use one file per flag, `AssertDisabledWhenFlagOff` helper
+- 1433+ unit tests in `Jellyfin.Plugin.AlexaSkill.Tests/` — feature flag tests use one file per flag, `AssertDisabledWhenFlagOff` helper
 
 ## Interaction Models
 
@@ -79,7 +79,8 @@ Response strings are defined in `Alexa/Locale/ResponseStrings.cs` as keys, with 
 ./scripts/run_nlu_tests.sh                  # all locales
 ./scripts/run_nlu_tests.sh -k "en-US"       # single locale
 ./scripts/run_nlu_tests.sh --dry-run         # validate fixtures only
-./scripts/validate_model.sh                  # validate interaction model JSON syntax
+./scripts/validate_model.sh <locale>         # upload & validate model via SMAPI (needs ask CLI auth)
+python3 scripts/validate_apl.py              # validate APL templates locally
 ```
 
 Requires `ask` CLI authenticated. Test fixtures in `tests/integration/fixtures/*.yaml`.

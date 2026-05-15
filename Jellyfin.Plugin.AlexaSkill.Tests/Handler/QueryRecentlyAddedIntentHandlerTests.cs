@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using global::Alexa.NET;
@@ -315,5 +316,50 @@ public class QueryRecentlyAddedIntentHandlerTests
         Assert.Equal(10, capturedQuery.Limit);
         Assert.NotNull(capturedQuery.IncludeItemTypes);
         Assert.True(capturedQuery.IncludeItemTypes.Length >= 3);
+    }
+
+    [Fact]
+    public async Task HandleAsync_WithResults_WithApl_IncludesAplDirective()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest();
+        var context = TestHelpers.CreateContextWithApl();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var movie = new Movie { Name = "Test Movie", Id = Guid.NewGuid() };
+        var episode = new Episode { Name = "Test Episode", Id = Guid.NewGuid() };
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { movie, episode });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.Contains(response.Response.Directives, d => d.Type == "Alexa.Presentation.APL.RenderDocument");
+    }
+
+    [Fact]
+    public async Task HandleAsync_WithResults_WithoutApl_NoAplDirective()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest();
+        var context = TestHelpers.CreateContextWithoutApl();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var movie = new Movie { Name = "Test Movie", Id = Guid.NewGuid() };
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { movie });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.DoesNotContain(response.Response.Directives, d => d.Type == "Alexa.Presentation.APL.RenderDocument");
     }
 }

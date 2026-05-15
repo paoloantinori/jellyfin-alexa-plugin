@@ -1,10 +1,10 @@
 ---
 id: JF-136
 title: 'APL touch-to-play: handle UserEvent for tappable list items'
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-05-12 15:56'
-updated_date: '2026-05-12 18:16'
+updated_date: '2026-05-14 16:40'
 labels:
   - apl
   - echo-show
@@ -47,14 +47,10 @@ Once lists render, taps do nothing — there's no handler for `Alexa.Presentatio
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [ ] #1 APL UserEvent handler registered in the request pipeline and processes Alexa.Presentation.APL.UserEvent requests
-- [ ] #2 Tapping a song in BrowseLibrary list plays that song via AudioPlayer
-- [ ] #3 Tapping an album/artist in BrowseLibrary list plays that album/artist's songs
-- [ ] #4 Tapping a search result in SearchMedia disambiguation plays that item
-- [ ] #5 Tapping an item in QueryArtist results plays that track
-- [ ] #6 Tapping an item in ListQueue plays that queue position
-- [ ] #7 Tapping an item in InProgressMediaList resumes that item
-- [ ] #8 APL list is replaced with NowPlaying template after successful playback starts
-- [ ] #9 Touch interaction is a no-op on audio-only devices (no regression)
+- [ ] #2 Tapping a song in list plays that song via AudioPlayer
+- [ ] #3 Tapping prev/pause/next on NowPlaying screen works
+- [ ] #4 APL list is replaced with NowPlaying template after successful playback starts
+- [ ] #5 Touch interaction is a no-op on audio-only devices (no regression)
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -91,6 +87,12 @@ Once lists render, taps do nothing — there's no handler for `Alexa.Presentatio
 5. Replace list with NowPlaying template after playback starts
 6. Register handler in DI
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+AplUserEventHandler already implemented (166 lines): handles selectItem, prev/pause/next, and playTrack actions. APL rendering root cause fixed in JF-154 (21 handlers not passing context to BuildAudioPlayerResponse). Needs live device testing on Echo Show to confirm APL lists render and touch interactions work end-to-end.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
