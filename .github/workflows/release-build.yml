@@ -6,12 +6,18 @@ on:
       - "*"
   workflow_dispatch:
 
+permissions:
+  contents: write
+  models: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Parse version
         id: version
@@ -61,9 +67,59 @@ jobs:
         with:
           tag_name: ${{ steps.version.outputs.VERSION }}
           files: AlexaSkill_${{ steps.version.outputs.VERSION }}.zip
-          generate_release_notes: true
+          generate_release_notes: false
+          body: "Generating release notes..."
           fail_on_unmatched_files: true
           prerelease: false
+
+      - name: Generate AI release notes
+        id: release-notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          PREV_TAG=$(git tag --sort=-version:refname | head -20 | grep -v "^${VERSION}$" | head -1)
+
+          if [ -z "$PREV_TAG" ]; then
+            LOG="Initial release ${VERSION}."
+          else
+            LOG=$(git log "${PREV_TAG}..${VERSION}" --pretty=format:"- %s" --no-merges 2>/dev/null || echo "- Release ${VERSION}")
+          fi
+
+          PROMPT="You are a release notes writer for a Jellyfin Alexa Skill plugin (C#).
+          The plugin lets users play music, videos, movies, and TV episodes from their Jellyfin server via Alexa devices.
+
+          Write concise, user-facing release notes in markdown.
+          Rules:
+          - Group related commits under descriptive headings (e.g. Bug Fixes, New Features, Improvements).
+          - Use present tense, imperative mood (e.g. 'Fix video playback on Echo Show devices').
+          - Do NOT mention internal refactors, test additions, or CI changes unless user-visible.
+          - Do NOT include a heading with the version number — that's already in the release title.
+          - Keep it short: 3-10 bullet points max.
+          - Do not wrap the output in markdown code fences.
+
+          Commits since previous release:
+          ${LOG}"
+
+          NOTES=$(curl -s https://models.inference.ai.azure.com/chat/completions \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -d "$(jq -n --arg prompt "$PROMPT" '{
+              model: "openai/gpt-4o-mini",
+              messages: [{role: "user", content: $prompt}],
+              temperature: 0.4,
+              max_tokens: 1024
+            }')" | jq -r '.choices[0].message.content // "Release ${VERSION}"')
+
+          # Write to file for multi-line GH_ACTION_ENV
+          echo "NOTES<<NOTES_EOF" >> "$GITHUB_ENV"
+          echo "$NOTES" >> "$GITHUB_ENV"
+          echo "NOTES_EOF" >> "$GITHUB_ENV"
+
+      - name: Update release with AI notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${{ steps.version.outputs.VERSION }}" --notes "$NOTES"
 
       - name: Add release to repo manifest
         run: python3 .github/workflows/add_release_to_manifest.py ${{ steps.version.outputs.VERSION }} AlexaSkill_${{ steps.version.outputs.VERSION }}.zip
