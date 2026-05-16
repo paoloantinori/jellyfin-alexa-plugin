@@ -313,11 +313,11 @@
           "Spiele meine Lieblings {media_type}",
           "Spiele meine {media_type} Favoriten",
           "Spiele meine Favoriten",
-          "spiele {username}s favoriten",
+          "spiele favoriten von {username}",
           "spiele die favoriten von {username}",
-          "hör {username}s favoriten",
-          "spiele {username}s lieblings {media_type}",
-          "spiele {username}s lieblingslieder"
+          "höre favoriten von {username}",
+          "spiele lieblings {media_type} von {username}",
+          "spiele lieblingslieder von {username}"
         ],
         "slots": [
           {

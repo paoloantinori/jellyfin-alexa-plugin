@@ -439,12 +439,12 @@
           "play what I like",
           "play my best of",
           "stick on my favourite {media_type}",
-          "play {username}'s favourites",
-          "play {username}'s favourite songs",
-          "play {username}'s favourite music",
-          "play {username}'s favourites playlist",
-          "listen to {username}'s favourites",
-          "play {username}'s favourite {media_type}"
+          "play favourites for {username}",
+          "play favourite songs for {username}",
+          "play favourite music for {username}",
+          "play the favourites playlist for {username}",
+          "listen to favourites for {username}",
+          "play favourite {media_type} for {username}"
         ],
         "slots": [
           {

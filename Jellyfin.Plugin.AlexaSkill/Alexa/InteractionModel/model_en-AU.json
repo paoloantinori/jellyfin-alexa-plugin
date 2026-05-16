@@ -320,13 +320,13 @@
           "Play my favorite {media_type}",
           "Play my {media_type} favorite",
           "Play my favorites",
-          "play {username}'s favorites",
-          "play {username}'s favourite songs",
-          "play {username}'s favourite music",
-          "play {username}'s favorites playlist",
-          "listen to {username}'s favorites",
-          "play {username}'s favorite {media_type}",
-          "play {username}'s favourite {media_type}"
+          "play favorites for {username}",
+          "play favorite songs for {username}",
+          "play favorite music for {username}",
+          "play the favorites playlist for {username}",
+          "listen to favorites for {username}",
+          "play favorite {media_type} for {username}",
+          "play favorite {media_type} for {username}"
         ],
         "slots": [
           {
