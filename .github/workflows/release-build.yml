@@ -124,15 +124,12 @@ jobs:
       - name: Add release to repo manifest
         run: python3 .github/workflows/add_release_to_manifest.py ${{ steps.version.outputs.VERSION }} AlexaSkill_${{ steps.version.outputs.VERSION }}.zip
 
-      - name: Commit manifest changes
-        run: |
-          git config --local user.name  "github-actions[bot]"
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git add manifest.json
-          git commit -m "Added new release to repo manifest"
-
-      - name: Push manifest changes
-        uses: ad-m/github-push-action@master
+      - name: Create PR for manifest update
+        uses: peter-evans/create-pull-request@v6
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          branch: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "Added new release to repo manifest"
+          title: "Update manifest for v${{ steps.version.outputs.VERSION }}"
+          body: "Automated manifest update for release v${{ steps.version.outputs.VERSION }}"
+          branch: update-manifest-${{ steps.version.outputs.VERSION }}
+          base: main

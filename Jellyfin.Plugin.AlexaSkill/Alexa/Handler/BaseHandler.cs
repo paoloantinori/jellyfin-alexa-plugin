@@ -702,9 +702,14 @@ public abstract class BaseHandler
         Entities.User? user = null)
         where T : class
     {
+        if (candidates == null || candidates.Count == 0)
+        {
+            return (FuzzyMissOutcome.NotFound, null);
+        }
+
         var bestWithScore = FuzzyMatcher.FindBestMatchWithScore(query, candidates, selector);
 
-        if (bestWithScore == null || bestWithScore.Value.Score < FuzzyMatcher.GetSuggestionThreshold(user))
+        if (bestWithScore == null || bestWithScore.Value.Item == null || bestWithScore.Value.Score < FuzzyMatcher.GetSuggestionThreshold(user))
         {
             return (FuzzyMissOutcome.NotFound, null);
         }
@@ -737,7 +742,7 @@ public abstract class BaseHandler
         }
 
         // Confirm mode: "Did you mean X?"
-        var matches = matchExtractor(best);
+        var matches = matchExtractor(best) ?? new List<(Guid, string)>();
         string? promptSsml = GetSsml("FuzzySuggestionPromptSsml", locale, query, selector(best));
 
         SkillResponse response;
