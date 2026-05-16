@@ -124,6 +124,16 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         if (_queueManager != null)
         {
             _queueManager.MoveTo(context.System.Device.DeviceID, itemId);
+
+            // Also update the current position for resume-after-pause accuracy.
+            // PlaybackNearlyFinished fires periodically, so this keeps the stored
+            // position reasonably fresh even if PlaybackStopped doesn't fire.
+            var queue = _queueManager.GetOrCreateQueue(context.System.Device.DeviceID);
+            queue.CurrentItemId = itemId;
+            if (context.AudioPlayer != null)
+            {
+                queue.CurrentPositionTicks = TimeSpan.FromMilliseconds(context.AudioPlayer.OffsetInMilliseconds).Ticks;
+            }
         }
 
         // Use the optimized /stream?static=true endpoint for pre-fetched playback

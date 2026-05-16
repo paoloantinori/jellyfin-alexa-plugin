@@ -36,4 +36,16 @@ public sealed class DeviceQueue
     /// Gets or sets the UTC timestamp of when this queue was last modified.
     /// </summary>
     public DateTime LastModifiedUtc { get; set; } = DateTime.UtcNow;
+
+    /// <summary>
+    /// Gets or sets the playback position (in ticks) of the currently playing item
+    /// at the time of the last pause/stop event. Used for resume-after-pause recovery.
+    /// </summary>
+    public long CurrentPositionTicks { get; set; }
+
+    /// <summary>
+    /// Gets or sets the item ID of the currently playing track at the time of
+    /// the last pause/stop event. Used for resume-after-pause recovery.
+    /// </summary>
+    public string? CurrentItemId { get; set; }
 }
