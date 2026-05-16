@@ -103,6 +103,33 @@ public class PlaySongIntentHandler : BaseHandler
                 () => _libraryManager.GetItemList(artistQuery),
                 "GetArtists",
                 cancellationToken).ConfigureAwait(false);
+
+            // Fallback: fuzzy match when SearchTerm fails due to ASR truncation.
+            if (artists.Count == 0)
+            {
+                string firstWord = musicianQuery.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? musicianQuery;
+                var prefixQuery = new InternalItemsQuery()
+                {
+                    User = jellyfinUser,
+                    Recursive = true,
+                    NameStartsWith = firstWord,
+                    IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
+                    DtoOptions = new DtoOptions(true)
+                };
+                ApplyLibraryFilter(prefixQuery, user, _libraryManager);
+
+                IReadOnlyList<BaseItem> prefixArtists = await RetryAsync(
+                    () => _libraryManager.GetItemList(prefixQuery),
+                    "GetArtistsFuzzy",
+                    cancellationToken).ConfigureAwait(false);
+
+                BaseItem? fuzzy = FuzzyMatch(musicianQuery, prefixArtists, a => a.Name, user);
+                if (fuzzy != null)
+                {
+                    artists = new List<BaseItem> { fuzzy };
+                }
+            }
+
             if (artists.Count == 0)
             {
                 return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByArtist", locale, musicianQuery));

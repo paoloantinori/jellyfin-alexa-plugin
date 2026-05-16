@@ -720,7 +720,15 @@ public abstract class BaseHandler
 
         if (autoAccept && autoPlayFunc != null)
         {
-            SkillResponse playResponse = autoPlayFunc(best);
+            SkillResponse? playResponse = autoPlayFunc(best);
+
+            // autoPlayFunc may return null when the caller only uses it as a side-effect
+            // to narrow the candidate list (e.g. PlayArtistSongsIntentHandler).
+            if (playResponse == null)
+            {
+                return (FuzzyMissOutcome.SuggestionHandled, null);
+            }
+
             string? ssml = GetSsml("FuzzyAutoPlayAnnouncementSsml", locale, selector(best), query);
             playResponse.Response.OutputSpeech = ssml != null
                 ? new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" }

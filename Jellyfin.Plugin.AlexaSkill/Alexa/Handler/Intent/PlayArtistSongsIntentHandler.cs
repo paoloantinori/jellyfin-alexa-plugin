@@ -106,6 +106,33 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             () => _libraryManager.GetItemList(artistSearchQuery),
             "GetArtists",
             cancellationToken).ConfigureAwait(false);
+
+        // Fallback: when SearchTerm fails (e.g. Alexa ASR truncation "soul coughin" vs "Soul Coughing"),
+        // try a broader prefix search and fuzzy match the results.
+        if (artists.Count == 0)
+        {
+            string firstWord = musician.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? musician;
+            var prefixQuery = new InternalItemsQuery()
+            {
+                Recursive = true,
+                NameStartsWith = firstWord,
+                IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
+                DtoOptions = new DtoOptions(true)
+            };
+            ApplyLibraryFilter(prefixQuery, user, _libraryManager);
+
+            IReadOnlyList<BaseItem> prefixArtists = await RetryAsync(
+                () => _libraryManager.GetItemList(prefixQuery),
+                "GetArtistsFuzzy",
+                cancellationToken).ConfigureAwait(false);
+
+            BaseItem? fuzzy = FuzzyMatch(musician, prefixArtists, a => a.Name, user);
+            if (fuzzy != null)
+            {
+                artists = new List<BaseItem> { fuzzy };
+            }
+        }
+
         if (artists.Count == 0)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundArtist", locale, musician));
@@ -113,7 +140,6 @@ public class PlayArtistSongsIntentHandler : BaseHandler
 
         if (artists.Count > 1)
         {
-            BaseItem? artistMatch = null;
             var (missOutcome, missResponse) = HandleFuzzyMiss(
                 musician,
                 artists,
@@ -123,7 +149,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 locale,
                 best =>
                 {
-                    artistMatch = best;
+                    artists = new List<BaseItem> { best };
                     return null!;
                 },
                 user: user);
@@ -134,8 +160,6 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 {
                     return missResponse;
                 }
-
-                artists = new List<BaseItem> { artistMatch! };
             }
             else
             {
