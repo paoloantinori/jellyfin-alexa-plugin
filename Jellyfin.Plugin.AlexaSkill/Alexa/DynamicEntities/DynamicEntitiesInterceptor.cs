@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET.Request.Type;
+using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -45,6 +46,13 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
     public async Task ProcessAsync(RequestContext context, CancellationToken cancellationToken)
     {
         if (context.Response?.Response == null)
+        {
+            return;
+        }
+
+        // AudioPlayer.Play responses must not include other directives.
+        // Adding Dialog.UpdateDynamicEntities would cause Alexa to reject the response.
+        if (context.Response.Response.Directives?.Any(d => d is AudioPlayerPlayDirective) == true)
         {
             return;
         }

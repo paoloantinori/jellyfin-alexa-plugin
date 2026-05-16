@@ -6,6 +6,7 @@ using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
+using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.DynamicEntities;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
@@ -304,5 +305,84 @@ public class DynamicEntitiesInterceptorTests
         // OperationCanceledException should NOT be swallowed
         await Assert.ThrowsAsync<OperationCanceledException>(
             () => interceptor.ProcessAsync(ctx, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ProcessAsync_AudioPlayerPlayDirective_SkipsDynamicEntities()
+    {
+        var userId = Guid.NewGuid();
+        var interceptor = CreateInterceptor();
+        var request = new LaunchRequest { Type = "LaunchRequest" };
+        var alexaContext = new Context
+        {
+            System = new global::Alexa.NET.Request.AlexaSystem
+            {
+                User = new global::Alexa.NET.Request.User { AccessToken = userId.ToString() },
+                Device = new Device { DeviceID = "test-device" }
+            }
+        };
+
+        var ctx = CreateContext(request, alexaContext);
+
+        // Simulate a response with an AudioPlayer.Play directive (e.g. from PlayArtistIntentHandler)
+        ctx.Response.Response.Directives = new List<IDirective>
+        {
+            new AudioPlayerPlayDirective
+            {
+                AudioItem = new AudioItem
+                {
+                    Stream = new AudioItemStream
+                    {
+                        Url = "https://example.com/stream.mp3",
+                        OffsetInMilliseconds = 0
+                    }
+                }
+            }
+        };
+
+        await interceptor.ProcessAsync(ctx, CancellationToken.None);
+
+        // Builder should not be called because AudioPlayer.Play responses cannot include other directives
+        _builderMock.Verify(
+            b => b.BuildFromRecentItems(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Guid[]>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        // Only the AudioPlayerPlayDirective should be present, no DynamicEntities directive
+        Assert.Single(ctx.Response.Response.Directives);
+        Assert.IsType<AudioPlayerPlayDirective>(ctx.Response.Response.Directives[0]);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_NoAudioPlayerDirective_NewSession_StillInjectsDynamicEntities()
+    {
+        var userId = Guid.NewGuid();
+        var directive = new DynamicEntitiesDirective();
+
+        _builderMock
+            .Setup(b => b.BuildFromRecentItems(userId, It.IsAny<string>(), It.IsAny<Guid[]>(), It.IsAny<CancellationToken>()))
+            .Returns(directive);
+
+        var interceptor = CreateInterceptor();
+        var request = new LaunchRequest { Type = "LaunchRequest" };
+        var alexaContext = new Context
+        {
+            System = new global::Alexa.NET.Request.AlexaSystem
+            {
+                User = new global::Alexa.NET.Request.User { AccessToken = userId.ToString() },
+                Device = new Device { DeviceID = "test-device" }
+            }
+        };
+
+        var ctx = CreateContext(request, alexaContext);
+
+        await interceptor.ProcessAsync(ctx, CancellationToken.None);
+
+        // Builder should have been called and directive injected
+        _builderMock.Verify(
+            b => b.BuildFromRecentItems(userId, It.IsAny<string>(), It.IsAny<Guid[]>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        Assert.NotNull(ctx.Response.Response.Directives);
+        Assert.Contains(ctx.Response.Response.Directives, d => d is DynamicEntitiesDirective);
     }
 }
