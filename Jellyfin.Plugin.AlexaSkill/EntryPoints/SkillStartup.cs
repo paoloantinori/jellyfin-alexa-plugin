@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,6 +10,7 @@ using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Alexa.InteractionModel;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Manifest;
+using Jellyfin.Plugin.AlexaSkill.Alexa.ModelDeployment;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Controller;
 using Jellyfin.Plugin.AlexaSkill.Diagnostics;
@@ -29,6 +31,7 @@ public class SkillStartup : IHostedService, IDisposable
     private readonly ILogger<SkillStartup> _logger;
     private readonly ISessionManager _sessionManager;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly ModelDeploymentManager _modelDeploymentManager;
     private readonly SearchResultCache _searchCache;
     private readonly CircuitBreaker _circuitBreaker;
     private readonly RequestCounters _requestCounters;
@@ -51,6 +54,7 @@ public class SkillStartup : IHostedService, IDisposable
         ISessionManager sessionManager,
         ILoggerFactory loggerFactory,
         IHttpClientFactory httpClientFactory,
+        ModelDeploymentManager modelDeploymentManager,
         SearchResultCache searchCache,
         CircuitBreaker circuitBreaker,
         RequestCounters requestCounters,
@@ -58,6 +62,7 @@ public class SkillStartup : IHostedService, IDisposable
     {
         _sessionManager = sessionManager;
         _httpClientFactory = httpClientFactory;
+        _modelDeploymentManager = modelDeploymentManager;
         _searchCache = searchCache;
         _circuitBreaker = circuitBreaker;
         _requestCounters = requestCounters;
@@ -164,6 +169,8 @@ public class SkillStartup : IHostedService, IDisposable
                     {
                         Collection<SkillInteractionModel> skillInteractionModels = Plugin.Instance.BuildSkillInteractionModels(user.UserSkill.InvocationName);
 
+                        ValidateLocaleRestrictions(skillInteractionModels);
+
                         if (!string.IsNullOrEmpty(user.UserSkill.SkillId) && user.SmapiManagement != null)
                         {
                             ManifestSkill? cloudManifestSkill = null;
@@ -195,6 +202,8 @@ public class SkillStartup : IHostedService, IDisposable
                                         await user.SmapiManagement.UpdateSkillAsync(user.UserSkill.SkillId!, manifestSkill, skillInteractionModels).ConfigureAwait(false);
                                         return null;
                                     }).ConfigureAwait(false);
+
+                                    await CaptureLocaleModelStatusesAsync(user, user.UserSkill.SkillId!).ConfigureAwait(false);
                                 }
 
                                 if (!accountLinkingData.AuthorizationUrl.Equals(endpointUriString, StringComparison.Ordinal)
@@ -238,6 +247,8 @@ public class SkillStartup : IHostedService, IDisposable
                             user.UserSkill.SkillId = skillId;
                             user.UserSkill.UserSkillStatus = UserSkillStatus.AccountLinkPending;
                             Plugin.Instance.SaveConfiguration();
+
+                            await CaptureLocaleModelStatusesAsync(user, skillId).ConfigureAwait(false);
                         }
                     }
                 }
@@ -308,6 +319,74 @@ public class SkillStartup : IHostedService, IDisposable
             }
 
             _disposed = true;
+        }
+    }
+
+    /// <summary>
+    /// Validates each locale's embedded interaction model against SMAPI restrictions.
+    /// Logs warnings for any violations found, but does not block startup.
+    /// </summary>
+    private void ValidateLocaleRestrictions(Collection<SkillInteractionModel> models)
+    {
+        foreach (var sim in models)
+        {
+            string? modelJson = _modelDeploymentManager.GetDefaultModelJson(sim.Locale);
+            if (modelJson == null)
+            {
+                continue;
+            }
+
+            var restrictionErrors = _modelDeploymentManager.ValidateSMAPIRestrictions(modelJson, sim.Locale);
+            if (restrictionErrors.Count > 0)
+            {
+                _logger.LogWarning(
+                    "SMAPI restriction violations for locale {Locale}: {Errors}",
+                    sim.Locale, string.Join("; ", restrictionErrors));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Captures per-locale interaction model build status from SMAPI and stores it in configuration.
+    /// </summary>
+    private async Task CaptureLocaleModelStatusesAsync(Entities.User user, string skillId)
+    {
+        try
+        {
+            var status = await AlexaUtil.CallAsync(user, () => user.SmapiManagement!.GetSkillStatusAsync(skillId)).ConfigureAwait(false);
+
+            var config = Plugin.Instance!.Configuration;
+            var now = DateTime.UtcNow;
+
+            foreach (var kvp in status.InteractionModel)
+            {
+                string locale = kvp.Key;
+                var localeStatus = kvp.Value;
+                string state = localeStatus.LastModified.Status.ToString();
+
+                string? error = null;
+                if (localeStatus.Errors is { Length: > 0 })
+                {
+                    error = string.Join("; ", localeStatus.Errors.Select(e => $"{e.Code}: {e.Message}"));
+                    _logger.LogWarning(
+                        "Interaction model build {Status} for locale {Locale}: {Error}",
+                        state, locale, error);
+                }
+
+                config.LocaleModelStatuses[locale] = new Configuration.LocaleModelStatus
+                {
+                    Status = state,
+                    LastUpdated = now,
+                    Error = error,
+                    Source = "Embedded",
+                };
+            }
+
+            Plugin.Instance.SaveConfiguration();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to capture per-locale model status for skill {SkillId}. Non-critical.", skillId);
         }
     }
 }

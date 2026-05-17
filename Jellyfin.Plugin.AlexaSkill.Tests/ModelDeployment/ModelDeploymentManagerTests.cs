@@ -318,4 +318,203 @@ public class ModelDeploymentManagerTests
         // Assert
         Assert.Null(json);
     }
+
+    // --- ValidateSMAPIRestrictions ---
+
+    [Fact]
+    public void ValidateSMAPIRestrictions_EmptySlotType_ReturnsError()
+    {
+        string json = JsonSerializer.Serialize(new
+        {
+            languageModel = new
+            {
+                invocationName = "test",
+                intents = new[] { new { name = "TestIntent", samples = new[] { "test" } } },
+                types = new object[]
+                {
+                    new { name = "EmptyType", values = Array.Empty<object>() },
+                },
+            },
+        });
+
+        var errors = _sut.ValidateSMAPIRestrictions(json, "it-IT");
+
+        Assert.Single(errors);
+        Assert.Contains("EmptyType", errors[0]);
+        Assert.Contains("no values", errors[0], StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ValidateSMAPIRestrictions_SlotTypeWithValues_NoError()
+    {
+        string json = JsonSerializer.Serialize(new
+        {
+            languageModel = new
+            {
+                invocationName = "test",
+                intents = new[] { new { name = "TestIntent", samples = new[] { "test" } } },
+                types = new object[]
+                {
+                    new
+                    {
+                        name = "MediaType",
+                        values = new[] { new { name = new { value = "song" } } },
+                    },
+                },
+            },
+        });
+
+        var errors = _sut.ValidateSMAPIRestrictions(json, "it-IT");
+
+        Assert.Empty(errors);
+    }
+
+    [Fact]
+    public void ValidateSMAPIRestrictions_SensitivityInNonEnglishLocale_ReturnsError()
+    {
+        string json = JsonSerializer.Serialize(new
+        {
+            languageModel = new
+            {
+                invocationName = "test",
+                intents = new[] { new { name = "TestIntent", samples = new[] { "test" } } },
+                modelConfiguration = new
+                {
+                    fallbackIntentSensitivity = new { level = "LOW" },
+                },
+            },
+        });
+
+        var errors = _sut.ValidateSMAPIRestrictions(json, "it-IT");
+
+        Assert.Single(errors);
+        Assert.Contains("fallbackIntentSensitivity", errors[0], StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("it-IT", errors[0]);
+    }
+
+    [Theory]
+    [InlineData("en-US")]
+    [InlineData("en-GB")]
+    [InlineData("en-AU")]
+    [InlineData("de-DE")]
+    public void ValidateSMAPIRestrictions_SensitivityInSupportedLocale_NoError(string locale)
+    {
+        string json = JsonSerializer.Serialize(new
+        {
+            languageModel = new
+            {
+                invocationName = "test",
+                intents = new[] { new { name = "TestIntent", samples = new[] { "test" } } },
+                modelConfiguration = new
+                {
+                    fallbackIntentSensitivity = new { level = "LOW" },
+                },
+            },
+        });
+
+        var errors = _sut.ValidateSMAPIRestrictions(json, locale);
+
+        Assert.Empty(errors);
+    }
+
+    [Theory]
+    [InlineData("es-ES")]
+    [InlineData("fr-FR")]
+    [InlineData("ja-JP")]
+    [InlineData("pt-BR")]
+    [InlineData("ar-SA")]
+    public void ValidateSMAPIRestrictions_SensitivityInUnsupportedLocale_ReturnsError(string locale)
+    {
+        string json = JsonSerializer.Serialize(new
+        {
+            languageModel = new
+            {
+                invocationName = "test",
+                intents = new[] { new { name = "TestIntent", samples = new[] { "test" } } },
+                modelConfiguration = new
+                {
+                    fallbackIntentSensitivity = new { level = "LOW" },
+                },
+            },
+        });
+
+        var errors = _sut.ValidateSMAPIRestrictions(json, locale);
+
+        Assert.Single(errors);
+    }
+
+    [Fact]
+    public void ValidateSMAPIRestrictions_MultipleViolations_ReturnsAllErrors()
+    {
+        string json = JsonSerializer.Serialize(new
+        {
+            languageModel = new
+            {
+                invocationName = "test",
+                intents = new[] { new { name = "TestIntent", samples = new[] { "test" } } },
+                types = new object[]
+                {
+                    new { name = "EmptyType", values = Array.Empty<object>() },
+                },
+                modelConfiguration = new
+                {
+                    fallbackIntentSensitivity = new { level = "LOW" },
+                },
+            },
+        });
+
+        var errors = _sut.ValidateSMAPIRestrictions(json, "fr-FR");
+
+        Assert.Equal(2, errors.Count);
+    }
+
+    [Fact]
+    public void ValidateSMAPIRestrictions_ValidModel_NoErrors()
+    {
+        string json = JsonSerializer.Serialize(new
+        {
+            languageModel = new
+            {
+                invocationName = "test",
+                intents = new[] { new { name = "TestIntent", samples = new[] { "test" } } },
+                types = new object[]
+                {
+                    new
+                    {
+                        name = "MediaType",
+                        values = new[] { new { name = new { value = "song" } } },
+                    },
+                },
+            },
+        });
+
+        var errors = _sut.ValidateSMAPIRestrictions(json, "en-US");
+
+        Assert.Empty(errors);
+    }
+
+    [Fact]
+    public void ValidateSMAPIRestrictions_WrappedModel_Works()
+    {
+        string json = JsonSerializer.Serialize(new
+        {
+            interactionModel = new
+            {
+                languageModel = new
+                {
+                    invocationName = "test",
+                    intents = new[] { new { name = "TestIntent", samples = new[] { "test" } } },
+                    types = new object[]
+                    {
+                        new { name = "EmptyType", values = Array.Empty<object>() },
+                    },
+                },
+            },
+        });
+
+        var errors = _sut.ValidateSMAPIRestrictions(json, "it-IT");
+
+        Assert.Single(errors);
+        Assert.Contains("EmptyType", errors[0]);
+    }
 }

@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
+using Jellyfin.Plugin.AlexaSkill.Alexa.ModelDeployment;
 using Jellyfin.Plugin.AlexaSkill.Diagnostics;
 using Jellyfin.Plugin.AlexaSkill.EntryPoints;
 using MediaBrowser.Controller.Session;
@@ -37,7 +38,8 @@ public class SkillStartupTests
 
     private SkillStartup CreateStartup()
     {
-        return new SkillStartup(_sessionManagerMock.Object, _loggerFactory, _httpClientFactory, _searchCache, new CircuitBreaker(), new RequestCounters(), _connectivityChecker);
+        var mdm = new ModelDeploymentManager(_httpClientFactory, _loggerFactory.CreateLogger<ModelDeploymentManager>());
+        return new SkillStartup(_sessionManagerMock.Object, _loggerFactory, _httpClientFactory, mdm, _searchCache, new CircuitBreaker(), new RequestCounters(), _connectivityChecker);
     }
 
     [Fact]

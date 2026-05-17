@@ -125,6 +125,14 @@ public class PluginConfiguration : BasePluginConfiguration
     public string? LastModelDeployStatus { get; set; }
 
     /// <summary>
+    /// Gets or sets per-locale interaction model build status from SMAPI.
+    /// Keyed by locale (e.g. "en-US", "it-IT").
+    /// </summary>
+#pragma warning disable CA2227
+    public Dictionary<string, LocaleModelStatus> LocaleModelStatuses { get; set; } = new();
+#pragma warning restore CA2227
+
+    /// <summary>
     /// Ensure the URL ends with a trailing slash so that relative URI construction
     /// preserves path segments. Without this, <c>new Uri("https://host/path", "Items/1")</c>
     /// resolves to <c>https://host/Items/1</c> instead of <c>https://host/path/Items/1</c>.
@@ -328,4 +336,22 @@ public class PluginConfiguration : BasePluginConfiguration
 
         return false;
     }
+}
+
+/// <summary>
+/// Stores the SMAPI build status for a single locale's interaction model.
+/// </summary>
+public record LocaleModelStatus
+{
+    /// <summary>Gets the build status: "SUCCEEDED", "FAILED", or "IN_PROGRESS".</summary>
+    public string Status { get; init; } = string.Empty;
+
+    /// <summary>Gets the UTC timestamp when this status was last checked.</summary>
+    public DateTime LastUpdated { get; init; }
+
+    /// <summary>Gets the error message if the build failed, null otherwise.</summary>
+    public string? Error { get; init; }
+
+    /// <summary>Gets the model source: "Embedded" (bundled) or "Custom" (user-provided).</summary>
+    public string Source { get; init; } = "Embedded";
 }

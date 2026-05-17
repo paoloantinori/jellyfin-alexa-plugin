@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -123,6 +124,84 @@ public class ModelDeploymentManager
     }
 
     /// <summary>
+    /// Validates an interaction model JSON against SMAPI restrictions that vary by locale.
+    /// Catches issues that Amazon rejects at build time but that structural validation cannot detect.
+    /// </summary>
+    /// <param name="json">The raw interaction model JSON string (may or may not have interactionModel envelope).</param>
+    /// <param name="locale">The target locale (e.g. "en-US", "it-IT").</param>
+    /// <returns>A list of restriction violations. Empty means the model passes all checks.</returns>
+    public List<string> ValidateSMAPIRestrictions(string json, string locale)
+    {
+        var errors = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(json) || string.IsNullOrWhiteSpace(locale))
+        {
+            return errors;
+        }
+
+        JsonDocument doc;
+        try
+        {
+            doc = JsonDocument.Parse(json);
+        }
+        catch (JsonException)
+        {
+            return errors; // Structural validation handles malformed JSON
+        }
+
+        JsonElement root = doc.RootElement;
+
+        // Unwrap interactionModel envelope if present
+        if (root.TryGetProperty("interactionModel", out var imElement))
+        {
+            root = imElement;
+        }
+
+        if (!root.TryGetProperty("languageModel", out var languageModel))
+        {
+            return errors; // Structural validation handles missing languageModel
+        }
+
+        // Check 1: fallbackIntentSensitivity only valid for English and German locales
+        if (languageModel.TryGetProperty("modelConfiguration", out var mc))
+        {
+            if (mc.TryGetProperty("fallbackIntentSensitivity", out _))
+            {
+                if (!IsLocaleSupportedForFallbackSensitivity(locale))
+                {
+                    errors.Add(
+                        $"fallbackIntentSensitivity is only supported for English (en-*) and German (de-DE) locales, not '{locale}'.");
+                }
+            }
+        }
+
+        // Check 2: Custom slot types must have at least one value
+        if (languageModel.TryGetProperty("types", out var types)
+            && types.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var type in types.EnumerateArray())
+            {
+                if (!type.TryGetProperty("name", out var nameEl))
+                {
+                    continue;
+                }
+
+                string typeName = nameEl.GetString() ?? string.Empty;
+
+                if (type.TryGetProperty("values", out var values)
+                    && values.ValueKind == JsonValueKind.Array
+                    && values.GetArrayLength() == 0)
+                {
+                    errors.Add(
+                        $"Custom slot type '{typeName}' has no values. SMAPI rejects empty custom types.");
+                }
+            }
+        }
+
+        return errors;
+    }
+
+    /// <summary>
     /// Fetches interaction model JSON from a URL.
     /// </summary>
     /// <param name="url">The URL to fetch the model JSON from.</param>
@@ -195,6 +274,14 @@ public class ModelDeploymentManager
 
         try
         {
+            var restrictionErrors = ValidateSMAPIRestrictions(modelJson, locale);
+            if (restrictionErrors.Count > 0)
+            {
+                string message = $"SMAPI restriction violations: {string.Join("; ", restrictionErrors)}";
+                _logger.LogWarning("Pre-flight validation failed for locale {Locale}: {Errors}", locale, message);
+                return new ModelDeploymentResult(false, message, string.Empty);
+            }
+
             // Parse the provided JSON and create a SkillInteractionModel.
             // The model JSON should contain the "interactionModel" envelope that SMAPI expects.
             var interactionModel = CreateSkillInteractionModel(modelJson, locale);
@@ -280,6 +367,22 @@ public class ModelDeploymentManager
 
         using var reader = new StreamReader(resource);
         return reader.ReadToEnd();
+    }
+
+    /// <summary>
+    /// Checks whether a locale supports the fallbackIntentSensitivity model configuration.
+    /// Only English (en-*) and German (de-DE) locales support this feature.
+    /// </summary>
+    /// <param name="locale">The locale to check.</param>
+    /// <returns>True if the locale supports fallbackIntentSensitivity.</returns>
+    private static bool IsLocaleSupportedForFallbackSensitivity(string locale)
+    {
+        if (locale.StartsWith("en-", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return locale.Equals("de-DE", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

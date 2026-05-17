@@ -1176,6 +1176,30 @@
                         } else {
                             html += "<div><span style='color:#aaa;'>Model source:</span> <span style='color:#888;'>Default</span></div>";
                         }
+                        if (data.localeModelStatuses && Object.keys(data.localeModelStatuses).length > 0) {
+                            html += "<div style='margin-top:0.6em;border-top:1px solid #333;padding-top:0.5em;'>";
+                            html += "<div style='color:#aaa;margin-bottom:0.3em;font-size:0.9em;'>Locale build status:</div>";
+                            var locales = Object.keys(data.localeModelStatuses).sort();
+                            for (var i = 0; i < locales.length; i++) {
+                                var loc = locales[i];
+                                var ls = data.localeModelStatuses[loc];
+                                var icon, color;
+                                if (ls.status === "SUCCEEDED") { icon = "✓"; color = "#4caf50"; }
+                                else if (ls.status === "FAILED") { icon = "✗"; color = "#e5a00d"; }
+                                else { icon = "•"; color = "#888"; }
+                                html += "<div style='display:flex;gap:0.5em;align-items:baseline;margin-bottom:0.15em;font-size:0.85em;'>";
+                                html += "<span style='color:" + color + ";font-weight:bold;min-width:1em;'>" + icon + "</span>";
+                                html += "<span style='color:#ccc;'>" + loc + "</span>";
+                                if (ls.status !== "SUCCEEDED") {
+                                    html += "<span style='color:" + color + ";'>" + ls.status + "</span>";
+                                }
+                                if (ls.error) {
+                                    html += "<span style='color:#999;font-size:0.8em;' title='" + ls.error.replace(/'/g, "&#39;") + "'>" + ls.error.substring(0, 80) + (ls.error.length > 80 ? "..." : "") + "</span>";
+                                }
+                                html += "</div>";
+                            }
+                            html += "</div>";
+                        }
                         statusDiv.innerHTML = html;
                         statusDiv.style.display = "block";
                     });

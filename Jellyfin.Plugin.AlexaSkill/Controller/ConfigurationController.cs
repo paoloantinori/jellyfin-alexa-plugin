@@ -629,7 +629,15 @@ public class ConfigurationController : ControllerBase
             customModelLocale = config.CustomModelLocale,
             customModelEnabled = config.CustomModelEnabled,
             lastModelDeployTime = config.LastModelDeployTime,
-            lastModelDeployStatus = config.LastModelDeployStatus
+            lastModelDeployStatus = config.LastModelDeployStatus,
+            localeModelStatuses = config.LocaleModelStatuses
+                .ToDictionary(kvp => kvp.Key, kvp => new
+                {
+                    status = kvp.Value.Status,
+                    lastUpdated = kvp.Value.LastUpdated,
+                    error = kvp.Value.Error,
+                    source = kvp.Value.Source,
+                })
         });
     }
 
