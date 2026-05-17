@@ -15,27 +15,33 @@ public class AplUserEventRequest : Request
     public new string Type => "Alexa.Presentation.APL.UserEvent";
 
     /// <summary>
-    /// The token of the APL document that generated the event.
+    /// Gets or sets the token of the APL document that generated the event.
     /// </summary>
     [JsonProperty("token")]
     public string? Token { get; set; }
 
     /// <summary>
-    /// The arguments array from the SendEvent command.
+    /// Gets or sets the arguments array from the SendEvent command.
     /// First element is typically the action name, second is the item ID.
     /// </summary>
     [JsonProperty("arguments")]
+#pragma warning disable CA2227 // Collection required for JSON deserialization
     public JArray? Arguments { get; set; }
+#pragma warning restore CA2227
 
     /// <summary>
-    /// Information about the APL component that triggered the event.
+    /// Gets or sets information about the APL component that triggered the event.
     /// </summary>
     [JsonProperty("source")]
+#pragma warning disable CA2227 // Collection required for JSON deserialization
     public JObject? Source { get; set; }
+#pragma warning restore CA2227
 
     /// <summary>
-    /// Component values extracted by the SendEvent command.
+    /// Gets or sets the component values extracted by the SendEvent command.
     /// </summary>
     [JsonProperty("components")]
+#pragma warning disable CA2227 // Collection required for JSON deserialization
     public JObject? Components { get; set; }
+#pragma warning restore CA2227
 }

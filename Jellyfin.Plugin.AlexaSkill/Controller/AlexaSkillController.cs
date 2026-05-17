@@ -421,7 +421,9 @@ public class AlexaSkillController : ControllerBase
         var response = await CertHttpClient.GetAsync(url).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
         var bytes = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+#pragma warning disable SYSLIB0057 // X509Certificate2(byte[]) obsolete in .NET 9
         var cert = new X509Certificate2(bytes);
+#pragma warning restore SYSLIB0057
         CertificateCache[key] = cert;
         return cert;
     }

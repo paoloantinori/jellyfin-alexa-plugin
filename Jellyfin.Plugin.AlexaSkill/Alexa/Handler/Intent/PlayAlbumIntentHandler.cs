@@ -230,7 +230,7 @@ public class PlayAlbumIntentHandler : BaseHandler
                     ParentId = albums[0].Id,
                     StartIndex = albumItems.Count,
                     TotalCount = albumResult.TotalRecordCount,
-                    UserId = jellyfinUser.Id
+                    UserId = jellyfinUser!.Id
                 });
         }
 

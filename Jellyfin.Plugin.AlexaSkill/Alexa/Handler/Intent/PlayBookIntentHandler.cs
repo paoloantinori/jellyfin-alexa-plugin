@@ -189,7 +189,7 @@ public class PlayBookIntentHandler : BaseHandler
                     ParentId = books[0].Id,
                     StartIndex = trackItems.Count,
                     TotalCount = bookTracks.TotalRecordCount,
-                    UserId = jellyfinUser.Id
+                    UserId = jellyfinUser!.Id
                 });
         }
 

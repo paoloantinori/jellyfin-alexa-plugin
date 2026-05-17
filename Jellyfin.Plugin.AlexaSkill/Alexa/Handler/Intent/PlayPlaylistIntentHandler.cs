@@ -214,7 +214,7 @@ public class PlayPlaylistIntentHandler : BaseHandler
                     PlaylistId = playlist.Id,
                     StartIndex = playlistItems.Count,
                     TotalCount = playlistResult.TotalRecordCount,
-                    UserId = jellyfinUser.Id
+                    UserId = jellyfinUser!.Id
                 });
         }
 

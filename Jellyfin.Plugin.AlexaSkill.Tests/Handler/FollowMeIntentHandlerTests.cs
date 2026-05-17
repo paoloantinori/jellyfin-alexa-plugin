@@ -219,7 +219,7 @@ public class FollowMeIntentHandlerTests : IDisposable
         Assert.Equal(itemId.ToString(), kitchenQueue.ItemIds[0]);
 
         // The source device queue should be cleared
-        Assert.Equal(0, _queueManager.GetAllActiveQueues("device-kitchen").Count);
+        Assert.Empty(_queueManager.GetAllActiveQueues("device-kitchen"));
     }
 
     [Fact]

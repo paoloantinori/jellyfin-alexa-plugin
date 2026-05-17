@@ -203,7 +203,9 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             tierReached = 1;
             Logger.LogInformation(
                 "ArtistSearch: tier=1 duration={TierMs}ms results={Count} method=SearchTerm query='{Query}'",
-                tierSw.ElapsedMilliseconds, artists.Count, musician);
+                tierSw.ElapsedMilliseconds,
+                artists.Count,
+                musician);
 
             string firstWord = musician.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? musician;
             if (artists.Count == 0)
@@ -215,7 +217,10 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 tierReached = 2;
                 Logger.LogInformation(
                     "ArtistSearch: tier=2 duration={TierMs}ms matched={Matched} method=PrefixFirstWord query='{Query}' prefix='{Prefix}'",
-                    tierSw.ElapsedMilliseconds, fuzzy != null, musician, firstWord);
+                    tierSw.ElapsedMilliseconds,
+                    fuzzy != null,
+                    musician,
+                    firstWord);
                 if (fuzzy != null)
                 {
                     artists = new List<BaseItem> { fuzzy };
@@ -231,7 +236,9 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 tierReached = 3;
                 Logger.LogInformation(
                     "ArtistSearch: tier=3 duration={TierMs}ms matched={Matched} method=PrefixFullQuery query='{Query}'",
-                    tierSw.ElapsedMilliseconds, fullPrefixFuzzy != null, musician);
+                    tierSw.ElapsedMilliseconds,
+                    fullPrefixFuzzy != null,
+                    musician);
                 if (fullPrefixFuzzy != null)
                 {
                     artists = new List<BaseItem> { fullPrefixFuzzy };
@@ -247,7 +254,9 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 tierReached = 4;
                 Logger.LogInformation(
                     "ArtistSearch: tier=4 duration={TierMs}ms matched={Matched} method=Contains query='{Query}'",
-                    tierSw.ElapsedMilliseconds, containsFuzzy != null, musician);
+                    tierSw.ElapsedMilliseconds,
+                    containsFuzzy != null,
+                    musician);
                 if (containsFuzzy != null)
                 {
                     artists = new List<BaseItem> { containsFuzzy };
@@ -258,7 +267,11 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         totalSw.Stop();
         Logger.LogInformation(
             "ArtistSearch: total duration={TotalMs}ms tier_reached={Tier} results={Count} query='{Query}' source={Source}",
-            totalSw.ElapsedMilliseconds, tierReached, artists.Count, musician, searchSource);
+            totalSw.ElapsedMilliseconds,
+            tierReached,
+            artists.Count,
+            musician,
+            searchSource);
 
         if (artists.Count == 0)
         {
@@ -319,7 +332,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("NoSongsForArtist", locale, matchedArtistName));
         }
 
-        IReadOnlyList<BaseItem> artistsItems = FavoritesAndRatingsFirst(artistResult.Items, jellyfinUser, _userDataManager);
+        IReadOnlyList<BaseItem> artistsItems = FavoritesAndRatingsFirst(artistResult.Items, jellyfinUser!, _userDataManager);
 
         List<QueueItem> queueItems = new List<QueueItem>();
         for (int i = 0; i < artistsItems.Count; i++)
@@ -352,7 +365,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                     ArtistId = artists[0].Id,
                     StartIndex = artistResult.Items.Count,
                     TotalCount = artistResult.TotalRecordCount,
-                    UserId = jellyfinUser.Id,
+                    UserId = jellyfinUser!.Id,
                     SortOrder = PopularitySort
                 });
         }
@@ -390,8 +403,11 @@ public class PlayArtistSongsIntentHandler : BaseHandler
     /// Executes a configured InternalItemsQuery and fuzzy-matches the results against the artist name.
     /// </summary>
     private async Task<BaseItem?> TrySearchFallbackAsync(
-        Action<InternalItemsQuery> configure, string musician, Entities.User? user,
-        string retryLabel, CancellationToken cancellationToken)
+        Action<InternalItemsQuery> configure,
+        string musician,
+        Entities.User? user,
+        string retryLabel,
+        CancellationToken cancellationToken)
     {
         var query = new InternalItemsQuery()
         {

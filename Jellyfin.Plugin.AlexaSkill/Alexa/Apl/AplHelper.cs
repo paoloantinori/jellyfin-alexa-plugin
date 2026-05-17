@@ -240,7 +240,7 @@ internal static class AplHelper
     }
 
     /// <summary>
-    /// Checks whether APL visual templates are enabled in plugin configuration.
+    /// Gets a value indicating whether APL visual templates are enabled in plugin configuration.
     /// Reads live config so config page changes take effect immediately.
     /// </summary>
     public static bool VisualsEnabled => Plugin.Instance?.Configuration?.AplVisualsEnabled ?? true;

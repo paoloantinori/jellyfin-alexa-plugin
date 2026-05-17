@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -144,7 +145,7 @@ public class SimulatorControllerTests
     /// Verify that ExecuteIntent returns 404 when simulator is disabled.
     /// </summary>
     [Fact]
-    public void ExecuteIntent_Disabled_ReturnsNotFound()
+    public async Task ExecuteIntent_Disabled_ReturnsNotFound()
     {
         if (Plugin.Instance == null)
         {
@@ -157,7 +158,7 @@ public class SimulatorControllerTests
             Plugin.Instance.Configuration.SimulatorEnabled = false;
             var controller = CreateController();
             var request = new SimulatorRequest { IntentName = "PlaySongIntent" };
-            var result = controller.ExecuteIntent(request).Result as Microsoft.AspNetCore.Mvc.NotFoundObjectResult;
+            var result = await controller.ExecuteIntent(request) as Microsoft.AspNetCore.Mvc.NotFoundObjectResult;
             Assert.NotNull(result);
             Assert.Equal(404, result.StatusCode);
         }
@@ -171,7 +172,7 @@ public class SimulatorControllerTests
     /// Verify that ExecuteIntent returns 400 when intentName is missing.
     /// </summary>
     [Fact]
-    public void ExecuteIntent_MissingIntentName_ReturnsBadRequest()
+    public async Task ExecuteIntent_MissingIntentName_ReturnsBadRequest()
     {
         if (Plugin.Instance == null)
         {
@@ -184,7 +185,7 @@ public class SimulatorControllerTests
             Plugin.Instance.Configuration.SimulatorEnabled = true;
             var controller = CreateController();
             var request = new SimulatorRequest { IntentName = null };
-            var result = controller.ExecuteIntent(request).Result as Microsoft.AspNetCore.Mvc.BadRequestObjectResult;
+            var result = await controller.ExecuteIntent(request) as Microsoft.AspNetCore.Mvc.BadRequestObjectResult;
             Assert.NotNull(result);
             Assert.Equal(400, result.StatusCode);
         }
@@ -198,7 +199,7 @@ public class SimulatorControllerTests
     /// Verify that ExecuteIntent returns 400 when no users are configured.
     /// </summary>
     [Fact]
-    public void ExecuteIntent_NoUsers_ReturnsBadRequest()
+    public async Task ExecuteIntent_NoUsers_ReturnsBadRequest()
     {
         if (Plugin.Instance == null)
         {
@@ -219,7 +220,7 @@ public class SimulatorControllerTests
             }
 
             var request = new SimulatorRequest { IntentName = "PlaySongIntent" };
-            var result = controller.ExecuteIntent(request).Result as Microsoft.AspNetCore.Mvc.BadRequestObjectResult;
+            var result = await controller.ExecuteIntent(request) as Microsoft.AspNetCore.Mvc.BadRequestObjectResult;
             Assert.NotNull(result);
             Assert.Equal(400, result.StatusCode);
         }

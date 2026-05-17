@@ -238,7 +238,7 @@ public class ModelDeploymentManager
         string skillId,
         CancellationToken cancellationToken)
     {
-        string defaultJson = GetDefaultModelJson(locale);
+        string? defaultJson = GetDefaultModelJson(locale);
         if (string.IsNullOrWhiteSpace(defaultJson))
         {
             return new ModelDeploymentResult(false,
@@ -324,9 +324,6 @@ public class ModelDeploymentManager
         // Wrap: {"interactionModel": <existing content>}
         return $"{{\"interactionModel\":{modelJson}}}";
     }
-
-    /// <summary>
-    /// Gets a human-readable build status string from the skill status API.
 }
 
 /// <summary>

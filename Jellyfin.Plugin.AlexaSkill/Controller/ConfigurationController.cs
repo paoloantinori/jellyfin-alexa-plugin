@@ -82,7 +82,7 @@ public class ConfigurationController : ControllerBase
         if (req.TryGetValue("InvocationName", out var invocationToken)
             && invocationToken.Type == JTokenType.String)
         {
-            string invocationName = invocationToken.Value<string>();
+            string invocationName = invocationToken.Value<string>()!;
             if (!IsValidInvocationName(invocationName))
             {
                 return new JsonResult(new { error = "Invalid invocation name" }) { StatusCode = 400 };
@@ -308,7 +308,7 @@ public class ConfigurationController : ControllerBase
 
         if (req.TryGetValue("ServerAddress", out var serverToken) && serverToken.Type == JTokenType.String)
         {
-            config.ServerAddress = serverToken.Value<string>();
+            config.ServerAddress = serverToken.Value<string>()!;
             updated = true;
         }
 
@@ -323,13 +323,13 @@ public class ConfigurationController : ControllerBase
 
         if (req.TryGetValue("LwaClientId", out var clientIdToken) && clientIdToken.Type == JTokenType.String)
         {
-            config.LwaClientId = clientIdToken.Value<string>();
+            config.LwaClientId = clientIdToken.Value<string>()!;
             updated = true;
         }
 
         if (req.TryGetValue("LwaClientSecret", out var clientSecretToken) && clientSecretToken.Type == JTokenType.String)
         {
-            config.LwaClientSecret = clientSecretToken.Value<string>();
+            config.LwaClientSecret = clientSecretToken.Value<string>()!;
             updated = true;
         }
 
@@ -397,10 +397,16 @@ public class ConfigurationController : ControllerBase
         { config.CustomModelEnabled = customEnabledToken.Value<bool>(); updated = true; }
 
         if (req.TryGetValue("CustomModelUrl", out var customUrlToken) && customUrlToken.Type == JTokenType.String)
-        { config.CustomModelUrl = customUrlToken.Value<string>(); updated = true; }
+        {
+            config.CustomModelUrl = customUrlToken.Value<string>();
+            updated = true;
+        }
 
         if (req.TryGetValue("CustomModelLocale", out var customLocaleToken) && customLocaleToken.Type == JTokenType.String)
-        { config.CustomModelLocale = customLocaleToken.Value<string>() ?? "en-US"; updated = true; }
+        {
+            config.CustomModelLocale = customLocaleToken.Value<string>() ?? "en-US";
+            updated = true;
+        }
 
         if (!updated)
         {

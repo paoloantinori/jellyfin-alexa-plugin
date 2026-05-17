@@ -687,7 +687,7 @@ public class ProgressiveQueueTests : IDisposable
         var response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
 
         // Should have found the artist via full-prefix fallback
-        Assert.Equal(1, session.NowPlayingQueue.Count);
+        Assert.Single(session.NowPlayingQueue);
 
         // Should have an AudioPlayer directive
         var directive = response.Response.Directives.OfType<AudioPlayerPlayDirective>().FirstOrDefault();

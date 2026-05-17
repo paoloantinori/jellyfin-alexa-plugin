@@ -32,7 +32,7 @@ public class DynamicEntitiesInterceptorTests
             Mock.Of<MediaBrowser.Controller.Library.ILibraryManager>(),
             Mock.Of<MediaBrowser.Controller.Library.IUserManager>(),
             LoggerFactory.Create(b => b.AddDebug()).CreateLogger<DynamicEntityBuilder>(),
-            null);
+            null!);
 
         _config = new PluginConfiguration();
         _loggerFactory = LoggerFactory.Create(b => b.AddDebug());
