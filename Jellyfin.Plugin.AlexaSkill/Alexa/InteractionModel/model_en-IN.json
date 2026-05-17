@@ -323,7 +323,6 @@
           "play favorite music for {username}",
           "play the favorites playlist for {username}",
           "listen to favorites for {username}",
-          "play favorite {media_type} for {username}",
           "play favorite {media_type} for {username}"
         ],
         "slots": [
@@ -434,7 +433,6 @@
           "play season {season_number} episode {episode_number} of {series_name}",
           "play {series_name} season {season_number} episode {episode_number}",
           "play episode {episode_number} of season {season_number} of {series_name}",
-          "play {series_name} season {season_number} episode {episode_number}",
           "watch season {season_number} episode {episode_number} of {series_name}",
           "watch {series_name} season {season_number} episode {episode_number}"
         ]
@@ -1093,7 +1091,14 @@
       },
       {
         "name": "AudiobookTitle",
-        "values": []
+        "values": [
+          {
+            "name": {
+              "value": "audiobook",
+              "synonyms": []
+            }
+          }
+        ]
       }
     ],
     "modelConfiguration": {

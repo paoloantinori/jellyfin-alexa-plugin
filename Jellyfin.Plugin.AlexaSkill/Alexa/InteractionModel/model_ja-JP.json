@@ -977,14 +977,16 @@
       },
       {
         "name": "AudiobookTitle",
-        "values": []
+        "values": [
+          {
+            "name": {
+              "value": "オーディオブック",
+              "synonyms": []
+            }
+          }
+        ]
       }
-    ],
-    "modelConfiguration": {
-      "fallbackIntentSensitivity": {
-        "level": "LOW"
-      }
-    }
+    ]
   },
   "dialog": {
     "intents": [

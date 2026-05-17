@@ -248,7 +248,6 @@
           "شغل {genre}",
           "أريد الاستماع إلى {genre}",
           "أعطني موسيقى {genre}",
-          "شغل {genre}",
           "هل يمكنك تشغيل {genre}"
         ],
         "slots": [
@@ -600,8 +599,7 @@
           "تعرف علي",
           "اربط صوتي",
           "هذا صوتي",
-          "اضبط ملفي الصوتي",
-          "اربط صوتي"
+          "اضبط ملفي الصوتي"
         ]
       },
       {
@@ -995,14 +993,16 @@
       },
       {
         "name": "AudiobookTitle",
-        "values": []
+        "values": [
+          {
+            "name": {
+              "value": "كتاب صوتي",
+              "synonyms": []
+            }
+          }
+        ]
       }
-    ],
-    "modelConfiguration": {
-      "fallbackIntentSensitivity": {
-        "level": "LOW"
-      }
-    }
+    ]
   },
   "dialog": {
     "intents": [

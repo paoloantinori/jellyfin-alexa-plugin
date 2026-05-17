@@ -477,8 +477,7 @@
         "samples": [
           "reproduce música {mood}",
           "reproduce algo {mood}",
-          "quiero música {mood}",
-          "reproduce algo {mood}"
+          "quiero música {mood}"
         ]
       },
       {
@@ -1060,13 +1059,15 @@
       },
       {
         "name": "AudiobookTitle",
-        "values": []
+        "values": [
+          {
+            "name": {
+              "value": "audiolibro",
+              "synonyms": []
+            }
+          }
+        ]
       }
-    ],
-    "modelConfiguration": {
-      "fallbackIntentSensitivity": {
-        "level": "LOW"
-      }
-    }
+    ]
   }
 }

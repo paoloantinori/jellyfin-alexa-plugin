@@ -187,6 +187,22 @@ def validate_single_model(locale: str, lm: dict) -> tuple[list[str], list[str]]:
     # 7. Required custom intents check (only for intents present in ALL other locales)
     # Handled by cross-locale validation below; per-locale only checks structural issues
 
+    # 8. Custom slot types must have at least one value (SMAPI rejects empty types)
+    for t in types:
+        tname = t.get("name", "<unnamed>")
+        tvals = t.get("values", [])
+        if isinstance(tvals, list) and len(tvals) == 0:
+            errors.append(f"{prefix} Custom slot type '{tname}' has no values (SMAPI rejects empty types)")
+
+    # 9. fallbackIntentSensitivity only valid for English and German locales
+    mc = lm.get("modelConfiguration")
+    if mc and "fallbackIntentSensitivity" in mc:
+        if not (locale.startswith("en-") or locale == "de-DE"):
+            errors.append(
+                f"{prefix} fallbackIntentSensitivity is only supported "
+                f"for English and German locales (de-DE)"
+            )
+
     return errors, warnings
 
 

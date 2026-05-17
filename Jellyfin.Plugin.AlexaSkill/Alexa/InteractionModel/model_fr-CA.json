@@ -739,6 +739,16 @@
           "écoute le livre {book}",
           "écoute le livre audio {book}"
         ]
+      },
+      {
+        "name": "LoopSongOnIntent",
+        "samples": [
+          "Répète cette chanson",
+          "Répète ce morceau",
+          "Mets cette chanson en boucle",
+          "Loop cette chanson",
+          "Répète indéfiniment"
+        ]
       }
     ],
     "types": [
@@ -1065,13 +1075,15 @@
       },
       {
         "name": "AudiobookTitle",
-        "values": []
+        "values": [
+          {
+            "name": {
+              "value": "livre audio",
+              "synonyms": []
+            }
+          }
+        ]
       }
-    ],
-    "modelConfiguration": {
-      "fallbackIntentSensitivity": {
-        "level": "LOW"
-      }
-    }
+    ]
   }
 }

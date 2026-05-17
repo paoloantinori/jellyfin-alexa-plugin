@@ -378,7 +378,6 @@
           "ik vind het nummer leuk",
           "ik vind de muziek leuk",
           "ik vind dit nummer leuk",
-          "ik vind dit leuk",
           "voeg de video toe aan favorieten",
           "voeg het nummer toe aan favorieten",
           "sla dit op in favorieten",
@@ -645,8 +644,7 @@
           "herken mij",
           "koppel mijn stem",
           "dit is mijn stem",
-          "stel mijn stemprofiel in",
-          "koppel mijn stem"
+          "stel mijn stemprofiel in"
         ]
       },
       {
@@ -1056,14 +1054,16 @@
       },
       {
         "name": "AudiobookTitle",
-        "values": []
+        "values": [
+          {
+            "name": {
+              "value": "luisterboek",
+              "synonyms": []
+            }
+          }
+        ]
       }
-    ],
-    "modelConfiguration": {
-      "fallbackIntentSensitivity": {
-        "level": "LOW"
-      }
-    }
+    ]
   },
   "dialog": {
     "intents": [

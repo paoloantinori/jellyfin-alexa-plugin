@@ -592,7 +592,7 @@
         "slots": [
           {
             "name": "media_type",
-            "type": "AMAZON.SearchQuery"
+            "type": "MediaType"
           }
         ]
       },
@@ -651,7 +651,7 @@
         "slots": [
           {
             "name": "media_type",
-            "type": "AMAZON.SearchQuery"
+            "type": "MediaType"
           },
           {
             "name": "time_period",
@@ -733,7 +733,7 @@
         "slots": [
           {
             "name": "media_type",
-            "type": "AMAZON.SearchQuery"
+            "type": "MediaType"
           }
         ]
       },
@@ -877,7 +877,7 @@
         "slots": [
           {
             "name": "media_type",
-            "type": "AMAZON.SearchQuery"
+            "type": "MediaType"
           }
         ]
       },
@@ -957,6 +957,165 @@
           "Con che utente sono collegato",
           "Dimmi chi sono",
           "Che utente sono"
+        ]
+      },
+      {
+        "name": "QueryRecentlyAddedIntent",
+        "samples": [
+          "cosa c'è di nuovo",
+          "cosa è stato aggiunto di recente",
+          "quali novità nella mia libreria",
+          "mostrami le novità",
+          "cosa c'è di nuovo ultimamente",
+          "elenca gli ultimi aggiunti",
+          "quali sono i più recenti",
+          "dimmi le novità",
+          "di mostrare le novità",
+          "quali aggiunte recenti"
+        ]
+      },
+      {
+        "name": "FollowMeIntent",
+        "samples": [
+          "seguimi",
+          "continua a riprodurre",
+          "riprendi da dove ero rimasto",
+          "trasferisci la riproduzione",
+          "continua a suonare",
+          "continua dall'altra stanza",
+          "porta la musica qui",
+          "di seguirmi",
+          "di continuare a riprodurre",
+          "di trasferire la riproduzione"
+        ]
+      },
+      {
+        "name": "LoopSongOnIntent",
+        "samples": [
+          "ripeti questa canzone",
+          "ripeti questo brano",
+          "metti in loop questo brano",
+          "ripeti all'infinito",
+          "loop questa canzone",
+          "riplei questo brano",
+          "riplei questa canzone",
+          "loop questo brano",
+          "di ripetere questo brano",
+          "di ripetere questa canzone"
+        ]
+      },
+      {
+        "name": "AddToQueueIntent",
+        "slots": [
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
+        ],
+        "samples": [
+          "aggiungi {song} alla coda",
+          "metti {song} in coda",
+          "aggiungi {song} di {musician} alla coda",
+          "metti {song} di {musician} in coda",
+          "accoda {song}",
+          "accoda {song} di {musician}",
+          "aggiungi {song} alla mia playlist",
+          "di aggiungere {song} alla coda",
+          "di mettere {song} in coda",
+          "pleia {song} in coda",
+          "di aggiungere {song} di {musician} alla coda"
+        ]
+      },
+      {
+        "name": "PlayNextIntent",
+        "slots": [
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
+        ],
+        "samples": [
+          "suona {song} dopo",
+          "suona {song} di {musician} dopo",
+          "riproduci {song} come prossimo",
+          "riproduci {song} di {musician} come prossimo",
+          "voglio ascoltare {song} dopo",
+          "metti {song} dopo questo",
+          "pleia {song} dopo",
+          "di suonare {song} dopo",
+          "di riprodurre {song} come prossimo",
+          "pleia {song} di {musician} dopo"
+        ]
+      },
+      {
+        "name": "ClearQueueIntent",
+        "samples": [
+          "svuota la coda",
+          "cancella la coda",
+          "pulisci la coda",
+          "elimina tutto dalla coda",
+          "svuota la mia playlist",
+          "di svuotare la coda",
+          "di cancellare la coda"
+        ]
+      },
+      {
+        "name": "ListQueueIntent",
+        "samples": [
+          "cosa c'è in coda",
+          "mostra la coda",
+          "elenca la coda",
+          "cosa suona dopo",
+          "qual è il prossimo",
+          "cosa c'è in programma",
+          "dimmi cosa c'è in coda",
+          "di mostrare la coda"
+        ]
+      },
+      {
+        "name": "PlayRadioIntent",
+        "samples": [
+          "suona radio",
+          "attiva la radio",
+          "suona musica simile",
+          "continua con brani simili",
+          "avvia una stazione radio",
+          "suona canzoni simili",
+          "pleia radio",
+          "pleia musica simile",
+          "di pleiare radio",
+          "di suonare musica simile"
+        ]
+      },
+      {
+        "name": "TurnRadioOnIntent",
+        "samples": [
+          "attiva la modalità radio",
+          "accendi la radio",
+          "modalità radio on",
+          "abilita la radio",
+          "pleia in modalità radio",
+          "di attivare la radio"
+        ]
+      },
+      {
+        "name": "TurnRadioOffIntent",
+        "samples": [
+          "disattiva la modalità radio",
+          "spegni la radio",
+          "modalità radio off",
+          "disabilita la radio",
+          "ferma la modalità radio",
+          "di disattivare la radio",
+          "basta radio"
         ]
       }
     ],
@@ -1381,7 +1540,148 @@
       },
       {
         "name": "AudiobookTitle",
-        "values": []
+        "values": [
+          {
+            "name": {
+              "value": "audiolibro",
+              "synonyms": []
+            }
+          }
+        ]
+      },
+      {
+        "name": "MediaType",
+        "values": [
+          {
+            "id": "media",
+            "name": {
+              "value": "media"
+            }
+          },
+          {
+            "id": "video",
+            "name": {
+              "value": "video"
+            }
+          },
+          {
+            "id": "musica",
+            "name": {
+              "value": "musica",
+              "synonyms": [
+                "canzoni",
+                "brani"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "TimePeriod",
+        "values": [
+          {
+            "id": "today",
+            "name": {
+              "value": "oggi"
+            }
+          },
+          {
+            "id": "this_week",
+            "name": {
+              "value": "questa settimana",
+              "synonyms": [
+                "nell'ultima settimana",
+                "la settimana scorsa",
+                "negli ultimi giorni"
+              ]
+            }
+          },
+          {
+            "id": "this_month",
+            "name": {
+              "value": "questo mese",
+              "synonyms": [
+                "nell'ultimo mese",
+                "il mese scorso"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "MediaInfoType",
+        "values": [
+          {
+            "id": "title",
+            "name": {
+              "value": "titolo",
+              "synonyms": [
+                "canzone",
+                "brano",
+                "nome"
+              ]
+            }
+          },
+          {
+            "id": "album",
+            "name": {
+              "value": "album",
+              "synonyms": [
+                "disco"
+              ]
+            }
+          },
+          {
+            "id": "artist",
+            "name": {
+              "value": "artista",
+              "synonyms": [
+                "cantante",
+                "gruppo",
+                "musicista"
+              ]
+            }
+          },
+          {
+            "id": "year",
+            "name": {
+              "value": "anno",
+              "synonyms": [
+                "anno di uscita"
+              ]
+            }
+          },
+          {
+            "id": "duration",
+            "name": {
+              "value": "durata",
+              "synonyms": [
+                "lunghezza",
+                "tempo"
+              ]
+            }
+          },
+          {
+            "id": "genre",
+            "name": {
+              "value": "genere",
+              "synonyms": [
+                "stile",
+                "tipo di musica"
+              ]
+            }
+          },
+          {
+            "id": "biography",
+            "name": {
+              "value": "biografia",
+              "synonyms": [
+                "bio",
+                "sull'artista"
+              ]
+            }
+          }
+        ]
       }
     ]
   }

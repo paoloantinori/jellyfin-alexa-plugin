@@ -742,6 +742,17 @@
           "hör {book}",
           "hör das buch {book}"
         ]
+      },
+      {
+        "name": "LoopSongOnIntent",
+        "samples": [
+          "Wiederhole dieses Lied",
+          "Wiederhole diesen Song",
+          "Wiederhole diesen Titel",
+          "Loop dieses Lied",
+          "Wiederhole endlos",
+          "Spiele dieses Lied in Schleife"
+        ]
       }
     ],
     "types": [
@@ -1066,7 +1077,14 @@
       },
       {
         "name": "AudiobookTitle",
-        "values": []
+        "values": [
+          {
+            "name": {
+              "value": "Hörbuch",
+              "synonyms": []
+            }
+          }
+        ]
       }
     ],
     "modelConfiguration": {

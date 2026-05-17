@@ -110,7 +110,6 @@
           "começar a tocar {song}",
           "tocar a faixa {song}",
           "tocar a faixa {song} de {musician}",
-          "tocar {song}",
           "me dá {song}",
           "stream {song}"
         ],
@@ -416,7 +415,6 @@
         "samples": [
           "qual é o nome da música",
           "qual é o nome do vídeo",
-          "qual é o nome da música",
           "qual é o título da música",
           "o que está tocando",
           "qual {media_info_type} é essa",
@@ -713,8 +711,7 @@
           "buscar {query}",
           "vocês têm {query}",
           "quero encontrar {query}",
-          "pode encontrar {query}",
-          "buscar {query}"
+          "pode encontrar {query}"
         ]
       },
       {
@@ -1068,14 +1065,16 @@
       },
       {
         "name": "AudiobookTitle",
-        "values": []
+        "values": [
+          {
+            "name": {
+              "value": "audiolivro",
+              "synonyms": []
+            }
+          }
+        ]
       }
-    ],
-    "modelConfiguration": {
-      "fallbackIntentSensitivity": {
-        "level": "LOW"
-      }
-    }
+    ]
   },
   "dialog": {
     "intents": [
