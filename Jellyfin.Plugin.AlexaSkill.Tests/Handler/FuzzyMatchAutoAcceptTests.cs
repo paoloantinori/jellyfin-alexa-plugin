@@ -327,6 +327,128 @@ public class FuzzyMatchAutoAcceptTests
         Assert.Null(response!.SessionAttributes?["disambig_matches"]);
     }
 
+    /// <summary>
+    /// Exact match (score 100) should NOT produce "closest match" announcement.
+    /// The OutputSpeech should remain as-is from the play response.
+    /// </summary>
+    [Fact]
+    public void Score100_DoesNotOverrideOutputSpeech()
+    {
+        var config = new PluginConfiguration();
+        var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
+        var harness = CreateHarness(config);
+
+        var candidates = new List<TestCandidate>
+        {
+            new("About Today", Guid.NewGuid())
+        };
+
+        Func<TestCandidate, SkillResponse> autoPlayFunc = _ =>
+        {
+            // Return a response with a known OutputSpeech so we can verify it is NOT overwritten
+            var response = ResponseBuilder.Empty();
+            response.Response.OutputSpeech = new PlainTextOutputSpeech { Text = "Playing About Today" };
+            return response;
+        };
+
+        var (outcome, response) = harness.CallHandleFuzzyMiss(
+            query: "About Today",
+            candidates: candidates,
+            selector: c => c.Name,
+            matchExtractor: c => new List<(Guid, string)> { (c.Id, c.Name) },
+            mediaType: "song",
+            locale: "en-US",
+            autoPlayFunc: autoPlayFunc,
+            user: user);
+
+        Assert.NotNull(response);
+        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        Assert.Equal("Playing About Today", speech.Text);
+        Assert.DoesNotContain("closest match", speech.Text);
+    }
+
+    /// <summary>
+    /// Score 90 (high-confidence but not exact) should NOT produce "closest match" announcement.
+    /// </summary>
+    [Fact]
+    public void Score90_DoesNotOverrideOutputSpeech()
+    {
+        var config = new PluginConfiguration();
+        var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
+        var harness = CreateHarness(config);
+
+        // "Beatles" is a substring of "The Beatles" => PartialRatio returns 90
+        var candidates = new List<TestCandidate>
+        {
+            new("The Beatles", Guid.NewGuid())
+        };
+
+        Func<TestCandidate, SkillResponse> autoPlayFunc = _ =>
+        {
+            var response = ResponseBuilder.Empty();
+            response.Response.OutputSpeech = new PlainTextOutputSpeech { Text = "Original speech" };
+            return response;
+        };
+
+        var (outcome, response) = harness.CallHandleFuzzyMiss(
+            query: "Beatles",
+            candidates: candidates,
+            selector: c => c.Name,
+            matchExtractor: c => new List<(Guid, string)> { (c.Id, c.Name) },
+            mediaType: "album",
+            locale: "en-US",
+            autoPlayFunc: autoPlayFunc,
+            user: user);
+
+        Assert.NotNull(response);
+        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        Assert.Equal("Original speech", speech.Text);
+        Assert.DoesNotContain("closest match", speech.Text);
+    }
+
+    /// <summary>
+    /// Score below 90 should still produce "closest match" announcement.
+    /// Uses a dynamically discovered query/candidate pair scoring in [DefaultThreshold, 90).
+    /// </summary>
+    [Fact]
+    public void ScoreBelow90_ProducesClosestMatchAnnouncement()
+    {
+        var config = new PluginConfiguration();
+        var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.AutoPlay };
+        var harness = CreateHarness(config);
+
+        var (query, candidates) = CreateBelowThreshold90Scenario();
+
+        Func<TestCandidate, SkillResponse> autoPlayFunc = _ =>
+        {
+            var response = ResponseBuilder.Empty();
+            response.Response.OutputSpeech = new PlainTextOutputSpeech { Text = "Original speech" };
+            return response;
+        };
+
+        var (outcome, response) = harness.CallHandleFuzzyMiss(
+            query: query,
+            candidates: candidates,
+            selector: c => c.Name,
+            matchExtractor: c => new List<(Guid, string)> { (c.Id, c.Name) },
+            mediaType: "album",
+            locale: "en-US",
+            autoPlayFunc: autoPlayFunc,
+            user: user);
+
+        Assert.NotNull(response);
+        Assert.NotEqual("Original speech", response.Response.OutputSpeech?.ToString());
+        // The announcement may be SSML or plain text depending on locale resources
+        string? speechText = response.Response.OutputSpeech switch
+        {
+            PlainTextOutputSpeech plain => plain.Text,
+            SsmlOutputSpeech ssml => ssml.Ssml,
+            _ => null,
+        };
+        Assert.NotNull(speechText);
+        Assert.Contains("closest match", speechText, StringComparison.OrdinalIgnoreCase);
+    }
+
     // --- Helpers ---
 
     /// <summary>
@@ -383,6 +505,55 @@ public class FuzzyMatchAutoAcceptTests
 
         throw new Xunit.Sdk.XunitException(
             "Could not find any query/candidate pair producing a borderline score. " +
+            "This is a test infrastructure issue, not a code bug.");
+    }
+
+    /// <summary>
+    /// Creates a query/candidate pair that produces a fuzzy score in [DefaultThreshold, 90).
+    /// This tests that the "closest match" announcement is still produced for non-near-exact matches.
+    /// Uses character mutations to find a score in the target range.
+    /// </summary>
+    private static (string Query, List<TestCandidate> Candidates) CreateBelowThreshold90Scenario()
+    {
+        // Use candidate names where character mutations produce scores between 60 and 89.
+        string[] candidateNames =
+        [
+            "The Beatles",
+            "Led Zeppelin",
+            "Pink Floyd",
+            "Rolling Stones",
+            "Alicia Keys",
+        ];
+
+        foreach (string candidate in candidateNames)
+        {
+            // Try replacing characters at different positions with 'z'
+            for (int pos = 0; pos < candidate.Length; pos++)
+            {
+                for (int count = 1; count <= Math.Min(3, candidate.Length - pos); count++)
+                {
+                    if (candidate[pos] == ' ')
+                    {
+                        continue; // skip spaces
+                    }
+
+                    string query = candidate.Remove(pos, count).Insert(pos, new string('z', count));
+
+                    var candidates = new List<TestCandidate> { new(candidate, Guid.NewGuid()) };
+                    var scoreResult = FuzzyMatcher.FindBestMatchWithScore(query, candidates, c => c.Name);
+
+                    if (scoreResult.HasValue
+                        && scoreResult.Value.Score >= FuzzyMatcher.DefaultThreshold
+                        && scoreResult.Value.Score < FuzzyMatcher.ContainmentScore)
+                    {
+                        return (query, candidates);
+                    }
+                }
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException(
+            "Could not find any query/candidate pair producing a score in [DefaultThreshold, ContainmentScore). " +
             "This is a test infrastructure issue, not a code bug.");
     }
 

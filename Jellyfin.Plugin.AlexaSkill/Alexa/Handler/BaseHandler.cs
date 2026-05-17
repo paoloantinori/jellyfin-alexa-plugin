@@ -734,6 +734,13 @@ public abstract class BaseHandler
                 return (FuzzyMissOutcome.SuggestionHandled, null);
             }
 
+            // Near-exact or exact matches (score >= ContainmentScore) play directly without
+            // the "closest match" qualifier — it would sound redundant.
+            if (score >= FuzzyMatcher.ContainmentScore)
+            {
+                return (FuzzyMissOutcome.SuggestionHandled, playResponse);
+            }
+
             string? ssml = GetSsml("FuzzyAutoPlayAnnouncementSsml", locale, selector(best), query);
             playResponse.Response.OutputSpeech = ssml != null
                 ? new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" }

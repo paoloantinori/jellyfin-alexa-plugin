@@ -17,6 +17,13 @@ internal static class FuzzyMatcher
     public const int DefaultThreshold = 60;
 
     /// <summary>
+    /// Similarity score returned by <see cref="PartialRatio"/> when one string
+    /// contains the other. Used as the boundary between "near-exact" and
+    /// "fuzzy" matches in <c>HandleFuzzyMiss</c>.
+    /// </summary>
+    public const int ContainmentScore = 90;
+
+    /// <summary>
     /// Minimum similarity score for a candidate to be offered as a suggestion
     /// when no confident match is found. Scores between this and DefaultThreshold
     /// trigger "Did you mean?" or auto-play behavior depending on config.
@@ -136,7 +143,7 @@ internal static class FuzzyMatcher
         // If one contains the other, high score
         if (a.Contains(b, StringComparison.OrdinalIgnoreCase) || b.Contains(a, StringComparison.OrdinalIgnoreCase))
         {
-            return 90;
+            return ContainmentScore;
         }
 
         string shorter = a.Length <= b.Length ? a : b;
