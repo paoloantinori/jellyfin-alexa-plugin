@@ -3,240 +3,65 @@
     "invocationName": "jellyfin player",
     "intents": [
       {
-        "name": "QueryRecentlyAddedIntent",
-        "samples": [
-          "cosa c'è di nuovo",
-          "cosa è stato aggiunto di recente",
-          "mostrami le novità",
-          "ci sono novità",
-          "quali sono gli ultimi aggiunti",
-          "cosa c'è di nuovo nella mia libreria",
-          "elenca gli ultimi contenuti aggiunti",
-          "quali sono le novità"
-        ]
-      },
-      {
-        "name": "FollowMeIntent",
-        "samples": [
-          "continua da qui",
-          "segui la riproduzione",
-          "continua ad ascoltare",
-          "riprendi da dove ero rimasto",
-          "seguimi",
-          "trasferisci la riproduzione",
-          "continua la musica",
-          "riprendi l'ascolto"
-        ]
-      },
-      {
         "name": "AMAZON.CancelIntent"
-      },
-      {
-        "name": "AMAZON.HelpIntent"
-      },
-      {
-        "name": "AMAZON.StopIntent"
       },
       {
         "name": "AMAZON.FallbackIntent"
       },
       {
-        "name": "AMAZON.PauseIntent"
-      },
-      {
-        "name": "AMAZON.ResumeIntent"
+        "name": "AMAZON.HelpIntent"
       },
       {
         "name": "AMAZON.NextIntent"
       },
       {
-        "name": "AMAZON.PreviousIntent"
-      },
-      {
-        "name": "AMAZON.YesIntent"
-      },
-      {
         "name": "AMAZON.NoIntent"
       },
       {
-        "name": "AMAZON.ShuffleOnIntent"
+        "name": "AMAZON.PauseIntent"
+      },
+      {
+        "name": "AMAZON.PreviousIntent"
+      },
+      {
+        "name": "AMAZON.ResumeIntent"
       },
       {
         "name": "AMAZON.ShuffleOffIntent"
       },
       {
+        "name": "AMAZON.ShuffleOnIntent"
+      },
+      {
         "name": "AMAZON.StartOverIntent"
       },
       {
-        "name": "LoopAllOffIntent",
-        "samples": [
-          "Disattiva loop",
-          "Disattiva ripetizione"
-        ]
+        "name": "AMAZON.StopIntent"
       },
       {
-        "name": "LoopAllOnIntent",
-        "samples": [
-          "Attiva loop",
-          "Attiva ripetizione"
-        ]
+        "name": "AMAZON.YesIntent"
       },
       {
-        "name": "RepeatSingleOnIntent",
+        "name": "BrowseLibraryIntent",
         "samples": [
-          "Ripeti la canzone",
-          "Ripeti la traccia",
-          "Ripeti il brano",
-          "Ripeti il video",
-          "di ripeter la canzone",
-          "di ripeter la traccia",
-          "di ripeter il brano",
-          "di ripeter il video",
-          "Ripetilo",
-          "di ripeterlo",
-          "riplei",
-          "replei",
-          "Suonalo ancora",
-          "di suonarlo ancora",
-          "Suonala ancora",
-          "di suonarla ancora"
-        ]
-      },
-      {
-        "name": "PlayChannelIntent",
-        "samples": [
-          "Canale {channel}",
-          "Riproduci radio {channel}",
-          "di riprodurre la radio {channel}",
-          "di mettere la radio {channel}",
-          "Radio {channel}"
+          "Sfoglia {browse_category}",
+          "Mostra {browse_category}",
+          "Elenca {browse_category}"
         ],
         "slots": [
           {
-            "name": "channel",
-            "type": "AMAZON.SearchQuery"
+            "name": "browse_category",
+            "type": "BrowseCategory"
           }
         ]
       },
       {
-        "name": "PlayVideoIntent",
+        "name": "ContinueWatchingIntent",
         "samples": [
-          "Riproduci {title}",
-          "Suona {title}",
-          "Metti {title}",
-          "Pleia {title}",
-          "Di riprodurre {title}",
-          "Di suonare {title}",
-          "Riproduci il video {title}",
-          "Riproduci il film {title}",
-          "Di riprodurre il video {title}",
-          "Di riprodurre il film {title}",
-          "Metti il video {title}",
-          "Metti il film {title}",
-          "Guarda {title}",
-          "Di guardare {title}",
-          "Voglio guardare {title}",
-          "Metti su il video {title}",
-          "Metti su il film {title}"
-        ],
-        "slots": [
-          {
-            "name": "title",
-            "type": "AMAZON.SearchQuery"
-          }
-        ]
-      },
-      {
-        "name": "PlayByGenreIntent",
-        "samples": [
-          "Riproduci musica {genre}",
-          "Suona musica {genre}",
-          "Metti musica {genre}",
-          "Pleia musica {genre}",
-          "Riproduci brani {genre}",
-          "Suona brani {genre}",
-          "Metti brani {genre}",
-          "Riproduci genere {genre}",
-          "Suona genere {genre}",
-          "Metti genere {genre}",
-          "Di riprodurre musica {genre}",
-          "Di suonare musica {genre}",
-          "Di riprodurre genere {genre}",
-          "Di suonare genere {genre}",
-          "Riproduci {genre}",
-          "Suona {genre}",
-          "Metti {genre}",
-          "Pleia {genre}",
-          "Di riprodurre {genre}"
-        ],
-        "slots": [
-          {
-            "name": "genre",
-            "type": "AMAZON.SearchQuery"
-          }
-        ]
-      },
-      {
-        "name": "PlayByDecadeIntent",
-        "samples": [
-          "Riproduci musica degli anni {decade}",
-          "Suona musica degli anni {decade}",
-          "Metti musica degli anni {decade}",
-          "Riproduci brani degli anni {decade}",
-          "Suona brani degli anni {decade}",
-          "Riproduci canzoni degli anni {decade}",
-          "Suona canzoni degli anni {decade}",
-          "Metti brani degli anni {decade}",
-          "Ascolta musica degli anni {decade}",
-          "Musica degli anni {decade}",
-          "Brani degli anni {decade}",
-          "Canzoni degli anni {decade}",
-          "Metti su musica degli anni {decade}",
-          "Fai suonare musica degli anni {decade}",
-          "Vorrei ascoltare musica degli anni {decade}",
-          "Mi andrebbe musica degli anni {decade}",
-          "Comincia a suonare brani degli anni {decade}",
-          "Pleia musica degli anni {decade}",
-          "Pleia brani degli anni {decade}",
-          "Metti canzoni degli anni {decade}",
-          "Fai partire canzoni degli anni {decade}",
-          "Suonami qualcosa degli anni {decade}"
-        ],
-        "slots": [
-          {
-            "name": "decade",
-            "type": "Decade"
-          }
-        ]
-      },
-      {
-        "name": "PlayPlaylistIntent",
-        "samples": [
-          "Riproduci playlist {playlist}",
-          "Suona playlist {playlist}",
-          "Metti playlist {playlist}",
-          "Pleia playlist {playlist}",
-          "Di riprodurre playlist {playlist}",
-          "Di suonare playlist {playlist}",
-          "Di mettere playlist {playlist}",
-          "Di pleiare playlist {playlist}",
-          "Riproduci la playlist {playlist}",
-          "Suona la playlist {playlist}",
-          "Metti la playlist {playlist}",
-          "Pleia la playlist {playlist}",
-          "Metti su la playlist {playlist}",
-          "Fai partire la playlist {playlist}",
-          "Comincia la playlist {playlist}",
-          "Vorrei ascoltare la playlist {playlist}",
-          "Dammi la playlist {playlist}",
-          "Ascolta la playlist {playlist}",
-          "Fai suonare la playlist {playlist}"
-        ],
-        "slots": [
-          {
-            "name": "playlist",
-            "type": "AMAZON.SearchQuery"
-          }
+          "Continua a guardare",
+          "Riprendi a guardare",
+          "Continua il video",
+          "Riprendi il video"
         ]
       },
       {
@@ -261,71 +86,6 @@
         ]
       },
       {
-        "name": "MarkFavoriteIntent",
-        "samples": [
-          "Aggiungi ai preferiti",
-          "Metti nei preferiti",
-          "Segna come preferito",
-          "Mi piace",
-          "Aggiungi questo ai preferiti",
-          "Metti questo nei preferiti",
-          "Segna questo come preferito",
-          "Questo mi piace",
-          "Mi piace questa canzone",
-          "Salva nei preferiti"
-        ]
-      },
-      {
-        "name": "UnmarkFavoriteIntent",
-        "samples": [
-          "Rimuovi dai preferiti",
-          "Togli dai preferiti",
-          "Rimuovi questo dai preferiti",
-          "Togli questo dai preferiti",
-          "Non mi piace più",
-          "Non mi piace piu",
-          "Questo non mi piace più",
-          "Questo non mi piace piu"
-        ]
-      },
-      {
-        "name": "MediaInfoIntent",
-        "slots": [
-          {
-            "name": "media_info_type",
-            "type": "MediaInfoType"
-          }
-        ],
-        "samples": [
-          "Cosa sta suonando",
-          "Cosa sta suonando adesso",
-          "Che brano è questo",
-          "Che canzone è questa",
-          "Chi è questo artista",
-          "Info su questo brano",
-          "Informazioni su questa canzone",
-          "Dimmi cosa sta suonando",
-          "Che cosa suona",
-          "Chi suona adesso",
-          "Qual è il {media_info_type}",
-          "Qual è la {media_info_type}",
-          "Dimmi il {media_info_type}",
-          "Dimmi la {media_info_type}",
-          "Che {media_info_type} è",
-          "Chi canta",
-          "Chi canta questa canzone",
-          "Di che album è questo brano",
-          "Che anno è",
-          "Quando è uscito",
-          "Quanto dura",
-          "Quanto dura questa canzone",
-          "Che genere è",
-          "Che genere di musica è",
-          "Parlami dell'artista",
-          "Raccontami di questo artista"
-        ]
-      },
-      {
         "name": "InProgressMediaListIntent",
         "samples": [
           "Cosa stavo guardando",
@@ -333,179 +93,6 @@
           "Riprendi a guardare",
           "Cosa ho lasciato a metà",
           "Cosa ho lasciato a meta"
-        ]
-      },
-      {
-        "name": "PlayEpisodeIntent",
-        "samples": [
-          "Riproduci {series_name} stagione {season_number} episodio {episode_number}",
-          "Suona {series_name} stagione {season_number} episodio {episode_number}",
-          "Metti {series_name} stagione {season_number} episodio {episode_number}"
-        ],
-        "slots": [
-          {
-            "name": "series_name",
-            "type": "SeriesName"
-          },
-          {
-            "name": "season_number",
-            "type": "ItalianNumber"
-          },
-          {
-            "name": "episode_number",
-            "type": "ItalianNumber"
-          }
-        ]
-      },
-      {
-        "name": "PlayPodcastIntent",
-        "samples": [
-          "Riproduci il podcast {podcast_name}",
-          "Suona il podcast {podcast_name}",
-          "Ascolta il podcast {podcast_name}",
-          "Metti il podcast {podcast_name}",
-          "Riproduci podcast {podcast_name}",
-          "Suona podcast {podcast_name}",
-          "Ascolta podcast {podcast_name}",
-          "Ascolta l'ultimo episodio di {podcast_name}",
-          "Riproduci l'ultimo episodio di {podcast_name}",
-          "Di riprodurre il podcast {podcast_name}"
-        ],
-        "slots": [
-          {
-            "name": "podcast_name",
-            "type": "AMAZON.SearchQuery"
-          }
-        ]
-      },
-      {
-        "name": "BrowseLibraryIntent",
-        "samples": [
-          "Sfoglia {browse_category}",
-          "Mostra {browse_category}",
-          "Elenca {browse_category}"
-        ],
-        "slots": [
-          {
-            "name": "browse_category",
-            "type": "BrowseCategory"
-          }
-        ]
-      },
-      {
-        "name": "RecommendIntent",
-        "samples": [
-          "Consiglia {media_type}",
-          "Raccomanda {media_type}",
-          "Suggerisci {media_type}",
-          "Di consigliare {media_type}",
-          "Di raccomandare {media_type}",
-          "Di suggerire {media_type}",
-          "Consiglia un brano",
-          "Consiglia una canzone",
-          "Consiglia un film",
-          "Suggerisci un brano",
-          "Suggerisci un film",
-          "Raccomanda un brano",
-          "Raccomanda una canzone"
-        ],
-        "slots": [
-          {
-            "name": "media_type",
-            "type": "MediaType"
-          }
-        ]
-      },
-      {
-        "name": "SleepTimerIntent",
-        "samples": [
-          "Imposta timer {duration_minutes}",
-          "Timer per dormire {duration_minutes}",
-          "Spegimento automatico {duration_minutes}",
-          "Ferma dopo {duration_minutes}"
-        ],
-        "slots": [
-          {
-            "name": "duration_minutes",
-            "type": "ItalianNumber"
-          }
-        ]
-      },
-      {
-        "name": "PlayMoodMusicIntent",
-        "samples": [
-          "Musica {mood}",
-          "Riproduci musica {mood}",
-          "Suona musica {mood}",
-          "Metti musica {mood}",
-          "Musica mattutina",
-          "Musica serale",
-          "Musica per cena",
-          "Musica per allenamento",
-          "Musica per concentrarmi",
-          "Musica per festa",
-          "Musica rilassante"
-        ],
-        "slots": [
-          {
-            "name": "mood",
-            "type": "AMAZON.SearchQuery"
-          }
-        ]
-      },
-      {
-        "name": "PlayRandomIntent",
-        "samples": [
-          "Riproduci {media_type} casuali",
-          "Riproduci {media_type} a caso",
-          "Suona {media_type} casuali",
-          "Suona {media_type} a caso",
-          "Metti {media_type} casuali",
-          "Metti {media_type} a caso",
-          "Pleia {media_type} casuali",
-          "Pleia {media_type} a caso",
-          "Metti su {media_type} a caso",
-          "Fai suonare {media_type} a caso",
-          "Scegli {media_type} a caso",
-          "Dammi {media_type} a caso",
-          "Vorrei {media_type} a caso",
-          "Mi andrebbe {media_type} a caso",
-          "Comincia {media_type} casuali",
-          "Mescola {media_type}",
-          "Mescola i miei {media_type}",
-          "Qualsiasi {media_type} va bene",
-          "Sorprendimi con {media_type}",
-          "Riproduci {media_type}",
-          "Di riprodurre {media_type}",
-          "Metti {media_type}",
-          "Dammi {media_type}",
-          "Riproduci un video",
-          "Riproduci un film",
-          "Di riprodurre un video",
-          "Di riprodurre un film",
-          "Metti un video",
-          "Metti un film",
-          "Dammi un video",
-          "Dammi un film",
-          "Voglio vedere un video",
-          "Voglio vedere un film",
-          "Fai partire un video",
-          "Fai partire un film"
-        ],
-        "slots": [
-          {
-            "name": "media_type",
-            "type": "MediaType"
-          }
-        ]
-      },
-      {
-        "name": "ContinueWatchingIntent",
-        "samples": [
-          "Continua a guardare",
-          "Riprendi a guardare",
-          "Continua il video",
-          "Riprendi il video"
         ]
       },
       {
@@ -521,162 +108,52 @@
         ]
       },
       {
-        "name": "WhoAmIIntent",
+        "name": "LoopAllOffIntent",
         "samples": [
-          "Chi sono",
-          "Chi sto usando",
-          "Con che utente sono collegato",
-          "Dimmi chi sono",
-          "Che utente sono"
+          "Disattiva loop",
+          "Disattiva ripetizione"
         ]
       },
       {
-        "name": "QueryArtistLibraryIntent",
+        "name": "LoopAllOnIntent",
         "samples": [
-          "Quali brani abbiamo di {musician}",
-          "Quali canzoni abbiamo di {musician}",
-          "Che brani abbiamo di {musician}",
-          "Che canzoni abbiamo di {musician}",
-          "Quali album abbiamo di {musician}",
-          "Che album abbiamo di {musician}",
-          "Quali dischi abbiamo di {musician}",
-          "Che dischi abbiamo di {musician}",
-          "Cosa abbiamo di {musician}",
-          "Mostra i brani di {musician}",
-          "Mostra gli album di {musician}",
-          "Elenca i brani di {musician}",
-          "Elenca gli album di {musician}",
-          "Quali {query_type} abbiamo di {musician}",
-          "Che {query_type} abbiamo di {musician}",
-          "Mostra {query_type} di {musician}",
-          "Quali brani ci sono di {musician}",
-          "Quali canzoni ci sono di {musician}",
-          "Che brani ci sono di {musician}",
-          "Che canzoni ci sono di {musician}",
-          "Quali album ci sono di {musician}",
-          "Che album ci sono di {musician}",
-          "Quali dischi ci sono di {musician}",
-          "Che dischi ci sono di {musician}",
-          "Quali {query_type} ci sono di {musician}",
-          "Che {query_type} ci sono di {musician}"
-        ],
-        "slots": [
-          {
-            "name": "musician",
-            "type": "AMAZON.Musician"
-          },
-          {
-            "name": "query_type",
-            "type": "LibraryQueryType"
-          }
+          "Attiva loop",
+          "Attiva ripetizione"
         ]
       },
       {
-        "name": "PlaySongIntent",
+        "name": "MarkFavoriteIntent",
         "samples": [
-          "Suona {song}",
-          "Metti {song}",
-          "Ascolta {song}",
-          "Fai partire {song}",
-          "Riproduci {song}",
-          "Pleia {song}",
-          "Di suonare {song}",
-          "Di mettere {song}",
-          "Di ascoltare {song}",
-          "Di far partire {song}",
-          "Di riprodurre {song}",
-          "Di pleiare {song}",
-          "Riproduci il brano {song}",
-          "Riproduci la canzone {song}",
-          "Riproduci il pezzo {song}",
-          "Riproduci la traccia {song}",
-          "Suona il brano {song}",
-          "Suona la canzone {song}",
-          "Suona il pezzo {song}",
-          "Suona la traccia {song}",
-          "Metti il brano {song}",
-          "Metti la canzone {song}",
-          "Metti il pezzo {song}",
-          "Metti la traccia {song}",
-          "Pleia il brano {song}",
-          "Pleia la canzone {song}",
-          "Pleia il pezzo {song}",
-          "Pleia la traccia {song}",
-          "Di riprodurre il brano {song}",
-          "Di riprodurre la canzone {song}",
-          "Di riprodurre il pezzo {song}",
-          "Di riprodurre la traccia {song}",
-          "Di suonare il brano {song}",
-          "Di suonare la canzone {song}",
-          "Di suonare il pezzo {song}",
-          "Di suonare la traccia {song}",
-          "Di mettere il brano {song}",
-          "Di mettere la canzone {song}",
-          "Di mettere il pezzo {song}",
-          "Di mettere la traccia {song}",
-          "Di pleiare il brano {song}",
-          "Di pleiare la canzone {song}",
-          "Di pleiare il pezzo {song}",
-          "Di pleiare la traccia {song}",
-          "Riproduci {song} di {musician}",
-          "Riproduci {song} dei {musician}",
-          "Riproduci {song} degli {musician}",
-          "Riproduci {song} delle {musician}",
-          "Suona {song} di {musician}",
-          "Suona {song} dei {musician}",
-          "Suona {song} degli {musician}",
-          "Suona {song} delle {musician}",
-          "Metti {song} di {musician}",
-          "Metti {song} dei {musician}",
-          "Metti {song} degli {musician}",
-          "Metti {song} delle {musician}",
-          "Pleia {song} di {musician}",
-          "Pleia {song} dei {musician}",
-          "Pleia {song} degli {musician}",
-          "Pleia {song} delle {musician}",
-          "Di riprodurre {song} di {musician}",
-          "Di riprodurre {song} dei {musician}",
-          "Di riprodurre {song} degli {musician}",
-          "Di riprodurre {song} delle {musician}",
-          "Di suonare {song} di {musician}",
-          "Di suonare {song} dei {musician}",
-          "Di suonare {song} degli {musician}",
-          "Di suonare {song} delle {musician}",
-          "Di mettere {song} di {musician}",
-          "Di mettere {song} dei {musician}",
-          "Di mettere {song} degli {musician}",
-          "Di mettere {song} delle {musician}",
-          "Di pleiare {song} di {musician}",
-          "Di pleiare {song} dei {musician}",
-          "Di pleiare {song} degli {musician}",
-          "Di pleiare {song} delle {musician}"
-        ],
-        "slots": [
-          {
-            "name": "song",
-            "type": "AMAZON.MusicRecording"
-          },
-          {
-            "name": "musician",
-            "type": "AMAZON.Musician"
-          }
+          "Aggiungi ai preferiti",
+          "Metti nei preferiti",
+          "Segna come preferito",
+          "Mi piace",
+          "Aggiungi questo ai preferiti",
+          "Metti questo nei preferiti",
+          "Segna questo come preferito",
+          "Questo mi piace",
+          "Mi piace questa canzone",
+          "Salva nei preferiti"
+        ]
+      },
+      {
+        "name": "MediaInfoIntent",
+        "samples": [
+          "Cosa sta suonando",
+          "Cosa sta suonando adesso",
+          "Che brano è questo",
+          "Che canzone è questa",
+          "Chi è questo artista",
+          "Info su questo brano",
+          "Informazioni su questa canzone",
+          "Dimmi cosa sta suonando",
+          "Che cosa suona",
+          "Chi suona adesso"
         ]
       },
       {
         "name": "PlayAlbumIntent",
         "samples": [
-          "Suona {album}",
-          "Metti {album}",
-          "Ascolta {album}",
-          "Fai partire {album}",
-          "Riproduci {album}",
-          "Pleia {album}",
-          "Di suonare {album}",
-          "Di mettere {album}",
-          "Di ascoltare {album}",
-          "Di far partire {album}",
-          "Di riprodurre {album}",
-          "Di pleiare {album}",
           "Riproduci album {album}",
           "Riproduci disco {album}",
           "Suona album {album}",
@@ -756,54 +233,7 @@
           "Di pleiare disco {album} di {musician}",
           "Di pleiare disco {album} dei {musician}",
           "Di pleiare disco {album} degli {musician}",
-          "Di pleiare disco {album} delle {musician}",
-          "Fai suonare l'album {album}",
-          "Fai suonare album {album}",
-          "Metti su l'album {album}",
-          "Metti su album {album}",
-          "Riproduci l'album {album}",
-          "Suona l'album {album}",
-          "Ascolta l'album {album}",
-          "Ascolta album {album}",
-          "Pleia l'album {album}",
-          "Vorrei ascoltare l'album {album}",
-          "Vorrei ascoltare album {album}",
-          "Fai partire l'album {album}",
-          "Fai partire album {album}",
-          "Di suonare l'album {album}",
-          "Di riprodurre l'album {album}",
-          "Di mettere l'album {album}",
-          "Di ascoltare l'album {album}",
-          "Di far partire l'album {album}",
-          "Di pleiare l'album {album}",
-          "Fai suonare l'album {album} di {musician}",
-          "Fai suonare l'album {album} dei {musician}",
-          "Fai suonare l'album {album} degli {musician}",
-          "Fai suonare l'album {album} delle {musician}",
-          "Metti su l'album {album} di {musician}",
-          "Metti su l'album {album} dei {musician}",
-          "Metti su l'album {album} degli {musician}",
-          "Metti su l'album {album} delle {musician}",
-          "Riproduci l'album {album} di {musician}",
-          "Riproduci l'album {album} dei {musician}",
-          "Riproduci l'album {album} degli {musician}",
-          "Riproduci l'album {album} delle {musician}",
-          "Suona l'album {album} di {musician}",
-          "Suona l'album {album} dei {musician}",
-          "Suona l'album {album} degli {musician}",
-          "Suona l'album {album} delle {musician}",
-          "Di suonare l'album {album} di {musician}",
-          "Di suonare l'album {album} dei {musician}",
-          "Di suonare l'album {album} degli {musician}",
-          "Di suonare l'album {album} delle {musician}",
-          "Fai suonare il disco {album}",
-          "Fai suonare disco {album}",
-          "Metti su il disco {album}",
-          "Riproduci il disco {album}",
-          "Suona il disco {album}",
-          "Ascolta il disco {album}",
-          "Di suonare il disco {album}",
-          "Di riprodurre il disco {album}"
+          "Di pleiare disco {album} delle {musician}"
         ],
         "slots": [
           {
@@ -819,18 +249,6 @@
       {
         "name": "PlayArtistSongsIntent",
         "samples": [
-          "Suona {musician}",
-          "Metti {musician}",
-          "Ascolta {musician}",
-          "Fai partire {musician}",
-          "Riproduci {musician}",
-          "Pleia {musician}",
-          "Di suonare {musician}",
-          "Di mettere {musician}",
-          "Di ascoltare {musician}",
-          "Di far partire {musician}",
-          "Di riprodurre {musician}",
-          "Di pleiare {musician}",
           "Riproduci brani di {musician}",
           "Riproduci brani dei {musician}",
           "Riproduci brani degli {musician}",
@@ -1054,28 +472,127 @@
           "Di pleiare una traccia di {musician}",
           "Di pleiare una traccia dei {musician}",
           "Di pleiare una traccia degli {musician}",
-          "Di pleiare una traccia delle {musician}",
-          "Suona la band {musician}",
-          "Metti la band {musician}",
-          "Ascolta la band {musician}",
-          "Riproduci la band {musician}",
-          "Fai partire la band {musician}",
-          "Suona il gruppo {musician}",
-          "Metti il gruppo {musician}",
-          "Ascolta il gruppo {musician}",
-          "Riproduci il gruppo {musician}",
-          "Fai partire il gruppo {musician}",
-          "Suona il cantante {musician}",
-          "Metti il cantante {musician}",
-          "Ascolta il cantante {musician}",
-          "Riproduci il cantante {musician}",
-          "Fai partire il cantante {musician}",
-          "Ascolta musica di {musician}"
+          "Di pleiare una traccia delle {musician}"
         ],
         "slots": [
           {
             "name": "musician",
             "type": "AMAZON.Musician"
+          }
+        ]
+      },
+      {
+        "name": "PlayBookIntent",
+        "slots": [
+          {
+            "name": "book",
+            "type": "AudiobookTitle"
+          }
+        ],
+        "samples": [
+          "riproduci {book}",
+          "riproduci il libro {book}",
+          "riproduci l'audiolibro {book}",
+          "ascolta {book}",
+          "ascolta il libro {book}",
+          "ascolta l'audiolibro {book}"
+        ]
+      },
+      {
+        "name": "PlayByDecadeIntent",
+        "samples": [
+          "Riproduci musica degli anni {decade}",
+          "Suona musica degli anni {decade}",
+          "Metti musica degli anni {decade}",
+          "Musica anni {decade}",
+          "Brani degli anni {decade}",
+          "Canzoni degli anni {decade}"
+        ],
+        "slots": [
+          {
+            "name": "decade",
+            "type": "Decade"
+          }
+        ]
+      },
+      {
+        "name": "PlayByGenreIntent",
+        "samples": [
+          "Riproduci {genre}",
+          "Suona {genre}",
+          "Metti {genre}",
+          "Pleia {genre}",
+          "Di riprodurre {genre}"
+        ],
+        "slots": [
+          {
+            "name": "genre",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
+        "name": "PlayChannelIntent",
+        "samples": [
+          "Canale {channel}",
+          "Riproduci radio {channel}",
+          "di riprodurre la radio {channel}",
+          "di mettere la radio {channel}",
+          "Radio {channel}"
+        ],
+        "slots": [
+          {
+            "name": "channel",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
+        "name": "PlayEpisodeIntent",
+        "samples": [
+          "Riproduci {series_name} stagione {season_number} episodio {episode_number}",
+          "Suona {series_name} stagione {season_number} episodio {episode_number}",
+          "Metti {series_name} stagione {season_number} episodio {episode_number}"
+        ],
+        "slots": [
+          {
+            "name": "series_name",
+            "type": "SeriesName"
+          },
+          {
+            "name": "season_number",
+            "type": "ItalianNumber"
+          },
+          {
+            "name": "episode_number",
+            "type": "ItalianNumber"
+          }
+        ]
+      },
+      {
+        "name": "PlayFavoritesIntent",
+        "samples": [
+          "Riproduci i miei preferiti",
+          "Riproduci {media_type} preferiti",
+          "Suona i miei preferiti",
+          "Suona {media_type} preferiti",
+          "Metti i miei preferiti",
+          "Metti {media_type} preferiti",
+          "Pleia i miei preferiti",
+          "Pleia {media_type} preferiti",
+          "Di riprodurre i miei preferiti",
+          "Di riprodurre {media_type} preferiti",
+          "Di suonare i miei preferiti",
+          "Di suonare {media_type} preferiti",
+          "Di mettere i miei preferiti",
+          "Di mettere {media_type} preferiti",
+          "Di pleiare i miei preferiti",
+          "Di pleiare {media_type} preferiti"
+        ],
+        "slots": [
+          {
+            "name": "media_type",
+            "type": "AMAZON.SearchQuery"
           }
         ]
       },
@@ -1107,20 +624,34 @@
           "Di pleiare ultimi {media_type} aggiunti",
           "Di pleiare nuovi media",
           "Riproduci {media_type} aggiunti {time_period}",
-          "Suona {media_type} aggiunti {time_period}",
-          "Metti {media_type} aggiunti {time_period}",
           "Riproduci novità {media_type} {time_period}",
-          "Suona novità {media_type} {time_period}",
           "Riproduci {media_type} {time_period}",
+          "Suona {media_type} aggiunti {time_period}",
+          "Suona novità {media_type} {time_period}",
           "Suona {media_type} {time_period}",
+          "Metti {media_type} aggiunti {time_period}",
+          "Metti novità {media_type} {time_period}",
+          "Metti {media_type} {time_period}",
+          "Pleia {media_type} aggiunti {time_period}",
+          "Pleia novità {media_type} {time_period}",
+          "Pleia {media_type} {time_period}",
           "Di riprodurre {media_type} aggiunti {time_period}",
+          "Di riprodurre novità {media_type} {time_period}",
+          "Di riprodurre {media_type} {time_period}",
           "Di suonare {media_type} aggiunti {time_period}",
-          "Di riprodurre novità {media_type} {time_period}"
+          "Di suonare novità {media_type} {time_period}",
+          "Di suonare {media_type} {time_period}",
+          "Di mettere {media_type} aggiunti {time_period}",
+          "Di mettere novità {media_type} {time_period}",
+          "Di mettere {media_type} {time_period}",
+          "Di pleiare {media_type} aggiunti {time_period}",
+          "Di pleiare novità {media_type} {time_period}",
+          "Di pleiare {media_type} {time_period}"
         ],
         "slots": [
           {
             "name": "media_type",
-            "type": "MediaType"
+            "type": "AMAZON.SearchQuery"
           },
           {
             "name": "time_period",
@@ -1129,51 +660,250 @@
         ]
       },
       {
-        "name": "PlayFavoritesIntent",
+        "name": "PlayMoodMusicIntent",
         "samples": [
-          "Riproduci i miei preferiti",
-          "Riproduci {media_type} preferiti",
-          "Suona i miei preferiti",
-          "Suona {media_type} preferiti",
-          "Metti i miei preferiti",
-          "Metti {media_type} preferiti",
-          "Pleia i miei preferiti",
-          "Pleia {media_type} preferiti",
-          "Di riprodurre i miei preferiti",
-          "Di riprodurre {media_type} preferiti",
-          "Di suonare i miei preferiti",
-          "Di suonare {media_type} preferiti",
-          "Di mettere i miei preferiti",
-          "Di mettere {media_type} preferiti",
-          "Di pleiare i miei preferiti",
-          "Di pleiare {media_type} preferiti",
-          "suona i preferiti di {username}",
-          "metti i preferiti di {username}",
-          "riproduci i preferiti di {username}",
-          "suona {media_type} preferiti di {username}",
-          "metti {media_type} preferiti di {username}",
-          "di suonare i preferiti di {username}",
-          "di mettere i preferiti di {username}"
+          "Musica {mood}",
+          "Riproduci musica {mood}",
+          "Suona musica {mood}",
+          "Metti musica {mood}",
+          "Musica mattutina",
+          "Musica serale",
+          "Musica per cena",
+          "Musica per allenamento",
+          "Musica per concentrarmi",
+          "Musica per festa",
+          "Musica rilassante"
         ],
         "slots": [
           {
-            "name": "media_type",
-            "type": "MediaType"
-          },
-          {
-            "name": "username",
-            "type": "AMAZON.Person"
+            "name": "mood",
+            "type": "AMAZON.SearchQuery"
           }
         ]
       },
       {
-        "name": "SearchMediaIntent",
+        "name": "PlayPlaylistIntent",
+        "samples": [
+          "Riproduci playlist {playlist}",
+          "Suona playlist {playlist}",
+          "Metti playlist {playlist}",
+          "Pleia playlist {playlist}",
+          "Di riprodurre playlist {playlist}",
+          "Di suonare playlist {playlist}",
+          "Di mettere playlist {playlist}",
+          "Di pleiare playlist {playlist}",
+          "Riproduci la playlist {playlist}",
+          "Suona la playlist {playlist}",
+          "Metti la playlist {playlist}",
+          "Pleia la playlist {playlist}"
+        ],
         "slots": [
           {
-            "name": "query",
+            "name": "playlist",
             "type": "AMAZON.SearchQuery"
           }
+        ]
+      },
+      {
+        "name": "PlayPodcastIntent",
+        "samples": [
+          "Riproduci il podcast {podcast_name}",
+          "Suona il podcast {podcast_name}",
+          "Ascolta il podcast {podcast_name}",
+          "Metti il podcast {podcast_name}",
+          "Ascolta l'ultimo episodio di {podcast_name}"
         ],
+        "slots": [
+          {
+            "name": "podcast_name",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
+        "name": "PlayRandomIntent",
+        "samples": [
+          "Riproduci {media_type} casuali",
+          "Riproduci {media_type} a caso",
+          "Suona {media_type} casuali",
+          "Suona {media_type} a caso",
+          "Metti {media_type} casuali",
+          "Metti {media_type} a caso"
+        ],
+        "slots": [
+          {
+            "name": "media_type",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
+        "name": "PlaySongIntent",
+        "samples": [
+          "Riproduci il brano {song}",
+          "Riproduci la canzone {song}",
+          "Riproduci il pezzo {song}",
+          "Riproduci la traccia {song}",
+          "Suona il brano {song}",
+          "Suona la canzone {song}",
+          "Suona il pezzo {song}",
+          "Suona la traccia {song}",
+          "Metti il brano {song}",
+          "Metti la canzone {song}",
+          "Metti il pezzo {song}",
+          "Metti la traccia {song}",
+          "Pleia il brano {song}",
+          "Pleia la canzone {song}",
+          "Pleia il pezzo {song}",
+          "Pleia la traccia {song}",
+          "Di riprodurre il brano {song}",
+          "Di riprodurre la canzone {song}",
+          "Di riprodurre il pezzo {song}",
+          "Di riprodurre la traccia {song}",
+          "Di suonare il brano {song}",
+          "Di suonare la canzone {song}",
+          "Di suonare il pezzo {song}",
+          "Di suonare la traccia {song}",
+          "Di mettere il brano {song}",
+          "Di mettere la canzone {song}",
+          "Di mettere il pezzo {song}",
+          "Di mettere la traccia {song}",
+          "Di pleiare il brano {song}",
+          "Di pleiare la canzone {song}",
+          "Di pleiare il pezzo {song}",
+          "Di pleiare la traccia {song}",
+          "Riproduci {song} di {musician}",
+          "Riproduci {song} dei {musician}",
+          "Riproduci {song} degli {musician}",
+          "Riproduci {song} delle {musician}",
+          "Suona {song} di {musician}",
+          "Suona {song} dei {musician}",
+          "Suona {song} degli {musician}",
+          "Suona {song} delle {musician}",
+          "Metti {song} di {musician}",
+          "Metti {song} dei {musician}",
+          "Metti {song} degli {musician}",
+          "Metti {song} delle {musician}",
+          "Pleia {song} di {musician}",
+          "Pleia {song} dei {musician}",
+          "Pleia {song} degli {musician}",
+          "Pleia {song} delle {musician}",
+          "Di riprodurre {song} di {musician}",
+          "Di riprodurre {song} dei {musician}",
+          "Di riprodurre {song} degli {musician}",
+          "Di riprodurre {song} delle {musician}",
+          "Di suonare {song} di {musician}",
+          "Di suonare {song} dei {musician}",
+          "Di suonare {song} degli {musician}",
+          "Di suonare {song} delle {musician}",
+          "Di mettere {song} di {musician}",
+          "Di mettere {song} dei {musician}",
+          "Di mettere {song} degli {musician}",
+          "Di mettere {song} delle {musician}",
+          "Di pleiare {song} di {musician}",
+          "Di pleiare {song} dei {musician}",
+          "Di pleiare {song} degli {musician}",
+          "Di pleiare {song} delle {musician}"
+        ],
+        "slots": [
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
+        ]
+      },
+      {
+        "name": "PlayVideoIntent",
+        "samples": [
+          "Riproduci {title}",
+          "Suona {title}",
+          "Metti {title}",
+          "Pleia {title}",
+          "Di riprodurre {title}",
+          "Di suonare {title}"
+        ],
+        "slots": [
+          {
+            "name": "title",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
+        "name": "QueryArtistLibraryIntent",
+        "samples": [
+          "Quali brani abbiamo di {musician}",
+          "Quali canzoni abbiamo di {musician}",
+          "Che brani abbiamo di {musician}",
+          "Che canzoni abbiamo di {musician}",
+          "Quali album abbiamo di {musician}",
+          "Che album abbiamo di {musician}",
+          "Quali dischi abbiamo di {musician}",
+          "Che dischi abbiamo di {musician}",
+          "Cosa abbiamo di {musician}",
+          "Mostra i brani di {musician}",
+          "Mostra gli album di {musician}",
+          "Elenca i brani di {musician}",
+          "Elenca gli album di {musician}",
+          "Quali {query_type} abbiamo di {musician}",
+          "Che {query_type} abbiamo di {musician}",
+          "Mostra {query_type} di {musician}"
+        ],
+        "slots": [
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          },
+          {
+            "name": "query_type",
+            "type": "LibraryQueryType"
+          }
+        ]
+      },
+      {
+        "name": "RecommendIntent",
+        "samples": [
+          "Consiglia {media_type}",
+          "Raccomanda {media_type}",
+          "Suggerisci {media_type}",
+          "Di consigliare {media_type}",
+          "Di raccomandare {media_type}",
+          "Di suggerire {media_type}"
+        ],
+        "slots": [
+          {
+            "name": "media_type",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
+        "name": "RepeatSingleOnIntent",
+        "samples": [
+          "Ripeti la canzone",
+          "Ripeti la traccia",
+          "Ripeti il brano",
+          "Ripeti il video",
+          "di ripeter la canzone",
+          "di ripeter la traccia",
+          "di ripeter il brano",
+          "di ripeter il video",
+          "Ripetilo",
+          "di ripeterlo",
+          "riplei",
+          "replei",
+          "Suonalo ancora",
+          "di suonarlo ancora",
+          "Suonala ancora",
+          "di suonarla ancora"
+        ]
+      },
+      {
+        "name": "SearchMediaIntent",
         "samples": [
           "Cerca {query}",
           "Trova {query}",
@@ -1183,133 +913,144 @@
           "Puoi trovare {query}",
           "Cerca il contenuto {query}",
           "Trova il brano {query}"
-        ]
-      },
-      {
-        "name": "AddToQueueIntent",
+        ],
         "slots": [
           {
-            "name": "song",
-            "type": "AMAZON.MusicRecording"
-          },
-          {
-            "name": "musician",
-            "type": "AMAZON.Musician"
+            "name": "query",
+            "type": "AMAZON.SearchQuery"
           }
-        ],
-        "samples": [
-          "Aggiungi {song} alla coda",
-          "Aggiungi {song} di {musician} alla coda",
-          "Metti {song} in coda",
-          "Metti {song} di {musician} in coda",
-          "Accoda {song}",
-          "Accoda {song} di {musician}",
-          "Aggiungi {song} alla mia lista",
-          "Inserisci {song} nella coda"
         ]
       },
       {
-        "name": "PlayNextIntent",
+        "name": "SleepTimerIntent",
+        "samples": [
+          "Imposta timer {duration_minutes}",
+          "Timer per dormire {duration_minutes}",
+          "Spegimento automatico {duration_minutes}",
+          "Ferma dopo {duration_minutes}"
+        ],
         "slots": [
           {
-            "name": "song",
-            "type": "AMAZON.MusicRecording"
-          },
-          {
-            "name": "musician",
-            "type": "AMAZON.Musician"
+            "name": "duration_minutes",
+            "type": "ItalianNumber"
           }
-        ],
-        "samples": [
-          "Suona {song} dopo",
-          "Suona {song} di {musician} dopo",
-          "Riproduci {song} dopo",
-          "Riproduci {song} di {musician} dopo",
-          "Metti {song} come prossimo",
-          "Metti {song} di {musician} come prossimo",
-          "Voglio sentire {song} dopo"
         ]
       },
       {
-        "name": "ClearQueueIntent",
-        "slots": [],
+        "name": "UnmarkFavoriteIntent",
         "samples": [
-          "Cancella la coda",
-          "Svuota la coda",
-          "Pulisci la coda",
-          "Elimina tutto dalla coda",
-          "Cancella la mia lista",
-          "Svuota la mia lista"
+          "Rimuovi dai preferiti",
+          "Togli dai preferiti",
+          "Rimuovi questo dai preferiti",
+          "Togli questo dai preferiti",
+          "Non mi piace più",
+          "Non mi piace piu",
+          "Questo non mi piace più",
+          "Questo non mi piace piu"
         ]
       },
       {
-        "name": "ListQueueIntent",
-        "slots": [],
+        "name": "WhoAmIIntent",
         "samples": [
-          "Cosa c'è nella coda",
-          "Cosa c'è in coda",
-          "Cosa viene dopo",
-          "Cosa c'è dopo",
-          "Mostra la coda",
-          "Elenca la coda",
-          "Cosa suona dopo"
-        ]
-      },
-      {
-        "name": "PlayRadioIntent",
-        "slots": [],
-        "samples": [
-          "Suona la radio",
-          "Riproduci la radio",
-          "Attiva la radio",
-          "Metti musica simile",
-          "Suona brani simili",
-          "Inizia una stazione radio",
-          "Continua con musica simile",
-          "Suona canzoni come questa"
-        ]
-      },
-      {
-        "name": "TurnRadioOnIntent",
-        "slots": [],
-        "samples": [
-          "Attiva la modalità radio",
-          "Accendi la modalità radio",
-          "Modalità radio attiva",
-          "Attiva la radio",
-          "Accendi la radio"
-        ]
-      },
-      {
-        "name": "TurnRadioOffIntent",
-        "slots": [],
-        "samples": [
-          "Disattiva la modalità radio",
-          "Spegni la modalità radio",
-          "Modalità radio disattivata",
-          "Disattiva la radio",
-          "Spegni la radio",
-          "Ferma la modalità radio"
-        ]
-      },
-      {
-        "name": "PlayBookIntent",
-        "slots": [
-          {
-            "name": "book",
-            "type": "AudiobookTitle"
-          }
-        ],
-        "samples": [
-          "riproduci {book}",
-          "riproduci il libro {book}",
-          "ascolta {book}",
-          "ascolta il libro {book}",
-          "ascolta l'audiolibro {book}"
+          "Chi sono",
+          "Chi sto usando",
+          "Con che utente sono collegato",
+          "Dimmi chi sono",
+          "Che utente sono"
         ]
       }
     ],
     "types": [
+      {
+        "name": "Decade",
+        "values": [
+          {
+            "name": {
+              "value": "cinquanta",
+              "synonyms": [
+                "anni cinquanta",
+                "1950",
+                "50"
+              ]
+            },
+            "id": "1950"
+          },
+          {
+            "name": {
+              "value": "sessanta",
+              "synonyms": [
+                "anni sessanta",
+                "1960",
+                "60"
+              ]
+            },
+            "id": "1960"
+          },
+          {
+            "name": {
+              "value": "settanta",
+              "synonyms": [
+                "anni settanta",
+                "1970",
+                "70"
+              ]
+            },
+            "id": "1970"
+          },
+          {
+            "name": {
+              "value": "ottanta",
+              "synonyms": [
+                "anni ottanta",
+                "1980",
+                "80"
+              ]
+            },
+            "id": "1980"
+          },
+          {
+            "name": {
+              "value": "novanta",
+              "synonyms": [
+                "anni novanta",
+                "1990",
+                "90"
+              ]
+            },
+            "id": "1990"
+          },
+          {
+            "name": {
+              "value": "duemila",
+              "synonyms": [
+                "anni duemila",
+                "2000"
+              ]
+            },
+            "id": "2000"
+          },
+          {
+            "name": {
+              "value": "duemiladieci",
+              "synonyms": [
+                "anni dieci",
+                "2010"
+              ]
+            },
+            "id": "2010"
+          },
+          {
+            "name": {
+              "value": "duemilaventi",
+              "synonyms": [
+                "anni venti",
+                "2020"
+              ]
+            },
+            "id": "2020"
+          }
+        ]
+      },
       {
         "name": "SeriesName",
         "values": [
@@ -1449,25 +1190,22 @@
         "name": "LibraryQueryType",
         "values": [
           {
-            "id": "tracks",
             "name": {
               "value": "brani",
               "synonyms": [
-                "canzoni",
-                "canzone",
-                "brano"
+                "canzoni"
               ]
-            }
+            },
+            "id": "tracks"
           },
           {
-            "id": "albums",
             "name": {
               "value": "album",
               "synonyms": [
-                "dischi",
-                "disco"
+                "dischi"
               ]
-            }
+            },
+            "id": "albums"
           }
         ]
       },
@@ -1642,257 +1380,9 @@
         ]
       },
       {
-        "name": "MediaInfoType",
-        "values": [
-          {
-            "id": "title",
-            "name": {
-              "value": "titolo",
-              "synonyms": [
-                "canzone",
-                "brano",
-                "nome"
-              ]
-            }
-          },
-          {
-            "id": "album",
-            "name": {
-              "value": "album",
-              "synonyms": [
-                "disco"
-              ]
-            }
-          },
-          {
-            "id": "artist",
-            "name": {
-              "value": "artista",
-              "synonyms": [
-                "cantante",
-                "gruppo",
-                "musicista"
-              ]
-            }
-          },
-          {
-            "id": "year",
-            "name": {
-              "value": "anno",
-              "synonyms": [
-                "anno di uscita"
-              ]
-            }
-          },
-          {
-            "id": "duration",
-            "name": {
-              "value": "durata",
-              "synonyms": [
-                "lunghezza",
-                "quanto dura"
-              ]
-            }
-          },
-          {
-            "id": "genre",
-            "name": {
-              "value": "genere",
-              "synonyms": [
-                "stile",
-                "tipo di musica"
-              ]
-            }
-          },
-          {
-            "id": "biography",
-            "name": {
-              "value": "biografia",
-              "synonyms": [
-                "bio",
-                "sull'artista"
-              ]
-            }
-          }
-        ]
-      },
-      {
-        "name": "TimePeriod",
-        "values": [
-          {
-            "id": "today",
-            "name": {
-              "value": "oggi",
-              "synonyms": [
-                "quest'oggi",
-                "nell'ultima giornata"
-              ]
-            }
-          },
-          {
-            "id": "this_week",
-            "name": {
-              "value": "questa settimana",
-              "synonyms": [
-                "nell'ultima settimana",
-                "la scorsa settimana",
-                "ultimamente",
-                "di recente"
-              ]
-            }
-          },
-          {
-            "id": "this_month",
-            "name": {
-              "value": "questo mese",
-              "synonyms": [
-                "nell'ultimo mese",
-                "lo scorso mese",
-                "nelle ultime settimane"
-              ]
-            }
-          }
-        ]
-      },
-      {
-        "name": "Decade",
-        "values": [
-          {
-            "id": "50s",
-            "name": {
-              "value": "cinquanta",
-              "synonyms": [
-                "anni cinquanta",
-                "50",
-                "cinquantesimo"
-              ]
-            }
-          },
-          {
-            "id": "60s",
-            "name": {
-              "value": "sessanta",
-              "synonyms": [
-                "anni sessanta",
-                "60",
-                "sessantesimo"
-              ]
-            }
-          },
-          {
-            "id": "70s",
-            "name": {
-              "value": "settanta",
-              "synonyms": [
-                "anni settanta",
-                "70",
-                "settantesimo"
-              ]
-            }
-          },
-          {
-            "id": "80s",
-            "name": {
-              "value": "ottanta",
-              "synonyms": [
-                "anni ottanta",
-                "80",
-                "ottantesimo"
-              ]
-            }
-          },
-          {
-            "id": "90s",
-            "name": {
-              "value": "novanta",
-              "synonyms": [
-                "anni novanta",
-                "90",
-                "novantesimo"
-              ]
-            }
-          },
-          {
-            "id": "2000s",
-            "name": {
-              "value": "duemila",
-              "synonyms": [
-                "anni duemila",
-                "2000"
-              ]
-            }
-          },
-          {
-            "id": "2010s",
-            "name": {
-              "value": "duemiladieci",
-              "synonyms": [
-                "anni duemila dieci",
-                "2010"
-              ]
-            }
-          },
-          {
-            "id": "2020s",
-            "name": {
-              "value": "duemilaventi",
-              "synonyms": [
-                "anni duemila venti",
-                "2020"
-              ]
-            }
-          }
-        ]
-      },
-      {
-        "name": "MediaType",
-        "values": [
-          {
-            "name": {
-              "value": "brani"
-            }
-          },
-          {
-            "name": {
-              "value": "canzoni"
-            }
-          },
-          {
-            "name": {
-              "value": "musica"
-            }
-          },
-          {
-            "name": {
-              "value": "media"
-            }
-          },
-          {
-            "name": {
-              "value": "video"
-            }
-          },
-          {
-            "name": {
-              "value": "film"
-            }
-          },
-          {
-            "name": {
-              "value": "audio"
-            }
-          }
-        ]
-      },
-      {
         "name": "AudiobookTitle",
         "values": []
       }
-    ],
-    "modelConfiguration": {
-      "fallbackIntentSensitivity": {
-        "level": "LOW"
-      }
-    }
+    ]
   }
 }
