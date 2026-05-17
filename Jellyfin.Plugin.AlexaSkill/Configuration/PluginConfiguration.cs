@@ -126,11 +126,44 @@ public class PluginConfiguration : BasePluginConfiguration
 
     /// <summary>
     /// Gets or sets per-locale interaction model build status from SMAPI.
-    /// Keyed by locale (e.g. "en-US", "it-IT").
+    /// Stored as a list because XmlSerializer cannot serialize Dictionary.
     /// </summary>
 #pragma warning disable CA2227
-    public Dictionary<string, LocaleModelStatus> LocaleModelStatuses { get; set; } = new();
+    public Collection<LocaleModelStatusEntry> LocaleModelStatuses { get; set; } = new();
 #pragma warning restore CA2227
+
+    /// <summary>
+    /// Gets locale model status by locale code.
+    /// </summary>
+    public LocaleModelStatus? GetLocaleModelStatus(string locale)
+    {
+        foreach (var entry in LocaleModelStatuses)
+        {
+            if (string.Equals(entry.Locale, locale, StringComparison.OrdinalIgnoreCase))
+            {
+                return entry.ToStatus();
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Sets or updates locale model status.
+    /// </summary>
+    public void SetLocaleModelStatus(string locale, LocaleModelStatus status)
+    {
+        for (int i = 0; i < LocaleModelStatuses.Count; i++)
+        {
+            if (string.Equals(LocaleModelStatuses[i].Locale, locale, StringComparison.OrdinalIgnoreCase))
+            {
+                LocaleModelStatuses[i] = new LocaleModelStatusEntry(locale, status);
+                return;
+            }
+        }
+
+        LocaleModelStatuses.Add(new LocaleModelStatusEntry(locale, status));
+    }
 
     /// <summary>
     /// Ensure the URL ends with a trailing slash so that relative URI construction
@@ -354,4 +387,38 @@ public record LocaleModelStatus
 
     /// <summary>Gets the model source: "Embedded" (bundled) or "Custom" (user-provided).</summary>
     public string Source { get; init; } = "Embedded";
+}
+
+/// <summary>
+/// XML-serializable entry for per-locale model status.
+/// XmlSerializer cannot handle Dictionary, so we use a Collection of keyed entries.
+/// </summary>
+public class LocaleModelStatusEntry
+{
+    public LocaleModelStatusEntry()
+    {
+    }
+
+    public LocaleModelStatusEntry(string locale, LocaleModelStatus status)
+    {
+        Locale = locale;
+        Status = status.Status;
+        LastUpdated = status.LastUpdated;
+        Error = status.Error;
+        Source = status.Source;
+    }
+
+    public string Locale { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public DateTime LastUpdated { get; set; }
+    public string? Error { get; set; }
+    public string Source { get; set; } = "Embedded";
+
+    public LocaleModelStatus ToStatus() => new()
+    {
+        Status = Status,
+        LastUpdated = LastUpdated,
+        Error = Error,
+        Source = Source,
+    };
 }

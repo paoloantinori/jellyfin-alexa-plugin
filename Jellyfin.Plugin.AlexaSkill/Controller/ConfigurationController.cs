@@ -631,12 +631,12 @@ public class ConfigurationController : ControllerBase
             lastModelDeployTime = config.LastModelDeployTime,
             lastModelDeployStatus = config.LastModelDeployStatus,
             localeModelStatuses = config.LocaleModelStatuses
-                .ToDictionary(kvp => kvp.Key, kvp => new
+                .ToDictionary(e => e.Locale, e => new
                 {
-                    status = kvp.Value.Status,
-                    lastUpdated = kvp.Value.LastUpdated,
-                    error = kvp.Value.Error,
-                    source = kvp.Value.Source,
+                    status = e.ToStatus().Status,
+                    lastUpdated = e.ToStatus().LastUpdated,
+                    error = e.ToStatus().Error,
+                    source = e.ToStatus().Source,
                 })
         });
     }

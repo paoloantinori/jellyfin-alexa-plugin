@@ -373,13 +373,13 @@ public class SkillStartup : IHostedService, IDisposable
                         state, locale, error);
                 }
 
-                config.LocaleModelStatuses[locale] = new Configuration.LocaleModelStatus
+                config.SetLocaleModelStatus(locale, new Configuration.LocaleModelStatus
                 {
                     Status = state,
                     LastUpdated = now,
                     Error = error,
                     Source = "Embedded",
-                };
+                });
             }
 
             Plugin.Instance.SaveConfiguration();
