@@ -176,5 +176,6 @@
   "ElicitBookName": "Qual livro você gostaria de ouvir?",
   "NotFoundBook": "Desculpe, não consegui encontrar um audiolivro chamado {0}.",
   "NoContentInBook": "Não há conteúdo de áudio no livro {0}.",
-  "SearchingBook": "Procurando seu audiolivro..."
+  "SearchingBook": "Procurando seu audiolivro...",
+  "FollowMeSuccessSsml": "<say-as interpret-as=\"interjection\">entendi</say-as><break time=\"200ms\"/>Continuando <emphasis level=\"moderate\">{0}</emphasis> de onde você parou."
 }
