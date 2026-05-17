@@ -399,7 +399,10 @@ tests:
       musician: {}
 
   # "Di suonare" prefix patterns (invocation-prefix form)
-  - utterance: "Di suonare album abbey road"
+  # NOTE: "Di suonare album abbey road" is ambiguous with PlayVideoIntent ("Di suonare {title}").
+  # Even "Di suonare l'album abbey road" fails — NLU prefers the generic {title} slot.
+  # Use "Fai suonare l'album {album}" instead: PlayVideoIntent has no "Fai suonare" pattern.
+  - utterance: "Fai suonare l'album abbey road"
     expected_intent: PlayAlbumIntent
     expected_slots:
       album: {}

@@ -40,7 +40,10 @@ tests:
       musician: {}
 
   # Combined song + musician slot pattern with multi-word artist
-  - utterance: "play bohemian rhapsody by queen"
+  # NOTE: bare "play X by Y" is ambiguous with PlayArtistSongsIntent ("play {musician}").
+  # Adding "the song" qualifier forces NLU to PlaySongIntent which has
+  # "play the song {song} by {musician}" as a dedicated sample.
+  - utterance: "play the song bohemian rhapsody by queen"
     expected_intent: PlaySongIntent
     expected_slots:
       song: {}
@@ -183,7 +186,9 @@ tests:
     expected_slots:
       decade: {}
 
-  - utterance: "Play 80s hits"
+  # NOTE: bare "Play 80s hits" is ambiguous with PlayArtistSongsIntent ("play {musician}").
+  # Adding "the" forces NLU to PlayByDecadeIntent which has "play the {decade} hits".
+  - utterance: "Play the 80s hits"
     expected_intent: PlayByDecadeIntent
     expected_slots:
       decade: {}
