@@ -7,12 +7,25 @@ C# Jellyfin plugin (net9.0) exposing an Alexa skill for media playback, search, 
 ```bash
 dotnet build Jellyfin.Plugin.AlexaSkill.sln
 dotnet test Jellyfin.Plugin.AlexaSkill.Tests          # 1487 unit tests
+python3 scripts/validate_interaction_models.py        # Check all 17 models (JSON, slots, drift)
+python3 scripts/validate_locales.py                   # Check locale key coverage (baseline-aware)
+python3 scripts/validate_versions.py                  # Check version consistency across files
 ./scripts/run_nlu_tests.sh                            # NLU tests (needs ask CLI auth)
 ./scripts/run_nlu_tests.sh -k "en-US"                 # single locale
 ./scripts/run_e2e_tests.sh                            # E2E via SMAPI simulate-skill (needs live Jellyfin)
 ```
 
 Env vars: `ASK_SKILL_ID`, `SMAPI_DELAY` (default 1.5s), `SMAPI_TIMEOUT`, `JELLYFIN_URL`, `JELLYFIN_API_KEY`, `JELLYFIN_USER`.
+
+## CI
+
+GitHub Actions runs on every PR and push to main (`ci.yml`):
+- **build-and-test**: Release build with `-warnaserror` + full test suite
+- **validate-models**: Interaction model structural validation (advisory)
+- **validate-locales**: Locale key coverage vs baseline (fails on new gaps only)
+- **validate-versions**: Directory.Build.props / build.yaml / manifest.json consistency
+
+Release workflow also validates models, locales, and versions before building.
 
 ## Project Layout
 

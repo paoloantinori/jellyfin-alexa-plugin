@@ -39,6 +39,15 @@ jobs:
       - name: Install Python dependencies
         run: pip install pyyaml
 
+      - name: Validate interaction models
+        run: python3 scripts/validate_interaction_models.py
+
+      - name: Validate locale strings
+        run: python3 scripts/validate_locales.py
+
+      - name: Check version consistency
+        run: python3 scripts/validate_versions.py
+
       - name: Build
         run: dotnet publish --configuration Release
 
