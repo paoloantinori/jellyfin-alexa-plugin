@@ -186,7 +186,75 @@
                                 <div class="fieldDescription">Items shown in recommendations (1–30).</div>
                             </div>
                     </details>
+                    <details>
+                        <summary><span class="accordion-title">Custom Interaction Model</span></summary>
+                            <div class="fieldDescription">Deploy a custom interaction model to override the built-in Alexa NLU model.</div>
+
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="CustomModelEnabled" /> <span>Enable Custom Model</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">Use a custom interaction model instead of the built-in one</div>
+                            </div>
+
+                            <div class="inputContainer">
+                                <label class="inputLabel inputLabelUnfocused" for="CustomModelUrl">Model URL</label>
+                                <input id="CustomModelUrl" name="CustomModelUrl" type="text" is="emby-input" placeholder="https://example.com/model_en-US.json" />
+                                <div class="fieldDescription">URL to a custom interaction model JSON file.</div>
+                            </div>
+
+                            <div class="selectContainer">
+                                <label class="selectLabel" for="CustomModelLocale">Locale</label>
+                                <select is="emby-select" id="CustomModelLocale" name="CustomModelLocale" class="emby-select-withcolor emby-select">
+                                    <option value="ar-SA">ar-SA</option>
+                                    <option value="de-DE">de-DE</option>
+                                    <option value="en-AU">en-AU</option>
+                                    <option value="en-CA">en-CA</option>
+                                    <option value="en-GB">en-GB</option>
+                                    <option value="en-IN">en-IN</option>
+                                    <option value="en-US">en-US</option>
+                                    <option value="es-ES">es-ES</option>
+                                    <option value="es-MX">es-MX</option>
+                                    <option value="es-US">es-US</option>
+                                    <option value="fr-CA">fr-CA</option>
+                                    <option value="fr-FR">fr-FR</option>
+                                    <option value="hi-IN">hi-IN</option>
+                                    <option value="it-IT">it-IT</option>
+                                    <option value="ja-JP">ja-JP</option>
+                                    <option value="nl-NL">nl-NL</option>
+                                    <option value="pt-BR">pt-BR</option>
+                                </select>
+                            </div>
+
+                            <div style="display:flex;gap:0.5em;margin-bottom:1em;">
+                                <button id="deployModelButton" is="emby-button" type="button" class="raised button-submit emby-button">
+                                    <span>Deploy Model</span>
+                                </button>
+                                <button id="restoreModelButton" is="emby-button" type="button" class="raised button-alt emby-button">
+                                    <span>Restore Default</span>
+                                </button>
+                            </div>
+
+                            <div id="customModelStatus" style="display:none;margin-bottom:1em;padding:0.8em;border-radius:4px;background:#1a1a1a;">
+                            </div>
+
+                            <div id="customModelProgress" style="display:none;margin-bottom:1em;padding:0.8em;border-radius:4px;background:#333;color:#ccc;">
+                            </div>
+
+                            <div class="fieldDescription" style="color:#888;">This replaces the interaction model for the selected locale. Model builds take 15-30 seconds.</div>
+                    </details>
+
                     </form>
+
+                    <!-- Restore Default Model Confirmation Modal -->
+                    <div id="restoreModelModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;">
+                        <div style="background:#222;border-radius:8px;padding:1.5em;max-width:400px;max-height:80vh;overflow-y:auto;min-width:280px;">
+                            <h3 style="margin-top:0;margin-bottom:1em;color:#ccc;">Restore Default Model</h3>
+                            <div class="fieldDescription" style="margin-bottom:1em;color:#aaa;">Are you sure you want to restore the default interaction model for this locale? Any custom model will be replaced.</div>
+                            <div style="display:flex;gap:0.5em;justify-content:flex-end;">
+                                <button id="restoreModelCancelBtn" is="emby-button" type="button" class="raised raised-mini emby-button">Cancel</button>
+                                <button id="restoreModelConfirmBtn" is="emby-button" type="button" class="raised button-submit raised-mini emby-button">Restore Default</button>
+                            </div>
+                        </div>
+                    </div>
 
                     <div class="detailSectionHeader">
                     <h2 style="margin:.6em 0;vertical-align:middle;display:inline-block">User Skill Configuration</h2>
@@ -221,12 +289,66 @@
                         </button>
                     </div>
                 </div>
+
+                <!-- Add User Skill Modal -->
+                <div id="addUserModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;">
+                    <div id="addUserPanel" style="background:#222;border-radius:8px;padding:1.5em;max-width:400px;max-height:80vh;overflow-y:auto;min-width:280px;">
+                        <h3 style="margin-top:0;margin-bottom:1em;color:#ccc;">Add New User Skill</h3>
+
+                        <!-- Dropdown mode: shown when Jellyfin users are available -->
+                        <div id="addUserDropdownMode">
+                            <div class="fieldDescription" style="margin-bottom:0.8em;color:#aaa;">Select a Jellyfin user to add:</div>
+                            <select id="addUserSelect" is="emby-select" class="emby-select-withcolor emby-select" style="width:100%;margin-bottom:1em;padding:0.5em;border-radius:3px;background:#333;color:#ccc;border:1px solid #555;">
+                            </select>
+                            <div style="display:flex;gap:0.5em;justify-content:flex-end;">
+                                <button id="addUserDropdownCancel" is="emby-button" type="button" class="raised raised-mini emby-button">Cancel</button>
+                                <button id="addUserDropdownAdd" is="emby-button" type="button" class="raised button-submit raised-mini emby-button">Add</button>
+                            </div>
+                        </div>
+
+                        <!-- Fallback mode: shown when API fails or all users are configured -->
+                        <div id="addUserFallbackMode" style="display:none;">
+                            <div class="fieldDescription" style="margin-bottom:0.8em;color:#aaa;">Could not load Jellyfin users. Enter the username manually:</div>
+                            <input id="addUserManualInput" type="text" is="emby-input" class="emby-input" style="width:100%;margin-bottom:1em;padding:0.5em;border-radius:3px;background:#333;color:#ccc;border:1px solid #555;" placeholder="Username" />
+                            <div style="display:flex;gap:0.5em;justify-content:flex-end;">
+                                <button id="addUserFallbackCancel" is="emby-button" type="button" class="raised raised-mini emby-button">Cancel</button>
+                                <button id="addUserFallbackAdd" is="emby-button" type="button" class="raised button-submit raised-mini emby-button">Add</button>
+                            </div>
+                        </div>
+
+                        <!-- No users available message -->
+                        <div id="addUserNoneMode" style="display:none;">
+                            <div class="fieldDescription" style="color:#aaa;">All Jellyfin users have already been configured. Enter a username manually if needed:</div>
+                            <input id="addUserNoneInput" type="text" is="emby-input" class="emby-input" style="width:100%;margin:0.8em 0;padding:0.5em;border-radius:3px;background:#333;color:#ccc;border:1px solid #555;" placeholder="Username" />
+                            <div style="display:flex;gap:0.5em;justify-content:flex-end;">
+                                <button id="addUserNoneCancel" is="emby-button" type="button" class="raised raised-mini emby-button">Cancel</button>
+                                <button id="addUserNoneAdd" is="emby-button" type="button" class="raised button-submit raised-mini emby-button">Add</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Amazon Authorization URL Modal -->
+                <div id="authUrlModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;">
+                    <div id="authUrlPanel" style="background:#222;border-radius:8px;padding:1.5em;max-width:500px;max-height:80vh;overflow-y:auto;min-width:300px;">
+                        <h3 style="margin-top:0;margin-bottom:1em;color:#ccc;">Amazon Account Linking</h3>
+                        <div class="fieldDescription" style="margin-bottom:0.8em;color:#aaa;">Please visit the following URL to complete Login with Amazon:</div>
+                        <input id="authUrlInput" type="text" readonly style="width:100%;margin-bottom:1em;padding:0.5em;border-radius:3px;background:#333;color:#ccc;border:1px solid #555;font-family:monospace;font-size:0.85em;word-break:break-all;" />
+                        <div style="display:flex;gap:0.5em;align-items:center;flex-wrap:wrap;">
+                            <button id="authUrlCopyButton" is="emby-button" type="button" class="raised button-submit raised-mini emby-button">Copy to Clipboard</button>
+                            <span id="authUrlCopiedMsg" style="color:#4caf50;display:none;margin-left:0.3em;">Copied!</span>
+                            <div style="flex:1;"></div>
+                            <button id="authUrlCloseButton" is="emby-button" type="button" class="raised raised-mini emby-button">Close</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         <script type="text/javascript">
             var Config = {
                 pluginUniqueId: "c5df7de0-8777-4b3c-a70d-5c3dae359c9e"
             };
+            var DEFAULT_LOCALE = "en-US";
 
             document.querySelector("#ConfigPage").addEventListener("pageshow", function() {
                 Dashboard.showLoadingMsg();
@@ -267,10 +389,16 @@
                         tbody.appendChild(createUserRow(user, config));
                     }
 
+                    // Custom model fields
+                    document.querySelector("#CustomModelEnabled").checked = config.CustomModelEnabled === true;
+                    document.querySelector("#CustomModelUrl").value = config.CustomModelUrl || "";
+                    document.querySelector("#CustomModelLocale").value = config.CustomModelLocale || DEFAULT_LOCALE;
+
                     Dashboard.hideLoadingMsg();
                 });
 
                 loadHealthSummary();
+                loadCustomModelStatus();
             });
 
             function isValidInvocationName(value) {
@@ -663,7 +791,10 @@
                         Dashboard.hideLoadingMsg();
 
                         res.json().then(function (data) {
-                            alert("Please ask the corresponding user in whose Alexa Developer account the skill should be created to go to the following URL and follow the instructions there to complete LWA:\n" + ApiClient.getUrl(data.verificationUrl));
+                            var url = ApiClient.getUrl(data.verificationUrl);
+                            document.querySelector("#authUrlInput").value = url;
+                            document.querySelector("#authUrlCopiedMsg").style.display = "none";
+                            document.querySelector("#authUrlModal").style.display = "flex";
                         });
                     }, function (res) {
                         Dashboard.hideLoadingMsg();
@@ -717,6 +848,11 @@
                     var mrrRaw = parseInt(document.querySelector("#MaxRecommendationResults").value);
                     config.MaxRecommendationResults = isNaN(mrrRaw) ? 10 : mrrRaw;
 
+                    // Custom model fields
+                    config.CustomModelEnabled = document.querySelector("#CustomModelEnabled").checked;
+                    config.CustomModelUrl = document.querySelector("#CustomModelUrl").value.trim();
+                    config.CustomModelLocale = document.querySelector("#CustomModelLocale").value;
+
                     // Save general config via dedicated endpoint that preserves
                     // the Users collection and [JsonIgnore] properties (SmapiDeviceToken, JellyfinToken).
                     // Do NOT use updatePluginConfiguration — it replaces the entire config object,
@@ -745,7 +881,10 @@
                         MaxSearchResults: config.MaxSearchResults,
                         MaxBrowseResults: config.MaxBrowseResults,
                         MaxRecentlyAddedResults: config.MaxRecentlyAddedResults,
-                        MaxRecommendationResults: config.MaxRecommendationResults
+                        MaxRecommendationResults: config.MaxRecommendationResults,
+                        CustomModelEnabled: config.CustomModelEnabled,
+                        CustomModelUrl: config.CustomModelUrl,
+                        CustomModelLocale: config.CustomModelLocale
                     };
                     ApiClient.ajax({
                         type: "PATCH",
@@ -886,20 +1025,257 @@
                 });
             });
 
-            document.querySelector("#newUserSkillButton").addEventListener("click", function(e) {
-                let username = prompt("Please enter the username for which a new skill should be created");
+            function closeAddUserModal() {
+                document.querySelector("#addUserModal").style.display = "none";
+            }
 
-                if (username != null) {
-                    ApiClient.getPluginConfiguration(Config.pluginUniqueId).then(function (config) {
-                        let newUserRow = createUserRow({
-                            "Username": username,
-                            "InvocationName": "jellyfin player",
-                            "SkillStatus": "unsaved"
-                        }, config);
+            function addUserRowForUsername(username) {
+                if (!username || username.trim() === "") return;
+                ApiClient.getPluginConfiguration(Config.pluginUniqueId).then(function (config) {
+                    var newUserRow = createUserRow({
+                        "Username": username.trim(),
+                        "InvocationName": "jellyfin player",
+                        "SkillStatus": "unsaved"
+                    }, config);
 
-                        document.querySelector("#userTableBody").appendChild(newUserRow);
+                    document.querySelector("#userTableBody").appendChild(newUserRow);
+                });
+                closeAddUserModal();
+            }
+
+            function showAddUserMode(mode, users) {
+                ["Dropdown", "Fallback", "None"].forEach(function(m) {
+                    document.querySelector("#addUser" + m + "Mode").style.display = m === mode ? "block" : "none";
+                });
+                if (mode === "Dropdown" && users) {
+                    var select = document.querySelector("#addUserSelect");
+                    select.innerHTML = "";
+                    users.forEach(function(user) {
+                        var opt = document.createElement("option");
+                        opt.value = user.Name;
+                        opt.textContent = user.Name;
+                        select.appendChild(opt);
                     });
                 }
+                document.querySelector("#addUserModal").style.display = "flex";
+                var inputId = mode === "Fallback" ? "addUserManualInput" : mode === "None" ? "addUserNoneInput" : null;
+                if (inputId) { var input = document.querySelector("#" + inputId); input.value = ""; input.focus(); }
+            }
+
+            document.querySelector("#addUserDropdownCancel").addEventListener("click", closeAddUserModal);
+            document.querySelector("#addUserFallbackCancel").addEventListener("click", closeAddUserModal);
+            document.querySelector("#addUserNoneCancel").addEventListener("click", closeAddUserModal);
+
+            document.querySelector("#addUserDropdownAdd").addEventListener("click", function() {
+                var username = document.querySelector("#addUserSelect").value;
+                addUserRowForUsername(username);
+            });
+
+            document.querySelector("#addUserFallbackAdd").addEventListener("click", function() {
+                addUserRowForUsername(document.querySelector("#addUserManualInput").value);
+            });
+
+            document.querySelector("#addUserNoneAdd").addEventListener("click", function() {
+                addUserRowForUsername(document.querySelector("#addUserNoneInput").value);
+            });
+
+            // Allow pressing Enter in manual input fields to submit
+            document.querySelector("#addUserManualInput").addEventListener("keydown", function(e) {
+                if (e.key === "Enter") { addUserRowForUsername(this.value); }
+            });
+            document.querySelector("#addUserNoneInput").addEventListener("keydown", function(e) {
+                if (e.key === "Enter") { addUserRowForUsername(this.value); }
+            });
+
+            // Click outside modal to close
+            document.querySelector("#addUserModal").addEventListener("click", function(e) {
+                if (e.target === this) { closeAddUserModal(); }
+            });
+
+            // Auth URL modal handlers
+            function closeAuthUrlModal() {
+                document.querySelector("#authUrlModal").style.display = "none";
+            }
+
+            document.querySelector("#authUrlCloseButton").addEventListener("click", closeAuthUrlModal);
+
+            document.querySelector("#authUrlModal").addEventListener("click", function(e) {
+                if (e.target === this) { closeAuthUrlModal(); }
+            });
+
+            document.querySelector("#authUrlCopyButton").addEventListener("click", function() {
+                var urlInput = document.querySelector("#authUrlInput");
+                var copiedMsg = document.querySelector("#authUrlCopiedMsg");
+                urlInput.select();
+                urlInput.setSelectionRange(0, 99999);
+
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(urlInput.value).then(function() {
+                        copiedMsg.style.display = "inline";
+                    }).catch(function() {
+                        document.execCommand("copy");
+                        copiedMsg.style.display = "inline";
+                    });
+                } else {
+                    document.execCommand("copy");
+                    copiedMsg.style.display = "inline";
+                }
+            });
+
+            document.querySelector("#newUserSkillButton").addEventListener("click", function(e) {
+                Dashboard.showLoadingMsg();
+
+                Promise.all([
+                    ApiClient.getUsers(),
+                    ApiClient.getPluginConfiguration(Config.pluginUniqueId)
+                ]).then(function(results) {
+                    Dashboard.hideLoadingMsg();
+                    var allUsers = results[0];
+                    var config = results[1];
+
+                    // Get already-configured usernames
+                    var configuredUsernames = (config.Users || []).map(function(u) { return u.Username; });
+
+                    // Filter out already-configured users
+                    var availableUsers = allUsers.filter(function(u) {
+                        return configuredUsernames.indexOf(u.Name) < 0;
+                    });
+
+                    if (availableUsers.length > 0) {
+                        showAddUserMode("Dropdown", availableUsers);
+                    } else if (allUsers.length > 0) {
+                        showAddUserMode("None");
+                    } else {
+                        showAddUserMode("Fallback");
+                    }
+                }).catch(function() {
+                    Dashboard.hideLoadingMsg();
+                    showAddUserMode("Fallback");
+                });
+            });
+
+            function loadCustomModelStatus() {
+                ApiClient.ajax({
+                    type: "GET",
+                    url: ApiClient.getUrl("alexaskill/api/custom-model/status")
+                }).then(function(res) {
+                    res.json().then(function(data) {
+                        var statusDiv = document.querySelector("#customModelStatus");
+                        var html = "";
+                        if (data.lastModelDeployTime) {
+                            var deployDate = new Date(data.lastModelDeployTime);
+                            html += "<div style='margin-bottom:0.3em;'><span style='color:#aaa;'>Last deploy:</span> <span style='color:#ccc;'>" + deployDate.toLocaleString() + "</span></div>";
+                        }
+                        if (data.lastModelDeployStatus) {
+                            var statusColor = data.lastModelDeployStatus.indexOf("failed") >= 0 || data.lastModelDeployStatus === "timed out"
+                                ? "#e5a00d" : "#4caf50";
+                            html += "<div style='margin-bottom:0.3em;'><span style='color:#aaa;'>Status:</span> <span style='color:" + statusColor + ";'>" + data.lastModelDeployStatus + "</span></div>";
+                        }
+                        if (data.customModelUrl) {
+                            html += "<div><span style='color:#aaa;'>Model source:</span> <span style='color:#ccc;'>Custom (" + (data.customModelLocale || DEFAULT_LOCALE) + ")</span></div>";
+                        } else {
+                            html += "<div><span style='color:#aaa;'>Model source:</span> <span style='color:#888;'>Default</span></div>";
+                        }
+                        statusDiv.innerHTML = html;
+                        statusDiv.style.display = "block";
+                    });
+                }, function() {
+                    // Status endpoint not available, silently ignore
+                });
+            }
+
+            function getFirstConfiguredUserId() {
+                var tbody = document.querySelector("#userTableBody");
+                if (!tbody || tbody.rows.length === 0) {
+                    return null;
+                }
+                var firstRow = tbody.rows[0];
+                var userId = firstRow.getAttribute("data-id");
+                if (!userId || userId === "undefined") {
+                    return null;
+                }
+                return userId;
+            }
+
+            var _modelMsgStyles = { error: ["#c62828","#fff"], progress: ["#333","#ccc"], success: ["#2e7d32","#fff"] };
+            function showCustomModelMessage(message, type) {
+                var s = _modelMsgStyles[type] || _modelMsgStyles.progress;
+                var div = document.querySelector("#customModelProgress");
+                div.style.background = s[0];
+                div.style.color = s[1];
+                div.textContent = message;
+                div.style.display = "block";
+            }
+
+            function hideCustomModelProgress() {
+                document.querySelector("#customModelProgress").style.display = "none";
+            }
+
+            function callModelApi(endpoint, payload, buttonSelector, progressMsg, successMsg, onSuccess) {
+                var userId = getFirstConfiguredUserId();
+                if (!userId) { showCustomModelMessage("No configured users found.", "error"); return; }
+                var btn = document.querySelector(buttonSelector);
+                btn.disabled = true;
+                hideCustomModelProgress();
+                showCustomModelMessage(progressMsg, "progress");
+                ApiClient.ajax({
+                    type: "POST",
+                    url: ApiClient.getUrl(endpoint),
+                    data: JSON.stringify(payload),
+                    contentType: "application/json"
+                }).then(function(res) {
+                    res.json().then(function(data) {
+                        showCustomModelMessage(successMsg + " — " + (data.buildStatus || "complete"), "success");
+                        if (onSuccess) { onSuccess(); }
+                        loadCustomModelStatus();
+                    });
+                }, function(res) {
+                    res.json().then(function(data) {
+                        showCustomModelMessage("Failed: " + (data.error || "unknown error"), "error");
+                    }).catch(function() {
+                        showCustomModelMessage("Failed: unknown error", "error");
+                    });
+                    loadCustomModelStatus();
+                }).finally(function() {
+                    btn.disabled = false;
+                });
+            }
+
+            document.querySelector("#deployModelButton").addEventListener("click", function() {
+                var url = document.querySelector("#CustomModelUrl").value.trim();
+                if (!url) { showCustomModelMessage("Please enter a model URL.", "error"); return; }
+                callModelApi(
+                    "alexaskill/api/custom-model/deploy",
+                    { userId: getFirstConfiguredUserId(), url: url, locale: document.querySelector("#CustomModelLocale").value },
+                    "#deployModelButton", "Fetching model...", "Deployed successfully"
+                );
+            });
+
+            document.querySelector("#restoreModelButton").addEventListener("click", function() {
+                var userId = getFirstConfiguredUserId();
+                if (!userId) {
+                    showCustomModelMessage("No configured users found. Add and save a user skill first.", "error");
+                    return;
+                }
+                document.querySelector("#restoreModelModal").style.display = "flex";
+            });
+
+            document.querySelector("#restoreModelCancelBtn").addEventListener("click", function() {
+                document.querySelector("#restoreModelModal").style.display = "none";
+            });
+
+            document.querySelector("#restoreModelModal").addEventListener("click", function(e) {
+                if (e.target === this) { document.querySelector("#restoreModelModal").style.display = "none"; }
+            });
+
+            document.querySelector("#restoreModelConfirmBtn").addEventListener("click", function() {
+                document.querySelector("#restoreModelModal").style.display = "none";
+                callModelApi(
+                    "alexaskill/api/custom-model/restore",
+                    { userId: getFirstConfiguredUserId(), locale: document.querySelector("#CustomModelLocale").value },
+                    "#restoreModelButton", "Restoring default model...", "Default model restored",
+                    function() { document.querySelector("#CustomModelUrl").value = ""; }
+                );
             });
         </script>
     </div>
