@@ -6,6 +6,7 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 using Jellyfin.Plugin.AlexaSkill.Alexa.DynamicEntities;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.ModelDeployment;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Diagnostics;
@@ -44,6 +45,9 @@ public class Registrator : IPluginServiceRegistrator
 
         // Dynamic entity resolution
         serviceCollection.AddSingleton<DynamicEntityBuilder>();
+
+        // Custom model deployment
+        serviceCollection.AddSingleton<ModelDeploymentManager>();
 
         // Proactive events
         serviceCollection.AddSingleton<ProactiveEventClient>();

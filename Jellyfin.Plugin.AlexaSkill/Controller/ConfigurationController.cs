@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 using System.Web;
 using Alexa.NET.Management;
 using Alexa.NET.Management.Api;
+using Jellyfin.Plugin.AlexaSkill.Alexa.ModelDeployment;
+using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Controller.Handler;
 using Jellyfin.Plugin.AlexaSkill.Entities;
 using MediaBrowser.Controller.Library;
@@ -33,6 +35,7 @@ public class ConfigurationController : ControllerBase
 
     private readonly IUserManager _userManager;
     private readonly ILogger<ConfigurationController> _logger;
+    private readonly ModelDeploymentManager _modelDeploymentManager;
     private LwaAuthorizationRequestHandler lwaAuthorizationRequestHandler;
 
     /// <summary>
@@ -42,14 +45,17 @@ public class ConfigurationController : ControllerBase
     /// <param name="sessionManager">Instance of the <see cref="ISessionManager"/> interface.</param>
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILogger{RequestController}"/> interface.</param>
+    /// <param name="modelDeploymentManager">Instance of the <see cref="ModelDeploymentManager"/> class.</param>
     public ConfigurationController(
         IUserManager userManager,
         ISessionManager sessionManager,
         ILibraryManager libraryManager,
-        ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory,
+        ModelDeploymentManager modelDeploymentManager)
     {
         _userManager = userManager;
         _logger = loggerFactory.CreateLogger<ConfigurationController>();
+        _modelDeploymentManager = modelDeploymentManager;
 
         lwaAuthorizationRequestHandler = Plugin.Instance!.LwaAuthorizationRequestHandler;
     }
@@ -387,6 +393,15 @@ public class ConfigurationController : ControllerBase
         if (req.TryGetValue("MaxRecommendationResults", out var maxRecToken) && maxRecToken.Type == JTokenType.Integer)
         { config.MaxRecommendationResults = maxRecToken.Value<int>(); updated = true; }
 
+        if (req.TryGetValue("CustomModelEnabled", out var customEnabledToken) && customEnabledToken.Type == JTokenType.Boolean)
+        { config.CustomModelEnabled = customEnabledToken.Value<bool>(); updated = true; }
+
+        if (req.TryGetValue("CustomModelUrl", out var customUrlToken) && customUrlToken.Type == JTokenType.String)
+        { config.CustomModelUrl = customUrlToken.Value<string>(); updated = true; }
+
+        if (req.TryGetValue("CustomModelLocale", out var customLocaleToken) && customLocaleToken.Type == JTokenType.String)
+        { config.CustomModelLocale = customLocaleToken.Value<string>() ?? "en-US"; updated = true; }
+
         if (!updated)
         {
             return new JsonResult(new { error = "No valid fields to update" }) { StatusCode = 400 };
@@ -465,10 +480,220 @@ public class ConfigurationController : ControllerBase
     }
 
     /// <summary>
+    /// Deploys a custom interaction model from a URL to SMAPI.
+    /// </summary>
+    /// <param name="json">JSON with userId, optional url, and optional locale.</param>
+    /// <returns>A JSON object with the deployment result.</returns>
+    [HttpPost("custom-model/deploy")]
+    [Authorize(Policy = "RequiresElevation")]
+    public async Task<ActionResult> DeployCustomModel([FromBody] dynamic json)
+    {
+        JObject req = JObject.Parse(json.ToString());
+
+        if (!TryResolveModelDeploymentContext(req, out var pluginUser, out var skillId, out var locale, out var error))
+        {
+            return error!;
+        }
+
+        var config = Plugin.Instance!.Configuration;
+        string url = req.TryGetValue("url", out var urlToken) && urlToken.Type == JTokenType.String
+            ? urlToken.Value<string>()!
+            : config.CustomModelUrl ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return new JsonResult(new { error = "No model URL provided and CustomModelUrl is not configured" }) { StatusCode = 400 };
+        }
+
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+            string modelJson = await _modelDeploymentManager.FetchModelJsonAsync(url, cts.Token).ConfigureAwait(false);
+
+            var validationResult = _modelDeploymentManager.ValidateModelJson(modelJson);
+            if (!validationResult.IsValid)
+            {
+                return new JsonResult(new { error = $"Invalid model: {validationResult.ErrorMessage}" }) { StatusCode = 400 };
+            }
+
+            var result = await _modelDeploymentManager.DeployCustomModelAsync(
+                modelJson, locale!, pluginUser!, skillId!, cts.Token).ConfigureAwait(false);
+
+            config.LastModelDeployTime = DateTime.UtcNow;
+            config.LastModelDeployStatus = result.Success ? $"deployed ({result.BuildStatus})" : $"failed: {result.Message}";
+            Plugin.Instance!.SaveConfiguration();
+
+            if (!result.Success)
+            {
+                return new JsonResult(new { error = result.Message, buildStatus = result.BuildStatus }) { StatusCode = 500 };
+            }
+
+            return new JsonResult(new
+            {
+                success = true,
+                message = result.Message,
+                buildStatus = result.BuildStatus,
+                invocationName = validationResult.InvocationName,
+                intentCount = validationResult.IntentCount,
+                locale = locale!
+            });
+        }
+        catch (ArgumentException ex)
+        {
+            return new JsonResult(new { error = ex.Message }) { StatusCode = 400 };
+        }
+        catch (TimeoutException)
+        {
+            config.LastModelDeployTime = DateTime.UtcNow;
+            config.LastModelDeployStatus = "timed out";
+            Plugin.Instance!.SaveConfiguration();
+            return new JsonResult(new { error = "Deployment timed out" }) { StatusCode = 504 };
+        }
+        catch (HttpRequestException ex)
+        {
+            return new JsonResult(new { error = $"Failed to fetch model: {ex.Message}" }) { StatusCode = 502 };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error during custom model deployment");
+            return new JsonResult(new { error = $"Internal error: {ex.Message}" }) { StatusCode = 500 };
+        }
+    }
+
+    /// <summary>
+    /// Restores the default (embedded) interaction model for a locale via SMAPI.
+    /// </summary>
+    /// <param name="json">JSON with userId and optional locale.</param>
+    /// <returns>A JSON object with the deployment result.</returns>
+    [HttpPost("custom-model/restore")]
+    [Authorize(Policy = "RequiresElevation")]
+    public async Task<ActionResult> RestoreDefaultModel([FromBody] dynamic json)
+    {
+        JObject req = JObject.Parse(json.ToString());
+
+        if (!TryResolveModelDeploymentContext(req, out var pluginUser, out var skillId, out var locale, out var error))
+        {
+            return error!;
+        }
+
+        var config = Plugin.Instance!.Configuration;
+
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+            var result = await _modelDeploymentManager.RestoreDefaultModelAsync(
+                locale!, pluginUser!, skillId!, cts.Token).ConfigureAwait(false);
+
+            config.LastModelDeployTime = DateTime.UtcNow;
+            config.LastModelDeployStatus = result.Success ? "restored" : $"restore failed: {result.Message}";
+            Plugin.Instance!.SaveConfiguration();
+
+            if (!result.Success)
+            {
+                return new JsonResult(new { error = result.Message }) { StatusCode = 500 };
+            }
+
+            return new JsonResult(new
+            {
+                success = true,
+                message = "Default model restored",
+                buildStatus = result.BuildStatus,
+                locale = locale!
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error during default model restore");
+            return new JsonResult(new { error = $"Internal error: {ex.Message}" }) { StatusCode = 500 };
+        }
+    }
+
+    /// <summary>
+    /// Gets the current custom model deployment configuration and status.
+    /// </summary>
+    /// <returns>A JSON object with the custom model config values.</returns>
+    [HttpGet("custom-model/status")]
+    [Authorize(Policy = "RequiresElevation")]
+    public ActionResult GetCustomModelStatus()
+    {
+        var config = Plugin.Instance!.Configuration;
+        return new JsonResult(new
+        {
+            customModelUrl = config.CustomModelUrl,
+            customModelLocale = config.CustomModelLocale,
+            customModelEnabled = config.CustomModelEnabled,
+            lastModelDeployTime = config.LastModelDeployTime,
+            lastModelDeployStatus = config.LastModelDeployStatus
+        });
+    }
+
+    /// <summary>
     /// Validates that an invocation name meets Amazon's requirements (at least 2 words).
     /// </summary>
     private static bool IsValidInvocationName(string name) =>
         name.Length > 0 && name.Contains(' ', StringComparison.Ordinal);
+
+    /// <summary>
+    /// Resolves and validates the common context needed by model deployment endpoints.
+    /// Extracts userId from the request body, resolves the plugin user, and validates
+    /// that the user has SMAPI credentials and a skill ID. Also resolves the locale.
+    /// </summary>
+    /// <param name="body">The parsed request body.</param>
+    /// <param name="pluginUser">The resolved plugin user, if successful.</param>
+    /// <param name="skillId">The user's skill ID, if successful.</param>
+    /// <param name="locale">The resolved locale, if successful.</param>
+    /// <param name="error">The error result, if validation failed.</param>
+    /// <returns>True if the context was resolved successfully; false if an error was set.</returns>
+    private bool TryResolveModelDeploymentContext(
+        JObject body,
+        out Jellyfin.Plugin.AlexaSkill.Entities.User? pluginUser,
+        out string? skillId,
+        out string? locale,
+        out ActionResult? error)
+    {
+        pluginUser = null;
+        skillId = null;
+        locale = null;
+        error = null;
+
+        if (!body.TryGetValue("userId", out var userIdToken) || string.IsNullOrWhiteSpace(userIdToken.Value<string>()))
+        {
+            error = new JsonResult(new { error = "userId is required" }) { StatusCode = 400 };
+            return false;
+        }
+
+        if (!TryResolvePluginUser(userIdToken.Value<string>()!, out pluginUser, out error))
+        {
+            return false;
+        }
+
+        if (pluginUser!.SmapiDeviceToken == null)
+        {
+            error = new JsonResult(new { error = "User has no SMAPI device token. Complete Alexa authorization first." }) { StatusCode = 400 };
+            return false;
+        }
+
+        if (pluginUser.UserSkill == null || string.IsNullOrEmpty(pluginUser.UserSkill.SkillId))
+        {
+            error = new JsonResult(new { error = "User has no skill ID. Complete skill creation first." }) { StatusCode = 400 };
+            return false;
+        }
+
+        skillId = pluginUser.UserSkill.SkillId;
+
+        var config = Plugin.Instance!.Configuration;
+        locale = body.TryGetValue("locale", out var localeToken) && localeToken.Type == JTokenType.String
+            ? localeToken.Value<string>()!
+            : config.CustomModelLocale;
+
+        if (string.IsNullOrWhiteSpace(locale))
+        {
+            error = new JsonResult(new { error = "No locale provided and CustomModelLocale is not configured" }) { StatusCode = 400 };
+            return false;
+        }
+
+        return true;
+    }
 
     private bool TryResolvePluginUser(string userId, out Jellyfin.Plugin.AlexaSkill.Entities.User? pluginUser, out ActionResult? error)
     {

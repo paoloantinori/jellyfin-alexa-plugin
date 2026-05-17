@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Threading.Tasks;
+using Jellyfin.Plugin.AlexaSkill.Alexa.ModelDeployment;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Controller;
 using Jellyfin.Plugin.AlexaSkill.Entities;
@@ -51,7 +53,10 @@ public class UserSkillApiTests : IDisposable
             _userManagerMock.Object,
             sessionManagerMock.Object,
             Mock.Of<ILibraryManager>(),
-            _loggerFactory);
+            _loggerFactory,
+            new ModelDeploymentManager(
+                Mock.Of<IHttpClientFactory>(),
+                _loggerFactory.CreateLogger<ModelDeploymentManager>()));
     }
 
     public void Dispose()

@@ -113,6 +113,17 @@ public class PluginConfiguration : BasePluginConfiguration
     public Collection<User> Users { get; set; } = new Collection<User>();
 #pragma warning restore CA2227
 
+    // Custom Interaction Model
+    public string? CustomModelUrl { get; set; }
+
+    public string CustomModelLocale { get; set; } = "en-US";
+
+    public bool CustomModelEnabled { get; set; }
+
+    public DateTime? LastModelDeployTime { get; set; }
+
+    public string? LastModelDeployStatus { get; set; }
+
     /// <summary>
     /// Ensure the URL ends with a trailing slash so that relative URI construction
     /// preserves path segments. Without this, <c>new Uri("https://host/path", "Items/1")</c>

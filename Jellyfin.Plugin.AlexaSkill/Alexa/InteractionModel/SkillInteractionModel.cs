@@ -9,16 +9,29 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.InteractionModel;
 public class SkillInteractionModel : SkillInteractionContainer
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="SkillInteractionModel"/> class.
+    /// Initializes a new instance of the <see cref="SkillInteractionModel"/> class
+    /// from an embedded resource file.
     /// </summary>
-    /// <param name="ressourcePath">Path to the manifest ressource.</param>
     /// <param name="locale">Locale of this interaction model.</param>
+    /// <param name="ressourcePath">Path to the manifest ressource.</param>
     /// <param name="invocationName">Invocation name of this interaction model.</param>
     public SkillInteractionModel(string locale, string ressourcePath, string invocationName)
     {
         InteractionModel = global::Jellyfin.Plugin.AlexaSkill.Util.DeserializeFromFile<SkillInteraction>(ressourcePath);
         Locale = locale;
         InvocationName = invocationName;
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="SkillInteractionModel"/> class
+    /// from a pre-deserialized <see cref="SkillInteraction"/> object.
+    /// </summary>
+    /// <param name="locale">Locale of this interaction model.</param>
+    /// <param name="interaction">The deserialized interaction model data.</param>
+    public SkillInteractionModel(string locale, SkillInteraction interaction)
+    {
+        InteractionModel = interaction;
+        Locale = locale;
     }
 
     /// <summary>
