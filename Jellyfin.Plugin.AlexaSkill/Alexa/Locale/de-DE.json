@@ -130,5 +130,9 @@
   "FollowMeSuccess": "Setze {0} fort, wo du aufgehört hast.",
   "FollowMeNothingPlaying": "Auf anderen Geräten wird gerade nichts abgespielt.",
   "FeatureDisabled": "Diese Funktion ist derzeit deaktiviert. Bitten Sie Ihren Administrator, sie zu aktivieren.",
-  "MediaTypeNotAvailable": "Diese Art von Inhalt ist nicht verfügbar."
+  "MediaTypeNotAvailable": "Diese Art von Inhalt ist nicht verfügbar.",
+  "ElicitBookName": "Welches Buch möchten Sie hören?",
+  "NotFoundBook": "Leider konnte ich kein Hörbuch mit dem Namen {0} finden.",
+  "NoContentInBook": "Das Buch {0} enthält keinen Audioinhalt.",
+  "SearchingBook": "Suche nach Ihrem Hörbuch..."
 }

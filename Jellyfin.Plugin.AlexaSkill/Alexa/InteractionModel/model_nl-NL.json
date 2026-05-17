@@ -701,6 +701,25 @@
           "kun je {query} vinden",
           "vind me {query}"
         ]
+      },
+      {
+        "name": "PlayBookIntent",
+        "slots": [
+          {
+            "name": "book",
+            "type": "AudiobookTitle"
+          }
+        ],
+        "samples": [
+          "play {book}",
+          "play the book {book}",
+          "play audiobook {book}",
+          "play the audiobook {book}",
+          "listen to {book}",
+          "listen to the book {book}",
+          "listen to audiobook {book}",
+          "listen to the audiobook {book}"
+        ]
       }
     ],
     "types": [
@@ -1034,6 +1053,10 @@
             }
           }
         ]
+      },
+      {
+        "name": "AudiobookTitle",
+        "values": []
       }
     ],
     "modelConfiguration": {

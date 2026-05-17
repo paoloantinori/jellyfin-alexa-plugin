@@ -297,12 +297,13 @@ public class SearchMediaIntentHandler : BaseHandler
             return series.MediaType == MediaType.Audio ? "podcast" : "series";
         }
 
-        var runtimeName = item.GetType().Name;
-        if (runtimeName.Contains("AudioBook", StringComparison.Ordinal))
+        // Concrete AudioBook type is in the server assembly, not the controller package
+        if (item.GetType().Name.Equals("AudioBook", StringComparison.Ordinal))
         {
             return "audiobook";
         }
 
+        var runtimeName = item.GetType().Name;
         if (runtimeName.Contains("Playlist", StringComparison.Ordinal))
         {
             return "playlist";

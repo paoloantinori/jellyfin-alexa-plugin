@@ -22,6 +22,7 @@ internal static class IntentNames
     public const string PlayByDecade = "PlayByDecadeIntent";
     public const string PlayMoodMusic = "PlayMoodMusicIntent";
     public const string ContinueWatching = "ContinueWatchingIntent";
+    public const string PlayBook = "PlayBookIntent";
     public const string GoToChapter = "GoToChapterIntent";
     public const string InProgressMediaList = "InProgressMediaListIntent";
     public const string BrowseLibrary = "BrowseLibraryIntent";

@@ -129,5 +129,9 @@
   "FollowMeSuccess": "Continuando {0} donde lo dejaste.",
   "FollowMeNothingPlaying": "No hay nada reproduciéndose en otros dispositivos.",
   "FeatureDisabled": "Esta función está desactivada. Pide a tu administrador que la active.",
-  "MediaTypeNotAvailable": "Este tipo de contenido no está disponible."
+  "MediaTypeNotAvailable": "Este tipo de contenido no está disponible.",
+  "ElicitBookName": "¿Qué libro te gustaría escuchar?",
+  "NotFoundBook": "Lo siento, no pude encontrar un audiolibro llamado {0}.",
+  "NoContentInBook": "No hay contenido de audio en el libro {0}.",
+  "SearchingBook": "Buscando tu audiolibro..."
 }

@@ -6,110 +6,83 @@ C# Jellyfin plugin (net9.0) exposing an Alexa skill for media playback, search, 
 
 ```bash
 dotnet build Jellyfin.Plugin.AlexaSkill.sln
-dotnet test Jellyfin.Plugin.AlexaSkill.Tests
+dotnet test Jellyfin.Plugin.AlexaSkill.Tests          # 1487 unit tests
+./scripts/run_nlu_tests.sh                            # NLU tests (needs ask CLI auth)
+./scripts/run_nlu_tests.sh -k "en-US"                 # single locale
+./scripts/run_e2e_tests.sh                            # E2E via SMAPI simulate-skill (needs live Jellyfin)
 ```
+
+Env vars: `ASK_SKILL_ID`, `SMAPI_DELAY` (default 1.5s), `SMAPI_TIMEOUT`, `JELLYFIN_URL`, `JELLYFIN_API_KEY`, `JELLYFIN_USER`.
 
 ## Project Layout
 
-- `Jellyfin.Plugin.AlexaSkill/Alexa/Handler/Intent/` — Intent handlers (one per intent, inherit `BaseHandler`)
-- `Jellyfin.Plugin.AlexaSkill/Alexa/InteractionModel/` — Per-locale interaction model JSON files (17 locales)
-- `Jellyfin.Plugin.AlexaSkill/Alexa/Locale/` — Response string localizations
-- `Jellyfin.Plugin.AlexaSkill/Alexa/Apl/` — APL visual template helpers
-- `Jellyfin.Plugin.AlexaSkill/Alexa/Cache/` — In-memory caching layer
-- `Jellyfin.Plugin.AlexaSkill/Alexa/Catalog/` — SMAPI catalog management
-- `Jellyfin.Plugin.AlexaSkill/Alexa/Directive/` — Alexa response directives (AudioPlayer, APL)
-- `Jellyfin.Plugin.AlexaSkill/Alexa/DynamicEntities/` — Dynamic entity slot updates
-- `Jellyfin.Plugin.AlexaSkill/Alexa/Manifest/` — Skill manifest generation
-- `Jellyfin.Plugin.AlexaSkill/Alexa/Playback/` — Playback state and queue management
-- `tests/integration/` — NLU and E2E test suites (Python/pytest, use SMAPI)
-- `manifest.json` — Jellyfin plugin manifest (version entries)
-- `build.yaml` — Plugin metadata (version, targetAbi, artifacts)
+- `Alexa/Handler/Intent/` — 53 intent handlers (one per intent, inherit `BaseHandler`)
+- `Alexa/Handler/BaseHandler.cs` — shared utilities: `FuzzyMatch`, `HandleFuzzyMiss`, `RetryAsync`, stream URLs, library filters
+- `Alexa/InteractionModel/` — 17 per-locale interaction model JSONs (`model_*.json`)
+- `Alexa/Locale/` — Response strings: keys in `ResponseStrings.cs`, values in 17 `<locale>.json` files
+- `Alexa/SmapiManagement.cs` — SMAPI wrapper (skill CRUD, account linking, status polling)
+- `Alexa/ModelDeployment/` — Custom interaction model validation, fetch, deploy, restore via SMAPI
+- `Alexa/Manifest/` — Skill manifest generation
+- `Alexa/Playback/` — Playback state and progressive queue management
+- `Alexa/FuzzyMatcher.cs` — Fuzzy string matching with configurable thresholds
+- `Alexa/RetryHelper.cs` — Exponential backoff retry with timeout budget (default 6s)
+- `Alexa/Pipeline/` — Request routing pipeline
+- `Configuration/` — Plugin config DTO + Jellyfin config UI (`config.html`)
+- `Controller/` — ASP.NET API controllers (skill endpoint, config, simulator, health)
+- `tests/integration/` — NLU + E2E test suites (Python/pytest)
 - `Directory.Build.props` — Version numbers (single source of truth)
 
 ## Handler Pattern
 
-All intent handlers live in `Alexa/Handler/Intent/` and inherit `BaseHandler`. Each implements:
-- `CanHandle(Request)` — returns true if this handler should process the request
-- `HandleAsync(Request, Context, User, Session, CancellationToken)` — executes the intent
+Handlers inherit `BaseHandler` and implement `CanHandle()` + `HandleAsync()`. `BaseHandler` provides:
 
-The `RequestPipeline` in `Alexa/Pipeline/` routes requests to handlers. `BaseHandler` provides shared utilities:
-- `FuzzyMatch(query, candidates, selector)` — best-match selection using FuzzyStrings
-- `DisambiguationHelper.AskFirstMatch()` — voice prompt for ambiguous results
-- `GetStreamUrl()` / `GetVideoStreamUrl()` — Jellyfin `/stream?static=true` endpoints
-- `RetryAsync()` — library query retry with logging
+- `FuzzyMatch(query, candidates, selector)` — best-match via FuzzyStrings library
+- `HandleFuzzyMiss()` — disambiguation with voice prompts; auto-plays near-exact matches (score >= 90) without qualifier
+- `GetStreamUrl()` / `GetVideoStreamUrl()` — `/Audio|Videos/{id}/stream?static=true`
+- `RetryAsync(operation, label)` — retry with exponential backoff, 6s timeout budget
+- `IfFeatureDisabled()` — short-circuit on feature flags
+- `ApplyLibraryFilter()` / `FilterByContentAccess()` — per-user library and content type gating
 
-## Configuration Gating
+New intents need: handler class + `IntentNames.cs` entry + interaction model samples + 17 locale response strings.
 
-Three mechanisms control what Alexa users can access:
+## Artist Search Fallback Chain
 
-- **Feature flags** (`IfFeatureDisabled()` in BaseHandler) — 9 boolean flags in `PluginConfiguration` (e.g. `RadioModeEnabled`, `PodcastsEnabled`). Handlers call this first to short-circuit with "feature disabled" response.
-- **Content type visibility** (`FilterByContentAccess()`) — `MusicEnabled`/`VideosEnabled`/`BooksEnabled` toggle which `BaseItemKind` types are queryable.
-- **Per-user library filtering** (`ApplyLibraryFilter()`) — `AllowedLibraryIds` per user restricts queries to specific top-level folders via `TopParentIds`.
-- **Per-user fuzzy match** — `FuzzyMatchBehavior` (Confirm/AutoPlay) and `FuzzyMatchThreshold` (0-100) per user.
+`PlayArtistSongsIntentHandler` has a 4-tier fallback (each is a separate DB query):
+1. `SearchTerm` — Jellyfin search index
+2. `NameStartsWith` first word — prefix with single word
+3. `NameStartsWith` full query — prefix with full string
+4. `NameContains` full query — substring match anywhere in name
 
-Configuration UI: `Jellyfin.Plugin.AlexaSkill/Configuration/config.html`.
-
-New intents need: handler class + entry in `Alexa/IntentNames.cs` + interaction model samples + locale response strings.
-
-## Localization
-
-Response strings are defined in `Alexa/Locale/ResponseStrings.cs` as keys, with per-locale values in `Alexa/Locale/<locale>.json`. To add a new string:
-1. Add a const key in `ResponseStrings.cs`
-2. Add translations in each locale JSON file
-3. Use `ResponseStrings.Get("Key", locale)` in handlers — missing locale = runtime exception
+All tiers go through `FuzzyMatch` to filter false positives. See JF-163 for planned in-memory optimization.
 
 ## Code Conventions
 
-- `Nullable enable` is on — nullability annotations required
-- `jellyfin.ruleset` controls code analysis (AllEnabledByDefault)
-- `TreatWarningsAsErrors` is false — warnings are advisory
+- `Nullable enable` on — nullability annotations required
+- `jellyfin.ruleset` controls code analysis (AllEnabledByDefault, `TreatWarningsAsErrors` = false)
 - Intent handlers use `async/await` with `ConfigureAwait(false)`
-- 1433+ unit tests in `Jellyfin.Plugin.AlexaSkill.Tests/` — feature flag tests use one file per flag, `AssertDisabledWhenFlagOff` helper
+- Feature flag tests use one file per flag, `AssertDisabledWhenFlagOff` helper
 
 ## Interaction Models
 
-17 locale files in `Alexa/InteractionModel/model_*.json`. After editing:
+17 locale files. After editing:
 1. Wrap in `{"interactionModel": <model>}` for SMAPI
 2. Deploy: `ask smapi set-interaction-model --skill-id <ID> --stage development --locale <XX> --interaction-model file:payload.json`
-3. Wait for build: `ask smapi get-skill-status --skill-id <ID>`
+3. Wait for build (~15-30s): `ask smapi get-skill-status --skill-id <ID>`
 
-## NLU Integration Tests
+NLU test fixtures in `tests/integration/fixtures/<locale>.yaml`. E2E fixtures in `tests/integration/fixtures/e2e_<locale>.yaml`.
 
-```bash
-./scripts/run_nlu_tests.sh                  # all locales
-./scripts/run_nlu_tests.sh -k "en-US"       # single locale
-./scripts/run_nlu_tests.sh --dry-run         # validate fixtures only
-./scripts/validate_model.sh <locale>         # upload & validate model via SMAPI (needs ask CLI auth)
-python3 scripts/validate_apl.py              # validate APL templates locally
-```
-
-Requires `ask` CLI authenticated. Test fixtures in `tests/integration/fixtures/*.yaml`.
-Env vars: `ASK_SKILL_ID`, `SMAPI_DELAY` (default 1.5s), `SMAPI_TIMEOUT`.
-
-### E2E Tests
-
-E2E tests use SMAPI `simulate-skill` (full Alexa pipeline including NLU + skill execution) rather than `profile-nlu` (NLU-only). The `smapi_client.py` automatically prefixes utterances with locale-aware invocation patterns (e.g. `"chiedi a jellyfin player di ..."` for it-IT).
-
-```bash
-./scripts/run_e2e_tests.sh                                         # requires live Jellyfin
-./scripts/run_e2e_tests.sh --dry-run                               # validate fixtures only
-```
-
-E2E tests are auto-skipped without Jellyfin connection. Provide via CLI flags or env vars:
-`--jellyfin-url` / `JELLYFIN_URL`, `--jellyfin-api-key` / `JELLYFIN_API_KEY`, `--jellyfin-user` / `JELLYFIN_USER`
-
-**E2E fixture files**: `tests/integration/fixtures/e2e_*.yaml` (e.g. `e2e_en-US.yaml`, `e2e_it-IT.yaml`). Each fixture requires `locale`, `invocation_name`, and a `tests` list with `utterance`, `expected_intent`, `expected_slots`, and `expected_response_type`.
-
-**Important**: `simulate-skill` routes through Alexa's full NLU which competes with built-in Amazon skills. en-US E2E tests are unreliable for this reason — prefer it-IT for simulate-skill testing. Use `expected_response_type: any` since SMAPI simulate-skill does not reliably return skill execution payload (outputSpeech/directives).
+**en-US E2E tests are unreliable** — `simulate-skill` competes with built-in Amazon skills. Prefer it-IT for simulate-skill testing.
 
 ## Key Gotchas
 
-- **Stream endpoints**: Audio uses `/Audio/{id}/stream?static=true`, video uses `/Videos/{id}/stream?static=true`. The `/Download` endpoint lacks proper HTTP headers (Content-Type, Range support) needed by Alexa AudioPlayer.
-- **AMAZON.SearchQuery cannot coexist with other slot types** in the same utterance. Use custom slot types (e.g. `MediaType`) for slots that appear alongside typed slots like `TimePeriod`.
-- **Slot name consistency**: Alexa requires the same slot name to use the same slot type across all intents in a locale.
-- **Stop vs Pause**: `AMAZON.StopIntent` must return `ResponseBuilder.Empty()` (device already stopped locally). `AMAZON.PauseIntent` must return `AudioPlayerStop()`. Returning the wrong response type causes the device to ignore the request.
+- **Stream endpoints**: Audio uses `/Audio/{id}/stream?static=true`, video uses `/Videos/{id}/stream?static=true`. Do NOT use `/Download` — lacks Content-Type and Range headers needed by AudioPlayer.
+- **AMAZON.SearchQuery** cannot coexist with other slot types in the same utterance. Use custom slot types (e.g. `MediaType`) instead.
+- **Slot name consistency**: Same slot name must use same slot type across all intents in a locale.
+- **Stop vs Pause**: `AMAZON.StopIntent` → `ResponseBuilder.Empty()`. `AMAZON.PauseIntent` → `AudioPlayerStop()`. Wrong response type = device ignores the request.
 - **NLU competition**: Ambiguous utterances between intents need concrete (non-slotted) samples to disambiguate.
-- **SMAPI rate limits**: Space live NLU tests with `SMAPI_DELAY=1.5`. Model builds take ~15-30s.
+- **SMAPI rate limits**: Space NLU tests with `SMAPI_DELAY=1.5`.
+- **ValueTuple serialization**: Never store `ValueTuple` in session attributes — Newtonsoft.Json serializes as Item1/Item2. Use named DTOs.
+- **Config.Users in API responses**: Never send `config.Users` via `updatePluginConfiguration` — it can wipe skill config entries. Use dedicated endpoints.
 
 ## Release
 
@@ -120,4 +93,4 @@ E2E tests are auto-skipped without Jellyfin connection. Provide via CLI flags or
 
 ## Backlog Workflow
 
-This project uses Backlog.md MCP. Before creating tasks, read `backlog://workflow/overview` (MCP resource) or call `backlog.get_backlog_instructions()`. Use `instruction` selector for `task-creation`, `task-execution`, or `task-finalization` guides.
+This project uses Backlog.md MCP. Before creating tasks, call `backlog.get_backlog_instructions()` with `instruction` selector for `task-creation`, `task-execution`, or `task-finalization` guides.

@@ -716,6 +716,22 @@
           "pode encontrar {query}",
           "buscar {query}"
         ]
+      },
+      {
+        "name": "PlayBookIntent",
+        "slots": [
+          {
+            "name": "book",
+            "type": "AudiobookTitle"
+          }
+        ],
+        "samples": [
+          "tocar {book}",
+          "tocar o livro {book}",
+          "ouvir {book}",
+          "ouvir o livro {book}",
+          "ouvir o audiolivro {book}"
+        ]
       }
     ],
     "types": [
@@ -1049,6 +1065,10 @@
             }
           }
         ]
+      },
+      {
+        "name": "AudiobookTitle",
+        "values": []
       }
     ],
     "modelConfiguration": {

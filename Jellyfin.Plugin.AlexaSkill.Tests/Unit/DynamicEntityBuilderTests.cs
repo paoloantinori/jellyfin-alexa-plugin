@@ -317,4 +317,97 @@ public class DynamicEntityBuilderTests
         Assert.NotNull(result);
         Assert.Equal("REPLACE", result.UpdateBehavior);
     }
+
+    [Fact]
+    public void Build_IncludeSeries_CreatesSeriesSlotType()
+    {
+        var userId = Guid.NewGuid();
+        SetupUserMock(userId);
+
+        var seriesId = Guid.NewGuid();
+        SetupLibraryMock([], []);
+
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes.Contains(BaseItemKind.Series))))
+            .Returns(new List<BaseItem>
+            {
+                new global::MediaBrowser.Controller.Entities.TV.Series { Name = "Breaking Bad", Id = seriesId }
+            });
+
+        var builder = CreateBuilder();
+        var result = builder.Build(userId, "it-IT", null, includeSeries: true, includeAudiobooks: false, CancellationToken.None);
+
+        Assert.NotNull(result);
+        var seriesType = result.Types.FirstOrDefault(t => t.Name == "SeriesName");
+        Assert.NotNull(seriesType);
+        Assert.Single(seriesType.Values);
+        Assert.Equal("Breaking Bad", seriesType.Values[0].Name.Value);
+    }
+
+    [Fact]
+    public void Build_IncludeSeriesFalse_NoSeriesSlotType()
+    {
+        var userId = Guid.NewGuid();
+        SetupUserMock(userId);
+        SetupLibraryMock([], []);
+
+        var builder = CreateBuilder();
+        var result = builder.Build(userId, "it-IT", null, includeSeries: false, includeAudiobooks: false, CancellationToken.None);
+
+        Assert.Null(result); // No items at all
+    }
+
+    [Fact]
+    public void Build_LastPlayedItems_IncludedInSlotTypes()
+    {
+        var userId = Guid.NewGuid();
+        SetupUserMock(userId);
+        SetupLibraryMock([], []);
+
+        var artistId = Guid.NewGuid();
+        var audio = new Audio { Name = "Bohemian Rhapsody", Id = Guid.NewGuid() };
+        audio.Artists = new List<string> { "Queen" };
+
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.OrderBy != null && q.OrderBy.Any(o => o.Item1 == ItemSortBy.DatePlayed))))
+            .Returns(new List<BaseItem> { audio });
+
+        var builder = CreateBuilder();
+        var result = builder.Build(userId, "it-IT", null, CancellationToken.None);
+
+        Assert.NotNull(result);
+        // Last-played audio maps to AMAZON.Musician slot
+        var artistType = result.Types.FirstOrDefault(t => t.Name == "AMAZON.Musician");
+        Assert.NotNull(artistType);
+    }
+
+    [Fact]
+    public void IsTvContext_KnownTvIntents_ReturnsTrue()
+    {
+        Assert.True(DynamicEntityBuilder.IsTvContext("PlayEpisodeIntent"));
+        Assert.True(DynamicEntityBuilder.IsTvContext("PlayVideoIntent"));
+        Assert.True(DynamicEntityBuilder.IsTvContext("ContinueWatchingIntent"));
+    }
+
+    [Fact]
+    public void IsTvContext_NonTvIntent_ReturnsFalse()
+    {
+        Assert.False(DynamicEntityBuilder.IsTvContext("PlayArtistSongsIntent"));
+        Assert.False(DynamicEntityBuilder.IsTvContext("PlaySongIntent"));
+    }
+
+    [Fact]
+    public void IsBookContext_KnownBookIntents_ReturnsTrue()
+    {
+        Assert.True(DynamicEntityBuilder.IsBookContext("GoToChapterIntent"));
+    }
+
+    [Fact]
+    public void IsBookContext_NonBookIntent_ReturnsFalse()
+    {
+        Assert.False(DynamicEntityBuilder.IsBookContext("PlayArtistSongsIntent"));
+        Assert.False(DynamicEntityBuilder.IsBookContext("PlayEpisodeIntent"));
+    }
 }

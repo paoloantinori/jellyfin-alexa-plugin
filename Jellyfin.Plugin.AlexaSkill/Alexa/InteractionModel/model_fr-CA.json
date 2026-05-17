@@ -723,6 +723,22 @@
           "Donne-moi des chansons des {decade}",
           "Mélange de la musique des {decade}"
         ]
+      },
+      {
+        "name": "PlayBookIntent",
+        "slots": [
+          {
+            "name": "book",
+            "type": "AudiobookTitle"
+          }
+        ],
+        "samples": [
+          "lis {book}",
+          "lis le livre {book}",
+          "écoute {book}",
+          "écoute le livre {book}",
+          "écoute le livre audio {book}"
+        ]
       }
     ],
     "types": [
@@ -1046,6 +1062,10 @@
             }
           }
         ]
+      },
+      {
+        "name": "AudiobookTitle",
+        "values": []
       }
     ],
     "modelConfiguration": {

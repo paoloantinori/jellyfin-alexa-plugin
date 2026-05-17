@@ -172,5 +172,9 @@
   "FollowMeSuccess": "استكمال {0} من حيث توقفت.",
   "FollowMeNothingPlaying": "لا يوجد شيء قيد التشغيل على الأجهزة الأخرى حاليا.",
   "FeatureDisabled": "هذه الميزة معطلة حالياً. اطلب من المسؤول تفعيلها.",
-  "MediaTypeNotAvailable": "هذا النوع من المحتوى غير متاح."
+  "MediaTypeNotAvailable": "هذا النوع من المحتوى غير متاح.",
+  "ElicitBookName": "Which book would you like to hear?",
+  "NotFoundBook": "Sorry, I couldn't find an audiobook called {0}.",
+  "NoContentInBook": "There is no audio content in the book {0}.",
+  "SearchingBook": "Searching for your audiobook..."
 }

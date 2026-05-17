@@ -12,5 +12,11 @@ public enum CatalogType
     Album,
 
     /// <summary>Audio tracks.</summary>
-    Song
+    Song,
+
+    /// <summary>TV series.</summary>
+    Series,
+
+    /// <summary>Audiobooks.</summary>
+    Audiobook
 }

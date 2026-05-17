@@ -722,6 +722,22 @@
           "Dame canciones de los {decade}",
           "Mezcla música de los {decade}"
         ]
+      },
+      {
+        "name": "PlayBookIntent",
+        "slots": [
+          {
+            "name": "book",
+            "type": "AudiobookTitle"
+          }
+        ],
+        "samples": [
+          "reproduce {book}",
+          "reproduce el libro {book}",
+          "escucha {book}",
+          "escucha el libro {book}",
+          "escucha el audiolibro {book}"
+        ]
       }
     ],
     "types": [
@@ -1041,6 +1057,10 @@
             }
           }
         ]
+      },
+      {
+        "name": "AudiobookTitle",
+        "values": []
       }
     ],
     "modelConfiguration": {

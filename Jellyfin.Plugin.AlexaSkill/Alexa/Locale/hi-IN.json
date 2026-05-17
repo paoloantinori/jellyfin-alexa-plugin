@@ -172,5 +172,9 @@
   "FollowMeSuccess": "{0} जहां आप छोड़े थे, वहां से जारी रख रहा हूं।",
   "FollowMeNothingPlaying": "अभी अन्य डिवाइस पर कुछ नहीं बज रहा है।",
   "FeatureDisabled": "यह सुविधा वर्तमान में अक्षम है। अपने व्यवस्थापक से इसे सक्षम करने के लिए कहें।",
-  "MediaTypeNotAvailable": "यह प्रकार की सामग्री उपलब्ध नहीं है।"
+  "MediaTypeNotAvailable": "यह प्रकार की सामग्री उपलब्ध नहीं है।",
+  "ElicitBookName": "Which book would you like to hear?",
+  "NotFoundBook": "Sorry, I couldn't find an audiobook called {0}.",
+  "NoContentInBook": "There is no audio content in the book {0}.",
+  "SearchingBook": "Searching for your audiobook..."
 }

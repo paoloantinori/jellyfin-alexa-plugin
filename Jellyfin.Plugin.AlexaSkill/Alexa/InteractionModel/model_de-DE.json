@@ -726,6 +726,22 @@
           "Gib mir {decade} Lieder",
           "Mische {decade} Musik"
         ]
+      },
+      {
+        "name": "PlayBookIntent",
+        "slots": [
+          {
+            "name": "book",
+            "type": "AudiobookTitle"
+          }
+        ],
+        "samples": [
+          "spiele {book}",
+          "spiele das buch {book}",
+          "spiele hörbuch {book}",
+          "hör {book}",
+          "hör das buch {book}"
+        ]
       }
     ],
     "types": [
@@ -1047,6 +1063,10 @@
             }
           }
         ]
+      },
+      {
+        "name": "AudiobookTitle",
+        "values": []
       }
     ],
     "modelConfiguration": {

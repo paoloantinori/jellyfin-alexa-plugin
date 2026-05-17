@@ -172,5 +172,9 @@
   "FollowMeSuccess": "{0} を続きから再生します。",
   "FollowMeNothingPlaying": "他のデバイスでは何も再生されていません。",
   "FeatureDisabled": "この機能は現在無効になっています。管理者に有効化を依頼してください。",
-  "MediaTypeNotAvailable": "この種類のコンテンツは利用できません。"
+  "MediaTypeNotAvailable": "この種類のコンテンツは利用できません。",
+  "ElicitBookName": "Which book would you like to hear?",
+  "NotFoundBook": "Sorry, I couldn't find an audiobook called {0}.",
+  "NoContentInBook": "There is no audio content in the book {0}.",
+  "SearchingBook": "Searching for your audiobook..."
 }

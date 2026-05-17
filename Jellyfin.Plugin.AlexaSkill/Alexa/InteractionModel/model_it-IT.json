@@ -1291,6 +1291,22 @@
           "Spegni la radio",
           "Ferma la modalità radio"
         ]
+      },
+      {
+        "name": "PlayBookIntent",
+        "slots": [
+          {
+            "name": "book",
+            "type": "AudiobookTitle"
+          }
+        ],
+        "samples": [
+          "riproduci {book}",
+          "riproduci il libro {book}",
+          "ascolta {book}",
+          "ascolta il libro {book}",
+          "ascolta l'audiolibro {book}"
+        ]
       }
     ],
     "types": [
@@ -1867,6 +1883,10 @@
             }
           }
         ]
+      },
+      {
+        "name": "AudiobookTitle",
+        "values": []
       }
     ],
     "modelConfiguration": {

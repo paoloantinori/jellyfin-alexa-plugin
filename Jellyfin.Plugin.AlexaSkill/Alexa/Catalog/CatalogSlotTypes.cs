@@ -11,11 +11,14 @@ public static class CatalogSlotTypes
 {
     /// <summary>
     /// Maps each <see cref="CatalogType"/> to its Alexa slot type name.
+    /// Used by dynamic entities (session-scoped via Dialog.UpdateDynamicEntities).
     /// </summary>
     public static readonly Dictionary<CatalogType, string> Names = new()
     {
         [CatalogType.Artist] = "AMAZON.Musician",
-        [CatalogType.Album] = "AMAZON.Album"
+        [CatalogType.Album] = "AMAZON.Album",
+        [CatalogType.Series] = "SeriesName",
+        [CatalogType.Audiobook] = "AudiobookTitle"
     };
 
     /// <summary>

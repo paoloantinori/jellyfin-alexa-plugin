@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.DynamicEntities;
@@ -70,9 +71,8 @@ public class DynamicEntityBuilderFilterTests
         // Act
         builder.Build(userId, "it-IT", allowedLibraryIds, CancellationToken.None);
 
-        // Assert
-        // Two queries are made: one for artists, one for albums
-        Assert.Equal(2, capturedQueries.Count);
+        // Assert: artist, album, and last-played queries should all have TopParentIds set
+        Assert.True(capturedQueries.Count >= 2, $"Expected at least 2 queries, got {capturedQueries.Count}");
         Assert.All(capturedQueries, q =>
         {
             Assert.NotNull(q.TopParentIds);
@@ -101,10 +101,9 @@ public class DynamicEntityBuilderFilterTests
         builder.Build(userId, "it-IT", null, CancellationToken.None);
 
         // Assert
-        Assert.Equal(2, capturedQueries.Count);
+        Assert.True(capturedQueries.Count >= 2, $"Expected at least 2 queries, got {capturedQueries.Count}");
         Assert.All(capturedQueries, q =>
         {
-            // TopParentIds is not set; InternalItemsQuery initializes it to empty array.
             Assert.Empty(q.TopParentIds);
         });
     }
@@ -128,10 +127,9 @@ public class DynamicEntityBuilderFilterTests
         builder.Build(userId, "it-IT", Array.Empty<Guid>(), CancellationToken.None);
 
         // Assert
-        Assert.Equal(2, capturedQueries.Count);
+        Assert.True(capturedQueries.Count >= 2, $"Expected at least 2 queries, got {capturedQueries.Count}");
         Assert.All(capturedQueries, q =>
         {
-            // TopParentIds is not set; InternalItemsQuery initializes it to empty array.
             Assert.Empty(q.TopParentIds);
         });
     }
@@ -155,10 +153,9 @@ public class DynamicEntityBuilderFilterTests
         builder.Build(userId, "it-IT", null, CancellationToken.None);
 
         // Assert
-        Assert.Equal(2, capturedQueries.Count);
+        Assert.True(capturedQueries.Count >= 2, $"Expected at least 2 queries, got {capturedQueries.Count}");
         Assert.All(capturedQueries, q =>
         {
-            // TopParentIds is not set; InternalItemsQuery initializes it to empty array.
             Assert.Empty(q.TopParentIds);
         });
     }

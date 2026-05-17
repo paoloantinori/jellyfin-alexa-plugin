@@ -172,5 +172,9 @@
   "FollowMeSuccess": "Ga verder met {0} waar je gebleven was.",
   "FollowMeNothingPlaying": "Er wordt nu niets afgespeeld op andere apparaten.",
   "FeatureDisabled": "Deze functie is momenteel uitgeschakeld. Vraag uw beheerder om deze in te schakelen.",
-  "MediaTypeNotAvailable": "Dit type inhoud is niet beschikbaar."
+  "MediaTypeNotAvailable": "Dit type inhoud is niet beschikbaar.",
+  "ElicitBookName": "Welk boek wilt u beluisteren?",
+  "NotFoundBook": "Sorry, ik kon geen audioboek vinden met de naam {0}.",
+  "NoContentInBook": "Er is geen audio-inhoud in het boek {0}.",
+  "SearchingBook": "Zoeken naar uw audioboek..."
 }

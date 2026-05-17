@@ -15,9 +15,10 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.DynamicEntities;
 
 /// <summary>
-/// Response interceptor that injects dynamic entity values into the Alexa NLU
-/// at the start of a new session. Uses the in-memory artist index for broader
-/// coverage, falling back to database queries when the index is not ready.
+/// Response interceptor that injects dynamic entity values into the Alexa NLU.
+/// On new sessions, injects artists, albums, and last-played items.
+/// Mid-session, conditionally injects series or audiobook entities when the
+/// conversation context suggests TV/book usage.
 /// </summary>
 public class DynamicEntitiesInterceptor : IResponseInterceptor
 {
@@ -50,19 +51,30 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
         }
 
         // AudioPlayer.Play responses must not include other directives.
-        // Adding Dialog.UpdateDynamicEntities would cause Alexa to reject the response.
         if (context.Response.Response.Directives?.Any(d => d is AudioPlayerPlayDirective) == true)
         {
             return;
         }
 
-        // Only inject dynamic entities on new sessions (LaunchRequest or session.New)
         bool isNewSession = context.SkillRequest is LaunchRequest
             || (context.AlexaSession?.New ?? false);
 
+        string intentName = context.IntentName;
+
+        // Determine if we should inject conditional entities
+        bool includeSeries = false;
+        bool includeAudiobooks = false;
+
         if (!isNewSession)
         {
-            return;
+            // Only inject mid-session if the intent suggests TV or book context
+            includeSeries = DynamicEntityBuilder.IsTvContext(intentName);
+            includeAudiobooks = DynamicEntityBuilder.IsBookContext(intentName);
+
+            if (!includeSeries && !includeAudiobooks)
+            {
+                return;
+            }
         }
 
         var (jellyfinUserId, allowedLibraryIds) = ResolveUserWithLibraries(context);
@@ -74,7 +86,7 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
         try
         {
             DynamicEntitiesDirective? directive = await Task.Run(
-                () => _builder.Build(jellyfinUserId, context.Locale, allowedLibraryIds, cancellationToken),
+                () => _builder.Build(jellyfinUserId, context.Locale, allowedLibraryIds, includeSeries, includeAudiobooks, cancellationToken),
                 cancellationToken).ConfigureAwait(false);
 
             if (directive == null)

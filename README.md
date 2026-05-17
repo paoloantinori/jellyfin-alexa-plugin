@@ -1,6 +1,6 @@
 # Jellyfin Alexa Plugin
 
-Control your Jellyfin media server with Alexa voice commands. Play music, videos, playlists, manage favorites, and more.
+Control your Jellyfin media server with Alexa voice commands. Play music, videos, playlists, search your library, manage favorites, and more — across 17 locales.
 
 ---
 
@@ -31,18 +31,26 @@ _Alpha software: features may change between releases. Always back up your confi
 
 ## About
 
-A Jellyfin plugin that creates a personal Alexa skill to play and control media from your Jellyfin server using voice commands. Each Jellyfin user gets their own Alexa skill with a customizable invocation name.
+A Jellyfin plugin that creates a personal Alexa skill to play and control media from your Jellyfin server using voice commands. Each Jellyfin user gets their own skill with a customizable invocation name, per-user library access controls, and configurable fuzzy matching. Supports custom interaction model deployment for advanced users who want to add their own intents or utterances.
 
 ## Features
 
-- **Playback control**: play specific songs, albums, artists, videos, channels, and playlists
-- **Queue management**: next, previous, shuffle, repeat, start over
-- **Favorites**: play favorites, add/remove from favorites
-- **Media info**: ask what's currently playing
-- **Recently added**: play recently added media
-- **Multi-user**: each Jellyfin user can have their own skill
-- **Multi-language**: 17 locale variants across 11 languages with full custom utterances
-- **Audio and video**: supports both audio playback and video launching
+- **Playback control**: play songs, albums, artists, videos, TV episodes, podcasts, channels, and playlists
+- **Search & discovery**: search your library, get recommendations, browse by category, play random media
+- **Queue management**: add to queue, play next, clear/list queue, shuffle, repeat, start over
+- **Radio mode**: radio station based on your library with on/off toggle
+- **Favorites**: play your favorites, add/remove favorites by voice
+- **Genre & mood**: play by genre, by decade, or by mood (happy, sad, relaxing, workout, etc.)
+- **Library browsing**: browse movies, albums, genres; see in-progress media; continue watching
+- **Media info**: ask what's playing — song name, artist, album, duration, genre, year
+- **Sleep timer**: stop playback after a specified duration
+- **Voice profiles**: "Learn my voice" and "Who am I" for multi-user voice recognition
+- **Follow me**: transfer playback between Alexa devices
+- **Multi-user**: each Jellyfin user gets their own skill with individual settings
+- **Per-user fuzzy matching**: configurable match behavior (confirm/auto-play) and threshold
+- **Custom interaction models**: deploy your own interaction model via URL for any locale
+- **Multi-language**: 17 locales across 11 languages with 52 intents each
+- **Audio and video**: supports both audio playback (AudioPlayer) and video launching
 
 ## Prerequisites
 
@@ -136,6 +144,16 @@ The plugin uses **Login with Amazon (LWA)** to create and manage your Alexa skil
 2. Click **Add** to create a new skill for a Jellyfin user
 3. Select the Jellyfin user from the dropdown
 4. Optionally customize the **invocation name** (default: "Jellyfin Player")
+
+Per-user settings include **fuzzy match behavior** (Confirm or Auto-Play), **fuzzy match threshold** (0–100), **allowed libraries** (restrict to specific top-level folders), and **content type access** (music, videos, audiobooks).
+
+### Feature Flags
+
+Toggle individual features on or off from the configuration page: radio mode, podcasts, mood music, sleep timer, chapter navigation, recommendations, artist library queries, and voice profile recognition.
+
+### Custom Interaction Model
+
+Deploy a custom interaction model from a URL to override the built-in model for any of the 17 supported locales. This allows adding custom intents or utterances without modifying the plugin source. Use the **Deploy** button after entering the model URL and selecting the target locale. The **Restore** button reverts to the default embedded model.
 
 ## LWA Authorization
 

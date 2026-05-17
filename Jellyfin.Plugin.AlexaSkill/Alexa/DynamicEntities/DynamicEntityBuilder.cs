@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -8,6 +9,7 @@ using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
+using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -26,8 +28,28 @@ public class DynamicEntityBuilder
     private const int MaxTotalValueCount = 90;
     private const int DbQueryLimit = 55;
     private const int ArtistIndexLimit = 70;
+    private const int LastPlayedCount = 5;
+    private static readonly TimeSpan LastPlayedCacheTtl = TimeSpan.FromMinutes(5);
+
+    // Expired entries evicted lazily on cache miss; consider hooking ILibraryManager events for eager invalidation
+    private readonly ConcurrentDictionary<Guid, (List<LastPlayedSlotValue> Values, DateTime ExpiresAt)> _lastPlayedCache = new();
 
     private static readonly Dictionary<CatalogType, string> SlotTypeNames = CatalogSlotTypes.Names;
+
+    private static readonly HashSet<string> TvIntents = new(StringComparer.Ordinal)
+    {
+        IntentNames.PlayEpisode,
+        IntentNames.PlayVideo,
+        IntentNames.ContinueWatching,
+        IntentNames.SearchMedia,
+        IntentNames.InProgressMediaList
+    };
+
+    private static readonly HashSet<string> BookIntents = new(StringComparer.Ordinal)
+    {
+        IntentNames.PlayBook,
+        IntentNames.GoToChapter
+    };
 
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
@@ -47,13 +69,29 @@ public class DynamicEntityBuilder
     }
 
     /// <summary>
-    /// Builds a <c>Dialog.UpdateDynamicEntities</c> directive from the user's library.
-    /// Uses the in-memory artist index when available for broader coverage.
+    /// Builds a <c>Dialog.UpdateDynamicEntities</c> directive for a new session.
+    /// Includes artists, albums, and last-played items.
     /// </summary>
     public virtual DynamicEntitiesDirective? Build(
         Guid jellyfinUserId,
         string locale,
         Guid[]? allowedLibraryIds,
+        CancellationToken cancellationToken)
+    {
+        return Build(jellyfinUserId, locale, allowedLibraryIds, includeSeries: false, includeAudiobooks: false, cancellationToken);
+    }
+
+    /// <summary>
+    /// Builds a <c>Dialog.UpdateDynamicEntities</c> directive from the user's library.
+    /// Optionally includes series or audiobook entities based on conversation context.
+    /// Always reserves 5 slots for last-played items.
+    /// </summary>
+    public virtual DynamicEntitiesDirective? Build(
+        Guid jellyfinUserId,
+        string locale,
+        Guid[]? allowedLibraryIds,
+        bool includeSeries,
+        bool includeAudiobooks,
         CancellationToken cancellationToken)
     {
         var user = _userManager.GetUserById(jellyfinUserId);
@@ -63,24 +101,56 @@ public class DynamicEntityBuilder
             return null;
         }
 
+        var config = Plugin.Instance?.Configuration;
+        bool musicEnabled = config?.MusicEnabled != false;
+        bool videosEnabled = config?.VideosEnabled != false;
+        bool booksEnabled = config?.BooksEnabled != false;
+
         int budget = MaxTotalValueCount;
         Guid[]? topParentIds = allowedLibraryIds != null
             ? LibraryFilter.ResolveTopParentIds(allowedLibraryIds, _libraryManager)
             : null;
 
-        List<DynamicSlotValue> artistValues;
-        if (_artistIndex?.IsReady == true)
+        // Reserve budget for last-played items (5 slots)
+        int baseBudget = budget - LastPlayedCount;
+
+        List<DynamicSlotValue> artistValues = new();
+        if (musicEnabled)
         {
-            artistValues = BuildArtistValuesFromIndex(topParentIds, locale, ref budget);
-        }
-        else
-        {
-            artistValues = BuildSlotValues(user, BaseItemKind.MusicArtist, CatalogType.Artist, locale, topParentIds, ref budget);
+            if (_artistIndex?.IsReady == true)
+            {
+                artistValues = BuildArtistValuesFromIndex(topParentIds, locale, ref baseBudget);
+            }
+            else
+            {
+                artistValues = BuildSlotValues(user, BaseItemKind.MusicArtist, CatalogType.Artist, locale, topParentIds, ref baseBudget);
+            }
         }
 
-        var albumValues = BuildSlotValues(user, BaseItemKind.MusicAlbum, CatalogType.Album, locale, topParentIds, ref budget);
+        List<DynamicSlotValue> albumValues = new();
+        if (musicEnabled)
+        {
+            albumValues = BuildSlotValues(user, BaseItemKind.MusicAlbum, CatalogType.Album, locale, topParentIds, ref baseBudget);
+        }
 
-        if (artistValues.Count == 0 && albumValues.Count == 0)
+        List<DynamicSlotValue> seriesValues = new();
+        if (includeSeries && videosEnabled)
+        {
+            seriesValues = BuildSlotValues(user, BaseItemKind.Series, CatalogType.Series, locale, topParentIds, ref baseBudget);
+        }
+
+        List<DynamicSlotValue> audiobookValues = new();
+        if (includeAudiobooks && booksEnabled)
+        {
+            audiobookValues = BuildSlotValues(user, BaseItemKind.AudioBook, CatalogType.Audiobook, locale, topParentIds, ref baseBudget);
+        }
+
+        // Sync budget: whatever base queries didn't use plus the reserved last-played slots
+        budget = baseBudget + LastPlayedCount;
+        var lastPlayedValues = BuildLastPlayedValues(user, locale, topParentIds, config, ref budget);
+
+        if (artistValues.Count == 0 && albumValues.Count == 0 && seriesValues.Count == 0
+            && audiobookValues.Count == 0 && lastPlayedValues.Count == 0)
         {
             _logger.LogDebug("No items found for dynamic entities");
             return null;
@@ -88,33 +158,214 @@ public class DynamicEntityBuilder
 
         var directive = new DynamicEntitiesDirective();
 
-        if (artistValues.Count > 0)
-        {
-            directive.Types.Add(new DynamicSlotType
-            {
-                Name = SlotTypeNames[CatalogType.Artist],
-                Values = artistValues
-            });
-        }
+        AddSlotType(directive, CatalogType.Artist, artistValues);
+        AddSlotType(directive, CatalogType.Album, albumValues);
+        AddSlotType(directive, CatalogType.Series, seriesValues);
+        AddSlotType(directive, CatalogType.Audiobook, audiobookValues);
 
-        if (albumValues.Count > 0)
-        {
-            directive.Types.Add(new DynamicSlotType
-            {
-                Name = SlotTypeNames[CatalogType.Album],
-                Values = albumValues
-            });
-        }
+        // Merge last-played items into their respective slot types (deduped)
+        DistributeLastPlayed(directive, lastPlayedValues);
 
         _logger.LogDebug(
-            "Built dynamic entities: {Artists} artists ({ArtistSource}) and {Albums} albums ({Used} of {Max} budget)",
+            "Built dynamic entities: {Artists} artists ({ArtistSource}), {Albums} albums, {Series} series, {Audiobooks} audiobooks, {LastPlayed} last-played ({Used} of {Max} budget)",
             artistValues.Count,
             _artistIndex?.IsReady == true ? "index" : "db",
             albumValues.Count,
+            seriesValues.Count,
+            audiobookValues.Count,
+            lastPlayedValues.Count,
             MaxTotalValueCount - budget,
             MaxTotalValueCount);
 
         return directive;
+    }
+
+    /// <summary>
+    /// Determines whether the given intent name suggests TV/series context.
+    /// </summary>
+    public static bool IsTvContext(string intentName) => TvIntents.Contains(intentName);
+
+    /// <summary>
+    /// Determines whether the given intent name suggests audiobook context.
+    /// </summary>
+    public static bool IsBookContext(string intentName) => BookIntents.Contains(intentName);
+
+    private static DynamicSlotType GetOrAddSlotType(DynamicEntitiesDirective directive, string slotTypeName)
+    {
+        var existing = directive.Types.FirstOrDefault(t => t.Name == slotTypeName);
+        if (existing != null)
+        {
+            return existing;
+        }
+
+        var newType = new DynamicSlotType { Name = slotTypeName, Values = new List<DynamicSlotValue>() };
+        directive.Types.Add(newType);
+        return newType;
+    }
+
+    private static void AddSlotType(DynamicEntitiesDirective directive, CatalogType type, List<DynamicSlotValue> values)
+    {
+        if (values.Count == 0)
+        {
+            return;
+        }
+
+        GetOrAddSlotType(directive, SlotTypeNames[type]).Values.AddRange(values);
+    }
+
+    private static void DistributeLastPlayed(DynamicEntitiesDirective directive, List<LastPlayedSlotValue> lastPlayedValues)
+    {
+        foreach (var lpv in lastPlayedValues)
+        {
+            var slotValue = new DynamicSlotValue
+            {
+                Id = lpv.Id,
+                Name = new DynamicSlotValueName { Value = lpv.DisplayName }
+            };
+
+            var slotType = GetOrAddSlotType(directive, lpv.SlotTypeName);
+            if (!slotType.Values.Any(v => v.Id == slotValue.Id))
+            {
+                slotType.Values.Add(slotValue);
+            }
+        }
+    }
+
+    private List<LastPlayedSlotValue> BuildLastPlayedValues(
+        Jellyfin.Database.Implementations.Entities.User user,
+        string locale,
+        Guid[]? topParentIds,
+        PluginConfiguration? config,
+        ref int budget)
+    {
+        if (_lastPlayedCache.TryGetValue(user.Id, out var cached) && cached.ExpiresAt > DateTime.UtcNow)
+        {
+            budget -= Math.Min(cached.Values.Count, budget);
+            return cached.Values;
+        }
+
+        // Evict expired entries on cache miss
+        foreach (var kvp in _lastPlayedCache)
+        {
+            if (kvp.Value.ExpiresAt <= DateTime.UtcNow)
+            {
+                _lastPlayedCache.TryRemove(kvp.Key, out _);
+            }
+        }
+
+        var itemTypes = new List<BaseItemKind>();
+        if (config?.MusicEnabled != false)
+        {
+            itemTypes.Add(BaseItemKind.Audio);
+        }
+
+        if (config?.VideosEnabled != false)
+        {
+            itemTypes.Add(BaseItemKind.Movie);
+            itemTypes.Add(BaseItemKind.Episode);
+        }
+
+        if (config?.BooksEnabled != false)
+        {
+            itemTypes.Add(BaseItemKind.AudioBook);
+        }
+
+        if (itemTypes.Count == 0)
+        {
+            return new List<LastPlayedSlotValue>();
+        }
+
+        var query = new InternalItemsQuery
+        {
+            User = user,
+            Recursive = true,
+            IncludeItemTypes = itemTypes.ToArray(),
+            OrderBy = new[] { (ItemSortBy.DatePlayed, SortOrder.Descending) },
+            Limit = 15,
+            DtoOptions = new DtoOptions(true)
+        };
+
+        if (topParentIds != null)
+        {
+            query.TopParentIds = topParentIds;
+        }
+
+        IReadOnlyList<BaseItem> recentItems = _libraryManager.GetItemList(query) ?? Array.Empty<BaseItem>();
+        var values = new List<LastPlayedSlotValue>();
+        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (BaseItem item in recentItems)
+        {
+            if (values.Count >= LastPlayedCount || budget <= 0)
+            {
+                break;
+            }
+
+            if (string.IsNullOrWhiteSpace(item.Name))
+            {
+                continue;
+            }
+
+            // Deduplicate by name to avoid "Song X" appearing twice
+            if (!seenNames.Add(item.Name))
+            {
+                continue;
+            }
+
+            var (slotTypeName, catalogType) = GetSlotTypeForItem(item);
+            if (slotTypeName == null)
+            {
+                continue;
+            }
+
+            values.Add(new LastPlayedSlotValue
+            {
+                Id = CatalogValue.FormatId(catalogType, item.Id),
+                DisplayName = item.Name,
+                SlotTypeName = slotTypeName
+            });
+
+            budget--;
+        }
+
+        _lastPlayedCache[user.Id] = (values, DateTime.UtcNow.Add(LastPlayedCacheTtl));
+        return values;
+    }
+
+    private (string? SlotTypeName, CatalogType CatalogType) GetSlotTypeForItem(BaseItem item)
+    {
+        // Audio tracks → map to AMAZON.Musician for better artist name recognition
+        if (item is MediaBrowser.Controller.Entities.Audio.Audio audio
+            && audio.Artists is { Count: > 0 })
+        {
+            return (SlotTypeNames[CatalogType.Artist], CatalogType.Artist);
+        }
+
+        // Episodes → SeriesName slot for series recognition
+        if (item is MediaBrowser.Controller.Entities.TV.Episode)
+        {
+            return (SlotTypeNames[CatalogType.Series], CatalogType.Series);
+        }
+
+        // Movies → SeriesName slot (reuses the video slot for unified last-played matching)
+        if (item is MediaBrowser.Controller.Entities.Movies.Movie)
+        {
+            return (SlotTypeNames[CatalogType.Series], CatalogType.Series);
+        }
+
+        // Audiobooks → AudiobookTitle slot (concrete type not in controller package, match by name)
+        if (item.GetType().Name.Equals("AudioBook", StringComparison.Ordinal))
+        {
+            return (SlotTypeNames[CatalogType.Audiobook], CatalogType.Audiobook);
+        }
+
+        // Plain audio without artist info
+        if (item is MediaBrowser.Controller.Entities.Audio.Audio)
+        {
+            return (SlotTypeNames[CatalogType.Album], CatalogType.Album);
+        }
+
+        return (null, CatalogType.Artist);
     }
 
     private List<DynamicSlotValue> BuildArtistValuesFromIndex(
@@ -213,5 +464,12 @@ public class DynamicEntityBuilder
 
         budget -= cost;
         return true;
+    }
+
+    private class LastPlayedSlotValue
+    {
+        public string Id { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
+        public string SlotTypeName { get; set; } = string.Empty;
     }
 }
