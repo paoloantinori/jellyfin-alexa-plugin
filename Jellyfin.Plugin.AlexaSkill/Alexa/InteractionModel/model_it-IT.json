@@ -1054,7 +1054,23 @@
           "Di pleiare una traccia di {musician}",
           "Di pleiare una traccia dei {musician}",
           "Di pleiare una traccia degli {musician}",
-          "Di pleiare una traccia delle {musician}"
+          "Di pleiare una traccia delle {musician}",
+          "Suona la band {musician}",
+          "Metti la band {musician}",
+          "Ascolta la band {musician}",
+          "Riproduci la band {musician}",
+          "Fai partire la band {musician}",
+          "Suona il gruppo {musician}",
+          "Metti il gruppo {musician}",
+          "Ascolta il gruppo {musician}",
+          "Riproduci il gruppo {musician}",
+          "Fai partire il gruppo {musician}",
+          "Suona il cantante {musician}",
+          "Metti il cantante {musician}",
+          "Ascolta il cantante {musician}",
+          "Riproduci il cantante {musician}",
+          "Fai partire il cantante {musician}",
+          "Ascolta musica di {musician}"
         ],
         "slots": [
           {
@@ -1852,6 +1868,11 @@
           }
         ]
       }
-    ]
+    ],
+    "modelConfiguration": {
+      "fallbackIntentSensitivity": {
+        "level": "LOW"
+      }
+    }
   }
 }

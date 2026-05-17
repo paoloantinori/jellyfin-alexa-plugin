@@ -16,69 +16,41 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.DynamicEntities;
 
 /// <summary>
-/// Builds dynamic entity payloads from a user's recently added Jellyfin items.
-/// These are injected into the Alexa NLU session for improved recognition
-/// of artists and albums the user is likely to request.
+/// Builds dynamic entity payloads from a user's Jellyfin library.
+/// Artists are sourced from the in-memory <see cref="IArtistIndex"/> when available,
+/// falling back to database queries. Albums are always queried from the database.
+/// Injected into the Alexa NLU session via <c>Dialog.UpdateDynamicEntities</c>.
 /// </summary>
 public class DynamicEntityBuilder
 {
-    /// <summary>
-    /// Alexa allows at most 100 total values+synonyms across all slot types in a
-    /// single Dialog.UpdateDynamicEntities directive. We reserve headroom so
-    /// artists + albums together stay under this limit.
-    /// </summary>
     private const int MaxTotalValueCount = 90;
-    private const int QueryLimit = 55;
+    private const int DbQueryLimit = 55;
+    private const int ArtistIndexLimit = 70;
 
     private static readonly Dictionary<CatalogType, string> SlotTypeNames = CatalogSlotTypes.Names;
 
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
+    private readonly IArtistIndex? _artistIndex;
     private readonly ILogger<DynamicEntityBuilder> _logger;
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="DynamicEntityBuilder"/> class.
-    /// </summary>
-    /// <param name="libraryManager">Jellyfin library manager.</param>
-    /// <param name="userManager">Jellyfin user manager.</param>
-    /// <param name="logger">Logger instance.</param>
     public DynamicEntityBuilder(
         ILibraryManager libraryManager,
         IUserManager userManager,
-        ILogger<DynamicEntityBuilder> logger)
+        ILogger<DynamicEntityBuilder> logger,
+        IArtistIndex? artistIndex = null)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _logger = logger;
+        _artistIndex = artistIndex;
     }
 
     /// <summary>
-    /// Builds a Dialog.UpdateDynamicEntities directive from the user's recently added items.
-    /// Returns null if no items are found.
+    /// Builds a <c>Dialog.UpdateDynamicEntities</c> directive from the user's library.
+    /// Uses the in-memory artist index when available for broader coverage.
     /// </summary>
-    /// <param name="jellyfinUserId">The Jellyfin user ID to query recent items for.</param>
-    /// <param name="locale">The Alexa request locale for phonetic synonym generation.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A populated directive, or null if no items available.</returns>
-    public virtual DynamicEntitiesDirective? BuildFromRecentItems(
-        Guid jellyfinUserId,
-        string locale,
-        CancellationToken cancellationToken)
-    {
-        return BuildFromRecentItems(jellyfinUserId, locale, null, cancellationToken);
-    }
-
-    /// <summary>
-    /// Builds a Dialog.UpdateDynamicEntities directive from the user's recently added items,
-    /// optionally filtered by allowed library IDs.
-    /// Returns null if no items are found.
-    /// </summary>
-    /// <param name="jellyfinUserId">The Jellyfin user ID to query recent items for.</param>
-    /// <param name="locale">The Alexa request locale for phonetic synonym generation.</param>
-    /// <param name="allowedLibraryIds">Optional library GUIDs to restrict results to. Null = all libraries.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A populated directive, or null if no items available.</returns>
-    public virtual DynamicEntitiesDirective? BuildFromRecentItems(
+    public virtual DynamicEntitiesDirective? Build(
         Guid jellyfinUserId,
         string locale,
         Guid[]? allowedLibraryIds,
@@ -95,12 +67,22 @@ public class DynamicEntityBuilder
         Guid[]? topParentIds = allowedLibraryIds != null
             ? LibraryFilter.ResolveTopParentIds(allowedLibraryIds, _libraryManager)
             : null;
-        var artistValues = BuildSlotValues(user, BaseItemKind.MusicArtist, CatalogType.Artist, locale, topParentIds, ref budget);
+
+        List<DynamicSlotValue> artistValues;
+        if (_artistIndex?.IsReady == true)
+        {
+            artistValues = BuildArtistValuesFromIndex(topParentIds, locale, ref budget);
+        }
+        else
+        {
+            artistValues = BuildSlotValues(user, BaseItemKind.MusicArtist, CatalogType.Artist, locale, topParentIds, ref budget);
+        }
+
         var albumValues = BuildSlotValues(user, BaseItemKind.MusicAlbum, CatalogType.Album, locale, topParentIds, ref budget);
 
         if (artistValues.Count == 0 && albumValues.Count == 0)
         {
-            _logger.LogDebug("No recent items found for dynamic entities");
+            _logger.LogDebug("No items found for dynamic entities");
             return null;
         }
 
@@ -125,11 +107,33 @@ public class DynamicEntityBuilder
         }
 
         _logger.LogDebug(
-            "Built dynamic entities directive with {Artists} artists and {Albums} albums ({Total} total values+synonyms)",
-            artistValues.Count, albumValues.Count, MaxTotalValueCount - budget);
-
+            "Built dynamic entities: {Artists} artists ({ArtistSource}) and {Albums} albums ({Used} of {Max} budget)",
+            artistValues.Count,
+            _artistIndex?.IsReady == true ? "index" : "db",
+            albumValues.Count,
+            MaxTotalValueCount - budget,
+            MaxTotalValueCount);
 
         return directive;
+    }
+
+    private List<DynamicSlotValue> BuildArtistValuesFromIndex(
+        Guid[]? topParentIds,
+        string locale,
+        ref int budget)
+    {
+        var allArtists = _artistIndex!.GetArtists(topParentIds);
+        var values = new List<DynamicSlotValue>();
+
+        foreach (BaseItem item in allArtists)
+        {
+            if (values.Count >= ArtistIndexLimit || !TryAddSlotValue(values, item, CatalogType.Artist, locale, ref budget))
+            {
+                break;
+            }
+        }
+
+        return values;
     }
 
     private List<DynamicSlotValue> BuildSlotValues(
@@ -146,7 +150,7 @@ public class DynamicEntityBuilder
             Recursive = true,
             IncludeItemTypes = new[] { itemKind },
             DtoOptions = new DtoOptions(true),
-            Limit = QueryLimit,
+            Limit = DbQueryLimit,
             OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) }
         };
 
@@ -161,54 +165,53 @@ public class DynamicEntityBuilder
 
         foreach (BaseItem item in items)
         {
-            if (string.IsNullOrWhiteSpace(item.Name))
-            {
-                continue;
-            }
-
-            if (budget <= 0)
+            if (!TryAddSlotValue(values, item, catalogType, locale, ref budget))
             {
                 break;
             }
-
-            var synonyms = PhoneticSynonymGenerator.GenerateSynonyms(item.Name, locale);
-
-            // Each value counts as 1, plus 1 per synonym toward the Alexa limit.
-            int cost = 1 + synonyms.Count;
-            if (cost > budget)
-            {
-                // Try trimming synonyms to fit.
-                int fitSynonyms = Math.Max(0, budget - 1);
-                if (fitSynonyms == 0 && budget >= 1)
-                {
-                    synonyms = new List<string>();
-                    cost = 1;
-                }
-                else
-                {
-                    synonyms = synonyms.Take(fitSynonyms).ToList();
-                    cost = 1 + synonyms.Count;
-                }
-            }
-
-            if (cost > budget)
-            {
-                break;
-            }
-
-            values.Add(new DynamicSlotValue
-            {
-                Id = CatalogValue.FormatId(catalogType, item.Id),
-                Name = new DynamicSlotValueName
-                {
-                    Value = item.Name,
-                    Synonyms = synonyms.Count > 0 ? synonyms : null
-                }
-            });
-
-            budget -= cost;
         }
 
         return values;
+    }
+
+    private bool TryAddSlotValue(
+        List<DynamicSlotValue> values,
+        BaseItem item,
+        CatalogType catalogType,
+        string locale,
+        ref int budget)
+    {
+        if (string.IsNullOrWhiteSpace(item.Name) || budget <= 0)
+        {
+            return budget > 0;
+        }
+
+        var synonyms = PhoneticSynonymGenerator.GenerateSynonyms(item.Name, locale);
+        int cost = 1 + synonyms.Count;
+
+        if (cost > budget)
+        {
+            int fitSynonyms = Math.Max(0, budget - 1);
+            synonyms = synonyms.Take(fitSynonyms).ToList();
+            cost = 1 + synonyms.Count;
+        }
+
+        if (cost > budget)
+        {
+            return false;
+        }
+
+        values.Add(new DynamicSlotValue
+        {
+            Id = CatalogValue.FormatId(catalogType, item.Id),
+            Name = new DynamicSlotValueName
+            {
+                Value = item.Name,
+                Synonyms = synonyms.Count > 0 ? synonyms : null
+            }
+        });
+
+        budget -= cost;
+        return true;
     }
 }

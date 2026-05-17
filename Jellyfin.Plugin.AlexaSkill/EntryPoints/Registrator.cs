@@ -34,6 +34,11 @@ public class Registrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<CircuitBreaker>();
         serviceCollection.AddSingleton<JellyfinConnectivityChecker>();
 
+        // In-memory artist index (also registered as hosted service for startup loading)
+        serviceCollection.AddSingleton<ArtistIndexService>();
+        serviceCollection.AddSingleton<IArtistIndex>(sp => sp.GetRequiredService<ArtistIndexService>());
+        serviceCollection.AddHostedService(sp => sp.GetRequiredService<ArtistIndexService>());
+
         // Scheduled tasks (visible in Jellyfin dashboard)
         serviceCollection.AddSingleton<TokenRefreshTask>();
         serviceCollection.AddSingleton<CacheCleanupTask>();

@@ -16,9 +16,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.DynamicEntities;
 
 /// <summary>
 /// Response interceptor that injects dynamic entity values into the Alexa NLU
-/// at the start of a new session. These session-scoped values supplement the
-/// persistent catalog-based slot types with recently played items, improving
-/// recognition of artist and album names the user has recently listened to.
+/// at the start of a new session. Uses the in-memory artist index for broader
+/// coverage, falling back to database queries when the index is not ready.
 /// </summary>
 public class DynamicEntitiesInterceptor : IResponseInterceptor
 {
@@ -75,7 +74,7 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
         try
         {
             DynamicEntitiesDirective? directive = await Task.Run(
-                () => _builder.BuildFromRecentItems(jellyfinUserId, context.Locale, allowedLibraryIds, cancellationToken),
+                () => _builder.Build(jellyfinUserId, context.Locale, allowedLibraryIds, cancellationToken),
                 cancellationToken).ConfigureAwait(false);
 
             if (directive == null)

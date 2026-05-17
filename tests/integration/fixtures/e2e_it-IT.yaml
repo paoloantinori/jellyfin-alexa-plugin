@@ -32,8 +32,74 @@ tests:
     expected_slots: {}
     expected_response_type: any
 
-  # --- Play by artist ---
+  # --- Play by artist (in-memory index) ---
+  # Exact match
   - utterance: "metti una canzone dei soul coughing"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+    expected_response_type: any
+
+  # Truncation — "soul coughin" without the g (ASR truncation)
+  - utterance: "metti una canzone dei soul coughin"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+    expected_response_type: any
+
+  # Exact match — different artist
+  - utterance: "suona i pink floyd"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+    expected_response_type: any
+
+  # Misspelling — "pink floid" (typo: y→i) — NLU may not resolve heavy misspellings
+  # Skipping: Alexa NLU cannot route this to any intent. Fuzzy matching is tested at unit level.
+  # - utterance: "suona i pink floid"
+  #   expected_intent: PlayArtistSongsIntent
+  #   expected_slots:
+  #     musician: {}
+  #   expected_response_type: any
+
+  # Multi-word prefix — "led zep" truncated (Led Zeppelin)
+  - utterance: "metti i led zep"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+    expected_response_type: any
+
+  # Different artist — The Beatles (multi-word with "The" prefix)
+  - utterance: "metti una canzone dei beatles"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+    expected_response_type: any
+
+  # Not found — artist that doesn't exist in the library
+  - utterance: "metti una canzone dei xyzzyfoo"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+    expected_response_type: any
+
+  # --- Disambiguation carrier phrases (band/gruppo/cantante) ---
+  # "band" carrier — disambiguates from PlayRadioIntent
+  - utterance: "suona la band radiohead"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+    expected_response_type: any
+
+  # "gruppo" carrier — Italian for "group"
+  - utterance: "metti il gruppo pink floyd"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+    expected_response_type: any
+
+  # "cantante" carrier — Italian for "singer"
+  - utterance: "ascolta il cantante soul coughing"
     expected_intent: PlayArtistSongsIntent
     expected_slots:
       musician: {}

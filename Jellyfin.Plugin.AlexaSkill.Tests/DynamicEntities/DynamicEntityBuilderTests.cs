@@ -16,7 +16,7 @@ using Xunit;
 namespace Jellyfin.Plugin.AlexaSkill.Tests.DynamicEntities;
 
 /// <summary>
-/// Tests for per-user library filtering in DynamicEntityBuilder.BuildFromRecentItems.
+/// Tests for per-user library filtering in DynamicEntityBuilder.Build.
 /// Verifies that the allowedLibraryIds parameter correctly filters the Jellyfin query.
 /// </summary>
 public class DynamicEntityBuilderFilterTests
@@ -49,7 +49,7 @@ public class DynamicEntityBuilderFilterTests
     }
 
     [Fact]
-    public void BuildFromRecentItems_WithAllowedLibraryIds_PassesTopParentIdsToQuery()
+    public void Build_WithAllowedLibraryIds_PassesTopParentIdsToQuery()
     {
         // Arrange
         var userId = Guid.NewGuid();
@@ -68,7 +68,7 @@ public class DynamicEntityBuilderFilterTests
         var builder = CreateBuilder();
 
         // Act
-        builder.BuildFromRecentItems(userId, "it-IT", allowedLibraryIds, CancellationToken.None);
+        builder.Build(userId, "it-IT", allowedLibraryIds, CancellationToken.None);
 
         // Assert
         // Two queries are made: one for artists, one for albums
@@ -83,7 +83,7 @@ public class DynamicEntityBuilderFilterTests
     }
 
     [Fact]
-    public void BuildFromRecentItems_WithNullAllowedLibraryIds_NoTopParentIds()
+    public void Build_WithNullAllowedLibraryIds_NoTopParentIds()
     {
         // Arrange
         var userId = Guid.NewGuid();
@@ -98,7 +98,7 @@ public class DynamicEntityBuilderFilterTests
         var builder = CreateBuilder();
 
         // Act
-        builder.BuildFromRecentItems(userId, "it-IT", null, CancellationToken.None);
+        builder.Build(userId, "it-IT", null, CancellationToken.None);
 
         // Assert
         Assert.Equal(2, capturedQueries.Count);
@@ -110,7 +110,7 @@ public class DynamicEntityBuilderFilterTests
     }
 
     [Fact]
-    public void BuildFromRecentItems_WithEmptyAllowedLibraryIds_NoTopParentIds()
+    public void Build_WithEmptyAllowedLibraryIds_NoTopParentIds()
     {
         // Arrange
         var userId = Guid.NewGuid();
@@ -125,7 +125,7 @@ public class DynamicEntityBuilderFilterTests
         var builder = CreateBuilder();
 
         // Act
-        builder.BuildFromRecentItems(userId, "it-IT", Array.Empty<Guid>(), CancellationToken.None);
+        builder.Build(userId, "it-IT", Array.Empty<Guid>(), CancellationToken.None);
 
         // Assert
         Assert.Equal(2, capturedQueries.Count);
@@ -137,7 +137,7 @@ public class DynamicEntityBuilderFilterTests
     }
 
     [Fact]
-    public void BuildFromRecentItems_WithoutAllowedLibraryIdsOverload_NoTopParentIds()
+    public void Build_WithoutAllowedLibraryIdsOverload_NoTopParentIds()
     {
         // Arrange
         var userId = Guid.NewGuid();
@@ -151,8 +151,8 @@ public class DynamicEntityBuilderFilterTests
 
         var builder = CreateBuilder();
 
-        // Act - using the overload without allowedLibraryIds parameter
-        builder.BuildFromRecentItems(userId, "it-IT", CancellationToken.None);
+        // Act - passing null for allowedLibraryIds
+        builder.Build(userId, "it-IT", null, CancellationToken.None);
 
         // Assert
         Assert.Equal(2, capturedQueries.Count);
