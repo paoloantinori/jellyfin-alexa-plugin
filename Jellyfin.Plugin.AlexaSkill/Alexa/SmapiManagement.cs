@@ -233,17 +233,23 @@ public class SmapiManagement : ManagementApi
 
     /// <summary>
     /// Polls skill status until it transitions out of IN_PROGRESS.
+    /// Returns the final skill status.
     /// </summary>
-    private async Task WaitForSkillStatusAsync(string skillId)
+    /// <param name="skillId">The skill ID to poll.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    public async Task<SkillStatus> WaitForSkillStatusAsync(string skillId, CancellationToken cancellationToken = default)
     {
         for (int i = 0; i < MaxPollRetries; i++)
         {
-            if ((await GetSkillStatusAsync(skillId).ConfigureAwait(false)).Manifest.LastModified.Status != SkillStatusState.IN_PROGRESS)
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var status = await GetSkillStatusAsync(skillId).ConfigureAwait(false);
+            if (status.Manifest.LastModified.Status != SkillStatusState.IN_PROGRESS)
             {
-                return;
+                return status;
             }
 
-            await Task.Delay(1000).ConfigureAwait(false);
+            await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
         }
 
         throw new TimeoutException($"Skill {skillId} did not transition from IN_PROGRESS within {MaxPollRetries} seconds");
