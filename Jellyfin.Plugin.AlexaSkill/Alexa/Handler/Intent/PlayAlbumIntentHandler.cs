@@ -31,6 +31,7 @@ public class PlayAlbumIntentHandler : BaseHandler
     private ILibraryManager _libraryManager;
     private IUserManager _userManager;
     private readonly DeviceQueueManager? _queueManager;
+    private readonly IArtistIndex? _artistIndex;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PlayAlbumIntentHandler"/> class.
@@ -41,17 +42,20 @@ public class PlayAlbumIntentHandler : BaseHandler
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
     /// <param name="queueManager">Optional per-device queue manager for crash recovery.</param>
+    /// <param name="artistIndex">Optional in-memory artist index for fast search.</param>
     public PlayAlbumIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
         ILoggerFactory loggerFactory,
-        DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
+        DeviceQueueManager? queueManager = null,
+        IArtistIndex? artistIndex = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _queueManager = queueManager;
+        _artistIndex = artistIndex;
     }
 
     /// <inheritdoc/>
@@ -95,20 +99,11 @@ public class PlayAlbumIntentHandler : BaseHandler
         string? matchedArtistName = null;
         if (musician != null)
         {
-            var artistSearchQuery = new InternalItemsQuery()
-            {
-                User = jellyfinUser,
-                Recursive = true,
-                SearchTerm = musician,
-                IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
-                DtoOptions = new DtoOptions(true)
-            };
-            ApplyLibraryFilter(artistSearchQuery, user, _libraryManager);
-
-            IReadOnlyList<BaseItem> artists = await RetryAsync(
-                () => _libraryManager.GetItemList(artistSearchQuery),
-                "GetArtists",
+            IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
+                musician, user, _libraryManager, _artistIndex, Logger,
+                (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
                 cancellationToken).ConfigureAwait(false);
+
             if (artists.Count == 0)
             {
                 return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByArtist", locale, musician));

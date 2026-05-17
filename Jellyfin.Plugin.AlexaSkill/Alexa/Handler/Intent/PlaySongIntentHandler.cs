@@ -26,8 +26,33 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public class PlaySongIntentHandler : BaseHandler
 {
+    private static readonly string[] SongCarrierPhrases = new[]
+    {
+        // Phrases that appear right before {song} in utterance templates.
+        // Within each locale group, longer phrases come first (e.g. "the song called " before "the song ").
+        // English
+        "the song called ", "a song called ",
+        "that song ", "the song ", "the track ", "a song ", "a track ",
+        // Italian
+        "la canzone ", "il brano ", "il pezzo ", "la traccia ",
+        "una canzone ", "un brano ", "un pezzo ", "una traccia ",
+        "canzone ", "brano ", "pezzo ", "traccia ",
+        // German
+        "das lied ", "das stück ", "den titel ",
+        "ein lied ", "ein stück ",
+        // Spanish
+        "la canción ", "el tema ", "una canción ", "canción ",
+        // French
+        "la chanson ", "le titre ", "le morceau ", "une chanson ", "chanson ",
+        // Dutch
+        "het liedje ", "het nummer ", "liedje ", "nummer ",
+        // Portuguese
+        "a música ", "a faixa ", "música ",
+    };
+
     private ILibraryManager _libraryManager;
     private IUserManager _userManager;
+    private readonly IArtistIndex? _artistIndex;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PlaySongIntentHandler"/> class.
@@ -37,15 +62,18 @@ public class PlaySongIntentHandler : BaseHandler
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
+    /// <param name="artistIndex">Optional in-memory artist index for fast search.</param>
     public PlaySongIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
+        ILoggerFactory loggerFactory,
+        IArtistIndex? artistIndex = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
+        _artistIndex = artistIndex;
     }
 
     /// <inheritdoc/>
@@ -77,6 +105,8 @@ public class PlaySongIntentHandler : BaseHandler
             return ResponseBuilder.Ask(ResponseStrings.Get("ElicitSongName", locale), new Reprompt(ResponseStrings.Get("ElicitSongName", locale)));
         }
 
+        songQuery = StripSongCarrierPhrase(songQuery);
+
         await SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)).ConfigureAwait(false);
 
         var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
@@ -89,46 +119,10 @@ public class PlaySongIntentHandler : BaseHandler
         string? matchedArtistName = null;
         if (musicianQuery != null)
         {
-            var artistQuery = new InternalItemsQuery()
-            {
-                User = jellyfinUser,
-                Recursive = true,
-                SearchTerm = musicianQuery,
-                IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
-                DtoOptions = new DtoOptions(true)
-            };
-            ApplyLibraryFilter(artistQuery, user, _libraryManager);
-
-            IReadOnlyList<BaseItem> artists = await RetryAsync(
-                () => _libraryManager.GetItemList(artistQuery),
-                "GetArtists",
+            IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
+                musicianQuery, user, _libraryManager, _artistIndex, Logger,
+                (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
                 cancellationToken).ConfigureAwait(false);
-
-            // Fallback: fuzzy match when SearchTerm fails due to ASR truncation.
-            if (artists.Count == 0)
-            {
-                string firstWord = musicianQuery.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? musicianQuery;
-                var prefixQuery = new InternalItemsQuery()
-                {
-                    User = jellyfinUser,
-                    Recursive = true,
-                    NameStartsWith = firstWord,
-                    IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
-                    DtoOptions = new DtoOptions(true)
-                };
-                ApplyLibraryFilter(prefixQuery, user, _libraryManager);
-
-                IReadOnlyList<BaseItem> prefixArtists = await RetryAsync(
-                    () => _libraryManager.GetItemList(prefixQuery),
-                    "GetArtistsFuzzy",
-                    cancellationToken).ConfigureAwait(false);
-
-                BaseItem? fuzzy = FuzzyMatch(musicianQuery, prefixArtists, a => a.Name, user);
-                if (fuzzy != null)
-                {
-                    artists = new List<BaseItem> { fuzzy };
-                }
-            }
 
             if (artists.Count == 0)
             {
@@ -205,5 +199,21 @@ public class PlaySongIntentHandler : BaseHandler
         string item_id = songs[0].Id.ToString();
 
         return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, songs[0], user, context);
+    }
+
+    // Alexa's NLU can misalign slot boundaries, causing carrier phrases like
+    // "la canzone" to bleed into the slot value. Strip them before searching.
+    internal static string StripSongCarrierPhrase(string query)
+    {
+        string trimmed = query.TrimStart();
+        foreach (string phrase in SongCarrierPhrases)
+        {
+            if (trimmed.StartsWith(phrase, StringComparison.OrdinalIgnoreCase))
+            {
+                return trimmed.Substring(phrase.Length).TrimStart();
+            }
+        }
+
+        return query;
     }
 }

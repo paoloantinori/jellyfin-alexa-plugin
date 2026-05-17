@@ -28,6 +28,7 @@ public class AddToQueueIntentHandler : BaseHandler
 {
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
+    private readonly IArtistIndex? _artistIndex;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AddToQueueIntentHandler"/> class.
@@ -37,15 +38,18 @@ public class AddToQueueIntentHandler : BaseHandler
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
+    /// <param name="artistIndex">Optional in-memory artist index for fast search.</param>
     public AddToQueueIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
+        ILoggerFactory loggerFactory,
+        IArtistIndex? artistIndex = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
+        _artistIndex = artistIndex;
     }
 
     /// <inheritdoc/>
@@ -86,19 +90,9 @@ public class AddToQueueIntentHandler : BaseHandler
         string? matchedArtistName = null;
         if (!string.IsNullOrWhiteSpace(musicianQuery))
         {
-            var artistSearchQuery = new InternalItemsQuery()
-            {
-                User = jellyfinUser,
-                Recursive = true,
-                SearchTerm = musicianQuery,
-                IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
-                DtoOptions = new DtoOptions(true)
-            };
-            ApplyLibraryFilter(artistSearchQuery, user, _libraryManager);
-
-            IReadOnlyList<BaseItem> artists = await RetryAsync(
-                () => _libraryManager.GetItemList(artistSearchQuery),
-                "GetArtistsForQueue",
+            IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
+                musicianQuery, user, _libraryManager, _artistIndex, Logger,
+                (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtistsForQueue", ct),
                 cancellationToken).ConfigureAwait(false);
 
             if (artists.Count == 0)

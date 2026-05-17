@@ -32,6 +32,7 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
     private readonly IUserDataManager _userDataManager;
+    private readonly IArtistIndex? _artistIndex;
 
     public QueryArtistLibraryIntentHandler(
         ISessionManager sessionManager,
@@ -39,11 +40,13 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
         ILibraryManager libraryManager,
         IUserManager userManager,
         IUserDataManager userDataManager,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
+        ILoggerFactory loggerFactory,
+        IArtistIndex? artistIndex = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _userDataManager = userDataManager;
+        _artistIndex = artistIndex;
     }
 
     /// <inheritdoc/>
@@ -96,20 +99,9 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
             return userError;
         }
 
-        var artistSearchQuery = new InternalItemsQuery
-        {
-            Recursive = true,
-            SearchTerm = musician,
-            IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
-            Limit = 1,
-            OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
-            DtoOptions = new DtoOptions(true)
-        };
-        ApplyLibraryFilter(artistSearchQuery, user, _libraryManager);
-
-        IReadOnlyList<BaseItem> artists = await RetryAsync(
-            () => _libraryManager.GetItemList(artistSearchQuery),
-            "GetArtists",
+        IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
+            musician, user, _libraryManager, _artistIndex, Logger,
+            (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
             cancellationToken).ConfigureAwait(false);
 
         if (artists.Count == 0)
