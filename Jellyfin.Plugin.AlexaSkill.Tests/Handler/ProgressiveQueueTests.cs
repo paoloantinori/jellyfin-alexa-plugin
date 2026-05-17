@@ -624,6 +624,81 @@ public class ProgressiveQueueTests : IDisposable
     }
 
     // =====================================================================
+    // PlayArtistSongsIntentHandler - Multi-word artist name fallback
+    // =====================================================================
+
+    [Fact]
+    public async Task PlayArtistSongs_FullPrefixFallback_MatchesMultiWordArtist()
+    {
+        var handler = new PlayArtistSongsIntentHandler(
+            _sessionManagerMock.Object,
+            _config,
+            _libraryManagerMock.Object,
+            _userManagerMock.Object,
+            _userDataManagerMock.Object,
+            _loggerFactory);
+
+        var session = CreateSession();
+        SetupUserMock();
+
+        var artistId = Guid.NewGuid();
+        var artist = new MediaBrowser.Controller.Entities.Audio.MusicArtist
+        {
+            Id = artistId,
+            Name = "Kidz Bop Kids"
+        };
+
+        var tracks = new List<Audio>
+        {
+            new() { Id = Guid.NewGuid(), Name = "Kidz Bop Song 1" }
+        };
+
+        // Mock: SearchTerm query returns empty (exact match fails)
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+            q.SearchTerm == "Kidz Bop" && q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicArtist))))
+            .Returns(new List<MediaBrowser.Controller.Entities.BaseItem>());
+
+        // Mock: first-word prefix query ("Kidz") returns empty
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+            q.NameStartsWith == "Kidz" && q.SearchTerm == null)))
+            .Returns(new List<MediaBrowser.Controller.Entities.BaseItem>());
+
+        // Mock: full-prefix query ("Kidz Bop") returns the artist
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+            q.NameStartsWith == "Kidz Bop" && q.SearchTerm == null)))
+            .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { artist });
+
+        // Mock: artist songs query
+        _libraryManagerMock.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q =>
+            q.ArtistIds != null && q.ArtistIds.Contains(artistId))))
+            .Returns(new QueryResult<BaseItem>
+            {
+                Items = tracks.Cast<MediaBrowser.Controller.Entities.BaseItem>().ToList(),
+                TotalRecordCount = 1
+            });
+
+        // Mock: no favorites
+        _userDataManagerMock.Setup(u => u.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<MediaBrowser.Controller.Entities.BaseItem>()))
+            .Returns((UserItemData?)null);
+
+        var request = CreateArtistSongsIntent("Kidz Bop");
+        var context = CreateContext();
+
+        var response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        // Should have found the artist via full-prefix fallback
+        Assert.Equal(1, session.NowPlayingQueue.Count);
+
+        // Should have an AudioPlayer directive
+        var directive = response.Response.Directives.OfType<AudioPlayerPlayDirective>().FirstOrDefault();
+        Assert.NotNull(directive);
+        Assert.Equal(PlayBehavior.ReplaceAll, directive.PlayBehavior);
+
+        // Cleanup
+        QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID);
+    }
+
+    // =====================================================================
     // ProgressiveQueueConstants tests
     // =====================================================================
 

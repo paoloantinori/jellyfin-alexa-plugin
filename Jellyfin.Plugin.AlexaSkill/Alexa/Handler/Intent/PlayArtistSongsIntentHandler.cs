@@ -109,27 +109,48 @@ public class PlayArtistSongsIntentHandler : BaseHandler
 
         // Fallback: when SearchTerm fails (e.g. Alexa ASR truncation "soul coughin" vs "Soul Coughing"),
         // try a broader prefix search and fuzzy match the results.
+        string firstWord = musician.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? musician;
         if (artists.Count == 0)
         {
-            string firstWord = musician.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? musician;
-            var prefixQuery = new InternalItemsQuery()
-            {
-                Recursive = true,
-                NameStartsWith = firstWord,
-                IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
-                DtoOptions = new DtoOptions(true)
-            };
-            ApplyLibraryFilter(prefixQuery, user, _libraryManager);
-
-            IReadOnlyList<BaseItem> prefixArtists = await RetryAsync(
-                () => _libraryManager.GetItemList(prefixQuery),
-                "GetArtistsFuzzy",
-                cancellationToken).ConfigureAwait(false);
-
-            BaseItem? fuzzy = FuzzyMatch(musician, prefixArtists, a => a.Name, user);
+            BaseItem? fuzzy = await TryPrefixFallbackAsync(
+                firstWord, musician, user, "GetArtistsFuzzy", cancellationToken).ConfigureAwait(false);
             if (fuzzy != null)
             {
+                Logger.LogInformation(
+                    "First-word prefix fallback matched '{Name}' for query '{Query}' (prefix '{Prefix}')",
+                    fuzzy.Name, musician, firstWord);
                 artists = new List<BaseItem> { fuzzy };
+            }
+        }
+
+        // Second fallback: try full query as prefix (e.g. "Kidz Bop" → NameStartsWith "Kidz Bop").
+        // Helps when the first-word prefix returns too many results or the fuzzy match
+        // falls below threshold (e.g. "Kidz Bop" → "Kidz Bop Kids").
+        if (artists.Count == 0 && !string.Equals(firstWord, musician, StringComparison.Ordinal))
+        {
+            BaseItem? fullPrefixFuzzy = await TryPrefixFallbackAsync(
+                musician, musician, user, "GetArtistsFullPrefix", cancellationToken).ConfigureAwait(false);
+            if (fullPrefixFuzzy != null)
+            {
+                Logger.LogInformation(
+                    "Full-prefix fallback matched '{Name}' for query '{Query}'",
+                    fullPrefixFuzzy.Name, musician);
+                artists = new List<BaseItem> { fullPrefixFuzzy };
+            }
+        }
+
+        // Third fallback: try NameContains substring search (e.g. "Kidz Bop" → "The Kidz Bop Kids").
+        // Catches cases where the query appears anywhere in the artist name, not just at the start.
+        if (artists.Count == 0)
+        {
+            BaseItem? containsFuzzy = await TryContainsFallbackAsync(
+                musician, musician, user, "GetArtistsContains", cancellationToken).ConfigureAwait(false);
+            if (containsFuzzy != null)
+            {
+                Logger.LogInformation(
+                    "Contains fallback matched '{Name}' for query '{Query}'",
+                    containsFuzzy.Name, musician);
+                artists = new List<BaseItem> { containsFuzzy };
             }
         }
 
@@ -235,5 +256,53 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         string item_id = artistsItems[0].Id.ToString();
 
         return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, artistsItems[0], user, context);
+    }
+
+    /// <summary>
+    /// Tries a NameStartsWith prefix search followed by fuzzy matching against the results.
+    /// Used as a fallback when the primary SearchTerm query returns no artists.
+    /// </summary>
+    private async Task<BaseItem?> TryPrefixFallbackAsync(
+        string prefix, string musician, Entities.User? user,
+        string retryLabel, CancellationToken cancellationToken)
+    {
+        return await TrySearchFallbackAsync(
+            q => q.NameStartsWith = prefix, musician, user, retryLabel, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Tries a NameContains substring search followed by fuzzy matching against the results.
+    /// Catches cases where the query appears anywhere in the artist name (e.g. "Kidz Bop" → "The Kidz Bop Kids").
+    /// </summary>
+    private async Task<BaseItem?> TryContainsFallbackAsync(
+        string searchTerm, string musician, Entities.User? user,
+        string retryLabel, CancellationToken cancellationToken)
+    {
+        return await TrySearchFallbackAsync(
+            q => q.NameContains = searchTerm, musician, user, retryLabel, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Executes a configured InternalItemsQuery and fuzzy-matches the results against the artist name.
+    /// </summary>
+    private async Task<BaseItem?> TrySearchFallbackAsync(
+        Action<InternalItemsQuery> configure, string musician, Entities.User? user,
+        string retryLabel, CancellationToken cancellationToken)
+    {
+        var query = new InternalItemsQuery()
+        {
+            Recursive = true,
+            IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
+            DtoOptions = new DtoOptions(true)
+        };
+        configure(query);
+        ApplyLibraryFilter(query, user, _libraryManager);
+
+        IReadOnlyList<BaseItem> results = await RetryAsync(
+            () => _libraryManager.GetItemList(query),
+            retryLabel,
+            cancellationToken).ConfigureAwait(false);
+
+        return FuzzyMatch(musician, results, a => a.Name, user);
     }
 }
