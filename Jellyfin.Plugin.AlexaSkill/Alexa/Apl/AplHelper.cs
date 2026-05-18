@@ -237,23 +237,6 @@ internal static class AplHelper
   ""type"": ""APL"",
   ""version"": ""1.7"",
   ""theme"": ""dark"",
-  ""resources"": [
-    {
-      ""dimensions"": {
-        ""cardWidth"": 200,
-        ""cardHeight"": 280,
-        ""artHeight"": 180
-      }
-    },
-    {
-      ""when"": ""${viewport.shape == 'round'}"",
-      ""dimensions"": {
-        ""cardWidth"": 160,
-        ""cardHeight"": 220,
-        ""artHeight"": 140
-      }
-    }
-  ],
   ""mainTemplate"": {
     ""parameters"": [""payload""],
     ""items"": [
@@ -261,80 +244,82 @@ internal static class AplHelper
         ""type"": ""Container"",
         ""height"": ""100vh"",
         ""width"": ""100vw"",
-        ""paddingTop"": 20,
         ""items"": [
           {
             ""type"": ""Text"",
             ""text"": ""${payload.carouselData.properties.headerText}"",
-            ""fontSize"": 30,
-            ""fontWeight"": ""bold"",
+            ""fontSize"": 32,
+            ""fontWeight"": ""700"",
             ""color"": ""white"",
-            ""paddingLeft"": 16,
-            ""paddingBottom"": 16
+            ""paddingLeft"": 24,
+            ""paddingTop"": 16,
+            ""paddingBottom"": 12
           },
           {
             ""type"": ""Sequence"",
             ""scrollDirection"": ""horizontal"",
+            ""width"": ""100%"",
             ""grow"": 1,
             ""data"": ""${payload.carouselData.properties.items}"",
             ""items"": {
-              ""type"": ""TouchWrapper"",
-              ""onPress"": [{ ""type"": ""SendEvent"", ""arguments"": [ ""carouselTap"", ""${data.id}"" ] }],
-              ""item"": {
-                ""type"": ""Container"",
-                ""width"": ""${cardWidth}"",
-                ""paddingLeft"": 8,
-                ""paddingRight"": 8,
-                ""items"": [
-                  {
-                    ""type"": ""Frame"",
-                    ""width"": ""${cardWidth}"",
-                    ""height"": ""${artHeight}"",
-                    ""borderRadius"": 8,
-                    ""backgroundColor"": ""#333333"",
-                    ""items"": [
-                      {
-                        ""type"": ""Image"",
-                        ""source"": ""${data.artUrl}"",
-                        ""width"": ""${cardWidth}"",
-                        ""height"": ""${artHeight}"",
-                        ""scale"": ""best-fill"",
-                        ""borderRadius"": 8,
-                        ""when"": ""${data.artUrl}""
-                      },
-                      {
-                        ""type"": ""Text"",
-                        ""text"": ""♪"",
-                        ""fontSize"": 48,
-                        ""color"": ""#666666"",
-                        ""textAlign"": ""center"",
-                        ""width"": ""${cardWidth}"",
-                        ""height"": ""${artHeight}"",
-                        ""when"": ""${!data.artUrl}""
-                      }
-                    ]
-                  },
-                  {
-                    ""type"": ""Text"",
-                    ""text"": ""${data.title}"",
-                    ""fontSize"": 18,
-                    ""color"": ""white"",
-                    ""maxLines"": 1,
-                    ""width"": ""${cardWidth}"",
-                    ""paddingTop"": 8
-                  },
-                  {
-                    ""type"": ""Text"",
-                    ""text"": ""${data.subtitle}"",
-                    ""fontSize"": 14,
-                    ""color"": ""#B0B0B0"",
-                    ""maxLines"": 1,
-                    ""width"": ""${cardWidth}"",
-                    ""paddingTop"": 2,
-                    ""when"": ""${data.subtitle}""
-                  }
-                ]
-              }
+              ""type"": ""Container"",
+              ""width"": ""28vw"",
+              ""paddingLeft"": 10,
+              ""paddingRight"": 10,
+              ""items"": [
+                {
+                  ""type"": ""Frame"",
+                  ""width"": ""100%"",
+                  ""height"": ""28vw"",
+                  ""borderRadius"": 12,
+                  ""backgroundColor"": ""#2A2A2A"",
+                  ""items"": [
+                    {
+                      ""type"": ""Image"",
+                      ""source"": ""${data.artUrl}"",
+                      ""width"": ""100%"",
+                      ""height"": ""100%"",
+                      ""scale"": ""best-fill"",
+                      ""borderRadius"": 12,
+                      ""when"": ""${data.artUrl}""
+                    },
+                    {
+                      ""type"": ""Text"",
+                      ""text"": ""♪"",
+                      ""fontSize"": 56,
+                      ""color"": ""#555555"",
+                      ""textAlign"": ""center"",
+                      ""textAlignVertical"": ""center"",
+                      ""width"": ""100%"",
+                      ""height"": ""100%"",
+                      ""when"": ""${!data.artUrl}""
+                    }
+                  ]
+                },
+                {
+                  ""type"": ""Text"",
+                  ""text"": ""${data.title}"",
+                  ""fontSize"": 20,
+                  ""color"": ""white"",
+                  ""maxLines"": 2,
+                  ""width"": ""100%"",
+                  ""paddingTop"": 8,
+                  ""paddingLeft"": 2,
+                  ""paddingRight"": 2
+                },
+                {
+                  ""type"": ""Text"",
+                  ""text"": ""${data.subtitle}"",
+                  ""fontSize"": 15,
+                  ""color"": ""#B0B0B0"",
+                  ""maxLines"": 1,
+                  ""width"": ""100%"",
+                  ""paddingTop"": 2,
+                  ""paddingLeft"": 2,
+                  ""paddingRight"": 2,
+                  ""when"": ""${data.subtitle}""
+                }
+              ]
             }
           }
         ]

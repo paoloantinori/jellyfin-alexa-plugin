@@ -1,16 +1,19 @@
 # Local Project Instructions (not checked in)
 
-## Deployment
+## Deploy Checklist — ALWAYS follow `.claude.local.md`
 
-Deploy commands, server credentials, and simulator setup are in `.claude.local.md` (gitignored). Read that file before any deploy or E2E testing task.
+That file has the full mandatory checklist. Key rules that keep getting violated:
+
+1. **BACKUP config before EVERY deploy** — Jellyfin wipes plugin config (users, API keys, settings) when the DLL changes. Fetch config via API, save locally, verify users > 0. If 0, STOP.
+2. **DISCOVER skill ID before E2E tests** — Run `ask smapi list-skills-for-vendor` to find the current Jellyfin skill. Update `~/.ask/ask_states.json`. The plugin creates new skills when config is wiped.
+3. **ENABLE skill after deploy** — `ask smapi set-skill-enablement --skill-id <ID> --stage development`
+4. **VERIFY config survived** after deploy. Restore from backup if lost.
+5. **CLEANUP stale skills** — Multiple Jellyfin skills cause NLU competition. Delete old ones.
+6. **Use `$JELLYFIN_URL`** (public URL) for E2E tests, NOT localhost (that's minix-only).
 
 ## E2E Tests (SMAPI simulate-skill)
 
-Skill ID and Jellyfin creds are in `.claude.local.md`. Key env vars:
-
-```bash
-export ASK_SKILL_ID="$ASK_SKILL_ID"   # see .claude.local.md
-```
+Skill ID and Jellyfin creds are in `.claude.local.md` and env vars.
 
 ### Run all E2E tests
 ```bash
@@ -40,3 +43,16 @@ export ASK_SKILL_ID="$ASK_SKILL_ID"   # see .claude.local.md
 - **NLU competition**: Utterances starting with "suona i radio*" route to PlayRadioIntent (not artist). Heavy misspellings ("pink floid") may fail to resolve to any intent at the NLU level. These are tested at unit level instead.
 - Artist E2E matrix covers: exact match, ASR truncation, multi-word prefix ("led zep"), "The" prefix ("beatles"), not found ("xyzzyfoo"), disambiguation carriers ("band radiohead", "gruppo pink floyd", "cantante soul coughing")
 - Deploy interaction model: `ask smapi set-interaction-model --skill-id $ASK_SKILL_ID --stage development --locale it-IT --interaction-model file:/tmp/payload.json`
+
+## Simulator (Built-in Intent Tester)
+
+For quick handler-level testing without SMAPI/NLU. Runs on minix localhost:
+```bash
+SSH_OPTS="-F /dev/null -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa"
+ssh $SSH_OPTS pantinor@minix "curl -sf -X POST 'http://localhost:8096/Plugins/AlexaSkill/Simulator/Intent' \
+  -H 'X-Emby-Token: 69088d9a2bd74af5945b3d5683a087d3' \
+  -H 'Content-Type: application/json' \
+  -d '{\"intentName\":\"QueryArtistLibraryIntent\",\"slots\":{\"musician\":\"soul coughing\"},\"locale\":\"it-IT\"}'"
+```
+- Slot format: flat strings `"musician":"soul coughing"`, NOT objects `"musician":{"value":"..."}`
+- LaunchRequest is NOT an intent — simulator only handles intent requests
