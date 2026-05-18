@@ -176,7 +176,6 @@ public class LWAController : ControllerBase
                     Uri endpointUri = new Uri(new Uri(Plugin.Instance.Configuration.ServerAddress), AlexaSkillController.ApiBaseUri);
                     string endpointUriString = new Uri(endpointUri, "account-linking").ToString();
 
-                    // Try to reuse an existing skill instead of creating a duplicate
                     string? existingSkillId = await AlexaUtil.CallAsync(currentUser, () =>
                         currentUser.SmapiManagement.FindExistingSkillAsync(Plugin.Instance.ManifestSkill!)).ConfigureAwait(false);
 
@@ -186,13 +185,11 @@ public class LWAController : ControllerBase
                         _logger.LogInformation("Reusing existing skill {SkillId} for user {UserId}", existingSkillId, userId);
                         skillId = existingSkillId;
 
-                        // Update the existing skill with current manifest and models
                         await currentUser.SmapiManagement.UpdateSkillAsync(
                                 skillId,
                                 Plugin.Instance.ManifestSkill!,
                                 skillInteractionModels).ConfigureAwait(false);
 
-                        // Re-apply account linking to the reused skill
                         currentUser.SmapiManagement.UpdateAccountLinkData(skillId, endpointUriString, Plugin.Instance.Configuration.AccountLinkingClientId);
                     }
                     else

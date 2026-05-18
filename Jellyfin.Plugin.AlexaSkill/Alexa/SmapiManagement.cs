@@ -285,12 +285,12 @@ public class SmapiManagement : ManagementApi
 
         try
         {
-            VendorResponse vendor = await this.Vendors.Get().ConfigureAwait(false);
-            string vendorId = vendor.Vendors[0].Id;
+            string vendorId = await GetVendorIdAsync().ConfigureAwait(false);
 
-            using var httpClient = new HttpClient();
-            httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_accessToken}");
-            var response = await httpClient.GetAsync($"https://api.amazonalexa.com/v1/skills?vendorId={vendorId}").ConfigureAwait(false);
+            var httpClient = Plugin.HttpClient;
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"https://api.amazonalexa.com/v1/skills?vendorId={vendorId}");
+            request.Headers.Add("Authorization", $"Bearer {_accessToken}");
+            var response = await httpClient.SendAsync(request).ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
             {
