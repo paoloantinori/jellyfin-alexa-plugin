@@ -1,8 +1,11 @@
 #nullable enable
 
 using System;
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.Alexa.ModelDeployment;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -516,5 +519,141 @@ public class ModelDeploymentManagerTests
 
         Assert.Single(errors);
         Assert.Contains("EmptyType", errors[0]);
+    }
+
+    // --- FetchModelJsonAsync ---
+
+    [Fact]
+    public async Task FetchModelJsonAsync_NullUrl_ThrowsArgumentException()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => _sut.FetchModelJsonAsync(null!, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task FetchModelJsonAsync_EmptyUrl_ThrowsArgumentException()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => _sut.FetchModelJsonAsync(string.Empty, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task FetchModelJsonAsync_WhitespaceUrl_ThrowsArgumentException()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => _sut.FetchModelJsonAsync("   ", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task FetchModelJsonAsync_ValidUrl_ReturnsJson()
+    {
+        // Arrange
+        var expectedJson = "{\"interactionModel\":{\"languageModel\":{\"invocationName\":\"test\"}}}";
+        var handler = new MockHttpMessageHandler(expectedJson);
+        var client = new HttpClient(handler) { BaseAddress = new Uri("http://localhost/") };
+        var factory = new Mock<IHttpClientFactory>();
+        factory.Setup(f => f.CreateClient("AlexaSkill")).Returns(client);
+        var sut = new ModelDeploymentManager(factory.Object, Mock.Of<ILogger<ModelDeploymentManager>>());
+
+        // Act
+        string result = await sut.FetchModelJsonAsync("http://localhost/model.json", CancellationToken.None);
+
+        // Assert
+        Assert.Equal(expectedJson, result);
+    }
+
+    [Fact]
+    public async Task FetchModelJsonAsync_HttpError_ThrowsHttpRequestException()
+    {
+        // Arrange
+        var handler = new MockHttpMessageHandler("", System.Net.HttpStatusCode.InternalServerError);
+        var client = new HttpClient(handler) { BaseAddress = new Uri("http://localhost/") };
+        var factory = new Mock<IHttpClientFactory>();
+        factory.Setup(f => f.CreateClient("AlexaSkill")).Returns(client);
+        var sut = new ModelDeploymentManager(factory.Object, Mock.Of<ILogger<ModelDeploymentManager>>());
+
+        // Act & Assert
+        await Assert.ThrowsAsync<HttpRequestException>(
+            () => sut.FetchModelJsonAsync("http://localhost/model.json", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task FetchModelJsonAsync_EmptyBody_ThrowsInvalidOperationException()
+    {
+        // Arrange — server returns 200 but empty body
+        var handler = new MockHttpMessageHandler("", System.Net.HttpStatusCode.OK);
+        var client = new HttpClient(handler) { BaseAddress = new Uri("http://localhost/") };
+        var factory = new Mock<IHttpClientFactory>();
+        factory.Setup(f => f.CreateClient("AlexaSkill")).Returns(client);
+        var sut = new ModelDeploymentManager(factory.Object, Mock.Of<ILogger<ModelDeploymentManager>>());
+
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => sut.FetchModelJsonAsync("http://localhost/model.json", CancellationToken.None));
+    }
+
+    // --- GetDefaultModelJson: all supported locales ---
+
+    public static IEnumerable<object[]> AllModelLocales()
+    {
+        foreach (var model in Util.GetLocalInteractionModels())
+        {
+            yield return new object[] { model.Item1 };
+        }
+    }
+
+    public static IEnumerable<object[]> NonEnglishGermanLocales()
+    {
+        foreach (var model in Util.GetLocalInteractionModels())
+        {
+            if (!model.Item1.StartsWith("en-", StringComparison.OrdinalIgnoreCase)
+                && !model.Item1.Equals("de-DE", StringComparison.OrdinalIgnoreCase))
+            {
+                yield return new object[] { model.Item1 };
+            }
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(AllModelLocales))]
+    public void GetDefaultModelJson_AllSupportedLocales_ReturnsValidModel(string locale)
+    {
+        string? json = _sut.GetDefaultModelJson(locale);
+
+        Assert.NotNull(json);
+        var validationResult = _sut.ValidateModelJson(json!);
+        Assert.True(validationResult.IsValid, $"Model for {locale} failed validation: {validationResult.ErrorMessage}");
+        Assert.True(validationResult.IntentCount > 0, $"Model for {locale} has 0 intents");
+    }
+
+    [Theory]
+    [MemberData(nameof(NonEnglishGermanLocales))]
+    public void ValidateSMAPIRestrictions_EmbeddedModel_NoErrors(string locale)
+    {
+        string? json = _sut.GetDefaultModelJson(locale);
+        Assert.NotNull(json);
+
+        var errors = _sut.ValidateSMAPIRestrictions(json!, locale);
+        Assert.Empty(errors);
+    }
+
+    private class MockHttpMessageHandler : HttpMessageHandler
+    {
+        private readonly string _content;
+        private readonly System.Net.HttpStatusCode _statusCode;
+
+        public MockHttpMessageHandler(string content, System.Net.HttpStatusCode statusCode = System.Net.HttpStatusCode.OK)
+        {
+            _content = content;
+            _statusCode = statusCode;
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new HttpResponseMessage(_statusCode)
+            {
+                Content = new StringContent(_content, System.Text.Encoding.UTF8, "application/json"),
+            });
+        }
     }
 }
