@@ -334,4 +334,214 @@ public class AplHelperTests
         Assert.Equal("object", ds["listData"]?["type"]?.ToString());
         Assert.NotNull(ds["listData"]?["properties"]);
     }
+
+    [Fact]
+    public void BuildCarouselDirective_EmptyItems_ReturnsNull()
+    {
+        var result = AplHelper.BuildCarouselDirective("Header", new List<ListDisplayItem>());
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void BuildCarouselDirective_NonEmptyItems_ReturnsDirectiveWithCorrectToken()
+    {
+        var items = new List<ListDisplayItem>
+        {
+            new("Track 1", "id1")
+        };
+
+        var result = AplHelper.BuildCarouselDirective("Recently Played", items);
+
+        Assert.NotNull(result);
+        Assert.Equal("carousel", result.Token);
+        Assert.NotNull(result.Document);
+        Assert.NotNull(result.DataSources);
+    }
+
+    [Fact]
+    public void BuildCarouselDirective_CustomToken_ReturnsDirectiveWithCustomToken()
+    {
+        var items = new List<ListDisplayItem>
+        {
+            new("Track 1", "id1")
+        };
+
+        var result = AplHelper.BuildCarouselDirective("Header", items, "myCarousel");
+
+        Assert.NotNull(result);
+        Assert.Equal("myCarousel", result.Token);
+    }
+
+    [Fact]
+    public void BuildCarouselDirective_DatasourceContainsCorrectItemCount()
+    {
+        var items = new List<ListDisplayItem>
+        {
+            new("Track 1", "id1", "Artist 1", "http://art1"),
+            new("Track 2", "id2", "Artist 2"),
+            new("Track 3", "id3")
+        };
+
+        var result = AplHelper.BuildCarouselDirective("Recently Played", items);
+
+        Assert.NotNull(result);
+        var itemArray = result.DataSources!["carouselData"]?["properties"]?["items"] as JArray;
+        Assert.NotNull(itemArray);
+        Assert.Equal(3, itemArray.Count);
+    }
+
+    [Fact]
+    public void BuildCarouselDirective_DatasourceContainsCorrectProperties()
+    {
+        var items = new List<ListDisplayItem>
+        {
+            new("Track 1", "id1", "Artist 1", "http://art1")
+        };
+
+        var result = AplHelper.BuildCarouselDirective("Recently Played", items);
+
+        Assert.NotNull(result);
+        string dsStr = result.DataSources!.ToString();
+        Assert.Contains("Recently Played", dsStr);
+        Assert.Contains("Track 1", dsStr);
+        Assert.Contains("id1", dsStr);
+        Assert.Contains("Artist 1", dsStr);
+        Assert.Contains("http://art1", dsStr);
+        Assert.Contains("carouselData", dsStr);
+    }
+
+    [Fact]
+    public void BuildCarouselDirective_ItemsWithoutSubtitleOrArtUrl_StillWork()
+    {
+        var items = new List<ListDisplayItem>
+        {
+            new("Minimal Item", "min-id")
+        };
+
+        var result = AplHelper.BuildCarouselDirective("Header", items);
+
+        Assert.NotNull(result);
+        Assert.NotNull(result.DataSources);
+
+        var itemObj = result.DataSources["carouselData"]?["properties"]?["items"]?[0] as JObject;
+        Assert.NotNull(itemObj);
+        Assert.Equal("Minimal Item", itemObj["title"]?.ToString());
+        Assert.Equal("min-id", itemObj["id"]?.ToString());
+        Assert.False(itemObj.ContainsKey("subtitle"));
+        Assert.False(itemObj.ContainsKey("artUrl"));
+    }
+
+    [Fact]
+    public void BuildCarouselDirective_ItemsWithArtUrlOnly_NoSubtitle()
+    {
+        var items = new List<ListDisplayItem>
+        {
+            new("Art Item", "art-id", null, "http://img.example.com/cover.jpg")
+        };
+
+        var result = AplHelper.BuildCarouselDirective("Header", items);
+
+        Assert.NotNull(result);
+        var itemObj = result.DataSources!["carouselData"]?["properties"]?["items"]?[0] as JObject;
+        Assert.NotNull(itemObj);
+        Assert.False(itemObj.ContainsKey("subtitle"));
+        Assert.True(itemObj.ContainsKey("artUrl"));
+        Assert.Equal("http://img.example.com/cover.jpg", itemObj["artUrl"]?.ToString());
+    }
+
+    [Fact]
+    public void BuildCarouselDirective_DocumentContainsHorizontalSequence()
+    {
+        var items = new List<ListDisplayItem>
+        {
+            new("Track", "id1")
+        };
+
+        var result = AplHelper.BuildCarouselDirective("Header", items);
+
+        Assert.NotNull(result);
+        string docStr = result.Document!.ToString();
+        Assert.Contains("horizontal", docStr);
+        Assert.Contains("Sequence", docStr);
+    }
+
+    [Fact]
+    public void BuildCarouselDirective_DocumentContainsCarouselTapSendEvent()
+    {
+        var items = new List<ListDisplayItem>
+        {
+            new("Track", "id1")
+        };
+
+        var result = AplHelper.BuildCarouselDirective("Header", items);
+
+        Assert.NotNull(result);
+        string docStr = result.Document!.ToString();
+        Assert.Contains("carouselTap", docStr);
+        Assert.Contains("SendEvent", docStr);
+        Assert.Contains("${data.id}", docStr);
+    }
+
+    [Fact]
+    public void BuildCarouselDirective_DocumentHasParameters()
+    {
+        var items = new List<ListDisplayItem>
+        {
+            new("Track", "id1")
+        };
+
+        var result = AplHelper.BuildCarouselDirective("Header", items);
+
+        var mainTemplate = result!.Document!["mainTemplate"];
+        var parameters = mainTemplate?["parameters"] as JArray;
+        Assert.NotNull(parameters);
+        Assert.Equal("payload", parameters[0].ToString());
+    }
+
+    [Fact]
+    public void BuildCarouselDirective_DocumentVersionIs17()
+    {
+        var items = new List<ListDisplayItem>
+        {
+            new("Track", "id1")
+        };
+
+        var result = AplHelper.BuildCarouselDirective("Header", items);
+
+        var doc = result!.Document as JObject;
+        Assert.Equal("1.7", doc?["version"]?.ToString());
+        Assert.Equal("dark", doc?["theme"]?.ToString());
+    }
+
+    [Fact]
+    public void BuildCarouselDirective_DatasourcesHasObjectType()
+    {
+        var items = new List<ListDisplayItem>
+        {
+            new("Track", "id1")
+        };
+
+        var result = AplHelper.BuildCarouselDirective("Header", items);
+
+        var ds = result!.DataSources!;
+        Assert.Equal("object", ds["carouselData"]?["type"]?.ToString());
+        Assert.NotNull(ds["carouselData"]?["properties"]);
+    }
+
+    [Fact]
+    public void BuildCarouselDirective_DocumentContainsDataBinding()
+    {
+        var items = new List<ListDisplayItem>
+        {
+            new("Track", "id1")
+        };
+
+        var result = AplHelper.BuildCarouselDirective("Header", items);
+
+        string docStr = result!.Document!.ToString();
+        Assert.Contains("${payload.carouselData.properties.headerText}", docStr);
+        Assert.Contains("${payload.carouselData.properties.items}", docStr);
+        Assert.Contains("${data.title}", docStr);
+        Assert.Contains("${data.artUrl}", docStr);
+    }
 }

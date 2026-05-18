@@ -229,6 +229,122 @@ internal static class AplHelper
 
     private static readonly JObject ListDocument = JObject.Parse(ListTemplate);
 
+    // Carousel APL template with horizontal scrolling image cards.
+    // Sequence.data iterates over ${payload.carouselData.properties.items},
+    // creating a ${data} context for each card. TouchWrapper sends
+    // "carouselTap" with the item id on press.
+    private static readonly string CarouselTemplate = @"{
+  ""type"": ""APL"",
+  ""version"": ""1.7"",
+  ""theme"": ""dark"",
+  ""resources"": [
+    {
+      ""dimensions"": {
+        ""cardWidth"": 200,
+        ""cardHeight"": 280,
+        ""artHeight"": 180
+      }
+    },
+    {
+      ""when"": ""${viewport.shape == 'round'}"",
+      ""dimensions"": {
+        ""cardWidth"": 160,
+        ""cardHeight"": 220,
+        ""artHeight"": 140
+      }
+    }
+  ],
+  ""mainTemplate"": {
+    ""parameters"": [""payload""],
+    ""items"": [
+      {
+        ""type"": ""Container"",
+        ""height"": ""100vh"",
+        ""width"": ""100vw"",
+        ""paddingTop"": 20,
+        ""items"": [
+          {
+            ""type"": ""Text"",
+            ""text"": ""${payload.carouselData.properties.headerText}"",
+            ""fontSize"": 30,
+            ""fontWeight"": ""bold"",
+            ""color"": ""white"",
+            ""paddingLeft"": 16,
+            ""paddingBottom"": 16
+          },
+          {
+            ""type"": ""Sequence"",
+            ""scrollDirection"": ""horizontal"",
+            ""grow"": 1,
+            ""data"": ""${payload.carouselData.properties.items}"",
+            ""items"": {
+              ""type"": ""TouchWrapper"",
+              ""onPress"": [{ ""type"": ""SendEvent"", ""arguments"": [ ""carouselTap"", ""${data.id}"" ] }],
+              ""item"": {
+                ""type"": ""Container"",
+                ""width"": ""${cardWidth}"",
+                ""paddingLeft"": 8,
+                ""paddingRight"": 8,
+                ""items"": [
+                  {
+                    ""type"": ""Frame"",
+                    ""width"": ""${cardWidth}"",
+                    ""height"": ""${artHeight}"",
+                    ""borderRadius"": 8,
+                    ""backgroundColor"": ""#333333"",
+                    ""items"": [
+                      {
+                        ""type"": ""Image"",
+                        ""source"": ""${data.artUrl}"",
+                        ""width"": ""${cardWidth}"",
+                        ""height"": ""${artHeight}"",
+                        ""scale"": ""best-fill"",
+                        ""borderRadius"": 8,
+                        ""when"": ""${data.artUrl}""
+                      },
+                      {
+                        ""type"": ""Text"",
+                        ""text"": ""♪"",
+                        ""fontSize"": 48,
+                        ""color"": ""#666666"",
+                        ""textAlign"": ""center"",
+                        ""width"": ""${cardWidth}"",
+                        ""height"": ""${artHeight}"",
+                        ""when"": ""${!data.artUrl}""
+                      }
+                    ]
+                  },
+                  {
+                    ""type"": ""Text"",
+                    ""text"": ""${data.title}"",
+                    ""fontSize"": 18,
+                    ""color"": ""white"",
+                    ""maxLines"": 1,
+                    ""width"": ""${cardWidth}"",
+                    ""paddingTop"": 8
+                  },
+                  {
+                    ""type"": ""Text"",
+                    ""text"": ""${data.subtitle}"",
+                    ""fontSize"": 14,
+                    ""color"": ""#B0B0B0"",
+                    ""maxLines"": 1,
+                    ""width"": ""${cardWidth}"",
+                    ""paddingTop"": 2,
+                    ""when"": ""${data.subtitle}""
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}";
+
+    private static readonly JObject CarouselDocument = JObject.Parse(CarouselTemplate);
+
     /// <summary>
     /// Check if the requesting device supports APL rendering.
     /// </summary>
@@ -346,6 +462,62 @@ internal static class AplHelper
                     {
                         ["title"] = title,
                         ["action"] = action,
+                        ["items"] = itemArray
+                    }
+                }
+            }
+        };
+    }
+
+    /// <summary>
+    /// Build an APL carousel directive showing horizontally scrolling image cards
+    /// with tap-to-select touch handlers for each item.
+    /// </summary>
+    /// <param name="headerText">Header text displayed above the carousel.</param>
+    /// <param name="items">Items to display as carousel cards.</param>
+    /// <param name="token">Token identifying this APL document for subsequent commands.</param>
+    /// <returns>An APL RenderDocument directive, or null if the item list is empty.</returns>
+    public static AplRenderDocumentDirective? BuildCarouselDirective(string headerText, List<ListDisplayItem> items, string token = "carousel")
+    {
+        if (items.Count == 0)
+        {
+            return null;
+        }
+
+        var itemArray = new JArray();
+        foreach (var item in items)
+        {
+            var itemObj = new JObject
+            {
+                ["title"] = item.Title,
+                ["id"] = item.Id
+            };
+
+            if (!string.IsNullOrEmpty(item.Subtitle))
+            {
+                itemObj["subtitle"] = item.Subtitle;
+            }
+
+            if (!string.IsNullOrEmpty(item.ArtUrl))
+            {
+                itemObj["artUrl"] = item.ArtUrl;
+            }
+
+            itemArray.Add(itemObj);
+        }
+
+        return new AplRenderDocumentDirective
+        {
+            Token = token,
+            Document = CarouselDocument,
+            DataSources = new JObject
+            {
+                ["carouselData"] = new JObject
+                {
+                    ["type"] = "object",
+                    ["properties"] = new JObject
+                    {
+                        ["headerText"] = headerText,
                         ["items"] = itemArray
                     }
                 }
