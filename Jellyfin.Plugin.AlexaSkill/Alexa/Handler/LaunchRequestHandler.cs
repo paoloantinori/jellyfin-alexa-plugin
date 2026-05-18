@@ -27,6 +27,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 public class LaunchRequestHandler : BaseHandler
 {
     private readonly ILibraryManager _libraryManager;
+    private readonly IUserManager _userManager;
     private readonly CustomerProfileService _profileService;
 
     /// <summary>
@@ -35,14 +36,17 @@ public class LaunchRequestHandler : BaseHandler
     /// <param name="sessionManager">Session manager instance.</param>
     /// <param name="config">The plugin configuration.</param>
     /// <param name="libraryManager">The library manager instance.</param>
+    /// <param name="userManager">The user manager instance.</param>
     /// <param name="loggerFactory">Logger factory instance.</param>
     public LaunchRequestHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
+        IUserManager userManager,
         ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
+        _userManager = userManager;
         _profileService = new CustomerProfileService(loggerFactory.CreateLogger<CustomerProfileService>());
     }
 
@@ -79,8 +83,8 @@ public class LaunchRequestHandler : BaseHandler
             return HandleSessionQueueResume(request, user, session);
         }
 
-        // No prior playback — show welcome
-        return await BuildWelcomeResponseAsync(context, locale, cancellationToken).ConfigureAwait(false);
+        // No prior playback — show welcome (with optional APL carousel)
+        return await BuildWelcomeResponseAsync(context, user, session, locale, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -163,9 +167,10 @@ public class LaunchRequestHandler : BaseHandler
     }
 
     /// <summary>
-    /// Build the welcome response with optional personalization.
+    /// Build the welcome response with optional personalization and APL carousel
+    /// showing recently played items when the device supports APL.
     /// </summary>
-    private async Task<SkillResponse> BuildWelcomeResponseAsync(Context context, string locale, CancellationToken cancellationToken)
+    private async Task<SkillResponse> BuildWelcomeResponseAsync(Context context, Entities.User user, SessionInfo session, string locale, CancellationToken cancellationToken)
     {
         string? givenName = await _profileService.GetGivenNameAsync(context, cancellationToken).ConfigureAwait(false);
 
@@ -180,13 +185,58 @@ public class LaunchRequestHandler : BaseHandler
 
         string? repromptSsml = GetSsml("WelcomeRepromptSsml", locale);
 
+        SkillResponse response;
         if (welcomeSsml != null && repromptSsml != null)
         {
-            return AskSsml(welcomeSsml, repromptSsml);
+            response = AskSsml(welcomeSsml, repromptSsml);
+        }
+        else
+        {
+            response = ResponseBuilder.Ask(
+                welcomeText,
+                new Reprompt(ResponseStrings.Get("WelcomeReprompt", locale)));
         }
 
-        return ResponseBuilder.Ask(
-            welcomeText,
-            new Reprompt(ResponseStrings.Get("WelcomeReprompt", locale)));
+        // Attach APL carousel with recently played items if device supports it
+        TryAttachCarousel(response, context, user, session, locale);
+
+        return response;
+    }
+
+    /// <summary>
+    /// Attach an APL carousel directive showing recently played items when
+    /// the device supports APL, visuals are enabled, and the user has history.
+    /// </summary>
+    private void TryAttachCarousel(SkillResponse response, Context context, Entities.User user, SessionInfo session, string locale)
+    {
+        if (!Apl.AplHelper.DeviceSupportsApl(context))
+        {
+            return;
+        }
+
+        if (!Apl.AplHelper.VisualsEnabled)
+        {
+            return;
+        }
+
+        var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
+        if (jellyfinUser == null)
+        {
+            Logger.LogDebug("Carousel skipped: could not resolve Jellyfin user for session {SessionId}", session.Id);
+            return;
+        }
+
+        List<Apl.ListDisplayItem> items = GetRecentlyPlayedItems(jellyfinUser, user, _libraryManager, _config);
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        string headerText = ResponseStrings.Get("RecentlyPlayed", locale);
+        var directive = Apl.AplHelper.BuildCarouselDirective(headerText, items);
+        if (directive != null)
+        {
+            response.Response.Directives.Add(directive);
+        }
     }
 }

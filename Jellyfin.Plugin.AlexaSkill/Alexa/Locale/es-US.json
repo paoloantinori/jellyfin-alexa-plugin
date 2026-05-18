@@ -177,5 +177,6 @@
   "ElicitBookName": "¿Qué libro te gustaría escuchar?",
   "NotFoundBook": "Lo siento, no pude encontrar un audiolibro llamado {0}.",
   "NoContentInBook": "No hay contenido de audio en el libro {0}.",
-  "SearchingBook": "Buscando tu audiolibro..."
+  "SearchingBook": "Buscando tu audiolibro...",
+  "RecentlyPlayed": "Recently Played"
 }

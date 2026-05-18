@@ -177,5 +177,6 @@
   "NotFoundBook": "Sorry, I couldn't find an audiobook called {0}.",
   "NoContentInBook": "There is no audio content in the book {0}.",
   "SearchingBook": "Searching for your audiobook...",
+  "RecentlyPlayed": "Recently Played",
   "FollowMeSuccessSsml": "<say-as interpret-as=\"interjection\">فهمت</say-as><break time=\"200ms\"/>استكمال <emphasis level=\"moderate\">{0}</emphasis> من حيث توقفت."
 }

@@ -87,6 +87,7 @@ public class ResumeOnRelaunchTests : IDisposable
             _sessionManagerMock.Object,
             _config,
             _libraryManagerMock.Object,
+            _userManagerMock.Object,
             _loggerFactory);
     }
 
@@ -414,6 +415,147 @@ public class ResumeOnRelaunchTests : IDisposable
     {
         string value = ResponseStrings.Get(key, locale);
         Assert.NotEqual(key, value);
+        Assert.NotEmpty(value);
+    }
+
+    // =====================================================================
+    // APL Carousel on Welcome
+    // =====================================================================
+
+    private static Context CreateContextWithApl()
+    {
+        return new Context
+        {
+            System = new global::Alexa.NET.Request.AlexaSystem
+            {
+                User = new global::Alexa.NET.Request.User { AccessToken = Guid.NewGuid().ToString() },
+                Device = new global::Alexa.NET.Request.Device
+                {
+                    DeviceID = "test-device",
+                    SupportedInterfaces = new Dictionary<string, object>
+                    {
+                        { "Alexa.Presentation.APL", new { } }
+                    }
+                }
+            }
+        };
+    }
+
+    private static Context CreateContextWithoutApl()
+    {
+        return new Context
+        {
+            System = new global::Alexa.NET.Request.AlexaSystem
+            {
+                User = new global::Alexa.NET.Request.User { AccessToken = Guid.NewGuid().ToString() },
+                Device = new global::Alexa.NET.Request.Device
+                {
+                    DeviceID = "test-device",
+                    SupportedInterfaces = new Dictionary<string, object>()
+                }
+            }
+        };
+    }
+
+    [Fact]
+    public async Task LaunchRequest_AplDevice_WithHistory_AttachesCarouselDirective()
+    {
+        var audioItem = new Audio { Name = "Test Song", Id = Guid.NewGuid() };
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { audioItem });
+
+        var handler = CreateLaunchHandler();
+        var request = new LaunchRequest { Locale = "en-US" };
+        var context = CreateContextWithApl();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.False(response.Response.ShouldEndSession);
+        Assert.NotNull(response.Response.OutputSpeech);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Welcome", speech);
+
+        // Should have an APL carousel directive
+        Assert.NotEmpty(response.Response.Directives);
+        Assert.Contains(response.Response.Directives, d => d.Type == "Alexa.Presentation.APL.RenderDocument");
+    }
+
+    [Fact]
+    public async Task LaunchRequest_NonAplDevice_NoCarouselDirective()
+    {
+        var audioItem = new Audio { Name = "Test Song", Id = Guid.NewGuid() };
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { audioItem });
+
+        var handler = CreateLaunchHandler();
+        var request = new LaunchRequest { Locale = "en-US" };
+        var context = CreateContextWithoutApl();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.False(response.Response.ShouldEndSession);
+        Assert.NotNull(response.Response.OutputSpeech);
+
+        // Should NOT have any directives for non-APL device
+        Assert.Empty(response.Response.Directives);
+    }
+
+    [Fact]
+    public async Task LaunchRequest_AplDevice_NoHistory_NoCarouselDirective()
+    {
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var handler = CreateLaunchHandler();
+        var request = new LaunchRequest { Locale = "en-US" };
+        var context = CreateContextWithApl();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.False(response.Response.ShouldEndSession);
+        Assert.NotNull(response.Response.OutputSpeech);
+
+        // No carousel when no recently played items
+        Assert.Empty(response.Response.Directives);
+    }
+
+    [Fact]
+    public async Task LaunchRequest_ResumeOfferTakesPriority_NoCarousel()
+    {
+        var itemId = Guid.NewGuid();
+        var item = new Audio { Name = "Test Song", Id = itemId };
+        _libraryManagerMock.Setup(l => l.GetItemById(itemId)).Returns(item);
+
+        // Return items for recently played (should not be reached)
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { item });
+
+        var handler = CreateLaunchHandler();
+        var request = new LaunchRequest { Locale = "en-US" };
+        var context = CreateContextWithAudio(itemId.ToString(), 10000);
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        // Resume offer should be shown, not welcome+carousel
+        Assert.False(response.Response.ShouldEndSession);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Test Song", speech);
+        Assert.Contains("resume", speech, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("en-US")]
+    [InlineData("it-IT")]
+    [InlineData("de-DE")]
+    [InlineData("fr-FR")]
+    public void LocaleStrings_RecentlyPlayedExists(string locale)
+    {
+        string value = ResponseStrings.Get("RecentlyPlayed", locale);
+        Assert.NotEqual("RecentlyPlayed", value);
         Assert.NotEmpty(value);
     }
 }

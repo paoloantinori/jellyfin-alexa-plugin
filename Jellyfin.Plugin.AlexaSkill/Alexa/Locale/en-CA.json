@@ -143,6 +143,7 @@
   "Resuming": "Resuming {0}.",
   "ResumingSsml": "<say-as interpret-as=\"interjection\">resuming</say-as><break time=\"200ms\"/><emphasis level=\"moderate\">{0}</emphasis>",
   "SearchingBook": "Searching for your audiobook...",
+  "RecentlyPlayed": "Recently Played",
   "SearchingMedia": "Searching for your music...",
   "SearchingMediaTime": "Searching for media added {0}...",
   "SearchingPodcast": "Searching for your podcast...",
