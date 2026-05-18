@@ -21,7 +21,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
 
 /// <summary>
 /// Handles APL UserEvent requests from touch interactions on Echo Show devices.
-/// Routes control actions (prev/pause/next) and list item selections (selectItem/playTrack).
+/// Routes control actions (prev/pause/next), list item selections (selectItem/playTrack),
+/// and carousel taps (carouselTap).
 /// </summary>
 public class AplUserEventHandler : BaseHandler
 {
@@ -43,8 +44,8 @@ public class AplUserEventHandler : BaseHandler
     }
 
     /// <summary>
-    /// Handle APL touch events: playback controls (prev/pause/next) and
-    /// list item selection (selectItem/playTrack).
+    /// Handle APL touch events: playback controls (prev/pause/next),
+    /// list item selection (selectItem/playTrack), and carousel taps (carouselTap).
     /// </summary>
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
@@ -61,6 +62,7 @@ public class AplUserEventHandler : BaseHandler
                 return HandleNext(user, session, context);
             case "selectItem":
             case "playTrack":
+            case "carouselTap":
                 return HandleSelectItem(aplEvent, user, session, context);
             default:
                 return Task.FromResult(ResponseBuilder.Empty());

@@ -286,6 +286,61 @@ public class AplUserEventHandlerTests
         Assert.NotNull(playDirective);
     }
 
+    // CarouselTap action tests
+
+    [Fact]
+    public async Task HandleAsync_CarouselTap_ValidAudioId_PlaysAudio()
+    {
+        var itemId = Guid.NewGuid();
+        var request = CreateAplEvent("carouselTap", itemId.ToString());
+        var session = CreateSession();
+
+        var audio = new Audio { Name = "Carousel Song", Id = itemId };
+        _libraryManager.Setup(l => l.GetItemById(itemId)).Returns(audio);
+
+        var response = await _handler.HandleAsync(request, _context, _user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.Equal(audio, session.FullNowPlayingItem);
+        Assert.Single(session.NowPlayingQueue);
+        Assert.Equal(itemId, session.NowPlayingQueue[0].Id);
+
+        var playDirective = response.Response.Directives.FirstOrDefault(d => d is AudioPlayerPlayDirective);
+        Assert.NotNull(playDirective);
+    }
+
+    [Fact]
+    public async Task HandleAsync_CarouselTap_ValidMovieId_PlaysVideo()
+    {
+        var itemId = Guid.NewGuid();
+        var request = CreateAplEvent("carouselTap", itemId.ToString());
+        var session = CreateSession();
+
+        var movie = new MediaBrowser.Controller.Entities.Movies.Movie { Name = "Carousel Movie", Id = itemId };
+        _libraryManager.Setup(l => l.GetItemById(itemId)).Returns(movie);
+
+        var response = await _handler.HandleAsync(request, _context, _user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.Equal(movie, session.FullNowPlayingItem);
+        Assert.Single(session.NowPlayingQueue);
+
+        var videoDirective = response.Response.Directives.FirstOrDefault(d => d.GetType().Name.Contains("VideoApp"));
+        Assert.NotNull(videoDirective);
+    }
+
+    [Fact]
+    public async Task HandleAsync_CarouselTap_InvalidGuid_ReturnsEmpty()
+    {
+        var request = CreateAplEvent("carouselTap", "not-a-guid");
+        var session = CreateSession();
+
+        var response = await _handler.HandleAsync(request, _context, _user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.Null(response.Response.OutputSpeech);
+    }
+
     // Edge case tests
 
     [Fact]
