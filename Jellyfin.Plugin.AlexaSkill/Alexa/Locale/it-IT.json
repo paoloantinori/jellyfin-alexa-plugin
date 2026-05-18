@@ -60,6 +60,7 @@
   "DisambiguateNextSsml": "Che ne dici di <break time=\"150ms\"/><emphasis level=\"moderate\">{0}</emphasis>?",
   "NoMoreMatches": "Spiacente, non ci sono altri risultati.",
   "DisambiguateReprompt": "Puoi dire sì o no.",
+  "DisambiguateCarouselTitle": "Intendevi...",
   "UnexpectedYes": "Non sono sicuro di cosa vuoi ascoltare. Puoi chiedermi di riprodurre una canzone, un album o un video.",
   "NotFoundRandom": "Non ho trovato contenuti da riprodurre a caso. Prova ad aggiungere musica alla tua libreria.",
   "NotFoundRandomGenre": "Non ho trovato contenuti {0} da riprodurre a caso.",

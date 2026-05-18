@@ -168,8 +168,8 @@ public class PlayAlbumIntentHandler : BaseHandler
             }
             else
             {
-                var matches = albums.Take(3).Select(a => (a.Id, a.Name)).ToList();
-                return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeAlbum, locale);
+                var matches = albums.Take(3).Select(a => (a.Id, a.Name, GetImageUrl(a.Id.ToString("N"), user))).ToList();
+                return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeAlbum, locale, context);
             }
         }
 

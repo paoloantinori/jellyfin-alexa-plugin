@@ -35,6 +35,7 @@
   "DisambiguatePrompt": "I found multiple matches. Would you like to hear {0}?",
   "DisambiguatePromptSsml": "I found multiple matches.<break time=\"200ms\"/>Would you like to hear <emphasis level=\"moderate\">{0}</emphasis>?",
   "DisambiguateReprompt": "You can say yes or no.",
+  "DisambiguateCarouselTitle": "Did you mean...",
   "ElicitAlbumName": "Which album would you like to hear?",
   "ElicitBookName": "Which book would you like to hear?",
   "ElicitSeriesName": "Which series would you like to watch?",

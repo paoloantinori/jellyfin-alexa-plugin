@@ -140,8 +140,8 @@ public class PlayPlaylistIntentHandler : BaseHandler
                 }
                 else
                 {
-                    var matches = playlists.Items.Take(3).Select(p => (p.Id, p.Name)).ToList();
-                    return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypePlaylist, locale);
+                    var matches = playlists.Items.Take(3).Select(p => (p.Id, p.Name, GetImageUrl(p.Id.ToString("N"), user))).ToList();
+                    return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypePlaylist, locale, context);
                 }
             }
         }

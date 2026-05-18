@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Alexa.NET.Response;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using Newtonsoft.Json;
@@ -217,5 +218,118 @@ public class DisambiguationHelperTests
         Assert.NotNull(result);
         Assert.Equal(2, result!.Value.Index);
         Assert.Equal("album", result.Value.MediaType);
+    }
+
+    [Fact]
+    public void AskFirstMatch_WithArtUrls_AndAplContext_AttachesCarouselDirective()
+    {
+        var matches = new List<(Guid, string, string?)>
+        {
+            (Guid.NewGuid(), "Test Song", "http://example.com/art1.jpg"),
+            (Guid.NewGuid(), "Other Song", "http://example.com/art2.jpg")
+        };
+
+        var context = TestHelpers.CreateContextWithApl();
+        var response = DisambiguationHelper.AskFirstMatch(matches, "song", "en-US", context);
+
+        Assert.NotNull(response);
+        response.Asks();
+        Assert.Contains("Test Song", TestHelpers.GetSpeechText(response));
+
+        // Verify carousel directive is attached
+        Assert.NotEmpty(response.Response.Directives);
+        Assert.Contains(response.Response.Directives, d => d is AplRenderDocumentDirective);
+    }
+
+    [Fact]
+    public void AskFirstMatch_WithArtUrls_NullContext_NoCarouselDirective()
+    {
+        var matches = new List<(Guid, string, string?)>
+        {
+            (Guid.NewGuid(), "Test Song", "http://example.com/art1.jpg")
+        };
+
+        var response = DisambiguationHelper.AskFirstMatch(matches, "song", "en-US", context: null);
+
+        Assert.NotNull(response);
+        response.Asks();
+
+        // No carousel when context is null
+        Assert.Empty(response.Response.Directives);
+    }
+
+    [Fact]
+    public void AskFirstMatch_WithArtUrls_NonAplContext_NoCarouselDirective()
+    {
+        var matches = new List<(Guid, string, string?)>
+        {
+            (Guid.NewGuid(), "Test Song", "http://example.com/art1.jpg")
+        };
+
+        var context = TestHelpers.CreateContextWithoutApl();
+        var response = DisambiguationHelper.AskFirstMatch(matches, "song", "en-US", context);
+
+        Assert.NotNull(response);
+        response.Asks();
+
+        // No carousel when device does not support APL
+        Assert.Empty(response.Response.Directives);
+    }
+
+    [Fact]
+    public void AskFirstMatch_WithArtUrls_SetsSessionAttributesWithArtUrl()
+    {
+        var id = Guid.NewGuid();
+        var artUrl = "http://example.com/art.jpg";
+        var matches = new List<(Guid, string, string?)>
+        {
+            (id, "Test Song", artUrl)
+        };
+
+        var response = DisambiguationHelper.AskFirstMatch(matches, "song", "en-US");
+
+        Assert.NotNull(response.SessionAttributes);
+        var storedMatches = JsonConvert.DeserializeObject<List<DisambiguationHelper.MatchInfo>>(
+            response.SessionAttributes["disambig_matches"].ToString()!);
+        Assert.Single(storedMatches);
+        Assert.Equal(id.ToString(), storedMatches[0].Id);
+        Assert.Equal("Test Song", storedMatches[0].Name);
+        Assert.Equal(artUrl, storedMatches[0].ArtUrl);
+    }
+
+    [Fact]
+    public void AskFirstMatch_OriginalOverload_StillWorks()
+    {
+        var matches = new List<(Guid, string)>
+        {
+            (Guid.NewGuid(), "Test Song")
+        };
+
+        var response = DisambiguationHelper.AskFirstMatch(matches, "song", "en-US");
+
+        Assert.NotNull(response);
+        response.Asks();
+        Assert.Contains("Test Song", TestHelpers.GetSpeechText(response));
+
+        // No carousel for original overload (no context parameter)
+        Assert.Empty(response.Response.Directives);
+    }
+
+    [Fact]
+    public void AskFirstMatch_WithArtUrls_NullArtUrls_StillAttachesCarousel()
+    {
+        var matches = new List<(Guid, string, string?)>
+        {
+            (Guid.NewGuid(), "Test Song", null),
+            (Guid.NewGuid(), "Other Song", null)
+        };
+
+        var context = TestHelpers.CreateContextWithApl();
+        var response = DisambiguationHelper.AskFirstMatch(matches, "song", "en-US", context);
+
+        Assert.NotNull(response);
+        // Carousel should still be attached even with null art URLs
+        // (items will just display without images)
+        Assert.NotEmpty(response.Response.Directives);
     }
 }

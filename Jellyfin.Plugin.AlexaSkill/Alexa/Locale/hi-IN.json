@@ -60,6 +60,7 @@
   "DisambiguateNextSsml": "कैसा रहेगा <break time=\"150ms\"/><emphasis level=\"moderate\">{0}</emphasis>?",
   "NoMoreMatches": "क्षमा करें, कोई और परिणाम नहीं हैं।",
   "DisambiguateReprompt": "आप हाँ या नहीं कह सकते हैं।",
+  "DisambiguateCarouselTitle": "क्या आप कह रहे थे...",
   "UnexpectedYes": "मुझे यकीन नहीं है कि आप क्या चलाना चाहते हैं। आप मुझसे गाना, एल्बम या वीडियो चलाने के लिए कह सकते हैं।",
   "NotFoundRandom": "मुझे शफल करने के लिए कोई मीडिया नहीं मिला। पहले अपनी लाइब्रेरी में कुछ संगीत जोड़ें।",
   "NotFoundRandomGenre": "मुझे शफल करने के लिए {0} मीडिया नहीं मिला।",

@@ -185,8 +185,8 @@ public class PlaySongIntentHandler : BaseHandler
                 return missResponse!;
             }
 
-            var matches = songs.Take(3).Select(s => (s.Id, s.Name)).ToList();
-            return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeSong, locale);
+            var matches = songs.Take(3).Select(s => (s.Id, s.Name, GetImageUrl(s.Id.ToString("N"), user))).ToList();
+            return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeSong, locale, context);
         }
 
         List<QueueItem> queueItems = new List<QueueItem>();

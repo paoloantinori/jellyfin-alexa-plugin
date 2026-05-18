@@ -60,6 +60,7 @@
   "DisambiguateNextSsml": "<break time=\"150ms\"/><emphasis level=\"moderate\">{0}</emphasis> はいかがですか？",
   "NoMoreMatches": "申し訳ありませんが、これ以上の結果はありません。",
   "DisambiguateReprompt": "はいまたはいいえと言ってください。",
+  "DisambiguateCarouselTitle": "もしかして...",
   "UnexpectedYes": "何を再生したいのかわかりません。曲、アルバム、または動画の再生をお申し付けください。",
   "NotFoundRandom": "シャッフルするメディアが見つかりませんでした。まずライブラリに音楽を追加してください。",
   "NotFoundRandomGenre": "{0} メディアでシャッフルするものが見つかりませんでした。",

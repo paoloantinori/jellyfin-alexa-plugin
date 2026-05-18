@@ -129,9 +129,10 @@ public class PlayPodcastIntentHandler : BaseHandler
             else
             {
                 return DisambiguationHelper.AskFirstMatch(
-                    podcasts.Select(p => (p.Id, p.Name)).ToList(),
+                    podcasts.Select(p => (p.Id, p.Name, (string?)GetImageUrl(p.Id.ToString("N"), user))).ToList(),
                     DisambiguationHelper.MediaTypePodcast,
-                    locale);
+                    locale,
+                    context);
             }
         }
 

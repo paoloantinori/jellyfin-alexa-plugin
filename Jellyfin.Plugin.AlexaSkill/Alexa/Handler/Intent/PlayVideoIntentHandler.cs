@@ -120,8 +120,8 @@ public class PlayVideoIntentHandler : BaseHandler
             }
             else
             {
-                var matches = videos.Take(3).Select(v => (v.Id, v.Name)).ToList();
-                return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeVideo, locale);
+                var matches = videos.Take(3).Select(v => (v.Id, v.Name, GetImageUrl(v.Id.ToString("N"), user))).ToList();
+                return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeVideo, locale, context);
             }
         }
 

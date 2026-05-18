@@ -165,13 +165,9 @@ public class SearchMediaIntentHandler : BaseHandler
         }
 
         var topItems = deduped.Take(3).ToList();
-        var matches = topItems.Select(i => (i.Id, FormatWithTypeLabel(i))).ToList();
+        var matches = topItems.Select(i => (i.Id, FormatWithTypeLabel(i), (string?)GetImageUrl(i.Id.ToString("N"), user))).ToList();
         Logger.LogInformation("Disambiguating top {Count} items: {Items}", topItems.Count, string.Join(", ", topItems.Select(i => i.Name)));
-        SkillResponse response = DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeSong, locale);
-
-        var aplItems = topItems.Select(i =>
-            new Apl.ListDisplayItem(i.Name, i.Id.ToString("N"), GetTypeName(i), GetImageUrl(i.Id.ToString("N"), user))).ToList();
-        TryAttachListDirective(response, context, query, aplItems, "search");
+        SkillResponse response = DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeSong, locale, context);
 
         return response;
     }

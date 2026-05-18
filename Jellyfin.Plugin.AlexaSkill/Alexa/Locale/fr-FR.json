@@ -61,6 +61,7 @@
   "DisambiguateNextSsml": "Que pensez-vous de <break time=\"150ms\"/><emphasis level=\"moderate\">{0}</emphasis> ?",
   "NoMoreMatches": "Désolé, il n'y a plus d'autres résultats.",
   "DisambiguateReprompt": "Vous pouvez dire oui ou non.",
+  "DisambiguateCarouselTitle": "Vouliez-vous dire...",
   "UnexpectedYes": "Je ne suis pas sûr de ce que vous souhaitez écouter. Vous pouvez me demander de lire une chanson, un album ou une vidéo.",
   "NotFoundRandom": "Je n'ai pas trouvé de média à lire au hasard. Essayez d'ajouter de la musique à votre bibliothèque d'abord.",
   "NotFoundRandomGenre": "Je n'ai pas trouvé de média {0} à lire au hasard.",

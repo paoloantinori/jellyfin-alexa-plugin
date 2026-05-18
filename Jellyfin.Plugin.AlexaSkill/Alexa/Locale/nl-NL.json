@@ -60,6 +60,7 @@
   "DisambiguateNextSsml": "Wat vind je van <break time=\"150ms\"/><emphasis level=\"moderate\">{0}</emphasis>?",
   "NoMoreMatches": "Sorry, er zijn geen andere resultaten.",
   "DisambiguateReprompt": "Je kunt ja of nee zeggen.",
+  "DisambiguateCarouselTitle": "Bedoelde je...",
   "UnexpectedYes": "Ik weet niet zeker wat je wilt afspelen. Je kunt me vragen een nummer, album of video af te spelen.",
   "NotFoundRandom": "Ik kon geen media vinden om te shuffelen. Probeer eerst wat muziek aan je bibliotheek toe te voegen.",
   "NotFoundRandomGenre": "Ik kon geen {0} media vinden om te shuffelen.",

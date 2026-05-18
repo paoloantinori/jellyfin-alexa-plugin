@@ -60,6 +60,7 @@
   "DisambiguateNextSsml": "ما رأيك بـ <break time=\"150ms\"/><emphasis level=\"moderate\">{0}</emphasis>؟",
   "NoMoreMatches": "عذراً، لا توجد نتائج أخرى.",
   "DisambiguateReprompt": "يمكنك القول نعم أو لا.",
+  "DisambiguateCarouselTitle": "هل كنت تعني...",
   "UnexpectedYes": "لست متأكداً مما تريد تشغيله. يمكنك أن تطلب مني تشغيل أغنية أو ألبوم أو فيديو.",
   "NotFoundRandom": "لم أجد وسائط لخلطها. حاول إضافة بعض الموسيقى إلى مكتبتك أولاً.",
   "NotFoundRandomGenre": "لم أجد وسائط {0} لخلطها.",

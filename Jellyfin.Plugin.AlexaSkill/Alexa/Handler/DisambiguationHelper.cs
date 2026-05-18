@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using Alexa.NET;
+using Alexa.NET.Request;
 using Alexa.NET.Response;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Newtonsoft.Json;
 
@@ -68,6 +70,59 @@ internal static class DisambiguationHelper
         }
 
         response.SessionAttributes = BuildAttributes(matchList, index, mediaType);
+        return response;
+    }
+
+    /// <summary>
+    /// Build a disambiguation Ask response for the first match, with optional APL carousel.
+    /// </summary>
+    /// <param name="matches">The list of candidate matches with optional art URLs.</param>
+    /// <param name="mediaType">The media type being disambiguated.</param>
+    /// <param name="locale">The locale for localized responses.</param>
+    /// <param name="context">The Alexa request context for APL capability detection, or null.</param>
+    /// <returns>A disambiguation Ask response, with carousel directive if APL is supported.</returns>
+    public static SkillResponse AskFirstMatch(
+        List<(Guid Id, string Name, string? ArtUrl)> matches,
+        string mediaType,
+        string locale,
+        Context? context = null)
+    {
+        var matchList = matches.Take(3).Select(m => new MatchInfo { Id = m.Id.ToString(), Name = m.Name, ArtUrl = m.ArtUrl }).ToList();
+        int index = 0;
+
+        string? promptSsml = BaseHandler.GetSsml("DisambiguatePromptSsml", locale, matchList[index].Name);
+        string reprompt = ResponseStrings.Get("DisambiguateReprompt", locale);
+
+        SkillResponse response;
+        if (promptSsml != null)
+        {
+            response = BaseHandler.AskSsml(promptSsml, new Reprompt(reprompt));
+        }
+        else
+        {
+            string prompt = ResponseStrings.Get("DisambiguatePrompt", locale, matchList[index].Name);
+            response = ResponseBuilder.Ask(prompt, new Reprompt(reprompt));
+        }
+
+        response.SessionAttributes = BuildAttributes(matchList, index, mediaType);
+
+        if (context != null && AplHelper.DeviceSupportsApl(context) && AplHelper.VisualsEnabled)
+        {
+            var carouselItems = matchList
+                .Select(m => new ListDisplayItem(m.Name, m.Id, null, m.ArtUrl))
+                .ToList();
+
+            var directive = AplHelper.BuildCarouselDirective(
+                ResponseStrings.Get("DisambiguateCarouselTitle", locale),
+                carouselItems,
+                "disambiguation");
+
+            if (directive != null)
+            {
+                response.Response.Directives.Add(directive);
+            }
+        }
+
         return response;
     }
 
@@ -153,5 +208,8 @@ internal static class DisambiguationHelper
 
         [JsonProperty("name")]
         public string Name { get; set; } = string.Empty;
+
+        [JsonProperty("artUrl")]
+        public string? ArtUrl { get; set; }
     }
 }
