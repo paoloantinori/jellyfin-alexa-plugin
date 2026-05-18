@@ -556,7 +556,13 @@ internal static class AplHelper
         return null;
     }
 
-    private static string GetSubtitle(BaseItem item)
+    /// <summary>
+    /// Build a subtitle string from item metadata for APL display.
+    /// Audio items show "Artist · Album", episodes show the series name.
+    /// </summary>
+    /// <param name="item">The media item.</param>
+    /// <returns>A subtitle string suitable for APL rendering.</returns>
+    internal static string GetSubtitle(BaseItem item)
     {
         if (item is Audio audio)
         {

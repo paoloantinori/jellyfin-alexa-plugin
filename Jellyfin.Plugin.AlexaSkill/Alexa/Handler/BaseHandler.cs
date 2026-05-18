@@ -842,6 +842,92 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// Query recently played items from Jellyfin and return them as display items
+    /// suitable for an APL carousel. Deduplicates by name (keeps first = most recent),
+    /// applies per-user library filtering, and respects feature flags for media types.
+    /// </summary>
+    /// <param name="jellyfinUser">The Jellyfin user for query context.</param>
+    /// <param name="user">The plugin user for library access and image URL generation.</param>
+    /// <param name="libraryManager">The library manager for querying items.</param>
+    /// <param name="config">Plugin configuration for feature flags and server address.</param>
+    /// <returns>A list of display items (empty, never null).</returns>
+    private protected static List<Apl.ListDisplayItem> GetRecentlyPlayedItems(
+        JellyfinUser jellyfinUser,
+        Entities.User user,
+        ILibraryManager libraryManager,
+        PluginConfiguration config)
+    {
+        var itemTypes = new List<BaseItemKind>();
+        if (config.MusicEnabled)
+        {
+            itemTypes.Add(BaseItemKind.Audio);
+        }
+
+        if (config.VideosEnabled)
+        {
+            itemTypes.Add(BaseItemKind.Movie);
+            itemTypes.Add(BaseItemKind.Episode);
+        }
+
+        if (config.BooksEnabled)
+        {
+            itemTypes.Add(BaseItemKind.AudioBook);
+        }
+
+        if (itemTypes.Count == 0)
+        {
+            return new List<Apl.ListDisplayItem>();
+        }
+
+        var query = new InternalItemsQuery
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            IncludeItemTypes = itemTypes.ToArray(),
+            OrderBy = new[] { (ItemSortBy.DatePlayed, SortOrder.Descending) },
+            Limit = 20,
+            DtoOptions = new DtoOptions(true)
+        };
+
+        ApplyLibraryFilter(query, user, libraryManager);
+
+        IReadOnlyList<BaseItem> recentItems = libraryManager.GetItemList(query) ?? Array.Empty<BaseItem>();
+
+        var results = new List<Apl.ListDisplayItem>();
+        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (BaseItem item in recentItems)
+        {
+            if (results.Count >= 10)
+            {
+                break;
+            }
+
+            if (string.IsNullOrWhiteSpace(item.Name))
+            {
+                continue;
+            }
+
+            // Deduplicate by name to avoid "Song X" appearing twice
+            if (!seenNames.Add(item.Name))
+            {
+                continue;
+            }
+
+            string subtitle = Apl.AplHelper.GetSubtitle(item);
+            string artUrl = new Uri(new Uri(config.ServerAddress), "Items/" + item.Id + "/Images/Primary?api_key=" + user.JellyfinToken).ToString();
+
+            results.Add(new Apl.ListDisplayItem(
+                item.Name,
+                item.Id.ToString(),
+                subtitle,
+                artUrl));
+        }
+
+        return results;
+    }
+
+    /// <summary>
     /// Escapes special XML characters in text for safe inclusion in SSML.
     /// </summary>
     /// <param name="text">The text to escape.</param>
