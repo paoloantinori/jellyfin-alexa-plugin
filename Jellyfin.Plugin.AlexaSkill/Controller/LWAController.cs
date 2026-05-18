@@ -150,7 +150,7 @@ public class LWAController : ControllerBase
             user.UserSkill.UserSkillStatus = UserSkillStatus.SkillCreating;
             Plugin.Instance!.SaveConfiguration();
 
-            // Create the skill in background
+            // Create or reuse the skill in background
             Guid userId = user.Id;
             _ = Task.Run(async () =>
             {
@@ -169,7 +169,6 @@ public class LWAController : ControllerBase
                     return;
                 }
 
-                _logger.LogInformation("Creating skill for user with id {UserId}", userId);
                 Collection<SkillInteractionModel> skillInteractionModels = Plugin.Instance.BuildSkillInteractionModels(currentUser.UserSkill!.InvocationName);
 
                 try
@@ -177,11 +176,34 @@ public class LWAController : ControllerBase
                     Uri endpointUri = new Uri(new Uri(Plugin.Instance.Configuration.ServerAddress), AlexaSkillController.ApiBaseUri);
                     string endpointUriString = new Uri(endpointUri, "account-linking").ToString();
 
-                    string skillId = await AlexaUtil.CallAsync(currentUser, () => currentUser.SmapiManagement.CreateSkillAsync(
-                        Plugin.Instance.ManifestSkill!,
-                        skillInteractionModels,
-                        endpointUriString,
-                        Plugin.Instance.Configuration.AccountLinkingClientId)).ConfigureAwait(false);
+                    // Try to reuse an existing skill instead of creating a duplicate
+                    string? existingSkillId = await AlexaUtil.CallAsync(currentUser, () =>
+                        currentUser.SmapiManagement.FindExistingSkillAsync(Plugin.Instance.ManifestSkill!)).ConfigureAwait(false);
+
+                    string skillId;
+                    if (existingSkillId != null)
+                    {
+                        _logger.LogInformation("Reusing existing skill {SkillId} for user {UserId}", existingSkillId, userId);
+                        skillId = existingSkillId;
+
+                        // Update the existing skill with current manifest and models
+                        await currentUser.SmapiManagement.UpdateSkillAsync(
+                                skillId,
+                                Plugin.Instance.ManifestSkill!,
+                                skillInteractionModels).ConfigureAwait(false);
+
+                        // Re-apply account linking to the reused skill
+                        currentUser.SmapiManagement.UpdateAccountLinkData(skillId, endpointUriString, Plugin.Instance.Configuration.AccountLinkingClientId);
+                    }
+                    else
+                    {
+                        _logger.LogInformation("Creating skill for user with id {UserId}", userId);
+                        skillId = await AlexaUtil.CallAsync(currentUser, () => currentUser.SmapiManagement.CreateSkillAsync(
+                            Plugin.Instance.ManifestSkill!,
+                            skillInteractionModels,
+                            endpointUriString,
+                            Plugin.Instance.Configuration.AccountLinkingClientId)).ConfigureAwait(false);
+                    }
 
                     currentUser.UserSkill.SkillId = skillId;
                     currentUser.UserSkill.UserSkillStatus = UserSkillStatus.AccountLinkPending;

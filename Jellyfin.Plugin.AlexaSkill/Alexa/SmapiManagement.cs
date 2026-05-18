@@ -1,5 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Linq;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET.Management;
@@ -265,4 +267,69 @@ public class SmapiManagement : ManagementApi
         return await this.Skills.Status(skillId).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Searches for an existing skill in the developer's account by matching
+    /// the skill name against the manifest's publishing name.
+    /// Returns the skill ID if found, or null.
+    /// </summary>
+    /// <param name="manifestSkill">The manifest whose name to search for.</param>
+    /// <returns>The existing skill ID, or null if no match found.</returns>
+    public async Task<string?> FindExistingSkillAsync(ManifestSkill manifestSkill)
+    {
+        string expectedName = manifestSkill.Manifest.PublishingInformation?.Locales?.Values.FirstOrDefault()?.Name ?? string.Empty;
+        if (string.IsNullOrEmpty(expectedName))
+        {
+            _logger.LogDebug("Cannot search for existing skill: manifest has no publishing name");
+            return null;
+        }
+
+        try
+        {
+            VendorResponse vendor = await this.Vendors.Get().ConfigureAwait(false);
+            string vendorId = vendor.Vendors[0].Id;
+
+            using var httpClient = new HttpClient();
+            httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_accessToken}");
+            var response = await httpClient.GetAsync($"https://api.amazonalexa.com/v1/skills?vendorId={vendorId}").ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogDebug("Skill listing returned {StatusCode}, skipping reuse check", (int)response.StatusCode);
+                return null;
+            }
+
+            string json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            var data = Newtonsoft.Json.Linq.JObject.Parse(json);
+            var skills = data["skills"] as Newtonsoft.Json.Linq.JArray;
+            if (skills == null)
+            {
+                return null;
+            }
+
+            foreach (var skill in skills)
+            {
+                var nameByLocale = skill["nameByLocale"] as Newtonsoft.Json.Linq.JObject;
+                if (nameByLocale == null)
+                {
+                    continue;
+                }
+
+                string? skillName = nameByLocale.Values<string>().FirstOrDefault(n => n == expectedName);
+                if (skillName != null)
+                {
+                    string? skillId = skill["skillId"]?.ToString();
+                    _logger.LogInformation("Found existing skill matching name '{Name}': {SkillId}", expectedName, skillId);
+                    return skillId;
+                }
+            }
+
+            _logger.LogDebug("No existing skill found with name '{Name}'", expectedName);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to search for existing skills, will create new");
+            return null;
+        }
+    }
 }
