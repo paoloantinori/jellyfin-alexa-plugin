@@ -67,6 +67,18 @@ public class QueryRecentlyAddedIntentHandlerTests
         return TestHelpers.CreateTestContext();
     }
 
+    /// <summary>
+    /// Ensure APL visuals are enabled so "WithApl" tests pass regardless of
+    /// static Plugin.Instance state left by other test classes running in parallel.
+    /// </summary>
+    private static void EnsureVisualsEnabled()
+    {
+        if (Plugin.Instance != null)
+        {
+            Plugin.Instance.Configuration.AplVisualsEnabled = true;
+        }
+    }
+
     private SessionInfo CreateSession()
     {
         return TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
@@ -321,6 +333,8 @@ public class QueryRecentlyAddedIntentHandlerTests
     [Fact]
     public async Task HandleAsync_WithResults_WithApl_IncludesAplDirective()
     {
+        EnsureVisualsEnabled();
+
         var handler = CreateHandler();
         var request = CreateIntentRequest();
         var context = TestHelpers.CreateContextWithApl();

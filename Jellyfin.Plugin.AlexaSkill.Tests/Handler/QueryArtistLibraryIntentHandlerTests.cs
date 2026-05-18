@@ -76,6 +76,18 @@ public class QueryArtistLibraryIntentHandlerTests
 
     private static Context CreateContext() => TestHelpers.CreateTestContext();
 
+    /// <summary>
+    /// Ensure APL visuals are enabled so "WithApl" tests pass regardless of
+    /// static Plugin.Instance state left by other test classes running in parallel.
+    /// </summary>
+    private static void EnsureVisualsEnabled()
+    {
+        if (Plugin.Instance != null)
+        {
+            Plugin.Instance.Configuration.AplVisualsEnabled = true;
+        }
+    }
+
     private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
 
     private static Entities.User CreateUser() => TestHelpers.CreateTestUser();
@@ -293,6 +305,8 @@ public class QueryArtistLibraryIntentHandlerTests
     [Fact]
     public async Task HandleAsync_TracksByArtist_WithApl_IncludesAplDirective()
     {
+        EnsureVisualsEnabled();
+
         var handler = CreateHandler();
         var request = CreateIntentRequest(musician: "Soul Coughing");
         var context = TestHelpers.CreateContextWithApl();
@@ -361,6 +375,8 @@ public class QueryArtistLibraryIntentHandlerTests
     [Fact]
     public async Task HandleAsync_AlbumsByArtist_WithApl_IncludesAplDirective()
     {
+        EnsureVisualsEnabled();
+
         var handler = CreateHandler();
         var request = CreateIntentRequest(musician: "Beatles", queryType: "albums");
         var context = TestHelpers.CreateContextWithApl();

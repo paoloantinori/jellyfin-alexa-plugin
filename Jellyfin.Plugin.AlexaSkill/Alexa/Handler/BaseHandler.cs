@@ -1005,6 +1005,41 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// Attach an APL image carousel directive to a response when the device supports APL.
+    /// No-op on non-APL devices or when visuals are disabled.
+    /// </summary>
+    private protected void TryAttachCarouselDirective(
+        SkillResponse response,
+        Context? context,
+        string title,
+        List<Apl.ListDisplayItem> items,
+        string token = "carousel")
+    {
+        if (!Apl.AplHelper.VisualsEnabled)
+        {
+            Logger.LogDebug("APL carousel skipped for '{Token}': visuals disabled in config", token);
+            return;
+        }
+
+        if (!Apl.AplHelper.DeviceSupportsApl(context))
+        {
+            var keys = context?.System?.Device?.SupportedInterfaces?.Keys;
+            Logger.LogDebug("APL carousel skipped for '{Token}': device does not support APL. Interfaces: {Interfaces}", token, keys != null ? string.Join(", ", keys) : "null");
+            return;
+        }
+
+        var directive = Apl.AplHelper.BuildCarouselDirective(title, items, token);
+        if (directive != null)
+        {
+            response.Response.Directives.Add(directive);
+        }
+        else
+        {
+            Logger.LogWarning("APL BuildCarouselDirective returned null for '{Token}' with {Count} items", token, items.Count);
+        }
+    }
+
+    /// <summary>
     /// Extract the first artist name from an audio item, or null for non-audio items.
     /// </summary>
     /// <param name="item">The media item.</param>

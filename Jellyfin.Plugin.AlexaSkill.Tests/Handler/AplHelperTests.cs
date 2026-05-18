@@ -28,6 +28,18 @@ public class AplHelperTests
 
     private static Context CreateContextWithoutApl() => TestHelpers.CreateContextWithoutApl();
 
+    /// <summary>
+    /// Ensure APL visuals are enabled so "WithApl" tests pass regardless of
+    /// static Plugin.Instance state left by other test classes running in parallel.
+    /// </summary>
+    private static void EnsureVisualsEnabled()
+    {
+        if (Plugin.Instance != null)
+        {
+            Plugin.Instance.Configuration.AplVisualsEnabled = true;
+        }
+    }
+
     [Fact]
     public void DeviceSupportsApl_WithAplInterface_ReturnsTrue()
     {
@@ -108,6 +120,8 @@ public class AplHelperTests
     [Fact]
     public async Task BuildAudioPlayerResponse_WithAplContext_IncludesAplDirective()
     {
+        EnsureVisualsEnabled();
+
         var sessionManagerMock = new Mock<ISessionManager>();
         var libraryManagerMock = new Mock<ILibraryManager>();
         var userManagerMock = new Mock<IUserManager>();
@@ -293,6 +307,8 @@ public class AplHelperTests
     [Fact]
     public async Task SearchMedia_Disambiguation_WithApl_IncludesAplDirective()
     {
+        EnsureVisualsEnabled();
+
         var sessionManagerMock = new Mock<ISessionManager>();
         var libraryManagerMock = new Mock<ILibraryManager>();
         var userManagerMock = new Mock<IUserManager>();
@@ -387,6 +403,8 @@ public class AplHelperTests
     [Fact]
     public async Task ListQueue_WithApl_IncludesAplDirective()
     {
+        EnsureVisualsEnabled();
+
         var sessionManagerMock = new Mock<ISessionManager>();
         var libraryManagerMock = new Mock<ILibraryManager>();
         var config = new PluginConfiguration();
@@ -479,6 +497,8 @@ public class AplHelperTests
     [Fact]
     public async Task InProgressMediaList_WithApl_IncludesAplDirective()
     {
+        EnsureVisualsEnabled();
+
         var sessionManagerMock = new Mock<ISessionManager>();
         var libraryManagerMock = new Mock<ILibraryManager>();
         var userManagerMock = new Mock<IUserManager>();

@@ -73,6 +73,18 @@ public class BrowseLibraryIntentHandlerTests
         return TestHelpers.CreateTestContext();
     }
 
+    /// <summary>
+    /// Ensure APL visuals are enabled so "WithApl" tests pass regardless of
+    /// static Plugin.Instance state left by other test classes running in parallel.
+    /// </summary>
+    private static void EnsureVisualsEnabled()
+    {
+        if (Plugin.Instance != null)
+        {
+            Plugin.Instance.Configuration.AplVisualsEnabled = true;
+        }
+    }
+
     private SessionInfo CreateSession()
     {
         return TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
@@ -237,6 +249,8 @@ public class BrowseLibraryIntentHandlerTests
     [Fact]
     public async Task HandleAsync_BrowseWithResults_WithApl_IncludesAplDirective()
     {
+        EnsureVisualsEnabled();
+
         var handler = CreateHandler();
         var request = CreateIntentRequest(category: "artists");
         var context = TestHelpers.CreateContextWithApl();

@@ -1,9 +1,21 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
+using Alexa.NET.Response;
+using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities.Audio;
+using MediaBrowser.Controller.Session;
+using Microsoft.Extensions.Logging;
+using Moq;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -543,5 +555,137 @@ public class AplHelperTests
         Assert.Contains("${payload.carouselData.properties.items}", docStr);
         Assert.Contains("${data.title}", docStr);
         Assert.Contains("${data.artUrl}", docStr);
+    }
+}
+
+/// <summary>
+/// Tests for BaseHandler.TryAttachCarouselDirective method.
+/// </summary>
+public class TryAttachCarouselDirectiveTests : IDisposable
+{
+    private readonly Mock<ISessionManager> _sessionManagerMock;
+    private readonly PluginConfiguration _config;
+    private readonly ILoggerFactory _loggerFactory;
+    private readonly TestCarouselHandler _handler;
+
+    public TryAttachCarouselDirectiveTests()
+    {
+        _sessionManagerMock = new Mock<ISessionManager>();
+        _config = new PluginConfiguration();
+        _loggerFactory = LoggerFactory.Create(b => { });
+        _handler = new TestCarouselHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+    }
+
+    public void Dispose()
+    {
+        _loggerFactory.Dispose();
+    }
+
+    [Fact]
+    public void TryAttachCarouselDirective_AplSupported_VisualsEnabled_AttachesDirective()
+    {
+        // VisualsEnabled defaults to true when Plugin.Instance is null
+        var context = AplTestHelper.CreateAplContext();
+        var response = ResponseBuilder.Tell("test");
+        var items = new List<ListDisplayItem>
+        {
+            new("Track 1", "id1", "Artist 1", "http://art1")
+        };
+
+        _handler.InvokeTryAttachCarouselDirective(response, context, "Recently Played", items);
+
+        var directive = Assert.Single(response.Response.Directives);
+        Assert.IsType<AplRenderDocumentDirective>(directive);
+    }
+
+    [Fact]
+    public void TryAttachCarouselDirective_AplNotSupported_NoDirective()
+    {
+        // VisualsEnabled defaults to true when Plugin.Instance is null
+        var context = new Context(); // no APL support
+        var response = ResponseBuilder.Tell("test");
+        var items = new List<ListDisplayItem>
+        {
+            new("Track 1", "id1")
+        };
+
+        _handler.InvokeTryAttachCarouselDirective(response, context, "Recently Played", items);
+
+        Assert.Empty(response.Response.Directives);
+    }
+
+    [Fact]
+    public void TryAttachCarouselDirective_VisualsDisabled_NoDirective()
+    {
+        // Set up Plugin.Instance with visuals disabled
+        TestHelpers.EnsurePluginInstance(
+            _config,
+            _loggerFactory,
+            c => c.AplVisualsEnabled = false,
+            nameof(TryAttachCarouselDirectiveTests));
+        Plugin.Instance!.Configuration.AplVisualsEnabled = false;
+
+        try
+        {
+            var context = AplTestHelper.CreateAplContext();
+            var response = ResponseBuilder.Tell("test");
+            var items = new List<ListDisplayItem>
+            {
+                new("Track 1", "id1")
+            };
+
+            _handler.InvokeTryAttachCarouselDirective(response, context, "Recently Played", items);
+
+            Assert.Empty(response.Response.Directives);
+        }
+        finally
+        {
+            // Restore default so static state does not leak to other test classes
+            Plugin.Instance!.Configuration.AplVisualsEnabled = true;
+        }
+    }
+
+    /// <summary>
+    /// Test subclass exposing the private protected TryAttachCarouselDirective method.
+    /// </summary>
+    private class TestCarouselHandler : BaseHandler
+    {
+        public TestCarouselHandler(ISessionManager sessionManager, PluginConfiguration config, ILoggerFactory loggerFactory)
+            : base(sessionManager, config, loggerFactory)
+        {
+        }
+
+        public override bool CanHandle(Request request) => true;
+
+        public override Task<SkillResponse> HandleAsync(Request request, Context context, Jellyfin.Plugin.AlexaSkill.Entities.User user, SessionInfo session, CancellationToken cancellationToken)
+            => Task.FromResult(ResponseBuilder.Tell("test"));
+
+        public void InvokeTryAttachCarouselDirective(
+            SkillResponse response,
+            Context? context,
+            string title,
+            List<ListDisplayItem> items,
+            string token = "carousel")
+            => TryAttachCarouselDirective(response, context, title, items, token);
+    }
+
+    private static class AplTestHelper
+    {
+        public static Context CreateAplContext()
+        {
+            return new Context
+            {
+                System = new AlexaSystem
+                {
+                    Device = new Device
+                    {
+                        SupportedInterfaces = new Dictionary<string, object?>
+                        {
+                            { "Alexa.Presentation.APL", null }
+                        }
+                    }
+                }
+            };
+        }
     }
 }

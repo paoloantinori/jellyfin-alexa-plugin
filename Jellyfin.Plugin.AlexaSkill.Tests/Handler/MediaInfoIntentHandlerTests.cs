@@ -81,6 +81,18 @@ public class MediaInfoIntentHandlerTests
 
     private static Context CreateContext() => TestHelpers.CreateTestContext();
 
+    /// <summary>
+    /// Ensure APL visuals are enabled so "WithApl" tests pass regardless of
+    /// static Plugin.Instance state left by other test classes running in parallel.
+    /// </summary>
+    private static void EnsureVisualsEnabled()
+    {
+        if (Plugin.Instance != null)
+        {
+            Plugin.Instance.Configuration.AplVisualsEnabled = true;
+        }
+    }
+
     private static string GetSpeechText(SkillResponse response) => TestHelpers.GetSpeechText(response);
 
     private void SetupArtistLookup(string artistName, string? overview, string[]? genres)
@@ -829,6 +841,7 @@ public class MediaInfoIntentHandlerTests
     [Fact]
     public async Task Handle_DefaultNowPlaying_WithApl_IncludesAplDirective()
     {
+        EnsureVisualsEnabled();
         TestHelpers.SetServerAddress(_config, "https://test.example.com");
         _libraryManagerMock
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
@@ -885,6 +898,7 @@ public class MediaInfoIntentHandlerTests
     [Fact]
     public async Task Handle_SpecificTitle_WithApl_IncludesAplDirective()
     {
+        EnsureVisualsEnabled();
         TestHelpers.SetServerAddress(_config, "https://test.example.com");
         var handler = CreateHandler();
         var session = CreateSession();

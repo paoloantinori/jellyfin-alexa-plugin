@@ -52,6 +52,18 @@ public class ResumeOnRelaunchTests : IDisposable
 
     private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
 
+    /// <summary>
+    /// Ensure APL visuals are enabled so "WithApl" tests pass regardless of
+    /// static Plugin.Instance state left by other test classes running in parallel.
+    /// </summary>
+    private static void EnsureVisualsEnabled()
+    {
+        if (Plugin.Instance != null)
+        {
+            Plugin.Instance.Configuration.AplVisualsEnabled = true;
+        }
+    }
+
     private static Context CreateContextWithoutAudio(string deviceId = "test-device")
     {
         return new Context
@@ -460,6 +472,8 @@ public class ResumeOnRelaunchTests : IDisposable
     [Fact]
     public async Task LaunchRequest_AplDevice_WithHistory_AttachesCarouselDirective()
     {
+        EnsureVisualsEnabled();
+
         var audioItem = new Audio { Name = "Test Song", Id = Guid.NewGuid() };
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audioItem });
