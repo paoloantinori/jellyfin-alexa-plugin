@@ -97,7 +97,7 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         List<Guid> artistsIds = new List<Guid>();
         string? matchedArtistName = null;
-        if (musician != null)
+        if (!string.IsNullOrWhiteSpace(musician))
         {
             IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
                 musician, user, _libraryManager, _artistIndex, Logger,
@@ -131,7 +131,7 @@ public class PlayAlbumIntentHandler : BaseHandler
             () => _libraryManager.GetItemList(albumSearchQuery),
             "GetAlbums",
             cancellationToken).ConfigureAwait(false);
-        if (albums.Count == 0 && musician != null)
+        if (albums.Count == 0 && !string.IsNullOrWhiteSpace(musician))
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByNameAndArtist", locale, album, matchedArtistName!));
         }

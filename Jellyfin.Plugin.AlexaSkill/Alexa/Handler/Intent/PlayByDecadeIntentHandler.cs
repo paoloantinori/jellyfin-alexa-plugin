@@ -121,7 +121,7 @@ public class PlayByDecadeIntentHandler : BaseHandler
         ApplyLibraryFilter(query, user, _libraryManager);
 
         // Optional genre filter if provided
-        if (intentRequest.Intent.Slots != null && intentRequest.Intent.Slots.TryGetValue("genre", out Slot? genreSlotObj) && !string.IsNullOrEmpty(genreSlotObj.Value))
+        if (intentRequest.Intent.Slots != null && intentRequest.Intent.Slots.TryGetValue("genre", out Slot? genreSlotObj) && !string.IsNullOrWhiteSpace(genreSlotObj.Value))
         {
             query.Genres = new[] { genreSlotObj.Value };
         }

@@ -125,7 +125,7 @@ public class AddToQueueIntentHandler : BaseHandler
 
         if (songs.Count == 0)
         {
-            return musicianQuery != null
+            return !string.IsNullOrWhiteSpace(musicianQuery)
                 ? ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByNameAndArtist", locale, songQuery, matchedArtistName!))
                 : ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByName", locale, songQuery));
         }

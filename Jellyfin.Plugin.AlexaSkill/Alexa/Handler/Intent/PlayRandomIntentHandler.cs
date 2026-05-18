@@ -107,7 +107,7 @@ public class PlayRandomIntentHandler : BaseHandler
 
         ApplyMediaTypeFilter(query, mediaTypeSlot);
 
-        if (!string.IsNullOrEmpty(genreSlot))
+        if (!string.IsNullOrWhiteSpace(genreSlot))
         {
             query.Genres = new[] { genreSlot };
         }
@@ -116,7 +116,7 @@ public class PlayRandomIntentHandler : BaseHandler
 
         if (items.Count == 0)
         {
-            string notFoundMsg = !string.IsNullOrEmpty(genreSlot)
+            string notFoundMsg = !string.IsNullOrWhiteSpace(genreSlot)
                 ? ResponseStrings.Get("NotFoundRandomGenre", locale, genreSlot)
                 : ResponseStrings.Get("NotFoundRandom", locale);
             return ResponseBuilder.Tell(notFoundMsg);
