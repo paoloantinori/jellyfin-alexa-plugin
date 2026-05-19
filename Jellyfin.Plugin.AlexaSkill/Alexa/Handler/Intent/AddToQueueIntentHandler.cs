@@ -158,7 +158,7 @@ public class AddToQueueIntentHandler : BaseHandler
             }
             else
             {
-                var matches = songs.Take(3).Select(s => (s.Id, s.Name, GetImageUrl(s.Id.ToString("N"), user))).ToList();
+                var matches = songs.Take(3).Select(s => (s.Id, s.Name, (string?)GetImageUrl(s.Id.ToString("N"), user))).ToList();
                 return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeSong, locale, context);
             }
         }

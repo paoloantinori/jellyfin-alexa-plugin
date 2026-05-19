@@ -110,43 +110,20 @@ public class BrowseLibraryIntentHandler : BaseHandler
 
         Jellyfin.Database.Implementations.Entities.User resolvedUser = jellyfinUser!;
 
-        IReadOnlyList<BaseItem> items;
+        string normalized = browseCategory.ToLowerInvariant();
 
-        switch (browseCategory.ToLowerInvariant())
+        if (SlotMappings.IsGenreCategory(normalized))
         {
-            case "artists":
-            case "artisti":
-                items = await QueryItems(BaseItemKind.MusicArtist, filter, resolvedUser, user, cancellationToken).ConfigureAwait(false);
-                break;
-            case "albums":
-                items = await QueryItems(BaseItemKind.MusicAlbum, filter, resolvedUser, user, cancellationToken).ConfigureAwait(false);
-                break;
-            case "genres":
-            case "generi":
-                return await HandleGenresQuery(filter, locale, resolvedUser, context, user, cancellationToken).ConfigureAwait(false);
-            case "movies":
-            case "film":
-                items = await QueryItems(BaseItemKind.Movie, filter, resolvedUser, user, cancellationToken).ConfigureAwait(false);
-                break;
-            case "songs":
-            case "brani":
-            case "canzoni":
-                items = await QueryItems(BaseItemKind.Audio, filter, resolvedUser, user, cancellationToken).ConfigureAwait(false);
-                break;
-            case "series":
-            case "serie":
-            case "serien":
-            case "séries":
-            case "shows":
-            case "シリーズ":
-            case "सीरीज़":
-            case "مسلسلات":
-                items = await QueryItems(BaseItemKind.Series, filter, resolvedUser, user, cancellationToken).ConfigureAwait(false);
-                break;
-            default:
-                string prompt = ResponseStrings.Get("DidNotCatchBrowseCategory", locale);
-                return ResponseBuilder.Ask(prompt, new Reprompt(prompt));
+            return await HandleGenresQuery(filter, locale, resolvedUser, context, user, cancellationToken).ConfigureAwait(false);
         }
+
+        if (!SlotMappings.BrowseCategoryToItemKind.TryGetValue(normalized, out BaseItemKind? itemKind) || !itemKind.HasValue)
+        {
+            string prompt = ResponseStrings.Get("DidNotCatchBrowseCategory", locale);
+            return ResponseBuilder.Ask(prompt, new Reprompt(prompt));
+        }
+
+        IReadOnlyList<BaseItem> items = await QueryItems(itemKind.Value, filter, resolvedUser, user, cancellationToken).ConfigureAwait(false);
 
         if (items.Count == 0)
         {

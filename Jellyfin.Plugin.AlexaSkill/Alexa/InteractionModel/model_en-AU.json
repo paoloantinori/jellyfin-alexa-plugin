@@ -848,6 +848,11 @@
             "name": {
               "value": "series"
             }
+          },
+          {
+            "name": {
+              "value": "books"
+            }
           }
         ]
       },

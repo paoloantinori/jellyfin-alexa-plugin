@@ -1351,6 +1351,11 @@
             "name": {
               "value": "playlist"
             }
+          },
+          {
+            "name": {
+              "value": "libri"
+            }
           }
         ]
       },

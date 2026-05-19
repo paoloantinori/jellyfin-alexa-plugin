@@ -226,12 +226,11 @@ public class RecommendIntentHandler : BaseHandler
             return new[] { BaseItemKind.Audio, BaseItemKind.Movie };
         }
 
-        return mediaType.ToLowerInvariant() switch
+        if (SlotMappings.MediaTypeToItemKinds.TryGetValue(mediaType.ToLowerInvariant(), out BaseItemKind[]? types) && types != null)
         {
-            "music" => new[] { BaseItemKind.Audio },
-            "movie" => new[] { BaseItemKind.Movie },
-            "video" => new[] { BaseItemKind.Movie },
-            _ => new[] { BaseItemKind.Audio, BaseItemKind.Movie }
-        };
+            return types;
+        }
+
+        return new[] { BaseItemKind.Audio, BaseItemKind.Movie };
     }
 }

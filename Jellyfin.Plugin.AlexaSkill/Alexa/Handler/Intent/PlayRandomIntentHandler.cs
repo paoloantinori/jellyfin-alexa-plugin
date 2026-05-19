@@ -191,15 +191,13 @@ public class PlayRandomIntentHandler : BaseHandler
             return;
         }
 
-        switch (mediaTypeSlot.ToLowerInvariant())
+        if (SlotMappings.MediaTypeToItemKinds.TryGetValue(mediaTypeSlot.ToLowerInvariant(), out BaseItemKind[]? types) && types != null)
         {
-            case "video":
-            case "film":
-                query.IncludeItemTypes = FilterByContentAccess(new[] { BaseItemKind.Movie, BaseItemKind.Episode });
-                break;
-            default:
-                query.IncludeItemTypes = FilterByContentAccess(new[] { BaseItemKind.Audio });
-                break;
+            query.IncludeItemTypes = FilterByContentAccess(types);
+        }
+        else
+        {
+            query.IncludeItemTypes = FilterByContentAccess(new[] { BaseItemKind.Audio });
         }
     }
 

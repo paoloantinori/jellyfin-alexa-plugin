@@ -231,6 +231,9 @@
                                 <button id="restoreModelButton" is="emby-button" type="button" class="raised button-alt emby-button">
                                     <span>Restore Default</span>
                                 </button>
+                                <button id="rebuildModelsButton" is="emby-button" type="button" class="raised button-alt emby-button">
+                                    <span>Rebuild All Models</span>
+                                </button>
                             </div>
 
                             <div id="customModelStatus" style="display:none;margin-bottom:1em;padding:0.8em;border-radius:4px;background:#1a1a1a;">
@@ -1299,6 +1302,14 @@
                     { userId: getFirstConfiguredUserId(), locale: document.querySelector("#CustomModelLocale").value },
                     "#restoreModelButton", "Restoring default model...", "Default model restored",
                     function() { document.querySelector("#CustomModelUrl").value = ""; }
+                );
+            });
+
+            document.querySelector("#rebuildModelsButton").addEventListener("click", function() {
+                callModelApi(
+                    "alexaskill/api/custom-model/rebuild",
+                    { userId: getFirstConfiguredUserId() },
+                    "#rebuildModelsButton", "Rebuilding all models...", "All models rebuilt"
                 );
             });
         </script>

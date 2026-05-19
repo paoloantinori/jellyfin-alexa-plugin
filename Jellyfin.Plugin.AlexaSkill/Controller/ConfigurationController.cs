@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Web;
 using Alexa.NET.Management;
 using Alexa.NET.Management.Api;
+using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.ModelDeployment;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Controller.Handler;
@@ -614,6 +615,57 @@ public class ConfigurationController : ControllerBase
         }
     }
 
+    [HttpPost("custom-model/rebuild")]
+    [Authorize(Policy = "RequiresElevation")]
+    public async Task<ActionResult> RebuildModels([FromBody] dynamic json)
+    {
+        JObject req = JObject.Parse(json.ToString());
+
+        if (!TryResolveSmapiUser(req, out var pluginUser, out var skillId, out var userError))
+        {
+            return userError!;
+        }
+
+        if (Plugin.Instance!.ManifestSkill == null)
+        {
+            return new JsonResult(new { error = "Plugin manifest not loaded. Restart Jellyfin first." }) { StatusCode = 503 };
+        }
+
+        var config = Plugin.Instance.Configuration;
+        string invocationName = pluginUser!.UserSkill!.InvocationName;
+
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+            var interactionModels = Plugin.Instance.BuildSkillInteractionModels(invocationName);
+
+            await AlexaUtil.CallAsync<object?>(pluginUser, async () =>
+            {
+                await pluginUser.SmapiManagement!.UpdateSkillAsync(skillId!, Plugin.Instance!.ManifestSkill!, interactionModels).ConfigureAwait(false);
+                return null;
+            }).ConfigureAwait(false);
+
+            // Poll until all locale model builds leave IN_PROGRESS
+            var localeResults = await PollLocaleBuildStatusAsync(pluginUser, skillId!, cts.Token).ConfigureAwait(false);
+
+            config.LastModelDeployTime = DateTime.UtcNow;
+            config.LastModelDeployStatus = localeResults.All(r => r.Value.Success) ? "rebuilt" : "rebuilt_with_errors";
+            Plugin.Instance!.SaveConfiguration();
+
+            return new JsonResult(new
+            {
+                success = localeResults.All(r => r.Value.Success),
+                message = $"Rebuilt {interactionModels.Count} models — {localeResults.Count(r => r.Value.Success)} succeeded, {localeResults.Count(r => !r.Value.Success)} failed",
+                locales = localeResults.ToDictionary(r => r.Key, r => new { success = r.Value.Success, status = r.Value.Status, error = r.Value.Error })
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error during model rebuild");
+            return new JsonResult(new { error = $"Internal error: {ex.Message}" }) { StatusCode = 500 };
+        }
+    }
+
     /// <summary>
     /// Gets the current custom model deployment configuration and status.
     /// </summary>
@@ -648,26 +700,67 @@ public class ConfigurationController : ControllerBase
         name.Length > 0 && name.Contains(' ', StringComparison.Ordinal);
 
     /// <summary>
-    /// Resolves and validates the common context needed by model deployment endpoints.
-    /// Extracts userId from the request body, resolves the plugin user, and validates
-    /// that the user has SMAPI credentials and a skill ID. Also resolves the locale.
+    /// Polls SMAPI until all locale model builds leave IN_PROGRESS.
+    /// Returns per-locale success/failure status.
     /// </summary>
-    /// <param name="body">The parsed request body.</param>
-    /// <param name="pluginUser">The resolved plugin user, if successful.</param>
-    /// <param name="skillId">The user's skill ID, if successful.</param>
-    /// <param name="locale">The resolved locale, if successful.</param>
-    /// <param name="error">The error result, if validation failed.</param>
-    /// <returns>True if the context was resolved successfully; false if an error was set.</returns>
-    private bool TryResolveModelDeploymentContext(
+    private async Task<Dictionary<string, (bool Success, string Status, string? Error)>> PollLocaleBuildStatusAsync(
+        Entities.User pluginUser, string skillId, CancellationToken cancellationToken)
+    {
+        const int maxPolls = 60;
+        var results = new Dictionary<string, (bool Success, string Status, string? Error)>(StringComparer.Ordinal);
+
+        for (int i = 0; i < maxPolls; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var status = await AlexaUtil.CallAsync(pluginUser, () => pluginUser.SmapiManagement!.GetSkillStatusAsync(skillId)).ConfigureAwait(false);
+
+            bool allDone = true;
+            foreach (var kvp in status.InteractionModel)
+            {
+                string locale = kvp.Key;
+                var localeStatus = kvp.Value;
+                string state = localeStatus.LastModified.Status.ToString();
+
+                if (state == "IN_PROGRESS")
+                {
+                    allDone = false;
+                    continue;
+                }
+
+                if (!results.ContainsKey(locale))
+                {
+                    string? error = localeStatus.Errors is { Length: > 0 }
+                        ? string.Join("; ", localeStatus.Errors.Select(e => $"{e.Code}: {e.Message}"))
+                        : null;
+
+                    results[locale] = (state == "SUCCEEDED", state, error);
+                }
+            }
+
+            if (allDone && results.Count >= status.InteractionModel.Count)
+            {
+                break;
+            }
+
+            await Task.Delay(2000, cancellationToken).ConfigureAwait(false);
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// Resolves userId to a plugin user with valid SMAPI credentials and skill ID.
+    /// Shared by model deployment endpoints and RebuildModels.
+    /// </summary>
+    private bool TryResolveSmapiUser(
         JObject body,
         out Jellyfin.Plugin.AlexaSkill.Entities.User? pluginUser,
         out string? skillId,
-        out string? locale,
         out ActionResult? error)
     {
         pluginUser = null;
         skillId = null;
-        locale = null;
         error = null;
 
         if (!body.TryGetValue("userId", out var userIdToken) || string.IsNullOrWhiteSpace(userIdToken.Value<string>()))
@@ -694,6 +787,27 @@ public class ConfigurationController : ControllerBase
         }
 
         skillId = pluginUser.UserSkill.SkillId;
+        return true;
+    }
+
+    /// <summary>
+    /// Resolves and validates the common context needed by model deployment endpoints.
+    /// Extracts userId from the request body, resolves the plugin user, and validates
+    /// that the user has SMAPI credentials and a skill ID. Also resolves the locale.
+    /// </summary>
+    private bool TryResolveModelDeploymentContext(
+        JObject body,
+        out Jellyfin.Plugin.AlexaSkill.Entities.User? pluginUser,
+        out string? skillId,
+        out string? locale,
+        out ActionResult? error)
+    {
+        locale = null;
+
+        if (!TryResolveSmapiUser(body, out pluginUser, out skillId, out error))
+        {
+            return false;
+        }
 
         var config = Plugin.Instance!.Configuration;
         locale = body.TryGetValue("locale", out var localeToken) && localeToken.Type == JTokenType.String

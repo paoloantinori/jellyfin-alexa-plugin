@@ -71,7 +71,7 @@ All tiers go through `FuzzyMatch` to filter false positives. See JF-163 for plan
 ## Code Conventions
 
 - `Nullable enable` on — nullability annotations required
-- `jellyfin.ruleset` controls code analysis (AllEnabledByDefault, `TreatWarningsAsErrors` = false)
+- `jellyfin.ruleset` controls code analysis (AllEnabledByDefault, `TreatWarningsAsErrors` = true)
 - Intent handlers use `async/await` with `ConfigureAwait(false)`
 - Feature flag tests use one file per flag, `AssertDisabledWhenFlagOff` helper
 

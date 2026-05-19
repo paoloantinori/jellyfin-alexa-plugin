@@ -830,6 +830,11 @@
             "name": {
               "value": "séries"
             }
+          },
+          {
+            "name": {
+              "value": "livros"
+            }
           }
         ]
       },

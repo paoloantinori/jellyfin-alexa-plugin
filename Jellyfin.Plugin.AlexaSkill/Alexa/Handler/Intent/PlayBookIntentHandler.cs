@@ -138,7 +138,7 @@ public class PlayBookIntentHandler : BaseHandler
             }
             else
             {
-                var matches = books.Take(3).Select(b => (b.Id, b.Name, GetImageUrl(b.Id.ToString("N"), user))).ToList();
+                var matches = books.Take(3).Select(b => (b.Id, b.Name, (string?)GetImageUrl(b.Id.ToString("N"), user))).ToList();
                 return DisambiguationHelper.AskFirstMatch(
                     matches, DisambiguationHelper.MediaTypeAlbum, locale, context);
             }

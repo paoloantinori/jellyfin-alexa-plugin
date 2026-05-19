@@ -17,7 +17,7 @@
   "ChapterNotFound": "Chapter {0} not found. There are {1} chapters total.",
   "CouldNotUnderstand": "I could not understand that, please try again.",
   "DidNotCatchArtistName": "I didn't catch the artist name. Which artist would you like to look up?",
-  "DidNotCatchBrowseCategory": "What would you like to browse? You can say artists, albums, movies, series, songs, or genres.",
+  "DidNotCatchBrowseCategory": "What would you like to browse? You can say artists, albums, movies, series, songs, or books.",
   "DidNotCatchChannelName": "I didn't catch the channel name. Please try again.",
   "DidNotCatchDecade": "I didn't catch the decade. Please try saying something like play music from the eighties.",
   "DidNotCatchEpisodeNumber": "I didn't catch the season or episode number. Please say the season and episode.",

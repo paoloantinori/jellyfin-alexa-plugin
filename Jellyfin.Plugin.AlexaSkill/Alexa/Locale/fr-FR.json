@@ -79,7 +79,7 @@
   "DidNotCatchEpisodeNumber": "Je n'ai pas compris le numéro de saison ou d'épisode. Veuillez indiquer la saison et l'épisode.",
   "NotFoundSeries": "Je n'ai pas trouvé de série appelée {0}.",
   "NotFoundEpisode": "Je n'ai pas trouvé la saison {0} épisode {1} de {2}.",
-  "DidNotCatchBrowseCategory": "Que souhaitez-vous parcourir ? Vous pouvez dire artistes, albums, films, séries, chansons ou genres.",
+  "DidNotCatchBrowseCategory": "Que souhaitez-vous parcourir ? Vous pouvez dire artistes, albums, films, séries, chansons, livres ou genres.",
   "BrowseResults": "J'ai trouvé {0} résultats : {1}",
   "BrowseItem": "{0}. {1}",
   "NoBrowseResults": "Je n'ai trouvé aucun {0}.",

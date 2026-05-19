@@ -816,6 +816,11 @@
             "name": {
               "value": "series"
             }
+          },
+          {
+            "name": {
+              "value": "libros"
+            }
           }
         ]
       },

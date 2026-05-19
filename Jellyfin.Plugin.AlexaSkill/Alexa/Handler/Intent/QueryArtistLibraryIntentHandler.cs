@@ -153,11 +153,7 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
             return false;
         }
 
-        string normalized = queryType.ToLowerInvariant().Trim();
-        return normalized.Contains("album", StringComparison.Ordinal)
-            || normalized.Contains("records", StringComparison.Ordinal)
-            || normalized.Contains("dischi", StringComparison.Ordinal)
-            || normalized.Contains("disco", StringComparison.Ordinal);
+        return SlotMappings.LibraryQueryTypeIsAlbum.TryGetValue(queryType.ToLowerInvariant().Trim(), out bool isAlbum) && isAlbum;
     }
 
     private async Task<SkillResponse> ListItemsByArtistAsync(

@@ -51,6 +51,8 @@
         <Rule Id="SA1501" Action="None" />
         <!-- disable warning SA1508: Closing brace should not be preceded by blank line -->
         <Rule Id="SA1508" Action="None" />
+        <!-- disable warning SA1509: Opening braces should not be preceded by blank line -->
+        <Rule Id="SA1509" Action="None" />
         <!-- disable warning SA1512: Single-line comments must not be followed by blank line -->
         <Rule Id="SA1512" Action="None" />
         <!-- disable warning SA1513: Closing brace should be followed by blank line -->
