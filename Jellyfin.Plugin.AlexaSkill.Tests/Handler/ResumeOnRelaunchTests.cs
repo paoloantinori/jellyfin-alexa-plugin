@@ -7,6 +7,7 @@ using global::Alexa.NET.Request;
 using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
 using global::Alexa.NET.Response.Directive;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -171,6 +172,41 @@ public class ResumeOnRelaunchTests : IDisposable
     }
 
     [Fact]
+    public async Task LaunchRequest_WithPriorPlayback_AplDevice_AttachesResumeOfferDirective()
+    {
+        EnsureVisualsEnabled();
+
+        var itemId = Guid.NewGuid();
+        var item = new Audio
+        {
+            Name = "Bohemian Rhapsody",
+            Id = itemId
+        };
+        _libraryManagerMock.Setup(l => l.GetItemById(itemId)).Returns(item);
+
+        var handler = CreateLaunchHandler();
+        var request = new LaunchRequest { Locale = "en-US" };
+        var context = CreateContextWithAudio(itemId.ToString(), 45000, deviceId: "test-device");
+        // Add APL support to the device
+        context.System.Device.SupportedInterfaces = new Dictionary<string, object>
+        {
+            { "Alexa.Presentation.APL", new { } }
+        };
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        // Should have resume offer APL directive
+        Assert.NotEmpty(response.Response.Directives);
+        var directive = Assert.IsType<AplRenderDocumentDirective>(response.Response.Directives[0]);
+        Assert.Equal("resumeOffer", directive.Token);
+
+        // Should still have voice prompt and session state
+        Assert.False(response.Response.ShouldEndSession);
+        Assert.True(response.SessionAttributes.ContainsKey("resume_state"));
+    }
+
+    [Fact]
     public async Task LaunchRequest_WithPriorPlayback_UnknownItem_StillOffersResume()
     {
         var itemId = Guid.NewGuid();
@@ -190,6 +226,38 @@ public class ResumeOnRelaunchTests : IDisposable
         // Should use UnknownMedia fallback for the title
         string speech = TestHelpers.GetSpeechText(response);
         Assert.Contains("Unknown media", speech);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ResumeOfferDisabled_ShowsWelcomeInstead()
+    {
+        // Arrange: disable the resume offer flag but AudioPlayer has a token
+        _config.ResumeOfferEnabled = false;
+
+        var itemId = Guid.NewGuid();
+        var item = new Audio
+        {
+            Name = "Test Song",
+            Id = itemId
+        };
+        _libraryManagerMock.Setup(l => l.GetItemById(itemId)).Returns(item);
+
+        var handler = CreateLaunchHandler();
+        var request = new LaunchRequest { Locale = "en-US" };
+        var context = CreateContextWithAudio(itemId.ToString(), 45000);
+        var session = CreateSession();
+
+        // Act
+        SkillResponse response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        // Assert: should get welcome response, NOT resume offer
+        Assert.False(response.Response.ShouldEndSession);
+        Assert.NotNull(response.Response.OutputSpeech);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Welcome", speech);
+
+        // Should NOT have resume_state in session attributes
+        Assert.True(response.SessionAttributes == null || !response.SessionAttributes.ContainsKey("resume_state"));
     }
 
     // =====================================================================
@@ -237,6 +305,88 @@ public class ResumeOnRelaunchTests : IDisposable
 
         // Should have speech announcement
         Assert.NotNull(response.Response.OutputSpeech);
+    }
+
+    [Fact]
+    public async Task YesIntent_WithResumeState_AnnounceTitle_SpeechContainsTitle()
+    {
+        var itemId = Guid.NewGuid();
+        var item = new Audio
+        {
+            Name = "Stairway to Heaven",
+            Id = itemId
+        };
+        _libraryManagerMock.Setup(l => l.GetItemById(itemId)).Returns(item);
+        _config.ResumeAnnounceTitle = true;
+
+        var handler = CreateYesHandler();
+        var request = new IntentRequest
+        {
+            Locale = "en-US",
+            Intent = new Intent { Name = "AMAZON.YesIntent" }
+        };
+        var context = CreateContextWithoutAudio();
+        var session = CreateSession();
+
+        var resumeState = new ResumeHelper.ResumeState
+        {
+            ItemId = itemId.ToString(),
+            OffsetMs = 60000
+        };
+        var sessionAttributes = new Dictionary<string, object>
+        {
+            ["resume_state"] = Newtonsoft.Json.JsonConvert.SerializeObject(resumeState)
+        };
+
+        SkillResponse response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, sessionAttributes, CancellationToken.None);
+
+        Assert.NotNull(response.Response.OutputSpeech);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Stairway to Heaven", speech);
+    }
+
+    [Fact]
+    public async Task YesIntent_WithResumeState_BriefMode_SpeechOmitsTitle()
+    {
+        var itemId = Guid.NewGuid();
+        var item = new Audio
+        {
+            Name = "Stairway to Heaven",
+            Id = itemId
+        };
+        _libraryManagerMock.Setup(l => l.GetItemById(itemId)).Returns(item);
+        _config.ResumeAnnounceTitle = false;
+
+        var handler = CreateYesHandler();
+        var request = new IntentRequest
+        {
+            Locale = "en-US",
+            Intent = new Intent { Name = "AMAZON.YesIntent" }
+        };
+        var context = CreateContextWithoutAudio();
+        var session = CreateSession();
+
+        var resumeState = new ResumeHelper.ResumeState
+        {
+            ItemId = itemId.ToString(),
+            OffsetMs = 60000
+        };
+        var sessionAttributes = new Dictionary<string, object>
+        {
+            ["resume_state"] = Newtonsoft.Json.JsonConvert.SerializeObject(resumeState)
+        };
+
+        SkillResponse response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, sessionAttributes, CancellationToken.None);
+
+        // Should still have AudioPlayer directive
+        Assert.NotEmpty(response.Response.Directives);
+        var audioDirective = Assert.IsType<AudioPlayerPlayDirective>(response.Response.Directives[0]);
+        Assert.Equal(60000, audioDirective.AudioItem.Stream.OffsetInMilliseconds);
+
+        // Speech should NOT contain the title in brief mode
+        Assert.NotNull(response.Response.OutputSpeech);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.DoesNotContain("Stairway to Heaven", speech);
     }
 
     [Fact]
@@ -412,17 +562,27 @@ public class ResumeOnRelaunchTests : IDisposable
 
     [Theory]
     [InlineData("en-US", "Resuming")]
+    [InlineData("en-US", "ResumeBrief")]
     [InlineData("en-US", "FreshStart")]
     [InlineData("it-IT", "Resuming")]
+    [InlineData("it-IT", "ResumeBrief")]
     [InlineData("it-IT", "FreshStart")]
     [InlineData("de-DE", "Resuming")]
+    [InlineData("de-DE", "ResumeBrief")]
     [InlineData("fr-FR", "Resuming")]
+    [InlineData("fr-FR", "ResumeBrief")]
     [InlineData("es-ES", "Resuming")]
+    [InlineData("es-ES", "ResumeBrief")]
     [InlineData("pt-BR", "Resuming")]
+    [InlineData("pt-BR", "ResumeBrief")]
     [InlineData("ja-JP", "Resuming")]
+    [InlineData("ja-JP", "ResumeBrief")]
     [InlineData("nl-NL", "Resuming")]
+    [InlineData("nl-NL", "ResumeBrief")]
     [InlineData("ar-SA", "Resuming")]
+    [InlineData("ar-SA", "ResumeBrief")]
     [InlineData("hi-IN", "Resuming")]
+    [InlineData("hi-IN", "ResumeBrief")]
     public void LocaleStrings_ResumeStringsExist(string locale, string key)
     {
         string value = ResponseStrings.Get(key, locale);
@@ -490,9 +650,10 @@ public class ResumeOnRelaunchTests : IDisposable
         string speech = TestHelpers.GetSpeechText(response);
         Assert.Contains("Welcome", speech);
 
-        // Should have an APL carousel directive
+        // Should have an APL welcome splash directive (which includes the carousel when items exist)
         Assert.NotEmpty(response.Response.Directives);
-        Assert.Contains(response.Response.Directives, d => d.Type == "Alexa.Presentation.APL.RenderDocument");
+        var directive = Assert.IsType<AplRenderDocumentDirective>(response.Response.Directives[0]);
+        Assert.Equal("welcome", directive.Token);
     }
 
     [Fact]
@@ -517,7 +678,7 @@ public class ResumeOnRelaunchTests : IDisposable
     }
 
     [Fact]
-    public async Task LaunchRequest_AplDevice_NoHistory_NoCarouselDirective()
+    public async Task LaunchRequest_AplDevice_NoHistory_WelcomeSplashDirective()
     {
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
@@ -532,8 +693,10 @@ public class ResumeOnRelaunchTests : IDisposable
         Assert.False(response.Response.ShouldEndSession);
         Assert.NotNull(response.Response.OutputSpeech);
 
-        // No carousel when no recently played items
-        Assert.Empty(response.Response.Directives);
+        // Welcome splash screen is always shown on APL devices (even without recently played items)
+        Assert.Single(response.Response.Directives);
+        var directive = Assert.IsType<AplRenderDocumentDirective>(response.Response.Directives[0]);
+        Assert.Equal("welcome", directive.Token);
     }
 
     [Fact]

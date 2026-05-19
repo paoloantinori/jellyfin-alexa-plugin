@@ -72,15 +72,18 @@ public class LaunchRequestHandler : BaseHandler
         string locale = GetLocale(request);
 
         // Check if audio was playing before this re-launch (AudioPlayer context carries the token/offset)
-        if (!string.IsNullOrEmpty(context.AudioPlayer?.Token))
+        if (_config.ResumeOfferEnabled)
         {
-            return await HandleResumeOfferAsync(request, context, user, session, locale, cancellationToken).ConfigureAwait(false);
-        }
+            if (!string.IsNullOrEmpty(context.AudioPlayer?.Token))
+            {
+                return await HandleResumeOfferAsync(request, context, user, session, locale, cancellationToken).ConfigureAwait(false);
+            }
 
-        // check if we have any media in the queue (legacy Jellyfin session-based resume)
-        if (session.NowPlayingQueue.Count > 0)
-        {
-            return HandleSessionQueueResume(request, user, session);
+            // check if we have any media in the queue (legacy Jellyfin session-based resume)
+            if (session.NowPlayingQueue.Count > 0)
+            {
+                return HandleSessionQueueResume(request, user, session);
+            }
         }
 
         // No prior playback — show welcome (with optional APL carousel)
@@ -123,6 +126,9 @@ public class LaunchRequestHandler : BaseHandler
             response = ResponseBuilder.Ask(prompt, new Reprompt(repromptText));
         }
 
+        // Attach APL screen showing the content artwork when device supports it
+        TryAttachResumeOfferScreen(response, item, itemId, user, locale, context);
+
         // Store resume state in session attributes using proper DTO for serialization
         var resumeState = new ResumeHelper.ResumeState
         {
@@ -143,7 +149,6 @@ public class LaunchRequestHandler : BaseHandler
     /// </summary>
     private SkillResponse HandleSessionQueueResume(Request request, Entities.User user, SessionInfo session)
     {
-        // check if something is currently playing which we can resume
         if (session.FullNowPlayingItem != null)
         {
             string item_id = session.FullNowPlayingItem.Id.ToString();
@@ -152,7 +157,6 @@ public class LaunchRequestHandler : BaseHandler
         }
         else
         {
-            // resume the first item in the queue
             BaseItem? item = _libraryManager.GetItemById(session.NowPlayingQueue[0].Id);
             if (item == null)
             {
@@ -197,17 +201,19 @@ public class LaunchRequestHandler : BaseHandler
                 new Reprompt(ResponseStrings.Get("WelcomeReprompt", locale)));
         }
 
-        // Attach APL carousel with recently played items if device supports it
-        TryAttachCarousel(response, context, user, session, locale);
+        // Attach welcome APL splash screen (always when supported, with or without recently played items)
+        TryAttachWelcomeScreen(response, context, user, session, locale, givenName);
 
         return response;
     }
 
     /// <summary>
-    /// Attach an APL carousel directive showing recently played items when
-    /// the device supports APL, visuals are enabled, and the user has history.
+    /// Attach an APL welcome/splash screen directive showing Jellyfin branding,
+    /// a personalized greeting, and optionally a "Recently Played" carousel.
+    /// Always renders on APL-capable devices (even without recently played items),
+    /// giving a consistent branded experience when the skill opens.
     /// </summary>
-    private void TryAttachCarousel(SkillResponse response, Context context, Entities.User user, SessionInfo session, string locale)
+    private void TryAttachWelcomeScreen(SkillResponse response, Context context, Entities.User user, SessionInfo session, string locale, string? givenName)
     {
         if (!Apl.AplHelper.DeviceSupportsApl(context))
         {
@@ -219,21 +225,47 @@ public class LaunchRequestHandler : BaseHandler
             return;
         }
 
-        var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
-        if (jellyfinUser == null)
+        string visualGreeting = !string.IsNullOrEmpty(givenName)
+            ? ResponseStrings.Get("WelcomeAplGreeting", locale, givenName!)
+            : string.Empty;
+
+        string prompt = ResponseStrings.Get("CarouselReprompt", locale);
+        string recentlyPlayedLabel = ResponseStrings.Get("RecentlyPlayed", locale);
+
+        var items = new List<Apl.ListDisplayItem>();
+        var (jellyfinUser, _) = ResolveJellyfinUser(_userManager, session.UserId, locale);
+        if (jellyfinUser != null)
         {
-            Logger.LogDebug("Carousel skipped: could not resolve Jellyfin user for session {SessionId}", session.Id);
+            items = GetRecentlyPlayedItems(jellyfinUser, user, _libraryManager, _config);
+        }
+
+        var directive = Apl.AplHelper.BuildWelcomeDirective(visualGreeting, prompt, recentlyPlayedLabel, items, context);
+        response.Response.Directives.Add(directive);
+    }
+
+    /// <summary>
+    /// Attach an APL resume-offer screen showing the content artwork, title,
+    /// and a "resume?" prompt on APL-capable devices.
+    /// </summary>
+    private void TryAttachResumeOfferScreen(SkillResponse response, BaseItem? item, string itemId, Entities.User user, string locale, Context context)
+    {
+        if (item == null)
+        {
             return;
         }
 
-        List<Apl.ListDisplayItem> items = GetRecentlyPlayedItems(jellyfinUser, user, _libraryManager, _config);
-        if (items.Count == 0)
+        if (!Apl.AplHelper.DeviceSupportsApl(context))
         {
             return;
         }
 
-        string headerText = ResponseStrings.Get("RecentlyPlayed", locale);
-        var directive = Apl.AplHelper.BuildCarouselDirective(headerText, items, context: context);
+        if (!Apl.AplHelper.VisualsEnabled)
+        {
+            return;
+        }
+
+        string imageUrl = GetImageUrl(itemId, user);
+        var directive = Apl.AplHelper.BuildResumeOfferDirective(item, imageUrl, imageUrl, locale, context);
         if (directive != null)
         {
             response.Response.Directives.Add(directive);

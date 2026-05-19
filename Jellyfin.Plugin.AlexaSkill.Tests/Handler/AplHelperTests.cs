@@ -125,7 +125,7 @@ public class AplHelperTests
         var sessionManagerMock = new Mock<ISessionManager>();
         var libraryManagerMock = new Mock<ILibraryManager>();
         var userManagerMock = new Mock<IUserManager>();
-        var config = new PluginConfiguration();
+        var config = new PluginConfiguration { AsrCompoundWordFixEnabled = false };
         TestHelpers.SetServerAddress(config, "https://test.example.com");
         var loggerFactory = LoggerFactory.Create(b => { });
 
@@ -262,7 +262,7 @@ public class AplHelperTests
         var sessionManagerMock = new Mock<ISessionManager>();
         var libraryManagerMock = new Mock<ILibraryManager>();
         var userManagerMock = new Mock<IUserManager>();
-        var config = new PluginConfiguration();
+        var config = new PluginConfiguration { AsrCompoundWordFixEnabled = false };
         TestHelpers.SetServerAddress(config, "https://test.example.com");
         var loggerFactory = LoggerFactory.Create(b => { });
 
@@ -312,7 +312,7 @@ public class AplHelperTests
         var sessionManagerMock = new Mock<ISessionManager>();
         var libraryManagerMock = new Mock<ILibraryManager>();
         var userManagerMock = new Mock<IUserManager>();
-        var config = new PluginConfiguration();
+        var config = new PluginConfiguration { AsrCompoundWordFixEnabled = false };
         TestHelpers.SetServerAddress(config, "https://test.example.com");
         var loggerFactory = LoggerFactory.Create(b => { });
 
@@ -359,7 +359,7 @@ public class AplHelperTests
         var sessionManagerMock = new Mock<ISessionManager>();
         var libraryManagerMock = new Mock<ILibraryManager>();
         var userManagerMock = new Mock<IUserManager>();
-        var config = new PluginConfiguration();
+        var config = new PluginConfiguration { AsrCompoundWordFixEnabled = false };
         TestHelpers.SetServerAddress(config, "https://test.example.com");
         var loggerFactory = LoggerFactory.Create(b => { });
 
@@ -407,7 +407,7 @@ public class AplHelperTests
 
         var sessionManagerMock = new Mock<ISessionManager>();
         var libraryManagerMock = new Mock<ILibraryManager>();
-        var config = new PluginConfiguration();
+        var config = new PluginConfiguration { AsrCompoundWordFixEnabled = false };
         TestHelpers.SetServerAddress(config, "https://test.example.com");
         var loggerFactory = LoggerFactory.Create(b => { });
 
@@ -453,7 +453,7 @@ public class AplHelperTests
     {
         var sessionManagerMock = new Mock<ISessionManager>();
         var libraryManagerMock = new Mock<ILibraryManager>();
-        var config = new PluginConfiguration();
+        var config = new PluginConfiguration { AsrCompoundWordFixEnabled = false };
         TestHelpers.SetServerAddress(config, "https://test.example.com");
         var loggerFactory = LoggerFactory.Create(b => { });
 
@@ -503,7 +503,7 @@ public class AplHelperTests
         var libraryManagerMock = new Mock<ILibraryManager>();
         var userManagerMock = new Mock<IUserManager>();
         var userDataManagerMock = new Mock<IUserDataManager>();
-        var config = new PluginConfiguration();
+        var config = new PluginConfiguration { AsrCompoundWordFixEnabled = false };
         TestHelpers.SetServerAddress(config, "https://test.example.com");
         var loggerFactory = LoggerFactory.Create(b => { });
 
@@ -555,7 +555,7 @@ public class AplHelperTests
         var libraryManagerMock = new Mock<ILibraryManager>();
         var userManagerMock = new Mock<IUserManager>();
         var userDataManagerMock = new Mock<IUserDataManager>();
-        var config = new PluginConfiguration();
+        var config = new PluginConfiguration { AsrCompoundWordFixEnabled = false };
         TestHelpers.SetServerAddress(config, "https://test.example.com");
         var loggerFactory = LoggerFactory.Create(b => { });
 

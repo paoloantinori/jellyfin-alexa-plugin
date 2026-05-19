@@ -162,6 +162,8 @@
   "ResumeReprompt": "Wil je verdergaan waar je gebleven was?",
   "Resuming": "Hervatten van {0}.",
   "ResumingSsml": "<say-as interpret-as=\"interjection\">prima</say-as><break time=\"200ms\"/>Hervatten van <emphasis level=\"moderate\">{0}</emphasis>.",
+  "ResumeBrief": "Hervatten.",
+  "ResumeBriefSsml": "<say-as interpret-as=\"interjection\">hervatten</say-as>",
   "FreshStart": "Laten we opnieuw beginnen. Wat wil je luisteren?",
   "QueryRecentlyAddedIntro": "Hier zijn de {0} meest recent toegevoegde items:",
   "QueryRecentlyAddedItem": "{0}. {1} van {2}",
@@ -180,5 +182,7 @@
   "SearchingBook": "Zoeken naar uw audioboek...",
   "FollowMeSuccessSsml": "<say-as interpret-as=\"interjection\">begrepen</say-as><break time=\"200ms\"/>Ga verder met <emphasis level=\"moderate\">{0}</emphasis> waar je gebleven was.",
   "RecentlyPlayed": "Recently Played",
-  "CarouselReprompt": "Wat wil je luisteren?"
+  "CarouselReprompt": "Wat wil je luisteren?",
+  "WelcomeAplGreeting": "Welkom, {0}!",
+  "ResumeOfferPrompt": "Wil je hervatten?"
 }

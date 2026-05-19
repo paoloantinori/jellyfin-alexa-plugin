@@ -162,6 +162,8 @@
   "ResumeReprompt": "停止したところから続けますか？",
   "Resuming": "{0} を再開します。",
   "ResumingSsml": "<emphasis level=\"moderate\">{0}</emphasis> を再開します。",
+  "ResumeBrief": "再開します。",
+  "ResumeBriefSsml": "<say-as interpret-as=\"interjection\">再開</say-as>",
   "FreshStart": "最初から始めましょう。何を聴きたいですか？",
   "QueryRecentlyAddedIntro": "最近追加された {0} 件のアイテムです:",
   "QueryRecentlyAddedItem": "{0}. {2} の {1}",
@@ -180,5 +182,7 @@
   "SearchingBook": "Searching for your audiobook...",
   "RecentlyPlayed": "Recently Played",
   "FollowMeSuccessSsml": "<say-as interpret-as=\"interjection\">了解</say-as><break time=\"200ms\"/>再開します <emphasis level=\"moderate\">{0}</emphasis> 続きから。",
-  "CarouselReprompt": "何を聴きますか？"
+  "CarouselReprompt": "何を聴きますか？",
+  "WelcomeAplGreeting": "ようこそ、{0}さん！",
+  "ResumeOfferPrompt": "再生を再開しますか？"
 }

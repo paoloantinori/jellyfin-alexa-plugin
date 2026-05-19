@@ -5,6 +5,7 @@ using System.Linq;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Entities.TV;
@@ -354,6 +355,270 @@ internal static class AplHelper
 
     private static readonly JObject CarouselDocument = JObject.Parse(CarouselTemplate);
 
+    // Welcome/splash APL template for skill launch. Always renders on APL devices
+    // so users see branded feedback even on first launch with no playback history.
+    // The carousel card layout mirrors CarouselTemplate — keep them in sync.
+    private static readonly string WelcomeTemplate = @"{
+  ""type"": ""APL"",
+  ""version"": ""1.7"",
+  ""theme"": ""dark"",
+  ""extensions"": [{ ""name"": ""Back"", ""uri"": ""aplext:backstack:10"" }],
+  ""mainTemplate"": {
+    ""parameters"": [""payload""],
+    ""items"": [
+      {
+        ""type"": ""Container"",
+        ""height"": ""100vh"",
+        ""width"": ""100vw"",
+        ""items"": [
+          {
+            ""type"": ""Container"",
+            ""grow"": 1,
+            ""justifyContent"": ""center"",
+            ""alignItems"": ""center"",
+            ""paddingLeft"": 24,
+            ""paddingRight"": 24,
+            ""items"": [
+              {
+                ""type"": ""Text"",
+                ""text"": ""Jellyfin"",
+                ""fontSize"": 44,
+                ""fontWeight"": ""bold"",
+                ""color"": ""white"",
+                ""textAlign"": ""center""
+              },
+              {
+                ""type"": ""Frame"",
+                ""width"": 60,
+                ""height"": 3,
+                ""backgroundColor"": ""#AA5CC3"",
+                ""borderRadius"": 2,
+                ""marginTop"": 10,
+                ""marginBottom"": 14
+              },
+              {
+                ""type"": ""Text"",
+                ""text"": ""${payload.welcomeData.properties.greeting}"",
+                ""fontSize"": 20,
+                ""color"": ""#B0B0B0"",
+                ""textAlign"": ""center"",
+                ""when"": ""${payload.welcomeData.properties.greeting}""
+              }
+            ]
+          },
+          {
+            ""type"": ""Container"",
+            ""when"": ""${payload.welcomeData.properties.hasItems}"",
+            ""grow"": 1,
+            ""items"": [
+              {
+                ""type"": ""Text"",
+                ""text"": ""${payload.welcomeData.properties.recentlyPlayedLabel}"",
+                ""fontSize"": 20,
+                ""fontWeight"": ""600"",
+                ""color"": ""white"",
+                ""paddingLeft"": 24,
+                ""paddingBottom"": 8
+              },
+              {
+                ""type"": ""Sequence"",
+                ""scrollDirection"": ""horizontal"",
+                ""width"": ""100%"",
+                ""grow"": 1,
+                ""data"": ""${payload.welcomeData.properties.items}"",
+                ""items"": {
+                  ""type"": ""TouchWrapper"",
+                  ""onPress"": [{ ""type"": ""SendEvent"", ""arguments"": [ ""carouselTap"", ""${data.id}"" ] }],
+                  ""item"": {
+                    ""type"": ""Container"",
+                    ""width"": ""28vw"",
+                    ""paddingLeft"": 10,
+                    ""paddingRight"": 10,
+                    ""items"": [
+                      {
+                        ""type"": ""Frame"",
+                        ""width"": ""100%"",
+                        ""height"": ""28vw"",
+                        ""borderRadius"": 12,
+                        ""backgroundColor"": ""#2A2A2A"",
+                        ""items"": [
+                          {
+                            ""type"": ""Image"",
+                            ""source"": ""${data.artUrl}"",
+                            ""width"": ""100%"",
+                            ""height"": ""100%"",
+                            ""scale"": ""best-fill"",
+                            ""borderRadius"": 12,
+                            ""when"": ""${data.artUrl}""
+                          },
+                          {
+                            ""type"": ""Text"",
+                            ""text"": ""♪"",
+                            ""fontSize"": 56,
+                            ""color"": ""#555555"",
+                            ""textAlign"": ""center"",
+                            ""textAlignVertical"": ""center"",
+                            ""width"": ""100%"",
+                            ""height"": ""100%"",
+                            ""when"": ""${!data.artUrl}""
+                          }
+                        ]
+                      },
+                      {
+                        ""type"": ""Text"",
+                        ""text"": ""${data.title}"",
+                        ""fontSize"": 18,
+                        ""color"": ""white"",
+                        ""maxLines"": 2,
+                        ""width"": ""100%"",
+                        ""paddingTop"": 8,
+                        ""paddingLeft"": 2,
+                        ""paddingRight"": 2
+                      },
+                      {
+                        ""type"": ""Text"",
+                        ""text"": ""${data.subtitle}"",
+                        ""fontSize"": 14,
+                        ""color"": ""#B0B0B0"",
+                        ""maxLines"": 1,
+                        ""width"": ""100%"",
+                        ""paddingTop"": 2,
+                        ""paddingLeft"": 2,
+                        ""paddingRight"": 2,
+                        ""when"": ""${data.subtitle}""
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            ""type"": ""Container"",
+            ""paddingBottom"": 24,
+            ""paddingTop"": 8,
+            ""paddingLeft"": 24,
+            ""paddingRight"": 24,
+            ""justifyContent"": ""center"",
+            ""alignItems"": ""center"",
+            ""items"": [
+              {
+                ""type"": ""Text"",
+                ""text"": ""${payload.welcomeData.properties.prompt}"",
+                ""fontSize"": 16,
+                ""color"": ""#707070"",
+                ""textAlign"": ""center"",
+                ""maxLines"": 2
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}";
+
+    private static readonly JObject WelcomeDocument = JObject.Parse(WelcomeTemplate);
+
+    // Resume offer APL template showing the content that was previously playing,
+    // with artwork, title, and a "resume?" prompt for Echo Show devices.
+    private static readonly string ResumeOfferTemplate = @"{
+  ""type"": ""APL"",
+  ""version"": ""1.7"",
+  ""theme"": ""dark"",
+  ""extensions"": [{ ""name"": ""Back"", ""uri"": ""aplext:backstack:10"" }],
+  ""resources"": [
+    {
+      ""dimensions"": {
+        ""artSize"": 240,
+        ""titleSize"": 32,
+        ""subtitleSize"": 22,
+        ""promptSize"": 18
+      }
+    },
+    {
+      ""when"": ""${viewport.shape == 'round'}"",
+      ""dimensions"": {
+        ""artSize"": 180,
+        ""titleSize"": 24,
+        ""subtitleSize"": 18,
+        ""promptSize"": 14
+      }
+    }
+  ],
+  ""mainTemplate"": {
+    ""parameters"": [""payload""],
+    ""items"": [
+      {
+        ""type"": ""Container"",
+        ""height"": ""100vh"",
+        ""width"": ""100vw"",
+        ""items"": [
+          {
+            ""type"": ""Image"",
+            ""source"": ""${payload.resumeData.properties.backgroundUrl}"",
+            ""scale"": ""best-fill"",
+            ""width"": ""100vw"",
+            ""height"": ""100vh"",
+            ""position"": ""absolute"",
+            ""opacity"": 0.3
+          },
+          {
+            ""type"": ""Container"",
+            ""justifyContent"": ""center"",
+            ""alignItems"": ""center"",
+            ""height"": ""100vh"",
+            ""width"": ""100vw"",
+            ""paddingLeft"": ""5vw"",
+            ""paddingRight"": ""5vw"",
+            ""items"": [
+              {
+                ""type"": ""Image"",
+                ""source"": ""${payload.resumeData.properties.artUrl}"",
+                ""width"": ""${artSize}"",
+                ""height"": ""${artSize}"",
+                ""borderRadius"": 10,
+                ""scale"": ""best-fill""
+              },
+              {
+                ""type"": ""Text"",
+                ""text"": ""${payload.resumeData.properties.title}"",
+                ""fontSize"": ""${titleSize}"",
+                ""fontWeight"": ""bold"",
+                ""color"": ""white"",
+                ""textAlign"": ""center"",
+                ""maxLines"": 2,
+                ""paddingTop"": 20
+              },
+              {
+                ""type"": ""Text"",
+                ""text"": ""${payload.resumeData.properties.subtitle}"",
+                ""fontSize"": ""${subtitleSize}"",
+                ""color"": ""#B0B0B0"",
+                ""textAlign"": ""center"",
+                ""maxLines"": 1,
+                ""paddingTop"": 5,
+                ""when"": ""${payload.resumeData.properties.subtitle}""
+              },
+              {
+                ""type"": ""Text"",
+                ""text"": ""${payload.resumeData.properties.prompt}"",
+                ""fontSize"": ""${promptSize}"",
+                ""color"": ""#707070"",
+                ""textAlign"": ""center"",
+                ""maxLines"": 2,
+                ""paddingTop"": 24
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}";
+
+    private static readonly JObject ResumeOfferDocument = JObject.Parse(ResumeOfferTemplate);
+
     /// <summary>
     /// Check if the requesting device supports APL rendering.
     /// </summary>
@@ -500,28 +765,6 @@ internal static class AplHelper
             return null;
         }
 
-        var itemArray = new JArray();
-        foreach (var item in items)
-        {
-            var itemObj = new JObject
-            {
-                ["title"] = item.Title,
-                ["id"] = item.Id
-            };
-
-            if (!string.IsNullOrEmpty(item.Subtitle))
-            {
-                itemObj["subtitle"] = item.Subtitle;
-            }
-
-            if (!string.IsNullOrEmpty(item.ArtUrl))
-            {
-                itemObj["artUrl"] = item.ArtUrl;
-            }
-
-            itemArray.Add(itemObj);
-        }
-
         return new AplRenderDocumentDirective
         {
             Token = token,
@@ -534,12 +777,135 @@ internal static class AplHelper
                     ["properties"] = new JObject
                     {
                         ["headerText"] = headerText,
-                        ["items"] = itemArray
+                        ["items"] = BuildItemArray(items)
                     }
                 }
             },
             PresentationSession = BuildPresentationSession(context)
         };
+    }
+
+    /// <summary>
+    /// Build an APL welcome/splash screen directive for skill launch.
+    /// Always returns a directive (even without carousel items) showing
+    /// Jellyfin branding, optional greeting, and a prompt.
+    /// When items are provided, a "Recently Played" carousel is shown.
+    /// </summary>
+    /// <param name="greeting">Personalized greeting text (e.g. "Welcome, Paolo!"), or empty string for no greeting.</param>
+    /// <param name="prompt">Bottom prompt text (e.g. "What would you like to hear?").</param>
+    /// <param name="recentlyPlayedLabel">Header for the carousel section.</param>
+    /// <param name="items">Recently played items for the carousel. Empty = no carousel section.</param>
+    /// <param name="context">Optional Alexa request context for backstack navigation.</param>
+    /// <returns>An APL RenderDocument directive for the welcome screen.</returns>
+    public static AplRenderDocumentDirective BuildWelcomeDirective(
+        string greeting,
+        string prompt,
+        string recentlyPlayedLabel,
+        List<ListDisplayItem> items,
+        Context? context = null)
+    {
+        var properties = new JObject
+        {
+            ["greeting"] = greeting,
+            ["prompt"] = prompt,
+            ["hasItems"] = items.Count > 0,
+            ["recentlyPlayedLabel"] = recentlyPlayedLabel,
+            ["items"] = BuildItemArray(items)
+        };
+
+        return new AplRenderDocumentDirective
+        {
+            Token = "welcome",
+            Document = WelcomeDocument,
+            DataSources = new JObject
+            {
+                ["welcomeData"] = new JObject
+                {
+                    ["type"] = "object",
+                    ["properties"] = properties
+                }
+            },
+            PresentationSession = BuildPresentationSession(context)
+        };
+    }
+
+    /// <summary>
+    /// Build an APL resume-offer screen directive showing the previously playing
+    /// content with its artwork, title, and a prompt asking the user to confirm resume.
+    /// </summary>
+    /// <param name="item">The media item that was previously playing.</param>
+    /// <param name="imageUrl">The URL for the item's primary image.</param>
+    /// <param name="backgroundImageUrl">The URL for the blurred background image.</param>
+    /// <param name="locale">The user's locale for localized prompt text.</param>
+    /// <param name="context">Optional Alexa request context for backstack navigation.</param>
+    /// <returns>An APL RenderDocument directive, or null if the item has no name.</returns>
+    public static AplRenderDocumentDirective? BuildResumeOfferDirective(
+        BaseItem item,
+        string imageUrl,
+        string backgroundImageUrl,
+        string locale,
+        Context? context = null)
+    {
+        if (string.IsNullOrEmpty(item.Name))
+        {
+            return null;
+        }
+
+        var subtitle = GetSubtitle(item);
+        string prompt = ResponseStrings.Get("ResumeOfferPrompt", locale);
+
+        return new AplRenderDocumentDirective
+        {
+            Token = "resumeOffer",
+            TimeoutType = TimeoutShort,
+            Document = ResumeOfferDocument,
+            DataSources = new JObject
+            {
+                ["resumeData"] = new JObject
+                {
+                    ["type"] = "object",
+                    ["properties"] = new JObject
+                    {
+                        ["title"] = item.Name,
+                        ["subtitle"] = subtitle,
+                        ["artUrl"] = imageUrl,
+                        ["backgroundUrl"] = backgroundImageUrl,
+                        ["prompt"] = prompt
+                    }
+                }
+            },
+            PresentationSession = BuildPresentationSession(context)
+        };
+    }
+
+    /// <summary>
+    /// Convert a list of display items into a JArray suitable for APL data binding.
+    /// </summary>
+    private static JArray BuildItemArray(List<ListDisplayItem> items)
+    {
+        var array = new JArray();
+        foreach (var item in items)
+        {
+            var obj = new JObject
+            {
+                ["title"] = item.Title,
+                ["id"] = item.Id
+            };
+
+            if (!string.IsNullOrEmpty(item.Subtitle))
+            {
+                obj["subtitle"] = item.Subtitle;
+            }
+
+            if (!string.IsNullOrEmpty(item.ArtUrl))
+            {
+                obj["artUrl"] = item.ArtUrl;
+            }
+
+            array.Add(obj);
+        }
+
+        return array;
     }
 
     /// <summary>

@@ -162,6 +162,8 @@
   "ResumeReprompt": "هل تريد المتابعة من حيث توقفت؟",
   "Resuming": "متابعة {0}.",
   "ResumingSsml": "متابعة <emphasis level=\"moderate\">{0}</emphasis>.",
+  "ResumeBrief": "استئناف.",
+  "ResumeBriefSsml": "<say-as interpret-as=\"interjection\">استئناف</say-as>",
   "FreshStart": "لنبدأ من جديد. ماذا تريد أن تستمع؟",
   "QueryRecentlyAddedIntro": "إليك أحدث {0} عناصر مضافة:",
   "QueryRecentlyAddedItem": "{0}. {1} لـ {2}",
@@ -180,5 +182,7 @@
   "SearchingBook": "Searching for your audiobook...",
   "RecentlyPlayed": "Recently Played",
   "FollowMeSuccessSsml": "<say-as interpret-as=\"interjection\">فهمت</say-as><break time=\"200ms\"/>استكمال <emphasis level=\"moderate\">{0}</emphasis> من حيث توقفت.",
-  "CarouselReprompt": "ماذا تريد أن تسمع؟"
+  "CarouselReprompt": "ماذا تريد أن تسمع؟",
+  "WelcomeAplGreeting": "!{0} ،أهلاً",
+  "ResumeOfferPrompt": "هل تريد الاستئناف؟"
 }

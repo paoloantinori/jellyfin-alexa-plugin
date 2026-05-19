@@ -124,6 +124,10 @@
                                 <div class="fieldDescription checkboxFieldDescription">Enable video playback on supported devices</div>
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="ResumeOfferEnabled" /> <span>Resume Offer</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">Offer to resume previously playing content when the skill is reopened</div>
+                            </div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="ResumeAnnounceTitle" /> <span>Announce Title on Resume</span></label>
                                 <div class="fieldDescription checkboxFieldDescription">Speak the content title when resuming playback. Disable for a briefer response with long titles.</div>
                             </div>
@@ -374,7 +378,7 @@
                     // Feature flags
                     ["RadioModeEnabled", "PodcastsEnabled", "LiveTvEnabled", "SleepTimerEnabled",
                      "QueueManagementEnabled", "BrowseLibraryEnabled", "RecommendationsEnabled",
-                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeAnnounceTitle", "AsrCompoundWordFixEnabled"].forEach(function(f) {
+                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "AsrCompoundWordFixEnabled"].forEach(function(f) {
                         document.querySelector("#" + f).checked = config[f] !== false;
                     });
 
@@ -832,7 +836,7 @@
 
                     ["RadioModeEnabled", "PodcastsEnabled", "LiveTvEnabled", "SleepTimerEnabled",
                      "QueueManagementEnabled", "BrowseLibraryEnabled", "RecommendationsEnabled",
-                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeAnnounceTitle", "AsrCompoundWordFixEnabled"].forEach(function(f) {
+                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "AsrCompoundWordFixEnabled"].forEach(function(f) {
                         config[f] = document.querySelector("#" + f).checked;
                     });
 
@@ -882,6 +886,7 @@
                         RecommendationsEnabled: config.RecommendationsEnabled,
                         AplVisualsEnabled: config.AplVisualsEnabled,
                         VideoPlaybackEnabled: config.VideoPlaybackEnabled,
+                        ResumeOfferEnabled: config.ResumeOfferEnabled,
                         ResumeAnnounceTitle: config.ResumeAnnounceTitle,
                         AsrCompoundWordFixEnabled: config.AsrCompoundWordFixEnabled,
                         MusicEnabled: config.MusicEnabled,

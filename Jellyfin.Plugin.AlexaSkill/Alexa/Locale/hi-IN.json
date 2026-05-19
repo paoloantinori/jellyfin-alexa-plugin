@@ -162,6 +162,8 @@
   "ResumeReprompt": "क्या आप वहीं से जारी रखना चाहेंगे जहाँ रुके थे?",
   "Resuming": "{0} फिर से शुरू कर रहा हूँ।",
   "ResumingSsml": "<emphasis level=\"moderate\">{0}</emphasis> फिर से शुरू कर रहा हूँ।",
+  "ResumeBrief": "फिर से शुरू कर रहा है।",
+  "ResumeBriefSsml": "<say-as interpret-as=\"interjection\">फिर से शुरू</say-as>",
   "FreshStart": "नई शुरुआत करते हैं। आप क्या सुनना चाहेंगे?",
   "QueryRecentlyAddedIntro": "यहाँ सबसे हाल ही में जोड़े गए {0} आइटम हैं:",
   "QueryRecentlyAddedItem": "{0}. {2} द्वारा {1}",
@@ -180,5 +182,7 @@
   "SearchingBook": "Searching for your audiobook...",
   "RecentlyPlayed": "Recently Played",
   "FollowMeSuccessSsml": "<say-as interpret-as=\"interjection\">समझ गया</say-as><break time=\"200ms\"/>जारी रख रहा हूँ <emphasis level=\"moderate\">{0}</emphasis> जहां आप छोड़े थे।",
-  "CarouselReprompt": "आप क्या सुनना चाहेंगे?"
+  "CarouselReprompt": "आप क्या सुनना चाहेंगे?",
+  "WelcomeAplGreeting": "स्वागत है, {0}!",
+  "ResumeOfferPrompt": "क्या आप फिर से शुरू करना चाहेंगे?"
 }

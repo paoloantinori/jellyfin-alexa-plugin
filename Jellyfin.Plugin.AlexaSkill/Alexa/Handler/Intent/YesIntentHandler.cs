@@ -172,11 +172,15 @@ public class YesIntentHandler : BaseHandler
             offsetMs);
 
         // Replace default speech with resume announcement
-        string title = item.Name ?? ResponseStrings.Get("UnknownMedia", locale);
-        string? ssml = GetSsml("ResumingSsml", locale, EscapeXml(title));
-        response.Response.OutputSpeech = ssml != null
-            ? new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" }
-            : new PlainTextOutputSpeech { Text = ResponseStrings.Get("Resuming", locale, title) };
+        if (_config.ResumeAnnounceTitle)
+        {
+            string title = item.Name ?? ResponseStrings.Get("UnknownMedia", locale);
+            response.Response.OutputSpeech = BuildOutputSpeech("ResumingSsml", "Resuming", locale, EscapeXml(title));
+        }
+        else
+        {
+            response.Response.OutputSpeech = BuildOutputSpeech("ResumeBriefSsml", "ResumeBrief", locale);
+        }
 
         return Task.FromResult(response);
     }

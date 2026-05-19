@@ -38,6 +38,7 @@ public class PluginConfigurationFeatureFlagTests
         Assert.True(config.RecommendationsEnabled);
         Assert.True(config.AplVisualsEnabled);
         Assert.True(config.VideoPlaybackEnabled);
+        Assert.True(config.ResumeOfferEnabled);
         Assert.True(config.ResumeAnnounceTitle);
         Assert.True(config.AsrCompoundWordFixEnabled);
     }
@@ -56,6 +57,7 @@ public class PluginConfigurationFeatureFlagTests
             RecommendationsEnabled = false,
             AplVisualsEnabled = false,
             VideoPlaybackEnabled = false,
+            ResumeOfferEnabled = false,
             ResumeAnnounceTitle = false,
             AsrCompoundWordFixEnabled = false
         };
@@ -69,6 +71,7 @@ public class PluginConfigurationFeatureFlagTests
         Assert.False(config.RecommendationsEnabled);
         Assert.False(config.AplVisualsEnabled);
         Assert.False(config.VideoPlaybackEnabled);
+        Assert.False(config.ResumeOfferEnabled);
         Assert.False(config.ResumeAnnounceTitle);
         Assert.False(config.AsrCompoundWordFixEnabled);
     }

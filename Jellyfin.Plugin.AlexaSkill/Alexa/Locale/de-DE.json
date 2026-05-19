@@ -162,6 +162,8 @@
   "ResumeReprompt": "Möchtest du dort weitermachen, wo du aufgehört hast?",
   "Resuming": "Setze {0} fort.",
   "ResumingSsml": "<say-as interpret-as=\"interjection\">weiter so</say-as><break time=\"200ms\"/>Setze <emphasis level=\"moderate\">{0}</emphasis> fort.",
+  "ResumeBrief": "Fortsetzen.",
+  "ResumeBriefSsml": "<say-as interpret-as=\"interjection\">fortsetzen</say-as>",
   "FreshStart": "Lass uns neu anfangen. Was möchtest du hören?",
   "QueryRecentlyAddedIntro": "Hier sind die {0} zuletzt hinzugefügten Elemente:",
   "QueryRecentlyAddedItem": "{0}. {1} von {2}",
@@ -180,5 +182,7 @@
   "NoContentInBook": "Das Buch {0} enthält keinen Audioinhalt.",
   "SearchingBook": "Suche nach Ihrem Hörbuch...",
   "RecentlyPlayed": "Recently Played",
-  "CarouselReprompt": "Was möchtest du hören?"
+  "CarouselReprompt": "Was möchtest du hören?",
+  "WelcomeAplGreeting": "Willkommen, {0}!",
+  "ResumeOfferPrompt": "Möchtest du weiterhören?"
 }

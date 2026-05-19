@@ -162,6 +162,8 @@
   "ResumeReprompt": "Deseja continuar de onde parou?",
   "Resuming": "Continuando {0}.",
   "ResumingSsml": "<say-as interpret-as=\"interjection\">beleza</say-as><break time=\"200ms\"/>Continuando <emphasis level=\"moderate\">{0}</emphasis>.",
+  "ResumeBrief": "Retomando.",
+  "ResumeBriefSsml": "<say-as interpret-as=\"interjection\">retomando</say-as>",
   "FreshStart": "Vamos recomeçar. O que você gostaria de ouvir?",
   "QueryRecentlyAddedIntro": "Aqui estão os {0} itens adicionados mais recentemente:",
   "QueryRecentlyAddedItem": "{0}. {1} por {2}",
@@ -180,5 +182,7 @@
   "SearchingBook": "Procurando seu audiolivro...",
   "FollowMeSuccessSsml": "<say-as interpret-as=\"interjection\">entendi</say-as><break time=\"200ms\"/>Continuando <emphasis level=\"moderate\">{0}</emphasis> de onde você parou.",
   "RecentlyPlayed": "Recently Played",
-  "CarouselReprompt": "O que você gostaria de ouvir?"
+  "CarouselReprompt": "O que você gostaria de ouvir?",
+  "WelcomeAplGreeting": "Bem-vindo, {0}!",
+  "ResumeOfferPrompt": "Deseja retomar?"
 }

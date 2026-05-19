@@ -162,6 +162,8 @@
   "ResumeReprompt": "Would you like to continue where you left off?",
   "Resuming": "Resuming {0}.",
   "ResumingSsml": "<say-as interpret-as=\"interjection\">resuming</say-as><break time=\"200ms\"/><emphasis level=\"moderate\">{0}</emphasis>",
+  "ResumeBrief": "Resuming.",
+  "ResumeBriefSsml": "<say-as interpret-as=\"interjection\">resuming</say-as>",
   "FreshStart": "Starting fresh. What would you like to hear?",
   "QueryRecentlyAddedIntro": "Here are the {0} most recently added items:",
   "QueryRecentlyAddedItem": "{0}. {1} by {2}",
@@ -180,5 +182,7 @@
   "NoContentInBook": "There is no audio content in the book {0}.",
   "SearchingBook": "Searching for your audiobook...",
   "RecentlyPlayed": "Recently Played",
-  "CarouselReprompt": "What would you like to hear?"
+  "CarouselReprompt": "What would you like to hear?",
+  "WelcomeAplGreeting": "Welcome, {0}!",
+  "ResumeOfferPrompt": "Would you like to resume?"
 }

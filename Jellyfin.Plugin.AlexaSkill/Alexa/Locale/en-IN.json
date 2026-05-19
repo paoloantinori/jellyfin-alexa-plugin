@@ -143,6 +143,8 @@
   "ResumeReprompt": "Would you like to continue where you left off?",
   "Resuming": "Resuming {0}.",
   "ResumingSsml": "<say-as interpret-as=\"interjection\">resuming</say-as><break time=\"200ms\"/><emphasis level=\"moderate\">{0}</emphasis>",
+  "ResumeBrief": "Resuming.",
+  "ResumeBriefSsml": "<say-as interpret-as=\"interjection\">resuming</say-as>",
   "SearchingBook": "Searching for your audiobook...",
   "RecentlyPlayed": "Recently Played",
   "SearchingMedia": "Searching for your music...",
@@ -180,5 +182,7 @@
   "WelcomeSsml": "Welcome to Jellyfin Skill<break time=\"300ms\"/>What can I play?",
   "WhoAmI": "You're connected as {0}.",
   "WhoAmIUnknown": "I don't recognize your voice yet. Say learn my voice to set it up.",
-  "CarouselReprompt": "What would you like to hear?"
+  "CarouselReprompt": "What would you like to hear?",
+  "WelcomeAplGreeting": "Welcome, {0}!",
+  "ResumeOfferPrompt": "Would you like to resume?"
 }
