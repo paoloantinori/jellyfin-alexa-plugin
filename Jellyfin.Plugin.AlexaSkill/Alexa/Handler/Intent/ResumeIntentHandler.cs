@@ -46,7 +46,9 @@ public class ResumeIntentHandler : BaseHandler
     public override bool CanHandle(Request request)
     {
         IntentRequest? intentRequest = request as IntentRequest;
-        return intentRequest != null && string.Equals(intentRequest.Intent.Name, IntentNames.AmazonResume, System.StringComparison.Ordinal);
+        PlaybackControllerRequest? playbackControllerRequest = request as PlaybackControllerRequest;
+        return (intentRequest != null && string.Equals(intentRequest.Intent.Name, IntentNames.AmazonResume, System.StringComparison.Ordinal)) ||
+            (playbackControllerRequest != null && playbackControllerRequest.PlaybackRequestType is PlaybackControllerRequestType.Play);
     }
 
     /// <summary>
@@ -106,6 +108,6 @@ public class ResumeIntentHandler : BaseHandler
             }
         }
 
-        return Task.FromResult<SkillResponse>(BuildAudioPlayerResponse(PlayBehavior.Enqueue, GetStreamUrl(item_id, user), item_id, session.FullNowPlayingItem, user, context, offset));
+        return Task.FromResult<SkillResponse>(BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, session.FullNowPlayingItem, user, context, offset));
     }
 }

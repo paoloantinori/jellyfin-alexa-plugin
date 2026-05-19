@@ -393,6 +393,56 @@ public class PauseResumeStateTests : IDisposable
         Assert.Equal(45000, directive.AudioItem.Stream.OffsetInMilliseconds);
     }
 
+    // ---- PlayBehavior and PlaybackController tests ----
+
+    [Fact]
+    public async Task ResumeIntent_UsesReplaceAllPlayBehavior()
+    {
+        var handler = new ResumeIntentHandler(
+            _sessionManagerMock.Object, _config, _loggerFactory, _queueManager);
+
+        var context = CreateContext(audioPlayerToken: TestItemId, audioPlayerOffset: 10000);
+        var session = CreateSessionWithNowPlaying(TestItemId);
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "AMAZON.ResumeIntent" } },
+            context,
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+        Assert.Equal(PlayBehavior.ReplaceAll, directive.PlayBehavior);
+    }
+
+    [Fact]
+    public void ResumeIntent_CanHandle_PlaybackControllerPlayCommand()
+    {
+        var handler = new ResumeIntentHandler(
+            _sessionManagerMock.Object, _config, _loggerFactory);
+
+        // PlaybackControllerRequest.PlaybackRequestType is read-only;
+        // deserialize from JSON to set it
+        var json = @"{""requestId"":""test"",""type"":""PlaybackController.PlayCommandIssued"",""timestamp"":""2024-01-01T00:00:00Z"",""locale"":""en-US"",""playbackRequestMethod"":""PLAY""}";
+        var request = Newtonsoft.Json.JsonConvert.DeserializeObject<PlaybackControllerRequest>(json);
+
+        Assert.NotNull(request);
+        Assert.True(handler.CanHandle(request!));
+    }
+
+    [Fact]
+    public void ResumeIntent_CannotHandle_PlaybackControllerPauseCommand()
+    {
+        var handler = new ResumeIntentHandler(
+            _sessionManagerMock.Object, _config, _loggerFactory);
+
+        var json = @"{""requestId"":""test"",""type"":""PlaybackController.PauseCommandIssued"",""timestamp"":""2024-01-01T00:00:00Z"",""locale"":""en-US"",""playbackRequestMethod"":""PAUSE""}";
+        var request = Newtonsoft.Json.JsonConvert.DeserializeObject<PlaybackControllerRequest>(json);
+
+        Assert.NotNull(request);
+        Assert.False(handler.CanHandle(request!));
+    }
+
     // ---- DeviceQueue persistence ----
 
     [Fact]
