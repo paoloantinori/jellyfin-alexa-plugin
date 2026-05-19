@@ -802,7 +802,12 @@
           },
           {
             "name": {
-              "value": "alben"
+              "value": "alben",
+              "synonyms": [
+                "platten",
+                "platte",
+                "album"
+              ]
             }
           },
           {
@@ -812,7 +817,13 @@
           },
           {
             "name": {
-              "value": "lieder"
+              "value": "lieder",
+              "synonyms": [
+                "song",
+                "songs",
+                "titel",
+                "lied"
+              ]
             }
           },
           {

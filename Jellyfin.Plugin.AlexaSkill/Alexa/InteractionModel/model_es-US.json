@@ -781,7 +781,12 @@
           },
           {
             "name": {
-              "value": "álbumes"
+              "value": "álbumes",
+              "synonyms": [
+                "álbum",
+                "discos",
+                "disco"
+              ]
             }
           },
           {
@@ -791,7 +796,14 @@
           },
           {
             "name": {
-              "value": "canciones"
+              "value": "canciones",
+              "synonyms": [
+                "pistas",
+                "pista",
+                "tema",
+                "temas",
+                "canción"
+              ]
             }
           },
           {

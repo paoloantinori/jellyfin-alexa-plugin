@@ -814,7 +814,12 @@
           },
           {
             "name": {
-              "value": "albums"
+              "value": "albums",
+              "synonyms": [
+                "record",
+                "records",
+                "album"
+              ]
             }
           },
           {
@@ -824,7 +829,13 @@
           },
           {
             "name": {
-              "value": "songs"
+              "value": "songs",
+              "synonyms": [
+                "track",
+                "music",
+                "song",
+                "tracks"
+              ]
             }
           },
           {

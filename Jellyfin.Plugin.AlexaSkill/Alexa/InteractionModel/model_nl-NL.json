@@ -786,7 +786,12 @@
           },
           {
             "name": {
-              "value": "albums"
+              "value": "albums",
+              "synonyms": [
+                "plaat",
+                "platen",
+                "album"
+              ]
             }
           },
           {
@@ -796,7 +801,13 @@
           },
           {
             "name": {
-              "value": "nummers"
+              "value": "nummers",
+              "synonyms": [
+                "track",
+                "muziek",
+                "nummer",
+                "tracks"
+              ]
             }
           },
           {

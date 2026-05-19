@@ -851,7 +851,13 @@
           "Elenca gli album di {musician}",
           "Quali {query_type} abbiamo di {musician}",
           "Che {query_type} abbiamo di {musician}",
-          "Mostra {query_type} di {musician}"
+          "Mostra {query_type} di {musician}",
+          "Mostra {query_type} dei {musician}",
+          "Mostra {query_type} degli {musician}",
+          "Quali {query_type} abbiamo dei {musician}",
+          "Che {query_type} abbiamo dei {musician}",
+          "Mostra dischi dei {musician}",
+          "Mostra album dei {musician}"
         ],
         "slots": [
           {
@@ -1310,7 +1316,10 @@
           },
           {
             "name": {
-              "value": "albums"
+              "value": "albums",
+              "synonyms": [
+                "dischi"
+              ]
             }
           },
           {

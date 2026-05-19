@@ -799,7 +799,12 @@
           },
           {
             "name": {
-              "value": "albums"
+              "value": "albums",
+              "synonyms": [
+                "disque",
+                "disques",
+                "album"
+              ]
             }
           },
           {
@@ -809,7 +814,14 @@
           },
           {
             "name": {
-              "value": "chansons"
+              "value": "chansons",
+              "synonyms": [
+                "titres",
+                "chanson",
+                "morceaux",
+                "titre",
+                "morceau"
+              ]
             }
           },
           {
