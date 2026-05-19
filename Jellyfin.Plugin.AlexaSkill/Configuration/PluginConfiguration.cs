@@ -89,6 +89,8 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool RecommendationsEnabled { get; set; } = true;
     public bool AplVisualsEnabled { get; set; } = true;
     public bool VideoPlaybackEnabled { get; set; } = true;
+    public bool ResumeAnnounceTitle { get; set; } = true;
+    public bool AsrCompoundWordFixEnabled { get; set; } = true;
 
     // Media type visibility — exclude content types from search and library queries
     public bool MusicEnabled { get; set; } = true;

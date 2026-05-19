@@ -123,6 +123,14 @@
                                 <label><input type="checkbox" is="emby-checkbox" id="VideoPlaybackEnabled" /> <span>Video Playback</span></label>
                                 <div class="fieldDescription checkboxFieldDescription">Enable video playback on supported devices</div>
                             </div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="ResumeAnnounceTitle" /> <span>Announce Title on Resume</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">Speak the content title when resuming playback. Disable for a briefer response with long titles.</div>
+                            </div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="AsrCompoundWordFixEnabled" /> <span>ASR Compound Word Fix</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">When Alexa splits compound words (e.g. 'lazybones' → 'lazy bones'), retry search with joined variants. Disable if search is too slow on misses.</div>
+                            </div>
                     </details>
 
                     <details>
@@ -366,7 +374,7 @@
                     // Feature flags
                     ["RadioModeEnabled", "PodcastsEnabled", "LiveTvEnabled", "SleepTimerEnabled",
                      "QueueManagementEnabled", "BrowseLibraryEnabled", "RecommendationsEnabled",
-                     "AplVisualsEnabled", "VideoPlaybackEnabled"].forEach(function(f) {
+                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeAnnounceTitle", "AsrCompoundWordFixEnabled"].forEach(function(f) {
                         document.querySelector("#" + f).checked = config[f] !== false;
                     });
 
@@ -824,7 +832,7 @@
 
                     ["RadioModeEnabled", "PodcastsEnabled", "LiveTvEnabled", "SleepTimerEnabled",
                      "QueueManagementEnabled", "BrowseLibraryEnabled", "RecommendationsEnabled",
-                     "AplVisualsEnabled", "VideoPlaybackEnabled"].forEach(function(f) {
+                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeAnnounceTitle", "AsrCompoundWordFixEnabled"].forEach(function(f) {
                         config[f] = document.querySelector("#" + f).checked;
                     });
 
@@ -874,6 +882,8 @@
                         RecommendationsEnabled: config.RecommendationsEnabled,
                         AplVisualsEnabled: config.AplVisualsEnabled,
                         VideoPlaybackEnabled: config.VideoPlaybackEnabled,
+                        ResumeAnnounceTitle: config.ResumeAnnounceTitle,
+                        AsrCompoundWordFixEnabled: config.AsrCompoundWordFixEnabled,
                         MusicEnabled: config.MusicEnabled,
                         VideosEnabled: config.VideosEnabled,
                         BooksEnabled: config.BooksEnabled,
