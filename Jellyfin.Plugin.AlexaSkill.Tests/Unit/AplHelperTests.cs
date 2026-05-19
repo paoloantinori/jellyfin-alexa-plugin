@@ -556,6 +556,116 @@ public class AplHelperTests
         Assert.Contains("${data.title}", docStr);
         Assert.Contains("${data.artUrl}", docStr);
     }
+
+    [Fact]
+    public void BuildNowPlayingDirective_DefaultProgress_IncludesProgressInDataSources()
+    {
+        var audio = new Audio { Name = "Song" };
+        var result = AplHelper.BuildNowPlayingDirective(audio, "art", "bg");
+
+        var props = result!.DataSources!["jellyfinData"]?["properties"] as JObject;
+        Assert.NotNull(props);
+        Assert.Equal(0L, props["progressValue"]?.Value<long>());
+        Assert.Equal(0L, props["totalValue"]?.Value<long>());
+        Assert.Equal("0:00", props["elapsedTime"]?.Value<string>());
+        Assert.Equal("0:00", props["totalTime"]?.Value<string>());
+    }
+
+    [Fact]
+    public void BuildNowPlayingDirective_WithProgress_IncludesProgressInDataSources()
+    {
+        var audio = new Audio { Name = "Song" };
+        long progressMs = 90000; // 1:30
+        long durationMs = 240000; // 4:00
+
+        var result = AplHelper.BuildNowPlayingDirective(audio, "art", "bg", null, progressMs, durationMs);
+
+        var props = result!.DataSources!["jellyfinData"]?["properties"] as JObject;
+        Assert.NotNull(props);
+        Assert.Equal(90000L, props["progressValue"]?.Value<long>());
+        Assert.Equal(240000L, props["totalValue"]?.Value<long>());
+        Assert.Equal("1:30", props["elapsedTime"]?.Value<string>());
+        Assert.Equal("4:00", props["totalTime"]?.Value<string>());
+    }
+
+    [Fact]
+    public void BuildNowPlayingDirective_ZeroDuration_ProgressBarStillRenders()
+    {
+        var audio = new Audio { Name = "Song" };
+        var result = AplHelper.BuildNowPlayingDirective(audio, "art", "bg", null, 0, 0);
+
+        Assert.NotNull(result);
+        var props = result.DataSources!["jellyfinData"]?["properties"] as JObject;
+        Assert.NotNull(props);
+        Assert.Equal(0L, props["totalValue"]?.Value<long>());
+    }
+
+    [Fact]
+    public void BuildNowPlayingDirective_DocumentContainsProgressBar()
+    {
+        var audio = new Audio { Name = "Song" };
+        var result = AplHelper.BuildNowPlayingDirective(audio, "art", "bg");
+
+        string docStr = result!.Document!.ToString();
+        Assert.Contains("AlexaProgressBar", docStr);
+        Assert.Contains("progressValue", docStr);
+        Assert.Contains("totalValue", docStr);
+        Assert.Contains("handleTick", docStr);
+    }
+
+    [Fact]
+    public void BuildNowPlayingDirective_DocumentContainsTimeBinding()
+    {
+        var audio = new Audio { Name = "Song" };
+        var result = AplHelper.BuildNowPlayingDirective(audio, "art", "bg");
+
+        string docStr = result!.Document!.ToString();
+        Assert.Contains("${payload.jellyfinData.properties.elapsedTime}", docStr);
+        Assert.Contains("${payload.jellyfinData.properties.totalTime}", docStr);
+    }
+
+    [Fact]
+    public void FormatTime_ZeroMs_ReturnsZeroTime()
+    {
+        Assert.Equal("0:00", AplHelper.FormatTime(0));
+    }
+
+    [Fact]
+    public void FormatTime_NegativeMs_ReturnsZeroTime()
+    {
+        Assert.Equal("0:00", AplHelper.FormatTime(-1000));
+    }
+
+    [Fact]
+    public void FormatTime_UnderOneMinute_FormatsSeconds()
+    {
+        Assert.Equal("0:45", AplHelper.FormatTime(45000));
+    }
+
+    [Fact]
+    public void FormatTime_MinutesAndSeconds_FormatsCorrectly()
+    {
+        Assert.Equal("3:07", AplHelper.FormatTime(187000));
+    }
+
+    [Fact]
+    public void FormatTime_ExactlyOneHour_FormatsWithHours()
+    {
+        Assert.Equal("1:00:00", AplHelper.FormatTime(3600000));
+    }
+
+    [Fact]
+    public void FormatTime_OverOneHour_FormatsHMMSS()
+    {
+        Assert.Equal("1:23:45", AplHelper.FormatTime(5025000));
+    }
+
+    [Fact]
+    public void FormatTime_LargeDuration_FormatsCorrectly()
+    {
+        // 2 hours, 30 minutes, 0 seconds
+        Assert.Equal("2:30:00", AplHelper.FormatTime(9000000));
+    }
 }
 
 /// <summary>

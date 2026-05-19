@@ -345,7 +345,8 @@ public abstract class BaseHandler
 
         if (item != null && deviceSupportsApl && visualsEnabled)
         {
-            var aplDirective = Apl.AplHelper.BuildNowPlayingDirective(item, imageUrl, imageUrl, context);
+            long durationMs = item.RunTimeTicks != null ? (long)(item.RunTimeTicks.Value / TimeSpan.TicksPerMillisecond) : 0;
+            var aplDirective = Apl.AplHelper.BuildNowPlayingDirective(item, imageUrl, imageUrl, context, offsetInMilliseconds, durationMs);
             if (aplDirective != null)
             {
                 directives.Add(aplDirective);

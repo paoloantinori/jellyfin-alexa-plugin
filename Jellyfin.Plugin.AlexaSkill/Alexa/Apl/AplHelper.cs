@@ -113,6 +113,36 @@ internal static class AplHelper
                 ""paddingTop"": 5
               },
               {
+                ""type"": ""Text"",
+                ""text"": ""${payload.jellyfinData.properties.elapsedTime} / ${payload.jellyfinData.properties.totalTime}"",
+                ""fontSize"": ""${subtitleSize}"",
+                ""color"": ""#B0B0B0"",
+                ""textAlign"": ""center"",
+                ""maxLines"": 1,
+                ""paddingTop"": 10
+              },
+              {
+                ""type"": ""AlexaProgressBar"",
+                ""progressValue"": ""${payload.jellyfinData.properties.progressValue}"",
+                ""totalValue"": ""${payload.jellyfinData.properties.totalValue}"",
+                ""progressFillColor"": ""#00A4DC"",
+                ""width"": ""80%"",
+                ""paddingTop"": 10,
+                ""handleTick"": [
+                  {
+                    ""when"": ""${progressValue < totalValue}"",
+                    ""minimumDelay"": 1000,
+                    ""commands"": [
+                      {
+                        ""type"": ""SetValue"",
+                        ""property"": ""progressValue"",
+                        ""value"": ""${progressValue + 1000}""
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
                 ""type"": ""Container"",
                 ""direction"": ""row"",
                 ""justifyContent"": ""center"",
@@ -637,14 +667,17 @@ internal static class AplHelper
 
     /// <summary>
     /// Build an APL Now Playing screen directive showing track info, album art,
-    /// and interactive playback controls (prev, pause, next) for Echo Show devices.
+    /// progress bar with elapsed/total time, and interactive playback controls
+    /// (prev, pause, next) for Echo Show devices.
     /// </summary>
     /// <param name="item">The media item to display.</param>
     /// <param name="imageUrl">The URL for the album art image.</param>
     /// <param name="backgroundImageUrl">The URL for the background image.</param>
     /// <param name="context">Optional Alexa request context for backstack navigation.</param>
+    /// <param name="progressMs">Current playback position in milliseconds.</param>
+    /// <param name="durationMs">Total duration of the item in milliseconds.</param>
     /// <returns>An APL RenderDocument directive, or null if the item has no name.</returns>
-    public static AplRenderDocumentDirective? BuildNowPlayingDirective(BaseItem item, string imageUrl, string backgroundImageUrl, Context? context = null)
+    public static AplRenderDocumentDirective? BuildNowPlayingDirective(BaseItem item, string imageUrl, string backgroundImageUrl, Context? context = null, long progressMs = 0, long durationMs = 0)
     {
         if (string.IsNullOrEmpty(item.Name))
         {
@@ -668,7 +701,11 @@ internal static class AplHelper
                         ["title"] = item.Name,
                         ["subtitle"] = subtitle,
                         ["artUrl"] = imageUrl,
-                        ["backgroundUrl"] = backgroundImageUrl
+                        ["backgroundUrl"] = backgroundImageUrl,
+                        ["progressValue"] = progressMs,
+                        ["totalValue"] = durationMs,
+                        ["elapsedTime"] = FormatTime(progressMs),
+                        ["totalTime"] = FormatTime(durationMs)
                     }
                 }
             },
@@ -967,6 +1004,29 @@ internal static class AplHelper
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Format a millisecond duration as a human-readable time string.
+    /// Returns "M:mm:ss" for durations over 1 hour, "m:ss" otherwise.
+    /// Returns "0:00" for zero or negative values.
+    /// </summary>
+    /// <param name="ms">Duration in milliseconds.</param>
+    /// <returns>Formatted time string.</returns>
+    internal static string FormatTime(long ms)
+    {
+        if (ms <= 0)
+        {
+            return "0:00";
+        }
+
+        var ts = TimeSpan.FromMilliseconds(ms);
+        if (ts.TotalHours >= 1)
+        {
+            return $"{(int)ts.TotalHours}:{ts.Minutes:D2}:{ts.Seconds:D2}";
+        }
+
+        return $"{ts.Minutes}:{ts.Seconds:D2}";
     }
 
     /// <summary>
