@@ -78,7 +78,7 @@
   "DidNotCatchEpisodeNumber": "Ik heb het seizoen- of afleveringsnummer niet goed verstaan. Zeg het seizoen en de aflevering.",
   "NotFoundSeries": "Ik kon geen serie vinden genaamd {0}.",
   "NotFoundEpisode": "Ik kon seizoen {0} aflevering {1} van {2} niet vinden.",
-  "DidNotCatchBrowseCategory": "Wat wil je bekijken? Je kunt artiesten, albums, films, nummers of genres zeggen.",
+  "DidNotCatchBrowseCategory": "Wat wil je bekijken? Je kunt artiesten, albums, films, series, nummers of genres zeggen.",
   "BrowseResults": "Ik heb {0} resultaten gevonden: {1}",
   "BrowseItem": "{0}. {1}",
   "NoBrowseResults": "Ik kon geen {0} vinden.",

@@ -78,7 +78,7 @@
   "DidNotCatchEpisodeNumber": "シーズンまたはエピソード番号が聞き取れませんでした。シーズンとエピソードを言ってください。",
   "NotFoundSeries": "{0} というシリーズが見つかりませんでした。",
   "NotFoundEpisode": "{2} のシーズン {0} エピソード {1} が見つかりませんでした。",
-  "DidNotCatchBrowseCategory": "何を閲覧しますか？アーティスト、アルバム、映画、曲、またはジャンルと言ってください。",
+  "DidNotCatchBrowseCategory": "何を閲覧しますか？アーティスト、アルバム、映画、シリーズ、曲、またはジャンルと言ってください。",
   "BrowseResults": "{0} 件の結果が見つかりました: {1}",
   "BrowseItem": "{0}. {1}",
   "NoBrowseResults": "{0} が見つかりませんでした。",

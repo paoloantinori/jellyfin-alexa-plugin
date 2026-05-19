@@ -830,6 +830,11 @@
             "name": {
               "value": "genres"
             }
+          },
+          {
+            "name": {
+              "value": "series"
+            }
           }
         ]
       },

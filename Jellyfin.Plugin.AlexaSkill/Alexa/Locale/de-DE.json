@@ -78,7 +78,7 @@
   "DidNotCatchEpisodeNumber": "Ich habe die Staffel- oder Episodennummer nicht verstanden. Bitte nenne Staffel und Episode.",
   "NotFoundSeries": "Ich konnte keine Serie namens {0} finden.",
   "NotFoundEpisode": "Ich konnte Staffel {0} Episode {1} von {2} nicht finden.",
-  "DidNotCatchBrowseCategory": "Was möchtest du durchsuchen? Du kannst Künstler, Alben, Filme, Lieder oder Genres sagen.",
+  "DidNotCatchBrowseCategory": "Was möchtest du durchsuchen? Du kannst Künstler, Alben, Filme, Serien, Lieder oder Genres sagen.",
   "BrowseResults": "Ich habe {0} Ergebnisse gefunden: {1}",
   "BrowseItem": "{0}. {1}",
   "NoBrowseResults": "Ich konnte keine {0} finden.",

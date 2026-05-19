@@ -96,7 +96,8 @@ public class BrowseLibraryIntentHandler : BaseHandler
 
         if (string.IsNullOrWhiteSpace(browseCategory))
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchBrowseCategory", locale));
+            string prompt = ResponseStrings.Get("DidNotCatchBrowseCategory", locale);
+            return ResponseBuilder.Ask(prompt, new Reprompt(prompt));
         }
 
         await SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)).ConfigureAwait(false);
@@ -132,8 +133,19 @@ public class BrowseLibraryIntentHandler : BaseHandler
             case "canzoni":
                 items = await QueryItems(BaseItemKind.Audio, filter, resolvedUser, user, cancellationToken).ConfigureAwait(false);
                 break;
+            case "series":
+            case "serie":
+            case "serien":
+            case "séries":
+            case "shows":
+            case "シリーズ":
+            case "सीरीज़":
+            case "مسلسلات":
+                items = await QueryItems(BaseItemKind.Series, filter, resolvedUser, user, cancellationToken).ConfigureAwait(false);
+                break;
             default:
-                return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchBrowseCategory", locale));
+                string prompt = ResponseStrings.Get("DidNotCatchBrowseCategory", locale);
+                return ResponseBuilder.Ask(prompt, new Reprompt(prompt));
         }
 
         if (items.Count == 0)

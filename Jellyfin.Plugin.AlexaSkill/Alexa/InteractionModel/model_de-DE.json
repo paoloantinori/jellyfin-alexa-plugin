@@ -819,6 +819,11 @@
             "name": {
               "value": "genres"
             }
+          },
+          {
+            "name": {
+              "value": "serien"
+            }
           }
         ]
       },

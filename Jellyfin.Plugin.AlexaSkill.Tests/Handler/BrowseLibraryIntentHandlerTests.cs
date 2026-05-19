@@ -272,6 +272,69 @@ public class BrowseLibraryIntentHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_BrowseSeries_ReturnsList()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(category: "series");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var series = new MediaBrowser.Controller.Entities.TV.Series { Name = "Breaking Bad", Id = Guid.NewGuid() };
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { series });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotNull(response.Response?.OutputSpeech);
+    }
+
+    [Fact]
+    public async Task HandleAsync_BrowseSeries_ItalianAlias_ReturnsList()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(category: "serie");
+        request.Locale = "it-IT";
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var series = new MediaBrowser.Controller.Entities.TV.Series { Name = "Breaking Bad", Id = Guid.NewGuid() };
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { series });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotNull(response.Response?.OutputSpeech);
+    }
+
+    [Fact]
+    public async Task HandleAsync_MissingCategory_KeepsSessionOpen()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest();
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotNull(response.Response?.OutputSpeech);
+        Assert.True(response.Response.ShouldEndSession == null || response.Response.ShouldEndSession == false,
+            "Missing category prompt should keep the session open (use Ask, not Tell)");
+        Assert.NotNull(response.Response?.Reprompt);
+    }
+
+    [Fact]
     public async Task HandleAsync_BrowseWithResults_WithoutApl_NoAplDirective()
     {
         var handler = CreateHandler();
