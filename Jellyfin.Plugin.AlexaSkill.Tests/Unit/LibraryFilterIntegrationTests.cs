@@ -37,7 +37,7 @@ public class LibraryFilterIntegrationTests : IDisposable
         _sessionManagerMock = new Mock<ISessionManager>();
         _libraryManagerMock = new Mock<ILibraryManager>();
         _userManagerMock = new Mock<IUserManager>();
-        _config = new PluginConfiguration();
+        _config = new PluginConfiguration { AsrCompoundWordFixEnabled = false };
         _loggerFactory = LoggerFactory.Create(b => { });
         TestHelpers.EnsurePluginInstance(
             _config,

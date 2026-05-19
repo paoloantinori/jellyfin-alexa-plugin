@@ -40,7 +40,7 @@ public class PlayArtistSongsIntentHandlerTests
         _userManagerMock = new Mock<IUserManager>();
         _userDataManagerMock = new Mock<IUserDataManager>();
         _artistIndexMock = new Mock<IArtistIndex>();
-        _config = new PluginConfiguration();
+        _config = new PluginConfiguration { AsrCompoundWordFixEnabled = false };
         TestHelpers.SetServerAddress(_config, "https://test.example.com");
         _loggerFactory = LoggerFactory.Create(b => { });
     }

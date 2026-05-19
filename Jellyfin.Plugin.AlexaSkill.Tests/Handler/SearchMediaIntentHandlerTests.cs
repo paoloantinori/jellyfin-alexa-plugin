@@ -39,6 +39,7 @@ public class SearchMediaIntentHandlerTests
         _libraryManagerMock = new Mock<ILibraryManager>();
         _userManagerMock = new Mock<IUserManager>();
         _config = new PluginConfiguration();
+        _config.AsrCompoundWordFixEnabled = false;
         TestHelpers.SetServerAddress(_config, "https://test.example.com");
         _loggerFactory = LoggerFactory.Create(b => { });
     }

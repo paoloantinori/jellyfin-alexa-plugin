@@ -97,22 +97,22 @@ public class SearchMediaIntentHandler : BaseHandler
             return userError;
         }
 
-        var searchQuery = new InternalItemsQuery
-        {
-            User = jellyfinUser,
-            Recursive = true,
-            SearchTerm = query,
-            IncludeItemTypes = FilterByContentAccess(_playableTypes),
-            Limit = Plugin.Instance?.Configuration?.MaxSearchResults ?? 20,
-            OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
-            DtoOptions = new DtoOptions(true)
-        };
-        ApplyLibraryFilter(searchQuery, user, _libraryManager);
-
-        IReadOnlyList<BaseItem> results = await RetryAsync(
-            () => _libraryManager.GetItemList(searchQuery),
-            "UnifiedSearch",
-            cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<BaseItem> results = await SearchWithAsrFallbackAsync(query,
+            searchTerm =>
+            {
+                var q = new InternalItemsQuery
+                {
+                    User = jellyfinUser,
+                    Recursive = true,
+                    SearchTerm = searchTerm,
+                    IncludeItemTypes = FilterByContentAccess(_playableTypes),
+                    Limit = Plugin.Instance?.Configuration?.MaxSearchResults ?? 20,
+                    OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
+                    DtoOptions = new DtoOptions(true)
+                };
+                ApplyLibraryFilter(q, user, _libraryManager);
+                return RetryAsync(() => _libraryManager.GetItemList(q), "UnifiedSearch", cancellationToken);
+            }).ConfigureAwait(false);
 
         if (results.Count <= ArtistFallbackThreshold)
         {

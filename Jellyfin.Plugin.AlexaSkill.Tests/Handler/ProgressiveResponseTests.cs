@@ -57,7 +57,7 @@ public class ProgressiveResponseTests
     public ProgressiveResponseTests()
     {
         _sessionManagerMock = new Mock<ISessionManager>();
-        _config = new PluginConfiguration();
+        _config = new PluginConfiguration { AsrCompoundWordFixEnabled = false };
         TestHelpers.SetServerAddress(_config, "http://localhost:8096");
         _loggerFactory = LoggerFactory.Create(b => { });
     }
@@ -180,7 +180,7 @@ public class ProgressiveResponseIntegrationTests
         _userManagerMock
             .Setup(um => um.GetUserById(It.IsAny<Guid>()))
             .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
-        _config = new PluginConfiguration();
+        _config = new PluginConfiguration { AsrCompoundWordFixEnabled = false };
         TestHelpers.SetServerAddress(_config, "http://localhost:8096");
         _loggerFactory = LoggerFactory.Create(b => { });
     }

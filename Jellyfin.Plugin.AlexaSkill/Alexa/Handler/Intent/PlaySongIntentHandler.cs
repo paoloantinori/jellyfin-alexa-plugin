@@ -136,21 +136,21 @@ public class PlaySongIntentHandler : BaseHandler
             }
         }
 
-        var songSearchQuery = new InternalItemsQuery()
-        {
-            User = jellyfinUser,
-            Recursive = true,
-            SearchTerm = songQuery,
-            ArtistIds = artistsIds.ToArray(),
-            IncludeItemTypes = new[] { BaseItemKind.Audio },
-            DtoOptions = new DtoOptions(true)
-        };
-        ApplyLibraryFilter(songSearchQuery, user, _libraryManager);
-
-        IReadOnlyList<BaseItem> songs = await RetryAsync(
-            () => _libraryManager.GetItemList(songSearchQuery),
-            "GetSongs",
-            cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<BaseItem> songs = await SearchWithAsrFallbackAsync(songQuery,
+            searchTerm =>
+            {
+                var q = new InternalItemsQuery()
+                {
+                    User = jellyfinUser,
+                    Recursive = true,
+                    SearchTerm = searchTerm,
+                    ArtistIds = artistsIds.ToArray(),
+                    IncludeItemTypes = new[] { BaseItemKind.Audio },
+                    DtoOptions = new DtoOptions(true)
+                };
+                ApplyLibraryFilter(q, user, _libraryManager);
+                return RetryAsync(() => _libraryManager.GetItemList(q), "GetSongs", cancellationToken);
+            }).ConfigureAwait(false);
         if (songs.Count == 0 && !string.IsNullOrWhiteSpace(musicianQuery))
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByNameAndArtist", locale, songQuery, matchedArtistName!));

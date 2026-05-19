@@ -635,7 +635,7 @@ public abstract class BaseHandler
         string query,
         Func<string, Task<IReadOnlyList<T>>> searchFunc)
     {
-        IReadOnlyList<T> results = await searchFunc(query).ConfigureAwait(false);
+        IReadOnlyList<T> results = await searchFunc(query).ConfigureAwait(false) ?? Array.Empty<T>();
 
         if (results.Count > 0)
         {
@@ -651,7 +651,7 @@ public abstract class BaseHandler
 
         foreach (string variant in variants)
         {
-            IReadOnlyList<T> variantResults = await searchFunc(variant).ConfigureAwait(false);
+            IReadOnlyList<T> variantResults = await searchFunc(variant).ConfigureAwait(false) ?? Array.Empty<T>();
 
             if (variantResults.Count > 0)
             {

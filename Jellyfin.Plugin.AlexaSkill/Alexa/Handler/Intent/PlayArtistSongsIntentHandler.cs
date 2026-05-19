@@ -185,19 +185,19 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         else
         {
             // Fallback: database queries when in-memory index is not yet loaded
-            var artistSearchQuery = new InternalItemsQuery()
-            {
-                Recursive = true,
-                SearchTerm = musician,
-                IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
-                DtoOptions = new DtoOptions(true)
-            };
-            ApplyLibraryFilter(artistSearchQuery, user, _libraryManager);
-
-            artists = await RetryAsync(
-                () => _libraryManager.GetItemList(artistSearchQuery),
-                "GetArtists",
-                cancellationToken).ConfigureAwait(false);
+            artists = await SearchWithAsrFallbackAsync(musician,
+                searchTerm =>
+                {
+                    var q = new InternalItemsQuery()
+                    {
+                        Recursive = true,
+                        SearchTerm = searchTerm,
+                        IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
+                        DtoOptions = new DtoOptions(true)
+                    };
+                    ApplyLibraryFilter(q, user, _libraryManager);
+                    return RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", cancellationToken);
+                }).ConfigureAwait(false);
 
             tierSw.Stop();
             tierReached = 1;
