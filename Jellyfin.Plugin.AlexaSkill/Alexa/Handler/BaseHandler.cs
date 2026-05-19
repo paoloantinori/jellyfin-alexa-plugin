@@ -461,6 +461,18 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// Build an OutputSpeech using SSML with plaintext fallback.
+    /// Tries the SSML key first; falls back to the plain key if SSML is unavailable.
+    /// </summary>
+    protected static IOutputSpeech BuildOutputSpeech(string ssmlKey, string plainKey, string locale, params object[] args)
+    {
+        string? ssml = GetSsml(ssmlKey, locale, args);
+        return ssml != null
+            ? new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" }
+            : new PlainTextOutputSpeech { Text = ResponseStrings.Get(plainKey, locale, args) };
+    }
+
+    /// <summary>
     /// Extract the locale from the request, defaulting to en-US if not available.
     /// </summary>
     /// <param name="request">The incoming request.</param>
@@ -608,6 +620,46 @@ public abstract class BaseHandler
     protected Task<T> RetryAsync<T>(Func<T> operation, string operationName, CancellationToken cancellationToken = default)
     {
         return RetryHelper.ExecuteWithRetryAsync(operation, Logger, operationName, cancellationToken: cancellationToken, timeoutMs: AlexaRequestTimeoutMs);
+    }
+
+    /// <summary>
+    /// Search using the original query first, then fall back to ASR compound-word
+    /// variants if the feature is enabled and the original returned no results.
+    /// Stops at the first non-empty result set.
+    /// </summary>
+    /// <typeparam name="T">The result item type.</typeparam>
+    /// <param name="query">The original search query from ASR.</param>
+    /// <param name="searchFunc">A function that executes a search for a given query string.</param>
+    /// <returns>Results from the first successful search, or the original empty results.</returns>
+    protected async Task<IReadOnlyList<T>> SearchWithAsrFallbackAsync<T>(
+        string query,
+        Func<string, Task<IReadOnlyList<T>>> searchFunc)
+    {
+        IReadOnlyList<T> results = await searchFunc(query).ConfigureAwait(false);
+
+        if (results.Count > 0)
+        {
+            return results;
+        }
+
+        if (!_config.AsrCompoundWordFixEnabled)
+        {
+            return results;
+        }
+
+        IReadOnlyList<string> variants = AsrVariantGenerator.GenerateAsrVariants(query);
+
+        foreach (string variant in variants)
+        {
+            IReadOnlyList<T> variantResults = await searchFunc(variant).ConfigureAwait(false);
+
+            if (variantResults.Count > 0)
+            {
+                return variantResults;
+            }
+        }
+
+        return results;
     }
 
     /// <summary>
