@@ -179,5 +179,6 @@
   "NoContentInBook": "Er is geen audio-inhoud in het boek {0}.",
   "SearchingBook": "Zoeken naar uw audioboek...",
   "FollowMeSuccessSsml": "<say-as interpret-as=\"interjection\">begrepen</say-as><break time=\"200ms\"/>Ga verder met <emphasis level=\"moderate\">{0}</emphasis> waar je gebleven was.",
-  "RecentlyPlayed": "Recently Played"
+  "RecentlyPlayed": "Recently Played",
+  "CarouselReprompt": "Wat wil je luisteren?"
 }

@@ -477,7 +477,7 @@ public class AplHelperTests
         Assert.Contains("Sequence", docStr);
     }
 
-    [Fact(Skip = "TouchWrapper tap handling temporarily removed from carousel template")]
+    [Fact]
     public void BuildCarouselDirective_DocumentContainsCarouselTapSendEvent()
     {
         var items = new List<ListDisplayItem>

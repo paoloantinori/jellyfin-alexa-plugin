@@ -354,6 +354,7 @@ public class AlexaSkillController : ControllerBase
     {
         string json = JsonConvert.SerializeObject(response);
         _logger.LogInformation("Skill response: {Len} bytes, directives: {Directives}", json.Length, response.Response.Directives.Count);
+
         return new ContentResult
         {
             Content = json,

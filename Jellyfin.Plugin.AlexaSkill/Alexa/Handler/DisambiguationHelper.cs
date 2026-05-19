@@ -115,7 +115,8 @@ internal static class DisambiguationHelper
             var directive = AplHelper.BuildCarouselDirective(
                 ResponseStrings.Get("DisambiguateCarouselTitle", locale),
                 carouselItems,
-                "disambiguation");
+                "disambiguation",
+                context);
 
             if (directive != null)
             {

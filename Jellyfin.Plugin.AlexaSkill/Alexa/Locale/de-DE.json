@@ -179,5 +179,6 @@
   "NotFoundBook": "Leider konnte ich kein Hörbuch mit dem Namen {0} finden.",
   "NoContentInBook": "Das Buch {0} enthält keinen Audioinhalt.",
   "SearchingBook": "Suche nach Ihrem Hörbuch...",
-  "RecentlyPlayed": "Recently Played"
+  "RecentlyPlayed": "Recently Played",
+  "CarouselReprompt": "Was möchtest du hören?"
 }

@@ -179,5 +179,6 @@
   "NoContentInBook": "There is no audio content in the book {0}.",
   "SearchingBook": "Searching for your audiobook...",
   "RecentlyPlayed": "Recently Played",
-  "FollowMeSuccessSsml": "<say-as interpret-as=\"interjection\">فهمت</say-as><break time=\"200ms\"/>استكمال <emphasis level=\"moderate\">{0}</emphasis> من حيث توقفت."
+  "FollowMeSuccessSsml": "<say-as interpret-as=\"interjection\">فهمت</say-as><break time=\"200ms\"/>استكمال <emphasis level=\"moderate\">{0}</emphasis> من حيث توقفت.",
+  "CarouselReprompt": "ماذا تريد أن تسمع؟"
 }

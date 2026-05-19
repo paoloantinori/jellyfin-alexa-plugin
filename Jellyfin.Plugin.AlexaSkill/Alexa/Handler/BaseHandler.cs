@@ -345,7 +345,7 @@ public abstract class BaseHandler
 
         if (item != null && deviceSupportsApl && visualsEnabled)
         {
-            var aplDirective = Apl.AplHelper.BuildNowPlayingDirective(item, imageUrl, imageUrl);
+            var aplDirective = Apl.AplHelper.BuildNowPlayingDirective(item, imageUrl, imageUrl, context);
             if (aplDirective != null)
             {
                 directives.Add(aplDirective);
@@ -993,7 +993,7 @@ public abstract class BaseHandler
             return;
         }
 
-        var directive = Apl.AplHelper.BuildListDirective(title, items, token, action);
+        var directive = Apl.AplHelper.BuildListDirective(title, items, token, action, context);
         if (directive != null)
         {
             response.Response.Directives.Add(directive);
@@ -1013,7 +1013,8 @@ public abstract class BaseHandler
         Context? context,
         string title,
         List<Apl.ListDisplayItem> items,
-        string token = "carousel")
+        string token = "carousel",
+        string locale = "en-US")
     {
         if (!Apl.AplHelper.VisualsEnabled)
         {
@@ -1028,10 +1029,21 @@ public abstract class BaseHandler
             return;
         }
 
-        var directive = Apl.AplHelper.BuildCarouselDirective(title, items, token);
+        var directive = Apl.AplHelper.BuildCarouselDirective(title, items, token, context);
         if (directive != null)
         {
             response.Response.Directives.Add(directive);
+
+            // Interactive APL directives require an open session to receive SendEvent callbacks.
+            if (response.Response.ShouldEndSession == true)
+            {
+                response.Response.ShouldEndSession = false;
+                string repromptText = ResponseStrings.Get("CarouselReprompt", locale);
+                if (response.Response.Reprompt == null && !string.IsNullOrEmpty(repromptText))
+                {
+                    response.Response.Reprompt = new Reprompt(repromptText);
+                }
+            }
         }
         else
         {

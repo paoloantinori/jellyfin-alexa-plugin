@@ -179,5 +179,6 @@
   "NotFoundBook": "Sorry, I couldn't find an audiobook called {0}.",
   "NoContentInBook": "There is no audio content in the book {0}.",
   "SearchingBook": "Searching for your audiobook...",
-  "RecentlyPlayed": "Recently Played"
+  "RecentlyPlayed": "Recently Played",
+  "CarouselReprompt": "What would you like to hear?"
 }

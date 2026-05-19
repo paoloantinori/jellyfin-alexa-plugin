@@ -233,7 +233,7 @@ public class LaunchRequestHandler : BaseHandler
         }
 
         string headerText = ResponseStrings.Get("RecentlyPlayed", locale);
-        var directive = Apl.AplHelper.BuildCarouselDirective(headerText, items);
+        var directive = Apl.AplHelper.BuildCarouselDirective(headerText, items, context: context);
         if (directive != null)
         {
             response.Response.Directives.Add(directive);

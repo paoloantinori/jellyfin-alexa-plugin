@@ -21,6 +21,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
 internal static class AplHelper
 {
     private const string AplInterfaceKey = "Alexa.Presentation.APL";
+    private const string BackstackExtensionUri = "aplext:backstack:10";
+    private const string TimeoutShort = "SHORT";
 
     // NowPlaying APL template with proper datasource binding.
     // ${payload.jellyfinData.properties.xxx} resolves via datasources.
@@ -29,6 +31,12 @@ internal static class AplHelper
   ""type"": ""APL"",
   ""version"": ""1.7"",
   ""theme"": ""dark"",
+  ""extensions"": [
+    {
+      ""name"": ""Back"",
+      ""uri"": ""aplext:backstack:10""
+    }
+  ],
   ""resources"": [
     {
       ""dimensions"": {
@@ -168,6 +176,12 @@ internal static class AplHelper
   ""type"": ""APL"",
   ""version"": ""1.7"",
   ""theme"": ""dark"",
+  ""extensions"": [
+    {
+      ""name"": ""Back"",
+      ""uri"": ""aplext:backstack:10""
+    }
+  ],
   ""mainTemplate"": {
     ""parameters"": [""payload""],
     ""items"": [
@@ -237,6 +251,12 @@ internal static class AplHelper
   ""type"": ""APL"",
   ""version"": ""1.7"",
   ""theme"": ""dark"",
+  ""extensions"": [
+    {
+      ""name"": ""Back"",
+      ""uri"": ""aplext:backstack:10""
+    }
+  ],
   ""mainTemplate"": {
     ""parameters"": [""payload""],
     ""items"": [
@@ -262,64 +282,68 @@ internal static class AplHelper
             ""grow"": 1,
             ""data"": ""${payload.carouselData.properties.items}"",
             ""items"": {
-              ""type"": ""Container"",
-              ""width"": ""28vw"",
-              ""paddingLeft"": 10,
-              ""paddingRight"": 10,
-              ""items"": [
-                {
-                  ""type"": ""Frame"",
-                  ""width"": ""100%"",
-                  ""height"": ""28vw"",
-                  ""borderRadius"": 12,
-                  ""backgroundColor"": ""#2A2A2A"",
-                  ""items"": [
-                    {
-                      ""type"": ""Image"",
-                      ""source"": ""${data.artUrl}"",
-                      ""width"": ""100%"",
-                      ""height"": ""100%"",
-                      ""scale"": ""best-fill"",
-                      ""borderRadius"": 12,
-                      ""when"": ""${data.artUrl}""
-                    },
-                    {
-                      ""type"": ""Text"",
-                      ""text"": ""♪"",
-                      ""fontSize"": 56,
-                      ""color"": ""#555555"",
-                      ""textAlign"": ""center"",
-                      ""textAlignVertical"": ""center"",
-                      ""width"": ""100%"",
-                      ""height"": ""100%"",
-                      ""when"": ""${!data.artUrl}""
-                    }
-                  ]
-                },
-                {
-                  ""type"": ""Text"",
-                  ""text"": ""${data.title}"",
-                  ""fontSize"": 20,
-                  ""color"": ""white"",
-                  ""maxLines"": 2,
-                  ""width"": ""100%"",
-                  ""paddingTop"": 8,
-                  ""paddingLeft"": 2,
-                  ""paddingRight"": 2
-                },
-                {
-                  ""type"": ""Text"",
-                  ""text"": ""${data.subtitle}"",
-                  ""fontSize"": 15,
-                  ""color"": ""#B0B0B0"",
-                  ""maxLines"": 1,
-                  ""width"": ""100%"",
-                  ""paddingTop"": 2,
-                  ""paddingLeft"": 2,
-                  ""paddingRight"": 2,
-                  ""when"": ""${data.subtitle}""
-                }
-              ]
+              ""type"": ""TouchWrapper"",
+              ""onPress"": [{ ""type"": ""SendEvent"", ""arguments"": [ ""carouselTap"", ""${data.id}"" ] }],
+              ""item"": {
+                ""type"": ""Container"",
+                ""width"": ""28vw"",
+                ""paddingLeft"": 10,
+                ""paddingRight"": 10,
+                ""items"": [
+                  {
+                    ""type"": ""Frame"",
+                    ""width"": ""100%"",
+                    ""height"": ""28vw"",
+                    ""borderRadius"": 12,
+                    ""backgroundColor"": ""#2A2A2A"",
+                    ""items"": [
+                      {
+                        ""type"": ""Image"",
+                        ""source"": ""${data.artUrl}"",
+                        ""width"": ""100%"",
+                        ""height"": ""100%"",
+                        ""scale"": ""best-fill"",
+                        ""borderRadius"": 12,
+                        ""when"": ""${data.artUrl}""
+                      },
+                      {
+                        ""type"": ""Text"",
+                        ""text"": ""♪"",
+                        ""fontSize"": 56,
+                        ""color"": ""#555555"",
+                        ""textAlign"": ""center"",
+                        ""textAlignVertical"": ""center"",
+                        ""width"": ""100%"",
+                        ""height"": ""100%"",
+                        ""when"": ""${!data.artUrl}""
+                      }
+                    ]
+                  },
+                  {
+                    ""type"": ""Text"",
+                    ""text"": ""${data.title}"",
+                    ""fontSize"": 20,
+                    ""color"": ""white"",
+                    ""maxLines"": 2,
+                    ""width"": ""100%"",
+                    ""paddingTop"": 8,
+                    ""paddingLeft"": 2,
+                    ""paddingRight"": 2
+                  },
+                  {
+                    ""type"": ""Text"",
+                    ""text"": ""${data.subtitle}"",
+                    ""fontSize"": 15,
+                    ""color"": ""#B0B0B0"",
+                    ""maxLines"": 1,
+                    ""width"": ""100%"",
+                    ""paddingTop"": 2,
+                    ""paddingLeft"": 2,
+                    ""paddingRight"": 2,
+                    ""when"": ""${data.subtitle}""
+                  }
+                ]
+              }
             }
           }
         ]
@@ -353,8 +377,9 @@ internal static class AplHelper
     /// <param name="item">The media item to display.</param>
     /// <param name="imageUrl">The URL for the album art image.</param>
     /// <param name="backgroundImageUrl">The URL for the background image.</param>
+    /// <param name="context">Optional Alexa request context for backstack navigation.</param>
     /// <returns>An APL RenderDocument directive, or null if the item has no name.</returns>
-    public static AplRenderDocumentDirective? BuildNowPlayingDirective(BaseItem item, string imageUrl, string backgroundImageUrl)
+    public static AplRenderDocumentDirective? BuildNowPlayingDirective(BaseItem item, string imageUrl, string backgroundImageUrl, Context? context = null)
     {
         if (string.IsNullOrEmpty(item.Name))
         {
@@ -366,6 +391,7 @@ internal static class AplHelper
         return new AplRenderDocumentDirective
         {
             Token = "nowPlaying",
+            TimeoutType = TimeoutShort,
             Document = NowPlayingDocument,
             DataSources = new JObject
             {
@@ -380,7 +406,8 @@ internal static class AplHelper
                         ["backgroundUrl"] = backgroundImageUrl
                     }
                 }
-            }
+            },
+            PresentationSession = BuildPresentationSession(context)
         };
     }
 
@@ -389,8 +416,9 @@ internal static class AplHelper
     /// tap-to-play touch handlers for each item.
     /// </summary>
     /// <param name="queueItems">The queue items to display.</param>
+    /// <param name="context">Optional Alexa request context for backstack navigation.</param>
     /// <returns>An APL RenderDocument directive, or null if the queue is empty.</returns>
-    public static AplRenderDocumentDirective? BuildQueueDirective(List<QueueDisplayItem> queueItems)
+    public static AplRenderDocumentDirective? BuildQueueDirective(List<QueueDisplayItem> queueItems, Context? context = null)
     {
         if (queueItems.Count == 0)
         {
@@ -398,7 +426,7 @@ internal static class AplHelper
         }
 
         var items = queueItems.Select((q, i) => new ListDisplayItem(q.Title, i.ToString(CultureInfo.InvariantCulture), q.Artist, q.ArtUrl)).ToList();
-        return BuildListDirective("Up Next", items, "queue", "playTrack");
+        return BuildListDirective("Up Next", items, "queue", "playTrack", context);
     }
 
     /// <summary>
@@ -409,8 +437,9 @@ internal static class AplHelper
     /// <param name="items">Items to display in the list.</param>
     /// <param name="token">Token identifying this APL document for subsequent commands.</param>
     /// <param name="action">SendEvent action name fired when a list item is tapped (default: "selectItem").</param>
+    /// <param name="context">Optional Alexa request context for backstack navigation.</param>
     /// <returns>An APL RenderDocument directive, or null if the item list is empty.</returns>
-    public static AplRenderDocumentDirective? BuildListDirective(string title, List<ListDisplayItem> items, string token, string action = "selectItem")
+    public static AplRenderDocumentDirective? BuildListDirective(string title, List<ListDisplayItem> items, string token, string action = "selectItem", Context? context = null)
     {
         if (items.Count == 0)
         {
@@ -450,7 +479,8 @@ internal static class AplHelper
                         ["items"] = itemArray
                     }
                 }
-            }
+            },
+            PresentationSession = BuildPresentationSession(context)
         };
     }
 
@@ -461,8 +491,9 @@ internal static class AplHelper
     /// <param name="headerText">Header text displayed above the carousel.</param>
     /// <param name="items">Items to display as carousel cards.</param>
     /// <param name="token">Token identifying this APL document for subsequent commands.</param>
+    /// <param name="context">Optional Alexa request context for backstack navigation.</param>
     /// <returns>An APL RenderDocument directive, or null if the item list is empty.</returns>
-    public static AplRenderDocumentDirective? BuildCarouselDirective(string headerText, List<ListDisplayItem> items, string token = "carousel")
+    public static AplRenderDocumentDirective? BuildCarouselDirective(string headerText, List<ListDisplayItem> items, string token = "carousel", Context? context = null)
     {
         if (items.Count == 0)
         {
@@ -506,8 +537,39 @@ internal static class AplHelper
                         ["items"] = itemArray
                     }
                 }
+            },
+            PresentationSession = BuildPresentationSession(context)
+        };
+    }
+
+    /// <summary>
+    /// Build a presentation session object for APL backstack navigation.
+    /// Returns null if no device ID is available (backstack disabled).
+    /// </summary>
+    private static PresentationSession? BuildPresentationSession(Context? context)
+    {
+        string? deviceId = context?.System?.Device?.DeviceID;
+        if (string.IsNullOrEmpty(deviceId))
+        {
+            return null;
+        }
+
+        var session = new PresentationSession
+        {
+            Id = deviceId!,
+            GrantedExtensions = new List<GrantedExtension>
+            {
+                new() { Uri = BackstackExtensionUri }
             }
         };
+
+        string? skillId = context!.System?.Application?.ApplicationId;
+        if (!string.IsNullOrEmpty(skillId))
+        {
+            session.SkillId = skillId;
+        }
+
+        return session;
     }
 
     /// <summary>

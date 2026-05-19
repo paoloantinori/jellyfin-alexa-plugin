@@ -179,5 +179,6 @@
   "WelcomeRepromptSsml": "Please tell me<break time=\"200ms\"/>what should I play?",
   "WelcomeSsml": "Welcome to Jellyfin Skill<break time=\"300ms\"/>What can I play?",
   "WhoAmI": "You're connected as {0}.",
-  "WhoAmIUnknown": "I don't recognize your voice yet. Say learn my voice to set it up."
+  "WhoAmIUnknown": "I don't recognize your voice yet. Say learn my voice to set it up.",
+  "CarouselReprompt": "What would you like to hear?"
 }

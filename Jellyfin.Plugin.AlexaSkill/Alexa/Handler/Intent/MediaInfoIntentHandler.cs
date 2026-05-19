@@ -510,7 +510,7 @@ public class MediaInfoIntentHandler : BaseHandler
         audio.Artists = !string.IsNullOrEmpty(item.AlbumArtist) ? new List<string> { item.AlbumArtist } : new List<string>();
         audio.Album = item.Album;
 
-        var directive = AplHelper.BuildNowPlayingDirective(audio, imageUrl, imageUrl);
+        var directive = AplHelper.BuildNowPlayingDirective(audio, imageUrl, imageUrl, context);
         if (directive != null)
         {
             response.Response.Directives.Add(directive);
