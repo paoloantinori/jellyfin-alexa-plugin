@@ -422,9 +422,9 @@ public class AplVisualsFeatureFlagTests : IDisposable
             itemId.ToString(), item, user, context);
 
         Assert.NotNull(response);
-        // Should have 2 directives: AudioPlayerPlayDirective + APL RenderDocument
-        Assert.Equal(2, response.Response.Directives.Count);
-        Assert.Contains(response.Response.Directives, d => d is global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective);
+        // AudioPlayer only — APL NowPlaying removed (built-in Echo player handles display)
+        Assert.Single(response.Response.Directives);
+        Assert.IsType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>(response.Response.Directives[0]);
     }
 
     [Fact]

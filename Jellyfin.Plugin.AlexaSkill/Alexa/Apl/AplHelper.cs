@@ -122,23 +122,19 @@ internal static class AplHelper
                 ""paddingTop"": 10
               },
               {
-                ""type"": ""AlexaProgressBar"",
-                ""progressValue"": ""${payload.jellyfinData.properties.progressValue}"",
-                ""totalValue"": ""${payload.jellyfinData.properties.totalValue}"",
-                ""progressFillColor"": ""#00A4DC"",
+                ""type"": ""Container"",
                 ""width"": ""80%"",
-                ""paddingTop"": 10,
-                ""handleTick"": [
+                ""height"": 6,
+                ""borderRadius"": 3,
+                ""backgroundColor"": ""#444444"",
+                ""marginTop"": 10,
+                ""items"": [
                   {
-                    ""when"": ""${progressValue < totalValue}"",
-                    ""minimumDelay"": 1000,
-                    ""commands"": [
-                      {
-                        ""type"": ""SetValue"",
-                        ""property"": ""progressValue"",
-                        ""value"": ""${progressValue + 1000}""
-                      }
-                    ]
+                    ""type"": ""Frame"",
+                    ""width"": ""${Math.min(1, Math.max(0, payload.jellyfinData.properties.progressValue / Math.max(1, payload.jellyfinData.properties.totalValue))) * 100}%"",
+                    ""height"": ""100%"",
+                    ""borderRadius"": 3,
+                    ""backgroundColor"": ""#00A4DC""
                   }
                 ]
               },

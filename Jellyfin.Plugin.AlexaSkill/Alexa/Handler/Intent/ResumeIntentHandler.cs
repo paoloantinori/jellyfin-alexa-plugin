@@ -63,17 +63,20 @@ public class ResumeIntentHandler : BaseHandler
     /// <returns>Skill response with AudioPlayer directive, or error message.</returns>
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
-        if (session?.FullNowPlayingItem == null)
-        {
-            return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", GetLocale(request))));
-        }
-
         if (string.Equals(context.AudioPlayer.PlayerActivity, "PLAYING", StringComparison.Ordinal))
         {
             return Task.FromResult<SkillResponse>(ResponseBuilder.Empty());
         }
 
-        string item_id = context.AudioPlayer?.Token ?? session.FullNowPlayingItem.Id.ToString();
+        // Prefer AudioPlayer token (survives session cleanup after PlaybackStopped),
+        // fall back to session's now-playing item ID
+        string? item_id = context.AudioPlayer?.Token
+            ?? session?.FullNowPlayingItem?.Id.ToString();
+
+        if (string.IsNullOrEmpty(item_id))
+        {
+            return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", GetLocale(request))));
+        }
 
         int offset = 0;
 
@@ -83,7 +86,7 @@ public class ResumeIntentHandler : BaseHandler
             offset = (int)context.AudioPlayer.OffsetInMilliseconds;
         }
         // Fallback 2: Jellyfin session play state
-        else if (session.PlayState != null)
+        else if (session?.PlayState != null)
         {
             offset = (int)TimeSpan.FromTicks(session.PlayState?.PositionTicks ?? 0).TotalMilliseconds;
         }
@@ -94,8 +97,6 @@ public class ResumeIntentHandler : BaseHandler
             var queue = _queueManager.GetOrCreateQueue(context.System.Device.DeviceID);
             if (!string.IsNullOrEmpty(queue.CurrentItemId) && queue.CurrentPositionTicks > 0)
             {
-                // Only use DeviceQueue item if it matches the session's now-playing item
-                // (or if the AudioPlayer token is empty/missing)
                 if (string.IsNullOrEmpty(context.AudioPlayer?.Token) ||
                     string.Equals(context.AudioPlayer.Token, queue.CurrentItemId, StringComparison.Ordinal))
                 {
@@ -108,6 +109,13 @@ public class ResumeIntentHandler : BaseHandler
             }
         }
 
-        return Task.FromResult<SkillResponse>(BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, session.FullNowPlayingItem, user, context, offset));
+        return Task.FromResult<SkillResponse>(BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll,
+            GetStreamUrl(item_id!, user),
+            item_id!,
+            session?.FullNowPlayingItem,
+            user,
+            context,
+            offset));
     }
 }

@@ -162,10 +162,9 @@ public class AplHelperTests
         SkillResponse response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
 
         Assert.NotNull(response);
-        // Should have both AudioPlayer.Play and APL RenderDocument directives
-        Assert.Equal(2, response.Response.Directives.Count);
+        // AudioPlayer only — APL NowPlaying removed (built-in Echo player handles display)
+        Assert.Single(response.Response.Directives);
         Assert.Contains(response.Response.Directives, d => d.Type == "AudioPlayer.Play");
-        Assert.Contains(response.Response.Directives, d => d.Type == "Alexa.Presentation.APL.RenderDocument");
     }
 
     [Fact]

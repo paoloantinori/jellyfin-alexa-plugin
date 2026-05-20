@@ -348,7 +348,8 @@
                     <div id="authUrlPanel" style="background:#222;border-radius:8px;padding:1.5em;max-width:500px;max-height:80vh;overflow-y:auto;min-width:300px;">
                         <h3 style="margin-top:0;margin-bottom:1em;color:#ccc;">Amazon Account Linking</h3>
                         <div class="fieldDescription" style="margin-bottom:0.8em;color:#aaa;">Please visit the following URL to complete Login with Amazon:</div>
-                        <input id="authUrlInput" type="text" readonly style="width:100%;margin-bottom:1em;padding:0.5em;border-radius:3px;background:#333;color:#ccc;border:1px solid #555;font-family:monospace;font-size:0.85em;word-break:break-all;" />
+                        <input id="authUrlInput" type="text" readonly style="width:100%;margin-bottom:0.5em;padding:0.5em;border-radius:3px;background:#333;color:#ccc;border:1px solid #555;font-family:monospace;font-size:0.85em;word-break:break-all;" />
+                        <a id="authUrlLink" href="#" target="_blank" rel="noopener noreferrer" style="display:block;margin-bottom:1em;color:#00A4DC;word-break:break-all;font-size:0.9em;">Open link in browser</a>
                         <div style="display:flex;gap:0.5em;align-items:center;flex-wrap:wrap;">
                             <button id="authUrlCopyButton" is="emby-button" type="button" class="raised button-submit raised-mini emby-button">Copy to Clipboard</button>
                             <span id="authUrlCopiedMsg" style="color:#4caf50;display:none;margin-left:0.3em;">Copied!</span>
@@ -808,6 +809,9 @@
                         res.json().then(function (data) {
                             var url = ApiClient.getUrl(data.verificationUrl);
                             document.querySelector("#authUrlInput").value = url;
+                            var link = document.querySelector("#authUrlLink");
+                            link.href = url;
+                            link.textContent = url;
                             document.querySelector("#authUrlCopiedMsg").style.display = "none";
                             document.querySelector("#authUrlModal").style.display = "flex";
                         });

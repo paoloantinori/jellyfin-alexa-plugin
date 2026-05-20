@@ -35,13 +35,17 @@ A Jellyfin plugin that creates a personal Alexa skill to play and control media 
 
 ## Features
 
-- **Playback control**: play songs, albums, artists, videos, TV episodes, podcasts, channels, and playlists
+- **Playback control**: play songs, albums, artists, videos, TV episodes, audiobooks, podcasts, channels, and playlists
 - **Search & discovery**: search your library, get recommendations, browse by category, play random media
+- **APL visual carousel**: browse/search results displayed as tappable image cards on Echo Show devices, with album art and media thumbnails
+- **APL NowPlaying screen**: progress bar with elapsed/total time display on Echo Show devices during audio playback
+- **Resume offer**: when reopening the skill, offers to resume where you left off instead of starting fresh
+- **ASR compound-word fix**: automatically retries split compound words when Alexa's speech recognition joins or separates words (e.g., "soulcoughing" → "soul coughing")
 - **Queue management**: add to queue, play next, clear/list queue, shuffle, repeat, start over
 - **Radio mode**: radio station based on your library with on/off toggle
 - **Favorites**: play your favorites, add/remove favorites by voice
 - **Genre & mood**: play by genre, by decade, or by mood (happy, sad, relaxing, workout, etc.)
-- **Library browsing**: browse movies, albums, genres; see in-progress media; continue watching
+- **Library browsing**: browse movies, series, albums, genres; see in-progress media; continue watching
 - **Media info**: ask what's playing — song name, artist, album, duration, genre, year
 - **Sleep timer**: stop playback after a specified duration
 - **Voice profiles**: "Learn my voice" and "Who am I" for multi-user voice recognition
@@ -49,8 +53,9 @@ A Jellyfin plugin that creates a personal Alexa skill to play and control media 
 - **Multi-user**: each Jellyfin user gets their own skill with individual settings
 - **Per-user fuzzy matching**: configurable match behavior (confirm/auto-play) and threshold
 - **Custom interaction models**: deploy your own interaction model via URL for any locale
-- **Multi-language**: 17 locales across 11 languages with 52 intents each
+- **Multi-language**: 17 locales across 11 languages with 53 intents each
 - **Audio and video**: supports both audio playback (AudioPlayer) and video launching
+- **Robust resume**: three-tier position fallback (Alexa context → Jellyfin session → device queue) ensures playback resumes correctly even after session state is cleared
 
 ## Prerequisites
 
@@ -145,11 +150,11 @@ The plugin uses **Login with Amazon (LWA)** to create and manage your Alexa skil
 3. Select the Jellyfin user from the dropdown
 4. Optionally customize the **invocation name** (default: "Jellyfin Player")
 
-Per-user settings include **fuzzy match behavior** (Confirm or Auto-Play), **fuzzy match threshold** (0–100), **allowed libraries** (restrict to specific top-level folders), and **content type access** (music, videos, audiobooks).
+Per-user settings include **fuzzy match behavior** (Confirm or Auto-Play), **fuzzy match threshold** (0–100), **allowed libraries** (restrict to specific top-level folders), and **content type access** (music, videos, audiobooks, books).
 
 ### Feature Flags
 
-Toggle individual features on or off from the configuration page: radio mode, podcasts, mood music, sleep timer, chapter navigation, recommendations, artist library queries, and voice profile recognition.
+Toggle individual features on or off from the configuration page: radio mode, podcasts, mood music, sleep timer, chapter navigation, recommendations, artist library queries, voice profile recognition, resume offer, and ASR compound-word correction.
 
 ### Custom Interaction Model
 
@@ -163,7 +168,7 @@ After adding a user, you need to authorize with Amazon:
 2. A new browser tab opens to the Amazon login page
 3. Sign in with your Amazon account and approve the access request
 4. You'll be redirected back to your Jellyfin server
-5. The plugin automatically creates the Alexa skill and uploads the interaction models
+5. The plugin automatically creates the Alexa skill and uploads the interaction models. If you re-authorize (e.g., after a token expiry), the existing skill is reused rather than creating a duplicate
 
 The status column shows the current state:
 - **LWA Auth Pending**: waiting for Amazon login
@@ -255,7 +260,7 @@ The skill supports **17 locales** across **11 languages**, each with full custom
 | Spanish (Mexico) | es-MX | [`model_es-MX.json`](Jellyfin.Plugin.AlexaSkill/Alexa/InteractionModel/model_es-MX.json) |
 | Spanish (US) | es-US | [`model_es-US.json`](Jellyfin.Plugin.AlexaSkill/Alexa/InteractionModel/model_es-US.json) |
 
-Each JSON file contains all 52 intents with locale-specific sample utterances. To see the complete list of voice commands for any language, open the corresponding interaction model file and look at the `samples` arrays within each intent.
+Each JSON file contains all 53 intents with locale-specific sample utterances. To see the complete list of voice commands for any language, open the corresponding interaction model file and look at the `samples` arrays within each intent.
 
 ## Troubleshooting
 

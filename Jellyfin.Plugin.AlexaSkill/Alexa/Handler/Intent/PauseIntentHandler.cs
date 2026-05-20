@@ -56,6 +56,6 @@ public class PauseIntentHandler : BaseHandler
             return Task.FromResult(ResponseBuilder.Empty());
         }
 
-        return Task.FromResult(ResponseBuilder.AudioPlayerStop());
+        return Task.FromResult(BuildPauseResponse());
     }
 }

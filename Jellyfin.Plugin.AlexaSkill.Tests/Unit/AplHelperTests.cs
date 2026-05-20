@@ -189,6 +189,16 @@ public class AplHelperTests
     }
 
     [Fact]
+    public void BuildNowPlayingDirective_NoAlexaLayoutsImport()
+    {
+        var audio = new Audio { Name = "Song" };
+        var result = AplHelper.BuildNowPlayingDirective(audio, "art", "bg");
+
+        var doc = result!.Document as JObject;
+        Assert.Null(doc?["import"]);
+    }
+
+    [Fact]
     public void BuildQueueDirective_EmptyList_ReturnsNull()
     {
         var result = AplHelper.BuildQueueDirective(new List<QueueDisplayItem>());
@@ -607,10 +617,10 @@ public class AplHelperTests
         var result = AplHelper.BuildNowPlayingDirective(audio, "art", "bg");
 
         string docStr = result!.Document!.ToString();
-        Assert.Contains("AlexaProgressBar", docStr);
         Assert.Contains("progressValue", docStr);
         Assert.Contains("totalValue", docStr);
-        Assert.Contains("handleTick", docStr);
+        Assert.Contains("#00A4DC", docStr);
+        Assert.Contains("#444444", docStr);
     }
 
     [Fact]

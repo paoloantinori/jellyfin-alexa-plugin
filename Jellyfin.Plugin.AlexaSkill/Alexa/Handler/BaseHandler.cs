@@ -277,6 +277,16 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// Build a pause response: AudioPlayer.Stop with the session kept open for resume.
+    /// </summary>
+    public static SkillResponse BuildPauseResponse()
+    {
+        var response = ResponseBuilder.AudioPlayerStop();
+        response.Response.ShouldEndSession = false;
+        return response;
+    }
+
+    /// <summary>
     /// Build an AudioPlayer response with cover art metadata.
     /// </summary>
     /// <param name="playBehavior">The play behavior (ReplaceAll, Enqueue, ReplaceEnqueued).</param>
@@ -292,16 +302,16 @@ public abstract class BaseHandler
     }
 
     /// <summary>
-    /// Build an AudioPlayer response with cover art metadata and optional APL visual.
+    /// Build an AudioPlayer response with cover art metadata.
     /// </summary>
     /// <param name="playBehavior">The play behavior (ReplaceAll, Enqueue, ReplaceEnqueued).</param>
     /// <param name="streamUrl">The audio stream URL.</param>
     /// <param name="itemId">The item ID used as the stream token.</param>
     /// <param name="item">The media item for metadata (title, art), or null.</param>
     /// <param name="user">The user for building the image URL.</param>
-    /// <param name="context">Optional Alexa context for APL device detection.</param>
+    /// <param name="context">Optional Alexa context for enqueue previous-token tracking.</param>
     /// <param name="offsetInMilliseconds">Resume offset in milliseconds (default 0).</param>
-    /// <returns>A SkillResponse containing the AudioPlayer directive with optional APL visual.</returns>
+    /// <returns>A SkillResponse containing the AudioPlayer directive.</returns>
     public SkillResponse BuildAudioPlayerResponse(PlayBehavior playBehavior, string streamUrl, string itemId, MediaBrowser.Controller.Entities.BaseItem? item, Entities.User user, Context? context, int offsetInMilliseconds = 0)
     {
         string imageUrl = item != null ? GetImageUrl(itemId, user) : string.Empty;
@@ -338,28 +348,13 @@ public abstract class BaseHandler
             }
         };
 
-        var directives = new List<IDirective> { directive };
-
-        bool deviceSupportsApl = context != null && Apl.AplHelper.DeviceSupportsApl(context);
-        bool visualsEnabled = Apl.AplHelper.VisualsEnabled;
-
-        if (item != null && deviceSupportsApl && visualsEnabled)
-        {
-            long durationMs = item.RunTimeTicks != null ? (long)(item.RunTimeTicks.Value / TimeSpan.TicksPerMillisecond) : 0;
-            var aplDirective = Apl.AplHelper.BuildNowPlayingDirective(item, imageUrl, imageUrl, context, offsetInMilliseconds, durationMs);
-            if (aplDirective != null)
-            {
-                directives.Add(aplDirective);
-            }
-        }
-
         return new SkillResponse
         {
             Version = "1.0",
             Response = new ResponseBody
             {
                 ShouldEndSession = true,
-                Directives = directives
+                Directives = new List<IDirective> { directive }
             }
         };
     }

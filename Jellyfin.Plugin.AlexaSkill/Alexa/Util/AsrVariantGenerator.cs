@@ -32,7 +32,6 @@ public static class AsrVariantGenerator
         var variants = new List<string>();
         var seen = new HashSet<string>();
 
-        // Pairwise: join each adjacent pair of words
         for (int i = 0; i < words.Length - 1; i++)
         {
             var variantWords = new string[words.Length];
@@ -50,7 +49,6 @@ public static class AsrVariantGenerator
             }
         }
 
-        // Fully-collapsed variant (all spaces removed)
         var collapsed = string.Concat(words);
         if (seen.Add(collapsed))
         {

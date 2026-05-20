@@ -57,7 +57,7 @@ public class AplUserEventHandler : BaseHandler
             case "prev":
                 return HandlePrevious(user, session, context);
             case "pause":
-                return Task.FromResult(ResponseBuilder.AudioPlayerStop());
+                return Task.FromResult(BuildPauseResponse());
             case "next":
                 return HandleNext(user, session, context);
             case "selectItem":
