@@ -25,6 +25,7 @@ public class VideoPlaybackFeatureFlagTests : IDisposable
     private readonly ILoggerFactory _loggerFactory;
     private readonly Mock<ILibraryManager> _libraryManagerMock;
     private readonly Mock<IUserManager> _userManagerMock;
+    private readonly Mock<IUserDataManager> _userDataManagerMock;
 
     public VideoPlaybackFeatureFlagTests()
     {
@@ -33,6 +34,7 @@ public class VideoPlaybackFeatureFlagTests : IDisposable
         _loggerFactory = LoggerFactory.Create(b => { });
         _libraryManagerMock = new Mock<ILibraryManager>();
         _userManagerMock = new Mock<IUserManager>();
+        _userDataManagerMock = new Mock<IUserDataManager>();
         TestHelpers.EnsurePluginInstance(
             _config, _loggerFactory,
             c => c.VideoPlaybackEnabled = _config.VideoPlaybackEnabled,
@@ -52,7 +54,7 @@ public class VideoPlaybackFeatureFlagTests : IDisposable
 
         var handler = new PlayVideoIntentHandler(
             _sessionManagerMock.Object, _config,
-            _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory);
 
         var response = await handler.HandleAsync(
             new IntentRequest { Intent = new Intent { Name = "PlayVideoIntent" } },
@@ -85,7 +87,7 @@ public class VideoPlaybackFeatureFlagTests : IDisposable
     {
         var handler = new PlayVideoIntentHandler(
             _sessionManagerMock.Object, _config,
-            _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory);
 
         var response = await handler.HandleAsync(
             new IntentRequest { Intent = new Intent { Name = "PlayVideoIntent" } },

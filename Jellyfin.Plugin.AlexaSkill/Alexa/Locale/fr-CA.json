@@ -208,5 +208,10 @@
   "JumpedToPosition": "Jumped to {0}.",
   "PositionPastEnd": "That is past the end. This content is {0} long.",
   "NowPlayingCardTitle": "Now Playing",
-  "ResumingAtPosition": "Resuming at {0}."
+  "ResumingAtPosition": "Resuming at {0}.",
+  "ResumingBook": "Resuming {0}, chapter {1}.",
+  "ResumingBookSsml": "<say-as interpret-as=\"interjection\">resuming</say-as><break time=\"200ms\"/><emphasis level=\"moderate\">{0}</emphasis>, chapter {1}.",
+  "ResumingVideo": "Resuming {0} from {1}.",
+  "RestartingContent": "Starting {0} from the beginning.",
+  "NoMediaToRestart": "Nothing to restart."
 }

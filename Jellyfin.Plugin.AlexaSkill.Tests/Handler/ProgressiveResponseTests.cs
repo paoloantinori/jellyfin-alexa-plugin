@@ -229,7 +229,7 @@ public class ProgressiveResponseIntegrationTests
             .Returns(new List<BaseItem>());
 
         var handler = new PlayAlbumIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory);
 
         var request = new IntentRequest
         {

@@ -208,5 +208,10 @@
   "JumpedToPosition": "Andato a {0}.",
   "PositionPastEnd": "Hai superato la fine. Questo contenuto dura {0}.",
   "NowPlayingCardTitle": "In riproduzione",
-  "ResumingAtPosition": "Riprendo da {0}."
+  "ResumingAtPosition": "Riprendo da {0}.",
+  "ResumingBook": "Resuming {0}, chapter {1}.",
+  "ResumingBookSsml": "<say-as interpret-as=\"interjection\">resuming</say-as><break time=\"200ms\"/><emphasis level=\"moderate\">{0}</emphasis>, chapter {1}.",
+  "ResumingVideo": "Resuming {0} from {1}.",
+  "RestartingContent": "Starting {0} from the beginning.",
+  "NoMediaToRestart": "Nothing to restart."
 }

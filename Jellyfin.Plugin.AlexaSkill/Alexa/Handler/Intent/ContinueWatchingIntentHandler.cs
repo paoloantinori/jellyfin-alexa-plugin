@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
@@ -13,10 +12,8 @@ using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
-using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
-using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
@@ -81,38 +78,9 @@ public class ContinueWatchingIntentHandler : BaseHandler
             return userError;
         }
 
-        Jellyfin.Database.Implementations.Entities.User resolvedUser = jellyfinUser!;
-
-        var query = new InternalItemsQuery
-        {
-            User = resolvedUser,
-            Recursive = true,
-            IncludeItemTypes = FilterByContentAccess(new[] { BaseItemKind.Audio, BaseItemKind.Movie, BaseItemKind.Episode }),
-            MinDateLastSavedForUser = DateTime.UtcNow.AddDays(-30),
-            Limit = MaxCandidates,
-            OrderBy = new[] { (ItemSortBy.DatePlayed, SortOrder.Descending) },
-            DtoOptions = new DtoOptions(true)
-        };
-        ApplyLibraryFilter(query, user, _libraryManager);
-
-        IReadOnlyList<BaseItem> recentItems = await RetryAsync(() => _libraryManager.GetItemList(query), "GetRecentItems", cancellationToken).ConfigureAwait(false);
-
-        // Find the most recently played item with a non-trivial resume position
-        BaseItem? resumeItem = null;
-        long resumeTicks = 0;
-
-        foreach (BaseItem item in recentItems)
-        {
-            UserItemData? userData = _userDataManager.GetUserData(resolvedUser, item);
-            if (userData == null || userData.Played || userData.PlaybackPositionTicks <= 0)
-            {
-                continue;
-            }
-
-            resumeItem = item;
-            resumeTicks = userData.PlaybackPositionTicks;
-            break;
-        }
+        BaseItemKind[] contentTypes = FilterByContentAccess(new[] { BaseItemKind.Audio, BaseItemKind.Movie, BaseItemKind.Episode });
+        var (resumeItem, resumeTicks) = FindLastPlayedItemWithProgress(
+            jellyfinUser!, _libraryManager, _userDataManager, user, contentTypes, MaxCandidates);
 
         if (resumeItem == null)
         {
@@ -139,7 +107,7 @@ public class ContinueWatchingIntentHandler : BaseHandler
                         {
                             VideoItem = new Directive.VideoItem
                             {
-                                Source = GetStreamUrl(itemId, user),
+                                Source = GetVideoStreamUrl(itemId, user),
                                 Metadata = new Directive.VideoItemMetadata { Title = resumeItem.Name }
                             }
                         }

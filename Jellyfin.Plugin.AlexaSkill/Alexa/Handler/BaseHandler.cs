@@ -1006,6 +1006,101 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// Find the most recently played item that has non-zero server-side progress
+    /// (PlaybackPositionTicks > 0 and not marked as Played). Queries across the
+    /// specified content types ordered by DatePlayed descending.
+    /// </summary>
+    /// <param name="jellyfinUser">The Jellyfin user for query context.</param>
+    /// <param name="libraryManager">The library manager for querying items.</param>
+    /// <param name="userDataManager">The user data manager for progress lookup.</param>
+    /// <param name="pluginUser">The plugin user for library access filtering.</param>
+    /// <param name="contentTypes">The content types to search (e.g. Audio, Movie, Episode).</param>
+    /// <param name="maxCandidates">Maximum items to scan (default 50).</param>
+    /// <returns>The best resume candidate and its position ticks, or (null, 0) if none found.</returns>
+    protected static (BaseItem? Item, long PositionTicks) FindLastPlayedItemWithProgress(
+        JellyfinUser jellyfinUser,
+        ILibraryManager libraryManager,
+        IUserDataManager userDataManager,
+        Entities.User pluginUser,
+        BaseItemKind[] contentTypes,
+        int maxCandidates = 50)
+    {
+        var query = new InternalItemsQuery
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            IncludeItemTypes = contentTypes,
+            MinDateLastSavedForUser = DateTime.UtcNow.AddDays(-30),
+            Limit = maxCandidates,
+            OrderBy = new[] { (ItemSortBy.DatePlayed, SortOrder.Descending) },
+            DtoOptions = new DtoOptions(true)
+        };
+        ApplyLibraryFilter(query, pluginUser, libraryManager);
+
+        IReadOnlyList<BaseItem> recentItems = libraryManager.GetItemList(query);
+
+        foreach (BaseItem item in recentItems)
+        {
+            UserItemData? userData = userDataManager.GetUserData(jellyfinUser, item);
+            if (userData == null || userData.Played || userData.PlaybackPositionTicks <= 0)
+            {
+                continue;
+            }
+
+            return (item, userData.PlaybackPositionTicks);
+        }
+
+        return (null, 0);
+    }
+
+    /// <summary>
+    /// Find the index of the first track in a collection that has server-side progress,
+    /// or the last track that was played (for queue resumption). Returns (index, positionTicks).
+    /// For music: position is always 0 (songs are short, start from top).
+    /// For books: position is the actual saved offset.
+    /// </summary>
+    /// <param name="tracks">The ordered list of tracks to scan.</param>
+    /// <param name="jellyfinUser">The Jellyfin user for progress lookup.</param>
+    /// <param name="userDataManager">The user data manager for progress lookup.</param>
+    /// <param name="resumePosition">If true, return the saved position ticks; if false, return 0 (for music).</param>
+    /// <returns>The resume index and position ticks, or (0, 0) if no progress found.</returns>
+    protected static (int Index, long PositionTicks) FindResumeTrackIndex(
+        IReadOnlyList<BaseItem> tracks,
+        JellyfinUser jellyfinUser,
+        IUserDataManager userDataManager,
+        bool resumePosition)
+    {
+        int lastPlayedIndex = -1;
+
+        for (int i = 0; i < tracks.Count; i++)
+        {
+            UserItemData? data = userDataManager.GetUserData(jellyfinUser, tracks[i]);
+            if (data == null)
+            {
+                continue;
+            }
+
+            if (data.PlaybackPositionTicks > 0 && !data.Played)
+            {
+                return (i, resumePosition ? data.PlaybackPositionTicks : 0);
+            }
+
+            if (data.Played && lastPlayedIndex < i)
+            {
+                lastPlayedIndex = i;
+            }
+        }
+
+        // If no in-progress track found, resume from the track after the last played one
+        if (lastPlayedIndex >= 0 && lastPlayedIndex + 1 < tracks.Count)
+        {
+            return (lastPlayedIndex + 1, 0);
+        }
+
+        return (0, 0);
+    }
+
+    /// <summary>
     /// Escapes special XML characters in text for safe inclusion in SSML.
     /// </summary>
     /// <param name="text">The text to escape.</param>

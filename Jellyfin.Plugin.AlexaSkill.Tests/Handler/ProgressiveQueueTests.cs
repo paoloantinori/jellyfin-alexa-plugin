@@ -457,6 +457,7 @@ public class ProgressiveQueueTests : IDisposable
             _config,
             _libraryManagerMock.Object,
             _userManagerMock.Object,
+            _userDataManagerMock.Object,
             _loggerFactory);
 
         var session = CreateSession();
@@ -519,6 +520,7 @@ public class ProgressiveQueueTests : IDisposable
             _config,
             _libraryManagerMock.Object,
             _userManagerMock.Object,
+            _userDataManagerMock.Object,
             _loggerFactory);
 
         var session = CreateSession();

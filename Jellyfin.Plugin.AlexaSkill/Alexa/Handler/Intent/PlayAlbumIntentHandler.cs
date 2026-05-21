@@ -30,6 +30,7 @@ public class PlayAlbumIntentHandler : BaseHandler
 {
     private ILibraryManager _libraryManager;
     private IUserManager _userManager;
+    private readonly IUserDataManager _userDataManager;
     private readonly DeviceQueueManager? _queueManager;
     private readonly IArtistIndex? _artistIndex;
 
@@ -40,6 +41,7 @@ public class PlayAlbumIntentHandler : BaseHandler
     /// <param name="config">The plugin configuration.</param>
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
+    /// <param name="userDataManager">Instance of the <see cref="IUserDataManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
     /// <param name="queueManager">Optional per-device queue manager for crash recovery.</param>
     /// <param name="artistIndex">Optional in-memory artist index for fast search.</param>
@@ -48,12 +50,14 @@ public class PlayAlbumIntentHandler : BaseHandler
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
+        IUserDataManager userDataManager,
         ILoggerFactory loggerFactory,
         DeviceQueueManager? queueManager = null,
         IArtistIndex? artistIndex = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
+        _userDataManager = userDataManager;
         _queueManager = queueManager;
         _artistIndex = artistIndex;
     }
@@ -194,27 +198,36 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         IReadOnlyList<BaseItem> albumItems = albumResult.Items;
 
-        List<QueueItem> queueItems = new List<QueueItem>();
-        for (int i = 0; i < albumItems.Count; i++)
+        // Check for existing queue position from server-side progress
+        (int startIndex, _) = FindResumeTrackIndex(
+            albumItems, jellyfinUser!, _userDataManager, resumePosition: false);
+
+        if (startIndex > 0)
         {
-            BaseItem item = albumItems[i];
-            queueItems.Add(new QueueItem
-            {
-                Id = item.Id,
-            });
+            Logger.LogInformation(
+                "PlayAlbum: resuming queue from track {Index} ({Name})",
+                startIndex, albumItems[startIndex].Name);
+        }
+
+        List<QueueItem> queueItems = new List<QueueItem>();
+        for (int i = startIndex; i < albumItems.Count; i++)
+        {
+            queueItems.Add(new QueueItem { Id = albumItems[i].Id });
         }
 
         session.NowPlayingQueue = queueItems;
-        session.FullNowPlayingItem = albumItems[0];
+        session.FullNowPlayingItem = albumItems[startIndex];
 
         // Persist queue to device storage for crash recovery
         _queueManager?.SetQueue(
             context.System.Device.DeviceID,
-            albumItems.Select(i => i.Id.ToString()).ToList(),
+            albumItems.Skip(startIndex).Select(i => i.Id.ToString()).ToList(),
             0);
 
-        // Store continuation info so PlaybackNearlyFinished can fetch the rest
-        if (albumResult.TotalRecordCount > albumItems.Count)
+        // Store continuation info so PlaybackNearlyFinished can fetch the rest.
+        // StartIndex uses the original page size because the database offset is
+        // independent of the resume slice.
+        if (albumResult.TotalRecordCount > albumResult.Items.Count)
         {
             QueueContinuationStore.Set(
                 session.UserId,
@@ -223,14 +236,14 @@ public class PlayAlbumIntentHandler : BaseHandler
                 {
                     SourceType = "Album",
                     ParentId = albums[0].Id,
-                    StartIndex = albumItems.Count,
+                    StartIndex = albumResult.Items.Count,
                     TotalCount = albumResult.TotalRecordCount,
                     UserId = jellyfinUser!.Id
                 });
         }
 
-        string item_id = albumItems[0].Id.ToString();
+        string item_id = albumItems[startIndex].Id.ToString();
 
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, albumItems[0], user, context);
+        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, albumItems[startIndex], user, context);
     }
 }

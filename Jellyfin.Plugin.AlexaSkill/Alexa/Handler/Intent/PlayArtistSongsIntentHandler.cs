@@ -334,26 +334,35 @@ public class PlayArtistSongsIntentHandler : BaseHandler
 
         IReadOnlyList<BaseItem> artistsItems = FavoritesAndRatingsFirst(artistResult.Items, jellyfinUser!, _userDataManager);
 
-        List<QueueItem> queueItems = new List<QueueItem>();
-        for (int i = 0; i < artistsItems.Count; i++)
+        // Check for existing queue position from server-side progress
+        (int startIndex, _) = FindResumeTrackIndex(
+            artistsItems, jellyfinUser!, _userDataManager, resumePosition: false);
+
+        if (startIndex > 0)
         {
-            BaseItem item = artistsItems[i];
-            queueItems.Add(new QueueItem
-            {
-                Id = item.Id,
-            });
+            Logger.LogInformation(
+                "PlayArtistSongs: resuming queue from track {Index} ({Name})",
+                startIndex, artistsItems[startIndex].Name);
+        }
+
+        List<QueueItem> queueItems = new List<QueueItem>();
+        for (int i = startIndex; i < artistsItems.Count; i++)
+        {
+            queueItems.Add(new QueueItem { Id = artistsItems[i].Id });
         }
 
         session.NowPlayingQueue = queueItems;
-        session.FullNowPlayingItem = artistsItems[0];
+        session.FullNowPlayingItem = artistsItems[startIndex];
 
         // Persist queue to device storage for crash recovery
         _queueManager?.SetQueue(
             context.System.Device.DeviceID,
-            artistsItems.Select(i => i.Id.ToString()).ToList(),
+            artistsItems.Skip(startIndex).Select(i => i.Id.ToString()).ToList(),
             0);
 
-        // Store continuation info so PlaybackNearlyFinished can fetch the rest
+        // Store continuation info so PlaybackNearlyFinished can fetch the rest.
+        // StartIndex uses the original page size because the database offset is
+        // independent of the resume slice.
         if (artistResult.TotalRecordCount > artistResult.Items.Count)
         {
             QueueContinuationStore.Set(
@@ -370,7 +379,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 });
         }
 
-        string itemId = artistsItems[0].Id.ToString();
+        string itemId = artistsItems[startIndex].Id.ToString();
 
         return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, artistsItems[0], user, context);
     }

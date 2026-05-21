@@ -24,11 +24,13 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
 /// <summary>
 /// Handler for PlayBookIntent — searches for audiobooks and plays their audio content.
+/// Resumes from the last position when the user has existing progress.
 /// </summary>
 public class PlayBookIntentHandler : BaseHandler
 {
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
+    private readonly IUserDataManager _userDataManager;
     private readonly DeviceQueueManager? _queueManager;
 
     public PlayBookIntentHandler(
@@ -36,11 +38,13 @@ public class PlayBookIntentHandler : BaseHandler
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
+        IUserDataManager userDataManager,
         ILoggerFactory loggerFactory,
         DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
+        _userDataManager = userDataManager;
         _queueManager = queueManager;
     }
 
@@ -164,21 +168,42 @@ public class PlayBookIntentHandler : BaseHandler
 
         IReadOnlyList<BaseItem> trackItems = bookTracks.Items;
 
+        // Check for existing progress — resume from the last position
+        (int startIndex, long resumeTicks) = FindResumeTrackIndex(
+            trackItems, jellyfinUser!, _userDataManager, resumePosition: true);
+
+        int offsetMs = 0;
+
+        if (startIndex > 0 || resumeTicks > 0)
+        {
+            offsetMs = (int)TimeSpan.FromTicks(resumeTicks).TotalMilliseconds;
+
+            Logger.LogInformation(
+                "PlayBook: resuming {Book} from track {Index} ({TrackName}) at {OffsetMs}ms",
+                books[0].Name,
+                startIndex,
+                trackItems[startIndex].Name,
+                offsetMs);
+        }
+
         List<QueueItem> queueItems = new();
-        for (int i = 0; i < trackItems.Count; i++)
+        for (int i = startIndex; i < trackItems.Count; i++)
         {
             queueItems.Add(new QueueItem { Id = trackItems[i].Id });
         }
 
         session.NowPlayingQueue = queueItems;
-        session.FullNowPlayingItem = trackItems[0];
+        session.FullNowPlayingItem = trackItems[startIndex];
 
         _queueManager?.SetQueue(
             context.System.Device.DeviceID,
-            trackItems.Select(i => i.Id.ToString()).ToList(),
+            trackItems.Skip(startIndex).Select(i => i.Id.ToString()).ToList(),
             0);
 
-        if (bookTracks.TotalRecordCount > trackItems.Count)
+        // Store continuation info so PlaybackNearlyFinished can fetch the rest.
+        // StartIndex uses the original page size because the database offset is
+        // independent of the resume slice.
+        if (bookTracks.TotalRecordCount > bookTracks.Items.Count)
         {
             QueueContinuationStore.Set(
                 session.UserId,
@@ -187,14 +212,32 @@ public class PlayBookIntentHandler : BaseHandler
                 {
                     SourceType = "Audiobook",
                     ParentId = books[0].Id,
-                    StartIndex = trackItems.Count,
+                    StartIndex = bookTracks.Items.Count,
                     TotalCount = bookTracks.TotalRecordCount,
                     UserId = jellyfinUser!.Id
                 });
         }
 
-        string itemId = trackItems[0].Id.ToString();
-        return BuildAudioPlayerResponse(
-            PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, trackItems[0], user, context);
+        string itemId = trackItems[startIndex].Id.ToString();
+        SkillResponse response = BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, trackItems[startIndex], user, context, offsetMs);
+
+        // Add resume announcement when not starting from the beginning
+        if (startIndex > 0 || resumeTicks > 0)
+        {
+            string bookName = EscapeXml(books[0].Name);
+            string trackName = EscapeXml(trackItems[startIndex].Name);
+            string? ssml = GetSsml("ResumingBookSsml", locale, bookName, trackName);
+
+            response.Response.OutputSpeech = ssml != null
+                ? new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" }
+                : new PlainTextOutputSpeech
+                {
+                    Text = ResponseStrings.Get("ResumingBook", locale, books[0].Name, trackItems[startIndex].Name)
+                };
+            response.Response.ShouldEndSession = true;
+        }
+
+        return response;
     }
 }

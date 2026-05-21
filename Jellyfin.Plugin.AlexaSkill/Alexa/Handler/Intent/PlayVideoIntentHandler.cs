@@ -28,16 +28,19 @@ public class PlayVideoIntentHandler : BaseHandler
 {
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
+    private readonly IUserDataManager _userDataManager;
 
     public PlayVideoIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
+        IUserDataManager userDataManager,
         ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
+        _userDataManager = userDataManager;
     }
 
     /// <inheritdoc/>
@@ -157,6 +160,19 @@ public class PlayVideoIntentHandler : BaseHandler
                 }
             }
         };
+
+        // Check for existing playback progress and announce resume position.
+        // Note: Alexa VideoApp does not support seek/offset natively, so the video
+        // will start from the beginning, but we inform the user where they left off.
+        UserItemData? userData = _userDataManager.GetUserData(jellyfinUser!, video);
+        long resumeTicks = userData?.PlaybackPositionTicks ?? 0;
+
+        if (resumeTicks > 0)
+        {
+            response.Response.OutputSpeech = new PlainTextOutputSpeech(
+                ResponseStrings.Get("ResumingVideo", locale, video.Name, FormatPosition(resumeTicks)));
+            Logger.LogInformation("PlayVideo: resuming {Title} from {Position}", video.Name, FormatPosition(resumeTicks));
+        }
 
         return response;
     }
