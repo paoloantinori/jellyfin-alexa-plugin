@@ -50,15 +50,9 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
             return;
         }
 
-        // AudioPlayer.Play responses must not include other directives.
-        if (context.Response.Response.Directives?.Any(d => d is AudioPlayerPlayDirective) == true)
-        {
-            return;
-        }
-
-        // Terminal audio directives have no active dialog — skip DynamicEntities injection.
+        // AudioPlayer directives carry their own dialog state — skip DynamicEntities.
         if (context.Response.Response.Directives?.Any(d =>
-            d is StopDirective or ClearQueueDirective) == true)
+            d is AudioPlayerPlayDirective or StopDirective or ClearQueueDirective) == true)
         {
             return;
         }

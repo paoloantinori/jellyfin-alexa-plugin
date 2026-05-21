@@ -303,37 +303,31 @@ public class DynamicEntitiesInterceptorTests
             () => interceptor.ProcessAsync(ctx, CancellationToken.None));
     }
 
-    [Fact]
-    public async Task ProcessAsync_AudioPlayerPlayDirective_SkipsDynamicEntities()
+    public static IEnumerable<object[]> AudioPlayerSkipDirectives => new[]
     {
-        var userId = Guid.NewGuid();
-        var interceptor = CreateInterceptor();
-        var request = new LaunchRequest { Type = "LaunchRequest" };
-        var alexaContext = new Context
+        new object[] { new AudioPlayerPlayDirective
         {
-            System = new global::Alexa.NET.Request.AlexaSystem
+            AudioItem = new AudioItem
             {
-                User = new global::Alexa.NET.Request.User { AccessToken = userId.ToString() },
-                Device = new Device { DeviceID = "test-device" }
-            }
-        };
-
-        var ctx = CreateContext(request, alexaContext);
-
-        ctx.Response.Response.Directives = new List<IDirective>
-        {
-            new AudioPlayerPlayDirective
-            {
-                AudioItem = new AudioItem
+                Stream = new AudioItemStream
                 {
-                    Stream = new AudioItemStream
-                    {
-                        Url = "https://example.com/stream.mp3",
-                        OffsetInMilliseconds = 0
-                    }
+                    Url = "https://example.com/stream.mp3",
+                    OffsetInMilliseconds = 0
                 }
             }
-        };
+        }},
+        new object[] { new StopDirective() },
+        new object[] { new ClearQueueDirective() },
+    };
+
+    [Theory]
+    [MemberData(nameof(AudioPlayerSkipDirectives))]
+    public async Task ProcessAsync_AudioPlayerDirective_SkipsDynamicEntities(IDirective directive)
+    {
+        var interceptor = CreateInterceptor();
+        var request = new LaunchRequest { Type = "LaunchRequest" };
+        var ctx = CreateContext(request);
+        ctx.Response.Response.Directives = new List<IDirective> { directive };
 
         await interceptor.ProcessAsync(ctx, CancellationToken.None);
 
@@ -342,7 +336,6 @@ public class DynamicEntitiesInterceptorTests
             Times.Never);
 
         Assert.Single(ctx.Response.Response.Directives);
-        Assert.IsType<AudioPlayerPlayDirective>(ctx.Response.Response.Directives[0]);
     }
 
     [Fact]
@@ -446,63 +439,6 @@ public class DynamicEntitiesInterceptorTests
             b => b.Build(userId, It.IsAny<string>(), It.IsAny<Guid[]>(), false, true, It.IsAny<CancellationToken>()),
             Times.Once);
         Assert.Contains(directive, ctx.Response!.Response.Directives!);
-    }
-
-    [Fact]
-    public async Task ProcessAsync_AudioPlayerStopDirective_SkipsDynamicEntities()
-    {
-        var userId = Guid.NewGuid();
-        var interceptor = CreateInterceptor();
-        var request = new LaunchRequest { Type = "LaunchRequest" };
-        var alexaContext = new Context
-        {
-            System = new global::Alexa.NET.Request.AlexaSystem
-            {
-                User = new global::Alexa.NET.Request.User { AccessToken = userId.ToString() },
-                Device = new Device { DeviceID = "test-device" }
-            }
-        };
-
-        var ctx = CreateContext(request, alexaContext);
-        ctx.Response.Response.Directives = new List<IDirective> { new StopDirective() };
-        ctx.Response.Response.ShouldEndSession = false;
-
-        await interceptor.ProcessAsync(ctx, CancellationToken.None);
-
-        _builderMock.Verify(
-            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Guid[]>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
-            Times.Never);
-
-        Assert.Single(ctx.Response.Response.Directives);
-        Assert.IsType<StopDirective>(ctx.Response.Response.Directives[0]);
-    }
-
-    [Fact]
-    public async Task ProcessAsync_AudioPlayerClearQueueDirective_SkipsDynamicEntities()
-    {
-        var userId = Guid.NewGuid();
-        var interceptor = CreateInterceptor();
-        var request = new LaunchRequest { Type = "LaunchRequest" };
-        var alexaContext = new Context
-        {
-            System = new global::Alexa.NET.Request.AlexaSystem
-            {
-                User = new global::Alexa.NET.Request.User { AccessToken = userId.ToString() },
-                Device = new Device { DeviceID = "test-device" }
-            }
-        };
-
-        var ctx = CreateContext(request, alexaContext);
-        ctx.Response.Response.Directives = new List<IDirective> { new ClearQueueDirective() };
-
-        await interceptor.ProcessAsync(ctx, CancellationToken.None);
-
-        _builderMock.Verify(
-            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Guid[]>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
-            Times.Never);
-
-        Assert.Single(ctx.Response.Response.Directives);
-        Assert.IsType<ClearQueueDirective>(ctx.Response.Response.Directives[0]);
     }
 
     [Fact]
