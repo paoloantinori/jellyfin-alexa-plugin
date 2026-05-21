@@ -18,7 +18,7 @@
     --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: var(--font); background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
 
   /* Header */
   .header {
@@ -31,6 +31,7 @@
     flex-wrap: wrap;
     z-index: 20;
     position: relative;
+    flex-shrink: 0;
   }
   .header h1 { font-size: 16px; font-weight: 600; white-space: nowrap; }
   .header h1 span { color: var(--accent); }
@@ -58,7 +59,7 @@
   .tabs {
     background: var(--surface); border-bottom: 1px solid var(--border);
     display: flex; overflow-x: auto; padding: 0 20px;
-    z-index: 20; position: relative;
+    z-index: 20; position: relative; flex-shrink: 0;
   }
   .tab {
     padding: 8px 14px; font-size: 12px; color: var(--text-dim);
@@ -69,7 +70,7 @@
   .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
   /* SVG canvas */
-  #graph { width: 100%; height: calc(100vh - 90px); display: block; cursor: grab; }
+  #graph { width: 100%; flex: 1; display: block; cursor: grab; }
   #graph:active { cursor: grabbing; }
 
   /* Node styles */
@@ -285,7 +286,7 @@ function detectLocale() {
 function initSVG() {
   svg = d3.select('#graph');
   width = window.innerWidth;
-  height = window.innerHeight - 90;
+  height = document.getElementById('graph').clientHeight || (window.innerHeight - 90);
   svg.attr('viewBox', [0, 0, width, height]);
 
   svg.call(zoom);
@@ -375,7 +376,7 @@ function buildUI() {
 
   window.addEventListener('resize', () => {
     width = window.innerWidth;
-    height = window.innerHeight - 90;
+    height = document.getElementById('graph').clientHeight || (window.innerHeight - 90);
     svg.attr('viewBox', [0, 0, width, height]);
   });
 }
