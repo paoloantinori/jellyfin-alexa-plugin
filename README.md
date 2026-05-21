@@ -53,7 +53,7 @@ A Jellyfin plugin that creates a personal Alexa skill to play and control media 
 - **Multi-user**: each Jellyfin user gets their own skill with individual settings
 - **Per-user fuzzy matching**: configurable match behavior (confirm/auto-play) and threshold
 - **Custom interaction models**: deploy your own interaction model via URL for any locale
-- **Multi-language**: 17 locales across 11 languages with 53 intents each
+- **Multi-language**: 17 locales across 11 languages with 57 intents each
 - **Audio and video**: supports both audio playback (AudioPlayer) and video launching
 - **Robust resume**: three-tier position fallback (Alexa context → Jellyfin session → device queue) ensures playback resumes correctly even after session state is cleared
 
@@ -260,7 +260,7 @@ The skill supports **17 locales** across **11 languages**, each with full custom
 | Spanish (Mexico) | es-MX | [`model_es-MX.json`](Jellyfin.Plugin.AlexaSkill/Alexa/InteractionModel/model_es-MX.json) |
 | Spanish (US) | es-US | [`model_es-US.json`](Jellyfin.Plugin.AlexaSkill/Alexa/InteractionModel/model_es-US.json) |
 
-Each JSON file contains all 53 intents with locale-specific sample utterances. To see the complete list of voice commands for any language, open the corresponding interaction model file and look at the `samples` arrays within each intent.
+Each JSON file contains all 57 intents with locale-specific sample utterances. To see the complete list of voice commands for any language, open the corresponding interaction model file and look at the `samples` arrays within each intent.
 
 ## Troubleshooting
 

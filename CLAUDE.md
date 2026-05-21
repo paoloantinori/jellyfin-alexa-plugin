@@ -6,10 +6,11 @@ C# Jellyfin plugin (net9.0) exposing an Alexa skill for media playback, search, 
 
 ```bash
 dotnet build Jellyfin.Plugin.AlexaSkill.sln
-dotnet test Jellyfin.Plugin.AlexaSkill.Tests          # ~1718 unit tests
+dotnet test Jellyfin.Plugin.AlexaSkill.Tests          # ~1424 unit tests
 python3 scripts/validate_interaction_models.py        # Check all 17 models (JSON, slots, drift)
 python3 scripts/validate_locales.py                   # Check locale key coverage (baseline-aware)
 python3 scripts/validate_versions.py                  # Check version consistency across files
+python3 scripts/validate_apl.py                       # Check APL templates validity
 ./scripts/run_nlu_tests.sh                            # NLU tests (needs ask CLI auth)
 ./scripts/run_nlu_tests.sh -k "en-US"                 # single locale
 ./scripts/run_e2e_tests.sh                            # E2E via SMAPI simulate-skill (needs live Jellyfin)
@@ -25,23 +26,32 @@ GitHub Actions runs on every PR and push to main (`ci.yml`):
 - **validate-locales**: Locale key coverage vs baseline (fails on new gaps only)
 - **validate-versions**: Directory.Build.props / build.yaml / manifest.json consistency
 
-Release workflow also validates models, locales, and versions before building.
+CI validates models, locales, and versions on every PR and push to main.
 
 ## Project Layout
 
-- `Alexa/Handler/Intent/` — 53 intent handlers (one per intent, inherit `BaseHandler`)
+- `Alexa/Handler/Intent/` — 57 intent handlers (one per intent, inherit `BaseHandler`)
 - `Alexa/Handler/BaseHandler.cs` — shared utilities: `FuzzyMatch`, `HandleFuzzyMiss`, `RetryAsync`, stream URLs, library filters
 - `Alexa/InteractionModel/` — 17 per-locale interaction model JSONs (`model_*.json`)
 - `Alexa/Locale/` — Response strings: keys in `ResponseStrings.cs`, values in 17 `<locale>.json` files
 - `Alexa/SmapiManagement.cs` — SMAPI wrapper (skill CRUD, account linking, status polling)
 - `Alexa/ModelDeployment/` — Custom interaction model validation, fetch, deploy, restore via SMAPI
 - `Alexa/Manifest/` — Skill manifest generation
+- `Alexa/Apl/` — APL visual template generation (carousel, NowPlaying screen)
+- `Alexa/Cache/` — In-memory cache layer for artist/item lookups
+- `Alexa/Catalog/` — Music catalog browsing (browse categories, recently added, recommendations)
+- `Alexa/Directive/` — Alexa response directives (AudioPlayer, APL, template rendering)
+- `Alexa/DynamicEntities/` — Dynamic entity slot updates via SMAPI
+- `Alexa/Interface/` — Alexa interface capability detection (APL support, etc.)
+- `Alexa/Music/` — Music-specific data models and helpers
 - `Alexa/Playback/` — Playback state and progressive queue management
+- `Alexa/Util/` — Shared utility classes
 - `Alexa/FuzzyMatcher.cs` — Fuzzy string matching with configurable thresholds
 - `Alexa/RetryHelper.cs` — Exponential backoff retry with timeout budget (default 6s)
 - `Alexa/Pipeline/` — Request routing pipeline
 - `Configuration/` — Plugin config DTO + Jellyfin config UI (`config.html`)
 - `Controller/` — ASP.NET API controllers (skill endpoint, config, simulator, health)
+- `docs/` — 102 Mermaid diagrams covering 6 feature flows × 17 locales
 - `tests/integration/` — NLU + E2E test suites (Python/pytest)
 - `Directory.Build.props` — Version numbers (single source of truth)
 
