@@ -44,7 +44,8 @@ test.describe('Voice Command Explorer', () => {
     const beforeJoined = beforeTexts.join(' ');
 
     // Switch to Italian
-    await page.locator('#localeSelect').selectOption('it-IT');
+    await page.locator('#localeBtn').click();
+    await page.locator('#localeList .dropdown-item').filter({ hasText: 'Italiano' }).click();
     await page.waitForTimeout(3000);
 
     // Labels should have changed
@@ -212,7 +213,8 @@ test.describe('Voice Command Explorer', () => {
     await page.waitForTimeout(2000);
 
     // Switch to German
-    await page.locator('#localeSelect').selectOption('de-DE');
+    await page.locator('#localeBtn').click();
+    await page.locator('#localeList .dropdown-item').filter({ hasText: 'Deutsch' }).click();
     await page.waitForTimeout(3000);
 
     // Should still be on Playback Lifecycle tab (active)

@@ -45,14 +45,45 @@
     font-size: 11px; color: var(--text-dim);
     text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap;
   }
-  select, .search-input {
+  .search-input {
     background: var(--surface2); color: var(--text);
     border: 1px solid var(--border); border-radius: 6px;
     padding: 5px 10px; font-size: 13px; font-family: var(--font);
     cursor: pointer; outline: none; transition: border-color 0.2s;
+    width: 200px;
   }
-  select:hover, .search-input:hover { border-color: var(--accent); }
-  select:focus, .search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(108,140,255,0.2); }
+  .search-input:hover { border-color: var(--accent); }
+  .search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(108,140,255,0.2); }
+
+  /* Custom dropdown */
+  .dropdown { position: relative; user-select: none; }
+  .dropdown-btn {
+    background: var(--surface2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 5px 28px 5px 10px; font-size: 13px; font-family: var(--font);
+    cursor: pointer; outline: none; transition: border-color 0.2s;
+    white-space: nowrap; display: flex; align-items: center; gap: 4px;
+  }
+  .dropdown-btn:hover { border-color: var(--accent); }
+  .dropdown-btn::after {
+    content: '▾'; position: absolute; right: 8px; top: 50%;
+    transform: translateY(-50%); font-size: 10px; color: var(--text-dim);
+    pointer-events: none;
+  }
+  .dropdown-list {
+    position: absolute; top: calc(100% + 4px); left: 0;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 0; min-width: 180px;
+    max-height: 280px; overflow-y: auto; z-index: 50;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4); display: none;
+  }
+  .dropdown-list.open { display: block; }
+  .dropdown-item {
+    padding: 5px 12px; font-size: 13px; cursor: pointer;
+    white-space: nowrap; transition: background 0.15s;
+  }
+  .dropdown-item:hover { background: var(--surface); }
+  .dropdown-item.active { color: var(--accent); }
   .search-input { width: 200px; }
 
   /* Tabs */
@@ -194,7 +225,10 @@
   <div class="controls">
     <div class="control-group">
       <label>Language</label>
-      <select id="localeSelect"></select>
+      <div class="dropdown" id="localeDropdown">
+        <div class="dropdown-btn" id="localeBtn" tabindex="0"></div>
+        <div class="dropdown-list" id="localeList"></div>
+      </div>
     </div>
     <div class="control-group">
       <label>Search</label>
@@ -330,18 +364,49 @@ function initSVG() {
 }
 
 function buildUI() {
-  const sel = document.getElementById('localeSelect');
-  DATA.locales.forEach(loc => {
-    const info = LOCALE_INFO[loc] || { flag: '', label: loc };
-    const opt = document.createElement('option');
-    opt.value = loc;
-    opt.textContent = `${info.flag} ${info.label}`;
-    sel.appendChild(opt);
-  });
+  // Custom locale dropdown
+  const btn = document.getElementById('localeBtn');
+  const list = document.getElementById('localeList');
   currentLocale = detectLocale();
   if (!DATA.locales.includes(currentLocale)) currentLocale = 'en-US';
-  sel.value = currentLocale;
-  sel.addEventListener('change', e => { currentLocale = e.target.value; renderGraph(); });
+
+  DATA.locales.forEach(loc => {
+    const info = LOCALE_INFO[loc] || { flag: '', label: loc };
+    const item = document.createElement('div');
+    item.className = 'dropdown-item' + (loc === currentLocale ? ' active' : '');
+    item.textContent = `${info.flag} ${info.label}`;
+    item.dataset.value = loc;
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      currentLocale = loc;
+      btn.textContent = `${info.flag} ${info.label}`;
+      list.querySelectorAll('.dropdown-item').forEach(i => i.classList.remove('active'));
+      item.classList.add('active');
+      list.classList.remove('open');
+      renderGraph();
+    });
+    list.appendChild(item);
+  });
+
+  // Set initial button text
+  const initInfo = LOCALE_INFO[currentLocale] || { flag: '', label: currentLocale };
+  btn.textContent = `${initInfo.flag} ${initInfo.label}`;
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    list.classList.toggle('open');
+  });
+
+  // Keyboard support
+  btn.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      list.classList.toggle('open');
+    }
+  });
+
+  // Close dropdown when clicking outside
+  document.addEventListener('click', () => list.classList.remove('open'));
 
   const tabsEl = document.getElementById('tabs');
   DATA.types.forEach(type => {
