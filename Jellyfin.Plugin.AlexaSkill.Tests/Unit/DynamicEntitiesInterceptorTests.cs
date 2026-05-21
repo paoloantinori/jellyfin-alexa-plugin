@@ -449,6 +449,63 @@ public class DynamicEntitiesInterceptorTests
     }
 
     [Fact]
+    public async Task ProcessAsync_AudioPlayerStopDirective_SkipsDynamicEntities()
+    {
+        var userId = Guid.NewGuid();
+        var interceptor = CreateInterceptor();
+        var request = new LaunchRequest { Type = "LaunchRequest" };
+        var alexaContext = new Context
+        {
+            System = new global::Alexa.NET.Request.AlexaSystem
+            {
+                User = new global::Alexa.NET.Request.User { AccessToken = userId.ToString() },
+                Device = new Device { DeviceID = "test-device" }
+            }
+        };
+
+        var ctx = CreateContext(request, alexaContext);
+        ctx.Response.Response.Directives = new List<IDirective> { new StopDirective() };
+        ctx.Response.Response.ShouldEndSession = false;
+
+        await interceptor.ProcessAsync(ctx, CancellationToken.None);
+
+        _builderMock.Verify(
+            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Guid[]>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        Assert.Single(ctx.Response.Response.Directives);
+        Assert.IsType<StopDirective>(ctx.Response.Response.Directives[0]);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_AudioPlayerClearQueueDirective_SkipsDynamicEntities()
+    {
+        var userId = Guid.NewGuid();
+        var interceptor = CreateInterceptor();
+        var request = new LaunchRequest { Type = "LaunchRequest" };
+        var alexaContext = new Context
+        {
+            System = new global::Alexa.NET.Request.AlexaSystem
+            {
+                User = new global::Alexa.NET.Request.User { AccessToken = userId.ToString() },
+                Device = new Device { DeviceID = "test-device" }
+            }
+        };
+
+        var ctx = CreateContext(request, alexaContext);
+        ctx.Response.Response.Directives = new List<IDirective> { new ClearQueueDirective() };
+
+        await interceptor.ProcessAsync(ctx, CancellationToken.None);
+
+        _builderMock.Verify(
+            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Guid[]>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        Assert.Single(ctx.Response.Response.Directives);
+        Assert.IsType<ClearQueueDirective>(ctx.Response.Response.Directives[0]);
+    }
+
+    [Fact]
     public async Task ProcessAsync_NonTvNonBookIntentMidSession_DoesNotInject()
     {
         var interceptor = CreateInterceptor();

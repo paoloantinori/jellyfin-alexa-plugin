@@ -56,6 +56,13 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
             return;
         }
 
+        // Terminal audio directives have no active dialog — skip DynamicEntities injection.
+        if (context.Response.Response.Directives?.Any(d =>
+            d is StopDirective or ClearQueueDirective) == true)
+        {
+            return;
+        }
+
         bool isNewSession = context.SkillRequest is LaunchRequest
             || (context.AlexaSession?.New ?? false);
 
