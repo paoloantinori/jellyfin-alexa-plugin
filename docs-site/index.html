@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Jellyfin Alexa Skill - Voice Command Explorer</title>
-<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
 <style>
   :root {
     --bg: #0f111a;
@@ -15,251 +15,181 @@
     --text-dim: #8888a0;
     --accent: #6c8cff;
     --accent-hover: #8aa4ff;
-    --green: #4CAF50;
-    --orange: #FF9800;
-    --purple: #9C27B0;
-    --blue: #2196F3;
-    --red: #f44336;
     --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; }
 
   /* Header */
   .header {
     background: var(--surface);
     border-bottom: 1px solid var(--border);
-    padding: 16px 24px;
+    padding: 12px 20px;
     display: flex;
     align-items: center;
     gap: 16px;
     flex-wrap: wrap;
+    z-index: 20;
+    position: relative;
   }
-  .header h1 {
-    font-size: 18px;
-    font-weight: 600;
-    white-space: nowrap;
-  }
+  .header h1 { font-size: 16px; font-weight: 600; white-space: nowrap; }
   .header h1 span { color: var(--accent); }
 
-  /* Controls bar */
   .controls {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    flex-wrap: wrap;
-    flex: 1;
-    justify-content: flex-end;
+    display: flex; gap: 12px; align-items: center;
+    flex-wrap: wrap; flex: 1; justify-content: flex-end;
   }
-  .control-group {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
+  .control-group { display: flex; align-items: center; gap: 6px; }
   .control-group label {
-    font-size: 12px;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    white-space: nowrap;
+    font-size: 11px; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap;
   }
   select, .search-input {
-    background: var(--surface2);
-    color: var(--text);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 6px 10px;
-    font-size: 13px;
-    font-family: var(--font);
-    cursor: pointer;
-    outline: none;
-    transition: border-color 0.2s;
+    background: var(--surface2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 5px 10px; font-size: 13px; font-family: var(--font);
+    cursor: pointer; outline: none; transition: border-color 0.2s;
   }
   select:hover, .search-input:hover { border-color: var(--accent); }
   select:focus, .search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(108,140,255,0.2); }
-  .search-input { width: 180px; }
+  .search-input { width: 200px; }
 
-  /* Diagram type tabs */
+  /* Tabs */
   .tabs {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    overflow-x: auto;
-    padding: 0 24px;
-    gap: 0;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    display: flex; overflow-x: auto; padding: 0 20px;
+    z-index: 20; position: relative;
   }
   .tab {
-    padding: 10px 16px;
-    font-size: 13px;
-    color: var(--text-dim);
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    white-space: nowrap;
-    transition: all 0.2s;
-    user-select: none;
+    padding: 8px 14px; font-size: 12px; color: var(--text-dim);
+    cursor: pointer; border-bottom: 2px solid transparent;
+    white-space: nowrap; transition: all 0.2s; user-select: none;
   }
   .tab:hover { color: var(--text); background: rgba(108,140,255,0.05); }
   .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
-  /* Main content */
-  .main {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 24px;
-    min-height: calc(100vh - 120px);
+  /* SVG canvas */
+  #graph { width: 100%; height: calc(100vh - 90px); display: block; cursor: grab; }
+  #graph:active { cursor: grabbing; }
+
+  /* Node styles */
+  .node rect {
+    rx: 8; ry: 8;
+    stroke-width: 2px;
+    cursor: pointer;
+    transition: filter 0.2s;
   }
-  .diagram-title {
-    font-size: 16px;
-    font-weight: 500;
-    margin-bottom: 16px;
-    color: var(--text);
-    text-align: center;
+  .node:hover rect { filter: brightness(1.3) drop-shadow(0 0 8px rgba(108,140,255,0.4)); }
+  .node text {
+    font-family: var(--font);
+    font-size: 11px;
+    fill: #e0e0e8;
+    pointer-events: none;
+    text-anchor: middle;
+    dominant-baseline: central;
+  }
+  .node .sublabel {
+    font-size: 9px;
+    fill: #8888a0;
   }
 
-  /* Mermaid container */
-  .diagram-container {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 32px;
-    width: 100%;
-    overflow: auto;
-    position: relative;
-    min-height: 500px;
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
+  /* Edge styles */
+  .edge { fill: none; stroke: #3a4060; stroke-width: 1.5px; }
+  .edge.dashed { stroke-dasharray: 6 3; }
+  .edge.active { stroke: var(--accent); stroke-width: 2.5px; }
+  .edge-label {
+    font-family: var(--font);
+    font-size: 9px;
+    fill: #8888a0;
+    pointer-events: none;
   }
-  .diagram-container svg {
-    min-width: 600px;
-    width: auto;
-    height: auto;
+  .edge-label-bg {
+    fill: var(--surface);
+    rx: 3; ry: 3;
   }
+
+  /* Tooltip */
+  .tooltip {
+    position: fixed; background: var(--surface2);
+    border: 1px solid var(--accent); border-radius: 8px;
+    padding: 10px 14px; font-size: 12px; color: var(--text);
+    pointer-events: none; z-index: 100; max-width: 280px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    opacity: 0; transition: opacity 0.15s;
+  }
+  .tooltip.show { opacity: 1; }
+  .tooltip .tt-title { font-weight: 600; margin-bottom: 4px; font-size: 13px; }
+  .tooltip .tt-detail { color: var(--text-dim); font-size: 11px; }
+
+  /* Detail panel */
+  .detail-panel {
+    position: fixed; right: 0; top: 0; width: 320px; height: 100vh;
+    background: var(--surface); border-left: 1px solid var(--border);
+    padding: 60px 20px 20px; z-index: 30;
+    transform: translateX(100%); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+    overflow-y: auto;
+  }
+  .detail-panel.open { transform: translateX(0); }
+  .detail-panel h2 { font-size: 16px; margin-bottom: 8px; }
+  .detail-panel .detail-id { color: var(--accent); font-size: 12px; margin-bottom: 16px; }
+  .detail-panel .detail-section { margin-bottom: 16px; }
+  .detail-panel .detail-section h3 { font-size: 12px; color: var(--text-dim); text-transform: uppercase; margin-bottom: 6px; }
+  .detail-panel .edge-list { list-style: none; }
+  .detail-panel .edge-list li {
+    padding: 6px 8px; border-radius: 4px; margin-bottom: 2px;
+    font-size: 12px; cursor: pointer; transition: background 0.2s;
+  }
+  .detail-panel .edge-list li:hover { background: var(--surface2); }
+  .detail-panel .edge-list .arrow { color: var(--accent); margin: 0 4px; }
+  .detail-panel .edge-list .utterance { color: var(--text-dim); font-style: italic; }
+  .close-btn {
+    position: absolute; top: 16px; right: 16px;
+    background: none; border: none; color: var(--text-dim);
+    font-size: 20px; cursor: pointer;
+  }
+  .close-btn:hover { color: var(--text); }
 
   /* Zoom controls */
   .zoom-controls {
-    position: fixed;
-    bottom: 24px;
-    right: 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    z-index: 10;
+    position: fixed; bottom: 20px; right: 20px;
+    display: flex; gap: 4px; z-index: 20;
   }
   .zoom-btn {
-    width: 36px;
-    height: 36px;
-    border-radius: 8px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    color: var(--text);
-    font-size: 18px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    width: 32px; height: 32px; border-radius: 6px;
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--text-dim); font-size: 16px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
     transition: all 0.2s;
   }
   .zoom-btn:hover { background: var(--surface2); border-color: var(--accent); color: var(--accent); }
 
-  /* Loading */
-  .loading {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 400px;
-    color: var(--text-dim);
-    font-size: 14px;
-    gap: 8px;
+  /* Breadcrumb / help */
+  .help-hint {
+    position: fixed; bottom: 20px; left: 20px;
+    font-size: 11px; color: var(--text-dim);
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 10px; z-index: 20;
+    opacity: 0.8; transition: opacity 0.3s;
   }
-  .spinner {
-    width: 20px; height: 20px;
-    border: 2px solid var(--border);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* Legend */
-  .legend {
-    display: flex;
-    gap: 16px;
-    margin-top: 16px;
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-  .legend-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    color: var(--text-dim);
-  }
-  .legend-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 3px;
+  .help-hint:hover { opacity: 1; }
+  .help-hint kbd {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 3px; padding: 1px 4px; font-size: 10px;
   }
 
-  /* Locale flags / labels */
-  .locale-flag { font-size: 14px; margin-right: 4px; }
-
-  /* Fullscreen toggle */
-  .fullscreen-btn {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    color: var(--text-dim);
-    padding: 4px 8px;
-    font-size: 12px;
-    cursor: pointer;
-    transition: all 0.2s;
-    z-index: 5;
-  }
-  .fullscreen-btn:hover { color: var(--accent); border-color: var(--accent); }
-
-  /* Responsive */
   @media (max-width: 768px) {
-    .header { padding: 12px 16px; }
+    .header { padding: 8px 12px; }
     .controls { justify-content: flex-start; }
-    .tabs { padding: 0 16px; }
-    .main { padding: 16px; }
-    .diagram-container { padding: 16px; }
+    .tabs { padding: 0 12px; }
     .search-input { width: 140px; }
-  }
-
-  /* Mermaid overrides for dark theme */
-  .diagram-container .node rect,
-  .diagram-container .node polygon,
-  .diagram-container .node circle {
-    stroke-width: 1.5px !important;
-  }
-  .diagram-container .edgeLabel {
-    font-size: 11px !important;
-  }
-  .diagram-container .edgePath .path {
-    stroke-width: 1.5px !important;
-  }
-
-  /* Highlight animation */
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.6; }
-  }
-  .highlighted {
-    animation: pulse 1.5s ease-in-out infinite;
+    .detail-panel { width: 100%; }
   }
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h1><span>Jellyfin</span> Alexa Skill &mdash; Voice Command Explorer</h1>
+  <h1><span>Jellyfin</span> Voice Command Explorer</h1>
   <div class="controls">
     <div class="control-group">
       <label>Language</label>
@@ -274,277 +204,558 @@
 
 <div class="tabs" id="tabs"></div>
 
-<div class="main">
-  <div class="diagram-title" id="diagramTitle"></div>
-  <div class="diagram-container" id="diagramContainer">
-    <button class="fullscreen-btn" id="fullscreenBtn" title="Toggle fullscreen">&#x26F6;</button>
-    <div class="loading" id="loading">
-      <div class="spinner"></div>
-      Loading diagrams...
-    </div>
+<svg id="graph"></svg>
+
+<div class="tooltip" id="tooltip">
+  <div class="tt-title"></div>
+  <div class="tt-detail"></div>
+</div>
+
+<div class="detail-panel" id="detailPanel">
+  <button class="close-btn" id="closePanel">&times;</button>
+  <h2 id="panelTitle"></h2>
+  <div class="detail-id" id="panelId"></div>
+  <div class="detail-section">
+    <h3>Connected Commands</h3>
+    <ul class="edge-list" id="panelEdges"></ul>
   </div>
-  <div class="legend" id="legend"></div>
 </div>
 
 <div class="zoom-controls">
   <button class="zoom-btn" id="zoomIn" title="Zoom in">+</button>
   <button class="zoom-btn" id="zoomOut" title="Zoom out">&minus;</button>
-  <button class="zoom-btn" id="zoomReset" title="Reset zoom">&#x21BA;</button>
+  <button class="zoom-btn" id="zoomReset" title="Reset view">&#x21BA;</button>
+</div>
+
+<div class="help-hint">
+  <kbd>Click</kbd> node to focus &middot; <kbd>Scroll</kbd> to zoom &middot; <kbd>Drag</kbd> background to pan &middot; <kbd>/</kbd> to search
 </div>
 
 <script>
-// Locale display info
 const LOCALE_INFO = {
-  'ar-SA': { flag: '\u{1F1F8}\u{1F1E6}', name: 'Arabic', label: 'العربية' },
-  'de-DE': { flag: '\u{1F1E9}\u{1F1EA}', name: 'German', label: 'Deutsch' },
-  'en-AU': { flag: '\u{1F1E6}\u{1F1FA}', name: 'English (AU)', label: 'English (AU)' },
-  'en-CA': { flag: '\u{1F1E8}\u{1F1E6}', name: 'English (CA)', label: 'English (CA)' },
-  'en-GB': { flag: '\u{1F1EC}\u{1F1E7}', name: 'English (UK)', label: 'English (UK)' },
-  'en-IN': { flag: '\u{1F1EE}\u{1F1F3}', name: 'English (IN)', label: 'English (IN)' },
-  'en-US': { flag: '\u{1F1FA}\u{1F1F8}', name: 'English (US)', label: 'English (US)' },
-  'es-ES': { flag: '\u{1F1EA}\u{1F1F8}', name: 'Spanish (ES)', label: 'Español (ES)' },
-  'es-MX': { flag: '\u{1F1F2}\u{1F1FD}', name: 'Spanish (MX)', label: 'Español (MX)' },
-  'es-US': { flag: '\u{1F1FA}\u{1F1F8}', name: 'Spanish (US)', label: 'Español (US)' },
-  'fr-CA': { flag: '\u{1F1E8}\u{1F1E6}', name: 'French (CA)', label: 'Français (CA)' },
-  'fr-FR': { flag: '\u{1F1EB}\u{1F1F7}', name: 'French (FR)', label: 'Français (FR)' },
-  'hi-IN': { flag: '\u{1F1EE}\u{1F1F3}', name: 'Hindi', label: 'हिन्दी' },
-  'it-IT': { flag: '\u{1F1EE}\u{1F1F9}', name: 'Italian', label: 'Italiano' },
-  'ja-JP': { flag: '\u{1F1EF}\u{1F1F5}', name: 'Japanese', label: '日本語' },
-  'nl-NL': { flag: '\u{1F1F3}\u{1F1F1}', name: 'Dutch', label: 'Nederlands' },
-  'pt-BR': { flag: '\u{1F1E7}\u{1F1F7}', name: 'Portuguese', label: 'Português (BR)' },
+  'ar-SA': { flag: '\u{1F1F8}\u{1F1E6}', label: 'العربية' },
+  'de-DE': { flag: '\u{1F1E9}\u{1F1EA}', label: 'Deutsch' },
+  'en-AU': { flag: '\u{1F1E6}\u{1F1FA}', label: 'English (AU)' },
+  'en-CA': { flag: '\u{1F1E8}\u{1F1E6}', label: 'English (CA)' },
+  'en-GB': { flag: '\u{1F1EC}\u{1F1E7}', label: 'English (UK)' },
+  'en-IN': { flag: '\u{1F1EE}\u{1F1F3}', label: 'English (IN)' },
+  'en-US': { flag: '\u{1F1FA}\u{1F1F8}', label: 'English (US)' },
+  'es-ES': { flag: '\u{1F1EA}\u{1F1F8}', label: 'Español (ES)' },
+  'es-MX': { flag: '\u{1F1F2}\u{1F1FD}', label: 'Español (MX)' },
+  'es-US': { flag: '\u{1F1FA}\u{1F1F8}', label: 'Español (US)' },
+  'fr-CA': { flag: '\u{1F1E8}\u{1F1E6}', label: 'Français (CA)' },
+  'fr-FR': { flag: '\u{1F1EB}\u{1F1F7}', label: 'Français (FR)' },
+  'hi-IN': { flag: '\u{1F1EE}\u{1F1F3}', label: 'हिन्दी' },
+  'it-IT': { flag: '\u{1F1EE}\u{1F1F9}', label: 'Italiano' },
+  'ja-JP': { flag: '\u{1F1EF}\u{1F1F5}', label: '日本語' },
+  'nl-NL': { flag: '\u{1F1F3}\u{1F1F1}', label: 'Nederlands' },
+  'pt-BR': { flag: '\u{1F1E7}\u{1F1F7}', label: 'Português (BR)' },
 };
 
 const DIAGRAM_ICONS = {
-  'playback-lifecycle': '\u{25B6}',
+  'playback-lifecycle': '▶',
   'search-disambiguation': '\u{1F50D}',
-  'media-info-queries': '\u{2139}️',
+  'media-info-queries': 'ℹ️',
   'library-browsing': '\u{1F4DA}',
   'queue-radio': '\u{1F4BF}',
   'session-management': '\u{1F4E1}',
 };
 
-const DIAGRAM_DESCRIPTIONS = {
-  'playback-lifecycle': 'Play, pause, skip, seek, and control playback',
-  'search-disambiguation': 'How voice searches find and match your media',
-  'media-info-queries': 'Ask what\'s playing, get song details and metadata',
-  'library-browsing': 'Browse your music library, playlists, and recommendations',
-  'queue-radio': 'Manage your queue, radio mode, shuffle, and repeat',
-  'session-management': 'Session lifecycle, resume, voice profiles, and timers',
-};
+const DEFAULT_COLORS = { fill: '#2a3050', stroke: '#3a4060', text: '#e0e0e8' };
 
-// State
-let DATA = null;
-let currentType = null;
-let currentLocale = null;
-let currentZoom = 1;
+let DATA, currentType, currentLocale;
+let simulation, svg, g, linkGroup, nodeGroup, labelGroup;
+let width, height;
+let selectedNode = null;
 
-// Detect browser locale
+// Zoom behavior
+const zoom = d3.zoom()
+  .scaleExtent([0.2, 5])
+  .on('zoom', (event) => {
+    g.attr('transform', event.transform);
+  });
+
 function detectLocale() {
-  const lang = navigator.language || navigator.userLanguage || 'en-US';
+  const lang = navigator.language || 'en-US';
   if (LOCALE_INFO[lang]) return lang;
-  const prefix = lang.split('-')[0];
-  const match = Object.keys(LOCALE_INFO).find(k => k.startsWith(prefix));
-  return match || 'en-US';
+  const p = lang.split('-')[0];
+  return Object.keys(LOCALE_INFO).find(k => k.startsWith(p)) || 'en-US';
 }
 
-// Initialize mermaid
-mermaid.initialize({
-  startOnLoad: false,
-  theme: 'dark',
-  themeVariables: {
-    primaryColor: '#4a4f6a',
-    primaryTextColor: '#e0e0e8',
-    primaryBorderColor: '#6c8cff',
-    lineColor: '#6c8cff',
-    secondaryColor: '#2a2f4a',
-    tertiaryColor: '#1a1d2e',
-    background: '#1a1d2e',
-    mainBkg: '#2a3050',
-    nodeBorder: '#6c8cff',
-    clusterBkg: '#1e2240',
-    clusterBorder: '#3a3f60',
-    titleColor: '#e0e0e8',
-    edgeLabelBackground: '#242840',
-    fontSize: '13px',
-  },
-  flowchart: {
-    htmlLabels: true,
-    curve: 'basis',
-    padding: 15,
-  },
-  securityLevel: 'loose',
-});
+function initSVG() {
+  svg = d3.select('#graph');
+  width = window.innerWidth;
+  height = window.innerHeight - 90;
+  svg.attr('viewBox', [0, 0, width, height]);
 
-// Build UI
+  svg.call(zoom);
+
+  // Remove any old defs
+  svg.selectAll('defs').remove();
+
+  const defs = svg.append('defs');
+  // Arrow marker
+  defs.append('marker')
+    .attr('id', 'arrowhead')
+    .attr('viewBox', '0 -5 10 10')
+    .attr('refX', 22).attr('refY', 0)
+    .attr('markerWidth', 6).attr('markerHeight', 6)
+    .attr('orient', 'auto')
+    .append('path')
+    .attr('d', 'M0,-5L10,0L0,5')
+    .attr('fill', '#3a4060');
+
+  defs.append('marker')
+    .attr('id', 'arrowhead-active')
+    .attr('viewBox', '0 -5 10 10')
+    .attr('refX', 22).attr('refY', 0)
+    .attr('markerWidth', 6).attr('markerHeight', 6)
+    .attr('orient', 'auto')
+    .append('path')
+    .attr('d', 'M0,-5L10,0L0,5')
+    .attr('fill', '#6c8cff');
+
+  // Glow filter
+  const glow = defs.append('filter').attr('id', 'glow');
+  glow.append('feGaussianBlur').attr('stdDeviation', '3').attr('result', 'coloredBlur');
+  const merge = glow.append('feMerge');
+  merge.append('feMergeNode').attr('in', 'coloredBlur');
+  merge.append('feMergeNode').attr('in', 'SourceGraphic');
+
+  g = svg.append('g');
+  linkGroup = g.append('g').attr('class', 'links');
+  labelGroup = g.append('g').attr('class', 'labels');
+  nodeGroup = g.append('g').attr('class', 'nodes');
+}
+
 function buildUI() {
-  // Locale select
-  const localeSelect = document.getElementById('localeSelect');
+  const sel = document.getElementById('localeSelect');
   DATA.locales.forEach(loc => {
-    const info = LOCALE_INFO[loc] || { flag: '', name: loc, label: loc };
+    const info = LOCALE_INFO[loc] || { flag: '', label: loc };
     const opt = document.createElement('option');
     opt.value = loc;
     opt.textContent = `${info.flag} ${info.label}`;
-    localeSelect.appendChild(opt);
+    sel.appendChild(opt);
   });
   currentLocale = detectLocale();
   if (!DATA.locales.includes(currentLocale)) currentLocale = 'en-US';
-  localeSelect.value = currentLocale;
-  localeSelect.addEventListener('change', (e) => {
-    currentLocale = e.target.value;
-    renderDiagram();
-  });
+  sel.value = currentLocale;
+  sel.addEventListener('change', e => { currentLocale = e.target.value; renderGraph(); });
 
-  // Tabs
   const tabsEl = document.getElementById('tabs');
   DATA.types.forEach(type => {
     const tab = document.createElement('div');
     tab.className = 'tab';
-    tab.dataset.type = type;
     const icon = DIAGRAM_ICONS[type] || '';
-    tab.textContent = `${icon} ${type.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}`;
+    tab.textContent = `${icon} ${type.replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}`;
     tab.addEventListener('click', () => {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       currentType = type;
-      renderDiagram();
+      renderGraph();
     });
     tabsEl.appendChild(tab);
   });
   currentType = DATA.types[0];
   tabsEl.children[0].classList.add('active');
 
-  // Search
   document.getElementById('searchInput').addEventListener('input', handleSearch);
+  document.getElementById('zoomIn').addEventListener('click', () => zoom.scaleBy(svg.transition().duration(300), 1.4));
+  document.getElementById('zoomOut').addEventListener('click', () => zoom.scaleBy(svg.transition().duration(300), 1/1.4));
+  document.getElementById('zoomReset').addEventListener('click', resetView);
+  document.getElementById('closePanel').addEventListener('click', closePanel);
 
-  // Zoom
-  document.getElementById('zoomIn').addEventListener('click', () => setZoom(currentZoom * 1.2));
-  document.getElementById('zoomOut').addEventListener('click', () => setZoom(currentZoom / 1.2));
-  document.getElementById('zoomReset').addEventListener('click', () => setZoom(1));
-
-  // Fullscreen
-  document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
-
-  // Keyboard
-  document.addEventListener('keydown', (e) => {
-    if (e.key === '+' || e.key === '=') { e.preventDefault(); setZoom(currentZoom * 1.2); }
-    if (e.key === '-') { e.preventDefault(); setZoom(currentZoom / 1.2); }
-    if (e.key === '0') { e.preventDefault(); setZoom(1); }
-    if (e.key === '/' && !e.ctrlKey) {
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closePanel();
+    if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
       e.preventDefault();
       document.getElementById('searchInput').focus();
     }
   });
+
+  window.addEventListener('resize', () => {
+    width = window.innerWidth;
+    height = window.innerHeight - 90;
+    svg.attr('viewBox', [0, 0, width, height]);
+  });
 }
 
-function setZoom(z) {
-  currentZoom = Math.max(0.3, Math.min(3, z));
-  const svg = document.querySelector('#diagramContainer svg');
-  if (svg) {
-    svg.style.transform = `scale(${currentZoom})`;
-    svg.style.transformOrigin = 'center top';
-    svg.style.transition = 'transform 0.2s ease';
-  }
+function resetView() {
+  svg.transition().duration(600).call(
+    zoom.transform,
+    d3.zoomIdentity.translate(width / 2, height / 2).scale(0.8).translate(-width / 2, -height / 2)
+  );
+  clearHighlights();
 }
 
-function toggleFullscreen() {
-  const el = document.getElementById('diagramContainer');
-  if (document.fullscreenElement) {
-    document.exitFullscreen();
-  } else {
-    el.requestFullscreen();
-  }
+function renderGraph() {
+  if (simulation) simulation.stop();
+
+  const graphData = DATA.diagrams[currentType]?.[currentLocale];
+  if (!graphData) return;
+
+  const nodes = graphData.nodes.map(n => ({
+    ...n,
+    fill: n.fill || DEFAULT_COLORS.fill,
+    stroke: n.stroke || DEFAULT_COLORS.stroke,
+    textColor: n.textColor || DEFAULT_COLORS.text,
+  }));
+
+  const nodeMap = {};
+  nodes.forEach(n => nodeMap[n.id] = n);
+
+  const links = graphData.edges.map(e => ({
+    source: nodeMap[e.source] ? e.source : nodes[0].id,
+    target: nodeMap[e.target] ? e.target : nodes[0].id,
+    label: e.label || '',
+    style: e.style || 'solid',
+  }));
+
+  // Clear
+  nodeGroup.selectAll('*').remove();
+  linkGroup.selectAll('*').remove();
+  labelGroup.selectAll('*').remove();
+
+  // Compute text widths for node sizing
+  const textMeasure = document.createElement('canvas').getContext('2d');
+  textMeasure.font = '11px Segoe UI, system-ui, sans-serif';
+
+  nodes.forEach(n => {
+    const lines = n.label.split('\n');
+    n.lines = lines;
+    const maxW = Math.max(...lines.map(l => textMeasure.measureText(l).width));
+    n.width = Math.max(maxW + 28, 80);
+    n.height = lines.length > 1 ? 20 + lines.length * 14 : 36;
+  });
+
+  // Force simulation
+  simulation = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(links).id(d => d.id).distance(100).strength(0.8))
+    .force('charge', d3.forceManyBody().strength(-400).distanceMax(400))
+    .force('center', d3.forceCenter(width / 2, height / 2))
+    .force('collision', d3.forceCollide().radius(d => Math.max(d.width, d.height) / 2 + 10))
+    .force('y', d3.forceY(height / 2).strength(0.05));
+
+  // Draw edges
+  const link = linkGroup.selectAll('path')
+    .data(links)
+    .join('path')
+    .attr('class', d => `edge ${d.style === 'dashed' ? 'dashed' : ''}`)
+    .attr('marker-end', 'url(#arrowhead)');
+
+  // Edge labels
+  const edgeLabels = labelGroup.selectAll('g')
+    .data(links.filter(l => l.label))
+    .join('g');
+
+  edgeLabels.append('rect')
+    .attr('class', 'edge-label-bg')
+    .each(function(d) {
+      const w = d.label.length * 5.5 + 8;
+      d3.select(this).attr('width', w).attr('height', 14).attr('x', -w/2).attr('y', -7);
+    });
+
+  edgeLabels.append('text')
+    .attr('class', 'edge-label')
+    .attr('text-anchor', 'middle')
+    .attr('dominant-baseline', 'central')
+    .text(d => d.label);
+
+  // Draw nodes
+  const node = nodeGroup.selectAll('g')
+    .data(nodes, d => d.id)
+    .join('g')
+    .attr('class', 'node')
+    .call(d3.drag()
+      .on('start', dragStart)
+      .on('drag', dragging)
+      .on('end', dragEnd))
+    .on('click', (event, d) => { event.stopPropagation(); focusNode(d); })
+    .on('mouseenter', (event, d) => showTooltip(event, d))
+    .on('mouseleave', hideTooltip);
+
+  node.append('rect')
+    .attr('width', d => d.width)
+    .attr('height', d => d.height)
+    .attr('x', d => -d.width / 2)
+    .attr('y', d => -d.height / 2)
+    .attr('fill', d => d.fill)
+    .attr('stroke', d => d.stroke)
+    .attr('rx', 8);
+
+  // Multi-line text
+  node.each(function(d) {
+    const g = d3.select(this);
+    const startY = d.lines.length > 1 ? -(d.lines.length * 7) : 0;
+    d.lines.forEach((line, i) => {
+      g.append('text')
+        .attr('class', i > 0 ? 'sublabel' : '')
+        .attr('text-anchor', 'middle')
+        .attr('dominant-baseline', 'central')
+        .attr('y', startY + i * 14)
+        .text(line);
+    });
+  });
+
+  // Tick
+  simulation.on('tick', () => {
+    link.attr('d', d => {
+      const dx = d.target.x - d.source.x;
+      const dy = d.target.y - d.source.y;
+      const dr = Math.sqrt(dx * dx + dy * dy) * 0.5;
+      return `M${d.source.x},${d.source.y}A${dr},${dr} 0 0,1 ${d.target.x},${d.target.y}`;
+    });
+
+    edgeLabels.attr('transform', d => {
+      const mx = (d.source.x + d.target.x) / 2;
+      const my = (d.source.y + d.target.y) / 2;
+      return `translate(${mx},${my})`;
+    });
+
+    node.attr('transform', d => `translate(${d.x},${d.y})`);
+  });
+
+  // Initial zoom to fit
+  svg.call(zoom.transform, d3.zoomIdentity
+    .translate(width * 0.1, height * 0.05)
+    .scale(0.8));
+
+  // Animate nodes appearing
+  node.attr('opacity', 0)
+    .transition()
+    .duration(400)
+    .delay((d, i) => i * 20)
+    .attr('opacity', 1);
+
+  link.attr('opacity', 0)
+    .transition()
+    .duration(300)
+    .delay(300)
+    .attr('opacity', 1);
+
+  edgeLabels.attr('opacity', 0)
+    .transition()
+    .duration(300)
+    .delay(400)
+    .attr('opacity', 1);
+
+  // Click background to deselect
+  svg.on('click', () => {
+    clearHighlights();
+    closePanel();
+  });
 }
 
-let renderCounter = 0;
-async function renderDiagram() {
-  const container = document.getElementById('diagramContainer');
-  const titleEl = document.getElementById('diagramTitle');
-  const legendEl = document.getElementById('legend');
+function focusNode(d) {
+  selectedNode = d;
+  const connected = new Set();
+  connected.add(d.id);
 
-  const diagramData = DATA.diagrams[currentType]?.[currentLocale];
-  if (!diagramData) {
-    container.innerHTML = '<div class="loading">No diagram available for this locale.</div>';
-    return;
-  }
+  // Find all neighbors
+  DATA.diagrams[currentType][currentLocale].edges.forEach(e => {
+    if (e.source === d.id || e.target === d.id) {
+      connected.add(e.source);
+      connected.add(e.target);
+    }
+  });
 
-  // Title
-  const info = LOCALE_INFO[currentLocale] || { flag: '', label: currentLocale };
-  const typeName = currentType.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-  titleEl.textContent = `${DIAGRAM_ICONS[currentType] || ''} ${typeName} — ${info.flag} ${info.label}`;
+  // Highlight
+  nodeGroup.selectAll('g')
+    .transition().duration(300)
+    .attr('opacity', n => connected.has(n.id) ? 1 : 0.15);
 
-  // Legend
-  legendEl.innerHTML = `
-    <div class="legend-item"><div class="legend-dot" style="background:#4CAF50"></div> Playing / Active</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#FF9800"></div> Paused / Waiting</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#f44336"></div> Stopped / Ended</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#2196F3"></div> Navigation / Seek</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#9C27B0"></div> Special / Radio</div>
-  `;
+  linkGroup.selectAll('path')
+    .transition().duration(300)
+    .attr('opacity', e => (e.source.id === d.id || e.target.id === d.id) ? 1 : 0.05)
+    .attr('class', e => {
+      const isConn = e.source.id === d.id || e.target.id === d.id;
+      return `edge ${e.style === 'dashed' ? 'dashed' : ''} ${isConn ? 'active' : ''}`;
+    })
+    .attr('marker-end', e => {
+      const isConn = e.source.id === d.id || e.target.id === d.id;
+      return isConn ? 'url(#arrowhead-active)' : 'url(#arrowhead)';
+    });
 
-  // Render mermaid
-  renderCounter++;
-  const id = `mermaid-${renderCounter}`;
+  labelGroup.selectAll('g')
+    .transition().duration(300)
+    .attr('opacity', e => {
+      const srcId = typeof e.source === 'object' ? e.source.id : e.source;
+      const tgtId = typeof e.target === 'object' ? e.target.id : e.target;
+      return (srcId === d.id || tgtId === d.id) ? 1 : 0.05;
+    });
 
-  try {
-    const { svg } = await mermaid.render(id, diagramData.mermaid);
-    // Keep fullscreen button
-    const fsBtn = container.querySelector('.fullscreen-btn');
-    container.innerHTML = '';
-    if (fsBtn) container.appendChild(fsBtn);
-    container.insertAdjacentHTML('beforeend', svg);
-    currentZoom = 1;
-  } catch (err) {
-    console.error('Mermaid render error:', err);
-    container.innerHTML = `<div class="loading">Error rendering diagram. Try another locale.</div>`;
-  }
+  // Glow effect on focused node
+  nodeGroup.selectAll('g')
+    .select('rect')
+    .attr('filter', n => n.id === d.id ? 'url(#glow)' : null);
+
+  // Zoom to center on node
+  const t = d3.zoomTransform(svg.node());
+  const [cx, cy] = [width / 2, height / 2];
+  const scale = Math.max(t.k, 1.2);
+  const tx = cx - d.x * scale;
+  const ty = cy - d.y * scale;
+
+  svg.transition().duration(600).ease(d3.easeCubicInOut)
+    .call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+
+  // Show detail panel
+  showDetailPanel(d);
+}
+
+function clearHighlights() {
+  selectedNode = null;
+  nodeGroup.selectAll('g').transition().duration(300).attr('opacity', 1);
+  nodeGroup.selectAll('rect').attr('filter', null);
+  linkGroup.selectAll('path')
+    .transition().duration(300)
+    .attr('opacity', 1)
+    .attr('class', e => `edge ${e.style === 'dashed' ? 'dashed' : ''}`)
+    .attr('marker-end', 'url(#arrowhead)');
+  labelGroup.selectAll('g').transition().duration(300).attr('opacity', 1);
+}
+
+function showDetailPanel(d) {
+  const panel = document.getElementById('detailPanel');
+  document.getElementById('panelTitle').textContent = d.label.split('\n')[0];
+  document.getElementById('panelId').textContent = d.id;
+
+  const edges = DATA.diagrams[currentType][currentLocale].edges;
+  const connected = edges.filter(e => e.source === d.id || e.target === d.id);
+
+  const list = document.getElementById('panelEdges');
+  list.innerHTML = '';
+
+  connected.forEach(e => {
+    const li = document.createElement('li');
+    const isOutgoing = e.source === d.id;
+    const otherId = isOutgoing ? e.target : e.source;
+    const other = DATA.diagrams[currentType][currentLocale].nodes.find(n => n.id === otherId);
+
+    li.innerHTML = `
+      <span class="${isOutgoing ? '' : 'utterance'}">${isOutgoing ? d.label.split('\\n')[0] : other?.label.split('\\n')[0] || otherId}</span>
+      <span class="arrow">${isOutgoing ? '→' : '←'}</span>
+      <span>${isOutgoing ? other?.label.split('\\n')[0] || otherId : d.label.split('\\n')[0]}</span>
+      ${e.label ? `<br><span class="utterance">"${e.label}"</span>` : ''}
+    `;
+    li.addEventListener('click', () => {
+      const node = simulation.nodes().find(n => n.id === otherId);
+      if (node) focusNode(node);
+    });
+    list.appendChild(li);
+  });
+
+  panel.classList.add('open');
+}
+
+function closePanel() {
+  document.getElementById('detailPanel').classList.remove('open');
+}
+
+function showTooltip(event, d) {
+  const tt = document.getElementById('tooltip');
+  tt.querySelector('.tt-title').textContent = d.label.split('\n')[0];
+  const edges = DATA.diagrams[currentType][currentLocale].edges;
+  const outCount = edges.filter(e => e.source === d.id).length;
+  const inCount = edges.filter(e => e.target === d.id).length;
+  tt.querySelector('.tt-detail').textContent =
+    `${outCount} outgoing · ${inCount} incoming · Click to focus`;
+  tt.style.left = (event.clientX + 12) + 'px';
+  tt.style.top = (event.clientY - 10) + 'px';
+  tt.classList.add('show');
+}
+
+function hideTooltip() {
+  document.getElementById('tooltip').classList.remove('show');
 }
 
 function handleSearch(e) {
   const query = e.target.value.toLowerCase().trim();
-  const svg = document.querySelector('#diagramContainer svg');
-  if (!svg) return;
+  if (!query) { clearHighlights(); return; }
 
-  // Reset all highlights
-  svg.querySelectorAll('.node, .edgePath, .edgeLabel').forEach(el => {
-    el.style.opacity = '1';
-    el.classList.remove('highlighted');
-  });
+  const nodes = simulation.nodes();
+  const matching = new Set();
 
-  if (!query) return;
-
-  // Find matching nodes
-  const nodes = svg.querySelectorAll('.node');
-  let found = new Set();
-
-  nodes.forEach(node => {
-    const text = node.textContent.toLowerCase();
-    if (text.includes(query)) {
-      found.add(node);
-      node.classList.add('highlighted');
+  nodes.forEach(n => {
+    if (n.label.toLowerCase().includes(query) || n.id.toLowerCase().includes(query)) {
+      matching.add(n.id);
     }
   });
 
-  // Dim non-matching
-  if (found.size > 0) {
-    nodes.forEach(node => {
-      if (!found.has(node)) {
-        node.style.opacity = '0.3';
-      }
+  if (matching.size === 0) return;
+
+  // Also include neighbors of matches
+  const expanded = new Set(matching);
+  DATA.diagrams[currentType][currentLocale].edges.forEach(e => {
+    if (matching.has(e.source) || matching.has(e.target)) {
+      expanded.add(e.source);
+      expanded.add(e.target);
+    }
+  });
+
+  nodeGroup.selectAll('g')
+    .transition().duration(300)
+    .attr('opacity', n => expanded.has(n.id) ? 1 : 0.1);
+
+  nodeGroup.selectAll('rect')
+    .attr('filter', n => matching.has(n.id) ? 'url(#glow)' : null);
+
+  linkGroup.selectAll('path')
+    .transition().duration(300)
+    .attr('opacity', e => {
+      const sid = typeof e.source === 'object' ? e.source.id : e.source;
+      const tid = typeof e.target === 'object' ? e.target.id : e.target;
+      return (matching.has(sid) || matching.has(tid)) ? 0.8 : 0.03;
     });
+
+  labelGroup.selectAll('g')
+    .transition().duration(300)
+    .attr('opacity', e => {
+      const sid = typeof e.source === 'object' ? e.source.id : e.source;
+      const tid = typeof e.target === 'object' ? e.target.id : e.target;
+      return (matching.has(sid) || matching.has(tid)) ? 1 : 0.03;
+    });
+
+  // Zoom to fit matching nodes
+  if (matching.size > 0 && matching.size < nodes.length) {
+    const matchNodes = nodes.filter(n => matching.has(n.id));
+    const xs = matchNodes.map(n => n.x);
+    const ys = matchNodes.map(n => n.y);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const bw = maxX - minX + 200;
+    const bh = maxY - minY + 200;
+    const scale = Math.min(width / bw, height / bh, 2.5);
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+
+    svg.transition().duration(600).ease(d3.easeCubicInOut)
+      .call(zoom.transform,
+        d3.zoomIdentity.translate(width/2 - cx*scale, height/2 - cy*scale).scale(scale));
   }
 }
 
-// Load data and start
-fetch('data.json')
+// Drag
+function dragStart(event, d) {
+  if (!event.active) simulation.alphaTarget(0.3).restart();
+  d.fx = d.x; d.fy = d.y;
+}
+function dragging(event, d) {
+  d.fx = event.x; d.fy = event.y;
+}
+function dragEnd(event, d) {
+  if (!event.active) simulation.alphaTarget(0);
+  d.fx = null; d.fy = null;
+}
+
+// Init
+initSVG();
+fetch('graphs.json')
   .then(r => r.json())
   .then(data => {
     DATA = data;
     buildUI();
-    renderDiagram();
-  })
-  .catch(err => {
-    document.getElementById('loading').textContent = 'Failed to load diagram data.';
-    console.error(err);
+    renderGraph();
   });
 </script>
 </body>
