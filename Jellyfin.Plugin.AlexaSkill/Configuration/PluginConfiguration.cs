@@ -92,6 +92,7 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool ResumeOfferEnabled { get; set; } = true;
     public bool ResumeAnnounceTitle { get; set; } = true;
     public bool AsrCompoundWordFixEnabled { get; set; } = true;
+    public bool SeekEnabled { get; set; }
 
     // Media type visibility — exclude content types from search and library queries
     public bool MusicEnabled { get; set; } = true;

@@ -148,6 +148,14 @@ public class ConfigurationController : ControllerBase
             updated = true;
         }
 
+        // Handle AnnouncePositionOnResume (boolean)
+        if (req.TryGetValue("AnnouncePositionOnResume", out var announceToken)
+            && announceToken.Type == JTokenType.Boolean)
+        {
+            pluginUser!.AnnouncePositionOnResume = announceToken.Value<bool>();
+            updated = true;
+        }
+
         if (!updated)
         {
             return new JsonResult(new { error = "No valid fields to update" }) { StatusCode = 400 };
@@ -372,6 +380,18 @@ public class ConfigurationController : ControllerBase
 
         if (req.TryGetValue("SimulatorEnabled", out var simToken) && simToken.Type == JTokenType.Boolean)
         { config.SimulatorEnabled = simToken.Value<bool>(); updated = true; }
+
+        if (req.TryGetValue("ResumeOfferEnabled", out var resumeOfferToken) && resumeOfferToken.Type == JTokenType.Boolean)
+        { config.ResumeOfferEnabled = resumeOfferToken.Value<bool>(); updated = true; }
+
+        if (req.TryGetValue("ResumeAnnounceTitle", out var resumeAnnounceToken) && resumeAnnounceToken.Type == JTokenType.Boolean)
+        { config.ResumeAnnounceTitle = resumeAnnounceToken.Value<bool>(); updated = true; }
+
+        if (req.TryGetValue("AsrCompoundWordFixEnabled", out var asrToken) && asrToken.Type == JTokenType.Boolean)
+        { config.AsrCompoundWordFixEnabled = asrToken.Value<bool>(); updated = true; }
+
+        if (req.TryGetValue("SeekEnabled", out var seekToken) && seekToken.Type == JTokenType.Boolean)
+        { config.SeekEnabled = seekToken.Value<bool>(); updated = true; }
 
         if (req.TryGetValue("InitialFetchSize", out var fetchToken) && fetchToken.Type == JTokenType.Integer)
         { config.InitialFetchSize = fetchToken.Value<int>(); updated = true; }

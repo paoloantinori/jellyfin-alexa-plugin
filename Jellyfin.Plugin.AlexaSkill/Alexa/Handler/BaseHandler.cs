@@ -348,7 +348,7 @@ public abstract class BaseHandler
             }
         };
 
-        return new SkillResponse
+        var response = new SkillResponse
         {
             Version = "1.0",
             Response = new ResponseBody
@@ -357,6 +357,36 @@ public abstract class BaseHandler
                 Directives = new List<IDirective> { directive }
             }
         };
+
+        if (Plugin.Instance?.Configuration?.SeekEnabled == true && item != null
+            && playBehavior != PlayBehavior.Enqueue)
+        {
+            string title = item.Name ?? string.Empty;
+            string cardContent = title;
+
+            long runTimeTicks = item.RunTimeTicks ?? 0;
+            if (runTimeTicks > 0)
+            {
+                string total = FormatPosition(runTimeTicks);
+                if (offsetInMilliseconds > 0)
+                {
+                    long posTicks = (long)offsetInMilliseconds * TimeSpan.TicksPerMillisecond;
+                    cardContent = $"{title}\n{FormatPosition(posTicks)} / {total}";
+                }
+                else
+                {
+                    cardContent = $"{title}\n0:00 / {total}";
+                }
+            }
+
+            response.Response.Card = new StandardCard
+            {
+                Title = string.Empty,
+                Content = cardContent
+            };
+        }
+
+        return response;
     }
 
     /// <summary>
@@ -1128,5 +1158,48 @@ public abstract class BaseHandler
         }
 
         return ts.TotalMinutes >= 1 ? $"{(int)ts.TotalMinutes}m {ts.Seconds}s" : $"{ts.Seconds}s";
+    }
+
+    /// <summary>
+    /// Format a TimeSpan into a locale-aware voice-friendly string (e.g. "1 hours and 30 minutes").
+    /// Uses ResponseStrings for localized templates.
+    /// </summary>
+    protected static string FormatTimeSpan(TimeSpan span, string locale)
+    {
+        if (span.TotalHours >= 1)
+        {
+            return ResponseStrings.Get("HoursAndMinutes", locale, (int)span.TotalHours, span.Minutes);
+        }
+
+        if (span.TotalMinutes >= 1)
+        {
+            return ResponseStrings.Get("MinutesAndSeconds", locale, (int)span.TotalMinutes, span.Seconds);
+        }
+
+        return ResponseStrings.Get("SecondsOnly", locale, span.Seconds);
+    }
+
+    /// <summary>
+    /// Build a locale-aware position string from session state.
+    /// Returns "X of Y" when runtime is known, just the position otherwise, or empty when position is 0/unavailable.
+    /// </summary>
+    protected static string BuildPositionDisplay(SessionInfo session, string locale)
+    {
+        if (session.PlayState?.PositionTicks == null || session.PlayState.PositionTicks.Value <= 0)
+        {
+            return string.Empty;
+        }
+
+        var position = TimeSpan.FromTicks(session.PlayState.PositionTicks.Value);
+        string positionStr = FormatTimeSpan(position, locale);
+
+        long? runtimeTicks = session.NowPlayingItem?.RunTimeTicks;
+        if (runtimeTicks.HasValue && runtimeTicks.Value > 0)
+        {
+            var runtime = TimeSpan.FromTicks(runtimeTicks.Value);
+            return ResponseStrings.Get("PositionOfTotal", locale, positionStr, FormatTimeSpan(runtime, locale));
+        }
+
+        return positionStr;
     }
 }

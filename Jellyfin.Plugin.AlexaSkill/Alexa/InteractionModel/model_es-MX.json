@@ -384,7 +384,23 @@
           "qué género tiene esta canción",
           "dame información de esta canción",
           "dime el nombre del artista",
-          "de qué álbum es esta canción"
+          "de qué álbum es esta canción",
+          "qué temporada es esta",
+          "qué temporada es",
+          "qué episodio es este",
+          "qué episodio es",
+          "qué serie es esta",
+          "quién dirigió esto",
+          "quién es el director",
+          "quién actúa en esto",
+          "quiénes son los actores",
+          "quién es el autor",
+          "quién escribió esto",
+          "quién es el narrador",
+          "quién narra esto",
+          "cuál es la calificación",
+          "cómo está calificado",
+          "quiénes están en el reparto"
         ]
       },
       {
@@ -948,6 +964,89 @@
               "synonyms": [
                 "bio",
                 "sobre el artista"
+              ]
+            }
+          },
+          {
+            "id": "director",
+            "name": {
+              "value": "director",
+              "synonyms": [
+                "realizador",
+                "cineasta"
+              ]
+            }
+          },
+          {
+            "id": "cast",
+            "name": {
+              "value": "reparto",
+              "synonyms": [
+                "actores",
+                "elenco",
+                "protagonistas"
+              ]
+            }
+          },
+          {
+            "id": "season",
+            "name": {
+              "value": "temporada",
+              "synonyms": [
+                "temporada número",
+                "ciclo"
+              ]
+            }
+          },
+          {
+            "id": "episode",
+            "name": {
+              "value": "episodio",
+              "synonyms": [
+                "capítulo",
+                "episodio número"
+              ]
+            }
+          },
+          {
+            "id": "series",
+            "name": {
+              "value": "serie",
+              "synonyms": [
+                "programa",
+                "show",
+                "series"
+              ]
+            }
+          },
+          {
+            "id": "author",
+            "name": {
+              "value": "autor",
+              "synonyms": [
+                "escritor",
+                "escritora"
+              ]
+            }
+          },
+          {
+            "id": "narrator",
+            "name": {
+              "value": "narrador",
+              "synonyms": [
+                "lector",
+                "narradora"
+              ]
+            }
+          },
+          {
+            "id": "rating",
+            "name": {
+              "value": "calificación",
+              "synonyms": [
+                "puntuación",
+                "valoración",
+                "nota"
               ]
             }
           }

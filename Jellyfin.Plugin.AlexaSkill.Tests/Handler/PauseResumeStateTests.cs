@@ -462,4 +462,99 @@ public class PauseResumeStateTests : IDisposable
         Assert.Equal(TestItemId, restored.CurrentItemId);
         Assert.Equal(TimeSpan.FromSeconds(30).Ticks, restored.CurrentPositionTicks);
     }
+
+    // ---- M5: Proactive position announcement on resume ----
+
+    [Fact]
+    public async Task ResumeIntent_AnnouncePositionEnabled_AnnouncesPosition()
+    {
+        var user = TestHelpers.CreateTestUser();
+        _config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
+        {
+            Id = user.Id,
+            AnnouncePositionOnResume = true
+        });
+
+        var handler = new ResumeIntentHandler(
+            _sessionManagerMock.Object, _config, _loggerFactory, _queueManager);
+
+        var context = CreateContext(audioPlayerToken: TestItemId, audioPlayerOffset: 90000); // 1m 30s
+        var session = CreateSessionWithNowPlaying(TestItemId);
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "AMAZON.ResumeIntent" } },
+            context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response.Response.OutputSpeech);
+        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        Assert.Contains("1 minutes", speech.Text);
+        Assert.Contains("30 seconds", speech.Text);
+    }
+
+    [Fact]
+    public async Task ResumeIntent_AnnouncePositionDisabled_NoAnnouncement()
+    {
+        var user = TestHelpers.CreateTestUser();
+        _config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
+        {
+            Id = user.Id,
+            AnnouncePositionOnResume = false
+        });
+
+        var handler = new ResumeIntentHandler(
+            _sessionManagerMock.Object, _config, _loggerFactory, _queueManager);
+
+        var context = CreateContext(audioPlayerToken: TestItemId, audioPlayerOffset: 90000);
+        var session = CreateSessionWithNowPlaying(TestItemId);
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "AMAZON.ResumeIntent" } },
+            context, user, session, CancellationToken.None);
+
+        Assert.Null(response.Response.OutputSpeech);
+    }
+
+    [Fact]
+    public async Task ResumeIntent_AnnouncePositionEnabled_ZeroOffset_NoAnnouncement()
+    {
+        var user = TestHelpers.CreateTestUser();
+        _config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
+        {
+            Id = user.Id,
+            AnnouncePositionOnResume = true
+        });
+
+        var handler = new ResumeIntentHandler(
+            _sessionManagerMock.Object, _config, _loggerFactory, _queueManager);
+
+        var context = CreateContext(audioPlayerToken: TestItemId, audioPlayerOffset: 0);
+        var session = CreateSessionWithNowPlaying(TestItemId);
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "AMAZON.ResumeIntent" } },
+            context, user, session, CancellationToken.None);
+
+        // Offset is 0, so no announcement even with the flag enabled
+        Assert.Null(response.Response.OutputSpeech);
+    }
+
+    [Fact]
+    public async Task ResumeIntent_AnnouncePositionEnabled_UserNotInConfig_NoAnnouncement()
+    {
+        // User exists but is NOT in plugin config.Users
+        var user = TestHelpers.CreateTestUser();
+
+        var handler = new ResumeIntentHandler(
+            _sessionManagerMock.Object, _config, _loggerFactory, _queueManager);
+
+        var context = CreateContext(audioPlayerToken: TestItemId, audioPlayerOffset: 90000);
+        var session = CreateSessionWithNowPlaying(TestItemId);
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "AMAZON.ResumeIntent" } },
+            context, user, session, CancellationToken.None);
+
+        // No config entry for this user → no announcement
+        Assert.Null(response.Response.OutputSpeech);
+    }
 }

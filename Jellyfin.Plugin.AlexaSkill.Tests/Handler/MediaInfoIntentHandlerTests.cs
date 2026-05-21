@@ -963,4 +963,144 @@ public class MediaInfoIntentHandlerTests
         Assert.NotNull(response);
         Assert.DoesNotContain(response.Response.Directives, d => d.Type == "Alexa.Presentation.APL.RenderDocument");
     }
+
+    // --- Position display tests (M4: SeekEnabled-gated StandardCard + APL progress) ---
+
+    [Fact]
+    public async Task Handle_SeekEnabled_WithProgress_IncludesStandardCard()
+    {
+        _config.SeekEnabled = true;
+        TestHelpers.SetServerAddress(_config, "https://test.example.com");
+        TestHelpers.EnsurePluginInstance(
+            _config, _loggerFactory,
+            c => c.SeekEnabled = true,
+            "mediainfo-seek-card");
+
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Id = Guid.NewGuid(),
+            Name = "Test Song",
+            Type = BaseItemKind.Audio,
+            AlbumArtist = "Artist",
+            RunTimeTicks = TimeSpan.FromMinutes(4).Ticks
+        };
+        session.PlayState = new PlayerStateInfo
+        {
+            PositionTicks = TimeSpan.FromMinutes(2).Ticks
+        };
+
+        var response = await handler.HandleAsync(
+            CreateMediaInfoRequest(), TestHelpers.CreateContextWithoutApl(),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.NotNull(response.Response.Card);
+        var card = Assert.IsType<StandardCard>(response.Response.Card);
+        Assert.Contains("Test Song", card.Content);
+        Assert.Contains("/", card.Content); // "elapsed / total" format
+    }
+
+    [Fact]
+    public async Task Handle_SeekDisabled_NoStandardCard()
+    {
+        _config.SeekEnabled = false;
+        TestHelpers.SetServerAddress(_config, "https://test.example.com");
+        TestHelpers.EnsurePluginInstance(
+            _config, _loggerFactory,
+            c => c.SeekEnabled = false,
+            "mediainfo-no-seek-card");
+
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Id = Guid.NewGuid(),
+            Name = "Test Song",
+            Type = BaseItemKind.Audio,
+            AlbumArtist = "Artist",
+            RunTimeTicks = TimeSpan.FromMinutes(4).Ticks
+        };
+        session.PlayState = new PlayerStateInfo
+        {
+            PositionTicks = TimeSpan.FromMinutes(2).Ticks
+        };
+
+        var response = await handler.HandleAsync(
+            CreateMediaInfoRequest(), TestHelpers.CreateContextWithoutApl(),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.Null(response.Response.Card);
+    }
+
+    [Fact]
+    public async Task Handle_SeekEnabled_NoProgress_IncludesCardWithoutProgress()
+    {
+        _config.SeekEnabled = true;
+        TestHelpers.SetServerAddress(_config, "https://test.example.com");
+        TestHelpers.EnsurePluginInstance(
+            _config, _loggerFactory,
+            c => c.SeekEnabled = true,
+            "mediainfo-seek-no-progress");
+
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Id = Guid.NewGuid(),
+            Name = "Test Song",
+            Type = BaseItemKind.Audio,
+            AlbumArtist = "Artist"
+        };
+        // No PlayState → no progress
+
+        var response = await handler.HandleAsync(
+            CreateMediaInfoRequest(), TestHelpers.CreateContextWithoutApl(),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        // StandardCard is attached by SeekEnabled path even without progress,
+        // but no elapsed/total line. Card should still be present with just the name.
+        Assert.NotNull(response.Response.Card);
+        var card = Assert.IsType<StandardCard>(response.Response.Card);
+        Assert.Contains("Test Song", card.Content);
+        Assert.DoesNotContain("/", card.Content);
+    }
+
+    [Fact]
+    public async Task Handle_SeekEnabled_WithAplAndProgress_IncludesAplDirective()
+    {
+        EnsureVisualsEnabled();
+        _config.SeekEnabled = true;
+        TestHelpers.SetServerAddress(_config, "https://test.example.com");
+        TestHelpers.EnsurePluginInstance(
+            _config, _loggerFactory,
+            c => { c.SeekEnabled = true; c.AplVisualsEnabled = true; },
+            "mediainfo-seek-apl");
+
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Id = Guid.NewGuid(),
+            Name = "Test Song",
+            Type = BaseItemKind.Audio,
+            AlbumArtist = "Artist",
+            RunTimeTicks = TimeSpan.FromMinutes(4).Ticks
+        };
+        session.PlayState = new PlayerStateInfo
+        {
+            PositionTicks = TimeSpan.FromMinutes(2).Ticks
+        };
+
+        var context = TestHelpers.CreateContextWithApl();
+        var response = await handler.HandleAsync(
+            CreateMediaInfoRequest(), context,
+            TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.Contains(response.Response.Directives, d => d.Type == "Alexa.Presentation.APL.RenderDocument");
+    }
 }

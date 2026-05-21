@@ -135,6 +135,10 @@
                                 <label><input type="checkbox" is="emby-checkbox" id="AsrCompoundWordFixEnabled" /> <span>ASR Compound Word Fix</span></label>
                                 <div class="fieldDescription checkboxFieldDescription">When Alexa splits compound words (e.g. 'lazybones' → 'lazy bones'), retry search with joined variants. Disable if search is too slow on misses.</div>
                             </div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="SeekEnabled" /> <span>Seek Controls</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">Enable skip forward/back and jump-to-position voice commands. Also adds progress display when asking what's playing.</div>
+                            </div>
                     </details>
 
                     <details>
@@ -379,7 +383,7 @@
                     // Feature flags
                     ["RadioModeEnabled", "PodcastsEnabled", "LiveTvEnabled", "SleepTimerEnabled",
                      "QueueManagementEnabled", "BrowseLibraryEnabled", "RecommendationsEnabled",
-                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "AsrCompoundWordFixEnabled"].forEach(function(f) {
+                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "AsrCompoundWordFixEnabled", "SeekEnabled"].forEach(function(f) {
                         document.querySelector("#" + f).checked = config[f] !== false;
                     });
 
@@ -715,6 +719,19 @@
                 fmDesc.textContent = "Match=auto-accept threshold, Sug=did-you-mean threshold";
                 fmWrap.appendChild(fmDesc);
 
+                let announceCb = document.createElement("label");
+                announceCb.style.cssText = "display:flex;align-items:center;gap:0.3em;margin-top:0.4em;font-size:0.8em;color:#aaa;cursor:pointer;";
+                let announceInput = document.createElement("input");
+                announceInput.type = "checkbox";
+                announceInput.setAttribute("data-field", "AnnouncePositionOnResume");
+                announceInput.checked = user.AnnouncePositionOnResume === true;
+                announceInput.style.margin = "0";
+                announceCb.appendChild(announceInput);
+                let announceLabel = document.createElement("span");
+                announceLabel.textContent = "Announce position on resume";
+                announceCb.appendChild(announceLabel);
+                fmWrap.appendChild(announceCb);
+
                 td.appendChild(fmWrap);
                 tr.appendChild(td);
 
@@ -840,7 +857,7 @@
 
                     ["RadioModeEnabled", "PodcastsEnabled", "LiveTvEnabled", "SleepTimerEnabled",
                      "QueueManagementEnabled", "BrowseLibraryEnabled", "RecommendationsEnabled",
-                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "AsrCompoundWordFixEnabled"].forEach(function(f) {
+                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "AsrCompoundWordFixEnabled", "SeekEnabled"].forEach(function(f) {
                         config[f] = document.querySelector("#" + f).checked;
                     });
 
@@ -893,6 +910,7 @@
                         ResumeOfferEnabled: config.ResumeOfferEnabled,
                         ResumeAnnounceTitle: config.ResumeAnnounceTitle,
                         AsrCompoundWordFixEnabled: config.AsrCompoundWordFixEnabled,
+                        SeekEnabled: config.SeekEnabled,
                         MusicEnabled: config.MusicEnabled,
                         VideosEnabled: config.VideosEnabled,
                         BooksEnabled: config.BooksEnabled,
@@ -958,7 +976,8 @@
                                     "AllowedLibraryIds": selectedLibs,
                                     "FuzzyMatchBehavior": fmBehavior ? fmBehavior.value : "Confirm",
                                     "FuzzyMatchThreshold": fmThreshold ? parseInt(fmThreshold.value) || 60 : 60,
-                                    "FuzzySuggestionThreshold": fmSuggestion ? parseInt(fmSuggestion.value) || 40 : 40
+                                    "FuzzySuggestionThreshold": fmSuggestion ? parseInt(fmSuggestion.value) || 40 : 40,
+                                    "AnnouncePositionOnResume": row.cells[4].querySelector('[data-field="AnnouncePositionOnResume"]')?.checked || false
                                 };
 
                                 ApiClient.ajax({

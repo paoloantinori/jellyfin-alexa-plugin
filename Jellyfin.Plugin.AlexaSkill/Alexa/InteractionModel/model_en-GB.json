@@ -518,7 +518,22 @@
           "when was this song released",
           "what is the genre of this",
           "give me info about this track",
-          "tell me the artist name"
+          "tell me the artist name",
+          "what season is this",
+          "which season is this",
+          "what episode is this",
+          "which episode is this",
+          "what show is this",
+          "who directed this",
+          "who is the director",
+          "who stars in this",
+          "who is in this",
+          "who is the author",
+          "who wrote this",
+          "who is the narrator",
+          "who narrates this",
+          "what is the rating",
+          "how is this rated"
         ]
       },
       {
@@ -1102,6 +1117,83 @@
               "synonyms": [
                 "bio",
                 "about the artist"
+              ]
+            }
+          },
+          {
+            "id": "director",
+            "name": {
+              "value": "director",
+              "synonyms": [
+                "filmmaker"
+              ]
+            }
+          },
+          {
+            "id": "cast",
+            "name": {
+              "value": "cast",
+              "synonyms": [
+                "actors",
+                "starring"
+              ]
+            }
+          },
+          {
+            "id": "season",
+            "name": {
+              "value": "season",
+              "synonyms": [
+                "season number"
+              ]
+            }
+          },
+          {
+            "id": "episode",
+            "name": {
+              "value": "episode",
+              "synonyms": [
+                "episode number"
+              ]
+            }
+          },
+          {
+            "id": "series",
+            "name": {
+              "value": "series",
+              "synonyms": [
+                "show",
+                "tv show",
+                "program"
+              ]
+            }
+          },
+          {
+            "id": "author",
+            "name": {
+              "value": "author",
+              "synonyms": [
+                "writer"
+              ]
+            }
+          },
+          {
+            "id": "narrator",
+            "name": {
+              "value": "narrator",
+              "synonyms": [
+                "reader",
+                "voice actor"
+              ]
+            }
+          },
+          {
+            "id": "rating",
+            "name": {
+              "value": "rating",
+              "synonyms": [
+                "score",
+                "star rating"
               ]
             }
           }

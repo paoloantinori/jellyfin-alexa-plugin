@@ -109,13 +109,30 @@ public class ResumeIntentHandler : BaseHandler
             }
         }
 
-        return Task.FromResult<SkillResponse>(BuildAudioPlayerResponse(
+        var response = BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll,
             GetStreamUrl(item_id!, user),
             item_id!,
             session?.FullNowPlayingItem,
             user,
             context,
-            offset));
+            offset);
+
+        // Proactive position announcement when enabled and we have a non-zero offset
+        if (offset > 0)
+        {
+            string locale = GetLocale(request);
+            Entities.User? pluginUser = _config.GetUserById(user.Id);
+            if (pluginUser?.AnnouncePositionOnResume == true)
+            {
+                string positionStr = FormatTimeSpan(TimeSpan.FromMilliseconds(offset), locale);
+                response.Response.OutputSpeech = new PlainTextOutputSpeech
+                {
+                    Text = ResponseStrings.Get("ResumingAtPosition", locale, positionStr)
+                };
+            }
+        }
+
+        return Task.FromResult<SkillResponse>(response);
     }
 }

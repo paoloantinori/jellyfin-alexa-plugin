@@ -62,7 +62,8 @@ public class MediaInfoIntentHandler : BaseHandler
 
     /// <summary>
     /// Report information about the currently playing media, including extended artist metadata when available.
-    /// Supports targeted follow-up queries via the media_info_type slot (title, album, artist, year, duration, genre, biography).
+    /// Supports targeted follow-up queries via the media_info_type slot
+    /// (title, album, artist, year, duration, genre, biography, season, episode, series, director, cast, author, narrator, rating).
     /// </summary>
     /// <param name="request">The skill request which should be handled.</param>
     /// <param name="context">The context of the skill intent request.</param>
@@ -119,10 +120,18 @@ public class MediaInfoIntentHandler : BaseHandler
             "duration" => HandleDurationQuery(item, locale),
             "genre" => HandleGenreQuery(item, locale),
             "biography" => await HandleBiographyQuery(item, session, locale, cancellationToken).ConfigureAwait(false),
+            "season" => HandleSeasonQuery(item, locale),
+            "episode" => HandleEpisodeQuery(item, locale),
+            "series" => HandleSeriesQuery(item, locale),
+            "director" => await HandleDirectorQuery(item, locale, cancellationToken).ConfigureAwait(false),
+            "cast" => await HandleCastQuery(item, locale, cancellationToken).ConfigureAwait(false),
+            "author" => await HandleAuthorQuery(item, locale, cancellationToken).ConfigureAwait(false),
+            "narrator" => await HandleNarratorQuery(item, locale, cancellationToken).ConfigureAwait(false),
+            "rating" => HandleRatingQuery(item, locale),
             _ => await BuildNowPlayingResponse(item, session, locale, context, user, cancellationToken).ConfigureAwait(false)
         };
 
-        TryAttachNowPlayingCard(response, item, context, user);
+        TryAttachNowPlayingCard(response, item, session, locale, context, user);
         return response;
     }
 
@@ -212,6 +221,133 @@ public class MediaInfoIntentHandler : BaseHandler
         return ResponseBuilder.Tell(artistInfo);
     }
 
+    private static SkillResponse HandleSeasonQuery(BaseItemDto item, string locale)
+    {
+        if (!item.ParentIndexNumber.HasValue)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaInfoSeasonUnavailable", locale));
+        }
+
+        return ResponseBuilder.Tell(ResponseStrings.Get("MediaInfoSeason", locale, item.ParentIndexNumber.Value));
+    }
+
+    private static SkillResponse HandleEpisodeQuery(BaseItemDto item, string locale)
+    {
+        if (!item.IndexNumber.HasValue)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaInfoEpisodeUnavailable", locale));
+        }
+
+        return ResponseBuilder.Tell(ResponseStrings.Get("MediaInfoEpisode", locale, item.IndexNumber.Value));
+    }
+
+    private static SkillResponse HandleSeriesQuery(BaseItemDto item, string locale)
+    {
+        if (string.IsNullOrEmpty(item.SeriesName))
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaInfoSeriesUnavailable", locale));
+        }
+
+        return ResponseBuilder.Tell(ResponseStrings.Get("MediaInfoSeries", locale, item.SeriesName));
+    }
+
+    private static SkillResponse HandleRatingQuery(BaseItemDto item, string locale)
+    {
+        if (!item.CommunityRating.HasValue)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaInfoRatingUnavailable", locale));
+        }
+
+        return ResponseBuilder.Tell(ResponseStrings.Get("MediaInfoRating", locale, item.CommunityRating.Value));
+    }
+
+    private async Task<SkillResponse> HandleAuthorQuery(BaseItemDto item, string locale, CancellationToken cancellationToken)
+    {
+        string? author = item.AlbumArtist;
+
+        if (string.IsNullOrEmpty(author))
+        {
+            var people = await GetPeopleForItem(item, cancellationToken).ConfigureAwait(false);
+            var authorPerson = people.FirstOrDefault(p => p.Type == PersonKind.Author);
+            author = authorPerson?.Name;
+        }
+
+        if (string.IsNullOrEmpty(author))
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaInfoAuthorUnavailable", locale));
+        }
+
+        return ResponseBuilder.Tell(ResponseStrings.Get("MediaInfoAuthor", locale, author));
+    }
+
+    private async Task<SkillResponse> HandleDirectorQuery(BaseItemDto item, string locale, CancellationToken cancellationToken)
+    {
+        var people = await GetPeopleForItem(item, cancellationToken).ConfigureAwait(false);
+        var director = people.FirstOrDefault(p => p.Type == PersonKind.Director);
+
+        if (director == null)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaInfoDirectorUnavailable", locale));
+        }
+
+        return ResponseBuilder.Tell(ResponseStrings.Get("MediaInfoDirector", locale, director.Name));
+    }
+
+    private async Task<SkillResponse> HandleCastQuery(BaseItemDto item, string locale, CancellationToken cancellationToken)
+    {
+        var people = await GetPeopleForItem(item, cancellationToken).ConfigureAwait(false);
+        var actors = people.Where(p => p.Type == PersonKind.Actor).Take(3).ToList();
+
+        if (actors.Count == 0)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaInfoCastUnavailable", locale));
+        }
+
+        string castList = string.Join(", ", actors.Select(a => a.Name));
+        return ResponseBuilder.Tell(ResponseStrings.Get("MediaInfoCast", locale, castList));
+    }
+
+    private async Task<SkillResponse> HandleNarratorQuery(BaseItemDto item, string locale, CancellationToken cancellationToken)
+    {
+        var people = await GetPeopleForItem(item, cancellationToken).ConfigureAwait(false);
+        var narrator = people.FirstOrDefault(p =>
+            string.Equals(p.Role, "Narrator", StringComparison.OrdinalIgnoreCase));
+
+        if (narrator == null)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaInfoNarratorUnavailable", locale));
+        }
+
+        return ResponseBuilder.Tell(ResponseStrings.Get("MediaInfoNarrator", locale, narrator.Name));
+    }
+
+    private async Task<IReadOnlyList<PersonInfo>> GetPeopleForItem(BaseItemDto item, CancellationToken cancellationToken)
+    {
+        if (item.People is { Length: > 0 })
+        {
+            return item.People.Select(p => new PersonInfo { Name = p.Name, Type = p.Type, Role = p.Role }).ToList();
+        }
+
+        try
+        {
+            BaseItem? fullItem = await RetryAsync(
+                () => _libraryManager.GetItemById(item.Id),
+                "GetItemForPeople",
+                cancellationToken).ConfigureAwait(false);
+
+            if (fullItem != null)
+            {
+                return _libraryManager.GetPeople(fullItem);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "MediaInfoIntent: failed to fetch people for {ItemId}", item.Id);
+        }
+
+        return (IReadOnlyList<PersonInfo>)Array.Empty<PersonInfo>();
+    }
+
     private async Task<SkillResponse> BuildNowPlayingResponse(BaseItemDto item, SessionInfo session, string locale, Context context, Entities.User user, CancellationToken cancellationToken)
     {
         string description;
@@ -226,7 +362,7 @@ public class MediaInfoIntentHandler : BaseHandler
             description = BuildMediaDescription(item, locale, out descriptionSsml);
         }
 
-        string position = BuildPositionInfo(session, locale);
+        string position = BuildPositionDisplay(session, locale);
         var response = string.IsNullOrEmpty(position)
             ? GetSsml("NowPlayingSsml", locale, descriptionSsml ?? description) is { } ssml
                 ? TellSsml(ssml)
@@ -235,7 +371,7 @@ public class MediaInfoIntentHandler : BaseHandler
                 ? TellSsml(ssmlFull)
                 : ResponseBuilder.Tell(ResponseStrings.Get("NowPlayingWithPosition", locale, description, position));
 
-        TryAttachNowPlayingCard(response, item, context, user);
+        TryAttachNowPlayingCard(response, item, session, locale, context, user);
         return response;
     }
 
@@ -455,52 +591,9 @@ public class MediaInfoIntentHandler : BaseHandler
         return item.Name ?? ResponseStrings.Get("UnknownMedia", locale);
     }
 
-    private static string BuildPositionInfo(SessionInfo session, string locale)
+    private void TryAttachNowPlayingCard(SkillResponse response, BaseItemDto item, SessionInfo session, string locale, Context context, Entities.User user)
     {
-        if (session.PlayState == null || session.PlayState.PositionTicks == null)
-        {
-            return string.Empty;
-        }
-
-        long positionTicks = session.PlayState.PositionTicks.Value;
-        long? runtimeTicks = session.NowPlayingItem?.RunTimeTicks;
-
-        if (positionTicks > 0)
-        {
-            var position = TimeSpan.FromTicks(positionTicks);
-            string positionStr = FormatTimeSpan(position, locale);
-
-            if (runtimeTicks.HasValue && runtimeTicks.Value > 0)
-            {
-                var runtime = TimeSpan.FromTicks(runtimeTicks.Value);
-                return ResponseStrings.Get("PositionOfTotal", locale, positionStr, FormatTimeSpan(runtime, locale));
-            }
-
-            return positionStr;
-        }
-
-        return string.Empty;
-    }
-
-    private static string FormatTimeSpan(TimeSpan span, string locale)
-    {
-        if (span.TotalHours >= 1)
-        {
-            return ResponseStrings.Get("HoursAndMinutes", locale, (int)span.TotalHours, span.Minutes);
-        }
-
-        if (span.TotalMinutes >= 1)
-        {
-            return ResponseStrings.Get("MinutesAndSeconds", locale, (int)span.TotalMinutes, span.Seconds);
-        }
-
-        return ResponseStrings.Get("SecondsOnly", locale, span.Seconds);
-    }
-
-    private void TryAttachNowPlayingCard(SkillResponse response, BaseItemDto item, Context context, Entities.User user)
-    {
-        if (!AplHelper.DeviceSupportsApl(context) || item.Id == Guid.Empty
-            || !AplHelper.VisualsEnabled)
+        if (item.Id == Guid.Empty)
         {
             return;
         }
@@ -510,10 +603,54 @@ public class MediaInfoIntentHandler : BaseHandler
         audio.Artists = !string.IsNullOrEmpty(item.AlbumArtist) ? new List<string> { item.AlbumArtist } : new List<string>();
         audio.Album = item.Album;
 
-        var directive = AplHelper.BuildNowPlayingDirective(audio, imageUrl, imageUrl, context);
-        if (directive != null)
+        bool seekEnabled = Plugin.Instance?.Configuration?.SeekEnabled == true;
+        long progressMs = 0, durationMs = 0;
+        long progressTicks = 0, durationTicks = 0;
+
+        if (seekEnabled)
         {
-            response.Response.Directives.Add(directive);
+            if (session.PlayState?.PositionTicks != null)
+            {
+                progressTicks = session.PlayState.PositionTicks.Value;
+                progressMs = (long)TimeSpan.FromTicks(progressTicks).TotalMilliseconds;
+            }
+
+            if (item.RunTimeTicks.HasValue && item.RunTimeTicks.Value > 0)
+            {
+                durationTicks = item.RunTimeTicks.Value;
+                durationMs = (long)TimeSpan.FromTicks(durationTicks).TotalMilliseconds;
+            }
+        }
+
+        // APL card — only on APL-capable devices
+        if (AplHelper.DeviceSupportsApl(context) && AplHelper.VisualsEnabled)
+        {
+            var directive = seekEnabled
+                ? AplHelper.BuildNowPlayingDirective(audio, imageUrl, imageUrl, context, progressMs, durationMs)
+                : AplHelper.BuildNowPlayingDirective(audio, imageUrl, imageUrl, context);
+
+            if (directive != null)
+            {
+                response.Response.Directives.Add(directive);
+            }
+        }
+
+        // Standard Card — always sent when SeekEnabled, visible in Alexa app
+        if (seekEnabled && response.Response != null)
+        {
+            string title = ResponseStrings.Get("NowPlayingCardTitle", locale);
+            string body = item.Name ?? string.Empty;
+
+            if (progressTicks > 0 && durationTicks > 0)
+            {
+                body += $"\n{FormatPosition(progressTicks)} / {FormatPosition(durationTicks)}";
+            }
+
+            response.Response.Card = new StandardCard
+            {
+                Title = title,
+                Content = body
+            };
         }
     }
 }

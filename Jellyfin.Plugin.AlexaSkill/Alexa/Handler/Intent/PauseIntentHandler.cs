@@ -1,9 +1,11 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
@@ -38,8 +40,8 @@ public class PauseIntentHandler : BaseHandler
 
     /// <summary>
     /// Pause or stop currently playing media.
-    /// For Stop/Cancel: the device has already stopped audio locally, return an empty response.
-    /// For Pause: send an AudioPlayer.Stop directive to stop the stream.
+    /// All paths send AudioPlayer.Stop to guarantee audio stops on device.
+    /// Stop/Cancel ends the session. Pause keeps it open for resume and announces position.
     /// </summary>
     /// <param name="request">The skill request which should be handled.</param>
     /// <param name="context">The context of the skill intent request.</param>
@@ -49,13 +51,36 @@ public class PauseIntentHandler : BaseHandler
     /// <returns>A task representing the async operation.</returns>
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
-        if (request is IntentRequest ir &&
+        bool isStopOrCancel = request is IntentRequest ir &&
             (string.Equals(ir.Intent.Name, IntentNames.AmazonStop, System.StringComparison.Ordinal) ||
-             string.Equals(ir.Intent.Name, IntentNames.AmazonCancel, System.StringComparison.Ordinal)))
+             string.Equals(ir.Intent.Name, IntentNames.AmazonCancel, System.StringComparison.Ordinal));
+
+        // Both pause and stop need AudioPlayer.Stop directive to guarantee audio stops.
+        // Stop/Cancel ends the session; Pause keeps it open for resume.
+        var response = BuildPauseResponse();
+
+        if (isStopOrCancel)
         {
-            return Task.FromResult(ResponseBuilder.Empty());
+            response.Response.ShouldEndSession = true;
+            return Task.FromResult(response);
         }
 
-        return Task.FromResult(BuildPauseResponse());
+        // Pause: announce position and add visual card when seek is enabled
+        if (Plugin.Instance?.Configuration?.SeekEnabled == true && session?.NowPlayingItem != null)
+        {
+            string locale = GetLocale(request);
+            string positionText = BuildPositionDisplay(session, locale);
+            if (!string.IsNullOrEmpty(positionText))
+            {
+                response.Response.OutputSpeech = new PlainTextOutputSpeech { Text = positionText };
+                response.Response.Card = new StandardCard
+                {
+                    Title = session.NowPlayingItem.Name ?? ResponseStrings.Get("NowPlayingCardTitle", locale),
+                    Content = positionText
+                };
+            }
+        }
+
+        return Task.FromResult(response);
     }
 }

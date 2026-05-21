@@ -117,6 +117,12 @@ public class User
     public bool ProactiveEventsEnabled { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether the user wants a voice announcement
+    /// of their position when resuming playback or starting an audiobook.
+    /// </summary>
+    public bool AnnouncePositionOnResume { get; set; }
+
+    /// <summary>
     /// Gets or sets the SMAPI vendor ID for the developer account.
     /// Fetched from the Alexa Vendors API during startup and persisted.
     /// </summary>

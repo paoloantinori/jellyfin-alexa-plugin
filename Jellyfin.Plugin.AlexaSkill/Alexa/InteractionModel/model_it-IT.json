@@ -148,7 +148,51 @@
           "Informazioni su questa canzone",
           "Dimmi cosa sta suonando",
           "Che cosa suona",
-          "Chi suona adesso"
+          "Chi suona adesso",
+          "cosa sto ascoltando",
+          "cosa sto ascoltando adesso",
+          "cosa è in riproduzione",
+          "cosa c'è in riproduzione",
+          "cosa sta riproducendo",
+          "cosa sta andando",
+          "cosa sto sentendo",
+          "informazioni su quello che sta riproducendo",
+          "dettagli su questo contenuto",
+          "cosa sto guardando",
+          "cosa stanno trasmettendo",
+          "che {media_info_type} è",
+          "qual è la {media_info_type}",
+          "dimmi la {media_info_type}",
+          "informazioni sulla {media_info_type}",
+          "chi è l'artista",
+          "quale album è questo",
+          "quanto dura",
+          "quanto dura questo",
+          "quanto dura questo film",
+          "che genere è",
+          "quale anno è uscito",
+          "parlami di questo artista",
+          "che stagione è",
+          "quale stagione è questa",
+          "che episodio è",
+          "quale episodio è questo",
+          "che serie è questa",
+          "chi è il regista",
+          "chi ha diretto questo",
+          "chi sono gli attori",
+          "chi recita in questo",
+          "chi è l'autore",
+          "chi ha scritto questo",
+          "chi è il narratore",
+          "chi narra questo",
+          "qual è il voto",
+          "com'è valutato"
+        ],
+        "slots": [
+          {
+            "name": "media_info_type",
+            "type": "MediaInfoType"
+          }
         ]
       },
       {
@@ -1123,6 +1167,71 @@
           "di disattivare la radio",
           "basta radio"
         ]
+      },
+      {
+        "name": "SkipForwardBackIntent",
+        "samples": [
+          "vai avanti {seek_amount} {seek_unit}",
+          "vai indietro {seek_amount} {seek_unit}",
+          "salta {seek_direction} {seek_amount} {seek_unit}",
+          "avanza {seek_amount} {seek_unit}",
+          "torna indietro {seek_amount} {seek_unit}",
+          "salta {seek_direction}",
+          "avanti {seek_amount} {seek_unit}",
+          "indietro {seek_amount} {seek_unit}",
+          "vai avanti",
+          "vai indietro",
+          "salta {seek_amount} secondi",
+          "salta {seek_amount} minuti",
+          "avanza di {seek_amount} {seek_unit}",
+          "riavvolgi {seek_amount} {seek_unit}"
+        ],
+        "slots": [
+          {
+            "name": "seek_direction",
+            "type": "SeekDirection"
+          },
+          {
+            "name": "seek_amount",
+            "type": "AMAZON.NUMBER"
+          },
+          {
+            "name": "seek_unit",
+            "type": "SeekUnit"
+          }
+        ]
+      },
+      {
+        "name": "JumpToPositionIntent",
+        "samples": [
+          "vai a {position_minutes} minuti",
+          "salta a {position_minutes} minuti",
+          "vai a {position_hours} ora {position_minutes} minuti",
+          "salta a {position_hours} ora {position_minutes} minuti",
+          "vai a {position_hours} ore",
+          "salta a {position_hours} ore",
+          "vai a {position_hours} ore e {position_minutes} minuti",
+          "salta a {position_hours} ore e {position_minutes} minuti",
+          "vai a {position_minutes} minuti e {position_seconds} secondi",
+          "salta al minuto {position_minutes}",
+          "vai al minuto {position_minutes}",
+          "avanza fino a {position_minutes} minuti",
+          "avanza fino a {position_hours} ore"
+        ],
+        "slots": [
+          {
+            "name": "position_hours",
+            "type": "AMAZON.NUMBER"
+          },
+          {
+            "name": "position_minutes",
+            "type": "AMAZON.NUMBER"
+          },
+          {
+            "name": "position_seconds",
+            "type": "AMAZON.NUMBER"
+          }
+        ]
       }
     ],
     "types": [
@@ -1692,6 +1801,131 @@
               "synonyms": [
                 "bio",
                 "sull'artista"
+              ]
+            }
+          },
+          {
+            "id": "director",
+            "name": {
+              "value": "regista",
+              "synonyms": [
+                "regia"
+              ]
+            }
+          },
+          {
+            "id": "cast",
+            "name": {
+              "value": "cast",
+              "synonyms": [
+                "attori",
+                "interpreti"
+              ]
+            }
+          },
+          {
+            "id": "season",
+            "name": {
+              "value": "stagione",
+              "synonyms": [
+                "numero stagione"
+              ]
+            }
+          },
+          {
+            "id": "episode",
+            "name": {
+              "value": "episodio",
+              "synonyms": [
+                "numero episodio"
+              ]
+            }
+          },
+          {
+            "id": "series",
+            "name": {
+              "value": "serie",
+              "synonyms": [
+                "serie tv",
+                "programma"
+              ]
+            }
+          },
+          {
+            "id": "author",
+            "name": {
+              "value": "autore",
+              "synonyms": [
+                "scrittore",
+                "scritto da"
+              ]
+            }
+          },
+          {
+            "id": "narrator",
+            "name": {
+              "value": "narratore",
+              "synonyms": [
+                "lettore",
+                "voce"
+              ]
+            }
+          },
+          {
+            "id": "rating",
+            "name": {
+              "value": "voto",
+              "synonyms": [
+                "punteggio",
+                "valutazione"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "SeekDirection",
+        "values": [
+          {
+            "id": "forward",
+            "name": {
+              "value": "avanti",
+              "synonyms": [
+                "avanza",
+                "in avanti"
+              ]
+            }
+          },
+          {
+            "id": "back",
+            "name": {
+              "value": "indietro",
+              "synonyms": [
+                "indietro",
+                "torna"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "SeekUnit",
+        "values": [
+          {
+            "id": "seconds",
+            "name": {
+              "value": "secondi",
+              "synonyms": [
+                "secondo"
+              ]
+            }
+          },
+          {
+            "id": "minutes",
+            "name": {
+              "value": "minuti",
+              "synonyms": [
+                "minuto"
               ]
             }
           }

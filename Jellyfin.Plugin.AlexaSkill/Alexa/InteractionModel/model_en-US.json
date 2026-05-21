@@ -426,6 +426,73 @@
         ]
       },
       {
+        "name": "SkipForwardBackIntent",
+        "samples": [
+          "skip forward {seek_amount} {seek_unit}",
+          "skip back {seek_amount} {seek_unit}",
+          "skip {seek_direction} {seek_amount} {seek_unit}",
+          "go forward {seek_amount} {seek_unit}",
+          "go back {seek_amount} {seek_unit}",
+          "skip {seek_direction}",
+          "forward {seek_amount} {seek_unit}",
+          "back {seek_amount} {seek_unit}",
+          "skip forward",
+          "skip back",
+          "skip {seek_amount} seconds",
+          "skip {seek_amount} minutes",
+          "fast forward {seek_amount} {seek_unit}",
+          "rewind {seek_amount} {seek_unit}",
+          "jump forward {seek_amount} {seek_unit}",
+          "jump back {seek_amount} {seek_unit}"
+        ],
+        "slots": [
+          {
+            "name": "seek_direction",
+            "type": "SeekDirection"
+          },
+          {
+            "name": "seek_amount",
+            "type": "AMAZON.NUMBER"
+          },
+          {
+            "name": "seek_unit",
+            "type": "SeekUnit"
+          }
+        ]
+      },
+      {
+        "name": "JumpToPositionIntent",
+        "samples": [
+          "jump to {position_hours} hour {position_minutes} minutes",
+          "jump to {position_minutes} minutes",
+          "go to {position_hours} hour {position_minutes} minutes",
+          "go to {position_minutes} minutes",
+          "skip to {position_hours} hours",
+          "skip to {position_minutes} minutes",
+          "jump to {position_hours} hours {position_minutes} minutes {position_seconds} seconds",
+          "go to {position_hours} hours",
+          "skip to {position_hours} hour {position_minutes}",
+          "jump to {position_minutes} minutes {position_seconds} seconds",
+          "go to {position_hours} hours and {position_minutes} minutes",
+          "fast forward to {position_minutes} minutes",
+          "fast forward to {position_hours} hours"
+        ],
+        "slots": [
+          {
+            "name": "position_hours",
+            "type": "AMAZON.NUMBER"
+          },
+          {
+            "name": "position_minutes",
+            "type": "AMAZON.NUMBER"
+          },
+          {
+            "name": "position_seconds",
+            "type": "AMAZON.NUMBER"
+          }
+        ]
+      },
+      {
         "name": "PlayPlaylistIntent",
         "samples": [
           "Play the playlist {playlist}",
@@ -520,6 +587,15 @@
           }
         ],
         "samples": [
+          "what's on",
+          "information about this",
+          "what is this",
+          "details about this",
+          "tell me about this",
+          "what am I watching",
+          "what am I listening to",
+          "what's playing right now",
+          "what's playing",
           "What is the name of the song",
           "What is the name of the video",
           "What is the name of the music",
@@ -532,15 +608,32 @@
           "Tell me the {media_info_type}",
           "Tell me about the {media_info_type}",
           "What is the {media_info_type}",
-          "What is the {media_info_type} of this song",
+          "What is the {media_info_type} of this",
           "Who is the {media_info_type}",
+          "How long is this",
           "How long is this song",
+          "How long is this movie",
           "Who sings this",
           "Who performs this",
           "What genre is this",
           "What year was this released",
           "Tell me about this artist",
-          "What album is this from"
+          "What album is this from",
+          "what season is this",
+          "which season is this",
+          "what episode is this",
+          "which episode is this",
+          "what show is this",
+          "who directed this",
+          "who is the director",
+          "who stars in this",
+          "who is in this",
+          "who is the author",
+          "who wrote this",
+          "who is the narrator",
+          "who narrates this",
+          "what is the rating",
+          "how is this rated"
         ]
       },
       {
@@ -874,6 +967,54 @@
     ],
     "types": [
       {
+        "name": "SeekDirection",
+        "values": [
+          {
+            "id": "forward",
+            "name": {
+              "value": "forward",
+              "synonyms": [
+                "ahead",
+                "on"
+              ]
+            }
+          },
+          {
+            "id": "back",
+            "name": {
+              "value": "back",
+              "synonyms": [
+                "backward",
+                "backwards"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "SeekUnit",
+        "values": [
+          {
+            "id": "seconds",
+            "name": {
+              "value": "seconds",
+              "synonyms": [
+                "second"
+              ]
+            }
+          },
+          {
+            "id": "minutes",
+            "name": {
+              "value": "minutes",
+              "synonyms": [
+                "minute"
+              ]
+            }
+          }
+        ]
+      },
+      {
         "name": "LibraryQueryType",
         "values": [
           {
@@ -1146,6 +1287,83 @@
               "synonyms": [
                 "bio",
                 "about the artist"
+              ]
+            }
+          },
+          {
+            "id": "director",
+            "name": {
+              "value": "director",
+              "synonyms": [
+                "filmmaker"
+              ]
+            }
+          },
+          {
+            "id": "cast",
+            "name": {
+              "value": "cast",
+              "synonyms": [
+                "actors",
+                "starring"
+              ]
+            }
+          },
+          {
+            "id": "season",
+            "name": {
+              "value": "season",
+              "synonyms": [
+                "season number"
+              ]
+            }
+          },
+          {
+            "id": "episode",
+            "name": {
+              "value": "episode",
+              "synonyms": [
+                "episode number"
+              ]
+            }
+          },
+          {
+            "id": "series",
+            "name": {
+              "value": "series",
+              "synonyms": [
+                "show",
+                "tv show",
+                "program"
+              ]
+            }
+          },
+          {
+            "id": "author",
+            "name": {
+              "value": "author",
+              "synonyms": [
+                "writer"
+              ]
+            }
+          },
+          {
+            "id": "narrator",
+            "name": {
+              "value": "narrator",
+              "synonyms": [
+                "reader",
+                "voice actor"
+              ]
+            }
+          },
+          {
+            "id": "rating",
+            "name": {
+              "value": "rating",
+              "synonyms": [
+                "score",
+                "star rating"
               ]
             }
           }

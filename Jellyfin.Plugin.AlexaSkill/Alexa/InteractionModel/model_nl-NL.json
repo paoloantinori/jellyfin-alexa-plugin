@@ -415,7 +415,23 @@
           "wat is het genre",
           "wanneer is dit uitgebracht",
           "vertel me over deze artiest",
-          "van welk album is dit"
+          "van welk album is dit",
+          "welk seizoen is dit",
+          "welke aflevering is dit",
+          "welke serie is dit",
+          "wie heeft dit geregisseerd",
+          "wie is de regisseur",
+          "wie spelen hierin",
+          "wie zijn de acteurs",
+          "wie is de auteur",
+          "wie heeft dit geschreven",
+          "wie is de verteller",
+          "wie vertelt dit",
+          "wat is de beoordeling",
+          "hoe is dit beoordeeld",
+          "wat is de waardering",
+          "hoeveel sterren heeft dit",
+          "wie zit in de cast"
         ]
       },
       {
@@ -979,6 +995,62 @@
                 "bio",
                 "over de artiest"
               ]
+            }
+          },
+          {
+            "id": "director",
+            "name": {
+              "value": "regisseur",
+              "synonyms": ["filmmaker", "regisseuse"]
+            }
+          },
+          {
+            "id": "cast",
+            "name": {
+              "value": "cast",
+              "synonyms": ["acteurs", "spelers", "rollen"]
+            }
+          },
+          {
+            "id": "season",
+            "name": {
+              "value": "seizoen",
+              "synonyms": ["seizoennummer"]
+            }
+          },
+          {
+            "id": "episode",
+            "name": {
+              "value": "aflevering",
+              "synonyms": ["afleveringnummer", "episode"]
+            }
+          },
+          {
+            "id": "series",
+            "name": {
+              "value": "serie",
+              "synonyms": ["tv-serie", "programma", "reeks"]
+            }
+          },
+          {
+            "id": "author",
+            "name": {
+              "value": "auteur",
+              "synonyms": ["schrijver", "schrijfster"]
+            }
+          },
+          {
+            "id": "narrator",
+            "name": {
+              "value": "verteller",
+              "synonyms": ["vertelster", "voorlezer", "spreker"]
+            }
+          },
+          {
+            "id": "rating",
+            "name": {
+              "value": "beoordeling",
+              "synonyms": ["waardering", "score", "cijfer"]
             }
           }
         ]

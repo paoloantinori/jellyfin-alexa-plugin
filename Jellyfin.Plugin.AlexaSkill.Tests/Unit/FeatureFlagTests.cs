@@ -41,6 +41,9 @@ public class PluginConfigurationFeatureFlagTests
         Assert.True(config.ResumeOfferEnabled);
         Assert.True(config.ResumeAnnounceTitle);
         Assert.True(config.AsrCompoundWordFixEnabled);
+
+        // SeekEnabled defaults to false (opt-in feature)
+        Assert.False(config.SeekEnabled);
     }
 
     [Fact]
@@ -59,7 +62,8 @@ public class PluginConfigurationFeatureFlagTests
             VideoPlaybackEnabled = false,
             ResumeOfferEnabled = false,
             ResumeAnnounceTitle = false,
-            AsrCompoundWordFixEnabled = false
+            AsrCompoundWordFixEnabled = false,
+            SeekEnabled = true
         };
 
         Assert.False(config.RadioModeEnabled);
@@ -74,6 +78,9 @@ public class PluginConfigurationFeatureFlagTests
         Assert.False(config.ResumeOfferEnabled);
         Assert.False(config.ResumeAnnounceTitle);
         Assert.False(config.AsrCompoundWordFixEnabled);
+
+        // SeekEnabled can be set to true (opt-in)
+        Assert.True(config.SeekEnabled);
     }
 }
 
