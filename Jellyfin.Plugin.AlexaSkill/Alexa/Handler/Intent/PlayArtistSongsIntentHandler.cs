@@ -332,11 +332,9 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("NoSongsForArtist", locale, matchedArtistName));
         }
 
-        IReadOnlyList<BaseItem> artistsItems = FavoritesAndRatingsFirst(artistResult.Items, jellyfinUser!, _userDataManager);
-
-        // Check for existing queue position from server-side progress
-        (int startIndex, _) = FindResumeTrackIndex(
-            artistsItems, jellyfinUser!, _userDataManager, resumePosition: false);
+        // Single-pass sort + resume detection (avoids duplicate GetUserData calls)
+        var (artistsItems, startIndex, _) = SortAndFindResumeIndex(
+            artistResult.Items, jellyfinUser!, _userDataManager, resumePosition: false);
 
         if (startIndex > 0)
         {

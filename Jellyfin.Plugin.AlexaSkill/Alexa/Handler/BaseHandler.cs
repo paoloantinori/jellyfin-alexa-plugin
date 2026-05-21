@@ -102,6 +102,124 @@ public abstract class BaseHandler
         return result;
     }
 
+    /// <summary>
+    /// Combined sort-by-rating + resume-index detection in a single pass over user data.
+    /// Eliminates duplicate GetUserData calls when both operations are needed.
+    /// </summary>
+    protected static (IReadOnlyList<BaseItem> SortedItems, int ResumeIndex, long ResumeTicks) SortAndFindResumeIndex(
+        IReadOnlyList<BaseItem> items,
+        Jellyfin.Database.Implementations.Entities.User user,
+        IUserDataManager userDataManager,
+        bool resumePosition)
+    {
+        if (items.Count <= 1)
+        {
+            if (items.Count == 1)
+            {
+                UserItemData? data = userDataManager.GetUserData(user, items[0]);
+                long ticks = resumePosition && data?.PlaybackPositionTicks > 0 && data.Played == false
+                    ? data.PlaybackPositionTicks : 0;
+                return (items, 0, ticks);
+            }
+
+            return (items, 0, 0);
+        }
+
+        var favorites = new List<(int Index, BaseItem Item, double? Rating, UserItemData? Data)>();
+        var rest = new List<(int Index, BaseItem Item, double? Rating, UserItemData? Data)>(items.Count);
+        bool anyRating = false;
+        int lastPlayedIndex = -1;
+        int inProgressIndex = -1;
+        long inProgressTicks = 0;
+
+        for (int i = 0; i < items.Count; i++)
+        {
+            BaseItem item = items[i];
+            UserItemData? data = userDataManager.GetUserData(user, item);
+            double? rating = data?.Rating;
+            if (rating.HasValue)
+            {
+                anyRating = true;
+            }
+
+            bool isFavorite = data?.IsFavorite == true;
+
+            // Track resume position (first in-progress track wins)
+            if (inProgressIndex < 0 && data?.PlaybackPositionTicks > 0 && data.Played == false)
+            {
+                inProgressIndex = i;
+                inProgressTicks = resumePosition ? data.PlaybackPositionTicks : 0;
+            }
+
+            if (data?.Played == true && lastPlayedIndex < i)
+            {
+                lastPlayedIndex = i;
+            }
+
+            var entry = (i, item, rating, data);
+            if (isFavorite)
+            {
+                favorites.Add(entry);
+            }
+            else
+            {
+                rest.Add(entry);
+            }
+        }
+
+        // Sort
+        IReadOnlyList<BaseItem> sorted;
+        if (!anyRating)
+        {
+            sorted = items;
+        }
+        else
+        {
+            List<BaseItem> result = new List<BaseItem>(items.Count);
+            result.AddRange(SortByRating(favorites));
+            result.AddRange(SortByRating(rest));
+            sorted = result;
+        }
+
+        // Determine resume index
+        if (inProgressIndex >= 0)
+        {
+            // Map original index to sorted position
+            BaseItem inProgressItem = items[inProgressIndex];
+            int sortedIndex = FindItemIndex(sorted, inProgressItem);
+            return (sorted, sortedIndex, inProgressTicks);
+        }
+
+        if (lastPlayedIndex >= 0 && lastPlayedIndex + 1 < items.Count)
+        {
+            BaseItem nextItem = items[lastPlayedIndex + 1];
+            int sortedIndex = FindItemIndex(sorted, nextItem);
+            return (sorted, sortedIndex, 0);
+        }
+
+        return (sorted, 0, 0);
+    }
+
+    private static int FindItemIndex(IReadOnlyList<BaseItem> items, BaseItem target)
+    {
+        for (int i = 0; i < items.Count; i++)
+        {
+            if (ReferenceEquals(items[i], target))
+            {
+                return i;
+            }
+        }
+
+        return 0;
+    }
+
+    private static IEnumerable<BaseItem> SortByRating(List<(int Index, BaseItem Item, double? Rating, UserItemData? Data)> items)
+    {
+        return items.OrderByDescending(i => i.Rating ?? double.MinValue)
+                    .ThenBy(i => i.Index)
+                    .Select(i => i.Item);
+    }
+
     private static IEnumerable<BaseItem> SortByRating(List<(int Index, BaseItem Item, double? Rating)> items)
     {
         return items.OrderByDescending(i => i.Rating ?? double.MinValue)
