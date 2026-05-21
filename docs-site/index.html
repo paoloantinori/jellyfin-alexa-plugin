@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jellyfin Alexa Skill - Voice Command Explorer</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #0f111a;
+    --surface: #1a1d2e;
+    --surface2: #242840;
+    --border: #2e3350;
+    --text: #e0e0e8;
+    --text-dim: #8888a0;
+    --accent: #6c8cff;
+    --accent-hover: #8aa4ff;
+    --green: #4CAF50;
+    --orange: #FF9800;
+    --purple: #9C27B0;
+    --blue: #2196F3;
+    --red: #f44336;
+    --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* Header */
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .header h1 span { color: var(--accent); }
+
+  /* Controls bar */
+  .controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    flex: 1;
+    justify-content: flex-end;
+  }
+  .control-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .control-group label {
+    font-size: 12px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+  select, .search-input {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 13px;
+    font-family: var(--font);
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  select:hover, .search-input:hover { border-color: var(--accent); }
+  select:focus, .search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(108,140,255,0.2); }
+  .search-input { width: 180px; }
+
+  /* Diagram type tabs */
+  .tabs {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    overflow-x: auto;
+    padding: 0 24px;
+    gap: 0;
+  }
+  .tab {
+    padding: 10px 16px;
+    font-size: 13px;
+    color: var(--text-dim);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    transition: all 0.2s;
+    user-select: none;
+  }
+  .tab:hover { color: var(--text); background: rgba(108,140,255,0.05); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* Main content */
+  .main {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px;
+    min-height: calc(100vh - 120px);
+  }
+  .diagram-title {
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 16px;
+    color: var(--text);
+    text-align: center;
+  }
+
+  /* Mermaid container */
+  .diagram-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px;
+    width: 100%;
+    overflow: auto;
+    position: relative;
+    min-height: 500px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+  }
+  .diagram-container svg {
+    min-width: 600px;
+    width: auto;
+    height: auto;
+  }
+
+  /* Zoom controls */
+  .zoom-controls {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    z-index: 10;
+  }
+  .zoom-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+  .zoom-btn:hover { background: var(--surface2); border-color: var(--accent); color: var(--accent); }
+
+  /* Loading */
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+    color: var(--text-dim);
+    font-size: 14px;
+    gap: 8px;
+  }
+  .spinner {
+    width: 20px; height: 20px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    gap: 16px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+  }
+
+  /* Locale flags / labels */
+  .locale-flag { font-size: 14px; margin-right: 4px; }
+
+  /* Fullscreen toggle */
+  .fullscreen-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-dim);
+    padding: 4px 8px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    z-index: 5;
+  }
+  .fullscreen-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .header { padding: 12px 16px; }
+    .controls { justify-content: flex-start; }
+    .tabs { padding: 0 16px; }
+    .main { padding: 16px; }
+    .diagram-container { padding: 16px; }
+    .search-input { width: 140px; }
+  }
+
+  /* Mermaid overrides for dark theme */
+  .diagram-container .node rect,
+  .diagram-container .node polygon,
+  .diagram-container .node circle {
+    stroke-width: 1.5px !important;
+  }
+  .diagram-container .edgeLabel {
+    font-size: 11px !important;
+  }
+  .diagram-container .edgePath .path {
+    stroke-width: 1.5px !important;
+  }
+
+  /* Highlight animation */
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+  .highlighted {
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span>Jellyfin</span> Alexa Skill &mdash; Voice Command Explorer</h1>
+  <div class="controls">
+    <div class="control-group">
+      <label>Language</label>
+      <select id="localeSelect"></select>
+    </div>
+    <div class="control-group">
+      <label>Search</label>
+      <input type="text" class="search-input" id="searchInput" placeholder="Find a command or intent...">
+    </div>
+  </div>
+</div>
+
+<div class="tabs" id="tabs"></div>
+
+<div class="main">
+  <div class="diagram-title" id="diagramTitle"></div>
+  <div class="diagram-container" id="diagramContainer">
+    <button class="fullscreen-btn" id="fullscreenBtn" title="Toggle fullscreen">&#x26F6;</button>
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      Loading diagrams...
+    </div>
+  </div>
+  <div class="legend" id="legend"></div>
+</div>
+
+<div class="zoom-controls">
+  <button class="zoom-btn" id="zoomIn" title="Zoom in">+</button>
+  <button class="zoom-btn" id="zoomOut" title="Zoom out">&minus;</button>
+  <button class="zoom-btn" id="zoomReset" title="Reset zoom">&#x21BA;</button>
+</div>
+
+<script>
+// Locale display info
+const LOCALE_INFO = {
+  'ar-SA': { flag: '\u{1F1F8}\u{1F1E6}', name: 'Arabic', label: 'العربية' },
+  'de-DE': { flag: '\u{1F1E9}\u{1F1EA}', name: 'German', label: 'Deutsch' },
+  'en-AU': { flag: '\u{1F1E6}\u{1F1FA}', name: 'English (AU)', label: 'English (AU)' },
+  'en-CA': { flag: '\u{1F1E8}\u{1F1E6}', name: 'English (CA)', label: 'English (CA)' },
+  'en-GB': { flag: '\u{1F1EC}\u{1F1E7}', name: 'English (UK)', label: 'English (UK)' },
+  'en-IN': { flag: '\u{1F1EE}\u{1F1F3}', name: 'English (IN)', label: 'English (IN)' },
+  'en-US': { flag: '\u{1F1FA}\u{1F1F8}', name: 'English (US)', label: 'English (US)' },
+  'es-ES': { flag: '\u{1F1EA}\u{1F1F8}', name: 'Spanish (ES)', label: 'Español (ES)' },
+  'es-MX': { flag: '\u{1F1F2}\u{1F1FD}', name: 'Spanish (MX)', label: 'Español (MX)' },
+  'es-US': { flag: '\u{1F1FA}\u{1F1F8}', name: 'Spanish (US)', label: 'Español (US)' },
+  'fr-CA': { flag: '\u{1F1E8}\u{1F1E6}', name: 'French (CA)', label: 'Français (CA)' },
+  'fr-FR': { flag: '\u{1F1EB}\u{1F1F7}', name: 'French (FR)', label: 'Français (FR)' },
+  'hi-IN': { flag: '\u{1F1EE}\u{1F1F3}', name: 'Hindi', label: 'हिन्दी' },
+  'it-IT': { flag: '\u{1F1EE}\u{1F1F9}', name: 'Italian', label: 'Italiano' },
+  'ja-JP': { flag: '\u{1F1EF}\u{1F1F5}', name: 'Japanese', label: '日本語' },
+  'nl-NL': { flag: '\u{1F1F3}\u{1F1F1}', name: 'Dutch', label: 'Nederlands' },
+  'pt-BR': { flag: '\u{1F1E7}\u{1F1F7}', name: 'Portuguese', label: 'Português (BR)' },
+};
+
+const DIAGRAM_ICONS = {
+  'playback-lifecycle': '\u{25B6}',
+  'search-disambiguation': '\u{1F50D}',
+  'media-info-queries': '\u{2139}️',
+  'library-browsing': '\u{1F4DA}',
+  'queue-radio': '\u{1F4BF}',
+  'session-management': '\u{1F4E1}',
+};
+
+const DIAGRAM_DESCRIPTIONS = {
+  'playback-lifecycle': 'Play, pause, skip, seek, and control playback',
+  'search-disambiguation': 'How voice searches find and match your media',
+  'media-info-queries': 'Ask what\'s playing, get song details and metadata',
+  'library-browsing': 'Browse your music library, playlists, and recommendations',
+  'queue-radio': 'Manage your queue, radio mode, shuffle, and repeat',
+  'session-management': 'Session lifecycle, resume, voice profiles, and timers',
+};
+
+// State
+let DATA = null;
+let currentType = null;
+let currentLocale = null;
+let currentZoom = 1;
+
+// Detect browser locale
+function detectLocale() {
+  const lang = navigator.language || navigator.userLanguage || 'en-US';
+  if (LOCALE_INFO[lang]) return lang;
+  const prefix = lang.split('-')[0];
+  const match = Object.keys(LOCALE_INFO).find(k => k.startsWith(prefix));
+  return match || 'en-US';
+}
+
+// Initialize mermaid
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'dark',
+  themeVariables: {
+    primaryColor: '#4a4f6a',
+    primaryTextColor: '#e0e0e8',
+    primaryBorderColor: '#6c8cff',
+    lineColor: '#6c8cff',
+    secondaryColor: '#2a2f4a',
+    tertiaryColor: '#1a1d2e',
+    background: '#1a1d2e',
+    mainBkg: '#2a3050',
+    nodeBorder: '#6c8cff',
+    clusterBkg: '#1e2240',
+    clusterBorder: '#3a3f60',
+    titleColor: '#e0e0e8',
+    edgeLabelBackground: '#242840',
+    fontSize: '13px',
+  },
+  flowchart: {
+    htmlLabels: true,
+    curve: 'basis',
+    padding: 15,
+  },
+  securityLevel: 'loose',
+});
+
+// Build UI
+function buildUI() {
+  // Locale select
+  const localeSelect = document.getElementById('localeSelect');
+  DATA.locales.forEach(loc => {
+    const info = LOCALE_INFO[loc] || { flag: '', name: loc, label: loc };
+    const opt = document.createElement('option');
+    opt.value = loc;
+    opt.textContent = `${info.flag} ${info.label}`;
+    localeSelect.appendChild(opt);
+  });
+  currentLocale = detectLocale();
+  if (!DATA.locales.includes(currentLocale)) currentLocale = 'en-US';
+  localeSelect.value = currentLocale;
+  localeSelect.addEventListener('change', (e) => {
+    currentLocale = e.target.value;
+    renderDiagram();
+  });
+
+  // Tabs
+  const tabsEl = document.getElementById('tabs');
+  DATA.types.forEach(type => {
+    const tab = document.createElement('div');
+    tab.className = 'tab';
+    tab.dataset.type = type;
+    const icon = DIAGRAM_ICONS[type] || '';
+    tab.textContent = `${icon} ${type.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}`;
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentType = type;
+      renderDiagram();
+    });
+    tabsEl.appendChild(tab);
+  });
+  currentType = DATA.types[0];
+  tabsEl.children[0].classList.add('active');
+
+  // Search
+  document.getElementById('searchInput').addEventListener('input', handleSearch);
+
+  // Zoom
+  document.getElementById('zoomIn').addEventListener('click', () => setZoom(currentZoom * 1.2));
+  document.getElementById('zoomOut').addEventListener('click', () => setZoom(currentZoom / 1.2));
+  document.getElementById('zoomReset').addEventListener('click', () => setZoom(1));
+
+  // Fullscreen
+  document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
+
+  // Keyboard
+  document.addEventListener('keydown', (e) => {
+    if (e.key === '+' || e.key === '=') { e.preventDefault(); setZoom(currentZoom * 1.2); }
+    if (e.key === '-') { e.preventDefault(); setZoom(currentZoom / 1.2); }
+    if (e.key === '0') { e.preventDefault(); setZoom(1); }
+    if (e.key === '/' && !e.ctrlKey) {
+      e.preventDefault();
+      document.getElementById('searchInput').focus();
+    }
+  });
+}
+
+function setZoom(z) {
+  currentZoom = Math.max(0.3, Math.min(3, z));
+  const svg = document.querySelector('#diagramContainer svg');
+  if (svg) {
+    svg.style.transform = `scale(${currentZoom})`;
+    svg.style.transformOrigin = 'center top';
+    svg.style.transition = 'transform 0.2s ease';
+  }
+}
+
+function toggleFullscreen() {
+  const el = document.getElementById('diagramContainer');
+  if (document.fullscreenElement) {
+    document.exitFullscreen();
+  } else {
+    el.requestFullscreen();
+  }
+}
+
+let renderCounter = 0;
+async function renderDiagram() {
+  const container = document.getElementById('diagramContainer');
+  const titleEl = document.getElementById('diagramTitle');
+  const legendEl = document.getElementById('legend');
+
+  const diagramData = DATA.diagrams[currentType]?.[currentLocale];
+  if (!diagramData) {
+    container.innerHTML = '<div class="loading">No diagram available for this locale.</div>';
+    return;
+  }
+
+  // Title
+  const info = LOCALE_INFO[currentLocale] || { flag: '', label: currentLocale };
+  const typeName = currentType.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  titleEl.textContent = `${DIAGRAM_ICONS[currentType] || ''} ${typeName} — ${info.flag} ${info.label}`;
+
+  // Legend
+  legendEl.innerHTML = `
+    <div class="legend-item"><div class="legend-dot" style="background:#4CAF50"></div> Playing / Active</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#FF9800"></div> Paused / Waiting</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f44336"></div> Stopped / Ended</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#2196F3"></div> Navigation / Seek</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#9C27B0"></div> Special / Radio</div>
+  `;
+
+  // Render mermaid
+  renderCounter++;
+  const id = `mermaid-${renderCounter}`;
+
+  try {
+    const { svg } = await mermaid.render(id, diagramData.mermaid);
+    // Keep fullscreen button
+    const fsBtn = container.querySelector('.fullscreen-btn');
+    container.innerHTML = '';
+    if (fsBtn) container.appendChild(fsBtn);
+    container.insertAdjacentHTML('beforeend', svg);
+    currentZoom = 1;
+  } catch (err) {
+    console.error('Mermaid render error:', err);
+    container.innerHTML = `<div class="loading">Error rendering diagram. Try another locale.</div>`;
+  }
+}
+
+function handleSearch(e) {
+  const query = e.target.value.toLowerCase().trim();
+  const svg = document.querySelector('#diagramContainer svg');
+  if (!svg) return;
+
+  // Reset all highlights
+  svg.querySelectorAll('.node, .edgePath, .edgeLabel').forEach(el => {
+    el.style.opacity = '1';
+    el.classList.remove('highlighted');
+  });
+
+  if (!query) return;
+
+  // Find matching nodes
+  const nodes = svg.querySelectorAll('.node');
+  let found = new Set();
+
+  nodes.forEach(node => {
+    const text = node.textContent.toLowerCase();
+    if (text.includes(query)) {
+      found.add(node);
+      node.classList.add('highlighted');
+    }
+  });
+
+  // Dim non-matching
+  if (found.size > 0) {
+    nodes.forEach(node => {
+      if (!found.has(node)) {
+        node.style.opacity = '0.3';
+      }
+    });
+  }
+}
+
+// Load data and start
+fetch('data.json')
+  .then(r => r.json())
+  .then(data => {
+    DATA = data;
+    buildUI();
+    renderDiagram();
+  })
+  .catch(err => {
+    document.getElementById('loading').textContent = 'Failed to load diagram data.';
+    console.error(err);
+  });
+</script>
+</body>
+</html>
