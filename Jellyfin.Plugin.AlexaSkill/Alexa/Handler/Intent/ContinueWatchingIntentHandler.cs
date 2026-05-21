@@ -99,7 +99,6 @@ public class ContinueWatchingIntentHandler : BaseHandler
                 Version = "1.0",
                 Response = new ResponseBody
                 {
-                    ShouldEndSession = true,
                     OutputSpeech = new PlainTextOutputSpeech(ResponseStrings.Get("NowPlayingWithPosition", locale, resumeItem.Name, FormatPosition(resumeTicks))),
                     Directives = new List<IDirective>
                     {

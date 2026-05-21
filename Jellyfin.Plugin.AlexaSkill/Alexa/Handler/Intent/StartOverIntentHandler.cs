@@ -118,7 +118,6 @@ public class StartOverIntentHandler : BaseHandler
                 Version = "1.0",
                 Response = new ResponseBody
                 {
-                    ShouldEndSession = true,
                     OutputSpeech = new PlainTextOutputSpeech(ResponseStrings.Get("RestartingContent", locale, item.Name)),
                     Directives = new List<IDirective>
                     {
