@@ -15,6 +15,9 @@ public class RequestCounters
     private int _totalErrors;
     private int _cacheHits;
     private int _cacheMisses;
+    private int _responseSizeBucketSmall;
+    private int _responseSizeBucketMedium;
+    private int _responseSizeBucketLarge;
     private long _startedAt;
 
     public RequestCounters()
@@ -109,6 +112,21 @@ public class RequestCounters
     }
 
     /// <summary>
+    /// Gets the count of responses with payload under 1 KB.
+    /// </summary>
+    public int ResponseSizeSmall => Volatile.Read(ref _responseSizeBucketSmall);
+
+    /// <summary>
+    /// Gets the count of responses with payload between 1 KB and 10 KB.
+    /// </summary>
+    public int ResponseSizeMedium => Volatile.Read(ref _responseSizeBucketMedium);
+
+    /// <summary>
+    /// Gets the count of responses with payload over 10 KB.
+    /// </summary>
+    public int ResponseSizeLarge => Volatile.Read(ref _responseSizeBucketLarge);
+
+    /// <summary>
     /// Gets a snapshot of per-intent metrics.
     /// </summary>
     /// <returns>A read-only dictionary mapping intent names to their metric snapshots.</returns>
@@ -117,5 +135,26 @@ public class RequestCounters
         return PerIntentMetrics.ToDictionary(
             kvp => kvp.Key,
             kvp => kvp.Value.Snapshot());
+    }
+
+    /// <summary>
+    /// Record a response payload size in bytes using coarse histogram buckets.
+    /// Buckets: small (&lt;1 KB), medium (1-10 KB), large (&gt;10 KB).
+    /// </summary>
+    /// <param name="byteCount">The serialized response size in bytes.</param>
+    public void RecordResponseSize(int byteCount)
+    {
+        if (byteCount < 1024)
+        {
+            Interlocked.Increment(ref _responseSizeBucketSmall);
+        }
+        else if (byteCount < 10240)
+        {
+            Interlocked.Increment(ref _responseSizeBucketMedium);
+        }
+        else
+        {
+            Interlocked.Increment(ref _responseSizeBucketLarge);
+        }
     }
 }

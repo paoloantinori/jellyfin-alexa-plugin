@@ -109,6 +109,12 @@ public class DiagnosticsController : ControllerBase
             CacheHitRate = _counters.CacheHits + _counters.CacheMisses > 0
                 ? Math.Round((double)_counters.CacheHits / (_counters.CacheHits + _counters.CacheMisses), 4)
                 : 0,
+            ResponseSizes = new
+            {
+                Small = _counters.ResponseSizeSmall,
+                Medium = _counters.ResponseSizeMedium,
+                Large = _counters.ResponseSizeLarge
+            },
             PerType = _counters.PerType.ToDictionary(k => k.Key, v => v.Value),
             Intents = _counters.GetIntentMetrics()
                 .OrderByDescending(kvp => kvp.Value.Count)
