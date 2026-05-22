@@ -22,17 +22,29 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.DynamicEntities;
 /// Artists are sourced from the in-memory <see cref="IArtistIndex"/> when available,
 /// falling back to database queries. Albums are always queried from the database.
 /// Injected into the Alexa NLU session via <c>Dialog.UpdateDynamicEntities</c>.
+/// <para>
+/// The full Build output is cached with a 2-minute TTL to avoid repeated DB queries
+/// on every LaunchRequest/new session. The cache is invalidated automatically when
+/// library items are added or removed.
+/// </para>
 /// </summary>
-public class DynamicEntityBuilder
+public class DynamicEntityBuilder : IDisposable
 {
     private const int MaxTotalValueCount = 90;
     private const int DbQueryLimit = 55;
     private const int ArtistIndexLimit = 70;
     private const int LastPlayedCount = 5;
     private static readonly TimeSpan LastPlayedCacheTtl = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan OutputCacheTtl = TimeSpan.FromMinutes(2);
 
-    // Expired entries evicted lazily on cache miss; consider hooking ILibraryManager events for eager invalidation
+    // Full-output cache keyed by (userId, locale, includeSeries, includeAudiobooks).
+    // Supersedes the per-tier _lastPlayedCache on cache hit since Build() returns early.
+    private static readonly ConcurrentDictionary<OutputCacheKey, (DynamicEntitiesDirective Directive, DateTime ExpiresAt)> _outputCache = new();
+
+    // Expired entries evicted lazily on cache miss
     private readonly ConcurrentDictionary<Guid, (List<LastPlayedSlotValue> Values, DateTime ExpiresAt)> _lastPlayedCache = new();
+
+    private readonly record struct OutputCacheKey(Guid UserId, string Locale, bool IncludeSeries, bool IncludeAudiobooks);
 
     private static readonly Dictionary<CatalogType, string> SlotTypeNames = CatalogSlotTypes.Names;
 
@@ -55,6 +67,7 @@ public class DynamicEntityBuilder
     private readonly IUserManager _userManager;
     private readonly IArtistIndex? _artistIndex;
     private readonly ILogger<DynamicEntityBuilder> _logger;
+    private bool _disposed;
 
     public DynamicEntityBuilder(
         ILibraryManager libraryManager,
@@ -66,6 +79,9 @@ public class DynamicEntityBuilder
         _userManager = userManager;
         _logger = logger;
         _artistIndex = artistIndex;
+
+        _libraryManager.ItemAdded += OnLibraryChanged;
+        _libraryManager.ItemRemoved += OnLibraryChanged;
     }
 
     /// <summary>
@@ -85,6 +101,7 @@ public class DynamicEntityBuilder
     /// Builds a <c>Dialog.UpdateDynamicEntities</c> directive from the user's library.
     /// Optionally includes series or audiobook entities based on conversation context.
     /// Always reserves 5 slots for last-played items.
+    /// Results are cached for 2 minutes; cache is invalidated on library changes.
     /// </summary>
     public virtual DynamicEntitiesDirective? Build(
         Guid jellyfinUserId,
@@ -94,6 +111,15 @@ public class DynamicEntityBuilder
         bool includeAudiobooks,
         CancellationToken cancellationToken)
     {
+        var cacheKey = new OutputCacheKey(jellyfinUserId, locale, includeSeries, includeAudiobooks);
+        if (_outputCache.TryGetValue(cacheKey, out var cached) && cached.ExpiresAt > DateTime.UtcNow)
+        {
+            _logger.LogDebug("Dynamic entities cache hit for user {UserId}", jellyfinUserId);
+            return cached.Directive;
+        }
+
+        EvictExpiredOutputCacheEntries();
+
         var user = _userManager.GetUserById(jellyfinUserId);
         if (user == null)
         {
@@ -177,6 +203,7 @@ public class DynamicEntityBuilder
             MaxTotalValueCount - budget,
             MaxTotalValueCount);
 
+        _outputCache[cacheKey] = (directive, DateTime.UtcNow.Add(OutputCacheTtl));
         return directive;
     }
 
@@ -189,6 +216,50 @@ public class DynamicEntityBuilder
     /// Determines whether the given intent name suggests audiobook context.
     /// </summary>
     public static bool IsBookContext(string intentName) => BookIntents.Contains(intentName);
+
+    /// <summary>
+    /// Clears the full-output cache. Called automatically when library items are added or removed.
+    /// Can also be called manually to force a refresh.
+    /// </summary>
+    public void InvalidateCache() => _outputCache.Clear();
+
+    /// <summary>
+    /// Evicts expired entries from the output cache. Called on cache miss to keep the dictionary bounded.
+    /// </summary>
+    private static void EvictExpiredOutputCacheEntries()
+    {
+        foreach (var kvp in _outputCache)
+        {
+            if (kvp.Value.ExpiresAt <= DateTime.UtcNow)
+            {
+                _outputCache.TryRemove(kvp.Key, out _);
+            }
+        }
+    }
+
+    private void OnLibraryChanged(object? sender, ItemChangeEventArgs e)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _outputCache.Clear();
+        _lastPlayedCache.Clear();
+    }
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _libraryManager.ItemAdded -= OnLibraryChanged;
+        _libraryManager.ItemRemoved -= OnLibraryChanged;
+        _disposed = true;
+    }
 
     private static DynamicSlotType GetOrAddSlotType(DynamicEntitiesDirective directive, string slotTypeName)
     {
