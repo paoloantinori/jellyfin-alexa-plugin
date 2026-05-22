@@ -84,8 +84,8 @@ public class PlayArtistSongsIntentHandlerTests
 
     private void SetupSongResult(params Audio[] songs)
     {
-        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
-            .Returns(new QueryResult<BaseItem>(songs.ToList<BaseItem>()));
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
+            .Returns(songs.ToList<BaseItem>());
     }
 
     [Fact]
@@ -273,8 +273,8 @@ public class PlayArtistSongsIntentHandlerTests
         _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(allArtists);
 
         SetupUserMock();
-        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
-            .Returns(new QueryResult<BaseItem>());
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
+            .Returns(new List<BaseItem>());
 
         var handler = CreateHandler(_artistIndexMock.Object);
         var request = CreateIntentRequest(musician: "Empty Artist");
@@ -330,11 +330,11 @@ public class PlayArtistSongsIntentHandlerTests
                 return new List<BaseItem>();
             });
 
-        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
-            .Returns(new QueryResult<BaseItem>(new List<BaseItem>
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
+            .Returns(new List<BaseItem>
             {
                 new Audio { Name = "Test Song", Id = Guid.NewGuid() }
-            }));
+            });
 
         var handler = CreateHandler(artistIndex: null);
         var request = CreateIntentRequest(musician: "xyzzyfoo");
@@ -390,11 +390,11 @@ public class PlayArtistSongsIntentHandlerTests
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { artist });
 
-        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
-            .Returns(new QueryResult<BaseItem>(new List<BaseItem>
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
+            .Returns(new List<BaseItem>
             {
                 new Audio { Name = "Comfortably Numb", Id = Guid.NewGuid() }
-            }));
+            });
 
         var handler = CreateHandler(artistIndex: null);
         var request = CreateIntentRequest(musician: "Pink Floyd");
@@ -436,11 +436,11 @@ public class PlayArtistSongsIntentHandlerTests
             .Returns(new List<BaseItem> { new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() } });
 
         SetupUserMock();
-        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
-            .Returns(new QueryResult<BaseItem>(new List<BaseItem>
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
+            .Returns(new List<BaseItem>
             {
                 new Audio { Name = "Yesterday", Id = Guid.NewGuid() }
-            }));
+            });
 
         var handler = CreateHandler(_artistIndexMock.Object);
         var request = CreateIntentRequest(musician: "Beatles");

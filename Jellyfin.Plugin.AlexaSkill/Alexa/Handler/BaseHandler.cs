@@ -20,6 +20,7 @@ using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Querying;
 using Microsoft.Extensions.Logging;
 using AlexaSession = Alexa.NET.Request.Session;
 using JellyfinUser = Jellyfin.Database.Implementations.Entities.User;
@@ -764,6 +765,31 @@ public abstract class BaseHandler
     protected Task<T> RetryAsync<T>(Func<T> operation, string operationName, CancellationToken cancellationToken = default)
     {
         return RetryHelper.ExecuteWithRetryAsync(operation, Logger, operationName, cancellationToken: cancellationToken, timeoutMs: AlexaRequestTimeoutMs);
+    }
+
+    /// <summary>
+    /// Executes GetItemsResult with a fallback to GetItemList on NullReferenceException.
+    /// Jellyfin's GetItemsResult evaluates dbQuery.Count() after applying query filters
+    /// and ordering. Certain combinations (e.g. ArtistIds + PopularitySort referencing
+    /// User data) cause EF Core's Count() translation to NRE. GetItemList skips the
+    /// Count() step entirely.
+    /// </summary>
+    protected QueryResult<BaseItem> SafeGetItemsResult(ILibraryManager libraryManager, InternalItemsQuery query)
+    {
+        try
+        {
+            return libraryManager.GetItemsResult(query);
+        }
+        catch (NullReferenceException)
+        {
+            // Jellyfin's GetItemsResult evaluates dbQuery.Count() after applying query
+            // filters + ordering. Certain combinations (e.g. ArtistIds + PopularitySort
+            // referencing User data) cause EF Core's Count() translation to NRE.
+            // Fall back to GetItemList which skips the Count() step entirely.
+            Logger.LogWarning("GetItemsResult NRE — falling back to GetItemList");
+            IReadOnlyList<BaseItem> items = libraryManager.GetItemList(query);
+            return new QueryResult<BaseItem>(query.StartIndex ?? 0, items.Count, items);
+        }
     }
 
     /// <summary>

@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Microsoft.Extensions.Logging;
+using Refit;
 using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
@@ -437,5 +439,68 @@ public class RetryHelperTests
         // This continues until delay grows enough to exceed budget
         // With budget=600 and minOp=100, budget allows retries until delay > 500
         Assert.True(calls >= 2, $"Expected at least 2 calls, got {calls}");
+    }
+
+    // --- Refit ApiException (412/429) tests ---
+
+    private static ApiException CreateApiException(HttpStatusCode statusCode, HttpMethod method)
+    {
+        var request = new HttpRequestMessage(method, "https://example.com");
+        var response = new HttpResponseMessage(statusCode);
+        response.Content = new StringContent("test");
+        return ApiException.Create(request, method, response, null!).Result;
+    }
+
+    [Fact]
+    public void IsTransient_RefitApiException_412_ReturnsTrue()
+    {
+        var ex = CreateApiException(HttpStatusCode.PreconditionFailed, HttpMethod.Put);
+        Assert.True(RetryHelper.IsTransient(ex));
+    }
+
+    [Fact]
+    public void IsTransient_RefitApiException_429_ReturnsTrue()
+    {
+        var ex = CreateApiException(HttpStatusCode.TooManyRequests, HttpMethod.Post);
+        Assert.True(RetryHelper.IsTransient(ex));
+    }
+
+    [Fact]
+    public void IsTransient_RefitApiException_400_ReturnsFalse()
+    {
+        var ex = CreateApiException(HttpStatusCode.BadRequest, HttpMethod.Post);
+        Assert.False(RetryHelper.IsTransient(ex));
+    }
+
+    [Fact]
+    public void IsTransient_RefitApiException_404_ReturnsFalse()
+    {
+        var ex = CreateApiException(HttpStatusCode.NotFound, HttpMethod.Get);
+        Assert.False(RetryHelper.IsTransient(ex));
+    }
+
+    [Fact]
+    public async Task Async_Refit412_RetriesAndSucceeds()
+    {
+        int calls = 0;
+        string result = await RetryHelper.ExecuteWithRetryAsync(
+            () =>
+            {
+                calls++;
+                if (calls < 3)
+                {
+                    var ex = CreateApiException(HttpStatusCode.PreconditionFailed, HttpMethod.Put);
+                    return Task.FromException<string>(ex);
+                }
+
+                return Task.FromResult("ok");
+            },
+            _logger,
+            "TestOp",
+            maxRetries: 3,
+            initialDelayMs: 1);
+
+        Assert.Equal("ok", result);
+        Assert.Equal(3, calls);
     }
 }

@@ -659,24 +659,21 @@ public class ConfigurationController : ControllerBase
             using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
             var interactionModels = Plugin.Instance.BuildSkillInteractionModels(invocationName);
 
-            await AlexaUtil.CallAsync<object?>(pluginUser, async () =>
-            {
-                await pluginUser.SmapiManagement!.UpdateSkillAsync(skillId!, Plugin.Instance!.ManifestSkill!, interactionModels).ConfigureAwait(false);
-                return null;
-            }).ConfigureAwait(false);
+            var failedLocales = await AlexaUtil.CallAsync(pluginUser, () => pluginUser.SmapiManagement!.UpdateSkillAsync(skillId!, Plugin.Instance!.ManifestSkill!, interactionModels)).ConfigureAwait(false);
 
             // Poll until all locale model builds leave IN_PROGRESS
             var localeResults = await PollLocaleBuildStatusAsync(pluginUser, skillId!, cts.Token).ConfigureAwait(false);
 
             config.LastModelDeployTime = DateTime.UtcNow;
-            config.LastModelDeployStatus = localeResults.All(r => r.Value.Success) ? "rebuilt" : "rebuilt_with_errors";
+            config.LastModelDeployStatus = localeResults.All(r => r.Value.Success) && failedLocales.Count == 0 ? "rebuilt" : "rebuilt_with_errors";
             Plugin.Instance!.SaveConfiguration();
 
             return new JsonResult(new
             {
-                success = localeResults.All(r => r.Value.Success),
+                success = localeResults.All(r => r.Value.Success) && failedLocales.Count == 0,
                 message = $"Rebuilt {interactionModels.Count} models — {localeResults.Count(r => r.Value.Success)} succeeded, {localeResults.Count(r => !r.Value.Success)} failed",
-                locales = localeResults.ToDictionary(r => r.Key, r => new { success = r.Value.Success, status = r.Value.Status, error = r.Value.Error })
+                locales = localeResults.ToDictionary(r => r.Key, r => new { success = r.Value.Success, status = r.Value.Status, error = r.Value.Error }),
+                updateFailures = failedLocales
             });
         }
         catch (Exception ex)

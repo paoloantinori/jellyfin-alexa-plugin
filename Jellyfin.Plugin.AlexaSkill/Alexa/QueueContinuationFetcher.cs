@@ -100,9 +100,22 @@ internal static class QueueContinuationFetcher
             query.OrderBy = continuation.SortOrder;
         }
 
-        QueryResult<BaseItem> result = libraryManager.GetItemsResult(query);
-        continuation.StartIndex += result.Items.Count;
-        return result.Items;
+        // Use GetItemList instead of GetItemsResult to avoid Jellyfin NRE in
+        // dbQuery.Count() when ArtistIds + PopularitySort expressions are combined.
+        IReadOnlyList<BaseItem> items = libraryManager.GetItemList(query);
+
+        // Detect end of results: if we got fewer items than requested, update TotalCount
+        // so FetchNextBatch knows there are no more items.
+        if (items.Count < continuation.BatchSize)
+        {
+            continuation.StartIndex = continuation.TotalCount;
+        }
+        else
+        {
+            continuation.StartIndex += items.Count;
+        }
+
+        return items;
     }
 
     private static IReadOnlyList<BaseItem> FetchPlaylistItems(

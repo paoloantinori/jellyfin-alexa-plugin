@@ -103,14 +103,19 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         int tierReached = 0;
         string searchSource = "Database";
 
+        // Pre-resolve library filter once for the entire request.
+        // Used by both the in-memory and database paths, plus the final artist-songs query.
+        Guid[]? allowedLibraryIds = null;
+        Guid[]? topParentIds = null;
+
         IReadOnlyList<BaseItem> artists;
 
         if (_artistIndex?.IsReady == true)
         {
             // In-memory search: resolve library filter once, search the pre-loaded index
             searchSource = "InMemory";
-            var allowedLibraryIds = GetAllowedLibraryIds(user);
-            Guid[]? topParentIds = allowedLibraryIds != null
+            allowedLibraryIds = GetAllowedLibraryIds(user);
+            topParentIds = allowedLibraryIds != null
                 ? Util.LibraryFilter.ResolveTopParentIds(allowedLibraryIds, _libraryManager)
                 : null;
             var allArtists = _artistIndex.GetArtists(topParentIds);
@@ -185,6 +190,12 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         else
         {
             // Fallback: database queries when in-memory index is not yet loaded
+            // Resolve library filter once and reuse across all fallback tiers.
+            allowedLibraryIds = GetAllowedLibraryIds(user);
+            topParentIds = allowedLibraryIds != null
+                ? Util.LibraryFilter.ResolveTopParentIds(allowedLibraryIds, _libraryManager)
+                : null;
+
             artists = await SearchWithAsrFallbackAsync(musician,
                 searchTerm =>
                 {
@@ -193,9 +204,9 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                         Recursive = true,
                         SearchTerm = searchTerm,
                         IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
+                        TopParentIds = topParentIds!,
                         DtoOptions = new DtoOptions(true)
                     };
-                    ApplyLibraryFilter(q, user, _libraryManager);
                     return RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", cancellationToken);
                 }).ConfigureAwait(false);
 
@@ -212,7 +223,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             {
                 tierSw.Restart();
                 BaseItem? fuzzy = await TryPrefixFallbackAsync(
-                    firstWord, musician, user, "GetArtistsFuzzy", cancellationToken).ConfigureAwait(false);
+                    firstWord, musician, topParentIds, user, "GetArtistsFuzzy", cancellationToken).ConfigureAwait(false);
                 tierSw.Stop();
                 tierReached = 2;
                 Logger.LogInformation(
@@ -231,7 +242,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             {
                 tierSw.Restart();
                 BaseItem? fullPrefixFuzzy = await TryPrefixFallbackAsync(
-                    musician, musician, user, "GetArtistsFullPrefix", cancellationToken).ConfigureAwait(false);
+                    musician, musician, topParentIds, user, "GetArtistsFullPrefix", cancellationToken).ConfigureAwait(false);
                 tierSw.Stop();
                 tierReached = 3;
                 Logger.LogInformation(
@@ -249,7 +260,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             {
                 tierSw.Restart();
                 BaseItem? containsFuzzy = await TryContainsFallbackAsync(
-                    musician, musician, user, "GetArtistsContains", cancellationToken).ConfigureAwait(false);
+                    musician, musician, topParentIds, user, "GetArtistsContains", cancellationToken).ConfigureAwait(false);
                 tierSw.Stop();
                 tierReached = 4;
                 Logger.LogInformation(
@@ -320,21 +331,30 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             ArtistIds = new[] { artists[0].Id },
             Limit = ProgressiveQueueConstants.GetInitialFetchSize()
         };
-        ApplyLibraryFilter(artistSongsQuery, user, _libraryManager);
 
-        QueryResult<BaseItem> artistResult = await RetryAsync(
-            () => _libraryManager.GetItemsResult(artistSongsQuery),
+        // Reuse pre-resolved library filter. Both paths set topParentIds above.
+        if (topParentIds != null)
+        {
+            artistSongsQuery.TopParentIds = topParentIds;
+        }
+
+        // Use GetItemList instead of GetItemsResult. Jellyfin's GetItemsResult evaluates
+        // dbQuery.Count() after applying the ArtistIds cross-reference + PopularitySort
+        // (which references User data), and EF Core's Count() translation NREs on this
+        // combination. GetItemList skips the Count() step entirely.
+        IReadOnlyList<BaseItem> artistItems = await RetryAsync(
+            () => _libraryManager.GetItemList(artistSongsQuery),
             "GetArtistSongs",
             cancellationToken).ConfigureAwait(false);
 
-        if (artistResult.TotalRecordCount == 0)
+        if (artistItems.Count == 0)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NoSongsForArtist", locale, matchedArtistName));
         }
 
         // Single-pass sort + resume detection (avoids duplicate GetUserData calls)
         var (artistsItems, startIndex, _) = SortAndFindResumeIndex(
-            artistResult.Items, jellyfinUser!, _userDataManager, resumePosition: false);
+            artistItems, jellyfinUser!, _userDataManager, resumePosition: false);
 
         if (startIndex > 0)
         {
@@ -359,9 +379,8 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             0);
 
         // Store continuation info so PlaybackNearlyFinished can fetch the rest.
-        // StartIndex uses the original page size because the database offset is
-        // independent of the resume slice.
-        if (artistResult.TotalRecordCount > artistResult.Items.Count)
+        // Without TotalRecordCount, assume more items exist if we filled the page.
+        if (artistItems.Count >= ProgressiveQueueConstants.GetInitialFetchSize())
         {
             QueueContinuationStore.Set(
                 session.UserId,
@@ -370,8 +389,8 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 {
                     SourceType = "Artist",
                     ArtistId = artists[0].Id,
-                    StartIndex = artistResult.Items.Count,
-                    TotalCount = artistResult.TotalRecordCount,
+                    StartIndex = artistItems.Count,
+                    TotalCount = int.MaxValue,
                     UserId = jellyfinUser!.Id,
                     SortOrder = PopularitySort
                 });
@@ -387,11 +406,11 @@ public class PlayArtistSongsIntentHandler : BaseHandler
     /// Used as a fallback when the primary SearchTerm query returns no artists.
     /// </summary>
     private async Task<BaseItem?> TryPrefixFallbackAsync(
-        string prefix, string musician, Entities.User? user,
+        string prefix, string musician, Guid[]? topParentIds, Entities.User? user,
         string retryLabel, CancellationToken cancellationToken)
     {
         return await TrySearchFallbackAsync(
-            q => q.NameStartsWith = prefix, musician, user, retryLabel, cancellationToken).ConfigureAwait(false);
+            q => q.NameStartsWith = prefix, musician, topParentIds, user, retryLabel, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -399,19 +418,21 @@ public class PlayArtistSongsIntentHandler : BaseHandler
     /// Catches cases where the query appears anywhere in the artist name (e.g. "Kidz Bop" → "The Kidz Bop Kids").
     /// </summary>
     private async Task<BaseItem?> TryContainsFallbackAsync(
-        string searchTerm, string musician, Entities.User? user,
+        string searchTerm, string musician, Guid[]? topParentIds, Entities.User? user,
         string retryLabel, CancellationToken cancellationToken)
     {
         return await TrySearchFallbackAsync(
-            q => q.NameContains = searchTerm, musician, user, retryLabel, cancellationToken).ConfigureAwait(false);
+            q => q.NameContains = searchTerm, musician, topParentIds, user, retryLabel, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
     /// Executes a configured InternalItemsQuery and fuzzy-matches the results against the artist name.
+    /// Uses pre-resolved topParentIds to avoid repeated library filter resolution.
     /// </summary>
     private async Task<BaseItem?> TrySearchFallbackAsync(
         Action<InternalItemsQuery> configure,
         string musician,
+        Guid[]? topParentIds,
         Entities.User? user,
         string retryLabel,
         CancellationToken cancellationToken)
@@ -420,10 +441,10 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         {
             Recursive = true,
             IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
+            TopParentIds = topParentIds!,
             DtoOptions = new DtoOptions(true)
         };
         configure(query);
-        ApplyLibraryFilter(query, user, _libraryManager);
 
         IReadOnlyList<BaseItem> results = await RetryAsync(
             () => _libraryManager.GetItemList(query),

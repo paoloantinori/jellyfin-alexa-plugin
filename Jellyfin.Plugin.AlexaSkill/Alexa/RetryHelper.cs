@@ -1,10 +1,12 @@
 using System;
 using System.Diagnostics;
 using System.Globalization;
+using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Refit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa;
 
@@ -205,6 +207,9 @@ internal static class RetryHelper
         }
 
         return ex is HttpRequestException
-            || ex is TimeoutException;
+            || ex is TimeoutException
+            || (ex is ApiException apiEx
+                && (apiEx.StatusCode == HttpStatusCode.PreconditionFailed
+                    || apiEx.StatusCode == HttpStatusCode.TooManyRequests));
     }
 }

@@ -149,7 +149,7 @@ public class PlayBookIntentHandler : BaseHandler
         }
 
         QueryResult<BaseItem> bookTracks = await RetryAsync(
-            () => _libraryManager.GetItemsResult(new InternalItemsQuery
+            () => SafeGetItemsResult(_libraryManager, new InternalItemsQuery
             {
                 User = jellyfinUser,
                 Recursive = true,

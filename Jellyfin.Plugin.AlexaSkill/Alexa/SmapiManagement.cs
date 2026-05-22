@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Net.Http;
@@ -70,17 +71,12 @@ public class SmapiManagement : ManagementApi
 
         this.UpdateAccountLinkData(skillId.Id, endpointUri, clientId);
 
-        foreach (var interactionModel in interactionModels)
+        var failedLocales = await UpdateInteractionModelsAsync(skillId.Id, interactionModels).ConfigureAwait(false);
+
+        if (failedLocales.Count > 0)
         {
-            try
-            {
-                await this.InteractionModel.Update(skillId.Id, SkillStage.Development, interactionModel.Locale, interactionModel).ConfigureAwait(false);
-                _logger.LogInformation("Interaction model updated for locale {Locale}", interactionModel.Locale);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to update interaction model for locale {Locale}", interactionModel.Locale);
-            }
+            _logger.LogWarning("Skill created {SkillId} but {Failed}/{Total} interaction models failed to update",
+                skillId.Id, failedLocales.Count, interactionModels.Count);
         }
 
         _logger.LogInformation("Skill created successfully: {SkillId}", skillId.Id);
@@ -94,7 +90,7 @@ public class SmapiManagement : ManagementApi
     /// <param name="manifestSkill">The new manifest skill.</param>
     /// <param name="interactionModels">The new interaction models.</param>
     /// <returns>A task representing the async operation.</returns>
-    public async Task UpdateSkillAsync(string skillId, ManifestSkill manifestSkill, Collection<SkillInteractionModel> interactionModels)
+    public async Task<Dictionary<string, string>> UpdateSkillAsync(string skillId, ManifestSkill manifestSkill, Collection<SkillInteractionModel> interactionModels)
     {
         _logger.LogInformation("Updating skill {SkillId}...", skillId);
 
@@ -110,20 +106,58 @@ public class SmapiManagement : ManagementApi
 
         await WaitForSkillStatusAsync(skillId).ConfigureAwait(false);
 
-        foreach (var interactionModel in interactionModels)
+        var failedLocales = await UpdateInteractionModelsAsync(skillId, interactionModels).ConfigureAwait(false);
+
+        _logger.LogInformation(
+            "Skill updated: {SkillId} — {Success} of {Total} locales succeeded",
+            skillId,
+            interactionModels.Count - failedLocales.Count,
+            interactionModels.Count);
+
+        return failedLocales;
+    }
+
+    /// <summary>
+    /// Updates all interaction models for a skill with retry and inter-locale spacing.
+    /// Returns a dictionary of locale → error message for any that failed after retries.
+    /// </summary>
+    private async Task<Dictionary<string, string>> UpdateInteractionModelsAsync(
+        string skillId, Collection<SkillInteractionModel> interactionModels)
+    {
+        var failedLocales = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        for (int i = 0; i < interactionModels.Count; i++)
         {
+            var interactionModel = interactionModels[i];
+
+            if (i > 0)
+            {
+                await Task.Delay(500).ConfigureAwait(false);
+            }
+
             try
             {
-                await this.InteractionModel.Update(skillId, SkillStage.Development, interactionModel.Locale, interactionModel).ConfigureAwait(false);
+                await RetryHelper.ExecuteWithRetryAsync(
+                    async () =>
+                    {
+                        await this.InteractionModel.Update(skillId, SkillStage.Development, interactionModel.Locale, interactionModel).ConfigureAwait(false);
+                        return (object?)null;
+                    },
+                    _logger,
+                    $"InteractionModel.Update[{interactionModel.Locale}]",
+                    maxRetries: 3,
+                    initialDelayMs: 2000).ConfigureAwait(false);
+
                 _logger.LogInformation("Interaction model updated for locale {Locale}", interactionModel.Locale);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to update interaction model for locale {Locale}", interactionModel.Locale);
+                _logger.LogError(ex, "Failed to update interaction model for locale {Locale} after retries", interactionModel.Locale);
+                failedLocales[interactionModel.Locale] = ex.Message;
             }
         }
 
-        _logger.LogInformation("Skill updated successfully: {SkillId}", skillId);
+        return failedLocales;
     }
 
     /// <summary>

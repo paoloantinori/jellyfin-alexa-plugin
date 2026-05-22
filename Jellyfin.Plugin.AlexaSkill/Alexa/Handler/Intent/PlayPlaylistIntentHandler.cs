@@ -100,7 +100,7 @@ public class PlayPlaylistIntentHandler : BaseHandler
         };
         ApplyLibraryFilter(query, user, _libraryManager);
 
-        QueryResult<BaseItem> playlists = await RetryAsync(() => _libraryManager.GetItemsResult(query), "GetPlaylists", cancellationToken).ConfigureAwait(false);
+        QueryResult<BaseItem> playlists = await RetryAsync(() => SafeGetItemsResult(_libraryManager, query), "GetPlaylists", cancellationToken).ConfigureAwait(false);
 
         if (playlists.TotalRecordCount == 0)
         {
@@ -154,7 +154,7 @@ public class PlayPlaylistIntentHandler : BaseHandler
 
         // Get playlist items using the library manager for consistent pagination.
         // Fetch the first page for fast time-to-audio; rest is fetched on demand.
-        QueryResult<BaseItem> playlistResult = _libraryManager.GetItemsResult(new InternalItemsQuery
+        QueryResult<BaseItem> playlistResult = SafeGetItemsResult(_libraryManager, new InternalItemsQuery
         {
             User = jellyfinUser,
             Recursive = true,

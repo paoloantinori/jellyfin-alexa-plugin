@@ -180,7 +180,7 @@ public class PlayAlbumIntentHandler : BaseHandler
         // Get the first page of album tracks for fast time-to-audio.
         // Remaining tracks will be fetched on demand by PlaybackNearlyFinished.
         QueryResult<BaseItem> albumResult = await RetryAsync(
-            () => _libraryManager.GetItemsResult(new InternalItemsQuery()
+            () => SafeGetItemsResult(_libraryManager, new InternalItemsQuery()
             {
                 User = jellyfinUser,
                 Recursive = true,

@@ -594,13 +594,9 @@ public class ProgressiveQueueTests : IDisposable
         _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicArtist))))
             .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { artist });
 
-        // Mock: artist songs query with limit
-        _libraryManagerMock.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Contains(artistId))))
-            .Returns(new QueryResult<BaseItem>
-            {
-                Items = allTracks.Take(ProgressiveQueueConstants.GetInitialFetchSize()).Cast<MediaBrowser.Controller.Entities.BaseItem>().ToList(),
-                TotalRecordCount = 15
-            });
+        // Mock: artist songs query with limit (uses GetItemList to avoid Jellyfin NRE)
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Contains(artistId))))
+            .Returns(allTracks.Take(ProgressiveQueueConstants.GetInitialFetchSize()).Cast<MediaBrowser.Controller.Entities.BaseItem>().ToList());
 
         // Mock: no favorites
         _userDataManagerMock.Setup(u => u.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<MediaBrowser.Controller.Entities.BaseItem>()))
@@ -614,12 +610,12 @@ public class ProgressiveQueueTests : IDisposable
         // Should have only initial items in queue
         Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), session.NowPlayingQueue.Count);
 
-        // Continuation should be stored
+        // Continuation should be stored (TotalCount is int.MaxValue since GetItemList has no count)
         QueueContinuation? continuation = QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID);
         Assert.NotNull(continuation);
         Assert.Equal("Artist", continuation.SourceType);
         Assert.Equal(artistId, continuation.ArtistId);
-        Assert.Equal(15, continuation.TotalCount);
+        Assert.Equal(int.MaxValue, continuation.TotalCount);
 
         // Cleanup
         QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID);
@@ -670,14 +666,10 @@ public class ProgressiveQueueTests : IDisposable
             q.NameStartsWith == "Kidz Bop" && q.SearchTerm == null)))
             .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { artist });
 
-        // Mock: artist songs query
-        _libraryManagerMock.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q =>
+        // Mock: artist songs query (uses GetItemList to avoid Jellyfin NRE)
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
             q.ArtistIds != null && q.ArtistIds.Contains(artistId))))
-            .Returns(new QueryResult<BaseItem>
-            {
-                Items = tracks.Cast<MediaBrowser.Controller.Entities.BaseItem>().ToList(),
-                TotalRecordCount = 1
-            });
+            .Returns(tracks.Cast<MediaBrowser.Controller.Entities.BaseItem>().ToList());
 
         // Mock: no favorites
         _userDataManagerMock.Setup(u => u.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<MediaBrowser.Controller.Entities.BaseItem>()))
