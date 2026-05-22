@@ -50,10 +50,4 @@ public class DeviceToken
     /// Gets or sets the epoch timetstamp when the access token expires.
     /// </summary>
     public long ExpireTimestamp { get; set; }
-
-    /// <summary>
-    /// Gets or sets the SMAPI vendor ID for the developer account.
-    /// Populated from the Alexa Vendors API during skill setup.
-    /// </summary>
-    public string? VendorId { get; set; }
 }
