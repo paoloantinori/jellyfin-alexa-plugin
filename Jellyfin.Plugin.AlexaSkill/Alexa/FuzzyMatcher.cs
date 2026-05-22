@@ -76,18 +76,30 @@ internal static class FuzzyMatcher
         }
 
         string normalizedQuery = Normalize(query);
+        int maxLenDiff = Math.Max(normalizedQuery.Length * 2, 15);
         T? bestMatch = null;
         int bestScore = 0;
 
         foreach (T candidate in candidates)
         {
             string candidateText = Normalize(selector(candidate));
+
+            if (Math.Abs(candidateText.Length - normalizedQuery.Length) > maxLenDiff)
+            {
+                continue;
+            }
+
             int score = PartialRatio(normalizedQuery, candidateText);
 
             if (score > bestScore)
             {
                 bestScore = score;
                 bestMatch = candidate;
+
+                if (bestScore >= ContainmentScore)
+                {
+                    return (bestMatch, bestScore);
+                }
             }
         }
 
@@ -112,9 +124,22 @@ internal static class FuzzyMatcher
 
         string normalizedQuery = Normalize(query);
 
-        return candidates
-            .Select(c => (Item: c, Score: PartialRatio(normalizedQuery, Normalize(selector(c)))))
-            .Where(x => x.Score >= threshold)
+        var scored = new List<(T Item, int Score)>();
+        foreach (T candidate in candidates)
+        {
+            int score = PartialRatio(normalizedQuery, Normalize(selector(candidate)));
+            if (score >= threshold)
+            {
+                scored.Add((candidate, score));
+            }
+
+            if (score == 100)
+            {
+                return new List<T> { candidate };
+            }
+        }
+
+        return scored
             .OrderByDescending(x => x.Score)
             .Select(x => x.Item)
             .ToList();
