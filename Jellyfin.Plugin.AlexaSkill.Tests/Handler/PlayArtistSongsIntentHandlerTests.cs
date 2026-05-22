@@ -287,4 +287,175 @@ public class PlayArtistSongsIntentHandlerTests
         Assert.NotNull(response);
         Assert.NotNull(response.Response?.OutputSpeech);
     }
+
+    /// <summary>
+    /// Verifies that the library filter is resolved only once per request in the database
+    /// fallback path, even when all four search tiers are exercised.
+    /// Before the optimization, ResolveTopParentIds was called once per query (up to 5 calls).
+    /// After, it is called exactly once.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DatabaseFallback_ResolveLibraryFilterOnce()
+    {
+        // Arrange: user with library restriction so ResolveTopParentIds is invoked.
+        var libraryId = Guid.NewGuid();
+        var user = TestHelpers.CreateTestUser();
+        user.AllowedLibraryIds = new List<string> { libraryId.ToString() };
+
+        // The CollectionFolder resolves to a physical folder.
+        var physicalFolderId = Guid.NewGuid();
+        var cf = new CollectionFolder { Id = libraryId };
+        cf.PhysicalLocationsList = new[] { "/data/media/music" };
+
+        var physicalFolder = new Folder { Id = physicalFolderId };
+
+        _libraryManagerMock.Setup(l => l.GetItemById(libraryId))
+            .Returns(cf);
+        _libraryManagerMock.Setup(l => l.FindByPath("/data/media/music", true))
+            .Returns(physicalFolder);
+
+        SetupUserMock();
+
+        // No artist found in first 3 tiers, found in 4th tier -- forces all 4 tiers + artist songs query.
+        int getItemListCallCount = 0;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(() =>
+            {
+                getItemListCallCount++;
+                if (getItemListCallCount == 4)
+                {
+                    return new List<BaseItem> { new MusicArtist { Name = "Test Artist", Id = Guid.NewGuid() } };
+                }
+
+                return new List<BaseItem>();
+            });
+
+        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem>(new List<BaseItem>
+            {
+                new Audio { Name = "Test Song", Id = Guid.NewGuid() }
+            }));
+
+        var handler = CreateHandler(artistIndex: null);
+        var request = CreateIntentRequest(musician: "xyzzyfoo");
+        var context = CreateContext();
+        var session = CreateSession();
+
+        // Act
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // Assert: response is valid (artist found and songs played)
+        Assert.NotNull(response);
+        Assert.NotNull(response.Response?.Directives);
+
+        // GetItemById (used by ResolveTopParentIds) should be called exactly once,
+        // not once per query tier. Before the optimization it would be called 5 times
+        // (SearchTerm + PrefixFirstWord + PrefixFull + Contains + ArtistSongs).
+        _libraryManagerMock.Verify(
+            l => l.GetItemById(libraryId),
+            Times.Once,
+            "Library filter should be resolved exactly once per request, not once per query tier");
+    }
+
+    /// <summary>
+    /// Verifies that all database fallback queries receive the same TopParentIds
+    /// value (the pre-resolved filter), not re-resolved per tier.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DatabaseFallback_AllQueriesShareResolvedFilter()
+    {
+        // Arrange: user with 2 library restrictions
+        var libraryId1 = Guid.NewGuid();
+        var libraryId2 = Guid.NewGuid();
+        var user = TestHelpers.CreateTestUser();
+        user.AllowedLibraryIds = new List<string> { libraryId1.ToString(), libraryId2.ToString() };
+
+        var cf1 = new CollectionFolder { Id = libraryId1 };
+        cf1.PhysicalLocationsList = new[] { "/media/music" };
+        var cf2 = new CollectionFolder { Id = libraryId2 };
+        cf2.PhysicalLocationsList = new[] { "/media/jazz" };
+
+        var folder1 = new Folder { Id = Guid.NewGuid() };
+        var folder2 = new Folder { Id = Guid.NewGuid() };
+
+        _libraryManagerMock.Setup(l => l.GetItemById(libraryId1)).Returns(cf1);
+        _libraryManagerMock.Setup(l => l.GetItemById(libraryId2)).Returns(cf2);
+        _libraryManagerMock.Setup(l => l.FindByPath("/media/music", true)).Returns(folder1);
+        _libraryManagerMock.Setup(l => l.FindByPath("/media/jazz", true)).Returns(folder2);
+
+        SetupUserMock();
+
+        // Return an artist on the first tier
+        var artist = new MusicArtist { Name = "Pink Floyd", Id = Guid.NewGuid() };
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { artist });
+
+        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem>(new List<BaseItem>
+            {
+                new Audio { Name = "Comfortably Numb", Id = Guid.NewGuid() }
+            }));
+
+        var handler = CreateHandler(artistIndex: null);
+        var request = CreateIntentRequest(musician: "Pink Floyd");
+        var context = CreateContext();
+        var session = CreateSession();
+
+        // Act
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // Assert
+        Assert.NotNull(response);
+
+        // GetItemById should be called exactly twice (once per library ID), not 2*N per query
+        _libraryManagerMock.Verify(l => l.GetItemById(libraryId1), Times.Once);
+        _libraryManagerMock.Verify(l => l.GetItemById(libraryId2), Times.Once);
+    }
+
+    /// <summary>
+    /// Verifies that the in-memory path also resolves the library filter only once.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_InMemoryPath_ResolveLibraryFilterOnce()
+    {
+        var libraryId = Guid.NewGuid();
+        var user = TestHelpers.CreateTestUser();
+        user.AllowedLibraryIds = new List<string> { libraryId.ToString() };
+
+        var cf = new CollectionFolder { Id = libraryId };
+        cf.PhysicalLocationsList = new[] { "/data/media/music" };
+        var physicalFolder = new Folder { Id = Guid.NewGuid() };
+
+        _libraryManagerMock.Setup(l => l.GetItemById(libraryId))
+            .Returns(cf);
+        _libraryManagerMock.Setup(l => l.FindByPath("/data/media/music", true))
+            .Returns(physicalFolder);
+
+        _artistIndexMock.Setup(i => i.IsReady).Returns(true);
+        _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>()))
+            .Returns(new List<BaseItem> { new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() } });
+
+        SetupUserMock();
+        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem>(new List<BaseItem>
+            {
+                new Audio { Name = "Yesterday", Id = Guid.NewGuid() }
+            }));
+
+        var handler = CreateHandler(_artistIndexMock.Object);
+        var request = CreateIntentRequest(musician: "Beatles");
+        var context = CreateContext();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+
+        // In-memory path resolves the filter once for artist search and reuses it for songs query.
+        // GetItemById is called exactly once (for the single pre-resolution).
+        _libraryManagerMock.Verify(
+            l => l.GetItemById(libraryId),
+            Times.Once,
+            "In-memory path should resolve library filter exactly once");
+    }
 }
