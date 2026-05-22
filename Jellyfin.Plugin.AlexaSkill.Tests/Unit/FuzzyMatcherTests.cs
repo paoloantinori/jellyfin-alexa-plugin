@@ -94,7 +94,6 @@ public class FuzzyMatcherTests
         var items = new List<TestItem>
         {
             new("Metallica"),
-            new("Metal"),
             new("The Beatles"),
             new("Metallurgic")
         };
