@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using MediaBrowser.Controller.Entities;
 using Microsoft.Extensions.Logging;
 
@@ -12,7 +13,12 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 /// </summary>
 public class SearchResultCache
 {
+    private static readonly TimeSpan RecentlyAddedTtl = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan FavoritesTtl = TimeSpan.FromMinutes(5);
+
     private readonly ConcurrentDictionary<string, CachedResult> _cache = new();
+    private readonly ConcurrentDictionary<string, CachedResult> _recentlyAddedCache = new();
+    private readonly ConcurrentDictionary<string, CachedResult> _favoritesCache = new();
     private readonly int _maxEntriesPerUser;
     private readonly TimeSpan _expiration;
     private readonly ILogger? _logger;
@@ -96,6 +102,50 @@ public class SearchResultCache
         results = cached.Results;
         _logger?.LogDebug("Cache hit for user {UserId} query '{Query}'", userId, queryKey);
         return true;
+    }
+
+    public virtual async Task<IReadOnlyList<BaseItem>> GetRecentlyAddedCachedAsync(
+        Guid userId, Func<Task<IReadOnlyList<BaseItem>>> queryFunc)
+    {
+        string cacheKey = BuildKey(userId, "recently_added");
+
+        if (_recentlyAddedCache.TryGetValue(cacheKey, out CachedResult? cached)
+            && DateTimeOffset.UtcNow - cached.Timestamp <= RecentlyAddedTtl)
+        {
+            _logger?.LogDebug("Recently-added cache hit for user {UserId}", userId);
+            return cached.Results;
+        }
+
+        IReadOnlyList<BaseItem> results = await queryFunc().ConfigureAwait(false);
+
+        if (results.Count > 0)
+        {
+            _recentlyAddedCache[cacheKey] = new CachedResult(results, DateTimeOffset.UtcNow);
+        }
+
+        return results;
+    }
+
+    public virtual async Task<IReadOnlyList<BaseItem>> GetFavoritesCachedAsync(
+        Guid userId, Func<Task<IReadOnlyList<BaseItem>>> queryFunc)
+    {
+        string cacheKey = BuildKey(userId, "favorites");
+
+        if (_favoritesCache.TryGetValue(cacheKey, out CachedResult? cached)
+            && DateTimeOffset.UtcNow - cached.Timestamp <= FavoritesTtl)
+        {
+            _logger?.LogDebug("Favorites cache hit for user {UserId}", userId);
+            return cached.Results;
+        }
+
+        IReadOnlyList<BaseItem> results = await queryFunc().ConfigureAwait(false);
+
+        if (results.Count > 0)
+        {
+            _favoritesCache[cacheKey] = new CachedResult(results, DateTimeOffset.UtcNow);
+        }
+
+        return results;
     }
 
     /// <summary>
@@ -207,6 +257,18 @@ public class SearchResultCache
         {
             results = null;
             return false;
+        }
+
+        public override Task<IReadOnlyList<BaseItem>> GetRecentlyAddedCachedAsync(
+            Guid userId, Func<Task<IReadOnlyList<BaseItem>>> queryFunc)
+        {
+            return queryFunc();
+        }
+
+        public override Task<IReadOnlyList<BaseItem>> GetFavoritesCachedAsync(
+            Guid userId, Func<Task<IReadOnlyList<BaseItem>>> queryFunc)
+        {
+            return queryFunc();
         }
 
         public override void Clear()

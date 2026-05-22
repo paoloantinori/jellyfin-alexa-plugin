@@ -8,6 +8,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
@@ -104,7 +105,10 @@ public class PlayFavoritesIntentHandler : BaseHandler
         };
         ApplyLibraryFilter(query, user, _libraryManager);
 
-        IReadOnlyList<BaseItem> favoriteItems = await RetryAsync(() => _libraryManager.GetItemList(query), "GetFavoriteItems", cancellationToken).ConfigureAwait(false);
+        SearchResultCache cache = Plugin.Instance?.SearchCache ?? SearchResultCache.Noop;
+        IReadOnlyList<BaseItem> favoriteItems = await cache.GetFavoritesCachedAsync(
+            jellyfinUser.Id,
+            () => RetryAsync(() => _libraryManager.GetItemList(query), "GetFavoriteItems", cancellationToken)).ConfigureAwait(false);
 
         if (favoriteItems.Count == 0)
         {

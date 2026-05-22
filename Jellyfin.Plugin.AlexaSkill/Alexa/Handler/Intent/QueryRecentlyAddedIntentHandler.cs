@@ -11,6 +11,7 @@ using Alexa.NET.Response;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
@@ -93,7 +94,10 @@ public class QueryRecentlyAddedIntentHandler : BaseHandler
         };
         ApplyLibraryFilter(query, user, _libraryManager);
 
-        IReadOnlyList<BaseItem> recentItems = await RetryAsync(() => _libraryManager.GetItemList(query), "GetRecentlyAddedItems", cancellationToken).ConfigureAwait(false);
+        SearchResultCache cache = Plugin.Instance?.SearchCache ?? SearchResultCache.Noop;
+        IReadOnlyList<BaseItem> recentItems = await cache.GetRecentlyAddedCachedAsync(
+            resolvedUser.Id,
+            () => RetryAsync(() => _libraryManager.GetItemList(query), "GetRecentlyAddedItems", cancellationToken)).ConfigureAwait(false);
 
         if (recentItems.Count == 0)
         {
