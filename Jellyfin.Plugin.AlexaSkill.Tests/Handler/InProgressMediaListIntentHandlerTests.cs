@@ -263,4 +263,26 @@ public class InProgressMediaListIntentHandlerTests
         Assert.Equal(50, capturedQuery.Limit);
         Assert.NotNull(capturedQuery.IncludeItemTypes);
     }
+
+    [Fact]
+    public async Task HandleAsync_FiltersPlayedItemsAtDbLevel()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest();
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        InternalItemsQuery? capturedQuery = null;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => capturedQuery = q)
+            .Returns(new List<BaseItem>());
+
+        await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(capturedQuery);
+        Assert.False(capturedQuery.IsPlayed);
+    }
 }

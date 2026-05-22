@@ -310,14 +310,6 @@ public class ResumeIntentHandlerServerProgressTests : IDisposable
 
         var session = CreateEmptySession();
 
-        // First item is fully played (Played=true), second item has progress
-        var playedItem = new Audio
-        {
-            Name = "Played Song",
-            Id = Guid.NewGuid(),
-            Path = "/music/played.mp3"
-        };
-
         var inProgressItem = new Audio
         {
             Name = "In Progress Song",
@@ -325,15 +317,8 @@ public class ResumeIntentHandlerServerProgressTests : IDisposable
             Path = "/music/inprogress.mp3"
         };
 
-        _libraryManagerMock.Setup(x => x.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns(new List<BaseItem> { playedItem, inProgressItem });
-
-        var playedUserData = new UserItemData
-        {
-            Key = "test",
-            PlaybackPositionTicks = TimeSpan.FromMinutes(3).Ticks,
-            Played = true
-        };
+        _libraryManagerMock.Setup(x => x.GetItemList(It.Is<InternalItemsQuery>(q => q.IsPlayed == false)))
+            .Returns(new List<BaseItem> { inProgressItem });
 
         var inProgressUserData = new UserItemData
         {
@@ -342,8 +327,6 @@ public class ResumeIntentHandlerServerProgressTests : IDisposable
             Played = false
         };
 
-        _userDataManagerMock.Setup(x => x.GetUserData(It.IsAny<JellyfinUser>(), playedItem))
-            .Returns(playedUserData);
         _userDataManagerMock.Setup(x => x.GetUserData(It.IsAny<JellyfinUser>(), inProgressItem))
             .Returns(inProgressUserData);
 

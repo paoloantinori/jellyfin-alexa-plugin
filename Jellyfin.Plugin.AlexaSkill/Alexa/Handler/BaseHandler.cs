@@ -1148,6 +1148,7 @@ public abstract class BaseHandler
             User = jellyfinUser,
             Recursive = true,
             IncludeItemTypes = contentTypes,
+            IsPlayed = false,
             MinDateLastSavedForUser = DateTime.UtcNow.AddDays(-30),
             Limit = maxCandidates,
             OrderBy = new[] { (ItemSortBy.DatePlayed, SortOrder.Descending) },
@@ -1160,7 +1161,7 @@ public abstract class BaseHandler
         foreach (BaseItem item in recentItems)
         {
             UserItemData? userData = userDataManager.GetUserData(jellyfinUser, item);
-            if (userData == null || userData.Played || userData.PlaybackPositionTicks <= 0)
+            if (userData == null || userData.PlaybackPositionTicks <= 0)
             {
                 continue;
             }

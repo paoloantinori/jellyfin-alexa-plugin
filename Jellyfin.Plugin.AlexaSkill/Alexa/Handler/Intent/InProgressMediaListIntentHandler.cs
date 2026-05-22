@@ -89,6 +89,7 @@ public class InProgressMediaListIntentHandler : BaseHandler
             User = resolvedUser,
             Recursive = true,
             IncludeItemTypes = new[] { BaseItemKind.Audio, BaseItemKind.Movie, BaseItemKind.Episode },
+            IsPlayed = false,
             MinDateLastSavedForUser = DateTime.UtcNow.AddDays(-30),
             Limit = MaxCandidates,
             OrderBy = new[] { (ItemSortBy.DatePlayed, SortOrder.Descending) },
@@ -103,7 +104,7 @@ public class InProgressMediaListIntentHandler : BaseHandler
         foreach (BaseItem item in recentItems)
         {
             UserItemData? userData = _userDataManager.GetUserData(resolvedUser, item);
-            if (userData == null || userData.Played || userData.PlaybackPositionTicks <= 0)
+            if (userData == null || userData.PlaybackPositionTicks <= 0)
             {
                 continue;
             }
