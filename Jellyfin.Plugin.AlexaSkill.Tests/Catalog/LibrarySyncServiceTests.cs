@@ -159,6 +159,35 @@ public class LibrarySyncServiceTests
     }
 
     /// <summary>
+    /// Verifies that InternalItemsQuery.Limit is set to MaxCatalogValues (50000)
+    /// so the database limits the result set instead of materializing all rows.
+    /// </summary>
+    [Fact]
+    public async Task SyncUserLibraryAsync_SetsLimitOnQuery()
+    {
+        // Arrange
+        const int ExpectedLimit = 50000;
+        var user = CreatePluginUser();
+        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        var service = CreateService();
+
+        List<InternalItemsQuery> capturedQueries = new List<InternalItemsQuery>();
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => capturedQueries.Add(q))
+            .Returns(Array.Empty<BaseItem>());
+
+        // Act
+        await service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
+
+        // Assert — two parallel catalog queries (artists + albums)
+        Assert.Equal(2, capturedQueries.Count);
+        Assert.All(capturedQueries, q =>
+        {
+            Assert.Equal(ExpectedLimit, q.Limit);
+        });
+    }
+
+    /// <summary>
     /// Verifies that SyncUserLibraryAsync returns early (no queries made) when
     /// the user has no SMAPI device token.
     /// </summary>

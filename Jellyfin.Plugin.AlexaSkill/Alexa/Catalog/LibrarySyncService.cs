@@ -164,6 +164,7 @@ public class LibrarySyncService
             Recursive = true,
             IncludeItemTypes = new[] { itemKind },
             DtoOptions = new DtoOptions(true),
+            Limit = MaxCatalogValues,
             OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) }
         };
 
@@ -177,11 +178,10 @@ public class LibrarySyncService
             return (0, null);
         }
 
-        // Limit items before generating synonyms to avoid wasted work
+        // Filter blank names; DB already limits to MaxCatalogValues rows
         var itemTuples = items
             .Select(i => (i.Id, i.Name))
-            .Where(t => !string.IsNullOrWhiteSpace(t.Name))
-            .Take(MaxCatalogValues);
+            .Where(t => !string.IsNullOrWhiteSpace(t.Name));
 
         CatalogPayload payload = CatalogPayload.FromItems(catalogType, itemTuples, PhoneticSynonymGenerator.GenerateSynonyms, ItalianLocale);
 
