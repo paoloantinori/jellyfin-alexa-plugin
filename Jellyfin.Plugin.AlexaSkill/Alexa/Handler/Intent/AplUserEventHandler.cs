@@ -27,14 +27,20 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
 public class AplUserEventHandler : BaseHandler
 {
     private readonly ILibraryManager _libraryManager;
+    private readonly IUserManager _userManager;
+    private readonly IUserDataManager _userDataManager;
 
     public AplUserEventHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
+        IUserManager userManager,
+        IUserDataManager userDataManager,
         ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
+        _userManager = userManager;
+        _userDataManager = userDataManager;
     }
 
     /// <inheritdoc/>
@@ -63,7 +69,7 @@ public class AplUserEventHandler : BaseHandler
             case "selectItem":
             case "playTrack":
             case "carouselTap":
-                return HandleSelectItem(aplEvent, user, session, context);
+                return HandleSelectItem(aplEvent, user, session, context, request);
             default:
                 return Task.FromResult(ResponseBuilder.Empty());
         }
@@ -123,7 +129,7 @@ public class AplUserEventHandler : BaseHandler
         return Task.FromResult(ResponseBuilder.Empty());
     }
 
-    private Task<SkillResponse> HandleSelectItem(AplUserEventRequest aplEvent, Entities.User user, SessionInfo session, Context context)
+    private Task<SkillResponse> HandleSelectItem(AplUserEventRequest aplEvent, Entities.User user, SessionInfo session, Context context, Request request)
     {
         string? itemIdStr = aplEvent.Arguments?.ElementAtOrDefault(1)?.ToString();
         if (string.IsNullOrEmpty(itemIdStr) || !Guid.TryParse(itemIdStr, out Guid itemId))
@@ -163,6 +169,30 @@ public class AplUserEventHandler : BaseHandler
             });
         }
 
-        return Task.FromResult(BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemIdStr, user), itemIdStr, item, user, context));
+        int offsetMs = GetResumeOffset(item, session, request);
+
+        return Task.FromResult(BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemIdStr, user), itemIdStr, item, user, context, offsetMs));
+    }
+
+    private int GetResumeOffset(BaseItem item, SessionInfo session, Request request)
+    {
+        var (jellyfinUser, _) = ResolveJellyfinUser(_userManager, session.UserId, GetLocale(request));
+        if (jellyfinUser == null)
+        {
+            Logger.LogWarning("APL tap: could not resolve Jellyfin user {UserId} for resume offset check", session.UserId);
+            return 0;
+        }
+
+        UserItemData? data = _userDataManager.GetUserData(jellyfinUser, item);
+        if (data?.PlaybackPositionTicks > 0 && !data.Played)
+        {
+            int offsetMs = (int)TimeSpan.FromTicks(data.PlaybackPositionTicks).TotalMilliseconds;
+            Logger.LogInformation(
+                "APL tap: resuming {ItemName} from {OffsetMs}ms (saved position)",
+                item.Name, offsetMs);
+            return offsetMs;
+        }
+
+        return 0;
     }
 }

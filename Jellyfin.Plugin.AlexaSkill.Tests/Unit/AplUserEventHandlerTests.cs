@@ -28,6 +28,8 @@ public class AplUserEventHandlerTests
 {
     private readonly Mock<ISessionManager> _sessionManager;
     private readonly Mock<ILibraryManager> _libraryManager;
+    private readonly Mock<IUserManager> _userManager;
+    private readonly Mock<IUserDataManager> _userDataManager;
     private readonly PluginConfiguration _config;
     private readonly AplUserEventHandler _handler;
     private readonly Entities.User _user;
@@ -37,13 +39,19 @@ public class AplUserEventHandlerTests
     {
         _sessionManager = new Mock<ISessionManager>();
         _libraryManager = new Mock<ILibraryManager>();
+        _userManager = new Mock<IUserManager>();
+        _userDataManager = new Mock<IUserDataManager>();
         _config = new PluginConfiguration { ServerAddress = "http://localhost:8096/" };
         var loggerFactory = LoggerFactory.Create(b => { });
+
+        TestHelpers.EnsurePluginInstance(_config, loggerFactory, c => { }, "apl-handler-tests");
 
         _handler = new AplUserEventHandler(
             _sessionManager.Object,
             _config,
             _libraryManager.Object,
+            _userManager.Object,
+            _userDataManager.Object,
             loggerFactory);
 
         _user = new Entities.User { Id = Guid.NewGuid(), JellyfinToken = "test-token" };
@@ -339,6 +347,90 @@ public class AplUserEventHandlerTests
 
         Assert.NotNull(response);
         Assert.Null(response.Response.OutputSpeech);
+    }
+
+    // Resume offset tests
+
+    [Fact]
+    public async Task HandleAsync_SelectItem_WithProgress_ResumesFromSavedPosition()
+    {
+        var itemId = Guid.NewGuid();
+        var request = CreateAplEvent("selectItem", itemId.ToString());
+        var session = CreateSession();
+
+        var audio = new Audio { Name = "Audiobook Track", Id = itemId };
+        _libraryManager.Setup(l => l.GetItemById(itemId)).Returns(audio);
+
+        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        _userManager.Setup(u => u.GetUserById(session.UserId)).Returns(jellyfinUser);
+
+        var progressData = new UserItemData
+        {
+            Key = "test",
+            Played = false,
+            PlaybackPositionTicks = TimeSpan.FromMinutes(15).Ticks
+        };
+        _userDataManager.Setup(x => x.GetUserData(jellyfinUser, audio)).Returns(progressData);
+
+        var response = await _handler.HandleAsync(request, _context, _user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        var playDirective = response.Response.Directives.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.NotNull(playDirective);
+        Assert.Equal((int)TimeSpan.FromMinutes(15).TotalMilliseconds, playDirective.AudioItem.Stream.OffsetInMilliseconds);
+    }
+
+    [Fact]
+    public async Task HandleAsync_SelectItem_NoProgress_StartsFromBeginning()
+    {
+        var itemId = Guid.NewGuid();
+        var request = CreateAplEvent("selectItem", itemId.ToString());
+        var session = CreateSession();
+
+        var audio = new Audio { Name = "Audiobook Track", Id = itemId };
+        _libraryManager.Setup(l => l.GetItemById(itemId)).Returns(audio);
+
+        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        _userManager.Setup(u => u.GetUserById(session.UserId)).Returns(jellyfinUser);
+
+        _userDataManager.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), audio))
+            .Returns((UserItemData?)null);
+
+        var response = await _handler.HandleAsync(request, _context, _user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        var playDirective = response.Response.Directives.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.NotNull(playDirective);
+        Assert.Equal(0, playDirective.AudioItem.Stream.OffsetInMilliseconds);
+    }
+
+    [Fact]
+    public async Task HandleAsync_SelectItem_PlayedItem_StartsFromBeginning()
+    {
+        var itemId = Guid.NewGuid();
+        var request = CreateAplEvent("carouselTap", itemId.ToString());
+        var session = CreateSession();
+
+        var audio = new Audio { Name = "Finished Track", Id = itemId };
+        _libraryManager.Setup(l => l.GetItemById(itemId)).Returns(audio);
+
+        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        _userManager.Setup(u => u.GetUserById(session.UserId)).Returns(jellyfinUser);
+
+        var playedData = new UserItemData
+        {
+            Key = "test",
+            Played = true,
+            PlaybackPositionTicks = 0
+        };
+        _userDataManager.Setup(x => x.GetUserData(jellyfinUser, audio)).Returns(playedData);
+
+        var response = await _handler.HandleAsync(request, _context, _user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        var playDirective = response.Response.Directives.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.NotNull(playDirective);
+        Assert.Equal(0, playDirective.AudioItem.Stream.OffsetInMilliseconds);
     }
 
     // Edge case tests
