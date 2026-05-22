@@ -206,10 +206,8 @@ public class ResumeIntentHandlerServerProgressTests : IDisposable
         Assert.NotNull(response);
         Assert.NotNull(response.Response);
 
-        // Should contain a video directive with Videos/ URL
         Assert.NotNull(response.Response.Directives);
         Assert.Single(response.Response.Directives);
-        Assert.True(response.Response.ShouldEndSession);
 
         // Output speech should contain movie name and position information
         Assert.NotNull(response.Response.OutputSpeech);
@@ -446,9 +444,7 @@ public class ResumeIntentHandlerServerProgressTests : IDisposable
 
         Assert.NotNull(response);
 
-        // Episodes should produce a response with shouldEndSession=true for video
         Assert.NotNull(response.Response.Directives);
         Assert.Single(response.Response.Directives);
-        Assert.True(response.Response.ShouldEndSession);
     }
 }

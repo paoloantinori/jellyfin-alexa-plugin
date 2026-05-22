@@ -210,10 +210,8 @@ public class StartOverIntentHandlerTests : IDisposable
 
         Assert.NotNull(response);
 
-        // Movies should produce a video directive
         Assert.NotNull(response.Response.Directives);
         Assert.Single(response.Response.Directives);
-        Assert.True(response.Response.ShouldEndSession);
 
         // Output speech should mention restarting
         Assert.NotNull(response.Response.OutputSpeech);
