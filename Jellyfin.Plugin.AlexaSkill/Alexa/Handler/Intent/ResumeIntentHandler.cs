@@ -81,13 +81,15 @@ public class ResumeIntentHandler : BaseHandler
     /// <returns>Skill response with AudioPlayer directive, or error message.</returns>
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
-        if (string.Equals(context.AudioPlayer.PlayerActivity, "PLAYING", StringComparison.Ordinal))
+        string locale = GetLocale(request);
+        var intentReq = request as IntentRequest;
+        Logger.LogDebug("ResumeIntent: entered, locale={Locale}, playerActivity={Activity}", locale, context.AudioPlayer?.PlayerActivity);
+
+        if (string.Equals(context.AudioPlayer?.PlayerActivity, "PLAYING", StringComparison.Ordinal))
         {
             Logger.LogDebug("ResumeIntent: already PLAYING, returning empty");
             return Task.FromResult<SkillResponse>(ResponseBuilder.Empty());
         }
-
-        string locale = GetLocale(request);
 
         // Prefer AudioPlayer token (survives session cleanup after PlaybackStopped),
         // fall back to session's now-playing item ID

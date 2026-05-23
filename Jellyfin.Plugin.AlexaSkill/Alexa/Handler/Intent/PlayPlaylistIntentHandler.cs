@@ -78,6 +78,8 @@ public class PlayPlaylistIntentHandler : BaseHandler
 
         string? playlistName = intentRequest.Intent.Slots?.TryGetValue("playlist", out var playlistSlot) == true ? playlistSlot.Value : null;
 
+        Logger.LogDebug("PlayPlaylist: entered, locale={Locale}", locale);
+
         if (string.IsNullOrWhiteSpace(playlistName))
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchPlaylistName", locale));
@@ -100,7 +102,9 @@ public class PlayPlaylistIntentHandler : BaseHandler
         };
         ApplyLibraryFilter(query, user, _libraryManager);
 
+        Logger.LogDebug("PlayPlaylist: querying Jellyfin with searchTerm='{PlaylistName}', types=Playlist", playlistName);
         QueryResult<BaseItem> playlists = await RetryAsync(() => SafeGetItemsResult(_libraryManager, query), "GetPlaylists", cancellationToken).ConfigureAwait(false);
+        Logger.LogDebug("PlayPlaylist: Jellyfin returned {ResultCount} playlists", playlists.TotalRecordCount);
 
         if (playlists.TotalRecordCount == 0)
         {
@@ -110,6 +114,7 @@ public class PlayPlaylistIntentHandler : BaseHandler
         BaseItem? playlistMatch = null;
         if (playlists.TotalRecordCount > 1)
         {
+            Logger.LogDebug("PlayPlaylist: {Count} playlists matched, running disambiguation", playlists.TotalRecordCount);
             BaseItem? topMatch = FuzzyMatch(playlistName, playlists.Items, p => p.Name, user);
             if (topMatch != null)
             {
@@ -151,9 +156,11 @@ public class PlayPlaylistIntentHandler : BaseHandler
         }
 
         BaseItem playlist = playlistMatch!;
+        Logger.LogDebug("PlayPlaylist: matched playlist='{PlaylistName}' (id={PlaylistId})", playlist.Name, playlist.Id);
 
         // Get playlist items using the library manager for consistent pagination.
         // Fetch the first page for fast time-to-audio; rest is fetched on demand.
+        Logger.LogDebug("PlayPlaylist: querying tracks for playlist='{PlaylistName}'", playlist.Name);
         QueryResult<BaseItem> playlistResult = SafeGetItemsResult(_libraryManager, new InternalItemsQuery
         {
             User = jellyfinUser,
@@ -220,6 +227,9 @@ public class PlayPlaylistIntentHandler : BaseHandler
 
         string item_id = firstItem.Id.ToString();
 
+        Logger.LogDebug(
+            "PlayPlaylist: returning AudioPlayer, itemId={ItemId}, playlist='{PlaylistName}', queueSize={QueueSize}",
+            item_id, playlist.Name, queueItems.Count);
         return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, firstItem, user, context);
     }
 }

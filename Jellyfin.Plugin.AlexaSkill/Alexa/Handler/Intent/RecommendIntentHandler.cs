@@ -87,6 +87,8 @@ public class RecommendIntentHandler : BaseHandler
             mediaType = mediaSlot.Value;
         }
 
+        Logger.LogDebug("Recommend: entered, locale={Locale}, mediaType={MediaType}", locale, mediaType);
+
         await SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)).ConfigureAwait(false);
 
         var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
@@ -164,11 +166,13 @@ public class RecommendIntentHandler : BaseHandler
 
         if (recommendations.Count == 0)
         {
+            Logger.LogDebug("Recommend: no recommendations found, returning Tell");
             return ResponseBuilder.Tell(ResponseStrings.Get("NoRecommendations", locale));
         }
 
         // Step 4: Pick a random item from results
         BaseItem item = recommendations[Random.Shared.Next(recommendations.Count)];
+        Logger.LogDebug("Recommend: picked '{ItemName}' ({ItemId}) from {Count} candidates", item.Name, item.Id, recommendations.Count);
         string itemId = item.Id.ToString();
 
         List<QueueItem> queueItems = new List<QueueItem>

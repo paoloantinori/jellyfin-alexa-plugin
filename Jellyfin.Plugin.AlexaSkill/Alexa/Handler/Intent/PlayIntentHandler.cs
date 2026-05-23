@@ -46,19 +46,24 @@ public class PlayIntentHandler : BaseHandler
     /// <returns>A skill response.</returns>
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
+        Logger.LogDebug("PlayIntent: invoked, nowPlayingItem={HasNowPlayingItem}, queueSize={QueueSize}", session.FullNowPlayingItem != null, session.NowPlayingQueue is { Count: > 0 } ? session.NowPlayingQueue.Count : 0);
+
         // check if something is currently playing which we can resume
         if (session.FullNowPlayingItem != null)
         {
             string item_id = session.FullNowPlayingItem.Id.ToString();
+            Logger.LogDebug("PlayIntent: resuming from FullNowPlayingItem, itemId={ItemId}", item_id);
             return Task.FromResult<SkillResponse>(BuildAudioPlayerResponse(PlayBehavior.Enqueue, GetStreamUrl(item_id, user), item_id, session.FullNowPlayingItem, user, context));
         }
-        else if (session.NowPlayingQueue.Count > 0)
+        else if (session.NowPlayingQueue is { Count: > 0 })
         {
             // resume the first item in the queue
             string item_id = session.NowPlayingQueue[0].Id.ToString();
+            Logger.LogDebug("PlayIntent: resuming from NowPlayingQueue[0], itemId={ItemId}", item_id);
             return Task.FromResult<SkillResponse>(BuildAudioPlayerResponse(PlayBehavior.Enqueue, GetStreamUrl(item_id, user), item_id, null, user, context));
         }
 
+        Logger.LogDebug("PlayIntent: nothing to play, returning empty response");
         return Task.FromResult<SkillResponse>(ResponseBuilder.Empty());
     }
 }

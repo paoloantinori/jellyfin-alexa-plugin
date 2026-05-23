@@ -104,6 +104,8 @@ public class PlaySongIntentHandler : BaseHandler
         string? songQuery = intentRequest.Intent.Slots?.TryGetValue("song", out var songSlot) == true ? songSlot.Value : null;
         string? musicianQuery = intentRequest.Intent.Slots?.TryGetValue("musician", out var musicianSlot) == true ? musicianSlot.Value : null;
 
+        Logger.LogDebug("PlaySong: entered, locale={Locale}", locale);
+
         if (string.IsNullOrWhiteSpace(songQuery))
         {
             return ResponseBuilder.Ask(ResponseStrings.Get("ElicitSongName", locale), new Reprompt(ResponseStrings.Get("ElicitSongName", locale)));
@@ -123,10 +125,13 @@ public class PlaySongIntentHandler : BaseHandler
         string? matchedArtistName = null;
         if (!string.IsNullOrWhiteSpace(musicianQuery))
         {
+            Logger.LogDebug("PlaySong: searching for artist filter='{Musician}'", musicianQuery);
             IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
                 musicianQuery, user, _libraryManager, _artistIndex, Logger,
                 (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
                 cancellationToken).ConfigureAwait(false);
+
+            Logger.LogDebug("PlaySong: artist search returned {Count} results for '{Musician}'", artists.Count, musicianQuery);
 
             if (artists.Count == 0)
             {
@@ -155,6 +160,7 @@ public class PlaySongIntentHandler : BaseHandler
                 ApplyLibraryFilter(q, user, _libraryManager);
                 return RetryAsync(() => _libraryManager.GetItemList(q), "GetSongs", cancellationToken);
             }).ConfigureAwait(false);
+        Logger.LogDebug("PlaySong: Jellyfin returned {SongCount} songs for query='{SongQuery}'", songs.Count, songQuery);
         if (songs.Count == 0 && !string.IsNullOrWhiteSpace(musicianQuery))
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByNameAndArtist", locale, songQuery, matchedArtistName!));
@@ -166,6 +172,7 @@ public class PlaySongIntentHandler : BaseHandler
 
         if (songs.Count > 1)
         {
+            Logger.LogDebug("PlaySong: {Count} songs matched, running disambiguation", songs.Count);
             var (missOutcome, missResponse) = HandleFuzzyMiss(
                 songQuery,
                 songs,
@@ -218,6 +225,9 @@ public class PlaySongIntentHandler : BaseHandler
                 songs[0].Name, offsetMs);
         }
 
+        Logger.LogDebug(
+            "PlaySong: returning AudioPlayer, itemId={ItemId}, song='{SongName}', offsetMs={OffsetMs}",
+            item_id, songs[0].Name, offsetMs);
         return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, songs[0], user, context, offsetMs);
     }
 

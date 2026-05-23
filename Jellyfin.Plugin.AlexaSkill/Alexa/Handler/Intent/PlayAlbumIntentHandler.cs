@@ -86,6 +86,8 @@ public class PlayAlbumIntentHandler : BaseHandler
         string? album = intentRequest.Intent.Slots?.TryGetValue("album", out var albumSlot) == true ? albumSlot.Value : null;
         string? musician = intentRequest.Intent.Slots?.TryGetValue("musician", out var musicianSlot) == true ? musicianSlot.Value : null;
 
+        Logger.LogDebug("PlayAlbum: entered, locale={Locale}", locale);
+
         if (string.IsNullOrWhiteSpace(album))
         {
             return ResponseBuilder.Ask(ResponseStrings.Get("ElicitAlbumName", locale), new Reprompt(ResponseStrings.Get("ElicitAlbumName", locale)));
@@ -103,10 +105,13 @@ public class PlayAlbumIntentHandler : BaseHandler
         string? matchedArtistName = null;
         if (!string.IsNullOrWhiteSpace(musician))
         {
+            Logger.LogDebug("PlayAlbum: searching for artist filter='{Musician}'", musician);
             IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
                 musician, user, _libraryManager, _artistIndex, Logger,
                 (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
                 cancellationToken).ConfigureAwait(false);
+
+            Logger.LogDebug("PlayAlbum: artist search returned {Count} results for '{Musician}'", artists.Count, musician);
 
             if (artists.Count == 0)
             {
@@ -131,10 +136,12 @@ public class PlayAlbumIntentHandler : BaseHandler
         };
         ApplyLibraryFilter(albumSearchQuery, user, _libraryManager);
 
+        Logger.LogDebug("PlayAlbum: querying Jellyfin with searchTerm='{Album}', artistIds={ArtistIdsCount}, types=MusicAlbum", album, artistsIds.Count);
         IReadOnlyList<BaseItem> albums = await RetryAsync(
             () => _libraryManager.GetItemList(albumSearchQuery),
             "GetAlbums",
             cancellationToken).ConfigureAwait(false);
+        Logger.LogDebug("PlayAlbum: Jellyfin returned {ResultCount} albums", albums.Count);
         if (albums.Count == 0 && !string.IsNullOrWhiteSpace(musician))
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByNameAndArtist", locale, album, matchedArtistName!));
@@ -146,6 +153,7 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         if (albums.Count > 1)
         {
+            Logger.LogDebug("PlayAlbum: {Count} albums matched, running disambiguation", albums.Count);
             BaseItem? albumMatch = null;
             var (missOutcome, missResponse) = HandleFuzzyMiss(
                 album,
@@ -179,6 +187,7 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         // Get the first page of album tracks for fast time-to-audio.
         // Remaining tracks will be fetched on demand by PlaybackNearlyFinished.
+        Logger.LogDebug("PlayAlbum: querying tracks for album='{AlbumName}' (id={AlbumId})", albums[0].Name, albums[0].Id);
         QueryResult<BaseItem> albumResult = await RetryAsync(
             () => SafeGetItemsResult(_libraryManager, new InternalItemsQuery()
             {
@@ -191,6 +200,7 @@ public class PlayAlbumIntentHandler : BaseHandler
             }),
             "GetAlbumTracks",
             cancellationToken).ConfigureAwait(false);
+        Logger.LogDebug("PlayAlbum: Jellyfin returned {TrackCount} tracks (total={TotalCount})", albumResult.Items.Count, albumResult.TotalRecordCount);
         if (albumResult.TotalRecordCount == 0)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NoSongsInAlbum", locale, album));
@@ -244,6 +254,9 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         string item_id = albumItems[startIndex].Id.ToString();
 
+        Logger.LogDebug(
+            "PlayAlbum: returning AudioPlayer, itemId={ItemId}, album='{AlbumName}', startIndex={StartIndex}, queueSize={QueueSize}",
+            item_id, albums[0].Name, startIndex, queueItems.Count);
         return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, albumItems[startIndex], user, context);
     }
 }

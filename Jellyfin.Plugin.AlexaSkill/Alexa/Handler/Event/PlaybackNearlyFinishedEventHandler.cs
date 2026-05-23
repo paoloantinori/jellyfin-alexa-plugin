@@ -76,6 +76,10 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     {
         // Check for sleep timer deadline encoded in the current token
         string? currentToken = context.AudioPlayer?.Token;
+        Logger.LogDebug(
+            "PlaybackNearlyFinished: currentToken={Token}, offset={OffsetMs}ms",
+            currentToken, context.AudioPlayer?.OffsetInMilliseconds);
+
         if (!string.IsNullOrEmpty(currentToken) && currentToken.Contains("|sleep:", StringComparison.Ordinal))
         {
             int sleepIdx = currentToken.IndexOf("|sleep:", StringComparison.Ordinal);
@@ -94,6 +98,12 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         TryFetchContinuationBatch(session, context);
 
         Guid? nextItemId = ResolveNextItemId(session, context);
+
+        Logger.LogDebug(
+            "PlaybackNearlyFinished: resolved next item={NextItemId}, loop={LoopMode}, shuffle={Shuffle}",
+            nextItemId,
+            session.PlayState?.RepeatMode ?? RepeatMode.RepeatNone,
+            session.PlayState?.PlaybackOrder ?? PlaybackOrder.Default);
 
         // If no next item and radio mode is on, auto-populate similar tracks
         if (nextItemId == null && RadioModeState.IsEnabled(session.UserId, context.System.Device.DeviceID))

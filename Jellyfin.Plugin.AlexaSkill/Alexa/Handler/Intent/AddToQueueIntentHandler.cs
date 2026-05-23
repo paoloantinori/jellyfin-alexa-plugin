@@ -73,6 +73,8 @@ public class AddToQueueIntentHandler : BaseHandler
         string? songQuery = intentRequest.Intent.Slots?["song"]?.Value;
         string? musicianQuery = intentRequest.Intent.Slots?["musician"]?.Value;
 
+        Logger.LogDebug("AddToQueue: entered, song={SongQuery}, musician={MusicianQuery}", songQuery, musicianQuery);
+
         if (string.IsNullOrWhiteSpace(songQuery))
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchQueueItem", locale));

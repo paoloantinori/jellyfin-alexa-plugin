@@ -83,6 +83,8 @@ public class SearchMediaIntentHandler : BaseHandler
             ? slot.Value
             : null;
 
+        Logger.LogDebug("SearchMedia: entered, locale={Locale}", locale);
+
         if (string.IsNullOrWhiteSpace(query))
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("CouldNotUnderstand", locale));
@@ -113,6 +115,8 @@ public class SearchMediaIntentHandler : BaseHandler
                 ApplyLibraryFilter(q, user, _libraryManager);
                 return RetryAsync(() => _libraryManager.GetItemList(q), "UnifiedSearch", cancellationToken);
             }).ConfigureAwait(false);
+
+        Logger.LogDebug("SearchMedia: Jellyfin returned {ResultCount} results for query='{Query}'", results.Count, query);
 
         if (results.Count <= ArtistFallbackThreshold)
         {
@@ -167,6 +171,7 @@ public class SearchMediaIntentHandler : BaseHandler
         var topItems = deduped.Take(3).ToList();
         var matches = topItems.Select(i => (i.Id, FormatWithTypeLabel(i), (string?)GetImageUrl(i.Id.ToString("N"), user))).ToList();
         Logger.LogInformation("Disambiguating top {Count} items: {Items}", topItems.Count, string.Join(", ", topItems.Select(i => i.Name)));
+        Logger.LogDebug("SearchMedia: returning disambiguation AskFirstMatch with {Count} choices", topItems.Count);
         SkillResponse response = DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeSong, locale, context);
 
         return response;

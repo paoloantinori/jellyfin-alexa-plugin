@@ -43,6 +43,8 @@ public class ShuffleOnIntentHandler : BaseHandler
     {
         PlaybackState requestState = context.AudioPlayer;
 
+        Logger.LogDebug("ShuffleOn: entered, token={Token}, offset={OffsetMs}ms", requestState.Token, requestState.OffsetInMilliseconds);
+
         long positionTicks = TimeSpan.FromMilliseconds(requestState.OffsetInMilliseconds).Ticks;
         PlaybackProgressInfo info = new PlaybackProgressInfo
         {

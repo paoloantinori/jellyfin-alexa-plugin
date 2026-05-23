@@ -39,6 +39,7 @@ public class TurnRadioOffIntentHandler : BaseHandler
         }
 
         string locale = GetLocale(request);
+        Logger.LogDebug("TurnRadioOff: entered, userId={UserId}, deviceId={DeviceId}", session.UserId, context.System.Device.DeviceID);
         RadioModeState.Disable(session.UserId, context.System.Device.DeviceID);
         Logger.LogInformation("Radio mode disabled for user {UserId}", session.UserId);
         return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("RadioModeOff", locale)));

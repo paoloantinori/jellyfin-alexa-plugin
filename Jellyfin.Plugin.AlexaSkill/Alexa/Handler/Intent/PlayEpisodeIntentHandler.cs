@@ -53,6 +53,7 @@ public class PlayEpisodeIntentHandler : BaseHandler
     {
         if (IfFeatureDisabled(c => c.VideoPlaybackEnabled, request) is { } disabled)
         {
+            Logger.LogDebug("PlayEpisode: feature disabled (VideoPlaybackEnabled), returning disabled response");
             return disabled;
         }
 
@@ -68,6 +69,8 @@ public class PlayEpisodeIntentHandler : BaseHandler
 
         string? seasonRaw = intentRequest.Intent.Slots?.TryGetValue("season_number", out var seasonSlot) == true ? seasonSlot.Value : null;
         string? episodeRaw = intentRequest.Intent.Slots?.TryGetValue("episode_number", out var episodeSlot) == true ? episodeSlot.Value : null;
+
+        Logger.LogDebug("PlayEpisode: seriesName='{SeriesName}', season={Season}, episode={Episode}, locale={Locale}", seriesName, seasonRaw, episodeRaw, locale);
 
         if (!int.TryParse(seasonRaw, CultureInfo.InvariantCulture, out int seasonNumber)
             || !int.TryParse(episodeRaw, CultureInfo.InvariantCulture, out int episodeNumber))
@@ -92,7 +95,9 @@ public class PlayEpisodeIntentHandler : BaseHandler
             DtoOptions = new DtoOptions(true)
         };
         ApplyLibraryFilter(seriesQuery, user, _libraryManager);
+        Logger.LogDebug("PlayEpisode: querying Jellyfin with searchTerm='{SeriesName}', types=Series", seriesName);
         IReadOnlyList<BaseItem> seriesList = await RetryAsync(() => _libraryManager.GetItemList(seriesQuery), "GetSeries", cancellationToken).ConfigureAwait(false);
+        Logger.LogDebug("PlayEpisode: Jellyfin returned {ResultCount} series", seriesList.Count);
 
         if (seriesList.Count == 0)
         {
@@ -100,6 +105,7 @@ public class PlayEpisodeIntentHandler : BaseHandler
         }
 
         BaseItem series = seriesList[0];
+        Logger.LogDebug("PlayEpisode: matched series='{SeriesName}' (id={SeriesId})", series.Name, series.Id);
 
         var episodeQuery = new InternalItemsQuery
         {
@@ -110,14 +116,19 @@ public class PlayEpisodeIntentHandler : BaseHandler
             ParentIndexNumber = seasonNumber,
             DtoOptions = new DtoOptions(true)
         };
+        Logger.LogDebug("PlayEpisode: querying episodes for seriesId={SeriesId}, season={Season}", series.Id, seasonNumber);
         IReadOnlyList<BaseItem> episodes = await RetryAsync(() => _libraryManager.GetItemList(episodeQuery), "GetEpisodes", cancellationToken).ConfigureAwait(false);
+        Logger.LogDebug("PlayEpisode: Jellyfin returned {EpisodeCount} episodes for season {Season}", episodes.Count, seasonNumber);
 
         BaseItem? episode = episodes.FirstOrDefault(e => e.IndexNumber == episodeNumber);
 
         if (episode == null)
         {
+            Logger.LogDebug("PlayEpisode: episode S{Season}E{Episode} not found for series='{SeriesName}'", seasonNumber, episodeNumber, seriesName);
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundEpisode", locale, seasonNumber.ToString(CultureInfo.InvariantCulture), episodeNumber.ToString(CultureInfo.InvariantCulture), seriesName));
         }
+
+        Logger.LogDebug("PlayEpisode: matched episode='{EpisodeName}' (id={EpisodeId})", episode.Name, episode.Id);
 
         string itemId = episode.Id.ToString();
 
@@ -151,6 +162,9 @@ public class PlayEpisodeIntentHandler : BaseHandler
             }
         };
 
+        Logger.LogDebug(
+            "PlayEpisode: returning VideoApp, itemId={ItemId}, episode='{EpisodeName}'",
+            itemId, episode.Name);
         return response;
     }
 }

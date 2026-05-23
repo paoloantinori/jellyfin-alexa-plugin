@@ -102,12 +102,18 @@ public static class LibraryFilter
     /// <param name="query">The Jellyfin query to filter.</param>
     /// <param name="user">The plugin user entity, or null.</param>
     /// <param name="libraryManager">Jellyfin library manager for resolving CollectionFolder → physical folder mapping.</param>
-    public static void ApplyLibraryFilter(InternalItemsQuery query, Entities.User? user, ILibraryManager libraryManager)
+    /// <param name="logger">Optional logger for debug diagnostics.</param>
+    public static void ApplyLibraryFilter(InternalItemsQuery query, Entities.User? user, ILibraryManager libraryManager, ILogger? logger = null)
     {
         var allowedIds = GetAllowedLibraryIds(user);
         if (allowedIds != null)
         {
+            logger?.LogDebug("ApplyLibraryFilter: applying {AllowedCount} allowed library IDs for user {UserId}", allowedIds.Length, user?.Id);
             query.TopParentIds = ResolveTopParentIds(allowedIds, libraryManager);
+        }
+        else
+        {
+            logger?.LogDebug("ApplyLibraryFilter: no library restrictions for user {UserId}", user?.Id);
         }
     }
 }

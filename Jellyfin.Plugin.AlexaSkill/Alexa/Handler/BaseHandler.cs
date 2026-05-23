@@ -433,6 +433,8 @@ public abstract class BaseHandler
     /// <returns>A SkillResponse containing the AudioPlayer directive.</returns>
     public SkillResponse BuildAudioPlayerResponse(PlayBehavior playBehavior, string streamUrl, string itemId, MediaBrowser.Controller.Entities.BaseItem? item, Entities.User user, Context? context, int offsetInMilliseconds = 0)
     {
+        Logger.LogDebug("BuildAudioPlayerResponse: itemId={ItemId}, behavior={Behavior}, offsetMs={OffsetMs}, title={Title}",
+            itemId, playBehavior, offsetInMilliseconds, item?.Name);
         string imageUrl = item != null ? GetImageUrl(itemId, user) : string.Empty;
         var imageSources = new AudioItemSources
         {
@@ -723,8 +725,8 @@ public abstract class BaseHandler
     /// Resolves CollectionFolder IDs to physical folder IDs for correct filtering.
     /// No-op when the user has no library restrictions configured.
     /// </summary>
-    protected static void ApplyLibraryFilter(InternalItemsQuery query, Entities.User? user, ILibraryManager libraryManager)
-        => Util.LibraryFilter.ApplyLibraryFilter(query, user, libraryManager);
+    protected static void ApplyLibraryFilter(InternalItemsQuery query, Entities.User? user, ILibraryManager libraryManager, ILogger? logger = null)
+        => Util.LibraryFilter.ApplyLibraryFilter(query, user, libraryManager, logger);
 
     /// <summary>
     /// Send a progressive response to keep the Alexa session alive during long operations.
@@ -738,6 +740,7 @@ public abstract class BaseHandler
     /// <returns>A task representing the async operation.</returns>
     protected async Task SendProgressiveResponse(Context context, Request request, string message)
     {
+        Logger.LogDebug("SendProgressiveResponse: sending message={Message}", message);
         try
         {
             using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
@@ -880,11 +883,14 @@ public abstract class BaseHandler
     /// <param name="selector">Function to extract the comparable string.</param>
     /// <param name="threshold">Minimum similarity score (0-100).</param>
     /// <returns>The best matching item, or null.</returns>
-    protected static T? FuzzyMatch<T>(string query, IEnumerable<T> candidates, Func<T, string> selector, Entities.User? user = null, int threshold = -1)
+    protected T? FuzzyMatch<T>(string query, IEnumerable<T> candidates, Func<T, string> selector, Entities.User? user = null, int threshold = -1)
         where T : class
     {
         int effectiveThreshold = threshold >= 0 ? threshold : FuzzyMatcher.GetDefaultThreshold(user);
-        return FuzzyMatcher.FindBestMatch(query, candidates, selector, effectiveThreshold);
+        var result = FuzzyMatcher.FindBestMatch(query, candidates, selector, effectiveThreshold);
+        Logger.LogDebug("FuzzyMatch: query={Query}, best={BestMatch}, threshold={Threshold}, matched={Matched}",
+            query, result != null ? selector(result) : "(null)", effectiveThreshold, result != null);
+        return result;
     }
 
     /// <summary>
@@ -926,6 +932,7 @@ public abstract class BaseHandler
     {
         if (candidates == null || candidates.Count == 0)
         {
+            Logger.LogDebug("HandleFuzzyMiss: no candidates for query={Query}", query);
             return (FuzzyMissOutcome.NotFound, null);
         }
 
@@ -933,6 +940,10 @@ public abstract class BaseHandler
 
         if (bestWithScore == null || bestWithScore.Value.Item == null || bestWithScore.Value.Score < FuzzyMatcher.GetSuggestionThreshold(user))
         {
+            Logger.LogDebug("HandleFuzzyMiss: query={Query}, candidates={CandidateCount}, best={BestMatch}, score={Score}, below suggestion threshold — not-found",
+                query, candidates.Count,
+                bestWithScore?.Item != null ? selector(bestWithScore.Value.Item) : "(null)",
+                bestWithScore?.Score ?? 0);
             return (FuzzyMissOutcome.NotFound, null);
         }
 
@@ -947,6 +958,8 @@ public abstract class BaseHandler
 
         if (autoAccept && autoPlayFunc != null)
         {
+            Logger.LogDebug("HandleFuzzyMiss: query={Query}, best={BestMatch}, score={Score}, auto-accept=true — auto-playing",
+                query, selector(best), score);
             SkillResponse? playResponse = autoPlayFunc(best);
 
             // autoPlayFunc may return null when the caller only uses it as a side-effect
@@ -971,6 +984,8 @@ public abstract class BaseHandler
         }
 
         // Confirm mode: "Did you mean X?"
+        Logger.LogDebug("HandleFuzzyMiss: query={Query}, best={BestMatch}, score={Score}, candidates={CandidateCount} — disambiguating",
+            query, selector(best), score, candidates.Count);
         var matches = matchExtractor(best) ?? new List<(Guid, string)>();
         string? promptSsml = GetSsml("FuzzySuggestionPromptSsml", locale, query, selector(best));
 
@@ -1044,7 +1059,7 @@ public abstract class BaseHandler
                 OrderBy = new[] { (ItemSortBy.Random, SortOrder.Ascending) },
                 DtoOptions = new DtoOptions(true)
             };
-            ApplyLibraryFilter(genreQuery, user, libraryManager);
+            ApplyLibraryFilter(genreQuery, user, libraryManager, Logger);
 
             IReadOnlyList<BaseItem> byGenre = await RetryAsync(
                 () => libraryManager.GetItemList(genreQuery),
@@ -1181,7 +1196,7 @@ public abstract class BaseHandler
             OrderBy = new[] { (ItemSortBy.DatePlayed, SortOrder.Descending) },
             DtoOptions = new DtoOptions(true)
         };
-        ApplyLibraryFilter(query, pluginUser, libraryManager);
+        ApplyLibraryFilter(query, pluginUser, libraryManager, logger);
 
         IReadOnlyList<BaseItem> recentItems = libraryManager.GetItemList(query);
 

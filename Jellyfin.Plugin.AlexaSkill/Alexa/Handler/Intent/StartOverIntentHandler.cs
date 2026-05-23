@@ -72,6 +72,8 @@ public class StartOverIntentHandler : BaseHandler
         string locale = GetLocale(request);
         BaseItem? item = session?.FullNowPlayingItem;
 
+        Logger.LogDebug("StartOver: entered, hasNowPlaying={HasNowPlaying}", item != null);
+
         if (session == null)
         {
             return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale)));

@@ -74,8 +74,11 @@ public abstract class FavoriteToggleIntentHandler : BaseHandler
         BaseItemDto? item = session.NowPlayingItem;
         if (item == null)
         {
+            Logger.LogDebug("FavoriteToggle ({IntentName}): no now-playing item, returning MediaNotFound", IntentName);
             return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale)));
         }
+
+        Logger.LogDebug("FavoriteToggle ({IntentName}): item={ItemName}, favorite={FavoriteValue}", IntentName, item.Name, FavoriteValue);
 
         var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, user.Id, locale);
         if (userError != null)

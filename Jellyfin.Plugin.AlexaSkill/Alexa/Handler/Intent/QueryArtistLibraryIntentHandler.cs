@@ -87,8 +87,11 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
             }
         }
 
+        Logger.LogDebug("QueryArtistLibrary: entered, locale={Locale}, musician={Musician}, queryType={QueryType}", locale, musician, queryType);
+
         if (string.IsNullOrWhiteSpace(musician))
         {
+            Logger.LogDebug("QueryArtistLibrary: missing musician slot, returning Tell");
             return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchArtistName", locale));
         }
 
@@ -107,11 +110,13 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
 
         if (artists.Count == 0)
         {
+            Logger.LogDebug("QueryArtistLibrary: artist '{Musician}' not found", musician);
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundArtist", locale, musician));
         }
 
         Guid artistId = artists[0].Id;
         string artistName = artists[0].Name;
+        Logger.LogDebug("QueryArtistLibrary: matched artist '{ArtistName}' ({ArtistId}), isAlbumQuery={IsAlbum}", artistName, artistId, IsAlbumQuery(queryType));
 
         if (IsAlbumQuery(queryType))
         {

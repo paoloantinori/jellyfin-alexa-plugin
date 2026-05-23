@@ -70,14 +70,18 @@ public class SleepTimerIntentHandler : BaseHandler
             durationSlot = slot.Value;
         }
 
+        Logger.LogDebug("SleepTimer: entered, durationSlot={DurationSlot}", durationSlot);
+
         if (string.IsNullOrEmpty(durationSlot) || !int.TryParse(durationSlot, NumberStyles.Integer, CultureInfo.InvariantCulture, out int durationMinutes))
         {
+            Logger.LogDebug("SleepTimer: invalid duration, returning Tell");
             return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchSleepTimer", locale)));
         }
 
         // Nothing currently playing.
         if (session.FullNowPlayingItem == null)
         {
+            Logger.LogDebug("SleepTimer: no media playing, returning Tell");
             return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale)));
         }
 
@@ -96,6 +100,7 @@ public class SleepTimerIntentHandler : BaseHandler
         // Cancel mode: duration <= 0 replays without a sleep deadline.
         if (durationMinutes <= 0)
         {
+            Logger.LogDebug("SleepTimer: cancel mode (durationMinutes={DurationMinutes}), replaying without deadline", durationMinutes);
             var cancelDirective = new AudioPlayerPlayDirective
             {
                 PlayBehavior = PlayBehavior.ReplaceAll,
@@ -125,6 +130,8 @@ public class SleepTimerIntentHandler : BaseHandler
         // Encode the sleep deadline into the token.
         long deadlineTicks = DateTimeOffset.UtcNow.AddMinutes(durationMinutes).UtcTicks;
         string token = $"{itemId}|sleep:{deadlineTicks.ToString(CultureInfo.InvariantCulture)}";
+
+        Logger.LogDebug("SleepTimer: setting {DurationMinutes} minute timer, token={Token}", durationMinutes, token);
 
         var directive = new AudioPlayerPlayDirective
         {

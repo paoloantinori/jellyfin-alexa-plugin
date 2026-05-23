@@ -68,6 +68,7 @@ public class YesIntentHandler : BaseHandler
     /// <returns>A task representing the async operation.</returns>
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
+        Logger.LogDebug("Yes: no session attributes, responding with unexpected-yes");
         return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("UnexpectedYes", GetLocale(request))));
     }
 
@@ -90,6 +91,7 @@ public class YesIntentHandler : BaseHandler
         var resumeState = ResumeHelper.ReadState(sessionAttributes);
         if (resumeState != null)
         {
+            Logger.LogDebug("Yes: confirming resume, itemId={ItemId}, offsetMs={OffsetMs}", resumeState.ItemId, resumeState.OffsetMs);
             return HandleResumeConfirmation(resumeState, user, session, context, locale);
         }
 
@@ -97,20 +99,25 @@ public class YesIntentHandler : BaseHandler
         var paginationState = ListPaginationHelper.ReadState(sessionAttributes);
         if (paginationState != null)
         {
+            Logger.LogDebug("Yes: continuing pagination type={ListType}", paginationState.Type);
             return HandlePaginationContinuation(paginationState, context, user, locale);
         }
 
         var state = DisambiguationHelper.ReadState(sessionAttributes);
         if (state == null)
         {
+            Logger.LogDebug("Yes: no disambiguation state, responding with unexpected-yes");
             return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("UnexpectedYes", locale)));
         }
 
         var (matches, index, mediaType) = state.Value;
         if (index < 0 || index >= matches.Count)
         {
+            Logger.LogDebug("Yes: disambiguation index {Index} out of range (count={MatchCount})", index, matches.Count);
             return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("UnexpectedYes", locale)));
         }
+
+        Logger.LogDebug("Yes: confirming disambiguation, mediaType={MediaType}, index={Index}, matchCount={MatchCount}", mediaType, index, matches.Count);
 
         if (!Guid.TryParse(matches[index].Id, out Guid itemId))
         {

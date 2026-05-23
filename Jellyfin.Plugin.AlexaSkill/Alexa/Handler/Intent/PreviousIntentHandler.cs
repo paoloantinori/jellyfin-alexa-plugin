@@ -56,9 +56,12 @@ public class PreviousIntentHandler : BaseHandler
     /// <returns>A play directive of the previous item in the queue or empty response if the queue is empty.</returns>
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
+        Logger.LogDebug("PreviousIntent: entered, queueSize={QueueSize}, nowPlaying={NowPlayingId}", session.NowPlayingQueue.Count, session.FullNowPlayingItem?.Id);
+
         // check if we have any media in the queue and there is currently something playing
         if (session.NowPlayingQueue.Count == 0 || session.FullNowPlayingItem == null)
         {
+            Logger.LogDebug("PreviousIntent: empty queue or no now-playing item, returning Empty");
             return Task.FromResult<SkillResponse>(ResponseBuilder.Empty());
         }
 
@@ -72,16 +75,19 @@ public class PreviousIntentHandler : BaseHandler
                 BaseItem? prevItem = _libraryManager.GetItemById(prevItemId);
                 if (prevItem == null)
                 {
+                    Logger.LogDebug("PreviousIntent: previous item {ItemId} not found in library, returning Empty", prevItemId);
                     return Task.FromResult<SkillResponse>(ResponseBuilder.Empty());
                 }
 
                 string previousItemId = session.NowPlayingQueue[i - 1].Id.ToString();
                 session.FullNowPlayingItem = prevItem;
 
+                Logger.LogDebug("PreviousIntent: playing previous item '{ItemName}' ({ItemId})", prevItem.Name, prevItemId);
                 return Task.FromResult<SkillResponse>(BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, prevItem, user, context));
             }
         }
 
+        Logger.LogDebug("PreviousIntent: already at first item in queue, returning Empty");
         return Task.FromResult<SkillResponse>(ResponseBuilder.Empty());
     }
 }

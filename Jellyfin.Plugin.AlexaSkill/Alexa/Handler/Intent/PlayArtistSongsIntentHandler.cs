@@ -85,6 +85,8 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         IntentRequest intentRequest = (IntentRequest)request;
         string? musician = intentRequest.Intent.Slots?.TryGetValue("musician", out var musicianSlot) == true ? musicianSlot.Value : null;
 
+        Logger.LogDebug("PlayArtistSongs: entered, locale={Locale}", locale);
+
         if (string.IsNullOrWhiteSpace(musician))
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchArtistName", locale));
@@ -286,11 +288,13 @@ public class PlayArtistSongsIntentHandler : BaseHandler
 
         if (artists.Count == 0)
         {
+            Logger.LogDebug("PlayArtistSongs: no artist found for query='{Query}'", musician);
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundArtist", locale, musician));
         }
 
         if (artists.Count > 1)
         {
+            Logger.LogDebug("PlayArtistSongs: {Count} artists matched, running disambiguation", artists.Count);
             var (missOutcome, missResponse) = HandleFuzzyMiss(
                 musician,
                 artists,
@@ -307,17 +311,20 @@ public class PlayArtistSongsIntentHandler : BaseHandler
 
             if (missOutcome == FuzzyMissOutcome.NotFound)
             {
+                Logger.LogDebug("PlayArtistSongs: fuzzy miss outcome=NotFound, asking user to disambiguate");
                 var matches = artists.Take(3).Select(a => (a.Id, a.Name, (string?)GetImageUrl(a.Id.ToString("N"), user))).ToList();
                 return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeArtist, locale, context);
             }
 
             if (missResponse != null)
             {
+                Logger.LogDebug("PlayArtistSongs: fuzzy miss outcome={Outcome}, returning response", missOutcome);
                 return missResponse;
             }
         }
 
         string matchedArtistName = artists[0].Name;
+        Logger.LogDebug("PlayArtistSongs: matched artist='{ArtistName}' (id={ArtistId})", matchedArtistName, artists[0].Id);
 
         // Fetch the first page of artist songs for fast time-to-audio.
         // Remaining songs will be fetched on demand by PlaybackNearlyFinished.
@@ -346,6 +353,8 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             () => _libraryManager.GetItemList(artistSongsQuery),
             "GetArtistSongs",
             cancellationToken).ConfigureAwait(false);
+
+        Logger.LogDebug("PlayArtistSongs: Jellyfin returned {SongCount} songs for artist='{ArtistName}'", artistItems.Count, matchedArtistName);
 
         if (artistItems.Count == 0)
         {
@@ -398,6 +407,9 @@ public class PlayArtistSongsIntentHandler : BaseHandler
 
         string itemId = artistsItems[startIndex].Id.ToString();
 
+        Logger.LogDebug(
+            "PlayArtistSongs: returning AudioPlayer, itemId={ItemId}, startIndex={StartIndex}, queueSize={QueueSize}, offset=0",
+            itemId, startIndex, queueItems.Count);
         return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, artistsItems[0], user, context);
     }
 

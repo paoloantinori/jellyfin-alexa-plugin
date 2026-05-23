@@ -52,8 +52,11 @@ public class LearnMyVoiceIntentHandler : BaseHandler
         string locale = GetLocale(request);
 
         string? personId = context.System?.Person?.PersonId;
+        Logger.LogDebug("LearnMyVoice: entered, user={Username}, hasPersonId={HasPersonId}", user.Username, !string.IsNullOrEmpty(personId));
+
         if (string.IsNullOrEmpty(personId))
         {
+            Logger.LogDebug("LearnMyVoice: no voice profile detected, returning VoiceLearnFailed");
             return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("VoiceLearnFailed", locale)));
         }
 

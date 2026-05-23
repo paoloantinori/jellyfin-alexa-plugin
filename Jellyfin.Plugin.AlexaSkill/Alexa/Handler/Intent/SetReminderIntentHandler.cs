@@ -56,6 +56,8 @@ public class SetReminderIntentHandler : BaseHandler
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
 
+        Logger.LogDebug("SetReminder: entered, locale={Locale}", locale);
+
         string? apiAccessToken = context?.System?.ApiAccessToken;
         if (string.IsNullOrEmpty(apiAccessToken))
         {

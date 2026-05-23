@@ -55,6 +55,7 @@ public class ClearQueueIntentHandler : BaseHandler
         }
 
         string locale = GetLocale(request);
+        Logger.LogDebug("ClearQueue: entered, queueSize={QueueSize}, hasNowPlaying={HasNowPlaying}", session.NowPlayingQueue.Count, session.FullNowPlayingItem != null);
 
         // Keep only the currently playing item in the queue
         if (session.FullNowPlayingItem != null)

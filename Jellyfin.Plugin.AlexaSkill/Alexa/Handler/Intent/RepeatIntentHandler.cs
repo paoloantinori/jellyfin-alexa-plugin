@@ -45,8 +45,11 @@ public class RepeatIntentHandler : BaseHandler
     {
         string locale = GetLocale(request);
 
+        Logger.LogDebug("RepeatIntent: entered (acting as now-playing info), locale={Locale}", locale);
+
         if (session?.NowPlayingItem == null)
         {
+            Logger.LogDebug("RepeatIntent: no media playing, returning Tell");
             return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale)));
         }
 

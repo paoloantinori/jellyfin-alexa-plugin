@@ -56,6 +56,8 @@ public class WhoAmIIntentHandler : BaseHandler
             && !string.IsNullOrEmpty(user.AlexaPersonId)
             && string.Equals(user.AlexaPersonId, personId, StringComparison.Ordinal);
 
+        Logger.LogDebug("WhoAmI: entered, voiceRecognized={VoiceRecognized}, username={Username}", voiceRecognized, user.Username);
+
         if (voiceRecognized)
         {
             return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("WhoAmI", locale, user.Username)));

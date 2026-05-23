@@ -55,9 +55,11 @@ public class FallbackIntentHandler : BaseHandler
         if (intentRequest.Intent.Name.StartsWith("AMAZON.", System.StringComparison.Ordinal)
             && !string.Equals(intentRequest.Intent.Name, IntentNames.AmazonFallback, System.StringComparison.Ordinal))
         {
+            Logger.LogDebug("FallbackIntent: unsupported built-in intent '{IntentName}', returning UnsupportedIntent", intentRequest.Intent.Name);
             return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("UnsupportedIntent", locale)));
         }
 
+        Logger.LogDebug("FallbackIntent: unmatched input, returning CouldNotUnderstand");
         return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("CouldNotUnderstand", locale)));
     }
 }

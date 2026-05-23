@@ -91,17 +91,22 @@ public sealed class DeviceQueueManager : IDisposable
     {
         if (!_queues.TryGetValue(deviceId, out DeviceQueue? queue))
         {
+            _logger.LogDebug("Advance: no queue found for device {DeviceId}", deviceId);
             return null;
         }
 
         if (queue.ItemIds.Count == 0 || queue.CurrentIndex < 0)
         {
+            _logger.LogDebug("Advance: empty queue or no current index for device {DeviceId}", deviceId);
             return null;
         }
+
+        int fromIndex = queue.CurrentIndex;
 
         // RepeatOne: stay on same track
         if (string.Equals(queue.RepeatMode, "One", StringComparison.Ordinal))
         {
+            _logger.LogDebug("Advance: device {DeviceId} RepeatOne — staying at index {Index}, item={ItemId}", deviceId, fromIndex, queue.ItemIds[fromIndex]);
             return queue.ItemIds[queue.CurrentIndex];
         }
 
@@ -116,6 +121,7 @@ public sealed class DeviceQueueManager : IDisposable
             }
             else
             {
+                _logger.LogDebug("Advance: device {DeviceId} reached end of queue at index {Index}, no wrap", deviceId, fromIndex);
                 return null;
             }
         }
@@ -123,6 +129,10 @@ public sealed class DeviceQueueManager : IDisposable
         queue.CurrentIndex = nextIndex;
         queue.LastModifiedUtc = DateTime.UtcNow;
         SchedulePersist(deviceId);
+
+        _logger.LogDebug(
+            "Advance: device {DeviceId} moved from index {FromIndex} to {ToIndex}, next item={ItemId}",
+            deviceId, fromIndex, nextIndex, queue.ItemIds[nextIndex]);
 
         return queue.ItemIds[nextIndex];
     }
@@ -138,18 +148,25 @@ public sealed class DeviceQueueManager : IDisposable
     {
         if (!_queues.TryGetValue(deviceId, out DeviceQueue? queue))
         {
+            _logger.LogDebug("MoveTo: no queue found for device {DeviceId}", deviceId);
             return false;
         }
 
         int index = queue.ItemIds.IndexOf(itemId);
         if (index < 0)
         {
+            _logger.LogDebug("MoveTo: item {ItemId} not found in queue for device {DeviceId}", itemId, deviceId);
             return false;
         }
 
+        int fromIndex = queue.CurrentIndex;
         queue.CurrentIndex = index;
         queue.LastModifiedUtc = DateTime.UtcNow;
         SchedulePersist(deviceId);
+
+        _logger.LogDebug(
+            "MoveTo: device {DeviceId} moved from index {FromIndex} to {ToIndex}, item={ItemId}",
+            deviceId, fromIndex, index, itemId);
 
         return true;
     }

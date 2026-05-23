@@ -39,6 +39,7 @@ public class TurnRadioOnIntentHandler : BaseHandler
         }
 
         string locale = GetLocale(request);
+        Logger.LogDebug("TurnRadioOn: entered, userId={UserId}, deviceId={DeviceId}", session.UserId, context.System.Device.DeviceID);
         RadioModeState.Enable(session.UserId, context.System.Device.DeviceID);
         Logger.LogInformation("Radio mode enabled for user {UserId}", session.UserId);
         return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("RadioModeOn", locale)));

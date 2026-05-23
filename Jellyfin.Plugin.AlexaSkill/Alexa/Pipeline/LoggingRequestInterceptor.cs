@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Alexa.NET.Request.Type;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
@@ -35,6 +37,18 @@ public class LoggingRequestInterceptor : IRequestInterceptor
             context.IntentName,
             context.Locale,
             context.CorrelationId);
+
+        // Log resolved slot values at debug level for intent requests
+        if (_logger.IsEnabled(LogLevel.Debug) && context.SkillRequest is IntentRequest intentRequest && intentRequest.Intent?.Slots != null)
+        {
+            var slotValues = string.Join(", ", intentRequest.Intent.Slots.Values
+                .Where(s => s?.Value != null)
+                .Select(s => $"{s.Name}={s.Value}"));
+            _logger.LogDebug(
+                "Resolved slots corr={CorrelationId}: {SlotValues}",
+                context.CorrelationId,
+                slotValues);
+        }
 
         return Task.FromResult(true);
     }

@@ -45,6 +45,8 @@ public class SkipForwardBackIntentHandler : BaseHandler
     {
         string locale = GetLocale(request);
 
+        Logger.LogDebug("SkipForwardBack: entered, locale={Locale}", locale);
+
         SkillResponse? disabled = IfFeatureDisabled(c => c.SeekEnabled, request);
         if (disabled != null)
         {
@@ -53,6 +55,7 @@ public class SkipForwardBackIntentHandler : BaseHandler
 
         if (session.FullNowPlayingItem == null)
         {
+            Logger.LogDebug("SkipForwardBack: no media playing, returning Tell");
             return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale)));
         }
 
@@ -99,6 +102,8 @@ public class SkipForwardBackIntentHandler : BaseHandler
         // Calculate target position
         long skipTicks = TimeSpan.FromSeconds(amount).Ticks;
         long targetTicks = forward ? currentTicks + skipTicks : currentTicks - skipTicks;
+
+        Logger.LogDebug("SkipForwardBack: direction={Direction}, amount={Amount}s, currentTicks={CurrentTicks}, targetTicks={TargetTicks}", forward ? "forward" : "back", amount, currentTicks, targetTicks);
 
         // Clamp to bounds
         if (targetTicks <= 0)

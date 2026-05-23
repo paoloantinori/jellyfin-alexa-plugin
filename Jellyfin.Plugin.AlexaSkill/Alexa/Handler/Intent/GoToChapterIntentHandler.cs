@@ -67,8 +67,11 @@ public class GoToChapterIntentHandler : BaseHandler
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
 
+        Logger.LogDebug("GoToChapter: entered, direction={Direction}, chapterNumber={ChapterNumber}", intentRequest.Intent.Slots?.GetValueOrDefault("direction")?.Value, intentRequest.Intent.Slots?.GetValueOrDefault("chapter_number")?.Value);
+
         if (session.FullNowPlayingItem == null)
         {
+            Logger.LogDebug("GoToChapter: no media currently playing");
             return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale)));
         }
 
@@ -77,6 +80,7 @@ public class GoToChapterIntentHandler : BaseHandler
 
         if (chapters.Count == 0)
         {
+            Logger.LogDebug("GoToChapter: item {ItemId} has no chapters", itemId);
             return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("NoChapters", locale)));
         }
 
@@ -129,6 +133,8 @@ public class GoToChapterIntentHandler : BaseHandler
         int offsetMs = (int)TimeSpan.FromTicks(targetTicks).TotalMilliseconds;
         string itemIdStr = itemId.ToString();
         string chapterName = chapters[targetIndex].Name ?? $"Chapter {targetIndex + 1}";
+
+        Logger.LogDebug("GoToChapter: navigating to chapter {ChapterIndex} '{ChapterName}' at offset {OffsetMs}ms", targetIndex + 1, chapterName, offsetMs);
 
         return Task.FromResult<SkillResponse>(BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll,

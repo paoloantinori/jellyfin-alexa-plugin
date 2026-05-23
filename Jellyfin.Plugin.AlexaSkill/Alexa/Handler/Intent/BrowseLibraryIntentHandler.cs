@@ -96,8 +96,11 @@ public class BrowseLibraryIntentHandler : BaseHandler
             }
         }
 
+        Logger.LogDebug("BrowseLibrary: entered, locale={Locale}, browseCategory={Category}, filter={Filter}", locale, browseCategory, filter);
+
         if (string.IsNullOrWhiteSpace(browseCategory))
         {
+            Logger.LogDebug("BrowseLibrary: returning Ask (missing category)");
             string prompt = ResponseStrings.Get("DidNotCatchBrowseCategory", locale);
             return ResponseBuilder.Ask(prompt, new Reprompt(prompt));
         }
@@ -116,22 +119,27 @@ public class BrowseLibraryIntentHandler : BaseHandler
 
         if (SlotMappings.IsGenreCategory(normalized))
         {
+            Logger.LogDebug("BrowseLibrary: resolved as genre query, filter={Filter}", filter);
             return await HandleGenresQuery(filter, locale, resolvedUser, context, user, cancellationToken).ConfigureAwait(false);
         }
 
         if (!SlotMappings.BrowseCategoryToItemKind.TryGetValue(normalized, out BaseItemKind? itemKind) || !itemKind.HasValue)
         {
+            Logger.LogDebug("BrowseLibrary: unrecognized category '{Category}', returning Ask", normalized);
             string prompt = ResponseStrings.Get("DidNotCatchBrowseCategory", locale);
             return ResponseBuilder.Ask(prompt, new Reprompt(prompt));
         }
 
+        Logger.LogDebug("BrowseLibrary: resolved category to {ItemKind}", itemKind.Value);
         IReadOnlyList<BaseItem> items = await QueryItems(itemKind.Value, filter, resolvedUser, user, cancellationToken).ConfigureAwait(false);
 
         if (items.Count == 0)
         {
+            Logger.LogDebug("BrowseLibrary: no results for {Category}, returning Tell", browseCategory);
             return ResponseBuilder.Tell(ResponseStrings.Get("NoBrowseResults", locale, browseCategory));
         }
 
+        Logger.LogDebug("BrowseLibrary: found {ItemCount} items, building list response", items.Count);
         return BuildListResponse(items, locale, browseCategory, context, user);
     }
 
@@ -207,6 +215,8 @@ public class BrowseLibraryIntentHandler : BaseHandler
         int voiceCount = Math.Min(total, VoicePageSize);
         int displayCount = Math.Min(total, MaxDisplayItems);
         bool isTruncated = total > voiceCount;
+
+        Logger.LogDebug("BrowseLibrary: BuildListResponse total={Total}, voiceCount={VoiceCount}, isTruncated={IsTruncated}", total, voiceCount, isTruncated);
 
         var voiceEntries = new List<string>();
         for (int i = 0; i < voiceCount; i++)

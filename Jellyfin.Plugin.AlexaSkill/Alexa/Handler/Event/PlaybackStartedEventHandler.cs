@@ -54,6 +54,10 @@ public class PlaybackStartedEventHandler : BaseHandler
     {
         AudioPlayerRequest req = (AudioPlayerRequest)request;
 
+        Logger.LogDebug(
+            "PlaybackStarted: item={Token}, offset={OffsetMs}ms, sessionId={SessionId}",
+            req.Token, req.OffsetInMilliseconds, session.Id);
+
         long startTicks = TimeSpan.FromMilliseconds(req.OffsetInMilliseconds).Ticks;
         PlaybackStartInfo playbackStartInfo = new PlaybackStartInfo
         {

@@ -75,6 +75,7 @@ public class QueryRecentlyAddedIntentHandler : BaseHandler
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
+        Logger.LogDebug("QueryRecentlyAdded: entered, locale={Locale}", locale);
 
         await SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)).ConfigureAwait(false);
 
@@ -104,9 +105,11 @@ public class QueryRecentlyAddedIntentHandler : BaseHandler
 
         if (recentItems.Count == 0)
         {
+            Logger.LogDebug("QueryRecentlyAdded: no recent items found, returning Tell");
             return ResponseBuilder.Tell(ResponseStrings.Get("QueryRecentlyAddedEmpty", locale));
         }
 
+        Logger.LogDebug("QueryRecentlyAdded: found {ItemCount} recent items", recentItems.Count);
         return BuildListResponse(recentItems, locale, context, user);
     }
 
@@ -116,6 +119,8 @@ public class QueryRecentlyAddedIntentHandler : BaseHandler
         int voiceCount = Math.Min(total, VoicePageSize);
         int displayCount = Math.Min(total, MaxDisplayItems);
         bool isTruncated = total > voiceCount;
+
+        Logger.LogDebug("QueryRecentlyAdded: BuildListResponse total={Total}, voiceCount={VoiceCount}, isTruncated={IsTruncated}", total, voiceCount, isTruncated);
 
         var voiceEntries = new List<string>();
         for (int i = 0; i < voiceCount; i++)

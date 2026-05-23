@@ -58,6 +58,11 @@ public class AplUserEventHandler : BaseHandler
         var aplEvent = (AplUserEventRequest)request;
         string? action = aplEvent.Arguments?.FirstOrDefault()?.ToString();
 
+        Logger.LogDebug(
+            "AplUserEvent: action={Action}, arguments={Args}",
+            action,
+            aplEvent.Arguments != null ? string.Join(", ", aplEvent.Arguments) : "(null)");
+
         if (action == "show more")
         {
             string locale = GetLocale(request);
@@ -158,14 +163,20 @@ public class AplUserEventHandler : BaseHandler
         string? itemIdStr = aplEvent.Arguments?.ElementAtOrDefault(1)?.ToString();
         if (string.IsNullOrEmpty(itemIdStr) || !Guid.TryParse(itemIdStr, out Guid itemId))
         {
+            Logger.LogDebug("AplUserEvent HandleSelectItem: no valid item ID in arguments");
             return Task.FromResult(ResponseBuilder.Empty());
         }
 
         BaseItem? item = _libraryManager.GetItemById(itemId);
         if (item == null)
         {
+            Logger.LogDebug("AplUserEvent HandleSelectItem: item {ItemId} not found in library", itemIdStr);
             return Task.FromResult(ResponseBuilder.Empty());
         }
+
+        Logger.LogDebug(
+            "AplUserEvent HandleSelectItem: resolved item={ItemName} ({ItemId}), type={ItemType}",
+            item.Name, itemIdStr, item.GetType().Name);
 
         session.NowPlayingQueue = new List<QueueItem> { new() { Id = item.Id } };
         session.FullNowPlayingItem = item;

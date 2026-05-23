@@ -75,6 +75,7 @@ public class InProgressMediaListIntentHandler : BaseHandler
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
+        Logger.LogDebug("InProgressMediaList: entered, locale={Locale}", locale);
 
         await SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)).ConfigureAwait(false);
 
@@ -121,12 +122,15 @@ public class InProgressMediaListIntentHandler : BaseHandler
 
         if (inProgressItems.Count == 0)
         {
+            Logger.LogDebug("InProgressMediaList: no in-progress items found, returning Tell");
             return ResponseBuilder.Tell(ResponseStrings.Get("NoInProgressMedia", locale));
         }
 
         int total = inProgressItems.Count;
         int voiceCount = Math.Min(total, VoicePageSize);
         bool isTruncated = total > voiceCount;
+
+        Logger.LogDebug("InProgressMediaList: found {ItemCount} in-progress items, voiceCount={VoiceCount}, isTruncated={IsTruncated}", total, voiceCount, isTruncated);
 
         var voiceDescriptions = new List<string>();
         for (int i = 0; i < voiceCount; i++)

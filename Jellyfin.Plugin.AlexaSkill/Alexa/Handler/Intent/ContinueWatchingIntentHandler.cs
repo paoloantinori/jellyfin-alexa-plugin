@@ -69,6 +69,7 @@ public class ContinueWatchingIntentHandler : BaseHandler
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
+        Logger.LogDebug("ContinueWatching: entered, locale={Locale}", locale);
 
         await SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)).ConfigureAwait(false);
 
@@ -84,9 +85,11 @@ public class ContinueWatchingIntentHandler : BaseHandler
 
         if (resumeItem == null)
         {
+            Logger.LogDebug("ContinueWatching: no in-progress item found, returning Tell");
             return ResponseBuilder.Tell(ResponseStrings.Get("NoContinueWatching", locale));
         }
 
+        Logger.LogDebug("ContinueWatching: found item '{ItemName}' ({ItemId}), resumeTicks={ResumeTicks}", resumeItem.Name, resumeItem.Id, resumeTicks);
         string itemId = resumeItem.Id.ToString();
         int offsetMs = (int)TimeSpan.FromTicks(resumeTicks).TotalMilliseconds;
 

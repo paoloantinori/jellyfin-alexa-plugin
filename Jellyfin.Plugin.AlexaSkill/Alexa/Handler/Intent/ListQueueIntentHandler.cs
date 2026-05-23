@@ -61,9 +61,11 @@ public class ListQueueIntentHandler : BaseHandler
         }
 
         string locale = GetLocale(request);
+        Logger.LogDebug("ListQueue: entered, locale={Locale}, queueSize={QueueSize}", locale, session.NowPlayingQueue.Count);
 
         if (session.NowPlayingQueue.Count == 0)
         {
+            Logger.LogDebug("ListQueue: queue is empty, returning Tell");
             return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("QueueEmpty", locale)));
         }
 
@@ -82,8 +84,11 @@ public class ListQueueIntentHandler : BaseHandler
         }
 
         int totalUpcoming = session.NowPlayingQueue.Count - (currentIndex + 1);
+        Logger.LogDebug("ListQueue: currentIndex={CurrentIndex}, totalUpcoming={TotalUpcoming}", currentIndex, totalUpcoming);
+
         if (totalUpcoming <= 0)
         {
+            Logger.LogDebug("ListQueue: no upcoming items, returning Tell");
             return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("QueueEmpty", locale)));
         }
 
@@ -122,6 +127,8 @@ public class ListQueueIntentHandler : BaseHandler
         // Adjust voice count for items that couldn't be resolved
         voiceCount = Math.Min(resolvedItems.Count, VoicePageSize);
         bool isTruncated = totalUpcoming > voiceCount;
+
+        Logger.LogDebug("ListQueue: resolved {ResolvedCount} items, voiceCount={VoiceCount}, isTruncated={IsTruncated}", resolvedItems.Count, voiceCount, isTruncated);
 
         string speech;
         if (isTruncated)

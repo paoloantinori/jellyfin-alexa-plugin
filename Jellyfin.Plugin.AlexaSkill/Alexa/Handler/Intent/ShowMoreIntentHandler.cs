@@ -50,6 +50,7 @@ public class ShowMoreIntentHandler : BaseHandler
     /// </summary>
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
+        Logger.LogDebug("ShowMore: no session attributes available");
         return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("ShowMoreNoSession", GetLocale(request))));
     }
 
@@ -63,9 +64,11 @@ public class ShowMoreIntentHandler : BaseHandler
         var paginationState = ListPaginationHelper.ReadState(sessionAttributes);
         if (paginationState == null)
         {
+            Logger.LogDebug("ShowMore: no pagination state in session attributes");
             return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("ShowMoreNoSession", locale)));
         }
 
+        Logger.LogDebug("ShowMore: continuing pagination type={ListType}, offset={CurrentOffset}, totalItems={ItemCount}", paginationState.Type, paginationState.CurrentOffset, paginationState.ItemIds.Length);
         return Task.FromResult(ListPaginationHelper.BuildNextPageResponse(_libraryManager, paginationState, locale));
     }
 }

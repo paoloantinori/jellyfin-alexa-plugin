@@ -51,6 +51,7 @@ public class NoIntentHandler : BaseHandler
     /// <returns>A task representing the async operation.</returns>
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
+        Logger.LogDebug("NoIntent: entered (no session attributes), returning UnexpectedYes");
         return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("UnexpectedYes", GetLocale(request))));
     }
 
@@ -72,12 +73,14 @@ public class NoIntentHandler : BaseHandler
         // Check for resume rejection first
         if (ResumeHelper.HasResumeState(sessionAttributes))
         {
+            Logger.LogDebug("NoIntent: handling resume rejection, returning FreshStart");
             return HandleResumeRejection(locale);
         }
 
         var state = DisambiguationHelper.ReadState(sessionAttributes);
         if (state == null)
         {
+            Logger.LogDebug("NoIntent: no disambiguation state found, returning UnexpectedYes");
             return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("UnexpectedYes", locale)));
         }
 
@@ -86,9 +89,11 @@ public class NoIntentHandler : BaseHandler
 
         if (nextIndex >= matches.Count)
         {
+            Logger.LogDebug("NoIntent: no more matches (index={Index}, total={Total}), returning NoMoreMatches", nextIndex, matches.Count);
             return Task.FromResult(DisambiguationHelper.NoMoreMatches(locale));
         }
 
+        Logger.LogDebug("NoIntent: advancing to next disambiguation match, mediaType={MediaType}, nextIndex={NextIndex}", mediaType, nextIndex);
         SkillResponse response = DisambiguationHelper.AskNextMatch(matches, nextIndex, mediaType, locale);
         return Task.FromResult(response);
     }

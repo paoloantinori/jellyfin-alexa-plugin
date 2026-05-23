@@ -43,6 +43,8 @@ public class JumpToPositionIntentHandler : BaseHandler
     {
         string locale = GetLocale(request);
 
+        Logger.LogDebug("JumpToPosition: entered, locale={Locale}", locale);
+
         SkillResponse? disabled = IfFeatureDisabled(c => c.SeekEnabled, request);
         if (disabled != null)
         {
@@ -51,6 +53,7 @@ public class JumpToPositionIntentHandler : BaseHandler
 
         if (session.FullNowPlayingItem == null)
         {
+            Logger.LogDebug("JumpToPosition: no media playing, returning Tell");
             return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale)));
         }
 
@@ -89,6 +92,8 @@ public class JumpToPositionIntentHandler : BaseHandler
         }
 
         long runtimeTicks = session.NowPlayingItem?.RunTimeTicks ?? 0;
+
+        Logger.LogDebug("JumpToPosition: target={Hours}h{Minutes}m{Seconds}s ({TargetTicks} ticks), runtime={RuntimeTicks} ticks", hours, minutes, seconds, targetTicks, runtimeTicks);
 
         // Past-end check
         if (runtimeTicks > 0 && targetTicks >= runtimeTicks)
