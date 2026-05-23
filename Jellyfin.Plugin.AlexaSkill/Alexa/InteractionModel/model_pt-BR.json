@@ -745,6 +745,20 @@
           "ouvir o livro {book}",
           "ouvir o audiolivro {book}"
         ]
+      },
+      {
+        "name": "ShowMoreIntent",
+        "samples": [
+          "mostrar mais",
+          "mais resultados",
+          "próximo",
+          "continuar",
+          "o que mais",
+          "ver mais",
+          "mais",
+          "próxima página"
+        ],
+        "slots": []
       }
     ],
     "types": [

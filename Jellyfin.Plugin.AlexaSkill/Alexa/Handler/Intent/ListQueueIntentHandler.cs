@@ -23,6 +23,10 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public class ListQueueIntentHandler : BaseHandler
 {
+    private const int VoicePageSize = 5;
+
+    private static int MaxDisplayItems => Plugin.Instance?.Configuration?.MaxQueueDisplayItems ?? 10;
+
     private readonly ILibraryManager _libraryManager;
 
     /// <summary>
@@ -77,35 +81,74 @@ public class ListQueueIntentHandler : BaseHandler
             }
         }
 
-        var upcoming = session.NowPlayingQueue.Skip(currentIndex + 1).Take(5).ToList();
+        int totalUpcoming = session.NowPlayingQueue.Count - (currentIndex + 1);
+        if (totalUpcoming <= 0)
+        {
+            return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("QueueEmpty", locale)));
+        }
+
+        var upcoming = session.NowPlayingQueue.Skip(currentIndex + 1).Take(MaxDisplayItems).ToList();
         if (upcoming.Count == 0)
         {
             return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("QueueEmpty", locale)));
         }
 
         var resolvedItems = new List<BaseItem>();
-        var names = new StringBuilder();
+        var voiceNames = new StringBuilder();
+        int voiceCount = Math.Min(upcoming.Count, VoicePageSize);
         for (int i = 0; i < upcoming.Count; i++)
         {
             var item = _libraryManager.GetItemById(upcoming[i].Id);
             if (item != null)
             {
-                if (names.Length > 0)
-                {
-                    names.Append(", ");
-                }
-
-                names.Append(item.Name);
                 resolvedItems.Add(item);
+                if (resolvedItems.Count <= voiceCount)
+                {
+                    if (voiceNames.Length > 0)
+                    {
+                        voiceNames.Append(", ");
+                    }
+
+                    voiceNames.Append(item.Name);
+                }
             }
         }
 
-        if (names.Length == 0)
+        if (resolvedItems.Count == 0)
         {
             return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("QueueEmpty", locale)));
         }
 
-        SkillResponse response = ResponseBuilder.Tell(ResponseStrings.Get("QueueList", locale, names.ToString()));
+        // Adjust voice count for items that couldn't be resolved
+        voiceCount = Math.Min(resolvedItems.Count, VoicePageSize);
+        bool isTruncated = totalUpcoming > voiceCount;
+
+        string speech;
+        if (isTruncated)
+        {
+            speech = ResponseStrings.Get("QueueListPartial", locale, totalUpcoming, voiceCount, voiceNames.ToString());
+            speech += " " + ResponseStrings.Get("ShowMorePrompt", locale);
+        }
+        else
+        {
+            speech = ResponseStrings.Get("QueueList", locale, voiceNames.ToString());
+        }
+
+        SkillResponse response = isTruncated
+            ? ResponseBuilder.Ask(speech, new Reprompt(ResponseStrings.Get("ShowMorePrompt", locale)))
+            : ResponseBuilder.Tell(speech);
+
+        // Store pagination state for ShowMoreIntent when truncated
+        if (isTruncated)
+        {
+            response.SessionAttributes = new Dictionary<string, object>();
+            ListPaginationHelper.WriteState(
+                response.SessionAttributes,
+                ListPaginationHelper.ListType.Queue,
+                resolvedItems.Select(i => i.Id.ToString()).ToArray(),
+                voiceCount,
+                VoicePageSize);
+        }
 
         if (Apl.AplHelper.DeviceSupportsApl(context)
             && Apl.AplHelper.VisualsEnabled)

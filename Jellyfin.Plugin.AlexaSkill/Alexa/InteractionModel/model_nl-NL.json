@@ -734,6 +734,20 @@
           "listen to audiobook {book}",
           "listen to the audiobook {book}"
         ]
+      },
+      {
+        "name": "ShowMoreIntent",
+        "samples": [
+          "toon meer",
+          "meer resultaten",
+          "volgende",
+          "doorgaan",
+          "wat nog meer",
+          "meer",
+          "volgende pagina",
+          "laat meer zien"
+        ],
+        "slots": []
       }
     ],
     "types": [
@@ -1001,56 +1015,83 @@
             "id": "director",
             "name": {
               "value": "regisseur",
-              "synonyms": ["filmmaker", "regisseuse"]
+              "synonyms": [
+                "filmmaker",
+                "regisseuse"
+              ]
             }
           },
           {
             "id": "cast",
             "name": {
               "value": "cast",
-              "synonyms": ["acteurs", "spelers", "rollen"]
+              "synonyms": [
+                "acteurs",
+                "spelers",
+                "rollen"
+              ]
             }
           },
           {
             "id": "season",
             "name": {
               "value": "seizoen",
-              "synonyms": ["seizoennummer"]
+              "synonyms": [
+                "seizoennummer"
+              ]
             }
           },
           {
             "id": "episode",
             "name": {
               "value": "aflevering",
-              "synonyms": ["afleveringnummer", "episode"]
+              "synonyms": [
+                "afleveringnummer",
+                "episode"
+              ]
             }
           },
           {
             "id": "series",
             "name": {
               "value": "serie",
-              "synonyms": ["tv-serie", "programma", "reeks"]
+              "synonyms": [
+                "tv-serie",
+                "programma",
+                "reeks"
+              ]
             }
           },
           {
             "id": "author",
             "name": {
               "value": "auteur",
-              "synonyms": ["schrijver", "schrijfster"]
+              "synonyms": [
+                "schrijver",
+                "schrijfster"
+              ]
             }
           },
           {
             "id": "narrator",
             "name": {
               "value": "verteller",
-              "synonyms": ["vertelster", "voorlezer", "spreker"]
+              "synonyms": [
+                "vertelster",
+                "voorlezer",
+                "spreker"
+              ]
             }
           },
           {
             "id": "rating",
             "name": {
               "value": "beoordeling",
-              "synonyms": ["waardering", "score", "cijfer"]
+              "synonyms": [
+                "waardering",
+                "score",
+                "cijfer"
+              ]
             }
           }
         ]

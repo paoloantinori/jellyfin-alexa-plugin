@@ -83,6 +83,7 @@ public class ResumeIntentHandler : BaseHandler
     {
         if (string.Equals(context.AudioPlayer.PlayerActivity, "PLAYING", StringComparison.Ordinal))
         {
+            Logger.LogDebug("ResumeIntent: already PLAYING, returning empty");
             return Task.FromResult<SkillResponse>(ResponseBuilder.Empty());
         }
 
@@ -95,17 +96,29 @@ public class ResumeIntentHandler : BaseHandler
 
         int offset = 0;
 
+        Logger.LogDebug(
+            "ResumeIntent: device={DeviceId}, audioPlayer token={Token} activity={Activity} offset={AudioOffset}ms, session itemId={SessionItem}",
+            context.System.Device.DeviceID,
+            context.AudioPlayer?.Token,
+            context.AudioPlayer?.PlayerActivity,
+            context.AudioPlayer?.OffsetInMilliseconds,
+            session?.FullNowPlayingItem?.Id.ToString());
+
         if (!string.IsNullOrEmpty(item_id))
         {
             // Fallback 1: Alexa AudioPlayer context (most accurate when device retains state)
             if (context.AudioPlayer != null && context.AudioPlayer.OffsetInMilliseconds > 0)
             {
                 offset = (int)context.AudioPlayer.OffsetInMilliseconds;
+                Logger.LogDebug("ResumeIntent: using AudioPlayer context offset={OffsetMs}ms", offset);
             }
             // Fallback 2: Jellyfin session play state
             else if (session?.PlayState != null)
             {
                 offset = (int)TimeSpan.FromTicks(session.PlayState?.PositionTicks ?? 0).TotalMilliseconds;
+                Logger.LogDebug(
+                    "ResumeIntent: using session playState offset={OffsetMs}ms (ticks={Ticks})",
+                    offset, session.PlayState?.PositionTicks);
             }
 
             // Fallback 3: DeviceQueue persisted state (survives after AudioPlayer.Stop clears context)
@@ -130,6 +143,7 @@ public class ResumeIntentHandler : BaseHandler
         // Fallback 4: Jellyfin server-side progress (queries last played item with resume position)
         if (string.IsNullOrEmpty(item_id))
         {
+            Logger.LogDebug("ResumeIntent: no item_id from context/session, trying server-side progress fallback");
             if (session == null)
             {
                 return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale)));
@@ -149,7 +163,8 @@ public class ResumeIntentHandler : BaseHandler
                 _libraryManager,
                 _userDataManager,
                 pluginUser,
-                contentTypes);
+                contentTypes,
+                Logger);
 
             if (resumeItem != null)
             {
@@ -222,6 +237,10 @@ public class ResumeIntentHandler : BaseHandler
             user,
             context,
             offset);
+
+        Logger.LogDebug(
+            "ResumeIntent: final response itemId={ItemId}, offset={OffsetMs}ms",
+            item_id, offset);
 
         // Proactive position announcement when enabled and we have a non-zero offset
         if (offset > 0)

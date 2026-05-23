@@ -28,7 +28,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public class BrowseLibraryIntentHandler : BaseHandler
 {
-    private static int MaxResults => Plugin.Instance?.Configuration?.MaxBrowseResults ?? 5;
+    private const int VoicePageSize = 5;
+
+    private static int MaxDisplayItems => Plugin.Instance?.Configuration?.MaxListDisplayItems ?? 15;
 
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
@@ -139,7 +141,7 @@ public class BrowseLibraryIntentHandler : BaseHandler
     /// <param name="itemType">The type of items to query.</param>
     /// <param name="filter">Optional search term to filter results.</param>
     /// <param name="jellyfinUser">The Jellyfin user for the query.</param>
-    /// <returns>A list of matching items, limited to MaxResults.</returns>
+    /// <returns>A list of matching items, limited to MaxDisplayItems.</returns>
     private async Task<IReadOnlyList<BaseItem>> QueryItems(BaseItemKind itemType, string? filter, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, CancellationToken cancellationToken)
     {
         var query = new InternalItemsQuery
@@ -147,7 +149,7 @@ public class BrowseLibraryIntentHandler : BaseHandler
             User = jellyfinUser,
             Recursive = true,
             IncludeItemTypes = FilterByContentAccess(new[] { itemType }),
-            Limit = MaxResults,
+            Limit = MaxDisplayItems,
             OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
             DtoOptions = new DtoOptions(true)
         };
@@ -183,7 +185,7 @@ public class BrowseLibraryIntentHandler : BaseHandler
             Recursive = true,
             IncludeItemTypes = FilterByContentAccess(new[] { BaseItemKind.Audio, BaseItemKind.Movie }),
             Genres = new[] { filter },
-            Limit = MaxResults,
+            Limit = MaxDisplayItems,
             OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
             DtoOptions = new DtoOptions(true)
         };
@@ -201,19 +203,48 @@ public class BrowseLibraryIntentHandler : BaseHandler
 
     private SkillResponse BuildListResponse(IReadOnlyList<BaseItem> items, string locale, string browseCategory, Context? context, Entities.User user)
     {
-        var itemEntries = new List<string>();
-        for (int i = 0; i < items.Count; i++)
+        int total = items.Count;
+        int voiceCount = Math.Min(total, VoicePageSize);
+        int displayCount = Math.Min(total, MaxDisplayItems);
+        bool isTruncated = total > voiceCount;
+
+        var voiceEntries = new List<string>();
+        for (int i = 0; i < voiceCount; i++)
         {
-            itemEntries.Add(ResponseStrings.Get("BrowseItem", locale, (i + 1).ToString(CultureInfo.InvariantCulture), items[i].Name));
+            voiceEntries.Add(ResponseStrings.Get("BrowseItem", locale, (i + 1).ToString(CultureInfo.InvariantCulture), items[i].Name));
         }
 
-        string listText = string.Join(". ", itemEntries);
-        string speech = ResponseStrings.Get("BrowseResults", locale, items.Count.ToString(CultureInfo.InvariantCulture), listText);
+        string voiceListText = string.Join(". ", voiceEntries);
 
-        SkillResponse response = ResponseBuilder.Tell(speech);
+        string speech;
+        if (isTruncated)
+        {
+            speech = ResponseStrings.Get("BrowseResultsPartial", locale, total.ToString(CultureInfo.InvariantCulture), browseCategory, voiceCount.ToString(CultureInfo.InvariantCulture), voiceListText);
+            speech += " " + ResponseStrings.Get("ShowMorePrompt", locale);
+        }
+        else
+        {
+            speech = ResponseStrings.Get("BrowseResults", locale, total.ToString(CultureInfo.InvariantCulture), voiceListText);
+        }
+
+        SkillResponse response = isTruncated
+            ? ResponseBuilder.Ask(speech, new Reprompt(ResponseStrings.Get("ShowMorePrompt", locale)))
+            : ResponseBuilder.Tell(speech);
+
+        // Store pagination state for ShowMoreIntent when truncated
+        if (isTruncated)
+        {
+            response.SessionAttributes = new Dictionary<string, object>();
+            ListPaginationHelper.WriteState(
+                response.SessionAttributes,
+                ListPaginationHelper.ListType.BrowseLibrary,
+                items.Take(displayCount).Select(i => i.Id.ToString()).ToArray(),
+                voiceCount,
+                VoicePageSize);
+        }
 
         string title = char.ToUpper(browseCategory[0], CultureInfo.InvariantCulture) + browseCategory[1..];
-        var aplItems = items.Select(i =>
+        var aplItems = items.Take(displayCount).Select(i =>
             new Apl.ListDisplayItem(i.Name, i.Id.ToString("N"), GetArtistSubtitle(i), GetImageUrl(i.Id.ToString("N"), user))).ToList();
         TryAttachCarouselDirective(response, context, title, aplItems, locale: locale);
 

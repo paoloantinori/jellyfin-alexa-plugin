@@ -72,14 +72,14 @@ public class YesIntentHandler : BaseHandler
     }
 
     /// <summary>
-    /// Handle with session attributes - resolve resume confirmation or disambiguation.
-    /// Resume confirmation takes priority over disambiguation when both are present.
+    /// Handle with session attributes - resolve resume confirmation, pagination, or disambiguation.
+    /// Resume confirmation takes priority over pagination, which takes priority over disambiguation.
     /// </summary>
     /// <param name="request">The skill request which should be handled.</param>
     /// <param name="context">The context of the skill intent request.</param>
     /// <param name="user">The user instance.</param>
     /// <param name="session">The session instance.</param>
-    /// <param name="sessionAttributes">The session attributes containing disambiguation or resume state.</param>
+    /// <param name="sessionAttributes">The session attributes containing disambiguation, pagination, or resume state.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task representing the async operation.</returns>
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, Dictionary<string, object>? sessionAttributes, CancellationToken cancellationToken)
@@ -91,6 +91,13 @@ public class YesIntentHandler : BaseHandler
         if (resumeState != null)
         {
             return HandleResumeConfirmation(resumeState, user, session, context, locale);
+        }
+
+        // Check for active pagination state - "yes" acts as "show more"
+        var paginationState = ListPaginationHelper.ReadState(sessionAttributes);
+        if (paginationState != null)
+        {
+            return HandlePaginationContinuation(paginationState, context, user, locale);
         }
 
         var state = DisambiguationHelper.ReadState(sessionAttributes);
@@ -134,6 +141,18 @@ public class YesIntentHandler : BaseHandler
         };
 
         return Task.FromResult(response);
+    }
+
+    /// <summary>
+    /// Handle pagination continuation: "yes" acts as "show more" when pagination state is active.
+    /// </summary>
+    private Task<SkillResponse> HandlePaginationContinuation(
+        ListPaginationHelper.PaginationState paginationState,
+        Context context,
+        Entities.User user,
+        string locale)
+    {
+        return Task.FromResult(ListPaginationHelper.BuildNextPageResponse(_libraryManager, paginationState, locale));
     }
 
     /// <summary>

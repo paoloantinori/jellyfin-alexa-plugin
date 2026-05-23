@@ -81,7 +81,7 @@ public class DialogDelegationTests
     public async Task PlaySong_MissingSlot_ElicitsSongName()
     {
         var handler = new PlaySongIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory);
         var request = CreateIntentRequest(IntentNames.PlaySong, "STARTED");
         var session = CreateSession();
 
@@ -97,7 +97,7 @@ public class DialogDelegationTests
     public async Task PlaySong_WithSlots_ProcessesNormally()
     {
         var handler = new PlaySongIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory);
         var request = CreateIntentRequest(IntentNames.PlaySong, "COMPLETED",
             new Dictionary<string, string> { { "song", "Bohemian Rhapsody" }, { "musician", "Queen" } });
         var session = CreateSession();
@@ -175,7 +175,7 @@ public class DialogDelegationTests
     public async Task PlaySong_NullDialogState_ElicitsSongName()
     {
         var handler = new PlaySongIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory);
         var request = CreateIntentRequest(IntentNames.PlaySong, null);
         var session = CreateSession();
 

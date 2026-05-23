@@ -213,5 +213,14 @@
   "SkippedToEnd": "Skipped to the end.",
   "JumpedToPosition": "Jumped to {0}.",
   "PositionPastEnd": "That's past the end. This content is {0} long.",
-  "NowPlayingCardTitle": "Now Playing"
+  "NowPlayingCardTitle": "Now Playing",
+  "BrowseResultsPartial": "I found {0} {1}. Here are the first {2}: {3}.",
+  "InProgressListPartial": "You have {0} items in progress. Here are the first {1}: {2}.",
+  "QueueListPartial": "There are {0} items up next. Here are the first {1}: {2}.",
+  "ShowMorePrompt": "Say \"show more\" to see additional items.",
+  "NoMoreItems": "Those are all the items.",
+  "ShowMoreNoSession": "I don't have a previous list to continue. Try browsing again.",
+  "ShowMorePage": "Here are the next items: {0}",
+  "ShowMoreLastPage": "And the remaining items: {0}",
+  "QueryRecentlyAddedPartial": "{0} Here are the first {1}: {2}."
 }

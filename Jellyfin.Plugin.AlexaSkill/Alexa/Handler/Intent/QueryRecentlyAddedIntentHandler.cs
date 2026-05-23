@@ -29,7 +29,10 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public class QueryRecentlyAddedIntentHandler : BaseHandler
 {
+    private const int VoicePageSize = 5;
+
     private static int MaxResults => Plugin.Instance?.Configuration?.MaxRecentlyAddedResults ?? 10;
+    private static int MaxDisplayItems => Plugin.Instance?.Configuration?.MaxListDisplayItems ?? 15;
 
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
@@ -109,8 +112,13 @@ public class QueryRecentlyAddedIntentHandler : BaseHandler
 
     private SkillResponse BuildListResponse(IReadOnlyList<BaseItem> items, string locale, Context? context, Entities.User user)
     {
-        var itemEntries = new List<string>();
-        for (int i = 0; i < items.Count; i++)
+        int total = items.Count;
+        int voiceCount = Math.Min(total, VoicePageSize);
+        int displayCount = Math.Min(total, MaxDisplayItems);
+        bool isTruncated = total > voiceCount;
+
+        var voiceEntries = new List<string>();
+        for (int i = 0; i < voiceCount; i++)
         {
             BaseItem item = items[i];
             string? artist = GetArtistSubtitle(item);
@@ -126,20 +134,42 @@ public class QueryRecentlyAddedIntentHandler : BaseHandler
                 entry = ResponseStrings.Get("QueryRecentlyAddedItemNoArtist", locale, (i + 1).ToString(CultureInfo.InvariantCulture), itemName);
             }
 
-            itemEntries.Add(entry);
+            voiceEntries.Add(entry);
         }
 
-        string listText = string.Join(". ", itemEntries);
-        string intro = ResponseStrings.Get("QueryRecentlyAddedIntro", locale, items.Count.ToString(CultureInfo.InvariantCulture));
+        string voiceListText = string.Join(". ", voiceEntries);
+        string intro = ResponseStrings.Get("QueryRecentlyAddedIntro", locale, total.ToString(CultureInfo.InvariantCulture));
         string prompt = ResponseStrings.Get("QueryRecentlyAddedPrompt", locale);
 
-        string speech = $"{intro} {listText}. {prompt}";
+        string speech;
+        if (isTruncated)
+        {
+            speech = ResponseStrings.Get("QueryRecentlyAddedPartial", locale, intro, voiceCount.ToString(CultureInfo.InvariantCulture), voiceListText) + " " + ResponseStrings.Get("ShowMorePrompt", locale) + " " + prompt;
+        }
+        else
+        {
+            speech = $"{intro} {voiceListText}. {prompt}";
+        }
 
-        SkillResponse response = ResponseBuilder.Tell(speech);
+        SkillResponse response = isTruncated
+            ? ResponseBuilder.Ask(speech, new Reprompt(ResponseStrings.Get("ShowMorePrompt", locale)))
+            : ResponseBuilder.Tell(speech);
 
-        var aplItems = items.Select(i =>
+        // Store pagination state for ShowMoreIntent when truncated
+        if (isTruncated)
+        {
+            response.SessionAttributes = new Dictionary<string, object>();
+            ListPaginationHelper.WriteState(
+                response.SessionAttributes,
+                ListPaginationHelper.ListType.RecentlyAdded,
+                items.Take(displayCount).Select(i => i.Id.ToString()).ToArray(),
+                voiceCount,
+                VoicePageSize);
+        }
+
+        var aplItems = items.Take(displayCount).Select(i =>
             new ListDisplayItem(i.Name ?? string.Empty, i.Id.ToString("N"), GetArtistSubtitle(i), GetImageUrl(i.Id.ToString("N"), user))).ToList();
-        TryAttachListDirective(response, context, "Recently Added", aplItems, "recentlyAdded");
+        TryAttachListDirective(response, context, "Recently Added", aplItems, "recentlyAdded", hasMore: isTruncated);
 
         return response;
     }

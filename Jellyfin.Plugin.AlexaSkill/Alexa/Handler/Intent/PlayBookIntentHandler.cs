@@ -161,16 +161,45 @@ public class PlayBookIntentHandler : BaseHandler
             "GetBookTracks",
             cancellationToken).ConfigureAwait(false);
 
+        // Single-file audiobooks: the AudioBook item IS the audio track itself.
+        // Multi-file audiobooks: children tracks exist under a parent folder.
+        IReadOnlyList<BaseItem> trackItems;
         if (bookTracks.TotalRecordCount == 0)
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("NoContentInBook", locale, book));
+            if (books[0].MediaType == MediaType.Audio)
+            {
+                trackItems = new List<BaseItem> { books[0] };
+            }
+            else
+            {
+                return ResponseBuilder.Tell(ResponseStrings.Get("NoContentInBook", locale, book));
+            }
+        }
+        else
+        {
+            trackItems = bookTracks.Items;
         }
 
-        IReadOnlyList<BaseItem> trackItems = bookTracks.Items;
-
         // Check for existing progress — resume from the last position
+        Logger.LogDebug(
+            "PlayBook: checking resume for '{BookName}' ({BookId}) with {TrackCount} tracks",
+            books[0].Name, books[0].Id, trackItems.Count);
+
+        for (int debugIdx = 0; debugIdx < trackItems.Count; debugIdx++)
+        {
+            UserItemData? dbgData = _userDataManager.GetUserData(jellyfinUser!, trackItems[debugIdx]);
+            Logger.LogDebug(
+                "PlayBook track[{Idx}]: '{TrackName}' — Played={Played}, PositionTicks={Ticks}",
+                debugIdx, trackItems[debugIdx].Name,
+                dbgData?.Played, dbgData?.PlaybackPositionTicks);
+        }
+
         (int startIndex, long resumeTicks) = FindResumeTrackIndex(
-            trackItems, jellyfinUser!, _userDataManager, resumePosition: true);
+            trackItems, jellyfinUser!, _userDataManager, resumePosition: true, Logger);
+
+        Logger.LogInformation(
+            "PlayBook: FindResumeTrackIndex returned startIndex={StartIndex}, resumeTicks={Ticks} for '{BookName}'",
+            startIndex, resumeTicks, books[0].Name);
 
         int offsetMs = 0;
 
@@ -184,6 +213,10 @@ public class PlayBookIntentHandler : BaseHandler
                 startIndex,
                 trackItems[startIndex].Name,
                 offsetMs);
+        }
+        else
+        {
+            Logger.LogInformation("PlayBook: starting '{Book}' from the beginning (no resume position found)", books[0].Name);
         }
 
         List<QueueItem> queueItems = new();

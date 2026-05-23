@@ -52,6 +52,7 @@ public class PlaySongIntentHandler : BaseHandler
 
     private ILibraryManager _libraryManager;
     private IUserManager _userManager;
+    private readonly IUserDataManager _userDataManager;
     private readonly IArtistIndex? _artistIndex;
 
     /// <summary>
@@ -61,6 +62,7 @@ public class PlaySongIntentHandler : BaseHandler
     /// <param name="config">The plugin configuration.</param>
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
+    /// <param name="userDataManager">Instance of the <see cref="IUserDataManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
     /// <param name="artistIndex">Optional in-memory artist index for fast search.</param>
     public PlaySongIntentHandler(
@@ -68,11 +70,13 @@ public class PlaySongIntentHandler : BaseHandler
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
+        IUserDataManager userDataManager,
         ILoggerFactory loggerFactory,
         IArtistIndex? artistIndex = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
+        _userDataManager = userDataManager;
         _artistIndex = artistIndex;
     }
 
@@ -176,7 +180,15 @@ public class PlaySongIntentHandler : BaseHandler
                     session.NowPlayingQueue = qi;
                     session.FullNowPlayingItem = best;
                     string iid = best.Id.ToString();
-                    return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(iid, user), iid, best, user, context);
+                    int fuzzOffset = GetItemResumeOffset(best, jellyfinUser!, locale);
+                    if (fuzzOffset > 0)
+                    {
+                        Logger.LogInformation(
+                            "PlaySong fuzzy auto-play: resuming '{SongName}' from {OffsetMs}ms",
+                            best.Name, fuzzOffset);
+                    }
+
+                    return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(iid, user), iid, best, user, context, fuzzOffset);
                 },
                 user: user);
 
@@ -190,7 +202,6 @@ public class PlaySongIntentHandler : BaseHandler
         }
 
         List<QueueItem> queueItems = new List<QueueItem>();
-        // Pick the first match
         queueItems.Add(new QueueItem { Id = songs[0].Id });
 
         session.NowPlayingQueue = queueItems;
@@ -198,7 +209,16 @@ public class PlaySongIntentHandler : BaseHandler
 
         string item_id = songs[0].Id.ToString();
 
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, songs[0], user, context);
+        int offsetMs = GetItemResumeOffset(songs[0], jellyfinUser!, locale);
+
+        if (offsetMs > 0)
+        {
+            Logger.LogInformation(
+                "PlaySong: resuming '{SongName}' from {OffsetMs}ms (saved position)",
+                songs[0].Name, offsetMs);
+        }
+
+        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, songs[0], user, context, offsetMs);
     }
 
     // Alexa's NLU can misalign slot boundaries, causing carrier phrases like
@@ -215,5 +235,37 @@ public class PlaySongIntentHandler : BaseHandler
         }
 
         return query;
+    }
+
+    /// <summary>
+    /// Check server-side playback progress for a single item and return resume offset in ms.
+    /// Returns 0 if the item has no saved position or is marked as fully played.
+    /// </summary>
+    private int GetItemResumeOffset(BaseItem item, Jellyfin.Database.Implementations.Entities.User jellyfinUser, string locale)
+    {
+        UserItemData? data = _userDataManager.GetUserData(jellyfinUser, item);
+        if (data == null)
+        {
+            Logger.LogDebug("PlaySong resume check: no UserItemData for '{SongName}'", item.Name);
+            return 0;
+        }
+
+        Logger.LogDebug(
+            "PlaySong resume check: '{SongName}' — PositionTicks={Ticks}, Played={Played}, IsFavorite={Fav}",
+            item.Name, data.PlaybackPositionTicks, data.Played, data.IsFavorite);
+
+        if (data.PlaybackPositionTicks > 0 && !data.Played)
+        {
+            int offset = (int)TimeSpan.FromTicks(data.PlaybackPositionTicks).TotalMilliseconds;
+            Logger.LogInformation(
+                "PlaySong resume check: '{SongName}' has saved position {Ticks} ticks ({OffsetMs}ms), will resume",
+                item.Name, data.PlaybackPositionTicks, offset);
+            return offset;
+        }
+
+        Logger.LogDebug(
+            "PlaySong resume check: '{SongName}' — no resume needed (ticks={Ticks}, played={Played})",
+            item.Name, data.PlaybackPositionTicks, data.Played);
+        return 0;
     }
 }

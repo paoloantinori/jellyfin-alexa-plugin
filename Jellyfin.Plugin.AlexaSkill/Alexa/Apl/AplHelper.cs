@@ -261,7 +261,29 @@ internal static class AplHelper
                 ]
               }
             }
-          }
+          },
+{
+  ""type"": ""TouchWrapper"",
+  ""when"": ""${payload.listData.properties.hasMore}"",
+  ""onPress"": [{ ""type"": ""SendEvent"", ""arguments"": [""show more""] }],
+  ""item"": {
+    ""type"": ""Container"",
+    ""justifyContent"": ""center"",
+    ""alignItems"": ""center"",
+    ""paddingTop"": 12,
+    ""paddingBottom"": 16,
+    ""items"": [
+      {
+        ""type"": ""Text"",
+        ""text"": ""Show More ▸"",
+        ""fontSize"": 20,
+        ""fontWeight"": ""bold"",
+        ""color"": ""#AA5CC3"",
+        ""textAlign"": ""center""
+      }
+    ]
+  }
+}
         ]
       }
     ]
@@ -737,7 +759,7 @@ internal static class AplHelper
     /// <param name="action">SendEvent action name fired when a list item is tapped (default: "selectItem").</param>
     /// <param name="context">Optional Alexa request context for backstack navigation.</param>
     /// <returns>An APL RenderDocument directive, or null if the item list is empty.</returns>
-    public static AplRenderDocumentDirective? BuildListDirective(string title, List<ListDisplayItem> items, string token, string action = "selectItem", Context? context = null)
+    public static AplRenderDocumentDirective? BuildListDirective(string title, List<ListDisplayItem> items, string token, string action = "selectItem", Context? context = null, bool hasMore = false)
     {
         if (items.Count == 0)
         {
@@ -774,7 +796,8 @@ internal static class AplHelper
                     {
                         ["title"] = title,
                         ["action"] = action,
-                        ["items"] = itemArray
+                        ["items"] = itemArray,
+                        ["hasMore"] = hasMore
                     }
                 }
             },

@@ -766,6 +766,20 @@
           "Loop cette chanson",
           "Répète indéfiniment"
         ]
+      },
+      {
+        "name": "ShowMoreIntent",
+        "samples": [
+          "montre plus",
+          "encore",
+          "plus de résultats",
+          "continuer",
+          "suivant",
+          "quoi d'autre",
+          "voir plus",
+          "page suivante"
+        ],
+        "slots": []
       }
     ],
     "types": [

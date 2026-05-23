@@ -26,7 +26,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 public class InProgressMediaListIntentHandler : BaseHandler
 {
     private const int MaxCandidates = 50;
-    private const int MaxResults = 5;
+    private const int VoicePageSize = 5;
+
+    private static int MaxDisplayItems => Plugin.Instance?.Configuration?.MaxInProgressDisplayItems ?? 10;
 
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
@@ -111,7 +113,7 @@ public class InProgressMediaListIntentHandler : BaseHandler
 
             inProgressItems.Add((item, FormatPosition(userData.PlaybackPositionTicks)));
 
-            if (inProgressItems.Count >= MaxResults)
+            if (inProgressItems.Count >= MaxDisplayItems)
             {
                 break;
             }
@@ -122,20 +124,48 @@ public class InProgressMediaListIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("NoInProgressMedia", locale));
         }
 
-        var itemDescriptions = new List<string>();
-        for (int i = 0; i < inProgressItems.Count; i++)
+        int total = inProgressItems.Count;
+        int voiceCount = Math.Min(total, VoicePageSize);
+        bool isTruncated = total > voiceCount;
+
+        var voiceDescriptions = new List<string>();
+        for (int i = 0; i < voiceCount; i++)
         {
-            itemDescriptions.Add(ResponseStrings.Get("InProgressItemWithPosition", locale, inProgressItems[i].Item.Name, inProgressItems[i].Position));
+            voiceDescriptions.Add(ResponseStrings.Get("InProgressItemWithPosition", locale, inProgressItems[i].Item.Name, inProgressItems[i].Position));
         }
 
-        string listText = string.Join(". ", itemDescriptions);
-        string speech = ResponseStrings.Get("InProgressList", locale, inProgressItems.Count, listText);
+        string voiceListText = string.Join(". ", voiceDescriptions);
 
-        SkillResponse response = ResponseBuilder.Tell(speech);
+        string speech;
+        if (isTruncated)
+        {
+            speech = ResponseStrings.Get("InProgressListPartial", locale, total, voiceCount, voiceListText);
+            speech += " " + ResponseStrings.Get("ShowMorePrompt", locale);
+        }
+        else
+        {
+            speech = ResponseStrings.Get("InProgressList", locale, total, voiceListText);
+        }
+
+        SkillResponse response = isTruncated
+            ? ResponseBuilder.Ask(speech, new Reprompt(ResponseStrings.Get("ShowMorePrompt", locale)))
+            : ResponseBuilder.Tell(speech);
+
+        // Store pagination state for ShowMoreIntent when truncated
+        if (isTruncated)
+        {
+            response.SessionAttributes = new Dictionary<string, object>();
+            ListPaginationHelper.WriteState(
+                response.SessionAttributes,
+                ListPaginationHelper.ListType.InProgress,
+                inProgressItems.Select(i => i.Item.Id.ToString()).ToArray(),
+                voiceCount,
+                VoicePageSize);
+        }
 
         var aplItems = inProgressItems.Select(i =>
             new Apl.ListDisplayItem(i.Item.Name, i.Item.Id.ToString("N"), i.Position, GetImageUrl(i.Item.Id.ToString("N"), user))).ToList();
-        TryAttachListDirective(response, context, "In Progress", aplItems, "inProgress");
+        TryAttachListDirective(response, context, "In Progress", aplItems, "inProgress", hasMore: isTruncated);
 
         return response;
     }

@@ -35,6 +35,10 @@ public class PlaybackFinishedEventHandler : BaseHandler
     {
         AudioPlayerRequest req = (AudioPlayerRequest)request;
 
+        Logger.LogDebug(
+            "PlaybackFinished: item={Token}, offset={OffsetMs}ms, sessionId={SessionId}",
+            req.Token, req.OffsetInMilliseconds, session.Id);
+
         PlaybackStopInfo playbackStopInfo = new PlaybackStopInfo
         {
             SessionId = session.Id,
@@ -42,6 +46,10 @@ public class PlaybackFinishedEventHandler : BaseHandler
             PositionTicks = TimeSpan.FromMilliseconds(req.OffsetInMilliseconds).Ticks,
         };
         await SessionManager.OnPlaybackStopped(playbackStopInfo).ConfigureAwait(false);
+
+        Logger.LogDebug(
+            "PlaybackFinished: saved to server — item={Token}, positionTicks={Ticks}",
+            req.Token, playbackStopInfo.PositionTicks);
 
         return ResponseBuilder.Empty();
     }

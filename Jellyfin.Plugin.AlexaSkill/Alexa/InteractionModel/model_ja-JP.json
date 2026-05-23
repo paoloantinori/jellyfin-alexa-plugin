@@ -671,6 +671,20 @@
           "listen to audiobook {book}",
           "listen to the audiobook {book}"
         ]
+      },
+      {
+        "name": "ShowMoreIntent",
+        "samples": [
+          "もっと見せて",
+          "次のページ",
+          "もっと",
+          "続き",
+          "他に何がある",
+          "もっと結果",
+          "次",
+          "もっと見る"
+        ],
+        "slots": []
       }
     ],
     "types": [

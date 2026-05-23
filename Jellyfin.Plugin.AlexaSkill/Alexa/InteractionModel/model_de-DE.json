@@ -769,6 +769,20 @@
           "Wiederhole endlos",
           "Spiele dieses Lied in Schleife"
         ]
+      },
+      {
+        "name": "ShowMoreIntent",
+        "samples": [
+          "zeig mehr",
+          "noch mehr",
+          "weiter",
+          "nächste seite",
+          "mehr ergebnisse",
+          "was gibt es noch",
+          "mehr",
+          "zeige mehr"
+        ],
+        "slots": []
       }
     ],
     "types": [
@@ -991,56 +1005,85 @@
             "id": "director",
             "name": {
               "value": "Regisseur",
-              "synonyms": ["Regisseurin", "Regie", "Filmemacher"]
+              "synonyms": [
+                "Regisseurin",
+                "Regie",
+                "Filmemacher"
+              ]
             }
           },
           {
             "id": "cast",
             "name": {
               "value": "Besetzung",
-              "synonyms": ["Schauspieler", "Darsteller", "Besetzung"]
+              "synonyms": [
+                "Schauspieler",
+                "Darsteller",
+                "Besetzung"
+              ]
             }
           },
           {
             "id": "season",
             "name": {
               "value": "Staffel",
-              "synonyms": ["Saison", "Staffelnummer"]
+              "synonyms": [
+                "Saison",
+                "Staffelnummer"
+              ]
             }
           },
           {
             "id": "episode",
             "name": {
               "value": "Folge",
-              "synonyms": ["Episodennummer", "Episode"]
+              "synonyms": [
+                "Episodennummer",
+                "Episode"
+              ]
             }
           },
           {
             "id": "series",
             "name": {
               "value": "Serie",
-              "synonyms": ["Show", "Fernsehserie", "TV-Serie"]
+              "synonyms": [
+                "Show",
+                "Fernsehserie",
+                "TV-Serie"
+              ]
             }
           },
           {
             "id": "author",
             "name": {
               "value": "Autor",
-              "synonyms": ["Schriftsteller", "Verfasser"]
+              "synonyms": [
+                "Schriftsteller",
+                "Verfasser"
+              ]
             }
           },
           {
             "id": "narrator",
             "name": {
               "value": "Sprecher",
-              "synonyms": ["Erzähler", "Vorleser", "Sprecherin"]
+              "synonyms": [
+                "Erzähler",
+                "Vorleser",
+                "Sprecherin"
+              ]
             }
           },
           {
             "id": "rating",
             "name": {
               "value": "Bewertung",
-              "synonyms": ["Note", "Sternebewertung", "Punktzahl"]
+              "synonyms": [
+                "Note",
+                "Sternebewertung",
+                "Punktzahl"
+              ]
             }
           }
         ]

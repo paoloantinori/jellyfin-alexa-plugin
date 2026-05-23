@@ -27,7 +27,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public class QueryArtistLibraryIntentHandler : BaseHandler
 {
-    private const int MaxListedItems = 5;
+    private const int VoicePageSize = 5;
+    private static int MaxDisplayItems => Plugin.Instance?.Configuration?.MaxListDisplayItems ?? 15;
 
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
@@ -201,20 +202,33 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
         }
 
         int total = items.Count;
+        int displayCount = Math.Min(total, MaxDisplayItems);
+        bool isTruncated = total > VoicePageSize;
         SkillResponse response;
 
-        if (total <= MaxListedItems)
+        if (total <= VoicePageSize)
         {
             string list = string.Join(", ", items.Select(i => i.Name));
             response = ResponseBuilder.Tell(ResponseStrings.Get(listKey, locale, artistName, total, list));
         }
         else
         {
-            string partialList = string.Join(", ", items.Take(MaxListedItems).Select(i => i.Name));
-            response = ResponseBuilder.Tell(ResponseStrings.Get(partialKey, locale, artistName, total, MaxListedItems, partialList));
+            string partialList = string.Join(", ", items.Take(VoicePageSize).Select(i => i.Name));
+            string speech = ResponseStrings.Get(partialKey, locale, artistName, total, VoicePageSize, partialList);
+            speech += " " + ResponseStrings.Get("ShowMorePrompt", locale);
+            response = ResponseBuilder.Ask(speech, new Reprompt(ResponseStrings.Get("ShowMorePrompt", locale)));
+
+            // Store pagination state for ShowMoreIntent
+            response.SessionAttributes = new Dictionary<string, object>();
+            ListPaginationHelper.WriteState(
+                response.SessionAttributes,
+                ListPaginationHelper.ListType.ArtistLibrary,
+                items.Take(displayCount).Select(i => i.Id.ToString()).ToArray(),
+                VoicePageSize,
+                VoicePageSize);
         }
 
-        var aplItems = items.Take(MaxListedItems).Select(i =>
+        var aplItems = items.Take(displayCount).Select(i =>
             new Apl.ListDisplayItem(i.Name, i.Id.ToString("N"), artistName, GetImageUrl(i.Id.ToString("N"), user))).ToList();
         TryAttachCarouselDirective(response, context, artistName, aplItems, "queryArtist", locale: locale);
 

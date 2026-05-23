@@ -130,7 +130,7 @@ public class AplHelperTests
         var loggerFactory = LoggerFactory.Create(b => { });
 
         var handler = new PlaySongIntentHandler(
-            sessionManagerMock.Object, config, libraryManagerMock.Object, userManagerMock.Object, loggerFactory);
+            sessionManagerMock.Object, config, libraryManagerMock.Object, userManagerMock.Object, Mock.Of<IUserDataManager>(), loggerFactory);
 
         var audio = new Audio { Name = "Test Song", Id = Guid.NewGuid() };
         audio.Artists = new List<string> { "Artist" };
@@ -266,7 +266,7 @@ public class AplHelperTests
         var loggerFactory = LoggerFactory.Create(b => { });
 
         var handler = new PlaySongIntentHandler(
-            sessionManagerMock.Object, config, libraryManagerMock.Object, userManagerMock.Object, loggerFactory);
+            sessionManagerMock.Object, config, libraryManagerMock.Object, userManagerMock.Object, Mock.Of<IUserDataManager>(), loggerFactory);
 
         var audio = new Audio { Name = "Test Song", Id = Guid.NewGuid() };
         audio.Artists = new List<string> { "Artist" };

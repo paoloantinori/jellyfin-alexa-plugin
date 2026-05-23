@@ -55,6 +55,18 @@ CI validates models, locales, and versions on every PR and push to main.
 - `tests/integration/` — NLU + E2E test suites (Python/pytest)
 - `Directory.Build.props` — Version numbers (single source of truth)
 
+## Debug Logging Policy
+
+Keep `Logger.LogDebug(...)` calls in production code to aid triage. These are filtered by Serilog's `Information` default level and have negligible performance impact. When debugging, enable them by adding an override to `/config/logging.default.json` in the Jellyfin container:
+
+```json
+"Jellyfin.Plugin.AlexaSkill": "Debug"
+```
+
+No code changes or rebuilds needed — just edit the config and restart Jellyfin.
+
+Debug logs should capture: resolved intent/slot/entity names, matched Jellyfin item IDs, playback position values (ticks/ms), user resolution, and handler branching decisions. This helps verify that Alexa NLU results match the correct Jellyfin entries without redeploying.
+
 ## Handler Pattern
 
 Handlers inherit `BaseHandler` and implement `CanHandle()` + `HandleAsync()`. `BaseHandler` provides:

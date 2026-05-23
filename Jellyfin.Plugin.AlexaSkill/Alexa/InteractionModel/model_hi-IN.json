@@ -700,6 +700,19 @@
           "listen to audiobook {book}",
           "listen to the audiobook {book}"
         ]
+      },
+      {
+        "name": "ShowMoreIntent",
+        "samples": [
+          "और दिखाओ",
+          "अगला पेज",
+          "और",
+          "जारी रखो",
+          "आगे",
+          "क्या और है",
+          "और परिणाम"
+        ],
+        "slots": []
       }
     ],
     "types": [

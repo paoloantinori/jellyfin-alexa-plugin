@@ -213,5 +213,14 @@
   "ResumingBookSsml": "<say-as interpret-as=\"interjection\">resuming</say-as><break time=\"200ms\"/><emphasis level=\"moderate\">{0}</emphasis>, chapter {1}.",
   "ResumingVideo": "Resuming {0} from {1}.",
   "RestartingContent": "Starting {0} from the beginning.",
-  "NoMediaToRestart": "Nothing to restart."
+  "NoMediaToRestart": "Nothing to restart.",
+  "BrowseResultsPartial": "وجدت {0} {1}. إليك أول {2}: {3}.",
+  "InProgressListPartial": "لديك {0} عناصر قيد التقدم. إليك أول {1}: {2}.",
+  "QueueListPartial": "هناك {0} عناصر تالية. إليك أول {1}: {2}.",
+  "ShowMorePrompt": "قل \"أظهر المزيد\" لرؤية عناصر إضافية.",
+  "NoMoreItems": "هذه جميع العناصر.",
+  "ShowMoreNoSession": "ليس لدي قائمة سابقة لمواصلتها. حاول التصفح مرة أخرى.",
+  "ShowMorePage": "إليك العناصر التالية: {0}",
+  "ShowMoreLastPage": "{0} إليك الـ {1} الأولى: {2}.",
+  "QueryRecentlyAddedPartial": "{0} إليك الـ {1} الأولى: {2}."
 }

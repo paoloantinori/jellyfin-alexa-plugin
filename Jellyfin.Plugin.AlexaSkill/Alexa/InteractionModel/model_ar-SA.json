@@ -685,6 +685,19 @@
           "listen to audiobook {book}",
           "listen to the audiobook {book}"
         ]
+      },
+      {
+        "name": "ShowMoreIntent",
+        "samples": [
+          "أظهر المزيد",
+          "المزيد",
+          "الصفحة التالية",
+          "استمر",
+          "ماذا أيضا",
+          "المزيد من النتائج",
+          "أظهر المزيد من النتائج"
+        ],
+        "slots": []
       }
     ],
     "types": [

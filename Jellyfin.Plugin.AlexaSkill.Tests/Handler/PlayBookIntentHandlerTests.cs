@@ -232,7 +232,9 @@ public class PlayBookIntentHandlerTests
 
         SetupUserMock();
 
-        var bookItem = new Audio
+        // Use a Folder-based item (not Audio) so MediaType != Audio,
+        // triggering the "no content" path after our single-file audiobook fix.
+        var bookItem = new CollectionFolder
         {
             Name = "Empty Book",
             Id = Guid.NewGuid()

@@ -55,6 +55,27 @@ public class PauseIntentHandler : BaseHandler
             (string.Equals(ir.Intent.Name, IntentNames.AmazonStop, System.StringComparison.Ordinal) ||
              string.Equals(ir.Intent.Name, IntentNames.AmazonCancel, System.StringComparison.Ordinal));
 
+        Logger.LogDebug(
+            "PauseIntent: isStopOrCancel={IsStop}, device={DeviceId}, audioPlayer token={Token} activity={Activity} offset={OffsetMs}ms",
+            isStopOrCancel,
+            context.System.Device.DeviceID,
+            context.AudioPlayer?.Token,
+            context.AudioPlayer?.PlayerActivity,
+            context.AudioPlayer?.OffsetInMilliseconds);
+
+        if (session?.FullNowPlayingItem != null)
+        {
+            Logger.LogDebug(
+                "PauseIntent: nowPlaying={ItemName} ({ItemId}), playState position={PositionTicks} ticks",
+                session.FullNowPlayingItem.Name,
+                session.FullNowPlayingItem.Id,
+                session.PlayState?.PositionTicks);
+        }
+        else
+        {
+            Logger.LogDebug("PauseIntent: no nowPlayingItem in session");
+        }
+
         // Both pause and stop need AudioPlayer.Stop directive to guarantee audio stops.
         // Stop/Cancel ends the session; Pause keeps it open for resume.
         var response = BuildPauseResponse();

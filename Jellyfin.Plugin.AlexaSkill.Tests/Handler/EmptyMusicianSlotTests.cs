@@ -55,6 +55,7 @@ public class EmptyMusicianSlotTests
             _config,
             _libraryManagerMock.Object,
             _userManagerMock.Object,
+            _userDataManagerMock.Object,
             _loggerFactory);
     }
 

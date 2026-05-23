@@ -110,6 +110,11 @@ public class PluginConfiguration : BasePluginConfiguration
     public int MaxRecentlyAddedResults { get; set; } = 10;
     public int MaxRecommendationResults { get; set; } = 10;
 
+    // Display preferences — items sent to APL visual templates (voice reads 5 max)
+    public int MaxListDisplayItems { get; set; } = 15;
+    public int MaxInProgressDisplayItems { get; set; } = 10;
+    public int MaxQueueDisplayItems { get; set; } = 10;
+
     /// <summary>
     /// Gets or sets the list of users.
     /// </summary>
@@ -244,9 +249,9 @@ public class PluginConfiguration : BasePluginConfiguration
             errors.Add("Max Search Results must be between 1 and 50.");
         }
 
-        if (MaxBrowseResults < 1 || MaxBrowseResults > 20)
+        if (MaxBrowseResults < 1 || MaxBrowseResults > 50)
         {
-            errors.Add("Max Browse Results must be between 1 and 20.");
+            errors.Add("Max Browse Results must be between 1 and 50.");
         }
 
         if (MaxRecentlyAddedResults < 1 || MaxRecentlyAddedResults > 50)
@@ -257,6 +262,21 @@ public class PluginConfiguration : BasePluginConfiguration
         if (MaxRecommendationResults < 1 || MaxRecommendationResults > 30)
         {
             errors.Add("Max Recommendation Results must be between 1 and 30.");
+        }
+
+        if (MaxListDisplayItems < 1 || MaxListDisplayItems > 50)
+        {
+            errors.Add("Max List Display Items must be between 1 and 50.");
+        }
+
+        if (MaxInProgressDisplayItems < 1 || MaxInProgressDisplayItems > 50)
+        {
+            errors.Add("Max In Progress Display Items must be between 1 and 50.");
+        }
+
+        if (MaxQueueDisplayItems < 1 || MaxQueueDisplayItems > 50)
+        {
+            errors.Add("Max Queue Display Items must be between 1 and 50.");
         }
 
         return errors;

@@ -31,6 +31,7 @@ public class PlaySongAsrFallbackTests
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly Mock<ILibraryManager> _libraryManagerMock;
     private readonly Mock<IUserManager> _userManagerMock;
+    private readonly Mock<IUserDataManager> _userDataManagerMock;
     private readonly PluginConfiguration _config;
     private readonly ILoggerFactory _loggerFactory;
 
@@ -39,6 +40,7 @@ public class PlaySongAsrFallbackTests
         _sessionManagerMock = new Mock<ISessionManager>();
         _libraryManagerMock = new Mock<ILibraryManager>();
         _userManagerMock = new Mock<IUserManager>();
+        _userDataManagerMock = new Mock<IUserDataManager>();
         _config = new PluginConfiguration();
         TestHelpers.SetServerAddress(_config, "https://test.example.com");
         _loggerFactory = LoggerFactory.Create(b => { });
@@ -51,6 +53,7 @@ public class PlaySongAsrFallbackTests
             _config,
             _libraryManagerMock.Object,
             _userManagerMock.Object,
+            _userDataManagerMock.Object,
             _loggerFactory);
     }
 

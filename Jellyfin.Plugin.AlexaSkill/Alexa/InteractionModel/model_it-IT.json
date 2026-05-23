@@ -1232,6 +1232,20 @@
             "type": "AMAZON.NUMBER"
           }
         ]
+      },
+      {
+        "name": "ShowMoreIntent",
+        "samples": [
+          "mostra altri",
+          "ancora",
+          "vedere altri",
+          "continua",
+          "avanti",
+          "altro",
+          "più risultati",
+          "cosa c'è altro"
+        ],
+        "slots": []
       }
     ],
     "types": [

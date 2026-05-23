@@ -213,5 +213,14 @@
   "ResumingBookSsml": "<say-as interpret-as=\"interjection\">resuming</say-as><break time=\"200ms\"/><emphasis level=\"moderate\">{0}</emphasis>, chapter {1}.",
   "ResumingVideo": "Resuming {0} from {1}.",
   "RestartingContent": "Starting {0} from the beginning.",
-  "NoMediaToRestart": "Nothing to restart."
+  "NoMediaToRestart": "Nothing to restart.",
+  "BrowseResultsPartial": "Ich habe {0} {1} gefunden. Hier sind die ersten {2}: {3}.",
+  "InProgressListPartial": "Du hast {0} Inhalte in Bearbeitung. Hier sind die ersten {1}: {2}.",
+  "QueueListPartial": "Es sind {0} Elemente als Nächstes dran. Hier sind die ersten {1}: {2}.",
+  "ShowMorePrompt": "Sage \"zeige mehr\", um weitere Elemente zu sehen.",
+  "NoMoreItems": "Das waren alle Elemente.",
+  "ShowMoreNoSession": "Ich habe keine vorherige Liste, die ich fortsetzen kann. Versuche es erneut mit dem Durchsuchen.",
+  "ShowMorePage": "Hier sind die nächsten Elemente: {0}",
+  "ShowMoreLastPage": "{0} Hier sind die ersten {1}: {2}.",
+  "QueryRecentlyAddedPartial": "{0} Hier sind die ersten {1}: {2}."
 }

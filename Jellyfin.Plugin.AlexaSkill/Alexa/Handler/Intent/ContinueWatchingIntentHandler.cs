@@ -80,7 +80,7 @@ public class ContinueWatchingIntentHandler : BaseHandler
 
         BaseItemKind[] contentTypes = FilterByContentAccess(new[] { BaseItemKind.Audio, BaseItemKind.Movie, BaseItemKind.Episode });
         var (resumeItem, resumeTicks) = FindLastPlayedItemWithProgress(
-            jellyfinUser!, _libraryManager, _userDataManager, user, contentTypes, MaxCandidates);
+            jellyfinUser!, _libraryManager, _userDataManager, user, contentTypes, Logger, MaxCandidates);
 
         if (resumeItem == null)
         {

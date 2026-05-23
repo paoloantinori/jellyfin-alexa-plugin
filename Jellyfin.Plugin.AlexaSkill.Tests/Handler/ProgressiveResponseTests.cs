@@ -198,7 +198,7 @@ public class ProgressiveResponseIntegrationTests
             .Returns(new List<BaseItem> { song });
 
         var handler = new PlaySongIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, Mock.Of<IUserDataManager>(), _loggerFactory);
 
         var request = new IntentRequest
         {

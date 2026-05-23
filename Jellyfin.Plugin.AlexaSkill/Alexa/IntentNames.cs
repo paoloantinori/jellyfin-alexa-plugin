@@ -47,6 +47,7 @@ internal static class IntentNames
     public const string FollowMe = "FollowMeIntent";
     public const string SkipForwardBack = "SkipForwardBackIntent";
     public const string JumpToPosition = "JumpToPositionIntent";
+    public const string ShowMore = "ShowMoreIntent";
 
     public const string AmazonFallback = "AMAZON.FallbackIntent";
     public const string AmazonLoopOff = "AMAZON.LoopOffIntent";

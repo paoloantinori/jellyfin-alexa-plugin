@@ -1167,6 +1167,7 @@ public abstract class BaseHandler
         IUserDataManager userDataManager,
         Entities.User pluginUser,
         BaseItemKind[] contentTypes,
+        ILogger? logger = null,
         int maxCandidates = 50)
     {
         var query = new InternalItemsQuery
@@ -1184,6 +1185,10 @@ public abstract class BaseHandler
 
         IReadOnlyList<BaseItem> recentItems = libraryManager.GetItemList(query);
 
+        logger?.LogDebug(
+            "FindLastPlayedItemWithProgress: found {Count} recently-played items for user {UserId}",
+            recentItems.Count, jellyfinUser.Id);
+
         foreach (BaseItem item in recentItems)
         {
             UserItemData? userData = userDataManager.GetUserData(jellyfinUser, item);
@@ -1192,9 +1197,14 @@ public abstract class BaseHandler
                 continue;
             }
 
+            logger?.LogDebug(
+                "FindLastPlayedItemWithProgress: found item '{Name}' ({Id}) with positionTicks={Ticks}",
+                item.Name, item.Id, userData.PlaybackPositionTicks);
+
             return (item, userData.PlaybackPositionTicks);
         }
 
+        logger?.LogDebug("FindLastPlayedItemWithProgress: no item with progress found");
         return (null, 0);
     }
 
@@ -1213,7 +1223,8 @@ public abstract class BaseHandler
         IReadOnlyList<BaseItem> tracks,
         JellyfinUser jellyfinUser,
         IUserDataManager userDataManager,
-        bool resumePosition)
+        bool resumePosition,
+        ILogger? logger = null)
     {
         int lastPlayedIndex = -1;
 
@@ -1227,6 +1238,9 @@ public abstract class BaseHandler
 
             if (data.PlaybackPositionTicks > 0 && !data.Played)
             {
+                logger?.LogDebug(
+                    "FindResumeTrackIndex: found in-progress track[{Idx}] '{Name}' — ticks={Ticks}, returning index",
+                    i, tracks[i].Name, data.PlaybackPositionTicks);
                 return (i, resumePosition ? data.PlaybackPositionTicks : 0);
             }
 
@@ -1239,9 +1253,13 @@ public abstract class BaseHandler
         // If no in-progress track found, resume from the track after the last played one
         if (lastPlayedIndex >= 0 && lastPlayedIndex + 1 < tracks.Count)
         {
+            logger?.LogDebug(
+                "FindResumeTrackIndex: no in-progress track, resuming after last played[{Idx}] '{Name}'",
+                lastPlayedIndex, tracks[lastPlayedIndex].Name);
             return (lastPlayedIndex + 1, 0);
         }
 
+        logger?.LogDebug("FindResumeTrackIndex: no resume position found, starting from beginning");
         return (0, 0);
     }
 
@@ -1296,7 +1314,8 @@ public abstract class BaseHandler
         string title,
         List<Apl.ListDisplayItem> items,
         string token,
-        string action = "selectItem")
+        string action = "selectItem",
+        bool hasMore = false)
     {
         if (!Apl.AplHelper.VisualsEnabled)
         {
@@ -1311,7 +1330,7 @@ public abstract class BaseHandler
             return;
         }
 
-        var directive = Apl.AplHelper.BuildListDirective(title, items, token, action, context);
+        var directive = Apl.AplHelper.BuildListDirective(title, items, token, action, context, hasMore);
         if (directive != null)
         {
             response.Response.Directives.Add(directive);

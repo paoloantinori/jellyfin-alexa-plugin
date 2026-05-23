@@ -50,6 +50,30 @@ public class AplUserEventHandler : BaseHandler
     }
 
     /// <summary>
+    /// Handle APL touch events with session attributes for pagination support.
+    /// Routes "show more" taps to ListPaginationHelper.
+    /// </summary>
+    public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, Dictionary<string, object>? sessionAttributes, CancellationToken cancellationToken)
+    {
+        var aplEvent = (AplUserEventRequest)request;
+        string? action = aplEvent.Arguments?.FirstOrDefault()?.ToString();
+
+        if (action == "show more")
+        {
+            string locale = GetLocale(request);
+            var paginationState = ListPaginationHelper.ReadState(sessionAttributes);
+            if (paginationState == null)
+            {
+                return Task.FromResult(ResponseBuilder.Empty());
+            }
+
+            return Task.FromResult(ListPaginationHelper.BuildNextPageResponse(_libraryManager, paginationState, locale));
+        }
+
+        return HandleAsync(request, context, user, session, cancellationToken);
+    }
+
+    /// <summary>
     /// Handle APL touch events: playback controls (prev/pause/next),
     /// list item selection (selectItem/playTrack), and carousel taps (carouselTap).
     /// </summary>

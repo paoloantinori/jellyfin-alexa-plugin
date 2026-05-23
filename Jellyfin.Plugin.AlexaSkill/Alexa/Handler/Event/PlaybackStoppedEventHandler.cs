@@ -52,17 +52,61 @@ public class PlaybackStoppedEventHandler : BaseHandler
     {
         AudioPlayerRequest req = (AudioPlayerRequest)request;
 
+        Logger.LogInformation(
+            "PlaybackStopped: item={Token}, offset={OffsetMs}ms, playerActivity={Activity}",
+            req.Token, req.OffsetInMilliseconds, context.AudioPlayer?.PlayerActivity);
+
+        // Detect displacement events: when a new AudioPlayer.Play replaces the current track,
+        // Alexa sends PlaybackStopped for the OLD item with a near-zero offset from the new
+        // track's start. This would overwrite the real saved position of the old item.
+        // Guard: if the token doesn't match the current queue's playing item, this is a
+        // displacement event — still report the stop but with position 0 to avoid corrupting
+        // the real progress.
+        bool isDisplacement = false;
+        if (_queueManager != null)
+        {
+            var queue = _queueManager.GetOrCreateQueue(context.System.Device.DeviceID);
+            string? expectedItemId = null;
+            if (queue.CurrentIndex >= 0 && queue.CurrentIndex < queue.ItemIds.Count)
+            {
+                expectedItemId = queue.ItemIds[queue.CurrentIndex];
+            }
+
+            if (!string.IsNullOrEmpty(expectedItemId) &&
+                !string.Equals(expectedItemId, req.Token, StringComparison.OrdinalIgnoreCase))
+            {
+                isDisplacement = true;
+                Logger.LogWarning(
+                    "PlaybackStopped: displacement detected — stopped item={StoppedToken} but queue expects={QueueToken}. " +
+                    "Saving with offset=0 to avoid overwriting real progress.",
+                    req.Token, expectedItemId);
+            }
+        }
+
+        long positionTicks = TimeSpan.FromMilliseconds(req.OffsetInMilliseconds).Ticks;
+        if (isDisplacement)
+        {
+            positionTicks = 0;
+        }
+
         PlaybackStopInfo playbackStopInfo = new PlaybackStopInfo
         {
             SessionId = session.Id,
             ItemId = new Guid(req.Token),
-            PositionTicks = TimeSpan.FromMilliseconds(req.OffsetInMilliseconds).Ticks,
+            PositionTicks = positionTicks,
         };
+
+        Logger.LogDebug(
+            "PlaybackStopped: saving to server — item={Token}, offsetMs={OffsetMs}, ticks={Ticks}, sessionId={SessionId}, displacement={IsDisplacement}",
+            req.Token, req.OffsetInMilliseconds, playbackStopInfo.PositionTicks, session.Id, isDisplacement);
+
         await SessionManager.OnPlaybackStopped(playbackStopInfo).ConfigureAwait(false);
 
+        Logger.LogInformation(
+            "PlaybackStopped: saved to server — item={Token}, position={PositionTicks} ticks",
+            req.Token, playbackStopInfo.PositionTicks);
+
         // Save playback position to DeviceQueue for resume-after-pause recovery.
-        // This allows ResumeIntentHandler to restore the exact position even when
-        // the Alexa AudioPlayer context has been cleared (e.g. after a Stop directive).
         if (_queueManager != null && !string.IsNullOrEmpty(req.Token))
         {
             var queue = _queueManager.GetOrCreateQueue(context.System.Device.DeviceID);
