@@ -296,7 +296,7 @@ public class GetRecentlyPlayedItemsTests
     public void ReturnsEmptyList_WhenLibraryManagerReturnsNull()
     {
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns((IReadOnlyList<BaseItem>?)null);
+            .Returns((IReadOnlyList<BaseItem>?)null!);
 
         var result = TestBaseHandler.CallGetRecentlyPlayedItems(
             CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
