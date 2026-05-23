@@ -507,7 +507,8 @@
           "navegar {browse_category}",
           "mostrar {browse_category}",
           "listar {browse_category}",
-          "quais {browse_category} eu tenho"
+          "quais {browse_category} eu tenho",
+          "quais {browse_category} existem"
         ]
       },
       {

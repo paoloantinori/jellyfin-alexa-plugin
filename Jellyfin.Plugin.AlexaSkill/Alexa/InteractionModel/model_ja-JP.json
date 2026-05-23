@@ -450,7 +450,9 @@
         "samples": [
           "{browse_category} をブラウズして",
           "{browse_category} を見せて",
-          "{browse_category} のリスト"
+          "{browse_category} のリスト",
+          "どんな {browse_category} がある",
+          "{browse_category} は何がある"
         ]
       },
       {

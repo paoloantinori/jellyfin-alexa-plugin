@@ -1,4 +1,4 @@
-# Library Browsing (en-US)
+# Library Browsing (en-CA)
 
 ```mermaid
 graph TD

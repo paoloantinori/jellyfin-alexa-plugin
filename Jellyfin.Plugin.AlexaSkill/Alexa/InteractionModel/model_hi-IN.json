@@ -476,7 +476,9 @@
         "samples": [
           "{browse_category} ब्राउज़ करो",
           "मुझे {browse_category} दिखाओ",
-          "{browse_category} की लिस्ट दो"
+          "{browse_category} की लिस्ट दो",
+          "मेरे पास कौन से {browse_category} हैं",
+          "क्या {browse_category} हैं"
         ]
       },
       {

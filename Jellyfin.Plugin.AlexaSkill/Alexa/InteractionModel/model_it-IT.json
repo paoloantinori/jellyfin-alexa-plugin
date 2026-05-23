@@ -46,7 +46,11 @@
         "samples": [
           "Sfoglia {browse_category}",
           "Mostra {browse_category}",
-          "Elenca {browse_category}"
+          "Elenca {browse_category}",
+          "quali {browse_category} abbiamo",
+          "quali {browse_category} ci sono",
+          "che {browse_category} abbiamo",
+          "che {browse_category} ci sono"
         ],
         "slots": [
           {
@@ -92,7 +96,9 @@
           "Mostrami i video in corso",
           "Riprendi a guardare",
           "Cosa ho lasciato a metà",
-          "Cosa ho lasciato a meta"
+          "Cosa ho lasciato a meta",
+          "quali video non ho finito",
+          "cosa non ho terminato"
         ]
       },
       {
@@ -868,7 +874,9 @@
           "Metti {title}",
           "Pleia {title}",
           "Di riprodurre {title}",
-          "Di suonare {title}"
+          "Di suonare {title}",
+          "voglio guardare {title}",
+          "fai vedere {title}"
         ],
         "slots": [
           {
@@ -1021,7 +1029,10 @@
           "quali sono i più recenti",
           "dimmi le novità",
           "di mostrare le novità",
-          "quali aggiunte recenti"
+          "quali aggiunte recenti",
+          "qualcosa di nuovo",
+          "ci sono novità",
+          "cos'è nuovo"
         ]
       },
       {

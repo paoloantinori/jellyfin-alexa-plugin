@@ -171,7 +171,21 @@
       {
         "name": "PlayVideoIntent",
         "samples": [
-          "Play the video {title}"
+          "Play the video {title}",
+          "put on the video {title}",
+          "start playing {title}",
+          "watch {title}",
+          "can you play {title}",
+          "I want to watch {title}",
+          "let's watch {title}",
+          "stream {title}",
+          "give me the video {title}",
+          "show me {title}",
+          "play the movie {title}",
+          "put on the movie {title}",
+          "can you play the video {title}",
+          "start the video {title}",
+          "I want to see {title}"
         ],
         "slots": [
           {

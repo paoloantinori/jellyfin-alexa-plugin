@@ -58,6 +58,16 @@ tests:
     expected_slots:
       song: {}
 
+  - utterance: "voglio guardare star wars"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+
+  - utterance: "fai vedere matrix"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+
   # -------------------------------------------------------------------------
   # 6. PlayByGenreIntent (genre)
   # -------------------------------------------------------------------------
@@ -197,6 +207,10 @@ tests:
     expected_intent: InProgressMediaListIntent
     expected_slots: {}
 
+  - utterance: "quali video non ho finito"
+    expected_intent: InProgressMediaListIntent
+    expected_slots: {}
+
   # -------------------------------------------------------------------------
   # 13. PlayEpisodeIntent (series_name, season_number, episode_number)
   # -------------------------------------------------------------------------
@@ -228,6 +242,16 @@ tests:
       browse_category: {}
 
   - utterance: "Elenca generi"
+    expected_intent: BrowseLibraryIntent
+    expected_slots:
+      browse_category: {}
+
+  - utterance: "quali libri abbiamo"
+    expected_intent: BrowseLibraryIntent
+    expected_slots:
+      browse_category: {}
+
+  - utterance: "quali film ci sono"
     expected_intent: BrowseLibraryIntent
     expected_slots:
       browse_category: {}

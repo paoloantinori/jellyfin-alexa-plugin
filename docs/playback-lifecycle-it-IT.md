@@ -11,6 +11,7 @@ graph TD
     Idle -->|"riproduci il libro {book}"| PlayBook["PlayBookIntent"]
     Idle -->|"Riproduci il podcast {podcast_name}"| PlayPodcast["PlayPodcastIntent"]
     Idle -->|"Riproduci {title}"| PlayVideo["PlayVideoIntent"]
+    Idle -->|"voglio guardare {title}"| PlayVideo
     Idle -->|"Riproduci {media_type} casuali"| PlayRandom["PlayRandomIntent"]
 
     PlayArtist --> Playing

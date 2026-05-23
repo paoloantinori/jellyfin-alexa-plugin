@@ -173,7 +173,15 @@
       {
         "name": "PlayVideoIntent",
         "samples": [
-          "Lis la vidéo {title}"
+          "Lis la vidéo {title}",
+          "Je veux regarder {title}",
+          "On regarde {title}",
+          "Je voudrais voir {title}",
+          "montre-moi {title}",
+          "peux-tu me montrer {title}",
+          "mets le film {title}",
+          "je veux voir {title}",
+          "diffuse le film {title}"
         ],
         "slots": [
           {
@@ -448,7 +456,9 @@
         "samples": [
           "parcourir {browse_category}",
           "montre-moi {browse_category}",
-          "lister {browse_category}"
+          "lister {browse_category}",
+          "quels {browse_category} ai-je",
+          "quels {browse_category} y a-t-il"
         ]
       },
       {

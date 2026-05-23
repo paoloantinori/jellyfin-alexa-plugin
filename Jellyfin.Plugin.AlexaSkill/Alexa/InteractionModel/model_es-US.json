@@ -446,7 +446,9 @@
         "samples": [
           "explorar {browse_category}",
           "muéstrame {browse_category}",
-          "lista {browse_category}"
+          "lista {browse_category}",
+          "qué {browse_category} tengo",
+          "qué {browse_category} hay"
         ]
       },
       {

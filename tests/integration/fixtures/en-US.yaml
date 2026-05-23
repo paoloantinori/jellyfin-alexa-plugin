@@ -375,6 +375,8 @@ tests:
     expected_slots:
       browse_category: {}
 
+  # (en-US already has "what {browse_category} do i have" — no new patterns added)
+
   # -------------------------------------------------------------------------
   # 20. RecommendIntent (media_type)
   # -------------------------------------------------------------------------

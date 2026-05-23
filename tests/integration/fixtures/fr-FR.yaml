@@ -274,6 +274,11 @@ tests:
     expected_slots:
       browse_category: {}
 
+  - utterance: "quels films y a-t-il"
+    expected_intent: BrowseLibraryIntent
+    expected_slots:
+      browse_category: {}
+
   # -------------------------------------------------------------------------
   # 22. RecommendIntent (media_type)
   # -------------------------------------------------------------------------

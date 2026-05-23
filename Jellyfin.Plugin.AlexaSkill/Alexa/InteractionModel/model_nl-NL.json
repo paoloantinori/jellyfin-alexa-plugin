@@ -496,7 +496,8 @@
           "browse {browse_category}",
           "laat {browse_category} zien",
           "lijst {browse_category}",
-          "welke {browse_category} heb ik"
+          "welke {browse_category} heb ik",
+          "welke {browse_category} zijn er"
         ]
       },
       {

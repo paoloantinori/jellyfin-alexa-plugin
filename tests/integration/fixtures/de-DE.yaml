@@ -282,6 +282,11 @@ tests:
     expected_slots:
       browse_category: {}
 
+  - utterance: "welche filme gibt es"
+    expected_intent: BrowseLibraryIntent
+    expected_slots:
+      browse_category: {}
+
   # -------------------------------------------------------------------------
   # 22. RecommendIntent (media_type)
   # -------------------------------------------------------------------------
