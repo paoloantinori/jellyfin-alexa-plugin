@@ -48,4 +48,11 @@ public sealed class DeviceQueue
     /// the last pause/stop event. Used for resume-after-pause recovery.
     /// </summary>
     public string? CurrentItemId { get; set; }
+
+    /// <summary>
+    /// Gets or sets per-item position state (itemId → ticks). Survives item switches
+    /// and bypasses Jellyfin's MinAudiobookResume threshold. Used for alternate-resume:
+    /// play A, switch to B, return to A → A resumes from saved position.
+    /// </summary>
+    public Dictionary<string, long> ItemPositionState { get; set; } = new();
 }

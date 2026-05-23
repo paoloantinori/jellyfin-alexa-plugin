@@ -64,17 +64,25 @@ public sealed class DeviceQueueManager : IDisposable
     /// <param name="playbackOrder">Playback order: "Default" or "Shuffle".</param>
     public void SetQueue(string deviceId, List<string> itemIds, int currentIndex, string repeatMode = "None", string playbackOrder = "Default")
     {
+        // Preserve ItemPositionState across queue resets (survives audiobook switches)
+        Dictionary<string, long>? existingPositions = null;
+        if (_queues.TryGetValue(deviceId, out DeviceQueue? oldQueue))
+        {
+            existingPositions = oldQueue.ItemPositionState;
+        }
+
         var queue = new DeviceQueue
         {
             ItemIds = itemIds,
             CurrentIndex = currentIndex,
             RepeatMode = repeatMode,
             PlaybackOrder = playbackOrder,
-            LastModifiedUtc = DateTime.UtcNow
+            LastModifiedUtc = DateTime.UtcNow,
+            ItemPositionState = existingPositions ?? new Dictionary<string, long>()
         };
 
         _queues[deviceId] = queue;
-        SchedulePersist(deviceId);
+        SchedulePersistInternal(deviceId);
 
         _logger.LogDebug(
             "Queue set for device {DeviceId}: {Count} items, index={Index}, repeat={Repeat}, order={Order}",
@@ -128,7 +136,7 @@ public sealed class DeviceQueueManager : IDisposable
 
         queue.CurrentIndex = nextIndex;
         queue.LastModifiedUtc = DateTime.UtcNow;
-        SchedulePersist(deviceId);
+        SchedulePersistInternal(deviceId);
 
         _logger.LogDebug(
             "Advance: device {DeviceId} moved from index {FromIndex} to {ToIndex}, next item={ItemId}",
@@ -162,7 +170,7 @@ public sealed class DeviceQueueManager : IDisposable
         int fromIndex = queue.CurrentIndex;
         queue.CurrentIndex = index;
         queue.LastModifiedUtc = DateTime.UtcNow;
-        SchedulePersist(deviceId);
+        SchedulePersistInternal(deviceId);
 
         _logger.LogDebug(
             "MoveTo: device {DeviceId} moved from index {FromIndex} to {ToIndex}, item={ItemId}",
@@ -181,7 +189,7 @@ public sealed class DeviceQueueManager : IDisposable
         DeviceQueue queue = GetOrCreateQueue(deviceId);
         queue.RepeatMode = repeatMode;
         queue.LastModifiedUtc = DateTime.UtcNow;
-        SchedulePersist(deviceId);
+        SchedulePersistInternal(deviceId);
     }
 
     /// <summary>
@@ -194,7 +202,7 @@ public sealed class DeviceQueueManager : IDisposable
         DeviceQueue queue = GetOrCreateQueue(deviceId);
         queue.PlaybackOrder = playbackOrder;
         queue.LastModifiedUtc = DateTime.UtcNow;
-        SchedulePersist(deviceId);
+        SchedulePersistInternal(deviceId);
     }
 
     /// <summary>
@@ -246,6 +254,16 @@ public sealed class DeviceQueueManager : IDisposable
     public int ActiveQueueCount => _queues.Count;
 
     /// <summary>
+    /// Schedules a debounced persist to disk for a device's queue.
+    /// Call after modifying queue state directly (e.g., ItemPositionState updates).
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    public void SchedulePersist(string deviceId)
+    {
+        SchedulePersistInternal(deviceId);
+    }
+
+    /// <summary>
     /// Returns all active device queues, optionally excluding a specific device.
     /// Each entry includes the device ID and its queue state.
     /// </summary>
@@ -271,7 +289,7 @@ public sealed class DeviceQueueManager : IDisposable
         return result;
     }
 
-    private void SchedulePersist(string deviceId)
+    private void SchedulePersistInternal(string deviceId)
     {
         _debounceTimers.AddOrUpdate(
             deviceId,

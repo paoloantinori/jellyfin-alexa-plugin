@@ -11,6 +11,7 @@ using global::Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Entities;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
@@ -38,6 +39,7 @@ public class PlayBookResumeTests
     private readonly Mock<IUserDataManager> _userDataManagerMock;
     private readonly PluginConfiguration _config;
     private readonly ILoggerFactory _loggerFactory;
+    private readonly DeviceQueueManager _queueManager;
 
     public PlayBookResumeTests()
     {
@@ -48,6 +50,8 @@ public class PlayBookResumeTests
         _config = new PluginConfiguration();
         TestHelpers.SetServerAddress(_config, "https://test.example.com");
         _loggerFactory = LoggerFactory.Create(b => { });
+        var queueLogger = new Mock<ILogger<DeviceQueueManager>>();
+        _queueManager = new DeviceQueueManager(System.IO.Path.GetTempPath(), queueLogger.Object);
 
         TestHelpers.EnsurePluginInstance(
             _config, _loggerFactory, c => { }, "playbook-resume-tests");
@@ -61,7 +65,8 @@ public class PlayBookResumeTests
             _libraryManagerMock.Object,
             _userManagerMock.Object,
             _userDataManagerMock.Object,
-            _loggerFactory);
+            _loggerFactory,
+            _queueManager);
     }
 
     private static IntentRequest CreateIntentRequest(string bookName)
@@ -82,7 +87,9 @@ public class PlayBookResumeTests
 
     private SessionInfo CreateSession()
     {
-        return TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+        var session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+        session.DeviceId = "test-device";
+        return session;
     }
 
     private static Jellyfin.Plugin.AlexaSkill.Entities.User CreateUser()

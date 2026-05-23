@@ -6,8 +6,10 @@ using global::Alexa.NET.Request;
 using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
@@ -24,14 +26,23 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 public class EventHandlerTests
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
+    private readonly Mock<ILibraryManager> _libraryManagerMock;
+    private readonly Mock<IUserManager> _userManagerMock;
+    private readonly Mock<IUserDataManager> _userDataManagerMock;
     private readonly PluginConfiguration _config;
     private readonly ILoggerFactory _loggerFactory;
+    private readonly DeviceQueueManager _queueManager;
 
     public EventHandlerTests()
     {
         _sessionManagerMock = new Mock<ISessionManager>();
+        _libraryManagerMock = new Mock<ILibraryManager>();
+        _userManagerMock = new Mock<IUserManager>();
+        _userDataManagerMock = new Mock<IUserDataManager>();
         _config = new PluginConfiguration();
         _loggerFactory = LoggerFactory.Create(b => { });
+        var queueLogger = new Mock<ILogger<DeviceQueueManager>>();
+        _queueManager = new DeviceQueueManager(System.IO.Path.GetTempPath(), queueLogger.Object);
     }
 
     private static Context CreateContext() => TestHelpers.CreateTestContext();
@@ -108,7 +119,7 @@ public class EventHandlerTests
     [Fact]
     public void PlaybackStopped_CanHandle_ReturnsTrueForPlaybackStopped()
     {
-        var handler = new PlaybackStoppedEventHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+        var handler = new PlaybackStoppedEventHandler(_sessionManagerMock.Object, _config, _loggerFactory, _queueManager, _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object);
         var request = CreateAudioPlayerRequest("AudioPlayer.PlaybackStopped");
 
         Assert.True(handler.CanHandle(request));
@@ -117,7 +128,7 @@ public class EventHandlerTests
     [Fact]
     public async Task PlaybackStopped_Handle_ReturnsEmptyResponse()
     {
-        var handler = new PlaybackStoppedEventHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+        var handler = new PlaybackStoppedEventHandler(_sessionManagerMock.Object, _config, _loggerFactory, _queueManager, _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object);
         var request = CreateAudioPlayerRequest("AudioPlayer.PlaybackStopped", offset: 3000);
 
         var response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);

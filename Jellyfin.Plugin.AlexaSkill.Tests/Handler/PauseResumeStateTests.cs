@@ -158,7 +158,8 @@ public class PauseResumeStateTests : IDisposable
     public async Task PlaybackStopped_SavesPositionToDeviceQueue()
     {
         var handler = new PlaybackStoppedEventHandler(
-            _sessionManagerMock.Object, _config, _loggerFactory, _queueManager);
+            _sessionManagerMock.Object, _config, _loggerFactory, _queueManager,
+            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object);
 
         long offsetMs = 30000; // 30 seconds
         var request = CreateStoppedRequest(TestItemId, offsetMs);
@@ -176,7 +177,8 @@ public class PauseResumeStateTests : IDisposable
     public async Task PlaybackStopped_WithZeroOffset_StillSavesItemId()
     {
         var handler = new PlaybackStoppedEventHandler(
-            _sessionManagerMock.Object, _config, _loggerFactory, _queueManager);
+            _sessionManagerMock.Object, _config, _loggerFactory, _queueManager,
+            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object);
 
         var request = CreateStoppedRequest(TestItemId, 0);
         var context = CreateContext();
@@ -193,7 +195,8 @@ public class PauseResumeStateTests : IDisposable
     public async Task PlaybackStopped_WithoutQueueManager_DoesNotThrow()
     {
         var handler = new PlaybackStoppedEventHandler(
-            _sessionManagerMock.Object, _config, _loggerFactory);
+            _sessionManagerMock.Object, _config, _loggerFactory, _queueManager,
+            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object);
 
         var request = CreateStoppedRequest(TestItemId, 5000);
         var context = CreateContext();
@@ -376,7 +379,8 @@ public class PauseResumeStateTests : IDisposable
     public async Task StopThenResume_PreservesPosition_ViaDeviceQueue()
     {
         var stoppedHandler = new PlaybackStoppedEventHandler(
-            _sessionManagerMock.Object, _config, _loggerFactory, _queueManager);
+            _sessionManagerMock.Object, _config, _loggerFactory, _queueManager,
+            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object);
         var resumeHandler = new ResumeIntentHandler(
             _sessionManagerMock.Object, _config, _loggerFactory,
             _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object,

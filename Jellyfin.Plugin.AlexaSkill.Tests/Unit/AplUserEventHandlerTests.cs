@@ -10,6 +10,7 @@ using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Entities;
 using MediaBrowser.Controller.Entities;
@@ -46,12 +47,16 @@ public class AplUserEventHandlerTests
 
         TestHelpers.EnsurePluginInstance(_config, loggerFactory, c => { }, "apl-handler-tests");
 
+        var queueLogger = new Mock<ILogger<DeviceQueueManager>>();
+        var queueManager = new DeviceQueueManager(System.IO.Path.GetTempPath(), queueLogger.Object);
+
         _handler = new AplUserEventHandler(
             _sessionManager.Object,
             _config,
             _libraryManager.Object,
             _userManager.Object,
             _userDataManager.Object,
+            queueManager,
             loggerFactory);
 
         _user = new Entities.User { Id = Guid.NewGuid(), JellyfinToken = "test-token" };
@@ -61,6 +66,7 @@ public class AplUserEventHandlerTests
     private static SessionInfo CreateSession()
     {
         var session = new SessionInfo(Mock.Of<ISessionManager>(), Mock.Of<ILogger<SessionInfo>>());
+        session.DeviceId = "test-device";
         return session;
     }
 

@@ -10,6 +10,7 @@ using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -29,6 +30,7 @@ public class AplUserEventHandler : BaseHandler
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
     private readonly IUserDataManager _userDataManager;
+    private readonly DeviceQueueManager _queueManager;
 
     public AplUserEventHandler(
         ISessionManager sessionManager,
@@ -36,11 +38,13 @@ public class AplUserEventHandler : BaseHandler
         ILibraryManager libraryManager,
         IUserManager userManager,
         IUserDataManager userDataManager,
+        DeviceQueueManager queueManager,
         ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _userDataManager = userDataManager;
+        _queueManager = queueManager;
     }
 
     /// <inheritdoc/>
@@ -211,6 +215,20 @@ public class AplUserEventHandler : BaseHandler
 
     private int GetResumeOffset(BaseItem item, SessionInfo session, Request request)
     {
+        string itemIdStr = item.Id.ToString("N");
+
+        // 1. Check plugin's per-item state first (bypasses Jellyfin's min-resume thresholds)
+        var queue = _queueManager.GetOrCreateQueue(session.DeviceId);
+        if (queue.ItemPositionState.TryGetValue(itemIdStr, out long cachedTicks) && cachedTicks > 0)
+        {
+            int offsetMs = (int)TimeSpan.FromTicks(cachedTicks).TotalMilliseconds;
+            Logger.LogInformation(
+                "APL tap: resuming {ItemName} from {OffsetMs}ms (ItemPositionState)",
+                item.Name, offsetMs);
+            return offsetMs;
+        }
+
+        // 2. Fall back to Jellyfin's UserData
         var (jellyfinUser, _) = ResolveJellyfinUser(_userManager, session.UserId, GetLocale(request));
         if (jellyfinUser == null)
         {
@@ -223,7 +241,7 @@ public class AplUserEventHandler : BaseHandler
         {
             int offsetMs = (int)TimeSpan.FromTicks(data.PlaybackPositionTicks).TotalMilliseconds;
             Logger.LogInformation(
-                "APL tap: resuming {ItemName} from {OffsetMs}ms (saved position)",
+                "APL tap: resuming {ItemName} from {OffsetMs}ms (UserData)",
                 item.Name, offsetMs);
             return offsetMs;
         }

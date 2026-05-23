@@ -1,12 +1,14 @@
 using System;
 using System.Linq;
 using System.Reflection;
+using System.IO;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 using Jellyfin.Plugin.AlexaSkill.Alexa.DynamicEntities;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.ModelDeployment;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Diagnostics;
@@ -14,6 +16,7 @@ using Jellyfin.Plugin.AlexaSkill.ProactiveEvents;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Plugins;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.AlexaSkill.EntryPoints;
 
@@ -29,6 +32,12 @@ public class Registrator : IPluginServiceRegistrator
         serviceCollection.AddHostedService<SkillStartup>();
 
         // Singletons
+        serviceCollection.AddSingleton<DeviceQueueManager>(sp =>
+        {
+            var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger<DeviceQueueManager>();
+            string dataDir = Path.Combine(Plugin.Instance!.DataFolderPath, "queues");
+            return new DeviceQueueManager(dataDir, logger);
+        });
         serviceCollection.AddSingleton<RequestCounters>();
         serviceCollection.AddSingleton<SearchResultCache>();
         serviceCollection.AddSingleton<CircuitBreaker>();

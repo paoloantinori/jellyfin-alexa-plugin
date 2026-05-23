@@ -1224,27 +1224,52 @@ public abstract class BaseHandler
     }
 
     /// <summary>
-    /// Find the index of the first track in a collection that has server-side progress,
-    /// or the last track that was played (for queue resumption). Returns (index, positionTicks).
-    /// For music: position is always 0 (songs are short, start from top).
-    /// For books: position is the actual saved offset.
+    /// Find the resume track index with only UserData (no ItemPositionState).
+    /// Delegates to the full overload with null queueManager.
     /// </summary>
-    /// <param name="tracks">The ordered list of tracks to scan.</param>
-    /// <param name="jellyfinUser">The Jellyfin user for progress lookup.</param>
-    /// <param name="userDataManager">The user data manager for progress lookup.</param>
-    /// <param name="resumePosition">If true, return the saved position ticks; if false, return 0 (for music).</param>
-    /// <returns>The resume index and position ticks, or (0, 0) if no progress found.</returns>
     protected static (int Index, long PositionTicks) FindResumeTrackIndex(
         IReadOnlyList<BaseItem> tracks,
         JellyfinUser jellyfinUser,
         IUserDataManager userDataManager,
         bool resumePosition,
         ILogger? logger = null)
+        => FindResumeTrackIndex(tracks, jellyfinUser, userDataManager, null, null, resumePosition, logger);
+
+    /// <summary>
+    /// Find the resume track index, checking ItemPositionState first
+    /// (bypasses Jellyfin's MinAudiobookResume threshold), then UserData.
+    /// When queueManager/deviceId are null, skips the ItemPositionState check.
+    /// </summary>
+    protected static (int Index, long PositionTicks) FindResumeTrackIndex(
+        IReadOnlyList<BaseItem> tracks,
+        JellyfinUser jellyfinUser,
+        IUserDataManager userDataManager,
+        Playback.DeviceQueueManager? queueManager,
+        string? deviceId,
+        bool resumePosition,
+        ILogger? logger = null)
     {
+        Playback.DeviceQueue? queue = queueManager != null && deviceId != null
+            ? queueManager.GetOrCreateQueue(deviceId)
+            : null;
         int lastPlayedIndex = -1;
 
         for (int i = 0; i < tracks.Count; i++)
         {
+            // Check ItemPositionState first (bypasses MinAudiobookResume threshold)
+            if (queue != null)
+            {
+                string itemIdStr = tracks[i].Id.ToString("N");
+                if (queue.ItemPositionState.TryGetValue(itemIdStr, out long cachedTicks) && cachedTicks > 0)
+                {
+                    logger?.LogDebug(
+                        "FindResumeTrackIndex: found ItemPositionState for track[{Idx}] '{Name}' — ticks={Ticks}",
+                        i, tracks[i].Name, cachedTicks);
+                    return (i, resumePosition ? cachedTicks : 0);
+                }
+            }
+
+            // Fall back to Jellyfin UserData
             UserItemData? data = userDataManager.GetUserData(jellyfinUser, tracks[i]);
             if (data == null)
             {
@@ -1254,7 +1279,7 @@ public abstract class BaseHandler
             if (data.PlaybackPositionTicks > 0 && !data.Played)
             {
                 logger?.LogDebug(
-                    "FindResumeTrackIndex: found in-progress track[{Idx}] '{Name}' — ticks={Ticks}, returning index",
+                    "FindResumeTrackIndex: found UserData for track[{Idx}] '{Name}' — ticks={Ticks}",
                     i, tracks[i].Name, data.PlaybackPositionTicks);
                 return (i, resumePosition ? data.PlaybackPositionTicks : 0);
             }
@@ -1265,7 +1290,6 @@ public abstract class BaseHandler
             }
         }
 
-        // If no in-progress track found, resume from the track after the last played one
         if (lastPlayedIndex >= 0 && lastPlayedIndex + 1 < tracks.Count)
         {
             logger?.LogDebug(

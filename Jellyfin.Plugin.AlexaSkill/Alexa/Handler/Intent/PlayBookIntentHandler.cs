@@ -31,7 +31,7 @@ public class PlayBookIntentHandler : BaseHandler
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
     private readonly IUserDataManager _userDataManager;
-    private readonly DeviceQueueManager? _queueManager;
+    private readonly DeviceQueueManager _queueManager;
 
     public PlayBookIntentHandler(
         ISessionManager sessionManager,
@@ -40,7 +40,7 @@ public class PlayBookIntentHandler : BaseHandler
         IUserManager userManager,
         IUserDataManager userDataManager,
         ILoggerFactory loggerFactory,
-        DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
+        DeviceQueueManager queueManager) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
@@ -195,7 +195,7 @@ public class PlayBookIntentHandler : BaseHandler
         }
 
         (int startIndex, long resumeTicks) = FindResumeTrackIndex(
-            trackItems, jellyfinUser!, _userDataManager, resumePosition: true, Logger);
+            trackItems, jellyfinUser!, _userDataManager, _queueManager, session.DeviceId, resumePosition: true, Logger);
 
         Logger.LogInformation(
             "PlayBook: FindResumeTrackIndex returned startIndex={StartIndex}, resumeTicks={Ticks} for '{BookName}'",
