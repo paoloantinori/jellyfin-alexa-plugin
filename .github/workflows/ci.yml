@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: ["main"]
 
+permissions:
+  checks: write
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
@@ -24,7 +27,16 @@ jobs:
         run: dotnet build --configuration Release --no-restore -warnaserror
 
       - name: Test
-        run: dotnet test --configuration Release --no-build --verbosity normal
+        run: dotnet test --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=test-results.trx"
+
+      - name: Test Report
+        uses: dorny/test-reporter@v3
+        if: ${{ !cancelled() }}
+        with:
+          name: .NET Test Results
+          path: "**/*.trx"
+          reporter: dotnet-trx
+          fail-on-error: true
 
   validate-models:
     runs-on: ubuntu-latest
