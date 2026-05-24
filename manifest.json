@@ -223,6 +223,14 @@
                 "changelog": "Unreleased",
                 "targetAbi": "10.11.0.0",
                 "timestamp": "2026-05-20 00:00:00"
+            },
+            {
+                "version": "0.4.0.0",
+                "checksum": "placeholder",
+                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.4.0.0/AlexaSkill_0.4.0.0.zip",
+                "changelog": "BrowseLibrary question-style utterances across all locales. Beef up PlayVideoIntent for 6 thin locales with video-specific verbs. APL carousel docs.",
+                "targetAbi": "10.11.0.0",
+                "timestamp": "2026-05-24 00:00:00"
             }
         ]
     }
