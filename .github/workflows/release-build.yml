@@ -83,7 +83,7 @@ jobs:
         run: python3 .github/workflows/add_release_to_manifest.py ${{ steps.version.outputs.VERSION }} AlexaSkill_${{ steps.version.outputs.VERSION }}.zip
 
       - name: Create PR for manifest update
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v7
         with:
           commit-message: "Update manifest for v${{ steps.version.outputs.VERSION }}"
           title: "Update manifest for v${{ steps.version.outputs.VERSION }}"
