@@ -226,11 +226,11 @@
             },
             {
                 "version": "0.4.0.0",
-                "checksum": "placeholder",
+                "checksum": "fff28fc0e13ff9a5436f2aaba359e494",
                 "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.4.0.0/AlexaSkill_0.4.0.0.zip",
-                "changelog": "BrowseLibrary question-style utterances across all locales. Beef up PlayVideoIntent for 6 thin locales with video-specific verbs. APL carousel docs.",
+                "changelog": "Fix APL visuals not showing after skill recreation. Fix config Save wiping user data. Add dedicated PATCH config endpoint. Remove broken SMAPI icon upload. Replace reflection-based config setting with explicit typed assignments.",
                 "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-24 00:00:00"
+                "timestamp": "2026-05-24 06:33:19"
             }
         ]
     }
