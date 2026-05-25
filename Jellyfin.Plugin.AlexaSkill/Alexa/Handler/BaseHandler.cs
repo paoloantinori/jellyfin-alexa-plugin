@@ -1029,6 +1029,17 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// Create a shuffled copy of a read-only list.
+    /// </summary>
+    /// <typeparam name="T">The element type of the list.</typeparam>
+    protected static List<T> ShuffleCopy<T>(IReadOnlyList<T> source)
+    {
+        var copy = source.ToList();
+        Shuffle(copy);
+        return copy;
+    }
+
+    /// <summary>
     /// Find tracks with genres matching the given audio item.
     /// Returns deduplicated results excluding the current item.
     /// </summary>

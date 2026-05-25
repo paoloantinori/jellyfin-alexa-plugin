@@ -228,6 +228,11 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         var queue = new List<QueueItem>(session.NowPlayingQueue);
         var seen = new HashSet<Guid>(queue.Select(q => q.Id));
 
+        if (continuation.Shuffle)
+        {
+            newItems = ShuffleCopy(newItems);
+        }
+
         foreach (BaseItem item in newItems)
         {
             if (seen.Add(item.Id))

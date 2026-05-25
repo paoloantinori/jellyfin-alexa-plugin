@@ -161,6 +161,10 @@
                     <details>
                         <summary><span class="accordion-title">Playback Preferences</span></summary>
                             <div class="fieldDescription">Fine-tune how audio is delivered to Alexa devices. Changes take effect on the next playback request.</div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="ShuffleArtistSongs" /> <span>Shuffle Artist Songs</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">Randomize song order when playing an artist. Off by default — songs play in popularity order (favorites, most played, highest rated, then alphabetical). This changes the initial queue for "play artist" requests; it does not affect "Alexa, shuffle" mid-session.</div>
+                            </div>
                             <div class="inputContainer">
                                 <label class="inputLabel inputLabelUnfocused" for="InitialFetchSize">Initial Fetch Size</label>
                                 <input id="InitialFetchSize" name="InitialFetchSize" type="number" is="emby-input" min="1" max="20" />
@@ -383,7 +387,8 @@
                     // Feature flags
                     ["RadioModeEnabled", "PodcastsEnabled", "LiveTvEnabled", "SleepTimerEnabled",
                      "QueueManagementEnabled", "BrowseLibraryEnabled", "RecommendationsEnabled",
-                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "AsrCompoundWordFixEnabled", "SeekEnabled"].forEach(function(f) {
+                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "AsrCompoundWordFixEnabled", "SeekEnabled",
+                     "ShuffleArtistSongs"].forEach(function(f) {
                         document.querySelector("#" + f).checked = config[f] !== false;
                     });
 
@@ -857,7 +862,8 @@
 
                     ["RadioModeEnabled", "PodcastsEnabled", "LiveTvEnabled", "SleepTimerEnabled",
                      "QueueManagementEnabled", "BrowseLibraryEnabled", "RecommendationsEnabled",
-                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "AsrCompoundWordFixEnabled", "SeekEnabled"].forEach(function(f) {
+                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "AsrCompoundWordFixEnabled", "SeekEnabled",
+                     "ShuffleArtistSongs"].forEach(function(f) {
                         config[f] = document.querySelector("#" + f).checked;
                     });
 

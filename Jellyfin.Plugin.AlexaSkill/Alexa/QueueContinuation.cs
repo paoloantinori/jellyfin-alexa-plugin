@@ -55,4 +55,10 @@ public class QueueContinuation
     /// Gets the sort order used for the original query (to maintain consistency across batches).
     /// </summary>
     public (ItemSortBy SortBy, SortOrder Order)[]? SortOrder { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether continuation batches should be shuffled
+    /// before being appended to the queue.
+    /// </summary>
+    public bool Shuffle { get; init; }
 }

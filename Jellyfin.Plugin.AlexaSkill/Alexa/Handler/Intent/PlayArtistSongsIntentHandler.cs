@@ -372,6 +372,13 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 startIndex, artistsItems[startIndex].Name);
         }
 
+        if (_config.ShuffleArtistSongs)
+        {
+            artistsItems = ShuffleCopy(artistsItems);
+            startIndex = 0;
+            Logger.LogDebug("PlayArtistSongs: shuffled {Count} tracks", artistsItems.Count);
+        }
+
         List<QueueItem> queueItems = new List<QueueItem>();
         for (int i = startIndex; i < artistsItems.Count; i++)
         {
@@ -401,7 +408,8 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                     StartIndex = artistItems.Count,
                     TotalCount = int.MaxValue,
                     UserId = jellyfinUser!.Id,
-                    SortOrder = PopularitySort
+                    SortOrder = PopularitySort,
+                    Shuffle = _config.ShuffleArtistSongs
                 });
         }
 

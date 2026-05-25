@@ -100,6 +100,8 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool BooksEnabled { get; set; } = true;
 
     // Playback preferences
+    public bool ShuffleArtistSongs { get; set; } = false;
+
     public int InitialFetchSize { get; set; } = 5;
     public int ContinuationBatchSize { get; set; } = 10;
     public int PrefetchThreshold { get; set; } = 2;
