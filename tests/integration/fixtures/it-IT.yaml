@@ -256,6 +256,31 @@ tests:
     expected_slots:
       browse_category: {}
 
+  - utterance: "mostra libri"
+    expected_intent: BrowseLibraryIntent
+    expected_slots:
+      browse_category: {}
+
+  - utterance: "mostra i libri"
+    expected_intent: BrowseLibraryIntent
+    expected_slots:
+      browse_category: {}
+
+  - utterance: "mostra artisti"
+    expected_intent: BrowseLibraryIntent
+    expected_slots:
+      browse_category: {}
+
+  - utterance: "sfoglia i brani"
+    expected_intent: BrowseLibraryIntent
+    expected_slots:
+      browse_category: {}
+
+  - utterance: "elenca playlist"
+    expected_intent: BrowseLibraryIntent
+    expected_slots:
+      browse_category: {}
+
   # -------------------------------------------------------------------------
   # 15. RecommendIntent (media_type)
   # -------------------------------------------------------------------------
