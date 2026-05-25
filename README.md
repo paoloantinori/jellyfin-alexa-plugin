@@ -53,7 +53,7 @@ A Jellyfin plugin that creates a personal Alexa skill to play and control media 
 - **Multi-user**: each Jellyfin user gets their own skill with individual settings
 - **Per-user fuzzy matching**: configurable match behavior (confirm/auto-play) and threshold
 - **Custom interaction models**: deploy your own interaction model via URL for any locale
-- **Multi-language**: 17 locales across 11 languages with 57 intents each
+- **Multi-language**: 17 locales across 11 languages with 58 intents each
 - **Audio and video**: supports both audio playback (AudioPlayer) and video launching
 - **Robust resume**: three-tier position fallback (Alexa context → Jellyfin session → device queue) ensures playback resumes correctly even after session state is cleared
 
@@ -98,6 +98,26 @@ dotnet publish --configuration Release
 ```
 
 Copy the contents of `Jellyfin.Plugin.AlexaSkill/bin/Release/net9.0/publish/` to your Jellyfin `plugins/Jellyfin.Plugin.AlexaSkill/` folder, then restart Jellyfin.
+
+## Development
+
+### Build & Test
+
+```bash
+dotnet build Jellyfin.Plugin.AlexaSkill.sln
+dotnet test Jellyfin.Plugin.AlexaSkill.Tests
+```
+
+### Validation Scripts
+
+```bash
+python3 scripts/validate_interaction_models.py  # Check all 17 models
+python3 scripts/validate_locales.py             # Check locale key coverage
+python3 scripts/validate_versions.py            # Check version consistency
+python3 scripts/validate_apl.py                 # Check APL templates
+```
+
+See `CLAUDE.md` in the repository for detailed development documentation including handler patterns, interaction model editing, and project layout.
 
 ## Amazon Developer Setup
 
@@ -260,7 +280,7 @@ The skill supports **17 locales** across **11 languages**, each with full custom
 | Spanish (Mexico) | es-MX | [`model_es-MX.json`](Jellyfin.Plugin.AlexaSkill/Alexa/InteractionModel/model_es-MX.json) |
 | Spanish (US) | es-US | [`model_es-US.json`](Jellyfin.Plugin.AlexaSkill/Alexa/InteractionModel/model_es-US.json) |
 
-Each JSON file contains all 57 intents with locale-specific sample utterances. To see the complete list of voice commands for any language, open the corresponding interaction model file and look at the `samples` arrays within each intent.
+Each JSON file contains all 58 intents with locale-specific sample utterances. To see the complete list of voice commands for any language, open the corresponding interaction model file and look at the `samples` arrays within each intent.
 
 ## Troubleshooting
 
