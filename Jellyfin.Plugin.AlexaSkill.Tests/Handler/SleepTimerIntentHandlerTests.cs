@@ -19,7 +19,8 @@ using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
-public class SleepTimerIntentHandlerTests
+[Collection("Plugin")]
+public class SleepTimerIntentHandlerTests : PluginTestBase
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly PluginConfiguration _config;

@@ -26,7 +26,8 @@ using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
-public class PlayEpisodeIntentHandlerTests
+[Collection("Plugin")]
+public class PlayEpisodeIntentHandlerTests : PluginTestBase
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly Mock<ILibraryManager> _libraryManagerMock;

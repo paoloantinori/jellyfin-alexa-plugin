@@ -48,7 +48,8 @@ internal class TestableHandler : BaseHandler
     }
 }
 
-public class ProgressiveResponseTests
+[Collection("Plugin")]
+public class ProgressiveResponseTests : PluginTestBase
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly PluginConfiguration _config;
@@ -162,7 +163,8 @@ public class ProgressiveResponseTests
 /// Tests verifying that library-querying handlers still produce correct responses
 /// after the progressive response integration.
 /// </summary>
-public class ProgressiveResponseIntegrationTests
+[Collection("Plugin")]
+public class ProgressiveResponseIntegrationTests : PluginTestBase
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly Mock<ILibraryManager> _libraryManagerMock;

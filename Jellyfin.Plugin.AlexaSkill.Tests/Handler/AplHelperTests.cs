@@ -22,22 +22,33 @@ using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
-public class AplHelperTests
+[Collection("Plugin")]
+public class AplHelperTests : PluginTestBase
 {
     private static Context CreateContextWithApl() => TestHelpers.CreateContextWithApl();
 
     private static Context CreateContextWithoutApl() => TestHelpers.CreateContextWithoutApl();
 
     /// <summary>
-    /// Ensure APL visuals are enabled so "WithApl" tests pass regardless of
-    /// static Plugin.Instance state left by other test classes running in parallel.
+    /// <summary>
+    /// Ensure APL visuals and all feature flags are enabled.
+    /// Creates Plugin.Instance if the collection fixture reset it.
     /// </summary>
     private static void EnsureVisualsEnabled()
     {
-        if (Plugin.Instance != null)
-        {
-            Plugin.Instance.Configuration.AplVisualsEnabled = true;
-        }
+        var config = new PluginConfiguration { AplVisualsEnabled = true, AsrCompoundWordFixEnabled = false };
+        TestHelpers.SetServerAddress(config, "https://test.example.com");
+        TestHelpers.EnsurePluginInstance(
+            config,
+            LoggerFactory.Create(b => { }),
+            c =>
+            {
+                c.AplVisualsEnabled = true;
+                c.QueueManagementEnabled = true;
+                c.BrowseLibraryEnabled = true;
+                c.MusicEnabled = true;
+            },
+            "alexa-apl-test");
     }
 
     [Fact]

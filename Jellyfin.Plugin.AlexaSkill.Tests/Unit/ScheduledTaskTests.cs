@@ -13,7 +13,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 /// <summary>
 /// Tests for JF-95: IScheduledTask implementations and SearchResultCache.RemoveExpired().
 /// </summary>
-public class ScheduledTaskTests
+[Collection("Plugin")]
+public class ScheduledTaskTests : PluginTestBase
 {
     private readonly ILogger _logger;
 

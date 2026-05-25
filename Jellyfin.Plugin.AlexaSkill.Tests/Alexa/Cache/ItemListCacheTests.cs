@@ -10,7 +10,8 @@ using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Alexa.Cache;
 
-public class ItemListCacheTests
+[Collection("Plugin")]
+public class ItemListCacheTests : PluginTestBase
 {
     private readonly SearchResultCache _cache;
     private int _queryCallCount;

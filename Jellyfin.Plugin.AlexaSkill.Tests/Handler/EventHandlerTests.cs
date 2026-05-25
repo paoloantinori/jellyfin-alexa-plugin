@@ -23,7 +23,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// Tests for event handlers: PlaybackStarted, Finished, Stopped, Failed,
 /// SessionEndedRequest, and ExceptionHandler.
 /// </summary>
-public class EventHandlerTests
+[Collection("Plugin")]
+public class EventHandlerTests : PluginTestBase
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly Mock<ILibraryManager> _libraryManagerMock;

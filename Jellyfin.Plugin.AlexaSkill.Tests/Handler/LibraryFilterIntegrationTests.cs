@@ -29,7 +29,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// Integration tests verifying that per-user library filtering (AllowedLibraryIds)
 /// correctly sets TopParentIds on Jellyfin InternalItemsQuery objects in intent handlers.
 /// </summary>
-public class LibraryFilterIntegrationTests
+[Collection("Plugin")]
+public class LibraryFilterIntegrationTests : PluginTestBase
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly Mock<ILibraryManager> _libraryManagerMock;

@@ -19,7 +19,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// <summary>
 /// Tests for simple playback control handlers: Pause, Fallback.
 /// </summary>
-public class PlaybackControlHandlerTests
+[Collection("Plugin")]
+public class PlaybackControlHandlerTests : PluginTestBase
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly PluginConfiguration _config;

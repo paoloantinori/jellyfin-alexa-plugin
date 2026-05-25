@@ -11,7 +11,8 @@ using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Controller;
 
-public class SimulatorControllerTests
+[Collection("Plugin")]
+public class SimulatorControllerTests : PluginTestBase
 {
     /// <summary>
     /// Verify that SimulatorRequest defaults are null (not crashing).

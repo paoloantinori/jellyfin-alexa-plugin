@@ -23,7 +23,8 @@ using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
-public class PlayArtistSongsIntentHandlerTests
+[Collection("Plugin")]
+public class PlayArtistSongsIntentHandlerTests : PluginTestBase
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly Mock<ILibraryManager> _libraryManagerMock;
@@ -457,5 +458,89 @@ public class PlayArtistSongsIntentHandlerTests
             l => l.GetItemById(libraryId),
             Times.Once,
             "In-memory path should resolve library filter exactly once");
+    }
+
+    [Fact]
+    public async Task HandleAsync_ShuffleArtistSongsOff_BuildsPopularityOrderQueue()
+    {
+        _config.ShuffleArtistSongs = false;
+
+        var artist = new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() };
+        _artistIndexMock.Setup(i => i.IsReady).Returns(true);
+        _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>()))
+            .Returns(new List<BaseItem> { artist });
+
+        SetupUserMock();
+
+        var songs = new[]
+        {
+            new Audio { Name = "Yesterday", Id = Guid.NewGuid() },
+            new Audio { Name = "Let It Be", Id = Guid.NewGuid() },
+            new Audio { Name = "Hey Jude", Id = Guid.NewGuid() }
+        };
+        SetupSongResult(songs);
+
+        var handler = CreateHandler(_artistIndexMock.Object);
+        var request = CreateIntentRequest(musician: "Beatles");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        // Queue should preserve original order when shuffle is off
+        Assert.Equal(3, session.NowPlayingQueue.Count);
+        Assert.Equal(songs[0].Id, session.NowPlayingQueue[0].Id);
+        Assert.Equal(songs[1].Id, session.NowPlayingQueue[1].Id);
+        Assert.Equal(songs[2].Id, session.NowPlayingQueue[2].Id);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ShuffleArtistSongsOn_RandomizesQueueOrder()
+    {
+        _config.ShuffleArtistSongs = true;
+
+        var artist = new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() };
+        _artistIndexMock.Setup(i => i.IsReady).Returns(true);
+        _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>()))
+            .Returns(new List<BaseItem> { artist });
+
+        SetupUserMock();
+
+        // Use enough songs that a shuffle is statistically certain to differ from original order
+        var songs = Enumerable.Range(0, 20)
+            .Select(i => new Audio { Name = $"Song {i}", Id = Guid.NewGuid() })
+            .ToArray();
+        SetupSongResult(songs);
+
+        var handler = CreateHandler(_artistIndexMock.Object);
+        var request = CreateIntentRequest(musician: "Beatles");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.Equal(20, session.NowPlayingQueue.Count);
+
+        // All items must be present (no duplicates, no losses)
+        var queueIds = session.NowPlayingQueue.Select(q => q.Id).ToHashSet();
+        Assert.Equal(songs.Length, queueIds.Count);
+        Assert.All(songs, s => Assert.Contains(s.Id, queueIds));
+
+        // With 20 items, the probability that shuffle produces the exact original order is 1/20! ≈ 4e-19
+        bool anyReordered = false;
+        for (int i = 0; i < songs.Length; i++)
+        {
+            if (session.NowPlayingQueue[i].Id != songs[i].Id)
+            {
+                anyReordered = true;
+                break;
+            }
+        }
+
+        Assert.True(anyReordered, "Shuffle should reorder at least one item in a 20-song queue");
     }
 }

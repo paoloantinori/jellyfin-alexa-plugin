@@ -14,7 +14,8 @@ using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.EntryPoints;
 
-public class SkillStartupTests
+[Collection("Plugin")]
+public class SkillStartupTests : PluginTestBase
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly ILoggerFactory _loggerFactory;

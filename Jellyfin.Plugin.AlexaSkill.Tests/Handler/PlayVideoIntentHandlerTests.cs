@@ -22,7 +22,8 @@ using Jellyfin.Database.Implementations.Entities;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
-public class PlayVideoIntentHandlerTests
+[Collection("Plugin")]
+public class PlayVideoIntentHandlerTests : PluginTestBase
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly Mock<ILibraryManager> _libraryManagerMock;

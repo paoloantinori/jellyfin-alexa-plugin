@@ -21,7 +21,8 @@ using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 
-public class AplHelperTests
+[Collection("Plugin")]
+public class AplHelperTests : PluginTestBase
 {
     [Fact]
     public void DeviceSupportsApl_NullContext_ReturnsFalse()
@@ -681,7 +682,8 @@ public class AplHelperTests
 /// <summary>
 /// Tests for BaseHandler.TryAttachCarouselDirective method.
 /// </summary>
-public class TryAttachCarouselDirectiveTests : IDisposable
+[Collection("Plugin")]
+public class TryAttachCarouselDirectiveTests : PluginTestBase, IDisposable
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly PluginConfiguration _config;

@@ -36,8 +36,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// store continuation state, and that PlaybackNearlyFinished fetches more
 /// items on demand.
 /// </summary>
-[Collection("PlaybackHandlers")]
-public class ProgressiveQueueTests : IDisposable
+[Collection("Plugin")]
+public class ProgressiveQueueTests : PluginTestBase, IDisposable
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly PluginConfiguration _config;
@@ -717,5 +717,184 @@ public class ProgressiveQueueTests : IDisposable
             "Prefetch threshold should be at least 1 to avoid last-minute fetches");
         Assert.True(ProgressiveQueueConstants.GetPrefetchThreshold() <= ProgressiveQueueConstants.GetInitialFetchSize(),
             "Prefetch threshold should not exceed initial fetch size");
+    }
+
+    // =====================================================================
+    // Shuffle continuation tests
+    // =====================================================================
+
+    [Fact]
+    public async Task PlaybackNearlyFinished_ShuffleContinuation_AppendsRandomizedOrder()
+    {
+        var handler = CreatePlaybackHandler();
+        var session = CreateSession();
+        SetupUserMock();
+
+        // Initial queue: 3 items, playing track 1
+        var track1Id = Guid.NewGuid();
+        var track2Id = Guid.NewGuid();
+        var track3Id = Guid.NewGuid();
+
+        session.FullNowPlayingItem = new Audio { Id = track1Id, Name = "Track 1" };
+        session.NowPlayingQueue = new List<QueueItem>
+        {
+            new() { Id = track1Id },
+            new() { Id = track2Id },
+            new() { Id = track3Id }
+        };
+
+        const string deviceId = "test-device";
+
+        // Continuation with Shuffle=true
+        var continuation = new QueueContinuation
+        {
+            SourceType = "Artist",
+            ArtistId = Guid.NewGuid(),
+            StartIndex = 3,
+            TotalCount = int.MaxValue,
+            UserId = Guid.NewGuid(),
+            BatchSize = 20,
+            Shuffle = true
+        };
+        QueueContinuationStore.Set(session.UserId, deviceId, continuation);
+
+        // Library returns 20 tracks in a known order
+        var continuationTracks = Enumerable.Range(0, 20)
+            .Select(i => new Audio { Id = Guid.NewGuid(), Name = $"Continuation {i}" })
+            .ToList();
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(continuationTracks.ToList<BaseItem>());
+
+        _libraryManagerMock.Setup(l => l.GetItemById(track2Id))
+            .Returns(new Audio { Id = track2Id, Name = "Track 2" });
+
+        await handler.HandleAsync(
+            CreateNearlyFinishedRequest(track1Id.ToString()),
+            CreateContext(track1Id.ToString()),
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        // Queue should have been extended
+        Assert.Equal(23, session.NowPlayingQueue.Count); // 3 original + 20 new
+
+        // Extract just the continuation items (after the original 3)
+        var appendedIds = session.NowPlayingQueue.Skip(3).Select(q => q.Id).ToList();
+
+        // All items present, no duplicates
+        Assert.Equal(20, appendedIds.Distinct().Count());
+        Assert.All(continuationTracks, t => Assert.Contains(t.Id, appendedIds));
+
+        // Order should differ from DB order (probability of exact match = 1/20! ≈ 0)
+        bool anyReordered = false;
+        for (int i = 0; i < continuationTracks.Count; i++)
+        {
+            if (appendedIds[i] != continuationTracks[i].Id)
+            {
+                anyReordered = true;
+                break;
+            }
+        }
+
+        Assert.True(anyReordered, "Shuffle=true should reorder continuation batch");
+
+        // Cleanup
+        QueueContinuationStore.Remove(session.UserId, deviceId);
+    }
+
+    [Fact]
+    public async Task PlaybackNearlyFinished_ShuffleOffContinuation_PreservesDbOrder()
+    {
+        var handler = CreatePlaybackHandler();
+        var session = CreateSession();
+        SetupUserMock();
+
+        var track1Id = Guid.NewGuid();
+        var track2Id = Guid.NewGuid();
+        var track3Id = Guid.NewGuid();
+
+        session.FullNowPlayingItem = new Audio { Id = track1Id, Name = "Track 1" };
+        session.NowPlayingQueue = new List<QueueItem>
+        {
+            new() { Id = track1Id },
+            new() { Id = track2Id },
+            new() { Id = track3Id }
+        };
+
+        const string deviceId = "test-device";
+
+        // Continuation with Shuffle=false (default)
+        var continuation = new QueueContinuation
+        {
+            SourceType = "Artist",
+            ArtistId = Guid.NewGuid(),
+            StartIndex = 3,
+            TotalCount = int.MaxValue,
+            UserId = Guid.NewGuid(),
+            BatchSize = 5,
+            Shuffle = false
+        };
+        QueueContinuationStore.Set(session.UserId, deviceId, continuation);
+
+        var contTracks = new List<Audio>
+        {
+            new() { Id = Guid.NewGuid(), Name = "A" },
+            new() { Id = Guid.NewGuid(), Name = "B" },
+            new() { Id = Guid.NewGuid(), Name = "C" },
+            new() { Id = Guid.NewGuid(), Name = "D" },
+            new() { Id = Guid.NewGuid(), Name = "E" }
+        };
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(contTracks.Cast<BaseItem>().ToList());
+
+        _libraryManagerMock.Setup(l => l.GetItemById(track2Id))
+            .Returns(new Audio { Id = track2Id, Name = "Track 2" });
+
+        await handler.HandleAsync(
+            CreateNearlyFinishedRequest(track1Id.ToString()),
+            CreateContext(track1Id.ToString()),
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        var appendedIds = session.NowPlayingQueue.Skip(3).Select(q => q.Id).ToList();
+
+        // Order should match DB order exactly
+        for (int i = 0; i < contTracks.Count; i++)
+        {
+            Assert.Equal(contTracks[i].Id, appendedIds[i]);
+        }
+
+        // Cleanup
+        QueueContinuationStore.Remove(session.UserId, deviceId);
+    }
+
+    [Fact]
+    public void QueueContinuationStore_ShuffleFlag_RoundTrips()
+    {
+        var userId = Guid.NewGuid();
+        string deviceId = "shuffle-test";
+
+        var continuation = new QueueContinuation
+        {
+            SourceType = "Artist",
+            ArtistId = Guid.NewGuid(),
+            UserId = userId,
+            Shuffle = true
+        };
+
+        QueueContinuationStore.Set(userId, deviceId, continuation);
+        QueueContinuation? retrieved = QueueContinuationStore.Get(userId, deviceId);
+
+        Assert.NotNull(retrieved);
+        Assert.True(retrieved.Shuffle);
+
+        // Also verify default is false
+        var noShuffle = new QueueContinuation { SourceType = "Artist", UserId = userId };
+        Assert.False(noShuffle.Shuffle);
+
+        QueueContinuationStore.Remove(userId, deviceId);
     }
 }

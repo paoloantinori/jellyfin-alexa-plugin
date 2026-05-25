@@ -28,7 +28,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// Verifies that PlaybackStoppedEventHandler saves position to DeviceQueue
 /// and ResumeIntentHandler falls back to it when Alexa context is empty.
 /// </summary>
-public class PauseResumeStateTests : IDisposable
+[Collection("Plugin")]
+public class PauseResumeStateTests : PluginTestBase, IDisposable
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly Mock<ILibraryManager> _libraryManagerMock;

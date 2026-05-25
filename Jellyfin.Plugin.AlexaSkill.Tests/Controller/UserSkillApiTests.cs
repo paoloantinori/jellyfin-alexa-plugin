@@ -24,7 +24,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Controller;
 /// wiping all rows.
 /// </summary>
 [Collection("Plugin")]
-public class UserSkillApiTests : IDisposable
+public class UserSkillApiTests : PluginTestBase, IDisposable
 {
     private readonly PluginConfiguration _config;
     private readonly ILoggerFactory _loggerFactory;

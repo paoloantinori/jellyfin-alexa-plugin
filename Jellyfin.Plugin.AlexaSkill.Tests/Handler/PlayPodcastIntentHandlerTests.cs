@@ -25,7 +25,8 @@ using MediaType = Jellyfin.Data.Enums.MediaType;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
-public class PlayPodcastIntentHandlerTests
+[Collection("Plugin")]
+public class PlayPodcastIntentHandlerTests : PluginTestBase
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly Mock<ILibraryManager> _libraryManagerMock;

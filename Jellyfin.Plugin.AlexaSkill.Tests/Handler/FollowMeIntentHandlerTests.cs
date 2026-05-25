@@ -26,7 +26,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// <summary>
 /// Tests for FollowMeIntentHandler: cross-device playback transfer.
 /// </summary>
-public class FollowMeIntentHandlerTests : IDisposable
+[Collection("Plugin")]
+public class FollowMeIntentHandlerTests : PluginTestBase, IDisposable
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly PluginConfiguration _config;

@@ -24,7 +24,8 @@ using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
-public class QueryRecentlyAddedIntentHandlerTests
+[Collection("Plugin")]
+public class QueryRecentlyAddedIntentHandlerTests : PluginTestBase
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly Mock<ILibraryManager> _libraryManagerMock;

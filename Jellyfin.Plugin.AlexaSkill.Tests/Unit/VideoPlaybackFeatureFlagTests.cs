@@ -18,7 +18,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 /// VideoPlaybackEnabled feature flag.
 /// </summary>
 [Collection("Plugin")]
-public class VideoPlaybackFeatureFlagTests : IDisposable
+public class VideoPlaybackFeatureFlagTests : PluginTestBase, IDisposable
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly PluginConfiguration _config;

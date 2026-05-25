@@ -22,7 +22,8 @@ using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
-public class BrowseLibraryIntentHandlerTests
+[Collection("Plugin")]
+public class BrowseLibraryIntentHandlerTests : PluginTestBase
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly Mock<ILibraryManager> _libraryManagerMock;
@@ -354,5 +355,51 @@ public class BrowseLibraryIntentHandlerTests
 
         Assert.NotNull(response);
         Assert.DoesNotContain(response.Response.Directives, d => d.Type == "Alexa.Presentation.APL.RenderDocument");
+    }
+
+    [Fact]
+    public async Task HandleAsync_BrowseBooks_DeduplicatesByParentId()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(category: "libri"); // Italian for "books"
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        Guid parentA = Guid.NewGuid();
+        Guid parentC = Guid.NewGuid();
+
+        // Book A: multi-chapter book (3 tracks under one parent) → resolve parent for name.
+        // Book B: single-file audiobook (1 track) → keep as-is.
+        var tracks = new List<BaseItem>
+        {
+            new Audio { Name = "Chapter 1", Id = Guid.NewGuid(), ParentId = parentA },
+            new Audio { Name = "Chapter 2", Id = Guid.NewGuid(), ParentId = parentA },
+            new Audio { Name = "Chapter 3", Id = Guid.NewGuid(), ParentId = parentA },
+            new Audio { Name = "Book B (standalone)", Id = Guid.NewGuid(), ParentId = parentC },
+        };
+
+        // Parent folder for Book A with correct book-level name.
+        var parentItems = new List<BaseItem>
+        {
+            new CollectionFolder { Name = "Book A Full Title", Id = parentA },
+        };
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ItemIds != null && q.ItemIds.Length > 0)))
+            .Returns(parentItems);
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ItemIds == null || q.ItemIds.Length == 0)))
+            .Returns(tracks);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotNull(response.Response?.OutputSpeech);
+
+        // The response should mention "2" books (1 parent-resolved + 1 standalone), not 4 tracks.
+        string speech = ((PlainTextOutputSpeech)response.Response.OutputSpeech).Text;
+        Assert.Contains("2", speech);
+        Assert.DoesNotContain("4", speech);
     }
 }

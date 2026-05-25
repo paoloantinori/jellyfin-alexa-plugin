@@ -9,7 +9,8 @@ using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Alexa.Cache;
 
-public class SearchResultCacheTests
+[Collection("Plugin")]
+public class SearchResultCacheTests : PluginTestBase
 {
     private readonly SearchResultCache _cache;
 

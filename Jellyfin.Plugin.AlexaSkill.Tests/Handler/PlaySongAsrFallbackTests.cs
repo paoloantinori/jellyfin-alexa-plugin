@@ -26,7 +26,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// Simulates the scenario where "lazy bones" (two words from ASR) finds nothing but the
 /// joined variant "lazybones" returns a result.
 /// </summary>
-public class PlaySongAsrFallbackTests
+[Collection("Plugin")]
+public class PlaySongAsrFallbackTests : PluginTestBase
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly Mock<ILibraryManager> _libraryManagerMock;

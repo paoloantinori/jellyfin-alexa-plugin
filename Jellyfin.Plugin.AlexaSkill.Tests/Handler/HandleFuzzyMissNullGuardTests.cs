@@ -21,7 +21,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// Verifies the method returns (NotFound, null) instead of throwing NullReferenceException
 /// when called with null or empty candidates, null matchExtractor results, etc.
 /// </summary>
-public class HandleFuzzyMissNullGuardTests
+[Collection("Plugin")]
+public class HandleFuzzyMissNullGuardTests : PluginTestBase
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly ILoggerFactory _loggerFactory;

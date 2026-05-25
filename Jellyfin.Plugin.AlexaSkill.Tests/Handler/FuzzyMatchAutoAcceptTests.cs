@@ -21,7 +21,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// Scores >= DefaultThreshold (60) should auto-accept regardless of FuzzyMatchBehavior.
 /// Only borderline scores (SuggestionThreshold..DefaultThreshold) consult the config.
 /// </summary>
-public class FuzzyMatchAutoAcceptTests
+[Collection("Plugin")]
+public class FuzzyMatchAutoAcceptTests : PluginTestBase
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly ILoggerFactory _loggerFactory;

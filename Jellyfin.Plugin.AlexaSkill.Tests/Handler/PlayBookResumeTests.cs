@@ -31,7 +31,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// Tests for PlayBookIntentHandler resume behavior:
 /// book progress detection, chapter skipping, and offset calculation.
 /// </summary>
-public class PlayBookResumeTests
+[Collection("Plugin")]
+public class PlayBookResumeTests : PluginTestBase
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly Mock<ILibraryManager> _libraryManagerMock;

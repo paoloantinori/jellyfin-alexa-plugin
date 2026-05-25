@@ -28,7 +28,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// Example: "chiedi a jellyfin player di mettere the idiot kings dei"
 /// matches PlaySongIntent "Di mettere {song} dei {musician}" with musician="".
 /// </summary>
-public class EmptyMusicianSlotTests
+[Collection("Plugin")]
+public class EmptyMusicianSlotTests : PluginTestBase
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly Mock<ILibraryManager> _libraryManagerMock;

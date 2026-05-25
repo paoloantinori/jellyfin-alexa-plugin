@@ -28,7 +28,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// Same class of bug as EmptyMusicianSlotTests — IsNullOrEmpty instead of IsNullOrWhiteSpace
 /// on an optional slot that modifies a search query.
 /// </summary>
-public class EmptyGenreSlotTests
+[Collection("Plugin")]
+public class EmptyGenreSlotTests : PluginTestBase
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly Mock<ILibraryManager> _libraryManagerMock;

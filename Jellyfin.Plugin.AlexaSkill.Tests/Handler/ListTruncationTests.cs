@@ -28,7 +28,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// Tests that list-producing handlers correctly split voice vs APL display limits,
 /// use partial locale keys when truncated, and keep the session open with ShowMorePrompt.
 /// </summary>
-public class ListTruncationTests
+[Collection("Plugin")]
+public class ListTruncationTests : PluginTestBase
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly Mock<ILibraryManager> _libraryManagerMock;
@@ -50,10 +51,19 @@ public class ListTruncationTests
 
     private static void EnsureVisualsEnabled()
     {
-        if (Plugin.Instance != null)
-        {
-            Plugin.Instance.Configuration.AplVisualsEnabled = true;
-        }
+        var config = new PluginConfiguration { AplVisualsEnabled = true };
+        TestHelpers.SetServerAddress(config, "https://test.example.com");
+        TestHelpers.EnsurePluginInstance(
+            config,
+            LoggerFactory.Create(b => { }),
+            c =>
+            {
+                c.AplVisualsEnabled = true;
+                c.QueueManagementEnabled = true;
+                c.BrowseLibraryEnabled = true;
+                c.MusicEnabled = true;
+            },
+            "alexa-list-truncation-test");
     }
 
     private SessionInfo CreateSession()

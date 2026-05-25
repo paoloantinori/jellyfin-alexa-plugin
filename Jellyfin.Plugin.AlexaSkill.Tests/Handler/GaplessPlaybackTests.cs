@@ -28,8 +28,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// Covers sequential enqueue, loop modes (RepeatOne, RepeatAll), shuffle, radio mode,
 /// sleep timer, end-of-queue, and edge cases.
 /// </summary>
-[Collection("PlaybackHandlers")]
-public class GaplessPlaybackTests : IDisposable
+[Collection("Plugin")]
+public class GaplessPlaybackTests : PluginTestBase, IDisposable
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly PluginConfiguration _config;

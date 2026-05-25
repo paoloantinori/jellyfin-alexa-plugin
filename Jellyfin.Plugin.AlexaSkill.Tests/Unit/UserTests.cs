@@ -6,7 +6,8 @@ using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 
-public class UserTests
+[Collection("Plugin")]
+public class UserTests : PluginTestBase
 {
     [Fact]
     public void SmapiDeviceToken_SetAndGet()

@@ -17,7 +17,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 /// Tests that SleepTimerIntentHandler respects the SleepTimerEnabled feature flag.
 /// </summary>
 [Collection("Plugin")]
-public class SleepTimerFeatureFlagTests : IDisposable
+public class SleepTimerFeatureFlagTests : PluginTestBase, IDisposable
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly PluginConfiguration _config;
