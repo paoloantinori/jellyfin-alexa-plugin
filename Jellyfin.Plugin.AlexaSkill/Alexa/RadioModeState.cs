@@ -38,4 +38,9 @@ internal static class RadioModeState
             }
         }
     }
+
+    /// <summary>
+    /// Clear all entries. For test teardown only.
+    /// </summary>
+    internal static void Clear() => _state.Clear();
 }

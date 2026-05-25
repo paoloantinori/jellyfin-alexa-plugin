@@ -76,6 +76,11 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public static Plugin? Instance { get; private set; }
 
     /// <summary>
+    /// Reset the singleton instance. For test teardown only.
+    /// </summary>
+    internal static void ResetInstance() => Instance = null;
+
+    /// <summary>
     /// Gets an HttpClient from the registered IHttpClientFactory.
     /// Falls back to a static HttpClient if DI is not available.
     /// </summary>

@@ -55,4 +55,9 @@ internal static class QueueContinuationStore
             }
         }
     }
+
+    /// <summary>
+    /// Clear all entries. For test teardown only.
+    /// </summary>
+    internal static void Clear() => _store.Clear();
 }
