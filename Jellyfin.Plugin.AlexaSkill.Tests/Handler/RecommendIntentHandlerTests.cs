@@ -185,6 +185,45 @@ public class RecommendIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
+    public async Task HandleAsync_NoMediaTypeSlot_DefaultsToAudioAndMovie()
+    {
+        var handler = CreateHandler();
+        // No media_type slot provided (slotless utterance)
+        var request = CreateIntentRequest();
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var playedItem = new Audio { Name = "Played Song", Id = Guid.NewGuid() };
+        playedItem.Genres = new[] { "Rock" };
+
+        var recommendedItem = new Audio { Name = "Recommended Song", Id = Guid.NewGuid() };
+
+        // Track what item types were queried in the played-items query
+        Jellyfin.Data.Enums.BaseItemKind[]? queriedTypes = null;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IsPlayed == true)))
+            .Callback<InternalItemsQuery>(q => queriedTypes = q.IncludeItemTypes)
+            .Returns(new List<BaseItem> { playedItem });
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IsPlayed == false || q.IsPlayed == null)))
+            .Returns(new List<BaseItem> { recommendedItem });
+
+        _libraryManagerMock.Setup(l => l.GetItemById(recommendedItem.Id))
+            .Returns(recommendedItem);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotNull(response.Response);
+        Assert.NotNull(response.Response.OutputSpeech);
+        Assert.NotNull(queriedTypes);
+        Assert.Contains(Jellyfin.Data.Enums.BaseItemKind.Audio, queriedTypes);
+        Assert.Contains(Jellyfin.Data.Enums.BaseItemKind.Movie, queriedTypes);
+    }
+
+    [Fact]
     public async Task HandleAsync_AllPlayed_FallsBackToRecent()
     {
         var handler = CreateHandler();

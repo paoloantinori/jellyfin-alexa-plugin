@@ -294,6 +294,14 @@ tests:
     expected_slots:
       media_type: {}
 
+  - utterance: "cosa mi consigli"
+    expected_intent: RecommendIntent
+    expected_slots: {}
+
+  - utterance: "consigliami qualcosa"
+    expected_intent: RecommendIntent
+    expected_slots: {}
+
   # -------------------------------------------------------------------------
   # 16. SleepTimerIntent (duration_minutes)
   # -------------------------------------------------------------------------

@@ -975,7 +975,12 @@
           "Suggerisci {media_type}",
           "Di consigliare {media_type}",
           "Di raccomandare {media_type}",
-          "Di suggerire {media_type}"
+          "Di suggerire {media_type}",
+          "cosa mi consigli",
+          "consigliami qualcosa",
+          "non so cosa ascoltare",
+          "cosa guardo stasera",
+          "consiglia qualcosa"
         ],
         "slots": [
           {
