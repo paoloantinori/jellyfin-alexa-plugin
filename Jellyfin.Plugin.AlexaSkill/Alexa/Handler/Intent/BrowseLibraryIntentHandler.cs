@@ -30,6 +30,10 @@ public class BrowseLibraryIntentHandler : BaseHandler
 {
     private const int VoicePageSize = 5;
 
+    // AudioBook tracks share the same ParentId per book. Over-fetch to collect
+    // enough distinct books after deduplication (most audiobooks have 5-20 tracks).
+    private const int AudioBookOverfetchFactor = 20;
+
     private static int MaxDisplayItems => Plugin.Instance?.Configuration?.MaxListDisplayItems ?? 15;
 
     private readonly ILibraryManager _libraryManager;
@@ -152,12 +156,16 @@ public class BrowseLibraryIntentHandler : BaseHandler
     /// <returns>A list of matching items, limited to MaxDisplayItems.</returns>
     private async Task<IReadOnlyList<BaseItem>> QueryItems(BaseItemKind itemType, string? filter, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, CancellationToken cancellationToken)
     {
+        bool isAudioBook = itemType == BaseItemKind.AudioBook;
+
         var query = new InternalItemsQuery
         {
             User = jellyfinUser,
             Recursive = true,
             IncludeItemTypes = FilterByContentAccess(new[] { itemType }),
-            Limit = MaxDisplayItems,
+            // Over-fetch for AudioBook: many tracks share the same parent folder,
+            // so we need raw items to deduplicate by ParentId before limiting.
+            Limit = isAudioBook ? MaxDisplayItems * AudioBookOverfetchFactor : MaxDisplayItems,
             OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
             DtoOptions = new DtoOptions(true)
         };
@@ -168,7 +176,49 @@ public class BrowseLibraryIntentHandler : BaseHandler
             query.SearchTerm = filter;
         }
 
-        return await RetryAsync(() => _libraryManager.GetItemList(query), $"Get{itemType}Items", cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<BaseItem> raw = await RetryAsync(() => _libraryManager.GetItemList(query), $"Get{itemType}Items", cancellationToken).ConfigureAwait(false);
+
+        if (!isAudioBook)
+        {
+            return raw;
+        }
+
+        // AudioBook: multi-file audiobooks produce one AudioBook item per chapter/track,
+        // all sharing the same ParentId (the book folder). Resolve parent items to get
+        // correct book-level names. Single-track parents (single-file audiobooks) are
+        // kept as-is since they are already the top-level item.
+        var grouped = raw.GroupBy(i => i.ParentId).ToList();
+        var parentIdsToResolve = new List<Guid>();
+        var standaloneBooks = new List<BaseItem>();
+
+        foreach (var group in grouped)
+        {
+            if (group.Count() == 1)
+            {
+                standaloneBooks.Add(group.First());
+            }
+            else
+            {
+                parentIdsToResolve.Add(group.Key);
+            }
+        }
+
+        if (parentIdsToResolve.Count == 0)
+        {
+            return standaloneBooks.Take(MaxDisplayItems).ToList();
+        }
+
+        var parentQuery = new InternalItemsQuery
+        {
+            User = jellyfinUser,
+            ItemIds = parentIdsToResolve.ToArray(),
+            OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
+            DtoOptions = new DtoOptions(true)
+        };
+
+        IReadOnlyList<BaseItem> parents = await RetryAsync(() => _libraryManager.GetItemList(parentQuery), "GetAudioBookParents", cancellationToken).ConfigureAwait(false);
+
+        return parents.Concat(standaloneBooks).Take(MaxDisplayItems).ToList();
     }
 
     /// <summary>
