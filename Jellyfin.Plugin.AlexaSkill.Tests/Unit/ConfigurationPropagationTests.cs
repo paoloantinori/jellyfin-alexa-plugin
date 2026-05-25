@@ -14,7 +14,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 /// is cleared. These tests verify the individual service reset methods that the configuration
 /// change handler invokes.
 /// </summary>
-public class ConfigurationPropagationTests
+[Collection("Plugin")]
+public class ConfigurationPropagationTests : PluginTestBase
 {
     private readonly ILogger _logger;
 

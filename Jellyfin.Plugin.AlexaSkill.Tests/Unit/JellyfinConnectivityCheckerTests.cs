@@ -11,7 +11,8 @@ using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 
-public class JellyfinConnectivityCheckerTests
+[Collection("Plugin")]
+public class JellyfinConnectivityCheckerTests : PluginTestBase
 {
     private readonly Mock<ILogger<JellyfinConnectivityChecker>> _loggerMock;
 

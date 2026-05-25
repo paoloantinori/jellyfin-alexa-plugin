@@ -15,7 +15,8 @@ using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 
-public class ArtistIndexServiceTests
+[Collection("Plugin")]
+public class ArtistIndexServiceTests : PluginTestBase
 {
     private readonly Mock<ILibraryManager> _libraryManagerMock;
     private readonly ILogger<ArtistIndexService> _logger;

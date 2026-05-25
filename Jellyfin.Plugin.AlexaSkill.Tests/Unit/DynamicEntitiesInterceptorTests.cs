@@ -20,7 +20,7 @@ using AlexaSession = Alexa.NET.Request.Session;
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 
 [Collection("Plugin")]
-public class DynamicEntitiesInterceptorTests
+public class DynamicEntitiesInterceptorTests : PluginTestBase
 {
     private readonly Mock<DynamicEntityBuilder> _builderMock;
     private readonly PluginConfiguration _config;

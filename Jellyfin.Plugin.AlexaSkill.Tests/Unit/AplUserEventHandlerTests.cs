@@ -25,7 +25,8 @@ using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 
-public class AplUserEventHandlerTests
+[Collection("Plugin")]
+public class AplUserEventHandlerTests : PluginTestBase
 {
     private readonly Mock<ISessionManager> _sessionManager;
     private readonly Mock<ILibraryManager> _libraryManager;
@@ -518,7 +519,8 @@ public class AplUserEventHandlerTests
 }
 
 // AplUserEventRequest and AplUserEventRequestConverter tests
-public class AplUserEventRequestConverterTests
+[Collection("Plugin")]
+public class AplUserEventRequestConverterTests : PluginTestBase
 {
     [Fact]
     public void CanConvert_AplUserEventType_ReturnsTrue()
@@ -589,7 +591,8 @@ public class AplUserEventRequestConverterTests
     }
 }
 
-public class AplHelperTouchEventTests
+[Collection("Plugin")]
+public class AplHelperTouchEventTests : PluginTestBase
 {
     [Fact]
     public void GetTouchEventArgument_AplUserEvent_ReturnsFirstArgument()

@@ -20,7 +20,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// Tests for structured logging across handlers: named template parameters,
 /// correct log levels, and structured context values.
 /// </summary>
-public class StructuredLoggingTests
+[Collection("Plugin")]
+public class StructuredLoggingTests : PluginTestBase
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly PluginConfiguration _config;

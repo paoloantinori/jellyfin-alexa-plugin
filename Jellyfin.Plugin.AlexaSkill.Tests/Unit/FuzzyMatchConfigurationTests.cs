@@ -24,7 +24,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 /// Uses a test handler that exposes the protected FuzzyMatch and HandleFuzzyMiss methods.
 /// </summary>
 [Collection("Plugin")]
-public class FuzzyMatchConfigurationTests : IDisposable
+public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly PluginConfiguration _config;

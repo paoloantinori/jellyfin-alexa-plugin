@@ -52,7 +52,7 @@ public class MediaTypeConfigurationDefaults
 /// Tests for BaseHandler.FilterByContentAccess static method.
 /// </summary>
 [Collection("Plugin")]
-public class FilterByContentAccessTests : IDisposable
+public class FilterByContentAccessTests : PluginTestBase, IDisposable
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly PluginConfiguration _config;
@@ -264,7 +264,7 @@ public class FilterByContentAccessTests : IDisposable
 /// Tests for BaseHandler.IfMediaTypeDisabled instance method.
 /// </summary>
 [Collection("Plugin")]
-public class IfMediaTypeDisabledTests : IDisposable
+public class IfMediaTypeDisabledTests : PluginTestBase, IDisposable
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly PluginConfiguration _config;

@@ -19,7 +19,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 /// Tests that PlayPodcastIntentHandler respects the PodcastsEnabled feature flag.
 /// </summary>
 [Collection("Plugin")]
-public class PodcastsFeatureFlagTests : IDisposable
+public class PodcastsFeatureFlagTests : PluginTestBase, IDisposable
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly PluginConfiguration _config;

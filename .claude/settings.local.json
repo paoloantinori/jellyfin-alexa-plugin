@@ -45,7 +45,10 @@
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(i['path']\\) for i in d.get\\('items',[]\\)]\")",
       "Bash(curl *)",
       "mcp__sequential-thinking__sequentialthinking",
-      "Bash(dotnet run *)"
+      "Bash(dotnet run *)",
+      "Bash(gh run *)",
+      "Bash(identify /tmp/skill_icon.png)",
+      "Bash(unzip -l /tmp/plugin_030.zip)"
     ]
   }
 }

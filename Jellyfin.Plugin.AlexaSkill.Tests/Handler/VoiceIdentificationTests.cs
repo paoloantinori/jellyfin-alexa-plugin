@@ -20,7 +20,7 @@ using Xunit;
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
 [Collection("Plugin")]
-public class VoiceIdentificationTests
+public class VoiceIdentificationTests : PluginTestBase
 {
     private readonly ILoggerFactory _loggerFactory = LoggerFactory.Create(b => { });
 

@@ -20,8 +20,8 @@ using Audio = MediaBrowser.Controller.Entities.Audio.Audio;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
-[Collection("PlaybackHandlers")]
-public class RadioModeTests : IDisposable
+[Collection("Plugin")]
+public class RadioModeTests : PluginTestBase, IDisposable
 {
     private static readonly string DeviceId = "test-device";
     private readonly Mock<ISessionManager> _sessionManagerMock;

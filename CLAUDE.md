@@ -6,7 +6,7 @@ C# Jellyfin plugin (net9.0) exposing an Alexa skill for media playback, search, 
 
 ```bash
 dotnet build Jellyfin.Plugin.AlexaSkill.sln
-dotnet test Jellyfin.Plugin.AlexaSkill.Tests          # ~1424 unit tests
+dotnet test Jellyfin.Plugin.AlexaSkill.Tests          # ~1861 unit tests
 python3 scripts/validate_interaction_models.py        # Check all 17 models (JSON, slots, drift)
 python3 scripts/validate_locales.py                   # Check locale key coverage (baseline-aware)
 python3 scripts/validate_versions.py                  # Check version consistency across files
@@ -30,7 +30,7 @@ CI validates models, locales, and versions on every PR and push to main.
 
 ## Project Layout
 
-- `Alexa/Handler/Intent/` — 57 intent handlers (one per intent, inherit `BaseHandler`)
+- `Alexa/Handler/Intent/` — 58 intent handlers (one per intent, inherit `BaseHandler`)
 - `Alexa/Handler/BaseHandler.cs` — shared utilities: `FuzzyMatch`, `HandleFuzzyMiss`, `RetryAsync`, stream URLs, library filters
 - `Alexa/InteractionModel/` — 17 per-locale interaction model JSONs (`model_*.json`)
 - `Alexa/Locale/` — Response strings: keys in `ResponseStrings.cs`, values in 17 `<locale>.json` files
@@ -46,6 +46,11 @@ CI validates models, locales, and versions on every PR and push to main.
 - `Alexa/Music/` — Music-specific data models and helpers
 - `Alexa/Playback/` — Playback state and progressive queue management
 - `Alexa/Util/` — Shared utility classes
+- `Alexa/ArtistIndexService.cs` — In-memory artist index with event-driven refresh
+- `Alexa/CircuitBreaker.cs` — Circuit breaker for external API resilience
+- `Alexa/ErrorClassifier.cs` — Categorizes errors for user-facing responses
+- `Alexa/CustomerProfileService.cs` — Amazon customer profile lookups
+- `Alexa/SlotMappings.cs` — Slot name → type mappings (consistency enforcement)
 - `Alexa/FuzzyMatcher.cs` — Fuzzy string matching with configurable thresholds
 - `Alexa/RetryHelper.cs` — Exponential backoff retry with timeout budget (default 6s)
 - `Alexa/Pipeline/` — Request routing pipeline

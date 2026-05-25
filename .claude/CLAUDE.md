@@ -1,6 +1,6 @@
 # Local Project Instructions (not checked in)
 
-## Deploy Checklist — ALWAYS follow `.claude.local.md`
+## Deploy Checklist — ALWAYS follow the deploy checklist in `.claude.local.md`
 
 That file has the full mandatory checklist. Key rules that keep getting violated:
 

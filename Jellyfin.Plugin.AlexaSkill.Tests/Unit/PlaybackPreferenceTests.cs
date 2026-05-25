@@ -111,7 +111,7 @@ public class PlaybackPreferenceDefaultsTests
 /// Tests for ProgressiveQueueConstants config-backed methods.
 /// </summary>
 [Collection("Plugin")]
-public class ProgressiveQueueConstantsTests : IDisposable
+public class ProgressiveQueueConstantsTests : PluginTestBase, IDisposable
 {
     private readonly ILoggerFactory _loggerFactory;
     private readonly PluginConfiguration _config;

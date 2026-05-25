@@ -26,7 +26,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// <summary>
 /// Tests for resume-on-relaunch flow: LaunchRequestHandler, YesIntentHandler, NoIntentHandler.
 /// </summary>
-public class ResumeOnRelaunchTests : IDisposable
+[Collection("Plugin")]
+public class ResumeOnRelaunchTests : PluginTestBase, IDisposable
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly PluginConfiguration _config;

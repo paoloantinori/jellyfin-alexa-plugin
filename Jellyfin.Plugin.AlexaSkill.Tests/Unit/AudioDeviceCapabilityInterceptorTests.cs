@@ -19,7 +19,7 @@ using AlexaSession = Alexa.NET.Request.Session;
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 
 [Collection("Plugin")]
-public class AudioDeviceCapabilityInterceptorTests
+public class AudioDeviceCapabilityInterceptorTests : PluginTestBase
 {
     private readonly ILoggerFactory _loggerFactory;
     private readonly Mock<ISessionManager> _sessionManagerMock;

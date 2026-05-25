@@ -17,7 +17,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 /// Tests that BrowseLibraryIntentHandler respects the BrowseLibraryEnabled feature flag.
 /// </summary>
 [Collection("Plugin")]
-public class BrowseLibraryFeatureFlagTests : IDisposable
+public class BrowseLibraryFeatureFlagTests : PluginTestBase, IDisposable
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly PluginConfiguration _config;

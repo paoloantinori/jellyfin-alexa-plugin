@@ -30,7 +30,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// <summary>
 /// Tests for StartOverIntentHandler: restarts currently playing or last-played item from the beginning.
 /// </summary>
-public class StartOverIntentHandlerTests : IDisposable
+[Collection("Plugin")]
+public class StartOverIntentHandlerTests : PluginTestBase, IDisposable
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly Mock<ILibraryManager> _libraryManagerMock;

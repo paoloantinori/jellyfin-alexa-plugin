@@ -88,7 +88,7 @@ public class PluginConfigurationFeatureFlagTests
 /// Tests for BaseHandler.IfFeatureDisabled method via a concrete test handler.
 /// </summary>
 [Collection("Plugin")]
-public class IfFeatureDisabledTests : IDisposable
+public class IfFeatureDisabledTests : PluginTestBase, IDisposable
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly PluginConfiguration _config;
@@ -214,7 +214,7 @@ public class IfFeatureDisabledTests : IDisposable
 /// Tests that real handlers respect feature flags.
 /// </summary>
 [Collection("Plugin")]
-public class HandlerFeatureFlagTests : IDisposable
+public class HandlerFeatureFlagTests : PluginTestBase, IDisposable
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly PluginConfiguration _config;
@@ -329,7 +329,7 @@ public class HandlerFeatureFlagTests : IDisposable
 /// Tests that AplVisualsEnabled suppresses APL directives while keeping audio functional.
 /// </summary>
 [Collection("Plugin")]
-public class AplVisualsFeatureFlagTests : IDisposable
+public class AplVisualsFeatureFlagTests : PluginTestBase, IDisposable
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly PluginConfiguration _config;
@@ -794,7 +794,7 @@ public class ResolveTopParentIdsTests
 /// Tests that queue management handlers respect the QueueManagementEnabled feature flag.
 /// </summary>
 [Collection("Plugin")]
-public class QueueManagementFeatureFlagTests : IDisposable
+public class QueueManagementFeatureFlagTests : PluginTestBase, IDisposable
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly PluginConfiguration _config;

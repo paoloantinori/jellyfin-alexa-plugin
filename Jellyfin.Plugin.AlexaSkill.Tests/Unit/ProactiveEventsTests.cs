@@ -9,7 +9,8 @@ using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 
-public class ProactiveEventRateLimiterTests
+[Collection("Plugin")]
+public class ProactiveEventRateLimiterTests : PluginTestBase
 {
     [Fact]
     public void CanSend_Initially_ReturnsTrue()
@@ -60,7 +61,8 @@ public class ProactiveEventRateLimiterTests
     }
 }
 
-public class ProactiveEventClientBuildTests
+[Collection("Plugin")]
+public class ProactiveEventClientBuildTests : PluginTestBase
 {
     [Fact]
     public void BuildMediaContentAvailableEvent_CreatesValidPayload()
@@ -139,7 +141,8 @@ public class ProactiveEventClientBuildTests
     }
 }
 
-public class ProactiveEventClientSendTests
+[Collection("Plugin")]
+public class ProactiveEventClientSendTests : PluginTestBase
 {
     [Fact]
     public async Task SendEventAsync_ReturnsFalse_WhenNoLwaClientId()

@@ -22,7 +22,7 @@ using Xunit;
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
 [Collection("Plugin")]
-public class SkipForwardBackIntentHandlerTests : IDisposable
+public class SkipForwardBackIntentHandlerTests : PluginTestBase, IDisposable
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly PluginConfiguration _config;

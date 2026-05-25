@@ -30,7 +30,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// Tests for ResumeIntentHandler fallback tier 4: Jellyfin server-side progress
 /// when no AudioPlayer token, no session FullNowPlayingItem, and no DeviceQueue state exists.
 /// </summary>
-public class ResumeIntentHandlerServerProgressTests : IDisposable
+[Collection("Plugin")]
+public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposable
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly Mock<ILibraryManager> _libraryManagerMock;

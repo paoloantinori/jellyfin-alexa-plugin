@@ -24,7 +24,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 /// sent to ILibraryManager.GetItemList.
 /// </summary>
 [Collection("Plugin")]
-public class LibraryFilterIntegrationTests : IDisposable
+public class LibraryFilterIntegrationTests : PluginTestBase, IDisposable
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly Mock<ILibraryManager> _libraryManagerMock;

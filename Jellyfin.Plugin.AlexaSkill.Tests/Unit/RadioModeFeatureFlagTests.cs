@@ -18,7 +18,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 /// Covers PlayRadioIntentHandler, TurnRadioOnIntentHandler, and TurnRadioOffIntentHandler.
 /// </summary>
 [Collection("Plugin")]
-public class RadioModeFeatureFlagTests : IDisposable
+public class RadioModeFeatureFlagTests : PluginTestBase, IDisposable
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly PluginConfiguration _config;

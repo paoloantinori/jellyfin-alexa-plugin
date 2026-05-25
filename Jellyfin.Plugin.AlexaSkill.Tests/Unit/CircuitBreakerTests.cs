@@ -5,7 +5,8 @@ using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 
-public class CircuitBreakerTests
+[Collection("Plugin")]
+public class CircuitBreakerTests : PluginTestBase
 {
     private readonly ILogger _logger;
 

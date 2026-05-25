@@ -17,7 +17,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 /// Tests that RecommendIntentHandler respects the RecommendationsEnabled feature flag.
 /// </summary>
 [Collection("Plugin")]
-public class RecommendationsFeatureFlagTests : IDisposable
+public class RecommendationsFeatureFlagTests : PluginTestBase, IDisposable
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly PluginConfiguration _config;
