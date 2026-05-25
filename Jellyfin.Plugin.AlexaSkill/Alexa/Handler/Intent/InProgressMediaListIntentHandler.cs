@@ -135,7 +135,7 @@ public class InProgressMediaListIntentHandler : BaseHandler
         var voiceDescriptions = new List<string>();
         for (int i = 0; i < voiceCount; i++)
         {
-            voiceDescriptions.Add(ResponseStrings.Get("InProgressItemWithPosition", locale, inProgressItems[i].Item.Name, inProgressItems[i].Position));
+            voiceDescriptions.Add(ResponseStrings.Get("InProgressItemWithPosition", locale, EscapeXml(inProgressItems[i].Item.Name ?? string.Empty), inProgressItems[i].Position));
         }
 
         string voiceListText = string.Join(". ", voiceDescriptions);

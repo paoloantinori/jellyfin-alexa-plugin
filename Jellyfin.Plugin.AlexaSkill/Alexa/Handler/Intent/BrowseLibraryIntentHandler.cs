@@ -271,7 +271,7 @@ public class BrowseLibraryIntentHandler : BaseHandler
         var voiceEntries = new List<string>();
         for (int i = 0; i < voiceCount; i++)
         {
-            voiceEntries.Add(ResponseStrings.Get("BrowseItem", locale, (i + 1).ToString(CultureInfo.InvariantCulture), items[i].Name));
+            voiceEntries.Add(ResponseStrings.Get("BrowseItem", locale, (i + 1).ToString(CultureInfo.InvariantCulture), EscapeXml(items[i].Name ?? string.Empty)));
         }
 
         string voiceListText = string.Join(". ", voiceEntries);

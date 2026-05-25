@@ -139,7 +139,7 @@ internal static class ListPaginationHelper
                 var item = libraryManager.GetItemById(id);
                 if (item != null)
                 {
-                    names.Add(item.Name);
+                    names.Add(BaseHandler.EscapeXml(item.Name ?? string.Empty));
                 }
             }
         }
@@ -152,7 +152,7 @@ internal static class ListPaginationHelper
         int newOffset = paginationState.CurrentOffset + voiceCount;
         bool hasMore = newOffset < paginationState.ItemIds.Length;
 
-        string voiceListText = string.Join(", ", names);
+        string voiceListText = string.Join(". ", names);
         string speech = hasMore
             ? ResponseStrings.Get("ShowMorePage", locale, voiceListText) + " " + ResponseStrings.Get("ShowMorePrompt", locale)
             : ResponseStrings.Get("ShowMoreLastPage", locale, voiceListText);
