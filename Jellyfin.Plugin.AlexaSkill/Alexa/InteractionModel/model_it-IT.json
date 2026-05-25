@@ -328,7 +328,10 @@
           "Di pleiare disco {album} di {musician}",
           "Di pleiare disco {album} dei {musician}",
           "Di pleiare disco {album} degli {musician}",
-          "Di pleiare disco {album} delle {musician}"
+          "Di pleiare disco {album} delle {musician}",
+          "c'è un album chiamato {album}",
+          "c'è l'album {album}",
+          "c'è un album di {musician}"
         ],
         "slots": [
           {
@@ -567,7 +570,10 @@
           "Di pleiare una traccia di {musician}",
           "Di pleiare una traccia dei {musician}",
           "Di pleiare una traccia degli {musician}",
-          "Di pleiare una traccia delle {musician}"
+          "Di pleiare una traccia delle {musician}",
+          "c'è musica di {musician}",
+          "c'è qualcosa di {musician}",
+          "c'è un artista chiamato {musician}"
         ],
         "slots": [
           {
@@ -898,7 +904,13 @@
           "Di pleiare {song} di {musician}",
           "Di pleiare {song} dei {musician}",
           "Di pleiare {song} degli {musician}",
-          "Di pleiare {song} delle {musician}"
+          "Di pleiare {song} delle {musician}",
+          "c'è una canzone chiamata {song}",
+          "c'è un brano chiamato {song}",
+          "c'è la canzone {song}",
+          "c'è il brano {song}",
+          "c'è una canzone di {musician}",
+          "c'è un brano di {musician}"
         ],
         "slots": [
           {
@@ -1020,7 +1032,8 @@
           "Voglio trovare {query}",
           "Puoi trovare {query}",
           "Cerca il contenuto {query}",
-          "Trova il brano {query}"
+          "Trova il brano {query}",
+          "c'è {query}"
         ],
         "slots": [
           {

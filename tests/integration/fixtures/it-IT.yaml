@@ -587,3 +587,24 @@ tests:
     expected_intent: SearchMediaIntent
     expected_slots:
       query: {}
+
+  # -------------------------------------------------------------------------
+  # 30. c'e patterns (is-there patterns)
+  # These test the c'e utterances added to intent-specific samples.
+  # NLU should prefer typed-slot intents over SearchMediaIntent for
+  # music-related c'e queries, and route generic ones to SearchMediaIntent.
+  # -------------------------------------------------------------------------
+  - utterance: "c'e una canzone di radiohead"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "c'e un album chiamato dark side of the moon"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+
+  - utterance: "c'e un film che si chiama matrix"
+    expected_intent: SearchMediaIntent
+    expected_slots:
+      query: {}
