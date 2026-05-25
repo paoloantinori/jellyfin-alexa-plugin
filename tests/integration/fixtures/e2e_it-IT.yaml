@@ -130,3 +130,36 @@ tests:
       song: {}
     expected_response_type: directive
     expected_directive_type: AudioPlayer.Play
+
+  # --- Browse / Library ---
+  # Browse albums (uses English plural "albums" per it-IT model)
+  - utterance: "elenca albums"
+    expected_intent: BrowseLibraryIntent
+    expected_slots:
+      browse_category: {}
+    expected_response_type: any
+
+  # In-progress media
+  - utterance: "cosa stavo guardando"
+    expected_intent: InProgressMediaListIntent
+    expected_slots: {}
+    expected_response_type: any
+
+  # Recently added
+  - utterance: "cosa c'è di nuovo"
+    expected_intent: QueryRecentlyAddedIntent
+    expected_slots: {}
+    expected_response_type: any
+
+  # List queue
+  - utterance: "mostra la coda"
+    expected_intent: ListQueueIntent
+    expected_slots: {}
+    expected_response_type: any
+
+  # Recommend music
+  - utterance: "consiglia musica"
+    expected_intent: RecommendIntent
+    expected_slots:
+      media_type: {}
+    expected_response_type: any
