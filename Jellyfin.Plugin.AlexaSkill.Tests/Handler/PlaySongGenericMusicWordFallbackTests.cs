@@ -245,6 +245,80 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
     }
 
     [Fact]
+    public void GenericMusicWords_ContainsAllOriginalWords()
+    {
+        // Original 14 words must still be present
+        var originalWords = new[]
+        {
+            "music", "songs",
+            "musica", "canzoni", "brani",
+            "musik", "lieder",
+            "música", "canciones",
+            "chansons", "musique",
+            "muziek", "liedjes",
+            "canções",
+        };
+
+        foreach (var word in originalWords)
+        {
+            Assert.True(PlaySongIntentHandler.GenericMusicWords.Contains(word),
+                $"Expected '{word}' to be in GenericMusicWords");
+        }
+    }
+
+    [Fact]
+    public void GenericMusicWords_ContainsNewlyAddedWords()
+    {
+        // Representative new words from each language
+        var newWords = new[]
+        {
+            // English
+            "song", "track", "tracks", "tune", "tunes",
+            // Italian
+            "brano", "canzone", "pezzo", "traccia",
+            // German
+            "lied", "titel",
+            // Spanish
+            "tema", "temas", "canción", "cancion",
+            // French
+            "chanson", "morceau", "titre", "titres",
+            // Dutch
+            "liedje", "nummer", "nummers",
+            // Portuguese
+            "músicas", "musicas", "faixa", "faixas", "cancoes",
+        };
+
+        foreach (var word in newWords)
+        {
+            Assert.True(PlaySongIntentHandler.GenericMusicWords.Contains(word),
+                $"Expected '{word}' to be in GenericMusicWords");
+        }
+    }
+
+    [Fact]
+    public void GenericMusicWords_CaseInsensitive()
+    {
+        Assert.Contains("MUSIC", PlaySongIntentHandler.GenericMusicWords);
+        Assert.Contains("Musica", PlaySongIntentHandler.GenericMusicWords);
+        Assert.Contains("BRANO", PlaySongIntentHandler.GenericMusicWords);
+        Assert.Contains("Chanson", PlaySongIntentHandler.GenericMusicWords);
+        Assert.Contains("LIED", PlaySongIntentHandler.GenericMusicWords);
+    }
+
+    [Fact]
+    public void GenericMusicWords_DoesNotContainStructuralWords()
+    {
+        // Verbs, prepositions, articles should NOT be in the set
+        var excludedWords = new[] { "play", "suona", "riproduci", "di", "dei", "von", "from", "the", "gli", "les" };
+
+        foreach (var word in excludedWords)
+        {
+            Assert.False(PlaySongIntentHandler.GenericMusicWords.Contains(word),
+                $"Did NOT expect structural word '{word}' to be in GenericMusicWords");
+        }
+    }
+
+    [Fact]
     public async Task GenericMusicWord_SetsProgressiveQueueContinuation()
     {
         var artistId = Guid.NewGuid();

@@ -55,22 +55,22 @@ public class PlaySongIntentHandler : BaseHandler
     // Generic words meaning "music/songs" across supported locales.
     // When Alexa captures one of these as the {song} slot alongside a {musician} slot,
     // the user means "play music by <artist>" not "play a song titled 'music'".
-    private static readonly HashSet<string> GenericMusicWords = new(StringComparer.OrdinalIgnoreCase)
+    internal static readonly HashSet<string> GenericMusicWords = new(StringComparer.OrdinalIgnoreCase)
     {
         // English
-        "music", "songs",
+        "music", "songs", "song", "track", "tracks", "tune", "tunes",
         // Italian
-        "musica", "canzoni", "brani",
+        "musica", "canzoni", "canzone", "brani", "brano", "pezzo", "traccia",
         // German
-        "musik", "lieder",
+        "musik", "lieder", "lied", "titel", "song",
         // Spanish
-        "música", "canciones",
+        "música", "musica", "canciones", "canción", "cancion", "tema", "temas",
         // French
-        "chansons", "musique",
+        "chansons", "chanson", "musique", "morceau", "titre", "titres",
         // Dutch
-        "muziek", "liedjes",
+        "muziek", "liedjes", "liedje", "nummer", "nummers",
         // Portuguese
-        "canções",
+        "canções", "cancoes", "músicas", "musicas", "faixa", "faixas",
     };
 
     private ILibraryManager _libraryManager;
