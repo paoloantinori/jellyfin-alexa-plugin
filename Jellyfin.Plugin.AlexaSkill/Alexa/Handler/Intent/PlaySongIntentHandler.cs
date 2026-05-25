@@ -10,12 +10,14 @@ using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Entities;
+using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
 
@@ -50,10 +52,32 @@ public class PlaySongIntentHandler : BaseHandler
         "a música ", "a faixa ", "música ",
     };
 
+    // Generic words meaning "music/songs" across supported locales.
+    // When Alexa captures one of these as the {song} slot alongside a {musician} slot,
+    // the user means "play music by <artist>" not "play a song titled 'music'".
+    private static readonly HashSet<string> GenericMusicWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        // English
+        "music", "songs",
+        // Italian
+        "musica", "canzoni", "brani",
+        // German
+        "musik", "lieder",
+        // Spanish
+        "música", "canciones",
+        // French
+        "chansons", "musique",
+        // Dutch
+        "muziek", "liedjes",
+        // Portuguese
+        "canções",
+    };
+
     private ILibraryManager _libraryManager;
     private IUserManager _userManager;
     private readonly IUserDataManager _userDataManager;
     private readonly IArtistIndex? _artistIndex;
+    private readonly DeviceQueueManager? _queueManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PlaySongIntentHandler"/> class.
@@ -65,6 +89,7 @@ public class PlaySongIntentHandler : BaseHandler
     /// <param name="userDataManager">Instance of the <see cref="IUserDataManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
     /// <param name="artistIndex">Optional in-memory artist index for fast search.</param>
+    /// <param name="queueManager">Optional per-device queue manager for crash recovery.</param>
     public PlaySongIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
@@ -72,12 +97,14 @@ public class PlaySongIntentHandler : BaseHandler
         IUserManager userManager,
         IUserDataManager userDataManager,
         ILoggerFactory loggerFactory,
-        IArtistIndex? artistIndex = null) : base(sessionManager, config, loggerFactory)
+        IArtistIndex? artistIndex = null,
+        DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _userDataManager = userDataManager;
         _artistIndex = artistIndex;
+        _queueManager = queueManager;
     }
 
     /// <inheritdoc/>
@@ -145,6 +172,19 @@ public class PlaySongIntentHandler : BaseHandler
             }
         }
 
+        // When the song query is a generic word like "musica"/"music" and we have
+        // a valid artist, skip the song search and go straight to artist playback.
+        // This avoids 1-4 wasted DB queries searching for a literal "music" song.
+        if (GenericMusicWords.Contains(songQuery)
+            && !string.IsNullOrWhiteSpace(musicianQuery) && artistsIds.Count > 0)
+        {
+            Logger.LogInformation(
+                "PlaySong: song slot '{SongQuery}' is a generic music word, playing artist songs for '{Artist}'",
+                songQuery, matchedArtistName);
+            return await PlayArtistSongsFallback(
+                artistsIds[0], matchedArtistName!, jellyfinUser!, user, session, context, locale, cancellationToken).ConfigureAwait(false);
+        }
+
         IReadOnlyList<BaseItem> songs = await SearchWithAsrFallbackAsync(songQuery,
             searchTerm =>
             {
@@ -161,7 +201,7 @@ public class PlaySongIntentHandler : BaseHandler
                 return RetryAsync(() => _libraryManager.GetItemList(q), "GetSongs", cancellationToken);
             }).ConfigureAwait(false);
         Logger.LogDebug("PlaySong: Jellyfin returned {SongCount} songs for query='{SongQuery}'", songs.Count, songQuery);
-        if (songs.Count == 0 && !string.IsNullOrWhiteSpace(musicianQuery))
+        if (songs.Count == 0 && !string.IsNullOrWhiteSpace(musicianQuery) && artistsIds.Count > 0)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByNameAndArtist", locale, songQuery, matchedArtistName!));
         }
@@ -277,5 +317,94 @@ public class PlaySongIntentHandler : BaseHandler
             "PlaySong resume check: '{SongName}' — no resume needed (ticks={Ticks}, played={Played})",
             item.Name, data.PlaybackPositionTicks, data.Played);
         return 0;
+    }
+
+    /// <summary>
+    /// Fallback when the song slot contains a generic music word (e.g. "musica"/"music")
+    /// but the musician slot has a valid artist. Plays the artist's songs instead of
+    /// returning "not found".
+    /// </summary>
+    private async Task<SkillResponse> PlayArtistSongsFallback(
+        Guid artistId,
+        string artistName,
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser,
+        Entities.User user,
+        SessionInfo session,
+        Context context,
+        string locale,
+        CancellationToken cancellationToken)
+    {
+        var artistSongsQuery = new InternalItemsQuery()
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            MediaTypes = new[] { MediaType.Audio },
+            OrderBy = PopularitySort,
+            DtoOptions = new DtoOptions(true),
+            ArtistIds = new[] { artistId },
+            Limit = ProgressiveQueueConstants.GetInitialFetchSize()
+        };
+        ApplyLibraryFilter(artistSongsQuery, user, _libraryManager);
+
+        IReadOnlyList<BaseItem> artistItems = await RetryAsync(
+            () => _libraryManager.GetItemList(artistSongsQuery),
+            "GetArtistSongsFallback",
+            cancellationToken).ConfigureAwait(false);
+
+        Logger.LogDebug("PlaySong fallback: fetched {Count} songs for artist='{Artist}'", artistItems.Count, artistName);
+
+        if (artistItems.Count == 0)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("NoSongsForArtist", locale, artistName));
+        }
+
+        var (sortedItems, startIndex, _) = SortAndFindResumeIndex(
+            artistItems, jellyfinUser, _userDataManager, resumePosition: false);
+
+        if (_config.ShuffleArtistSongs)
+        {
+            var shuffled = sortedItems.ToList();
+            Shuffle(shuffled);
+            sortedItems = shuffled;
+            startIndex = 0;
+        }
+
+        List<QueueItem> queueItems = new List<QueueItem>();
+        for (int i = startIndex; i < sortedItems.Count; i++)
+        {
+            queueItems.Add(new QueueItem { Id = sortedItems[i].Id });
+        }
+
+        session.NowPlayingQueue = queueItems;
+        session.FullNowPlayingItem = sortedItems[startIndex];
+
+        // Persist queue to device storage for crash recovery
+        _queueManager?.SetQueue(
+            context.System.Device.DeviceID,
+            sortedItems.Skip(startIndex).Select(i => i.Id.ToString()).ToList(),
+            0);
+
+        if (artistItems.Count >= ProgressiveQueueConstants.GetInitialFetchSize())
+        {
+            QueueContinuationStore.Set(
+                session.UserId,
+                context.System.Device.DeviceID,
+                new QueueContinuation
+                {
+                    SourceType = "Artist",
+                    ArtistId = artistId,
+                    StartIndex = artistItems.Count,
+                    TotalCount = int.MaxValue,
+                    UserId = jellyfinUser.Id,
+                    SortOrder = PopularitySort,
+                    Shuffle = _config.ShuffleArtistSongs
+                });
+        }
+
+        string itemId = sortedItems[startIndex].Id.ToString();
+        Logger.LogDebug(
+            "PlaySong fallback: returning AudioPlayer, itemId={ItemId}, startIndex={StartIndex}, queueSize={QueueSize}",
+            itemId, startIndex, queueItems.Count);
+        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, sortedItems[startIndex], user, context);
     }
 }
