@@ -573,7 +573,21 @@
           "Di pleiare una traccia delle {musician}",
           "c'è musica di {musician}",
           "c'è qualcosa di {musician}",
-          "c'è un artista chiamato {musician}"
+          "c'è un artista chiamato {musician}",
+          "Suona la band {musician}",
+          "Metti la band {musician}",
+          "Ascolta la band {musician}",
+          "Riproduci la band {musician}",
+          "Suona il gruppo {musician}",
+          "Metti il gruppo {musician}",
+          "Ascolta il gruppo {musician}",
+          "Suona il cantante {musician}",
+          "Metti il cantante {musician}",
+          "Ascolta il cantante {musician}",
+          "Riproduci il cantante {musician}",
+          "Suona la cantante {musician}",
+          "Metti la cantante {musician}",
+          "Ascolta la cantante {musician}"
         ],
         "slots": [
           {
