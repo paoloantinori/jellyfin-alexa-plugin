@@ -51,7 +51,19 @@ public class PlaybackFinishedEventHandler : BaseHandler
             "PlaybackFinished: saved to server — item={Token}, positionTicks={Ticks}",
             req.Token, playbackStopInfo.PositionTicks);
 
-        return ResponseBuilder.Empty();
+        // If PlaybackNearlyFinished enqueued a next track, keep the session alive
+        // for APL touch events and the upcoming track. If not, end the session to
+        // dismiss the APL screen.
+        bool hasQueuedNext = context.AudioPlayer?.PlayerActivity == "PLAYING"
+            || context.AudioPlayer?.PlayerActivity == "BUFFER_UNDERRUN";
+
+        if (!hasQueuedNext)
+        {
+            Logger.LogInformation("PlaybackFinished: queue exhausted, ending session to dismiss APL screen");
+            return BuildEndSessionResponse();
+        }
+
+        return BuildKeepAliveResponse();
     }
 }
 #pragma warning restore CA1711

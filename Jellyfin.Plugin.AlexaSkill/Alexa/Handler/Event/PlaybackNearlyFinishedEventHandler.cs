@@ -89,7 +89,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
                 if (DateTimeOffset.UtcNow.UtcTicks >= deadlineTicks)
                 {
                     Logger.LogInformation("Sleep timer expired, stopping playback");
-                    return ResponseBuilder.Empty();
+                    return BuildKeepAliveResponse();
                 }
             }
         }

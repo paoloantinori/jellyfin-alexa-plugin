@@ -406,6 +406,39 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// Build a keep-alive response that keeps the skill session alive without
+    /// opening the mic. Used by AudioPlayer event handlers to allow subsequent
+    /// events (e.g., PING from APL handleTick) to reach the backend.
+    /// </summary>
+    public static SkillResponse BuildKeepAliveResponse()
+    {
+        return new SkillResponse
+        {
+            Version = "1.0",
+            Response = new ResponseBody
+            {
+                ShouldEndSession = null
+            }
+        };
+    }
+
+    /// <summary>
+    /// Build a response that ends the skill session, causing APL documents to dismiss.
+    /// Used when playback finishes and the queue is exhausted, or when the user stops playback.
+    /// </summary>
+    public static SkillResponse BuildEndSessionResponse()
+    {
+        return new SkillResponse
+        {
+            Version = "1.0",
+            Response = new ResponseBody
+            {
+                ShouldEndSession = true
+            }
+        };
+    }
+
+    /// <summary>
     /// Build an AudioPlayer response with cover art metadata.
     /// </summary>
     /// <param name="playBehavior">The play behavior (ReplaceAll, Enqueue, ReplaceEnqueued).</param>

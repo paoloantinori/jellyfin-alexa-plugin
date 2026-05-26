@@ -6,8 +6,6 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
-using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
@@ -44,12 +42,6 @@ public class PlaybackStartedEventHandler : BaseHandler
     /// <summary>
     /// Set the currently started media as playing.
     /// </summary>
-    /// <param name="request">The skill request which should be handled.</param>
-    /// <param name="context">The context of the skill intent request.</param>
-    /// <param name="user">The user instance.</param>
-    /// <param name="session">The session instance.</param>
-    /// <param name="cancellationToken">Cancellation token for request timeout.</param>
-    /// <returns>Empty response.</returns>
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         AudioPlayerRequest req = (AudioPlayerRequest)request;
@@ -68,8 +60,9 @@ public class PlaybackStartedEventHandler : BaseHandler
             PositionTicks = startTicks,
             PlaybackStartTimeTicks = startTicks,
         };
+
         await SessionManager.OnPlaybackStart(playbackStartInfo).ConfigureAwait(false);
 
-        return ResponseBuilder.Empty();
+        return BuildKeepAliveResponse();
     }
 }

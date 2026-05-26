@@ -164,7 +164,16 @@ public class PlaybackStoppedEventHandler : BaseHandler
             }
         }
 
-        return ResponseBuilder.Empty();
+        // End the session to dismiss the APL screen when playback stops
+        // (user pause/stop, system stop, or error). Keep alive only for
+        // displacement events where a new track is already starting.
+        if (isDisplacement)
+        {
+            return BuildKeepAliveResponse();
+        }
+
+        Logger.LogInformation("PlaybackStopped: ending session to dismiss APL screen");
+        return BuildEndSessionResponse();
     }
 
     private const int MaxItemPositionStateEntries = 200;

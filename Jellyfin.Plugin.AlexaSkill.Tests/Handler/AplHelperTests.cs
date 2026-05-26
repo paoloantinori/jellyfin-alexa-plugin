@@ -173,9 +173,12 @@ public class AplHelperTests : PluginTestBase
         SkillResponse response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
 
         Assert.NotNull(response);
-        // AudioPlayer only — APL NowPlaying removed (built-in Echo player handles display)
-        Assert.Single(response.Response.Directives);
+        // Persistent APL NowPlaying attached alongside AudioPlayer on APL devices
+        Assert.Equal(2, response.Response.Directives.Count);
         Assert.Contains(response.Response.Directives, d => d.Type == "AudioPlayer.Play");
+        Assert.Contains(response.Response.Directives, d => d.Type == "Alexa.Presentation.APL.RenderDocument");
+        // Session kept alive for tick handler PING keepalive
+        Assert.Null(response.Response.ShouldEndSession);
     }
 
     [Fact]

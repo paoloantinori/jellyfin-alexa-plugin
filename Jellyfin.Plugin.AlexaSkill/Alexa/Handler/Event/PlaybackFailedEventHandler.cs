@@ -61,6 +61,6 @@ public class PlaybackFailedEventHandler : BaseHandler
         };
         await SessionManager.OnPlaybackStopped(playbackStopInfo).ConfigureAwait(false);
 
-        return ResponseBuilder.Empty();
+        return BuildKeepAliveResponse();
     }
 }
