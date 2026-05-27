@@ -381,6 +381,16 @@ public abstract class BaseHandler
     public string GetVideoStreamUrl(string itemId, Entities.User user)
         => BuildStreamUrl("Videos/", itemId, user);
 
+    /// <summary>
+    /// Get a video-audio URL that combines album art with audio into an MP4 stream
+    /// for Echo Show VideoApp playback with native progress bar controls.
+    /// </summary>
+    /// <param name="itemId">Id of the audio item.</param>
+    /// <param name="user">The user for API key authentication.</param>
+    /// <returns>URL to the video-audio endpoint.</returns>
+    public string GetVideoAudioUrl(string itemId, Entities.User user)
+        => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/{itemId}?api_key={user.JellyfinToken}").ToString();
+
     private string BuildStreamUrl(string pathSegment, string itemId, Entities.User user)
         => new Uri(new Uri(_config.ServerAddress), $"{pathSegment}{itemId}/stream?static=true&api_key={user.JellyfinToken}").ToString();
 
@@ -466,6 +476,16 @@ public abstract class BaseHandler
     /// <returns>A SkillResponse containing the AudioPlayer directive.</returns>
     public SkillResponse BuildAudioPlayerResponse(PlayBehavior playBehavior, string streamUrl, string itemId, MediaBrowser.Controller.Entities.BaseItem? item, Entities.User user, Context? context, int offsetInMilliseconds = 0)
     {
+        // Route initial playback through VideoApp when native controls are enabled.
+        // Enqueue/ReplaceEnqueued stay as AudioPlayer for queue building.
+        // Resume (offset > 0) also stays as AudioPlayer since VideoApp has no offset support.
+        if (Plugin.Instance?.Configuration?.NativeControlsForAudio == true
+            && playBehavior == PlayBehavior.ReplaceAll
+            && offsetInMilliseconds == 0)
+        {
+            return BuildVideoAppAudioResponse(itemId, item, user);
+        }
+
         Logger.LogDebug("BuildAudioPlayerResponse: itemId={ItemId}, behavior={Behavior}, offsetMs={OffsetMs}, title={Title}",
             itemId, playBehavior, offsetInMilliseconds, item?.Name);
         string imageUrl = item != null ? GetImageUrl(itemId, user) : string.Empty;
@@ -541,6 +561,41 @@ public abstract class BaseHandler
         }
 
         return response;
+    }
+
+    /// <summary>
+    /// Build a VideoApp.Launch response for audio playback using the video-audio
+    /// endpoint, which combines album art with audio into a streamable MP4.
+    /// Gives native progress bar / scrubber on Echo Show.
+    /// </summary>
+    public SkillResponse BuildVideoAppAudioResponse(string itemId, BaseItem? item, Entities.User user)
+    {
+        string videoAudioUrl = GetVideoAudioUrl(itemId, user);
+        Logger.LogDebug("BuildVideoAppAudioResponse: itemId={ItemId}, title={Title}, url={Url}", itemId, item?.Name, videoAudioUrl);
+
+        return new SkillResponse
+        {
+            Version = "1.0",
+            Response = new ResponseBody
+            {
+                ShouldEndSession = null,
+                Directives = new List<IDirective>
+                {
+                    new Directive.VideoAppLaunchDirective
+                    {
+                        VideoItem = new Directive.VideoItem
+                        {
+                            Source = videoAudioUrl,
+                            Metadata = new Directive.VideoItemMetadata
+                            {
+                                Title = item?.Name ?? string.Empty,
+                                Subtitle = GetSubtitle(item)
+                            }
+                        }
+                    }
+                }
+            }
+        };
     }
 
     /// <summary>

@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.IO;
 using global::Alexa.NET;
 using global::Alexa.NET.Request;
 using global::Alexa.NET.Request.Type;
@@ -9,11 +10,14 @@ using global::Alexa.NET.Response;
 using global::Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
+using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Serialization;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
@@ -36,7 +40,8 @@ internal class CoverArtTestHandler : BaseHandler
         => Task.FromResult(ResponseBuilder.Empty());
 }
 
-public class CoverArtTests
+[Collection("Plugin")]
+public class CoverArtTests : PluginTestBase
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly PluginConfiguration _config;
@@ -446,4 +451,263 @@ public class CoverArtTests
 
         Assert.Equal("Breaking Bad", directive.AudioItem.Metadata.Subtitle);
     }
+}
+
+/// <summary>
+/// Tests for the VideoApp audio response path, activated when NativeControlsForAudio is enabled.
+/// Verifies that the video-audio endpoint URL is used instead of the raw audio stream URL.
+/// </summary>
+[Collection("Plugin")]
+public class VideoAppAudioTests : PluginTestBase, IDisposable
+{
+    private readonly Mock<ISessionManager> _sessionManagerMock;
+    private readonly PluginConfiguration _config;
+    private readonly ILoggerFactory _loggerFactory;
+
+    public VideoAppAudioTests()
+    {
+        _sessionManagerMock = new Mock<ISessionManager>();
+        _config = new PluginConfiguration { ServerAddress = "http://localhost:8096/", NativeControlsForAudio = true };
+        _loggerFactory = LoggerFactory.Create(b => { });
+        EnsurePluginInstance();
+    }
+
+    public void Dispose()
+    {
+        _loggerFactory.Dispose();
+    }
+
+    private void EnsurePluginInstance()
+    {
+        if (Plugin.Instance != null)
+        {
+            Plugin.Instance.Configuration.NativeControlsForAudio = true;
+            Plugin.Instance.Configuration.ServerAddress = "http://localhost:8096/";
+            return;
+        }
+
+        var tmpDir = Path.Combine(Path.GetTempPath(), "alexa-videoapp-test-" + Guid.NewGuid());
+        Directory.CreateDirectory(tmpDir);
+
+        var appPaths = new Mock<IApplicationPaths>();
+        appPaths.Setup(p => p.PluginsPath).Returns(tmpDir);
+        appPaths.Setup(p => p.PluginConfigurationsPath).Returns(tmpDir);
+        appPaths.Setup(p => p.DataPath).Returns(tmpDir);
+        appPaths.Setup(p => p.CachePath).Returns(tmpDir);
+        appPaths.Setup(p => p.LogDirectoryPath).Returns(tmpDir);
+        appPaths.Setup(p => p.ConfigurationDirectoryPath).Returns(tmpDir);
+        appPaths.Setup(p => p.SystemConfigurationFilePath).Returns(Path.Combine(tmpDir, "system.xml"));
+        appPaths.Setup(p => p.ProgramDataPath).Returns(tmpDir);
+        appPaths.Setup(p => p.ProgramSystemPath).Returns(tmpDir);
+        appPaths.Setup(p => p.TempDirectory).Returns(tmpDir);
+        appPaths.Setup(p => p.VirtualDataPath).Returns(tmpDir);
+
+        var xmlSerializer = new Mock<IXmlSerializer>();
+        xmlSerializer
+            .Setup(x => x.DeserializeFromFile(typeof(PluginConfiguration), It.IsAny<string>()))
+            .Returns(_config);
+
+        var userManager = new Mock<IUserManager>();
+
+        var plugin = new Plugin(
+            appPaths.Object,
+            xmlSerializer.Object,
+            _loggerFactory,
+            userManager.Object);
+
+        plugin.Configuration.ServerAddress = "http://localhost:8096/";
+        plugin.Configuration.NativeControlsForAudio = true;
+    }
+
+    private VideoAppTestHandler CreateHandler()
+        => new(_sessionManagerMock.Object, _config, _loggerFactory);
+
+    private static Entities.User CreateUser(string token = "test-token")
+        => TestHelpers.CreateTestUser(jellyfinToken: token);
+
+    private static Audio CreateSong(string name = "Test Song", Guid? id = null)
+        => new() { Name = name, Id = id ?? Guid.NewGuid() };
+
+    [Fact]
+    public void BuildAudioPlayerResponse_NativeControlsOn_UsesVideoAppDirective()
+    {
+        var handler = CreateHandler();
+        var song = CreateSong("My Song");
+        var user = CreateUser();
+        string itemId = song.Id.ToString();
+        string streamUrl = handler.GetStreamUrl(itemId, user);
+
+        var response = handler.BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
+
+        var directive = Assert.IsType<VideoAppLaunchDirective>(
+            Assert.Single(response.Response.Directives));
+        Assert.NotNull(directive.VideoItem);
+    }
+
+    [Fact]
+    public void BuildAudioPlayerResponse_NativeControlsOn_SourceUsesVideoAudioEndpoint()
+    {
+        var handler = CreateHandler();
+        var song = CreateSong(id: Guid.Parse("22222222-2222-2222-2222-222222222222"));
+        var user = CreateUser(token: "my-video-token");
+        string itemId = song.Id.ToString();
+        string streamUrl = handler.GetStreamUrl(itemId, user);
+
+        var response = handler.BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
+
+        var directive = Assert.IsType<VideoAppLaunchDirective>(
+            Assert.Single(response.Response.Directives));
+
+        Assert.Contains("/alexaskill/api/video-audio/", directive.VideoItem.Source);
+        Assert.Contains(itemId, directive.VideoItem.Source);
+        Assert.Contains("api_key=my-video-token", directive.VideoItem.Source);
+    }
+
+    [Fact]
+    public void BuildAudioPlayerResponse_NativeControlsOn_SourceDoesNotUseRawStreamUrl()
+    {
+        var handler = CreateHandler();
+        var song = CreateSong();
+        var user = CreateUser();
+        string itemId = song.Id.ToString();
+        string streamUrl = handler.GetStreamUrl(itemId, user);
+
+        var response = handler.BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
+
+        var directive = Assert.IsType<VideoAppLaunchDirective>(
+            Assert.Single(response.Response.Directives));
+
+        // Should NOT contain the raw /Audio/.../stream path
+        Assert.DoesNotContain("/Audio/", directive.VideoItem.Source);
+        Assert.DoesNotContain("/stream", directive.VideoItem.Source);
+    }
+
+    [Fact]
+    public void BuildAudioPlayerResponse_NativeControlsOn_EnqueueStaysAudioPlayer()
+    {
+        var handler = CreateHandler();
+        var song = CreateSong();
+        var user = CreateUser();
+        string itemId = song.Id.ToString();
+        string streamUrl = handler.GetStreamUrl(itemId, user);
+        var context = TestHelpers.CreateTestContext();
+
+        var response = handler.BuildAudioPlayerResponse(
+            PlayBehavior.Enqueue, streamUrl, itemId, song, user, context);
+
+        // Enqueue should stay as AudioPlayer, not VideoApp
+        var directive = Assert.IsType<AudioPlayerPlayDirective>(
+            Assert.Single(response.Response.Directives));
+        Assert.Equal(PlayBehavior.Enqueue, directive.PlayBehavior);
+    }
+
+    [Fact]
+    public void BuildAudioPlayerResponse_NativeControlsOn_WithOffsetStaysAudioPlayer()
+    {
+        var handler = CreateHandler();
+        var song = CreateSong();
+        var user = CreateUser();
+        string itemId = song.Id.ToString();
+        string streamUrl = handler.GetStreamUrl(itemId, user);
+
+        var response = handler.BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, streamUrl, itemId, song, user, offsetInMilliseconds: 5000);
+
+        // Resume with offset should stay as AudioPlayer
+        Assert.IsType<AudioPlayerPlayDirective>(
+            Assert.Single(response.Response.Directives));
+    }
+
+    [Fact]
+    public void BuildAudioPlayerResponse_NativeControlsOn_MetadataHasTitle()
+    {
+        var handler = CreateHandler();
+        var song = CreateSong("Stairway to Heaven");
+        var user = CreateUser();
+        string itemId = song.Id.ToString();
+        string streamUrl = handler.GetStreamUrl(itemId, user);
+
+        var response = handler.BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
+
+        var directive = Assert.IsType<VideoAppLaunchDirective>(
+            Assert.Single(response.Response.Directives));
+
+        Assert.NotNull(directive.VideoItem.Metadata);
+        Assert.Equal("Stairway to Heaven", directive.VideoItem.Metadata.Title);
+    }
+
+    [Fact]
+    public void BuildAudioPlayerResponse_NativeControlsOn_MetadataHasSubtitle()
+    {
+        var handler = CreateHandler();
+        var song = new Audio
+        {
+            Name = "Bohemian Rhapsody",
+            Id = Guid.NewGuid(),
+            Artists = new List<string> { "Queen" }
+        };
+        var user = CreateUser();
+        string itemId = song.Id.ToString();
+        string streamUrl = handler.GetStreamUrl(itemId, user);
+
+        var response = handler.BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
+
+        var directive = Assert.IsType<VideoAppLaunchDirective>(
+            Assert.Single(response.Response.Directives));
+
+        Assert.Equal("Queen", directive.VideoItem.Metadata.Subtitle);
+    }
+
+    [Fact]
+    public void GetVideoAudioUrl_BuildsCorrectUrl()
+    {
+        var handler = CreateHandler();
+        var user = CreateUser(token: "abc123");
+        string itemId = "33333333-3333-3333-3333-333333333333";
+
+        string url = handler.TestGetVideoAudioUrl(itemId, user);
+
+        Assert.Equal("http://localhost:8096/alexaskill/api/video-audio/33333333-3333-3333-3333-333333333333?api_key=abc123", url);
+    }
+
+    [Fact]
+    public void BuildAudioPlayerResponse_NativeControlsOn_NullItem_EmptyTitle()
+    {
+        var handler = CreateHandler();
+        var user = CreateUser();
+        string itemId = Guid.NewGuid().ToString();
+        string streamUrl = handler.GetStreamUrl(itemId, user);
+
+        var response = handler.BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, streamUrl, itemId, null!, user);
+
+        var directive = Assert.IsType<VideoAppLaunchDirective>(
+            Assert.Single(response.Response.Directives));
+
+        Assert.Equal(string.Empty, directive.VideoItem.Metadata.Title);
+    }
+}
+
+/// <summary>
+/// Test handler exposing BuildAudioPlayerResponse and GetVideoAudioUrl for VideoApp tests.
+/// </summary>
+internal class VideoAppTestHandler : BaseHandler
+{
+    public VideoAppTestHandler(ISessionManager sessionManager, PluginConfiguration config, ILoggerFactory loggerFactory)
+        : base(sessionManager, config, loggerFactory)
+    {
+    }
+
+    public override bool CanHandle(Request request) => true;
+
+    public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
+        => Task.FromResult(ResponseBuilder.Empty());
+
+    public string TestGetVideoAudioUrl(string itemId, Entities.User user)
+        => GetVideoAudioUrl(itemId, user);
 }
