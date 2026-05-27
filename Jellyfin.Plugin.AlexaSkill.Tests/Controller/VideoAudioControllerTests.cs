@@ -125,7 +125,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.Contains("-preset ultrafast", args, StringComparison.Ordinal);
         Assert.Contains("scale=1280:720", args, StringComparison.Ordinal);
         Assert.Contains("pad=1280:720", args, StringComparison.Ordinal);
-        Assert.Contains("-c:a copy", args, StringComparison.Ordinal);
+        Assert.Contains("-c:a aac", args, StringComparison.Ordinal);
         Assert.Contains("-pix_fmt yuv420p", args, StringComparison.Ordinal);
         Assert.Contains("frag_keyframe+empty_moov", args, StringComparison.Ordinal);
         Assert.Contains("-shortest", args, StringComparison.Ordinal);

@@ -125,12 +125,9 @@ public class VideoAudioController : ControllerBase
             artUrl ?? "(black frame)",
             useBlackFrame);
 
-        // Build and start ffmpeg
+        // Build ffmpeg arguments
         var ffmpegArgs = BuildFfmpegArguments(artUrl, audioUrl, useBlackFrame);
         _logger.LogDebug("VideoAudio: ffmpeg arguments: {Args}", ffmpegArgs);
-
-        Response.ContentType = "video/mp4";
-        Response.Headers["X-Accel-Buffering"] = "no";
 
         using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
 
@@ -144,8 +141,12 @@ public class VideoAudioController : ControllerBase
 
         try
         {
-            await StartFfmpegAndStreamWithCacheAsync(ffmpeg, ffmpegArgs, cachePath, cts.Token).ConfigureAwait(false);
-            return new EmptyResult();
+            // Generate to file first, then serve — gives proper Content-Length header
+            // which VideoApp needs for reliable playback on Echo Show.
+            await RunFfmpegToFileAsync(ffmpeg, ffmpegArgs, cachePath, cts.Token).ConfigureAwait(false);
+
+            _logger.LogDebug("VideoAudio: serving generated file for item {ItemId}", itemId);
+            return PhysicalFile(cachePath, "video/mp4");
         }
         catch (OperationCanceledException)
         {
@@ -216,7 +217,7 @@ public class VideoAudioController : ControllerBase
             $"{inputArgs} " +
             $"-i \"{audioUrl}\" " +
             "-c:v libx264 -tune stillimage -preset ultrafast -crf 28 " +
-            "-c:a copy " +
+            "-c:a aac -b:a 128k " +
             "-pix_fmt yuv420p -r 1 " +
             "-vf \"scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:black\" " +
             "-f mp4 -movflags frag_keyframe+empty_moov " +
@@ -306,38 +307,37 @@ public class VideoAudioController : ControllerBase
     }
 
     /// <summary>
-    /// Start ffmpeg and stream its stdout to both the HTTP response and a cache file.
-    /// If ffmpeg fails, the incomplete cache file is deleted by the caller.
+    /// Run ffmpeg to generate the MP4 file to disk.
     /// </summary>
     /// <param name="ffmpegPath">Path to ffmpeg binary.</param>
     /// <param name="arguments">ffmpeg command-line arguments.</param>
-    /// <param name="cachePath">Path to write the cache file.</param>
+    /// <param name="outputPath">Path to write the output file.</param>
     /// <param name="cancellationToken">Cancellation token for timeout/abort.</param>
-    private async Task StartFfmpegAndStreamWithCacheAsync(
+    private async Task RunFfmpegToFileAsync(
         string ffmpegPath,
         string arguments,
-        string cachePath,
+        string outputPath,
         CancellationToken cancellationToken)
     {
+        // Replace "pipe:1" with the output file path
+        string fileArgs = arguments.Replace("pipe:1", $"\"{outputPath}\"", StringComparison.Ordinal);
+
         using var process = new Process();
-        using var cacheStream = new FileStream(cachePath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
-#pragma warning disable CA3006 // Process command injection — inputs are validated:
-        // itemId is validated as GUID — no user input in arguments
+#pragma warning disable CA3006 // itemId is validated as GUID — no user input in arguments
         process.StartInfo = new ProcessStartInfo
         {
             FileName = ffmpegPath,
-            Arguments = arguments,
+            Arguments = fileArgs,
             UseShellExecute = false,
             CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            StandardOutputEncoding = System.Text.Encoding.UTF8
+            RedirectStandardOutput = false,
+            RedirectStandardError = true
         };
 #pragma warning restore CA3006
 
         process.Start();
 
-        // Read stderr asynchronously to prevent deadlock and log for debugging
+        // Read stderr asynchronously to prevent deadlock
         var stderrTask = Task.Run(async () =>
         {
             using var reader = process.StandardError;
@@ -348,31 +348,12 @@ public class VideoAudioController : ControllerBase
             }
         }, cancellationToken);
 
-        // Stream stdout to response body AND cache file simultaneously
-        Stream stdout = process.StandardOutput.BaseStream;
-        var buffer = new byte[81920]; // 80KB buffer for efficient streaming
-        int bytesRead;
-
-        while ((bytesRead = await stdout.ReadAsync(buffer.AsMemory(0), cancellationToken).ConfigureAwait(false)) > 0)
-        {
-            var chunk = buffer.AsMemory(0, bytesRead);
-
-            await Response.Body.WriteAsync(chunk, cancellationToken).ConfigureAwait(false);
-            await Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
-            await cacheStream.WriteAsync(chunk, cancellationToken).ConfigureAwait(false);
-        }
-
-        // Wait for ffmpeg to exit
-        if (!process.HasExited)
-        {
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-        }
-
+        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
         await stderrTask.ConfigureAwait(false);
 
         if (process.ExitCode != 0)
         {
-            _logger.LogWarning("ffmpeg exited with code {ExitCode} for item", process.ExitCode);
+            _logger.LogWarning("ffmpeg exited with code {ExitCode}", process.ExitCode);
             throw new InvalidOperationException($"ffmpeg exited with code {process.ExitCode}");
         }
 
