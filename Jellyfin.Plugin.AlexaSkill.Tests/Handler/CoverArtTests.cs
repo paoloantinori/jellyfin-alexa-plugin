@@ -562,7 +562,6 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
 
         Assert.Contains("/alexaskill/api/video-audio/", directive.VideoItem.Source);
         Assert.Contains(itemId, directive.VideoItem.Source);
-        Assert.Contains("api_key=my-video-token", directive.VideoItem.Source);
     }
 
     [Fact]
@@ -672,7 +671,7 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
 
         string url = handler.TestGetVideoAudioUrl(itemId, user);
 
-        Assert.Equal("http://localhost:8096/alexaskill/api/video-audio/33333333-3333-3333-3333-333333333333?api_key=abc123", url);
+        Assert.Equal("http://localhost:8096/alexaskill/api/video-audio/33333333-3333-3333-3333-333333333333", url);
     }
 
     [Fact]

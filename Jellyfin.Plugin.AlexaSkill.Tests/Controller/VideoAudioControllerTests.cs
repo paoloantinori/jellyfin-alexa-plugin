@@ -72,37 +72,6 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
-    /// Verify that the endpoint returns 401 when no API key is provided.
-    /// </summary>
-    [Fact]
-    public async Task StreamVideoAudio_NoApiKey_Returns401()
-    {
-        var controller = CreateController();
-
-        ActionResult result = await controller.StreamVideoAudio(Guid.NewGuid().ToString(), null);
-
-        var unauthorized = Assert.IsType<UnauthorizedObjectResult>(result);
-        Assert.NotNull(unauthorized.Value);
-    }
-
-    /// <summary>
-    /// Verify that the endpoint returns 401 when the API key format is invalid
-    /// (contains non-hex characters that could be a command injection vector).
-    /// </summary>
-    [Fact]
-    public async Task StreamVideoAudio_InvalidApiKeyFormat_Returns401()
-    {
-        var controller = CreateController();
-
-        ActionResult result = await controller.StreamVideoAudio(
-            Guid.NewGuid().ToString(),
-            "not-valid-chars!@#");
-
-        var unauthorized = Assert.IsType<UnauthorizedObjectResult>(result);
-        Assert.NotNull(unauthorized.Value);
-    }
-
-    /// <summary>
     /// Verify that the endpoint returns 400 when itemId is not a valid GUID.
     /// </summary>
     [Fact]
@@ -110,7 +79,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     {
         var controller = CreateController();
 
-        ActionResult result = await controller.StreamVideoAudio("not-a-guid", "abc123def456");
+        ActionResult result = await controller.StreamVideoAudio("not-a-guid", null);
 
         var badRequest = Assert.IsType<BadRequestObjectResult>(result);
         Assert.NotNull(badRequest.Value);
@@ -130,28 +99,10 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         ActionResult result = await controller.StreamVideoAudio(
             Guid.NewGuid().ToString(),
-            "abc123def456abc123def456abc12345");
+            null);
 
         var notFound = Assert.IsType<NotFoundObjectResult>(result);
         Assert.NotNull(notFound.Value);
-    }
-
-    /// <summary>
-    /// Verify that IsValidApiKey returns true for valid hex API keys.
-    /// </summary>
-    [Theory]
-    [InlineData("abc123def456abc123def456abc12345", true)]
-    [InlineData("ABCDEF1234567890", true)]
-    [InlineData("0123456789abcdef", true)]
-    [InlineData("", false)]
-    [InlineData("not-hex-chars!", false)]
-    [InlineData("validhexbut has space", false)]
-    [InlineData("key;rm -rf /", false)]
-    [InlineData("key\"injection", false)]
-    [InlineData("key'injection", false)]
-    public void IsValidApiKey_ValidatesCorrectly(string apiKey, bool expected)
-    {
-        Assert.Equal(expected, VideoAudioController.IsValidApiKey(apiKey));
     }
 
     /// <summary>
@@ -161,8 +112,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     [Fact]
     public void BuildFfmpegArguments_WithArtUrl_ContainsAllExpectedFlags()
     {
-        string artUrl = "http://localhost:8096/Items/123/Images/Primary?api_key=abc";
-        string audioUrl = "http://localhost:8096/Audio/456/stream?static=true&api_key=abc";
+        string artUrl = "http://localhost:8096/Items/123/Images/Primary";
+        string audioUrl = "http://localhost:8096/Audio/456/stream?static=true";
 
         string args = VideoAudioController.BuildFfmpegArguments(artUrl, audioUrl, false);
 
@@ -188,7 +139,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     [Fact]
     public void BuildFfmpegArguments_BlackFrame_ContainsLavfiInput()
     {
-        string audioUrl = "http://localhost:8096/Audio/456/stream?static=true&api_key=abc";
+        string audioUrl = "http://localhost:8096/Audio/456/stream?static=true";
 
         string args = VideoAudioController.BuildFfmpegArguments(null, audioUrl, true);
 

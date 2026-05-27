@@ -386,10 +386,10 @@ public abstract class BaseHandler
     /// for Echo Show VideoApp playback with native progress bar controls.
     /// </summary>
     /// <param name="itemId">Id of the audio item.</param>
-    /// <param name="user">The user for API key authentication.</param>
+    /// <param name="user">The user (unused, kept for API consistency).</param>
     /// <returns>URL to the video-audio endpoint.</returns>
     public string GetVideoAudioUrl(string itemId, Entities.User user)
-        => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/{itemId}?api_key={user.JellyfinToken}").ToString();
+        => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/{itemId}").ToString();
 
     private string BuildStreamUrl(string pathSegment, string itemId, Entities.User user)
         => new Uri(new Uri(_config.ServerAddress), $"{pathSegment}{itemId}/stream?static=true&api_key={user.JellyfinToken}").ToString();

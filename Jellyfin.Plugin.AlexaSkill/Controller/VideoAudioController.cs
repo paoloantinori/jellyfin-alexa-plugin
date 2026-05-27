@@ -71,19 +71,6 @@ public class VideoAudioController : ControllerBase
         [FromRoute] string itemId,
         [FromQuery(Name = "api_key")] string? apiKey)
     {
-        if (string.IsNullOrWhiteSpace(apiKey))
-        {
-            _logger.LogWarning("VideoAudio request without API key for item {ItemId}", itemId);
-            return Unauthorized(new { error = "api_key query parameter is required" });
-        }
-
-        // Validate apiKey contains only hex chars (Jellyfin API keys are 32-char hex strings)
-        if (!IsValidApiKey(apiKey))
-        {
-            _logger.LogWarning("VideoAudio request with invalid API key format");
-            return Unauthorized(new { error = "Invalid API key format" });
-        }
-
         if (string.IsNullOrWhiteSpace(itemId) || !Guid.TryParse(itemId, out Guid itemGuid))
         {
             return BadRequest(new { error = "Invalid itemId format" });
@@ -123,11 +110,13 @@ public class VideoAudioController : ControllerBase
             return PhysicalFile(cached.FullName, "video/mp4");
         }
 
-        // Build audio URL (ffmpeg fetches it directly via HTTP)
-        string audioUrl = $"{serverUrl}/Audio/{itemId}/stream?static=true&api_key={apiKey}";
+        // Build audio URL (ffmpeg fetches it directly via HTTP).
+        // Jellyfin's /Audio/{id}/stream endpoint works without auth for static streams.
+        string audioUrl = $"{serverUrl}/Audio/{itemId}/stream?static=true";
 
-        // Determine album art URL — prefer item image, then parent, then black frame
-        string? artUrl = ResolveArtUrl(item, serverUrl, apiKey);
+        // Determine album art URL — prefer item image, then parent, then black frame.
+        // Image endpoints also work without auth.
+        string? artUrl = ResolveArtUrl(item, serverUrl);
         bool useBlackFrame = artUrl == null;
 
         _logger.LogDebug(
@@ -178,17 +167,15 @@ public class VideoAudioController : ControllerBase
     /// </summary>
     /// <param name="item">The Jellyfin audio item.</param>
     /// <param name="serverUrl">The base server URL (no trailing slash).</param>
-    /// <param name="apiKey">API key for authentication.</param>
     /// <returns>Art URL string or null.</returns>
     internal static string? ResolveArtUrl(
         MediaBrowser.Controller.Entities.BaseItem item,
-        string serverUrl,
-        string apiKey)
+        string serverUrl)
     {
         // Check if the item itself has a primary image
         if (item.HasImage(ImageType.Primary, 0))
         {
-            return $"{serverUrl}/Items/{item.Id}/Images/Primary?api_key={apiKey}";
+            return $"{serverUrl}/Items/{item.Id}/Images/Primary";
         }
 
         // For audio items, try to find the album parent's primary image
@@ -197,7 +184,7 @@ public class VideoAudioController : ControllerBase
             var album = item.FindParent<MediaBrowser.Controller.Entities.Audio.MusicAlbum>();
             if (album != null && album.HasImage(ImageType.Primary, 0))
             {
-                return $"{serverUrl}/Items/{album.Id}/Images/Primary?api_key={apiKey}";
+                return $"{serverUrl}/Items/{album.Id}/Images/Primary";
             }
         }
 
@@ -205,7 +192,7 @@ public class VideoAudioController : ControllerBase
         Guid parentId = item.ParentId;
         if (parentId != Guid.Empty)
         {
-            return $"{serverUrl}/Items/{parentId}/Images/Primary?api_key={apiKey}";
+            return $"{serverUrl}/Items/{parentId}/Images/Primary";
         }
 
         return null;
@@ -235,30 +222,6 @@ public class VideoAudioController : ControllerBase
             "-f mp4 -movflags frag_keyframe+empty_moov " +
             "-shortest " +
             "pipe:1";
-    }
-
-    /// <summary>
-    /// Validate that the API key contains only hex characters (Jellyfin API keys are 32-char hex).
-    /// Prevents injection into ffmpeg command-line arguments.
-    /// </summary>
-    /// <param name="apiKey">The API key to validate.</param>
-    /// <returns>True if the key contains only valid hex characters.</returns>
-    internal static bool IsValidApiKey(string apiKey)
-    {
-        if (string.IsNullOrWhiteSpace(apiKey))
-        {
-            return false;
-        }
-
-        foreach (char c in apiKey)
-        {
-            if (!Uri.IsHexDigit(c))
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     /// <summary>
@@ -359,7 +322,7 @@ public class VideoAudioController : ControllerBase
         using var process = new Process();
         using var cacheStream = new FileStream(cachePath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
 #pragma warning disable CA3006 // Process command injection — inputs are validated:
-        // itemId is validated as GUID, apiKey is validated as hex-only via IsValidApiKey()
+        // itemId is validated as GUID — no user input in arguments
         process.StartInfo = new ProcessStartInfo
         {
             FileName = ffmpegPath,
