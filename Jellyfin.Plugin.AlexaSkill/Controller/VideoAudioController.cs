@@ -4,6 +4,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.MediaEncoding;
@@ -18,6 +19,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Controller;
 /// Controller that combines album art and audio into a streamable MP4 video
 /// for Alexa Echo Show VideoApp playback. Uses ffmpeg to mux a static image
 /// with the audio track on-the-fly with chunked streaming.
+/// Results are cached so subsequent plays of the same item (with same album art)
+/// are served instantly without re-encoding.
 /// </summary>
 [ApiController]
 [Route("alexaskill/api/video-audio")]
@@ -25,6 +28,7 @@ public class VideoAudioController : ControllerBase
 {
     private readonly ILibraryManager _libraryManager;
     private readonly IMediaEncoder _mediaEncoder;
+    private readonly VideoAudioCache _cache;
     private readonly ILogger<VideoAudioController> _logger;
 
     /// <summary>
@@ -32,14 +36,17 @@ public class VideoAudioController : ControllerBase
     /// </summary>
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="mediaEncoder">Instance of the <see cref="IMediaEncoder"/> interface.</param>
+    /// <param name="cache">Instance of the <see cref="VideoAudioCache"/> service.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
     public VideoAudioController(
         ILibraryManager libraryManager,
         IMediaEncoder mediaEncoder,
+        VideoAudioCache cache,
         ILoggerFactory loggerFactory)
     {
         _libraryManager = libraryManager;
         _mediaEncoder = mediaEncoder;
+        _cache = cache;
         _logger = loggerFactory.CreateLogger<VideoAudioController>();
     }
 
@@ -52,7 +59,8 @@ public class VideoAudioController : ControllerBase
 
     /// <summary>
     /// Stream an MP4 video combining album art and audio for the given item.
-    /// The video is generated on-the-fly by ffmpeg and streamed via chunked transfer.
+    /// If a cached version exists (same item + same album art), serves it directly.
+    /// Otherwise, generates on-the-fly via ffmpeg and caches the result.
     /// </summary>
     /// <param name="itemId">The Jellyfin audio item ID.</param>
     /// <param name="apiKey">Jellyfin API key for authentication.</param>
@@ -104,6 +112,17 @@ public class VideoAudioController : ControllerBase
 
         string serverUrl = config.ServerAddress.TrimEnd('/');
 
+        // Determine cache key: itemId + album art modification time
+        long artModifiedTicks = GetArtModifiedTicks(item);
+
+        // Check cache first
+        FileInfo? cached = await _cache.GetCachedFile(itemId, artModifiedTicks).ConfigureAwait(false);
+        if (cached != null)
+        {
+            _logger.LogDebug("VideoAudio: serving cached file for item {ItemId}", itemId);
+            return PhysicalFile(cached.FullName, "video/mp4");
+        }
+
         // Build audio URL (ffmpeg fetches it directly via HTTP)
         string audioUrl = $"{serverUrl}/Audio/{itemId}/stream?static=true&api_key={apiKey}";
 
@@ -126,19 +145,29 @@ public class VideoAudioController : ControllerBase
 
         using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
 
+        // Prepare cache file path
+        string cachePath = _cache.GetCacheFilePath(itemId, artModifiedTicks);
+        string? cacheDir = Path.GetDirectoryName(cachePath);
+        if (cacheDir != null)
+        {
+            Directory.CreateDirectory(cacheDir);
+        }
+
         try
         {
-            await StartFfmpegAndStreamAsync(ffmpeg, ffmpegArgs, cts.Token).ConfigureAwait(false);
+            await StartFfmpegAndStreamWithCacheAsync(ffmpeg, ffmpegArgs, cachePath, cts.Token).ConfigureAwait(false);
             return new EmptyResult();
         }
         catch (OperationCanceledException)
         {
             _logger.LogWarning("VideoAudio: ffmpeg timed out for item {ItemId}", itemId);
+            DeleteCacheFile(cachePath);
             return StatusCode(504, new { error = "Video generation timed out" });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "VideoAudio: ffmpeg failed for item {ItemId}", itemId);
+            DeleteCacheFile(cachePath);
             return StatusCode(500, new { error = "Video generation failed" });
         }
     }
@@ -233,6 +262,37 @@ public class VideoAudioController : ControllerBase
     }
 
     /// <summary>
+    /// Get the album art DateModified ticks for use as a cache key component.
+    /// When album art changes, the cache key changes and the old entry becomes stale.
+    /// </summary>
+    /// <param name="item">The Jellyfin item.</param>
+    /// <returns>DateModified ticks from the primary image, or 0 if no image.</returns>
+    internal static long GetArtModifiedTicks(MediaBrowser.Controller.Entities.BaseItem item)
+    {
+        var imageInfo = item.GetImageInfo(ImageType.Primary, 0);
+        if (imageInfo != null && imageInfo.DateModified != default)
+        {
+            return imageInfo.DateModified.Ticks;
+        }
+
+        // For audio items, try album parent's image
+        if (item is MediaBrowser.Controller.Entities.Audio.Audio)
+        {
+            var album = item.FindParent<MediaBrowser.Controller.Entities.Audio.MusicAlbum>();
+            if (album != null)
+            {
+                var albumImageInfo = album.GetImageInfo(ImageType.Primary, 0);
+                if (albumImageInfo != null && albumImageInfo.DateModified != default)
+                {
+                    return albumImageInfo.DateModified.Ticks;
+                }
+            }
+        }
+
+        return 0;
+    }
+
+    /// <summary>
     /// Resolve the path to the ffmpeg binary.
     /// Tries IMediaEncoder first, then falls back to PATH lookup.
     /// </summary>
@@ -283,17 +343,21 @@ public class VideoAudioController : ControllerBase
     }
 
     /// <summary>
-    /// Start ffmpeg and stream its stdout to the HTTP response.
+    /// Start ffmpeg and stream its stdout to both the HTTP response and a cache file.
+    /// If ffmpeg fails, the incomplete cache file is deleted by the caller.
     /// </summary>
     /// <param name="ffmpegPath">Path to ffmpeg binary.</param>
     /// <param name="arguments">ffmpeg command-line arguments.</param>
+    /// <param name="cachePath">Path to write the cache file.</param>
     /// <param name="cancellationToken">Cancellation token for timeout/abort.</param>
-    private async Task StartFfmpegAndStreamAsync(
+    private async Task StartFfmpegAndStreamWithCacheAsync(
         string ffmpegPath,
         string arguments,
+        string cachePath,
         CancellationToken cancellationToken)
     {
         using var process = new Process();
+        using var cacheStream = new FileStream(cachePath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
 #pragma warning disable CA3006 // Process command injection — inputs are validated:
         // itemId is validated as GUID, apiKey is validated as hex-only via IsValidApiKey()
         process.StartInfo = new ProcessStartInfo
@@ -321,15 +385,18 @@ public class VideoAudioController : ControllerBase
             }
         }, cancellationToken);
 
-        // Stream stdout to response body using the underlying stream (binary, not text)
+        // Stream stdout to response body AND cache file simultaneously
         Stream stdout = process.StandardOutput.BaseStream;
         var buffer = new byte[81920]; // 80KB buffer for efficient streaming
         int bytesRead;
 
         while ((bytesRead = await stdout.ReadAsync(buffer.AsMemory(0), cancellationToken).ConfigureAwait(false)) > 0)
         {
-            await Response.Body.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken).ConfigureAwait(false);
+            var chunk = buffer.AsMemory(0, bytesRead);
+
+            await Response.Body.WriteAsync(chunk, cancellationToken).ConfigureAwait(false);
             await Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
+            await cacheStream.WriteAsync(chunk, cancellationToken).ConfigureAwait(false);
         }
 
         // Wait for ffmpeg to exit
@@ -343,6 +410,32 @@ public class VideoAudioController : ControllerBase
         if (process.ExitCode != 0)
         {
             _logger.LogWarning("ffmpeg exited with code {ExitCode} for item", process.ExitCode);
+            throw new InvalidOperationException($"ffmpeg exited with code {process.ExitCode}");
+        }
+
+        // Background eviction — don't block the response
+        _ = Task.Run(() => _cache.EvictIfNeeded(), CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Delete an incomplete cache file. Called when ffmpeg fails or times out.
+    /// </summary>
+    /// <param name="cachePath">Path to the cache file to delete.</param>
+    private void DeleteCacheFile(string cachePath)
+    {
+        try
+        {
+#pragma warning disable CA3003 // cachePath is built from GUID-validated itemId and numeric ticks
+            if (System.IO.File.Exists(cachePath))
+            {
+                System.IO.File.Delete(cachePath);
+#pragma warning restore CA3003
+                _logger.LogDebug("Deleted incomplete cache file: {Path}", cachePath);
+            }
+        }
+        catch (IOException ex)
+        {
+            _logger.LogDebug(ex, "Failed to delete incomplete cache file: {Path}", cachePath);
         }
     }
 }

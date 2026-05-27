@@ -165,6 +165,10 @@
                                 <label><input type="checkbox" is="emby-checkbox" id="ShuffleArtistSongs" /> <span>Shuffle Artist Songs</span></label>
                                 <div class="fieldDescription checkboxFieldDescription">Randomize song order when playing an artist. Off by default — songs play in popularity order (favorites, most played, highest rated, then alphabetical). This changes the initial queue for "play artist" requests; it does not affect "Alexa, shuffle" mid-session.</div>
                             </div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="NativeControlsForAudio" /> <span>Native Echo Show Controls</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">Use native progress bar and elapsed time on Echo Show for audio playback. Trades album art for native transport controls (progress bar, scrubber). Requires a screen-equipped device; non-screen devices always use the standard audio player.</div>
+                            </div>
                             <div class="inputContainer">
                                 <label class="inputLabel inputLabelUnfocused" for="InitialFetchSize">Initial Fetch Size</label>
                                 <input id="InitialFetchSize" name="InitialFetchSize" type="number" is="emby-input" min="1" max="20" />
@@ -179,6 +183,16 @@
                                 <label class="inputLabel inputLabelUnfocused" for="PrefetchThreshold">Pre-fetch Threshold</label>
                                 <input id="PrefetchThreshold" name="PrefetchThreshold" type="number" is="emby-input" min="0" max="10" />
                                 <div class="fieldDescription">Items remaining before pre-fetching more (0–10). Higher = smoother gapless playback.</div>
+                            </div>
+                    </details>
+
+                    <details>
+                        <summary><span class="accordion-title">Cache Settings</span></summary>
+                            <div class="fieldDescription">Control disk cache for generated video-audio MP4 files. Cached files let subsequent plays start instantly without ffmpeg re-encoding.</div>
+                            <div class="inputContainer">
+                                <label class="inputLabel inputLabelUnfocused" for="VideoAudioCacheSizeMB">Video-Audio Cache Size (MB)</label>
+                                <input id="VideoAudioCacheSizeMB" name="VideoAudioCacheSizeMB" type="number" is="emby-input" min="256" max="16384" />
+                                <div class="fieldDescription">Maximum disk space for cached MP4 files (256–16384 MB). Oldest files are evicted when the limit is exceeded. Default: 2048 (2 GB).</div>
                             </div>
                     </details>
 
@@ -388,7 +402,7 @@
                     ["RadioModeEnabled", "PodcastsEnabled", "LiveTvEnabled", "SleepTimerEnabled",
                      "QueueManagementEnabled", "BrowseLibraryEnabled", "RecommendationsEnabled",
                      "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "AsrCompoundWordFixEnabled", "SeekEnabled",
-                     "ShuffleArtistSongs"].forEach(function(f) {
+                     "ShuffleArtistSongs", "NativeControlsForAudio"].forEach(function(f) {
                         document.querySelector("#" + f).checked = config[f] !== false;
                     });
 
@@ -407,6 +421,9 @@
                     document.querySelector("#MaxBrowseResults").value = config.MaxBrowseResults != null ? config.MaxBrowseResults : 5;
                     document.querySelector("#MaxRecentlyAddedResults").value = config.MaxRecentlyAddedResults != null ? config.MaxRecentlyAddedResults : 10;
                     document.querySelector("#MaxRecommendationResults").value = config.MaxRecommendationResults != null ? config.MaxRecommendationResults : 10;
+
+                    // Cache settings
+                    document.querySelector("#VideoAudioCacheSizeMB").value = config.VideoAudioCacheSizeMB != null ? config.VideoAudioCacheSizeMB : 2048;
 
                     var tbody = document.querySelector("#userTableBody");
                     tbody.innerHTML = "";
@@ -863,7 +880,7 @@
                     ["RadioModeEnabled", "PodcastsEnabled", "LiveTvEnabled", "SleepTimerEnabled",
                      "QueueManagementEnabled", "BrowseLibraryEnabled", "RecommendationsEnabled",
                      "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "AsrCompoundWordFixEnabled", "SeekEnabled",
-                     "ShuffleArtistSongs"].forEach(function(f) {
+                     "ShuffleArtistSongs", "NativeControlsForAudio"].forEach(function(f) {
                         config[f] = document.querySelector("#" + f).checked;
                     });
 
@@ -889,6 +906,10 @@
                     config.MaxRecentlyAddedResults = isNaN(mraRaw) ? 10 : mraRaw;
                     var mrrRaw = parseInt(document.querySelector("#MaxRecommendationResults").value);
                     config.MaxRecommendationResults = isNaN(mrrRaw) ? 10 : mrrRaw;
+
+                    // Cache settings
+                    var cacheSizeRaw = parseInt(document.querySelector("#VideoAudioCacheSizeMB").value);
+                    config.VideoAudioCacheSizeMB = isNaN(cacheSizeRaw) ? 2048 : cacheSizeRaw;
 
                     // Custom model fields
                     config.CustomModelEnabled = document.querySelector("#CustomModelEnabled").checked;
@@ -917,6 +938,7 @@
                         ResumeAnnounceTitle: config.ResumeAnnounceTitle,
                         AsrCompoundWordFixEnabled: config.AsrCompoundWordFixEnabled,
                         SeekEnabled: config.SeekEnabled,
+                        NativeControlsForAudio: config.NativeControlsForAudio,
                         MusicEnabled: config.MusicEnabled,
                         VideosEnabled: config.VideosEnabled,
                         BooksEnabled: config.BooksEnabled,
@@ -928,6 +950,7 @@
                         MaxBrowseResults: config.MaxBrowseResults,
                         MaxRecentlyAddedResults: config.MaxRecentlyAddedResults,
                         MaxRecommendationResults: config.MaxRecommendationResults,
+                        VideoAudioCacheSizeMB: config.VideoAudioCacheSizeMB,
                         CustomModelEnabled: config.CustomModelEnabled,
                         CustomModelUrl: config.CustomModelUrl,
                         CustomModelLocale: config.CustomModelLocale

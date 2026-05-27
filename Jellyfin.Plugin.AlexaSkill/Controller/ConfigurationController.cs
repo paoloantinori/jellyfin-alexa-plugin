@@ -393,6 +393,9 @@ public class ConfigurationController : ControllerBase
         if (req.TryGetValue("SeekEnabled", out var seekToken) && seekToken.Type == JTokenType.Boolean)
         { config.SeekEnabled = seekToken.Value<bool>(); updated = true; }
 
+        if (req.TryGetValue("NativeControlsForAudio", out var nativeControlsToken) && nativeControlsToken.Type == JTokenType.Boolean)
+        { config.NativeControlsForAudio = nativeControlsToken.Value<bool>(); updated = true; }
+
         if (req.TryGetValue("InitialFetchSize", out var fetchToken) && fetchToken.Type == JTokenType.Integer)
         { config.InitialFetchSize = fetchToken.Value<int>(); updated = true; }
 
@@ -413,6 +416,18 @@ public class ConfigurationController : ControllerBase
 
         if (req.TryGetValue("MaxRecommendationResults", out var maxRecToken) && maxRecToken.Type == JTokenType.Integer)
         { config.MaxRecommendationResults = maxRecToken.Value<int>(); updated = true; }
+
+        if (req.TryGetValue("VideoAudioCacheSizeMB", out var cacheSizeToken) && cacheSizeToken.Type == JTokenType.Integer)
+        {
+            int val = cacheSizeToken.Value<int>();
+            if (val < 256 || val > 16384)
+            {
+                return new JsonResult(new { error = "VideoAudioCacheSizeMB must be between 256 and 16384" }) { StatusCode = 400 };
+            }
+
+            config.VideoAudioCacheSizeMB = val;
+            updated = true;
+        }
 
         if (req.TryGetValue("CustomModelEnabled", out var customEnabledToken) && customEnabledToken.Type == JTokenType.Boolean)
         { config.CustomModelEnabled = customEnabledToken.Value<bool>(); updated = true; }

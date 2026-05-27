@@ -102,6 +102,18 @@ public class PluginConfiguration : BasePluginConfiguration
     // Playback preferences
     public bool ShuffleArtistSongs { get; set; } = false;
 
+    /// <summary>
+    /// Gets or sets the maximum size (in MB) for the video-audio MP4 cache.
+    /// Oldest files are evicted when the limit is exceeded. Default: 2048 (2GB).
+    /// </summary>
+    public int VideoAudioCacheSizeMB { get; set; } = 2048;
+
+    /// <summary>
+    /// Use VideoApp.Launch for audio playback instead of AudioPlayer.Play.
+    /// Gives native progress bar/scrubber on Echo Show but without album art.
+    /// </summary>
+    public bool NativeControlsForAudio { get; set; } = false;
+
     public int InitialFetchSize { get; set; } = 5;
     public int ContinuationBatchSize { get; set; } = 10;
     public int PrefetchThreshold { get; set; } = 2;

@@ -5,6 +5,7 @@ using System.IO;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
+using MediaBrowser.Common.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Alexa.DynamicEntities;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.ModelDeployment;
@@ -42,6 +43,14 @@ public class Registrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<SearchResultCache>();
         serviceCollection.AddSingleton<CircuitBreaker>();
         serviceCollection.AddSingleton<JellyfinConnectivityChecker>();
+
+        // Video-audio MP4 cache
+        serviceCollection.AddSingleton<VideoAudioCache>(sp =>
+        {
+            var appPaths = sp.GetRequiredService<IApplicationPaths>();
+            var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger<VideoAudioCache>();
+            return new VideoAudioCache(appPaths, logger);
+        });
 
         // In-memory artist index (also registered as hosted service for startup loading)
         serviceCollection.AddSingleton<ArtistIndexService>();
