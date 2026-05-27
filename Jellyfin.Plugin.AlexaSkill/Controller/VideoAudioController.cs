@@ -1,0 +1,348 @@
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
+using Jellyfin.Plugin.AlexaSkill.Configuration;
+using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.MediaEncoding;
+using MediaBrowser.Model.Entities;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+
+namespace Jellyfin.Plugin.AlexaSkill.Controller;
+
+/// <summary>
+/// Controller that combines album art and audio into a streamable MP4 video
+/// for Alexa Echo Show VideoApp playback. Uses ffmpeg to mux a static image
+/// with the audio track on-the-fly with chunked streaming.
+/// </summary>
+[ApiController]
+[Route("alexaskill/api/video-audio")]
+public class VideoAudioController : ControllerBase
+{
+    private readonly ILibraryManager _libraryManager;
+    private readonly IMediaEncoder _mediaEncoder;
+    private readonly ILogger<VideoAudioController> _logger;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="VideoAudioController"/> class.
+    /// </summary>
+    /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
+    /// <param name="mediaEncoder">Instance of the <see cref="IMediaEncoder"/> interface.</param>
+    /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
+    public VideoAudioController(
+        ILibraryManager libraryManager,
+        IMediaEncoder mediaEncoder,
+        ILoggerFactory loggerFactory)
+    {
+        _libraryManager = libraryManager;
+        _mediaEncoder = mediaEncoder;
+        _logger = loggerFactory.CreateLogger<VideoAudioController>();
+    }
+
+    /// <summary>
+    /// Gets or sets the path to the ffmpeg binary.
+    /// Resolved from Jellyfin's <see cref="IMediaEncoder"/> service.
+    /// Overridden in tests to inject a mock path.
+    /// </summary>
+    internal string FfmpegPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Stream an MP4 video combining album art and audio for the given item.
+    /// The video is generated on-the-fly by ffmpeg and streamed via chunked transfer.
+    /// </summary>
+    /// <param name="itemId">The Jellyfin audio item ID.</param>
+    /// <param name="apiKey">Jellyfin API key for authentication.</param>
+    /// <returns>A chunked MP4 video stream.</returns>
+    [HttpGet("{itemId}")]
+    [AllowAnonymous]
+    public async Task<ActionResult> StreamVideoAudio(
+        [FromRoute] string itemId,
+        [FromQuery(Name = "api_key")] string? apiKey)
+    {
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            _logger.LogWarning("VideoAudio request without API key for item {ItemId}", itemId);
+            return Unauthorized(new { error = "api_key query parameter is required" });
+        }
+
+        // Validate apiKey contains only hex chars (Jellyfin API keys are 32-char hex strings)
+        if (!IsValidApiKey(apiKey))
+        {
+            _logger.LogWarning("VideoAudio request with invalid API key format");
+            return Unauthorized(new { error = "Invalid API key format" });
+        }
+
+        if (string.IsNullOrWhiteSpace(itemId) || !Guid.TryParse(itemId, out Guid itemGuid))
+        {
+            return BadRequest(new { error = "Invalid itemId format" });
+        }
+
+        // Resolve ffmpeg path
+        string ffmpeg = ResolveFfmpegPath();
+        if (string.IsNullOrEmpty(ffmpeg))
+        {
+            _logger.LogError("ffmpeg not available for VideoAudio request");
+            return StatusCode(503, new { error = "ffmpeg is not available on this server" });
+        }
+
+        MediaBrowser.Controller.Entities.BaseItem? item = _libraryManager.GetItemById(itemGuid);
+        if (item == null)
+        {
+            _logger.LogWarning("VideoAudio: item {ItemId} not found", itemId);
+            return NotFound(new { error = "Item not found" });
+        }
+
+        var config = Plugin.Instance?.Configuration;
+        if (config == null || string.IsNullOrWhiteSpace(config.ServerAddress))
+        {
+            return StatusCode(503, new { error = "Plugin not configured" });
+        }
+
+        string serverUrl = config.ServerAddress.TrimEnd('/');
+
+        // Build audio URL (ffmpeg fetches it directly via HTTP)
+        string audioUrl = $"{serverUrl}/Audio/{itemId}/stream?static=true&api_key={apiKey}";
+
+        // Determine album art URL — prefer item image, then parent, then black frame
+        string? artUrl = ResolveArtUrl(item, serverUrl, apiKey);
+        bool useBlackFrame = artUrl == null;
+
+        _logger.LogDebug(
+            "VideoAudio: itemId={ItemId}, artUrl={ArtUrl}, useBlackFrame={UseBlackFrame}",
+            itemId,
+            artUrl ?? "(black frame)",
+            useBlackFrame);
+
+        // Build and start ffmpeg
+        var ffmpegArgs = BuildFfmpegArguments(artUrl, audioUrl, useBlackFrame);
+        _logger.LogDebug("VideoAudio: ffmpeg arguments: {Args}", ffmpegArgs);
+
+        Response.ContentType = "video/mp4";
+        Response.Headers["X-Accel-Buffering"] = "no";
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+
+        try
+        {
+            await StartFfmpegAndStreamAsync(ffmpeg, ffmpegArgs, cts.Token).ConfigureAwait(false);
+            return new EmptyResult();
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("VideoAudio: ffmpeg timed out for item {ItemId}", itemId);
+            return StatusCode(504, new { error = "Video generation timed out" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "VideoAudio: ffmpeg failed for item {ItemId}", itemId);
+            return StatusCode(500, new { error = "Video generation failed" });
+        }
+    }
+
+    /// <summary>
+    /// Resolve the album art URL for the given item. Returns null if no suitable image is available.
+    /// Priority: item's own Primary image > parent (album) Primary image > parent ID fallback > null.
+    /// </summary>
+    /// <param name="item">The Jellyfin audio item.</param>
+    /// <param name="serverUrl">The base server URL (no trailing slash).</param>
+    /// <param name="apiKey">API key for authentication.</param>
+    /// <returns>Art URL string or null.</returns>
+    internal static string? ResolveArtUrl(
+        MediaBrowser.Controller.Entities.BaseItem item,
+        string serverUrl,
+        string apiKey)
+    {
+        // Check if the item itself has a primary image
+        if (item.HasImage(ImageType.Primary, 0))
+        {
+            return $"{serverUrl}/Items/{item.Id}/Images/Primary?api_key={apiKey}";
+        }
+
+        // For audio items, try to find the album parent's primary image
+        if (item is MediaBrowser.Controller.Entities.Audio.Audio)
+        {
+            var album = item.FindParent<MediaBrowser.Controller.Entities.Audio.MusicAlbum>();
+            if (album != null && album.HasImage(ImageType.Primary, 0))
+            {
+                return $"{serverUrl}/Items/{album.Id}/Images/Primary?api_key={apiKey}";
+            }
+        }
+
+        // Fallback: try parent item (could be album folder, artist folder, etc.)
+        Guid parentId = item.ParentId;
+        if (parentId != Guid.Empty)
+        {
+            return $"{serverUrl}/Items/{parentId}/Images/Primary?api_key={apiKey}";
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Build ffmpeg argument string for combining album art + audio into MP4.
+    /// </summary>
+    /// <param name="artUrl">Album art URL (null for black frame fallback).</param>
+    /// <param name="audioUrl">Audio stream URL.</param>
+    /// <param name="useBlackFrame">Whether to generate a black frame instead of using art.</param>
+    /// <returns>ffmpeg argument string.</returns>
+    internal static string BuildFfmpegArguments(string? artUrl, string audioUrl, bool useBlackFrame)
+    {
+        // Input arguments
+        string inputArgs = useBlackFrame
+            ? "-f lavfi -i \"color=c=black:s=1280x720:d=999\" -framerate 1"
+            : $"-loop 1 -framerate 1 -i \"{artUrl}\"";
+
+        return
+            $"{inputArgs} " +
+            $"-i \"{audioUrl}\" " +
+            "-c:v libx264 -tune stillimage -preset ultrafast -crf 28 " +
+            "-c:a copy " +
+            "-pix_fmt yuv420p -r 1 " +
+            "-vf \"scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:black\" " +
+            "-f mp4 -movflags frag_keyframe+empty_moov " +
+            "-shortest " +
+            "pipe:1";
+    }
+
+    /// <summary>
+    /// Validate that the API key contains only hex characters (Jellyfin API keys are 32-char hex).
+    /// Prevents injection into ffmpeg command-line arguments.
+    /// </summary>
+    /// <param name="apiKey">The API key to validate.</param>
+    /// <returns>True if the key contains only valid hex characters.</returns>
+    internal static bool IsValidApiKey(string apiKey)
+    {
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            return false;
+        }
+
+        foreach (char c in apiKey)
+        {
+            if (!Uri.IsHexDigit(c))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Resolve the path to the ffmpeg binary.
+    /// Tries IMediaEncoder first, then falls back to PATH lookup.
+    /// </summary>
+    /// <returns>Path to ffmpeg or empty string if not found.</returns>
+    private string ResolveFfmpegPath()
+    {
+        if (!string.IsNullOrEmpty(FfmpegPath))
+        {
+            return FfmpegPath;
+        }
+
+        try
+        {
+            string? encoderPath = _mediaEncoder.EncoderPath;
+            if (!string.IsNullOrEmpty(encoderPath) && System.IO.File.Exists(encoderPath))
+            {
+                return encoderPath;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Could not resolve ffmpeg path from IMediaEncoder");
+        }
+
+        // Fallback: try to find ffmpeg on PATH
+        try
+        {
+            string? pathEnv = Environment.GetEnvironmentVariable("PATH");
+            if (!string.IsNullOrEmpty(pathEnv))
+            {
+                string ffmpegName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "ffmpeg.exe" : "ffmpeg";
+                foreach (string dir in pathEnv.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    string candidate = Path.Combine(dir, ffmpegName);
+                    if (System.IO.File.Exists(candidate))
+                    {
+                        return candidate;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Error searching PATH for ffmpeg");
+        }
+
+        return string.Empty;
+    }
+
+    /// <summary>
+    /// Start ffmpeg and stream its stdout to the HTTP response.
+    /// </summary>
+    /// <param name="ffmpegPath">Path to ffmpeg binary.</param>
+    /// <param name="arguments">ffmpeg command-line arguments.</param>
+    /// <param name="cancellationToken">Cancellation token for timeout/abort.</param>
+    private async Task StartFfmpegAndStreamAsync(
+        string ffmpegPath,
+        string arguments,
+        CancellationToken cancellationToken)
+    {
+        using var process = new Process();
+#pragma warning disable CA3006 // Process command injection — inputs are validated:
+        // itemId is validated as GUID, apiKey is validated as hex-only via IsValidApiKey()
+        process.StartInfo = new ProcessStartInfo
+        {
+            FileName = ffmpegPath,
+            Arguments = arguments,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            StandardOutputEncoding = System.Text.Encoding.UTF8
+        };
+#pragma warning restore CA3006
+
+        process.Start();
+
+        // Read stderr asynchronously to prevent deadlock and log for debugging
+        var stderrTask = Task.Run(async () =>
+        {
+            using var reader = process.StandardError;
+            string? line;
+            while ((line = await reader.ReadLineAsync().ConfigureAwait(false)) != null)
+            {
+                _logger.LogDebug("ffmpeg stderr: {Line}", line);
+            }
+        }, cancellationToken);
+
+        // Stream stdout to response body using the underlying stream (binary, not text)
+        Stream stdout = process.StandardOutput.BaseStream;
+        var buffer = new byte[81920]; // 80KB buffer for efficient streaming
+        int bytesRead;
+
+        while ((bytesRead = await stdout.ReadAsync(buffer.AsMemory(0), cancellationToken).ConfigureAwait(false)) > 0)
+        {
+            await Response.Body.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken).ConfigureAwait(false);
+            await Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        // Wait for ffmpeg to exit
+        if (!process.HasExited)
+        {
+            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        await stderrTask.ConfigureAwait(false);
+
+        if (process.ExitCode != 0)
+        {
+            _logger.LogWarning("ffmpeg exited with code {ExitCode} for item", process.ExitCode);
+        }
+    }
+}
