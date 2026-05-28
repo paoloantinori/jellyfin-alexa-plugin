@@ -666,10 +666,9 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
     public void GetVideoAudioUrl_BuildsCorrectUrl()
     {
         var handler = CreateHandler();
-        var user = CreateUser(token: "abc123");
         string itemId = "33333333-3333-3333-3333-333333333333";
 
-        string url = handler.TestGetVideoAudioUrl(itemId, user);
+        string url = handler.TestGetVideoAudioUrl(itemId);
 
         Assert.Equal("http://localhost:8096/alexaskill/api/video-audio/33333333-3333-3333-3333-333333333333", url);
     }
@@ -707,6 +706,6 @@ internal class VideoAppTestHandler : BaseHandler
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
         => Task.FromResult(ResponseBuilder.Empty());
 
-    public string TestGetVideoAudioUrl(string itemId, Entities.User user)
-        => GetVideoAudioUrl(itemId, user);
+    public string TestGetVideoAudioUrl(string itemId)
+        => GetVideoAudioUrl(itemId);
 }

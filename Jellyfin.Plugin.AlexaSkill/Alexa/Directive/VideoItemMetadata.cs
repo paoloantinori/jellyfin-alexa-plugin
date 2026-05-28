@@ -9,4 +9,7 @@ public class VideoItemMetadata
 {
     [JsonProperty("title")]
     public string Title { get; set; } = string.Empty;
+
+    [JsonProperty("subtitle", NullValueHandling = NullValueHandling.Ignore)]
+    public string? Subtitle { get; set; }
 }

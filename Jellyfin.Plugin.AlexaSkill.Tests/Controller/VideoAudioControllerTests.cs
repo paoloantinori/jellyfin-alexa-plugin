@@ -79,7 +79,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     {
         var controller = CreateController();
 
-        ActionResult result = await controller.StreamVideoAudio("not-a-guid", null);
+        ActionResult result = await controller.StreamVideoAudio("not-a-guid");
 
         var badRequest = Assert.IsType<BadRequestObjectResult>(result);
         Assert.NotNull(badRequest.Value);
@@ -98,8 +98,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         controller.FfmpegPath = "/usr/bin/ffmpeg";
 
         ActionResult result = await controller.StreamVideoAudio(
-            Guid.NewGuid().ToString(),
-            null);
+            Guid.NewGuid().ToString());
 
         var notFound = Assert.IsType<NotFoundObjectResult>(result);
         Assert.NotNull(notFound.Value);
@@ -114,8 +113,9 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     {
         string artUrl = "http://localhost:8096/Items/123/Images/Primary";
         string audioUrl = "http://localhost:8096/Audio/456/stream?static=true";
+        string outputPath = "/tmp/test-output.mp4";
 
-        string args = VideoAudioController.BuildFfmpegArguments(artUrl, audioUrl, false);
+        string args = VideoAudioController.BuildFfmpegArguments(artUrl, audioUrl, false, outputPath);
 
         Assert.Contains("-loop 1", args, StringComparison.Ordinal);
         Assert.Contains(artUrl, args, StringComparison.Ordinal);
@@ -129,8 +129,9 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.Contains("-pix_fmt yuv420p", args, StringComparison.Ordinal);
         Assert.Contains("frag_keyframe+empty_moov", args, StringComparison.Ordinal);
         Assert.Contains("-shortest", args, StringComparison.Ordinal);
-        Assert.Contains("pipe:1", args, StringComparison.Ordinal);
+        Assert.Contains(outputPath, args, StringComparison.Ordinal);
         Assert.DoesNotContain("-f lavfi", args, StringComparison.Ordinal);
+        Assert.DoesNotContain("pipe:1", args, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -140,8 +141,9 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     public void BuildFfmpegArguments_BlackFrame_ContainsLavfiInput()
     {
         string audioUrl = "http://localhost:8096/Audio/456/stream?static=true";
+        string outputPath = "/tmp/test-output.mp4";
 
-        string args = VideoAudioController.BuildFfmpegArguments(null, audioUrl, true);
+        string args = VideoAudioController.BuildFfmpegArguments(null, audioUrl, true, outputPath);
 
         Assert.Contains("-f lavfi", args, StringComparison.Ordinal);
         Assert.Contains("color=c=black:s=1280x720", args, StringComparison.Ordinal);

@@ -63,13 +63,10 @@ public class VideoAudioController : ControllerBase
     /// Otherwise, generates on-the-fly via ffmpeg and caches the result.
     /// </summary>
     /// <param name="itemId">The Jellyfin audio item ID.</param>
-    /// <param name="apiKey">Jellyfin API key for authentication.</param>
-    /// <returns>A chunked MP4 video stream.</returns>
+    /// <returns>An MP4 video file.</returns>
     [HttpGet("{itemId}")]
     [AllowAnonymous]
-    public async Task<ActionResult> StreamVideoAudio(
-        [FromRoute] string itemId,
-        [FromQuery(Name = "api_key")] string? apiKey)
+    public async Task<ActionResult> StreamVideoAudio([FromRoute] string itemId)
     {
         if (string.IsNullOrWhiteSpace(itemId) || !Guid.TryParse(itemId, out Guid itemGuid))
         {
@@ -125,12 +122,6 @@ public class VideoAudioController : ControllerBase
             artUrl ?? "(black frame)",
             useBlackFrame);
 
-        // Build ffmpeg arguments
-        var ffmpegArgs = BuildFfmpegArguments(artUrl, audioUrl, useBlackFrame);
-        _logger.LogDebug("VideoAudio: ffmpeg arguments: {Args}", ffmpegArgs);
-
-        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
-
         // Prepare cache file path
         string cachePath = _cache.GetCacheFilePath(itemId, artModifiedTicks);
         string? cacheDir = Path.GetDirectoryName(cachePath);
@@ -138,6 +129,12 @@ public class VideoAudioController : ControllerBase
         {
             Directory.CreateDirectory(cacheDir);
         }
+
+        // Build ffmpeg arguments (includes output file path directly)
+        var ffmpegArgs = BuildFfmpegArguments(artUrl, audioUrl, useBlackFrame, cachePath);
+        _logger.LogDebug("VideoAudio: ffmpeg arguments: {Args}", ffmpegArgs);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
 
         try
         {
@@ -189,13 +186,7 @@ public class VideoAudioController : ControllerBase
             }
         }
 
-        // Fallback: try parent item (could be album folder, artist folder, etc.)
-        Guid parentId = item.ParentId;
-        if (parentId != Guid.Empty)
-        {
-            return $"{serverUrl}/Items/{parentId}/Images/Primary";
-        }
-
+        // No suitable image found — fall back to black frame
         return null;
     }
 
@@ -205,8 +196,9 @@ public class VideoAudioController : ControllerBase
     /// <param name="artUrl">Album art URL (null for black frame fallback).</param>
     /// <param name="audioUrl">Audio stream URL.</param>
     /// <param name="useBlackFrame">Whether to generate a black frame instead of using art.</param>
+    /// <param name="outputPath">File path for the output MP4.</param>
     /// <returns>ffmpeg argument string.</returns>
-    internal static string BuildFfmpegArguments(string? artUrl, string audioUrl, bool useBlackFrame)
+    internal static string BuildFfmpegArguments(string? artUrl, string audioUrl, bool useBlackFrame, string outputPath)
     {
         // Input arguments
         string inputArgs = useBlackFrame
@@ -222,7 +214,7 @@ public class VideoAudioController : ControllerBase
             "-vf \"scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:black\" " +
             "-f mp4 -movflags frag_keyframe+empty_moov " +
             "-shortest " +
-            "pipe:1";
+            $"\"{outputPath}\"";
     }
 
     /// <summary>
@@ -319,15 +311,12 @@ public class VideoAudioController : ControllerBase
         string outputPath,
         CancellationToken cancellationToken)
     {
-        // Replace "pipe:1" with the output file path
-        string fileArgs = arguments.Replace("pipe:1", $"\"{outputPath}\"", StringComparison.Ordinal);
-
         using var process = new Process();
 #pragma warning disable CA3006 // itemId is validated as GUID — no user input in arguments
         process.StartInfo = new ProcessStartInfo
         {
             FileName = ffmpegPath,
-            Arguments = fileArgs,
+            Arguments = arguments,
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = false,
