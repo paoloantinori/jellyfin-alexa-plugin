@@ -412,8 +412,10 @@ public class AplVisualsFeatureFlagTests : PluginTestBase, IDisposable
     }
 
     [Fact]
-    public void BuildAudioPlayerResponse_HasAplDirective_WhenAplVisualsEnabled()
+    public void BuildAudioPlayerResponse_NoAplDirective_WhenAplVisualsEnabled()
     {
+        // APL NowPlaying overlay was removed — Echo's built-in player takes
+        // visual priority, so BuildAudioPlayerResponse only emits AudioPlayer.
         _config.AplVisualsEnabled = true;
         Plugin.Instance!.Configuration.AplVisualsEnabled = true;
 
@@ -429,12 +431,10 @@ public class AplVisualsFeatureFlagTests : PluginTestBase, IDisposable
             itemId.ToString(), item, user, context);
 
         Assert.NotNull(response);
-        // Persistent APL NowPlaying attached alongside AudioPlayer on APL devices
-        Assert.Equal(2, response.Response.Directives.Count);
-        Assert.Contains(response.Response.Directives, d => d.Type == "AudioPlayer.Play");
-        Assert.Contains(response.Response.Directives, d => d.Type == "Alexa.Presentation.APL.RenderDocument");
-        // Session kept alive for tick handler PING keepalive
-        Assert.Null(response.Response.ShouldEndSession);
+        // No APL directive even when visuals enabled — overlay removed
+        Assert.Single(response.Response.Directives);
+        Assert.IsType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>(response.Response.Directives[0]);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
