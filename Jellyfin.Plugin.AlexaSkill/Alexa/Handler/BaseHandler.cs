@@ -20,7 +20,9 @@ using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
+using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
 using AlexaSession = Alexa.NET.Request.Session;
 using JellyfinUser = Jellyfin.Database.Implementations.Entities.User;
@@ -1597,5 +1599,121 @@ public abstract class BaseHandler
         }
 
         return positionStr;
+    }
+
+    /// <summary>
+    /// Build an AudioPlayer response that plays an artist's songs, sorted by popularity
+    /// with optional shuffle and progressive queue continuation.
+    /// Shared by PlaySongIntentHandler, PlayAlbumIntentHandler, and others that fall back
+    /// to artist playback when the primary media-type search finds nothing.
+    /// </summary>
+    /// <param name="artistId">The artist's Jellyfin ID.</param>
+    /// <param name="artistName">The artist's display name (for messages and logging).</param>
+    /// <param name="jellyfinUser">The Jellyfin user for queries.</param>
+    /// <param name="user">The Alexa user.</param>
+    /// <param name="session">The current session.</param>
+    /// <param name="context">The Alexa context.</param>
+    /// <param name="locale">The locale for response strings.</param>
+    /// <param name="libraryManager">Library manager for querying items.</param>
+    /// <param name="userDataManager">User data manager for resume-position lookup.</param>
+    /// <param name="queueManager">Optional per-device queue manager for crash recovery.</param>
+    /// <param name="logLabel">Label for log messages (e.g. "PlaySong fallback").</param>
+    /// <param name="announcement">Optional speech to announce before playback.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A skill response with AudioPlayer directive, or a "no songs" tell.</returns>
+    protected async Task<SkillResponse> BuildArtistSongsResponseAsync(
+        Guid artistId,
+        string artistName,
+        JellyfinUser jellyfinUser,
+        Entities.User user,
+        SessionInfo session,
+        Context context,
+        string locale,
+        ILibraryManager libraryManager,
+        IUserDataManager userDataManager,
+        Playback.DeviceQueueManager? queueManager,
+        string logLabel,
+        string? announcement = null,
+        CancellationToken cancellationToken = default)
+    {
+        var artistSongsQuery = new InternalItemsQuery()
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            MediaTypes = new[] { MediaType.Audio },
+            OrderBy = PopularitySort,
+            DtoOptions = new DtoOptions(true),
+            ArtistIds = new[] { artistId },
+            Limit = ProgressiveQueueConstants.GetInitialFetchSize()
+        };
+        ApplyLibraryFilter(artistSongsQuery, user, libraryManager);
+
+        IReadOnlyList<BaseItem> artistItems = await RetryAsync(
+            () => libraryManager.GetItemList(artistSongsQuery),
+            logLabel + ":GetArtistSongs",
+            cancellationToken).ConfigureAwait(false);
+
+        Logger.LogDebug("{Label}: fetched {Count} songs for artist='{Artist}'", logLabel, artistItems.Count, artistName);
+
+        if (artistItems.Count == 0)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("NoSongsForArtist", locale, artistName));
+        }
+
+        var (sortedItems, startIndex, _) = SortAndFindResumeIndex(
+            artistItems, jellyfinUser, userDataManager, resumePosition: false);
+
+        if (_config.ShuffleArtistSongs)
+        {
+            var shuffled = sortedItems.ToList();
+            Shuffle(shuffled);
+            sortedItems = shuffled;
+            startIndex = 0;
+        }
+
+        List<QueueItem> queueItems = new List<QueueItem>();
+        for (int i = startIndex; i < sortedItems.Count; i++)
+        {
+            queueItems.Add(new QueueItem { Id = sortedItems[i].Id });
+        }
+
+        session.NowPlayingQueue = queueItems;
+        session.FullNowPlayingItem = sortedItems[startIndex];
+
+        // Persist queue to device storage for crash recovery
+        queueManager?.SetQueue(
+            context.System.Device.DeviceID,
+            sortedItems.Skip(startIndex).Select(i => i.Id.ToString()).ToList(),
+            0);
+
+        if (artistItems.Count >= ProgressiveQueueConstants.GetInitialFetchSize())
+        {
+            QueueContinuationStore.Set(
+                session.UserId,
+                context.System.Device.DeviceID,
+                new QueueContinuation
+                {
+                    SourceType = "Artist",
+                    ArtistId = artistId,
+                    StartIndex = artistItems.Count,
+                    TotalCount = int.MaxValue,
+                    UserId = jellyfinUser.Id,
+                    SortOrder = PopularitySort,
+                    Shuffle = _config.ShuffleArtistSongs
+                });
+        }
+
+        string itemId = sortedItems[startIndex].Id.ToString();
+        Logger.LogDebug(
+            "{Label}: returning AudioPlayer, itemId={ItemId}, startIndex={StartIndex}, queueSize={QueueSize}",
+            logLabel, itemId, startIndex, queueItems.Count);
+        SkillResponse response = BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, sortedItems[startIndex], user, context);
+
+        if (!string.IsNullOrWhiteSpace(announcement))
+        {
+            response.Response.OutputSpeech = new PlainTextOutputSpeech { Text = announcement };
+        }
+
+        return response;
     }
 }
