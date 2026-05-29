@@ -222,5 +222,6 @@
   "ShowMoreNoSession": "ليس لدي قائمة سابقة لمواصلتها. حاول التصفح مرة أخرى.",
   "ShowMorePage": "إليك العناصر التالية: {0}",
   "ShowMoreLastPage": "{0} إليك الـ {1} الأولى: {2}.",
-  "QueryRecentlyAddedPartial": "{0} إليك الـ {1} الأولى: {2}."
+  "QueryRecentlyAddedPartial": "{0} إليك الـ {1} الأولى: {2}.",
+  "FoundArtistInstead": "وجدت الفنان {0}. إليك موسيقى {0}."
 }

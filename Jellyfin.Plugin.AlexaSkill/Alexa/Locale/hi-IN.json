@@ -222,5 +222,6 @@
   "ShowMoreNoSession": "जारी रखने के लिए कोई पिछली सूची नहीं है। कृपया फिर से ब्राउज़ करें।",
   "ShowMorePage": "यहाँ अगले आइटम हैं: {0}",
   "ShowMoreLastPage": "{0} यहाँ पहले {1} हैं: {2}।",
-  "QueryRecentlyAddedPartial": "{0} यहाँ पहले {1} हैं: {2}।"
+  "QueryRecentlyAddedPartial": "{0} यहाँ पहले {1} हैं: {2}।",
+  "FoundArtistInstead": "मुझे कलाकार {0} मिला। यहाँ {0} का संगीत है।"
 }

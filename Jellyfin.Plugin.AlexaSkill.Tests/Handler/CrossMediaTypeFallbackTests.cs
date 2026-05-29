@@ -1,0 +1,443 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Alexa.NET;
+using Alexa.NET.Request;
+using Alexa.NET.Request.Type;
+using Alexa.NET.Response;
+using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Configuration;
+using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
+using MediaBrowser.Controller.Dto;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Audio;
+using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Session;
+using Microsoft.Extensions.Logging;
+using Moq;
+using Xunit;
+
+namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
+
+/// <summary>
+/// Tests that PlaySongIntentHandler and PlayAlbumIntentHandler fall back to artist
+/// playback when no results are found for the primary media type (cross-media-type fallback).
+/// This handles the case where Alexa's NLU routes an artist query to the wrong intent
+/// (e.g. "mettere gli strokes" → PlaySongIntent instead of PlayArtistSongsIntent).
+/// </summary>
+[Collection("Plugin")]
+public class CrossMediaTypeFallbackTests : PluginTestBase
+{
+    private readonly Mock<ISessionManager> _sessionManagerMock;
+    private readonly Mock<ILibraryManager> _libraryManagerMock;
+    private readonly Mock<IUserManager> _userManagerMock;
+    private readonly Mock<IUserDataManager> _userDataManagerMock;
+    private readonly PluginConfiguration _config;
+    private readonly ILoggerFactory _loggerFactory;
+
+    public CrossMediaTypeFallbackTests()
+    {
+        _sessionManagerMock = new Mock<ISessionManager>();
+        _libraryManagerMock = new Mock<ILibraryManager>();
+        _userManagerMock = new Mock<IUserManager>();
+        _userDataManagerMock = new Mock<IUserDataManager>();
+        _config = new PluginConfiguration();
+        TestHelpers.SetServerAddress(_config, "https://test.example.com");
+        _loggerFactory = LoggerFactory.Create(b => { });
+    }
+
+    private PlaySongIntentHandler CreateSongHandler()
+    {
+        return new PlaySongIntentHandler(
+            _sessionManagerMock.Object,
+            _config,
+            _libraryManagerMock.Object,
+            _userManagerMock.Object,
+            _userDataManagerMock.Object,
+            _loggerFactory);
+    }
+
+    private PlayAlbumIntentHandler CreateAlbumHandler()
+    {
+        return new PlayAlbumIntentHandler(
+            _sessionManagerMock.Object,
+            _config,
+            _libraryManagerMock.Object,
+            _userManagerMock.Object,
+            _userDataManagerMock.Object,
+            _loggerFactory);
+    }
+
+    private static IntentRequest CreateSongIntent(string song, string? musician = null)
+    {
+        var intent = new Intent { Name = IntentNames.PlaySong };
+        intent.Slots = new Dictionary<string, Slot>
+        {
+            ["song"] = new Slot { Name = "song", Value = song }
+        };
+        if (musician != null)
+        {
+            intent.Slots["musician"] = new Slot { Name = "musician", Value = musician };
+        }
+        return new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req" };
+    }
+
+    private static IntentRequest CreateAlbumIntent(string album, string? musician = null)
+    {
+        var intent = new Intent { Name = IntentNames.PlayAlbum };
+        intent.Slots = new Dictionary<string, Slot>
+        {
+            ["album"] = new Slot { Name = "album", Value = album }
+        };
+        if (musician != null)
+        {
+            intent.Slots["musician"] = new Slot { Name = "musician", Value = musician };
+        }
+        return new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req" };
+    }
+
+    private static Context CreateContext() => TestHelpers.CreateTestContext();
+    private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+    private static Entities.User CreateUser() => TestHelpers.CreateTestUser();
+
+    private void SetupUserMock()
+    {
+        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
+            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+    }
+
+    // ============================================================
+    // PlaySongIntentHandler cross-media-type fallback tests
+    // ============================================================
+
+    [Fact]
+    public async Task PlaySong_NoSongs_NoMusician_ArtistExists_FallsBackToArtist()
+    {
+        var artistId = Guid.NewGuid();
+        var song1 = new Audio { Name = "Last Nite", Id = Guid.NewGuid() };
+        var song2 = new Audio { Name = "Someday", Id = Guid.NewGuid() };
+
+        SetupUserMock();
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                // Song search: returns empty (no song titled "the strokes")
+                if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))
+                    return new List<BaseItem>();
+
+                // Artist search: returns the artist
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                    return new List<BaseItem> { new MusicArtist { Name = "The Strokes", Id = artistId } };
+
+                // Artist songs fallback: ArtistIds + MediaTypes Audio
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0 && q.MediaTypes != null && q.MediaTypes.Contains(MediaType.Audio))
+                    return new List<BaseItem> { song1, song2 };
+
+                return new List<BaseItem>();
+            });
+
+        var handler = CreateSongHandler();
+        var request = CreateSongIntent("the strokes"); // no musician slot
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // Should return audio player directive (artist songs playback), not "not found"
+        Assert.NotNull(response.Response?.Directives);
+        Assert.NotEmpty(response.Response.Directives);
+
+        // Queue should have the artist's songs
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Equal(2, session.NowPlayingQueue.Count);
+
+        // Should include announcement speech
+        Assert.NotNull(response.Response.OutputSpeech);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Strokes", speech);
+    }
+
+    [Fact]
+    public async Task PlaySong_NoSongs_NoMusician_NoArtist_ReturnsNotFound()
+    {
+        SetupUserMock();
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var handler = CreateSongHandler();
+        var request = CreateSongIntent("xyzzyfoo"); // no musician slot
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // Should NOT fall back — no artist found either
+        Assert.True(response.Response?.Directives == null || response.Response.Directives.Count == 0);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("xyzzyfoo", speech, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task PlaySong_SongsFound_NoFallbackTriggered()
+    {
+        var songId = Guid.NewGuid();
+        SetupUserMock();
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                // Song search: returns a match
+                if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))
+                    return new List<BaseItem> { new Audio { Name = "Reptilia", Id = songId } };
+
+                return new List<BaseItem>();
+            });
+
+        var handler = CreateSongHandler();
+        var request = CreateSongIntent("reptilia"); // no musician slot
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // Should play the song directly (no fallback, no announcement)
+        Assert.NotNull(response.Response?.Directives);
+        Assert.NotEmpty(response.Response.Directives);
+        // No announcement for direct match
+        Assert.Null(response.Response.OutputSpeech);
+    }
+
+    [Fact]
+    public async Task PlaySong_NoSongs_WithMusicianSlot_NoFallback()
+    {
+        // When musician slot IS filled, the cross-media-type fallback should NOT trigger
+        // because the user explicitly specified "play song X by artist Y".
+        SetupUserMock();
+
+        var artistId = Guid.NewGuid();
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                // Artist search for musician slot
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                    return new List<BaseItem> { new MusicArtist { Name = "The Strokes", Id = artistId } };
+
+                // Song search returns empty
+                if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))
+                    return new List<BaseItem>();
+
+                return new List<BaseItem>();
+            });
+
+        var handler = CreateSongHandler();
+        var request = CreateSongIntent("unknown song", "the strokes"); // musician slot is filled
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // Should NOT fall back to artist playback — should return "not found song by artist"
+        Assert.True(response.Response?.Directives == null || response.Response.Directives.Count == 0);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("unknown song", speech, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task PlaySong_NoSongs_ArtistFound_ButNoArtistSongs_ReturnsNoSongsForArtist()
+    {
+        var artistId = Guid.NewGuid();
+        SetupUserMock();
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                // Song search: empty
+                if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))
+                    return new List<BaseItem>();
+
+                // Artist search: found
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                    return new List<BaseItem> { new MusicArtist { Name = "Empty Artist", Id = artistId } };
+
+                // Artist songs: empty (no songs for this artist)
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0)
+                    return new List<BaseItem>();
+
+                return new List<BaseItem>();
+            });
+
+        var handler = CreateSongHandler();
+        var request = CreateSongIntent("empty artist");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // Should tell user no songs for the artist
+        Assert.True(response.Response?.Directives == null || response.Response.Directives.Count == 0);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Empty Artist", speech);
+    }
+
+    // ============================================================
+    // PlayAlbumIntentHandler cross-media-type fallback tests
+    // ============================================================
+
+    [Fact]
+    public async Task PlayAlbum_NoAlbums_NoMusician_ArtistExists_FallsBackToArtist()
+    {
+        var artistId = Guid.NewGuid();
+        var song1 = new Audio { Name = "Is This It", Id = Guid.NewGuid() };
+        var song2 = new Audio { Name = "The Modern Age", Id = Guid.NewGuid() };
+
+        SetupUserMock();
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                // Album search: returns empty
+                if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))
+                    return new List<BaseItem>();
+
+                // Artist search: returns the artist
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                    return new List<BaseItem> { new MusicArtist { Name = "The Strokes", Id = artistId } };
+
+                // Artist songs fallback
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0 && q.MediaTypes != null && q.MediaTypes.Contains(MediaType.Audio))
+                    return new List<BaseItem> { song1, song2 };
+
+                return new List<BaseItem>();
+            });
+
+        var handler = CreateAlbumHandler();
+        var request = CreateAlbumIntent("the strokes"); // no musician slot
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // Should return audio player directive (artist songs playback)
+        Assert.NotNull(response.Response?.Directives);
+        Assert.NotEmpty(response.Response.Directives);
+
+        // Queue should have the artist's songs
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Equal(2, session.NowPlayingQueue.Count);
+
+        // Should include announcement speech
+        Assert.NotNull(response.Response.OutputSpeech);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Strokes", speech);
+    }
+
+    [Fact]
+    public async Task PlayAlbum_NoAlbums_NoMusician_NoArtist_ReturnsNotFound()
+    {
+        SetupUserMock();
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var handler = CreateAlbumHandler();
+        var request = CreateAlbumIntent("xyzzyfoo");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.True(response.Response?.Directives == null || response.Response.Directives.Count == 0);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("xyzzyfoo", speech, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task PlayAlbum_AlbumsFound_NoFallbackTriggered()
+    {
+        // When albums ARE found, the handler proceeds to album playback and never
+        // reaches the cross-media fallback code path. Verify that the response
+        // does NOT contain the "FoundArtistInstead" announcement.
+        var albumId = Guid.NewGuid();
+        var trackId = Guid.NewGuid();
+        SetupUserMock();
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                // Album search: returns a match
+                if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))
+                    return new List<BaseItem> { new MusicAlbum { Name = "Is This It", Id = albumId } };
+
+                // Album tracks (ParentId match)
+                if (q.ParentId == albumId)
+                    return new List<BaseItem> { new Audio { Name = "Is This It", Id = trackId } };
+
+                return new List<BaseItem>();
+            });
+
+        // The handler uses SafeGetItemsResult for album tracks which calls GetItemsResult internally.
+        // Mock it to return a single track.
+        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>(
+                new List<BaseItem> { new Audio { Name = "Is This It", Id = trackId } }));
+
+        var handler = CreateAlbumHandler();
+        var request = CreateAlbumIntent("is this it");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // Response should be audio playback with no artist fallback announcement
+        Assert.Null(response.Response.OutputSpeech);
+    }
+
+    [Fact]
+    public async Task PlayAlbum_NoAlbums_WithMusicianSlot_NoFallback()
+    {
+        // When musician slot IS filled, cross-media-type fallback should NOT trigger
+        SetupUserMock();
+
+        var artistId = Guid.NewGuid();
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                // Artist search for musician slot
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                    return new List<BaseItem> { new MusicArtist { Name = "The Strokes", Id = artistId } };
+
+                // Album search returns empty
+                if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))
+                    return new List<BaseItem>();
+
+                return new List<BaseItem>();
+            });
+
+        var handler = CreateAlbumHandler();
+        var request = CreateAlbumIntent("unknown album", "the strokes"); // musician slot is filled
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // Should NOT fall back — should return "not found album by artist"
+        Assert.True(response.Response?.Directives == null || response.Response.Directives.Count == 0);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("unknown album", speech, StringComparison.OrdinalIgnoreCase);
+    }
+}

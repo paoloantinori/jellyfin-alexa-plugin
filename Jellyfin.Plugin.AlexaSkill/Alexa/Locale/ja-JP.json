@@ -222,5 +222,6 @@
   "ShowMoreNoSession": "続行する前のリストがありません。もう一度閲覧してみてください。",
   "ShowMorePage": "次のアイテムはこちらです: {0}",
   "ShowMoreLastPage": "{0} 最初の{1}件を表示します: {2}。",
-  "QueryRecentlyAddedPartial": "{0} 最初の{1}件を表示します: {2}。"
+  "QueryRecentlyAddedPartial": "{0} 最初の{1}件を表示します: {2}。",
+  "FoundArtistInstead": "アーティスト{0}を見つけました。{0}の音楽を再生します。"
 }

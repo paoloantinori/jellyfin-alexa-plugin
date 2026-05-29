@@ -222,5 +222,6 @@
   "ShowMoreNoSession": "Não tenho uma lista anterior para continuar. Tente navegar novamente.",
   "ShowMorePage": "Aqui estão os próximos itens: {0}",
   "ShowMoreLastPage": "{0} Aqui estão os primeiros {1}: {2}.",
-  "QueryRecentlyAddedPartial": "{0} Aqui estão os primeiros {1}: {2}."
+  "QueryRecentlyAddedPartial": "{0} Aqui estão os primeiros {1}: {2}.",
+  "FoundArtistInstead": "Encontrei o artista {0}. Aqui está a música de {0}."
 }

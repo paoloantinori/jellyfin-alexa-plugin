@@ -222,5 +222,6 @@
   "ShowMoreNoSession": "Ik heb geen vorige lijst om voort te zetten. Probeer opnieuw te bladeren.",
   "ShowMorePage": "Hier zijn de volgende items: {0}",
   "ShowMoreLastPage": "{0} Hier zijn de eerste {1}: {2}.",
-  "QueryRecentlyAddedPartial": "{0} Hier zijn de eerste {1}: {2}."
+  "QueryRecentlyAddedPartial": "{0} Hier zijn de eerste {1}: {2}.",
+  "FoundArtistInstead": "Ik heb de artiest {0} gevonden. Hier is muziek van {0}."
 }

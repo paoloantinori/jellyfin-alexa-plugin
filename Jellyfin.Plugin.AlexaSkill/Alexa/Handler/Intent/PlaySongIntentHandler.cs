@@ -207,6 +207,32 @@ public class PlaySongIntentHandler : BaseHandler
         }
         else if (songs.Count == 0)
         {
+            // Cross-media-type fallback: no songs found and no musician slot.
+            // The NLU may have routed an artist name to PlaySongIntent by mistake
+            // (e.g. "mettere gli strokes" → song="strokes" instead of artist="strokes").
+            // Try searching for an artist with the same query.
+            Logger.LogDebug("PlaySong: no songs found, trying artist fallback with query='{Query}'", songQuery);
+            IReadOnlyList<BaseItem> fallbackArtists = await Util.ArtistSearch.SearchAsync(
+                songQuery, user, _libraryManager, _artistIndex, Logger,
+                (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtistsFallback", ct),
+                cancellationToken).ConfigureAwait(false);
+
+            if (fallbackArtists.Count > 0)
+            {
+                var bestMatch = FuzzyMatcher.FindBestMatchWithScore(songQuery, fallbackArtists, a => a.Name);
+                if (bestMatch.HasValue && bestMatch.Value.Score >= FuzzyMatcher.GetDefaultThreshold(user))
+                {
+                    BaseItem artist = bestMatch.Value.Item;
+                    Logger.LogInformation(
+                        "PlaySong: artist fallback found '{ArtistName}' with score={Score} for query='{Query}'",
+                        artist.Name, bestMatch.Value.Score, songQuery);
+
+                    return await PlayArtistSongsFallback(
+                        artist.Id, artist.Name, jellyfinUser!, user, session, context, locale, cancellationToken,
+                        announcement: ResponseStrings.Get("FoundArtistInstead", locale, artist.Name)).ConfigureAwait(false);
+                }
+            }
+
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByName", locale, songQuery));
         }
 
@@ -324,6 +350,15 @@ public class PlaySongIntentHandler : BaseHandler
     /// but the musician slot has a valid artist. Plays the artist's songs instead of
     /// returning "not found".
     /// </summary>
+    /// <param name="artistId">The artist's Jellyfin ID.</param>
+    /// <param name="artistName">The artist's display name.</param>
+    /// <param name="jellyfinUser">The Jellyfin user for queries.</param>
+    /// <param name="user">The Alexa user.</param>
+    /// <param name="session">The current session.</param>
+    /// <param name="context">The Alexa context.</param>
+    /// <param name="locale">The locale for response strings.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="announcement">Optional speech to announce before playback (e.g. "I found the artist X").</param>
     private async Task<SkillResponse> PlayArtistSongsFallback(
         Guid artistId,
         string artistName,
@@ -332,7 +367,8 @@ public class PlaySongIntentHandler : BaseHandler
         SessionInfo session,
         Context context,
         string locale,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? announcement = null)
     {
         var artistSongsQuery = new InternalItemsQuery()
         {
@@ -405,6 +441,15 @@ public class PlaySongIntentHandler : BaseHandler
         Logger.LogDebug(
             "PlaySong fallback: returning AudioPlayer, itemId={ItemId}, startIndex={StartIndex}, queueSize={QueueSize}",
             itemId, startIndex, queueItems.Count);
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, sortedItems[startIndex], user, context);
+        SkillResponse response = BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, sortedItems[startIndex], user, context);
+
+        // If an announcement was provided (e.g. "I found the artist X"), add it as speech output.
+        // Alexa speaks the output before starting playback.
+        if (!string.IsNullOrWhiteSpace(announcement))
+        {
+            response.Response.OutputSpeech = new PlainTextOutputSpeech { Text = announcement };
+        }
+
+        return response;
     }
 }

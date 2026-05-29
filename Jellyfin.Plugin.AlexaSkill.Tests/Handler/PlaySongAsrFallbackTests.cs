@@ -122,10 +122,12 @@ public class PlaySongAsrFallbackTests : PluginTestBase
     [Fact]
     public async Task PlaySong_AsrFallbackDisabled_OriginalNotFound_ReturnsNotFound()
     {
-        // Arrange: feature disabled — should NOT try variants
+        // Arrange: feature disabled — should NOT try ASR compound-word variants.
+        // Note: the cross-media-type artist fallback will still trigger additional
+        // searches (artist search) after the song search fails, which is expected.
         SetupUserMock();
 
-        var searchTerms = new List<string>();
+        var searchTerms = new List<string?>();
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Callback<InternalItemsQuery>(q => searchTerms.Add(q.SearchTerm))
             .Returns(new List<BaseItem>());
@@ -146,9 +148,11 @@ public class PlaySongAsrFallbackTests : PluginTestBase
         string speech = TestHelpers.GetSpeechText(response);
         Assert.DoesNotContain("lazybones", speech);
 
-        // Only one search call (original "lazy bones"), no variants
-        Assert.Single(searchTerms);
-        Assert.Equal("lazy bones", searchTerms[0]);
+        // The first search call is the original "lazy bones" song search (with SearchTerm).
+        // Subsequent calls are from the cross-media-type artist fallback — they have different
+        // search parameters. Verify no ASR compound-word variant ("lazybones") was tried.
+        Assert.Contains("lazy bones", searchTerms);
+        Assert.DoesNotContain("lazybones", searchTerms);
     }
 
     [Fact]
