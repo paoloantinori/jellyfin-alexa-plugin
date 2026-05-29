@@ -218,7 +218,7 @@
             },
             {
                 "version": "0.3.2.0",
-                "checksum": "placeholder",
+                "checksum": "697bc7136d190216d25084c86b010f0b",
                 "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.3.2.0/AlexaSkill_0.3.2.0.zip",
                 "changelog": "Unreleased",
                 "targetAbi": "10.11.0.0",
@@ -226,7 +226,7 @@
             },
             {
                 "version": "0.4.0.0",
-                "checksum": "placeholder",
+                "checksum": "fff28fc0e13ff9a5436f2aaba359e494",
                 "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.4.0.0/AlexaSkill_0.4.0.0.zip",
                 "changelog": "BrowseLibrary question-style utterances across all locales. Beef up PlayVideoIntent for 6 thin locales with video-specific verbs. APL carousel docs.",
                 "targetAbi": "10.11.0.0",
