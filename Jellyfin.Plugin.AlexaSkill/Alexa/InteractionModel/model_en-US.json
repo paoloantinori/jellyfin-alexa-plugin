@@ -240,7 +240,15 @@
           "play {musician} songs",
           "play {musician} music",
           "give me {musician}",
-          "stream {musician}"
+          "stream {musician}",
+          "play the {musician}",
+          "put on the {musician}",
+          "stream the {musician}",
+          "hear the {musician}",
+          "to play the {musician}",
+          "to put on the {musician}",
+          "to stream the {musician}",
+          "to hear the {musician}"
         ],
         "slots": [
           {

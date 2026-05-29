@@ -215,7 +215,25 @@
           "Spiele {musician} Musik",
           "Schalte {musician} ein",
           "Starte Musik von {musician}",
-          "Gib etwas von {musician} wieder"
+          "Gib etwas von {musician} wieder",
+          "Spiele die {musician}",
+          "Spiel die {musician}",
+          "Gib die {musician}",
+          "Mach die {musician}",
+          "Spiele der {musician}",
+          "Spiel der {musician}",
+          "Gib der {musician}",
+          "Mach der {musician}",
+          "Spiele das {musician}",
+          "Spiel das {musician}",
+          "Gib das {musician}",
+          "Mach das {musician}",
+          "Zu spielen die {musician}",
+          "Zu spielen der {musician}",
+          "Zu spielen das {musician}",
+          "Zu hören die {musician}",
+          "Zu hören der {musician}",
+          "Zu hören das {musician}"
         ],
         "slots": [
           {

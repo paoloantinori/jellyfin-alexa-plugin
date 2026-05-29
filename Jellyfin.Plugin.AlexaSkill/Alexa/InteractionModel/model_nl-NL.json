@@ -191,7 +191,17 @@
           "shuffle nummers van {musician}",
           "speel {musician}",
           "speel wat {musician}",
-          "stream {musician}"
+          "stream {musician}",
+          "Speel de {musician}",
+          "Zet de {musician}",
+          "Luister naar de {musician}",
+          "Speel het {musician}",
+          "Zet het {musician}",
+          "Luister naar het {musician}",
+          "Te spelen de {musician}",
+          "Te spelen het {musician}",
+          "Te zetten de {musician}",
+          "Te zetten het {musician}"
         ],
         "slots": [
           {

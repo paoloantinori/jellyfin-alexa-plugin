@@ -168,7 +168,11 @@
           "{musician} を聞きたい",
           "{musician} をシャッフルして",
           "{musician} を再生して",
-          "{musician} のストリーム"
+          "{musician} のストリーム",
+          "{musician}を再生",
+          "{musician}を流して",
+          "{musician}を聞かせて",
+          "{musician}をかけて"
         ],
         "slots": [
           {

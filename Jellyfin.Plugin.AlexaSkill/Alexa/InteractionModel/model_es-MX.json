@@ -204,7 +204,23 @@
           "Pon algo de {musician}",
           "Reproduce algo de {musician}",
           "Dime algo de {musician}",
-          "Suelta canciones de {musician}"
+          "Suelta canciones de {musician}",
+          "Reproduce los {musician}",
+          "Pon los {musician}",
+          "Escucha los {musician}",
+          "Oye los {musician}",
+          "Reproduce las {musician}",
+          "Pon las {musician}",
+          "Escucha las {musician}",
+          "Oye las {musician}",
+          "Reproducir los {musician}",
+          "Reproducir las {musician}",
+          "Poner los {musician}",
+          "Poner las {musician}",
+          "Escuchar los {musician}",
+          "Escuchar las {musician}",
+          "Oír los {musician}",
+          "Oír las {musician}"
         ],
         "slots": [
           {

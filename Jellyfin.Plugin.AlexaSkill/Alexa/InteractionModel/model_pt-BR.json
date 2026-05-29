@@ -196,7 +196,21 @@
           "tocar {musician}",
           "tocar um pouco de {musician}",
           "me dá {musician}",
-          "stream {musician}"
+          "stream {musician}",
+          "Toca os {musician}",
+          "Coloca os {musician}",
+          "Põe os {musician}",
+          "Ouve os {musician}",
+          "Toca as {musician}",
+          "Coloca as {musician}",
+          "Põe as {musician}",
+          "Ouve as {musician}",
+          "Tocar os {musician}",
+          "Tocar as {musician}",
+          "Colocar os {musician}",
+          "Colocar as {musician}",
+          "Ouvir os {musician}",
+          "Ouvir as {musician}"
         ],
         "slots": [
           {

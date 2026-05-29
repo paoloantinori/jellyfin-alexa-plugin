@@ -255,7 +255,18 @@
           "I fancy listening to {musician}",
           "I fancy hearing {musician}",
           "whack on some {musician}",
-          "let's have some {musician}"
+          "let's have some {musician}",
+          "play the {musician}",
+          "put on the {musician}",
+          "stream the {musician}",
+          "hear the {musician}",
+          "to play the {musician}",
+          "to put on the {musician}",
+          "to stream the {musician}",
+          "to hear the {musician}",
+          "bang on the {musician}",
+          "stick on the {musician}",
+          "whack on the {musician}"
         ],
         "slots": [
           {

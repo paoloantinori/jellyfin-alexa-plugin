@@ -180,7 +180,9 @@
           "{musician} शुरू करो",
           "{musician} को शफल करो",
           "{musician} चलाओ",
-          "कुछ {musician} चलाओ"
+          "कुछ {musician} चलाओ",
+          "{musician} बजाओ",
+          "{musician} सुनाओ"
         ],
         "slots": [
           {

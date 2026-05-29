@@ -331,7 +331,9 @@
           "Di pleiare disco {album} delle {musician}",
           "c'è un album chiamato {album}",
           "c'è l'album {album}",
-          "c'è un album di {musician}"
+          "c'è un album di {musician}",
+          "metti su {album}",
+          "metti su l'album {album}"
         ],
         "slots": [
           {
@@ -587,7 +589,27 @@
           "Riproduci il cantante {musician}",
           "Suona la cantante {musician}",
           "Metti la cantante {musician}",
-          "Ascolta la cantante {musician}"
+          "Ascolta la cantante {musician}",
+          "Suona gli {musician}",
+          "Suona i {musician}",
+          "Metti gli {musician}",
+          "Metti i {musician}",
+          "Riproduci gli {musician}",
+          "Riproduci i {musician}",
+          "Pleia gli {musician}",
+          "Pleia i {musician}",
+          "Metti su gli {musician}",
+          "Metti su i {musician}",
+          "Di suonare gli {musician}",
+          "Di suonare i {musician}",
+          "Di mettere gli {musician}",
+          "Di mettere i {musician}",
+          "Di riprodurre gli {musician}",
+          "Di riprodurre i {musician}",
+          "Di pleiare gli {musician}",
+          "Di pleiare i {musician}",
+          "Di mettere su gli {musician}",
+          "Di mettere su i {musician}"
         ],
         "slots": [
           {
@@ -924,7 +946,12 @@
           "c'è la canzone {song}",
           "c'è il brano {song}",
           "c'è una canzone di {musician}",
-          "c'è un brano di {musician}"
+          "c'è un brano di {musician}",
+          "metti su {song}",
+          "metti su il brano {song}",
+          "metti su la canzone {song}",
+          "metti su il pezzo {song}",
+          "metti su la traccia {song}"
         ],
         "slots": [
           {

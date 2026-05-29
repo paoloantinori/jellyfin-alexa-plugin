@@ -215,7 +215,19 @@
           "Mets des titres de {musician}",
           "Passe {musician}",
           "Passe les chansons de {musician}",
-          "Commence {musician}"
+          "Commence {musician}",
+          "Joue les {musician}",
+          "Mets les {musician}",
+          "Passe les {musician}",
+          "Écoute les {musician}",
+          "Lance les {musician}",
+          "Diffuse les {musician}",
+          "De jouer les {musician}",
+          "De mettre les {musician}",
+          "De passer les {musician}",
+          "D'écouter les {musician}",
+          "De lancer les {musician}",
+          "De diffuser les {musician}"
         ],
         "slots": [
           {

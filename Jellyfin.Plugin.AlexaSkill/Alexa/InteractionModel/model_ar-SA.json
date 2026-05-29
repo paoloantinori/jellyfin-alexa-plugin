@@ -184,7 +184,9 @@
           "ابدأ تشغيل {musician}",
           "اخلط أغاني {musician}",
           "شغل {musician}",
-          "شغل بعض {musician}"
+          "شغل بعض {musician}",
+          "شغل أعمال {musician}",
+          "اسمع {musician}"
         ],
         "slots": [
           {
