@@ -35,6 +35,9 @@ public static class PhoneticSynonymGenerator
             "de" => GermanPhoneticSynonyms.Generate(name),
             "es" => SpanishPhoneticSynonyms.Generate(name),
             "fr" => FrenchPhoneticSynonyms.Generate(name),
+            "pt" => PortuguesePhoneticSynonyms.Generate(name),
+            "ja" => JapanesePhoneticSynonyms.Generate(name),
+            "nl" => DutchPhoneticSynonyms.Generate(name),
             _ => new List<string>()
         };
     }

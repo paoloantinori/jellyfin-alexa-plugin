@@ -186,8 +186,60 @@ public class PhoneticSynonymGeneratorTests
     [Fact]
     public void GenerateSynonyms_UnknownLocale_ReturnsEmpty()
     {
-        var result = PhoneticSynonymGenerator.GenerateSynonyms("Pink Floyd", "ja-JP");
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Pink Floyd", "xx-XX");
         Assert.Empty(result);
+    }
+
+    // --- Portuguese locale dispatch tests ---
+
+    [Fact]
+    public void GenerateSynonyms_PortugueseBR_DispatchesToPortuguese()
+    {
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("The Smiths", "pt-BR");
+        Assert.NotEmpty(result);
+        Assert.Contains(result, s => s.Contains("Smids") && !s.Contains("th"));
+    }
+
+    [Fact]
+    public void GenerateSynonyms_PortuguesePT_DispatchesToPortuguese()
+    {
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("The Smiths", "pt-PT");
+        Assert.NotEmpty(result);
+    }
+
+    // --- Japanese locale dispatch tests ---
+
+    [Fact]
+    public void GenerateSynonyms_JapaneseJP_DispatchesToJapanese()
+    {
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("The Smiths", "ja-JP");
+        Assert.NotEmpty(result);
+        Assert.Contains(result, s => s.Contains("Smis") && !s.Contains("th"));
+    }
+
+    [Fact]
+    public void GenerateSynonyms_JapaneseJP_LToRTransform()
+    {
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Linkin Park", "ja-JP");
+        Assert.NotEmpty(result);
+        Assert.Contains(result, s => s.Contains("Rinkin"));
+    }
+
+    // --- Dutch locale dispatch tests ---
+
+    [Fact]
+    public void GenerateSynonyms_DutchNL_DispatchesToDutch()
+    {
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("The Smiths", "nl-NL");
+        Assert.NotEmpty(result);
+        Assert.Contains(result, s => s.Contains("Smits") && !s.Contains("th"));
+    }
+
+    [Fact]
+    public void GenerateSynonyms_DutchBE_DispatchesToDutch()
+    {
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("The Smiths", "nl-BE");
+        Assert.NotEmpty(result);
     }
 
     [Fact]
