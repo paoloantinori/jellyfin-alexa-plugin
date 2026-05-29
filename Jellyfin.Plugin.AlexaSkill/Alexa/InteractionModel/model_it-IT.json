@@ -609,7 +609,18 @@
           "Di pleiare gli {musician}",
           "Di pleiare i {musician}",
           "Di mettere su gli {musician}",
-          "Di mettere su i {musician}"
+          "Di mettere su i {musician}",
+          "Metti su la band {musician}",
+          "Metti su il gruppo {musician}",
+          "Metti su il cantante {musician}",
+          "Metti su la cantante {musician}",
+          "Di mettere su la band {musician}",
+          "Di mettere su il gruppo {musician}",
+          "Di mettere su il cantante {musician}",
+          "Di mettere su la cantante {musician}",
+          "Metti su della musica di {musician}",
+          "Metti su della musica dei {musician}",
+          "Metti su della musica degli {musician}"
         ],
         "slots": [
           {
