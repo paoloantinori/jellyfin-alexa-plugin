@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using Alexa.NET.Management;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Manifest;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Entities;
 using MediaBrowser.Model.Plugins;
 
@@ -23,8 +24,6 @@ public class PluginConfiguration : BasePluginConfiguration
     {
         // set default options here
         sslCertType = SslCertificateType.Wildcard;
-        LwaClientId = string.Empty;
-        LwaClientSecret = string.Empty;
 
         serverAddress = string.Empty;
         AccountLinkingClientId = Guid.NewGuid().ToString();
@@ -58,15 +57,30 @@ public class PluginConfiguration : BasePluginConfiguration
         }
     }
 
+    private string lwaClientId = string.Empty;
+    private string lwaClientSecret = string.Empty;
+
     /// <summary>
     /// Gets or sets the client id for LWA.
+    /// Sanitized to strip invisible Unicode characters that browser copy-paste
+    /// from the Amazon developer portal may introduce (e.g. zero-width spaces).
     /// </summary>
-    public string LwaClientId { get; set; }
+    public string LwaClientId
+    {
+        get => lwaClientId;
+        set => lwaClientId = CredentialSanitizer.Sanitize(value);
+    }
 
     /// <summary>
     /// Gets or sets the client secret for LWA.
+    /// Sanitized to strip invisible Unicode characters that browser copy-paste
+    /// from the Amazon developer portal may introduce (e.g. zero-width spaces).
     /// </summary>
-    public string LwaClientSecret { get; set; }
+    public string LwaClientSecret
+    {
+        get => lwaClientSecret;
+        set => lwaClientSecret = CredentialSanitizer.Sanitize(value);
+    }
 
     /// <summary>
     /// Gets or sets the account linking client id.
