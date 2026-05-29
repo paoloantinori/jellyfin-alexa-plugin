@@ -26,4 +26,13 @@ public interface IArtistIndex
     /// Number of artists in the index.
     /// </summary>
     int Count { get; }
+
+    /// <summary>
+    /// Try to get the pre-computed Double Metaphone phonetic codes for an artist.
+    /// Codes are computed once at index build time for zero per-request cost.
+    /// </summary>
+    /// <param name="artistId">The artist's item ID.</param>
+    /// <param name="codes">Primary and alternate phonetic codes if found.</param>
+    /// <returns>True if phonetic codes were found for this artist.</returns>
+    bool TryGetPhoneticCode(Guid artistId, out (string Primary, string? Alternate) codes);
 }

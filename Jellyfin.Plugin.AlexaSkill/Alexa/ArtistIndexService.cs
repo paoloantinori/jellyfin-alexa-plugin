@@ -26,6 +26,7 @@ public class ArtistIndexService : IArtistIndex, IHostedService, IDisposable
     private readonly ILogger<ArtistIndexService> _logger;
     private volatile List<BaseItem> _artists = [];
     private volatile Dictionary<Guid, Guid> _artistTopParentMap = new();
+    private volatile Dictionary<Guid, (string Primary, string? Alternate)> _phoneticCodes = new();
     private volatile bool _isReady;
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
     private readonly object _debounceLock = new();
@@ -34,6 +35,12 @@ public class ArtistIndexService : IArtistIndex, IHostedService, IDisposable
 
     public bool IsReady => _isReady;
     public int Count => _artists.Count;
+
+    /// <inheritdoc />
+    public bool TryGetPhoneticCode(Guid artistId, out (string Primary, string? Alternate) codes)
+    {
+        return _phoneticCodes.TryGetValue(artistId, out codes);
+    }
 
     public ArtistIndexService(ILibraryManager libraryManager, ILogger<ArtistIndexService> logger)
     {
@@ -88,13 +95,25 @@ public class ArtistIndexService : IArtistIndex, IHostedService, IDisposable
                 topParentMap[artist.Id] = ResolveTopParentId(artist);
             }
 
+            // Pre-compute Double Metaphone phonetic codes for fuzzy matching
+            var phoneticCodes = new Dictionary<Guid, (string Primary, string? Alternate)>(artists.Count);
+            foreach (var artist in artists)
+            {
+                if (!string.IsNullOrWhiteSpace(artist.Name))
+                {
+                    phoneticCodes[artist.Id] = DoubleMetaphone.Encode(artist.Name);
+                }
+            }
+
             _artistTopParentMap = topParentMap;
+            _phoneticCodes = phoneticCodes;
             _artists = new List<BaseItem>(artists);
             _isReady = true;
 
-            _logger.LogInformation("Artist index {Action}: {Count} artists",
+            _logger.LogInformation("Artist index {Action}: {Count} artists, {PhoneticCount} with phonetic codes",
                 artists.Count > 0 ? "loaded" : "initialized (empty library)",
-                artists.Count);
+                artists.Count,
+                phoneticCodes.Count);
         }
         catch (OperationCanceledException)
         {

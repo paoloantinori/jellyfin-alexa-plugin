@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Xunit;
@@ -238,4 +240,282 @@ public class FuzzyMatcherTests
     }
 
     private record TestItem(string Name);
+
+    // --- Phonetic pre-filter tests ---
+
+    [Fact]
+    public void FindBestMatch_WithPhoneticLookup_PhoneticAndLevenshteinMiss_StillFinds()
+    {
+        // "smit" is close to "Smith" — phonetic codes should match and boost the score
+        var smith = new TestItemWithId("Smith", Guid.NewGuid());
+        var metallica = new TestItemWithId("Metallica", Guid.NewGuid());
+        var items = new List<TestItemWithId> { metallica, smith };
+
+        var phoneticMap = new Dictionary<Guid, (string Primary, string? Alternate)>
+        {
+            [smith.Id] = DoubleMetaphone.Encode("Smith"),
+            [metallica.Id] = DoubleMetaphone.Encode("Metallica"),
+        };
+
+        (string Primary, string? Alternate)? Lookup(Guid id) =>
+            phoneticMap.TryGetValue(id, out var codes) ? codes : null;
+
+        var result = FuzzyMatcher.FindBestMatch(
+            "smit",
+            items,
+            i => i.Name,
+            i => i.Id,
+            Lookup,
+            40);
+
+        Assert.NotNull(result);
+        Assert.Equal("Smith", result.Name);
+    }
+
+    [Fact]
+    public void FindBestMatch_WithPhoneticLookup_PhoneticMissLevenshteinHit_StillFinds()
+    {
+        // "beetles" → Levenshtein should match "The Beatles" even without phonetic help
+        var beatles = new TestItemWithId("The Beatles", Guid.NewGuid());
+        var items = new List<TestItemWithId> { beatles };
+
+        var phoneticMap = new Dictionary<Guid, (string Primary, string? Alternate)>
+        {
+            [beatles.Id] = DoubleMetaphone.Encode("The Beatles"),
+        };
+
+        (string Primary, string? Alternate)? Lookup(Guid id) =>
+            phoneticMap.TryGetValue(id, out var codes) ? codes : null;
+
+        var result = FuzzyMatcher.FindBestMatch(
+            "beetles",
+            items,
+            i => i.Name,
+            i => i.Id,
+            Lookup,
+            FuzzyMatcher.DefaultThreshold);
+
+        Assert.NotNull(result);
+        Assert.Equal("The Beatles", result.Name);
+    }
+
+    [Fact]
+    public void FindBestMatch_WithPhoneticLookup_NoPhoneticData_FallsBackToLevenshtein()
+    {
+        // When phonetic lookup returns null for all candidates, should still work via Levenshtein
+        var beatles = new TestItemWithId("The Beatles", Guid.NewGuid());
+        var items = new List<TestItemWithId> { beatles };
+
+        (string Primary, string? Alternate)? Lookup(Guid _) => null;
+
+        var result = FuzzyMatcher.FindBestMatch(
+            "beetles",
+            items,
+            i => i.Name,
+            i => i.Id,
+            Lookup,
+            FuzzyMatcher.DefaultThreshold);
+
+        Assert.NotNull(result);
+        Assert.Equal("The Beatles", result.Name);
+    }
+
+    [Fact]
+    public void FindBestMatch_WithPhoneticLookup_PhoneticBoostsLowerLevenshteinScore()
+    {
+        // When two candidates have similar Levenshtein scores, phonetic match should
+        // boost the correct one to win
+        var smith = new TestItemWithId("Smith", Guid.NewGuid());
+        var smoot = new TestItemWithId("Smoot", Guid.NewGuid());
+        var items = new List<TestItemWithId> { smoot, smith };
+
+        var phoneticMap = new Dictionary<Guid, (string Primary, string? Alternate)>
+        {
+            [smith.Id] = DoubleMetaphone.Encode("Smith"),
+            [smoot.Id] = DoubleMetaphone.Encode("Smoot"),
+        };
+
+        (string Primary, string? Alternate)? Lookup(Guid id) =>
+            phoneticMap.TryGetValue(id, out var codes) ? codes : null;
+
+        // Query "smit" — phonetically matches "Smith" (SM0T/XMT) which should boost it
+        var result = FuzzyMatcher.FindBestMatch(
+            "smit",
+            items,
+            i => i.Name,
+            i => i.Id,
+            Lookup,
+            40);
+
+        Assert.NotNull(result);
+        // With phonetic boost, Smith should win (even if Smoot has similar Levenshtein)
+        Assert.Equal("Smith", result.Name);
+    }
+
+    [Fact]
+    public void FindBestMatchWithScore_WithPhoneticLookup_ReturnsBoostedScore()
+    {
+        var smith = new TestItemWithId("Smith", Guid.NewGuid());
+        var items = new List<TestItemWithId> { smith };
+
+        var phoneticMap = new Dictionary<Guid, (string Primary, string? Alternate)>
+        {
+            [smith.Id] = DoubleMetaphone.Encode("Smith"),
+        };
+
+        (string Primary, string? Alternate)? Lookup(Guid id) =>
+            phoneticMap.TryGetValue(id, out var codes) ? codes : null;
+
+        // Get score without phonetic
+        var scoreWithoutPhonetic = FuzzyMatcher.FindBestMatchWithScore("smit", items, i => i.Name);
+
+        // Get score with phonetic
+        var scoreWithPhonetic = FuzzyMatcher.FindBestMatchWithScore(
+            "smit", items, i => i.Name, i => i.Id, Lookup);
+
+        Assert.NotNull(scoreWithoutPhonetic);
+        Assert.NotNull(scoreWithPhonetic);
+
+        // Phonetic match should boost the score
+        Assert.True(scoreWithPhonetic.Value.Score >= scoreWithoutPhonetic.Value.Score,
+            $"Phonetic score ({scoreWithPhonetic.Value.Score}) should be >= non-phonetic score ({scoreWithoutPhonetic.Value.Score})");
+    }
+
+    [Fact]
+    public void FindBestMatch_WithPhoneticLookup_ExactMatch_ShortCircuits()
+    {
+        var beatles = new TestItemWithId("The Beatles", Guid.NewGuid());
+        var items = new List<TestItemWithId> { beatles };
+
+        var phoneticMap = new Dictionary<Guid, (string Primary, string? Alternate)>
+        {
+            [beatles.Id] = DoubleMetaphone.Encode("The Beatles"),
+        };
+
+        (string Primary, string? Alternate)? Lookup(Guid id) =>
+            phoneticMap.TryGetValue(id, out var codes) ? codes : null;
+
+        var result = FuzzyMatcher.FindBestMatchWithScore(
+            "The Beatles",
+            items,
+            i => i.Name,
+            i => i.Id,
+            Lookup);
+
+        Assert.NotNull(result);
+        Assert.Equal(100, result.Value.Score);
+    }
+
+    [Fact]
+    public void PhoneticCodesMatch_MatchingPrimary_ReturnsTrue()
+    {
+        Assert.True(FuzzyMatcher.PhoneticCodesMatch("ABCD", null, "ABCD", null));
+    }
+
+    [Fact]
+    public void PhoneticCodesMatch_MatchingAlternate_ReturnsTrue()
+    {
+        Assert.True(FuzzyMatcher.PhoneticCodesMatch("ABCD", "WXYZ", "WXYZ", null));
+    }
+
+    [Fact]
+    public void PhoneticCodesMatch_NoMatch_ReturnsFalse()
+    {
+        Assert.False(FuzzyMatcher.PhoneticCodesMatch("ABCD", null, "WXYZ", null));
+    }
+
+    [Fact]
+    public void PhoneticCodesMatch_EmptyPrimary_ReturnsFalse()
+    {
+        Assert.False(FuzzyMatcher.PhoneticCodesMatch(string.Empty, null, "ABCD", null));
+    }
+
+    [Fact]
+    public void PhoneticCodesMatch_CrossMatchPrimaryAlternate_ReturnsTrue()
+    {
+        // query primary matches candidate alternate
+        Assert.True(FuzzyMatcher.PhoneticCodesMatch("ABCD", null, "XYZ", "ABCD"));
+    }
+
+    [Fact]
+    public void PhoneticCodesMatch_AllAlternatesMatch_ReturnsTrue()
+    {
+        Assert.True(FuzzyMatcher.PhoneticCodesMatch("ABCD", "WXYZ", "QRST", "WXYZ"));
+    }
+
+    [Fact]
+    public void FindBestMatch_WithPhoneticLookup_EmptyQuery_ReturnsNull()
+    {
+        var items = new List<TestItemWithId> { new("Test", Guid.NewGuid()) };
+
+        (string Primary, string? Alternate)? Lookup(Guid _) => null;
+
+        var result = FuzzyMatcher.FindBestMatch(
+            "",
+            items,
+            i => i.Name,
+            i => i.Id,
+            Lookup);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void FindBestMatch_WithPhoneticLookup_EmptyCandidates_ReturnsNull()
+    {
+        (string Primary, string? Alternate)? Lookup(Guid _) => null;
+
+        var result = FuzzyMatcher.FindBestMatch(
+            "test",
+            Enumerable.Empty<TestItemWithId>(),
+            i => i.Name,
+            i => i.Id,
+            Lookup);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void Performance_PhoneticFuzzyMatch_10KArtists_Under10ms()
+    {
+        // Build 10K artists with IDs and pre-computed phonetic codes
+        var artists = new List<TestItemWithId>(10000);
+        var phoneticMap = new Dictionary<Guid, (string Primary, string? Alternate)>(10000);
+
+        for (int i = 0; i < 10000; i++)
+        {
+            var item = new TestItemWithId($"Artist {i}", Guid.NewGuid());
+            artists.Add(item);
+            phoneticMap[item.Id] = DoubleMetaphone.Encode(item.Name);
+        }
+
+        // Add some real names
+        var smith = new TestItemWithId("Smith", Guid.NewGuid());
+        artists.Add(smith);
+        phoneticMap[smith.Id] = DoubleMetaphone.Encode("Smith");
+
+        var pinkFloyd = new TestItemWithId("Pink Floyd", Guid.NewGuid());
+        artists.Add(pinkFloyd);
+        phoneticMap[pinkFloyd.Id] = DoubleMetaphone.Encode("Pink Floyd");
+
+        (string Primary, string? Alternate)? Lookup(Guid id) =>
+            phoneticMap.TryGetValue(id, out var codes) ? codes : null;
+
+        var sw = Stopwatch.StartNew();
+
+        var result = FuzzyMatcher.FindBestMatch(
+            "smit",
+            artists,
+            i => i.Name,
+            i => i.Id,
+            Lookup,
+            40);
+
+        sw.Stop();
+
+        Assert.True(sw.ElapsedMilliseconds < 200,
+            $"Phonetic fuzzy match on 10K artists took {sw.ElapsedMilliseconds}ms, expected < 200ms");
+    }
+
+    private record TestItemWithId(string Name, Guid Id);
 }

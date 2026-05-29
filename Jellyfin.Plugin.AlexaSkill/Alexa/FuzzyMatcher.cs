@@ -7,7 +7,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa;
 
 /// <summary>
 /// Fuzzy string matching utility for tolerating typos in voice queries.
-/// Uses Levenshtein distance to score and rank candidate matches.
+/// Uses Levenshtein distance to score and rank candidate matches, with an
+/// optional Double Metaphone phonetic pre-filter to promote candidates that
+/// sound similar even when their spelling diverges.
 /// </summary>
 internal static class FuzzyMatcher
 {
@@ -29,6 +31,14 @@ internal static class FuzzyMatcher
     /// trigger "Did you mean?" or auto-play behavior depending on config.
     /// </summary>
     public const int SuggestionThreshold = 40;
+
+    /// <summary>
+    /// Score bonus applied when phonetic codes match between query and candidate.
+    /// This promotes candidates that sound similar even when Levenshtein alone
+    /// would rank them lower. The bonus is capped so it cannot push a poor
+    /// Levenshtein match above the threshold on its own.
+    /// </summary>
+    private const int PhoneticBonus = 15;
 
     /// <summary>
     /// Gets the fuzzy match threshold from the user, falling back to the compile-time constant.
@@ -55,6 +65,33 @@ internal static class FuzzyMatcher
         where T : class
     {
         var result = FindBestMatchWithScore(query, candidates, selector);
+        return result.HasValue && result.Value.Score >= threshold ? result.Value.Item : null;
+    }
+
+    /// <summary>
+    /// Find the best matching item using phonetic pre-filtering combined with Levenshtein scoring.
+    /// When a phonetic lookup is available, candidates whose Double Metaphone codes match the query
+    /// receive a score bonus. This helps catch cross-language pronunciation matches that pure
+    /// Levenshtein would miss (e.g. "smit" matching "Smith").
+    /// </summary>
+    /// <typeparam name="T">The type of candidate items.</typeparam>
+    /// <param name="query">The user's search query.</param>
+    /// <param name="candidates">Candidate items to match against.</param>
+    /// <param name="selector">Function to extract the comparable string from each candidate.</param>
+    /// <param name="candidateIdSelector">Function to extract the unique ID from each candidate (for phonetic lookup).</param>
+    /// <param name="phoneticLookup">Function that returns pre-computed phonetic codes for a candidate ID, or false if unavailable.</param>
+    /// <param name="threshold">Minimum score (0-100) to accept a match.</param>
+    /// <returns>The best matching item, or default if no match above threshold.</returns>
+    public static T? FindBestMatch<T>(
+        string query,
+        IEnumerable<T> candidates,
+        Func<T, string> selector,
+        Func<T, Guid> candidateIdSelector,
+        Func<Guid, (string Primary, string? Alternate)?> phoneticLookup,
+        int threshold = DefaultThreshold)
+        where T : class
+    {
+        var result = FindBestMatchWithScore(query, candidates, selector, candidateIdSelector, phoneticLookup);
         return result.HasValue && result.Value.Score >= threshold ? result.Value.Item : null;
     }
 
@@ -105,6 +142,128 @@ internal static class FuzzyMatcher
 
         return bestMatch != null ? (bestMatch, bestScore) : null;
     }
+
+    /// <summary>
+    /// Find the best matching item with phonetic pre-filter, returning the item with its score.
+    /// Encodes the query's phonetic code once, then applies a score bonus to candidates whose
+    /// pre-computed phonetic codes match. Levenshtein remains the primary scoring signal.
+    /// </summary>
+    /// <typeparam name="T">The type of candidate items.</typeparam>
+    /// <param name="query">The user's search query.</param>
+    /// <param name="candidates">Candidate items to match against.</param>
+    /// <param name="selector">Function to extract the comparable string from each candidate.</param>
+    /// <param name="candidateIdSelector">Function to extract the unique ID from each candidate.</param>
+    /// <param name="phoneticLookup">Function that returns pre-computed phonetic codes for a candidate ID, or null if unavailable.</param>
+    /// <returns>The best match with its score (including phonetic bonus), or null.</returns>
+    public static (T Item, int Score)? FindBestMatchWithScore<T>(
+        string query,
+        IEnumerable<T> candidates,
+        Func<T, string> selector,
+        Func<T, Guid> candidateIdSelector,
+        Func<Guid, (string Primary, string? Alternate)?> phoneticLookup)
+        where T : class
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return null;
+        }
+
+        string normalizedQuery = Normalize(query);
+        int maxLenDiff = Math.Max(normalizedQuery.Length * 2, 15);
+
+        // Encode the query's phonetic code once for all comparisons
+        var queryPhonetic = DoubleMetaphone.Encode(query);
+
+        T? bestMatch = null;
+        int bestScore = 0;
+
+        foreach (T candidate in candidates)
+        {
+            string candidateText = Normalize(selector(candidate));
+
+            if (Math.Abs(candidateText.Length - normalizedQuery.Length) > maxLenDiff)
+            {
+                continue;
+            }
+
+            int score = PartialRatio(normalizedQuery, candidateText);
+
+            // Apply phonetic bonus: if the candidate's pre-computed phonetic codes match
+            // the query's phonetic codes, boost the score
+            if (score < ContainmentScore)
+            {
+                Guid candidateId = candidateIdSelector(candidate);
+                var candidatePhonetic = phoneticLookup(candidateId);
+                if (candidatePhonetic.HasValue)
+                {
+                    if (PhoneticCodesMatch(queryPhonetic.Primary, queryPhonetic.Alternate,
+                            candidatePhonetic.Value.Primary, candidatePhonetic.Value.Alternate))
+                    {
+                        score = Math.Min(score + PhoneticBonus, 100);
+                    }
+                }
+            }
+
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestMatch = candidate;
+
+                if (bestScore >= ContainmentScore)
+                {
+                    return (bestMatch, bestScore);
+                }
+            }
+        }
+
+        return bestMatch != null ? (bestMatch, bestScore) : null;
+    }
+
+    /// <summary>
+    /// Check if two sets of Double Metaphone codes indicate a phonetic match.
+    /// Matches if any combination of primary/alternate codes are equal.
+    /// </summary>
+    internal static bool PhoneticCodesMatch(
+        string queryPrimary, string? queryAlternate,
+        string candidatePrimary, string? candidateAlternate)
+    {
+        if (queryPrimary.Length == 0 || candidatePrimary.Length == 0)
+        {
+            return false;
+        }
+
+        // Primary matches primary
+        if (CodesEqual(queryPrimary, candidatePrimary))
+        {
+            return true;
+        }
+
+        // Primary matches alternate
+        if (candidateAlternate != null && CodesEqual(queryPrimary, candidateAlternate))
+        {
+            return true;
+        }
+
+        // Alternate matches primary
+        if (queryAlternate != null && CodesEqual(queryAlternate, candidatePrimary))
+        {
+            return true;
+        }
+
+        // Alternate matches alternate
+        if (queryAlternate != null && candidateAlternate != null && CodesEqual(queryAlternate, candidateAlternate))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Compare two phonetic codes for equality.
+    /// </summary>
+    private static bool CodesEqual(string a, string b) =>
+        string.Equals(a, b, StringComparison.Ordinal);
 
     /// <summary>
     /// Rank candidates by similarity to the query, returning all above threshold sorted by score descending.

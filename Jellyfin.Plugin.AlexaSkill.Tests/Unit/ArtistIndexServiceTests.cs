@@ -311,4 +311,155 @@ public class ArtistIndexServiceTests : PluginTestBase
         Assert.NotNull(fuzzy);
         Assert.Equal("Soul Coughing", fuzzy.Name);
     }
+
+    // --- Phonetic code pre-computation tests ---
+
+    [Fact]
+    public async Task StartAsync_PreComputesPhoneticCodes()
+    {
+        var artistId = Guid.NewGuid();
+        var artists = new List<BaseItem>
+        {
+            new MusicArtist { Name = "The Beatles", Id = artistId },
+            new MusicArtist { Name = "Pink Floyd", Id = Guid.NewGuid() }
+        };
+
+        var service = CreateService(artists);
+        await service.StartAsync(CancellationToken.None);
+
+        // Phonetic codes should be pre-computed
+        Assert.True(service.TryGetPhoneticCode(artistId, out var codes));
+        Assert.NotEmpty(codes.Primary);
+    }
+
+    [Fact]
+    public async Task TryGetPhoneticCode_UnknownArtist_ReturnsFalse()
+    {
+        var artists = new List<BaseItem>
+        {
+            new MusicArtist { Name = "Beatles", Id = Guid.NewGuid() }
+        };
+
+        var service = CreateService(artists);
+        await service.StartAsync(CancellationToken.None);
+
+        Assert.False(service.TryGetPhoneticCode(Guid.NewGuid(), out _));
+    }
+
+    [Fact]
+    public async Task TryGetPhoneticCode_BeforeLoad_ReturnsFalse()
+    {
+        var service = CreateService();
+        // Don't call StartAsync
+
+        Assert.False(service.TryGetPhoneticCode(Guid.NewGuid(), out _));
+    }
+
+    [Fact]
+    public async Task StartAsync_EmptyNameArtist_DoesNotCrash()
+    {
+        var artists = new List<BaseItem>
+        {
+            new MusicArtist { Name = "", Id = Guid.NewGuid() },
+            new MusicArtist { Name = null!, Id = Guid.NewGuid() },
+            new MusicArtist { Name = "Beatles", Id = Guid.NewGuid() }
+        };
+
+        var service = CreateService(artists);
+        await service.StartAsync(CancellationToken.None);
+
+        Assert.Equal(3, service.Count);
+    }
+
+    [Fact]
+    public async Task PhoneticCodes_AreRecomputedOnRefresh()
+    {
+        var artistId = Guid.NewGuid();
+        var initialArtists = new List<BaseItem>
+        {
+            new MusicArtist { Name = "Beatles", Id = artistId }
+        };
+
+        var updatedArtists = new List<BaseItem>
+        {
+            new MusicArtist { Name = "The Beatles", Id = artistId }
+        };
+
+        int callCount = 0;
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(() => ++callCount == 1 ? initialArtists : updatedArtists);
+
+        _libraryManagerMock
+            .Setup(l => l.GetItemById(It.IsAny<Guid>()))
+            .Returns((Guid id) => null as BaseItem);
+
+        var service = new ArtistIndexService(_libraryManagerMock.Object, _logger);
+        await service.StartAsync(CancellationToken.None);
+
+        // Initial code for "Beatles"
+        Assert.True(service.TryGetPhoneticCode(artistId, out var initialCodes));
+
+        // Force refresh with updated data
+        await service.StartAsync(CancellationToken.None);
+
+        // Code should now be for "The Beatles"
+        Assert.True(service.TryGetPhoneticCode(artistId, out var updatedCodes));
+        // The codes may or may not differ, but the lookup should still work
+        Assert.NotEmpty(updatedCodes.Primary);
+    }
+
+    [Fact]
+    public async Task PhoneticCodes_LargeLibrary_AllArtistsHaveCodes()
+    {
+        var artists = new List<BaseItem>();
+        for (int i = 0; i < 500; i++)
+        {
+            artists.Add(new MusicArtist { Name = $"Artist {i}", Id = Guid.NewGuid() });
+        }
+
+        var service = CreateService(artists);
+        await service.StartAsync(CancellationToken.None);
+
+        int codesFound = 0;
+        foreach (var artist in service.GetArtists())
+        {
+            if (service.TryGetPhoneticCode(artist.Id, out var codes))
+            {
+                Assert.NotEmpty(codes.Primary);
+                codesFound++;
+            }
+        }
+
+        Assert.Equal(500, codesFound);
+    }
+
+    [Fact]
+    public async Task PhoneticFuzzyMatch_Integration_PhoneticallySimilarName()
+    {
+        // "Schmidt" and "Smith" are phonetically similar
+        var smithId = Guid.NewGuid();
+        var artists = new List<BaseItem>
+        {
+            new MusicArtist { Name = "Smith", Id = smithId },
+            new MusicArtist { Name = "Metallica", Id = Guid.NewGuid() }
+        };
+
+        var service = CreateService(artists);
+        await service.StartAsync(CancellationToken.None);
+
+        var allArtists = service.GetArtists();
+
+        // Use phonetic-enhanced matching
+        var result = FuzzyMatcher.FindBestMatch(
+            "smit",
+            allArtists,
+            a => a.Name,
+            a => a.Id,
+            id => service.TryGetPhoneticCode(id, out var codes) ? codes : null,
+            40);
+
+        Assert.NotNull(result);
+        Assert.Equal("Smith", result.Name);
+    }
 }

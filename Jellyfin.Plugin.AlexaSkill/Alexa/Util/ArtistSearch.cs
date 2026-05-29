@@ -67,7 +67,7 @@ internal static class ArtistSearch
                 var prefixCandidates = allArtists
                     .Where(a => a.Name.StartsWith(firstWord, StringComparison.OrdinalIgnoreCase))
                     .ToList();
-                BaseItem? fuzzy = FuzzyMatch(musician, prefixCandidates, user);
+                BaseItem? fuzzy = FuzzyMatch(musician, prefixCandidates, user, artistIndex);
                 tierSw.Stop();
                 tierReached = 2;
                 logger.LogInformation(
@@ -86,7 +86,7 @@ internal static class ArtistSearch
                 var prefixCandidates = allArtists
                     .Where(a => a.Name.StartsWith(musician, StringComparison.OrdinalIgnoreCase))
                     .ToList();
-                BaseItem? fuzzy = FuzzyMatch(musician, prefixCandidates, user);
+                BaseItem? fuzzy = FuzzyMatch(musician, prefixCandidates, user, artistIndex);
                 tierSw.Stop();
                 tierReached = 3;
                 logger.LogInformation(
@@ -102,7 +102,7 @@ internal static class ArtistSearch
             if (artists.Count == 0)
             {
                 tierSw.Restart();
-                BaseItem? fuzzy = FuzzyMatch(musician, allArtists, user);
+                BaseItem? fuzzy = FuzzyMatch(musician, allArtists, user, artistIndex);
                 tierSw.Stop();
                 tierReached = 4;
                 logger.LogInformation(
@@ -195,7 +195,7 @@ internal static class ArtistSearch
         LibraryFilter.ApplyLibraryFilter(query, user, libraryManager);
 
         IReadOnlyList<BaseItem> results = await dbQuery(query, cancellationToken).ConfigureAwait(false);
-        BaseItem? fuzzy = FuzzyMatch(musician, results, user);
+        BaseItem? fuzzy = FuzzyMatch(musician, results, user, null);
         return fuzzy != null ? new List<BaseItem> { fuzzy } : Array.Empty<BaseItem>();
     }
 
@@ -214,13 +214,35 @@ internal static class ArtistSearch
         LibraryFilter.ApplyLibraryFilter(query, user, libraryManager);
 
         IReadOnlyList<BaseItem> results = await dbQuery(query, cancellationToken).ConfigureAwait(false);
-        BaseItem? fuzzy = FuzzyMatch(searchTerm, results, user);
+        BaseItem? fuzzy = FuzzyMatch(searchTerm, results, user, null);
         return fuzzy != null ? new List<BaseItem> { fuzzy } : Array.Empty<BaseItem>();
     }
 
-    private static BaseItem? FuzzyMatch(string query, IReadOnlyList<BaseItem> candidates, Entities.User? user)
+    private static BaseItem? FuzzyMatch(string query, IReadOnlyList<BaseItem> candidates, Entities.User? user,
+        IArtistIndex? artistIndex)
     {
         int threshold = FuzzyMatcher.GetDefaultThreshold(user);
+
+        // Use phonetic-enhanced matching when artist index (with pre-computed codes) is available
+        if (artistIndex?.IsReady == true)
+        {
+            return FuzzyMatcher.FindBestMatch(
+                query,
+                candidates,
+                a => a.Name,
+                a => a.Id,
+                id =>
+                {
+                    if (artistIndex.TryGetPhoneticCode(id, out var codes))
+                    {
+                        return codes;
+                    }
+
+                    return null;
+                },
+                threshold);
+        }
+
         return FuzzyMatcher.FindBestMatch(query, candidates, a => a.Name, threshold);
     }
 }
