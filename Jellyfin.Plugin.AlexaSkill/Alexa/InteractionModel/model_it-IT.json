@@ -1,6 +1,6 @@
 {
   "languageModel": {
-    "invocationName": "jellyfin player",
+    "invocationName": "mia collezione",
     "intents": [
       {
         "name": "AMAZON.CancelIntent"

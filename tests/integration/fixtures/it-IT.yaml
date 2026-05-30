@@ -1,5 +1,5 @@
 locale: it-IT
-invocation_name: jellyfin player
+invocation_name: mia collezione
 tests:
   # -------------------------------------------------------------------------
   # 1. LoopAllOffIntent (no slots)
@@ -489,7 +489,7 @@ tests:
     expected_slots:
       musician: {}
 
-  # "Di suonare" patterns (invocation-prefix form used via "chiedi a jellyfin player di ...")
+  # "Di suonare" patterns (invocation-prefix form used via "chiedi a mia collezione di ...")
   - utterance: "Di suonare una canzone dei soul coughing"
     expected_intent: PlayArtistSongsIntent
     expected_slots:
