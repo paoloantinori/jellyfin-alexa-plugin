@@ -11,8 +11,9 @@ python3 scripts/validate_interaction_models.py        # Check all 17 models (JSO
 python3 scripts/validate_locales.py                   # Check locale key coverage (baseline-aware)
 python3 scripts/validate_versions.py                  # Check version consistency across files
 python3 scripts/validate_apl.py                       # Check APL templates validity
-./scripts/run_nlu_tests.sh                            # NLU tests (needs ask CLI auth)
+./scripts/run_nlu_tests.sh                            # NLU tests via Utterance Profiler API (needs ask CLI auth)
 ./scripts/run_nlu_tests.sh -k "en-US"                 # single locale
+./scripts/run_nlu_tests.sh --dry-run                  # validate fixtures only, no SMAPI calls
 ./scripts/run_e2e_tests.sh                            # E2E via SMAPI simulate-skill (needs live Jellyfin)
 ```
 
@@ -110,7 +111,7 @@ All tiers go through `FuzzyMatch` to filter false positives. See JF-163 for plan
 2. Deploy: `ask smapi set-interaction-model --skill-id <ID> --stage development --locale <XX> --interaction-model file:payload.json`
 3. Wait for build (~15-30s): `ask smapi get-skill-status --skill-id <ID>`
 
-NLU test fixtures in `tests/integration/fixtures/<locale>.yaml`. E2E fixtures in `tests/integration/fixtures/e2e_<locale>.yaml`.
+NLU test fixtures in `tests/integration/fixtures/<locale>.yaml`. NLU tests use the **Utterance Profiler API** (`ask smapi profile-nlu`) which tests intent/slot routing against the saved model directly — no model build or skill endpoint required. E2E fixtures in `tests/integration/fixtures/e2e_<locale>.yaml` use `simulate-skill` (full pipeline, needs live endpoint).
 
 **en-US E2E tests are unreliable** — `simulate-skill` competes with built-in Amazon skills. Prefer it-IT for simulate-skill testing.
 
