@@ -95,7 +95,15 @@ New intents need: handler class + `IntentNames.cs` entry + interaction model sam
 3. `NameStartsWith` full query — prefix with full string
 4. `NameContains` full query — substring match anywhere in name
 
-All tiers go through `FuzzyMatch` to filter false positives. See JF-163 for planned in-memory optimization.
+All tiers go through `FuzzyMatch` to filter false positives. Results are served from the in-memory `ArtistIndexService` when available.
+
+## Cross-Media-Type Fallback
+
+When a handler's primary search finds no results (e.g., PlaySongIntent finds no song), `BaseHandler.BuildArtistSongsResponseAsync` falls back to artist search. This is shared across PlaySong, PlayAlbum, and PlayVideo handlers via `BaseHandler`.
+
+## ASR Compound-Word Fix
+
+When enabled (`AsrCompoundWordFixEnabled`), `SearchWithAsrFallbackAsync` in `BaseHandler` retries the original query with joined/split word variants. For example, "lazy bones" retries as "lazybones". Only triggers when the original query returns no results.
 
 ## Code Conventions
 
@@ -107,6 +115,8 @@ All tiers go through `FuzzyMatch` to filter false positives. See JF-163 for plan
 ## Interaction Models
 
 17 locale files. After editing:
+
+**Invocation names**: Default is `"jellyfin player"` (set in `Config.cs`). Italian (`it-IT`) uses `"mia collezione"` as its invocation name.
 1. Wrap in `{"interactionModel": <model>}` for SMAPI
 2. Deploy: `ask smapi set-interaction-model --skill-id <ID> --stage development --locale <XX> --interaction-model file:payload.json`
 3. Wait for build (~15-30s): `ask smapi get-skill-status --skill-id <ID>`
@@ -126,6 +136,7 @@ NLU test fixtures in `tests/integration/fixtures/<locale>.yaml`. NLU tests use t
 - **AMAZON.SearchQuery** cannot coexist with other slot types in the same utterance. Use custom slot types (e.g. `MediaType`) instead.
 - **Slot name consistency**: Same slot name must use same slot type across all intents in a locale.
 - **Stop vs Pause**: `AMAZON.StopIntent` → `ResponseBuilder.Empty()`. `AMAZON.PauseIntent` → `BuildPauseResponse()` (AudioPlayerStop + ShouldEndSession=false). Wrong response type = device ignores the request. Never use bare `AudioPlayerStop()` for pause — it defaults `ShouldEndSession=true`, which prevents resume routing.
+- **AudioPlayer responses**: `BuildAudioPlayerResponse` sets `ShouldEndSession=false` to keep the session open for follow-up intents after playback starts.
 - **Resume item resolution**: Prefer `context.AudioPlayer.Token` over `session.FullNowPlayingItem`. Jellyfin's `PlaybackStopped` event clears `FullNowPlayingItem` before the resume request arrives, but `AudioPlayer.Token` survives.
 - **NLU competition**: Ambiguous utterances between intents need concrete (non-slotted) samples to disambiguate.
 - **SMAPI rate limits**: Space NLU tests with `SMAPI_DELAY=1.5`.

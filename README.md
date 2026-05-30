@@ -168,7 +168,7 @@ The plugin uses **Login with Amazon (LWA)** to create and manage your Alexa skil
 1. In the plugin configuration, you'll see a table of users
 2. Click **Add** to create a new skill for a Jellyfin user
 3. Select the Jellyfin user from the dropdown
-4. Optionally customize the **invocation name** (default: "Jellyfin Player")
+4. Optionally customize the **invocation name** (default: "Jellyfin Player", Italian: "Mia Collezione")
 
 Per-user settings include **fuzzy match behavior** (Confirm or Auto-Play), **fuzzy match threshold** (0–100), **allowed libraries** (restrict to specific top-level folders), and **content type access** (music, videos, audiobooks, books).
 
@@ -248,6 +248,7 @@ E2E test fixtures are in `tests/integration/fixtures/e2e_*.yaml`. Note that `sim
 4. Use the simulator to type or speak commands, e.g.:
    - "Alexa, tell Jellyfin Player to play songs by Daft Punk"
    - "Alexa, ask Jellyfin Player what's playing"
+   - "Alexa, chiedi a mia collezione di suonare musica dei queen" (Italian)
 
 ### Using Your Echo Device
 
@@ -255,6 +256,7 @@ Once account linking is complete, try:
 - "Alexa, open Jellyfin Player"
 - "Alexa, tell Jellyfin Player to play the album Discovery"
 - "Alexa, ask Jellyfin Player to play my favorites"
+- "Alexa, chiedi a mia collezione di suonare i pink floyd" (Italian)
 
 ## Supported Languages
 
@@ -926,7 +928,7 @@ Invocation name: **"jellyfin player"**
 
 ### <a id="it-it"></a>Italian (it-IT)
 
-Invocation name: **"jellyfin player"**
+Invocation name: **"mia collezione"**
 
 | Intent | Utterances |
 |--------|------------|
