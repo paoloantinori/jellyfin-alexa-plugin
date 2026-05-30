@@ -68,7 +68,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="icon.png" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="icon.jpg" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
