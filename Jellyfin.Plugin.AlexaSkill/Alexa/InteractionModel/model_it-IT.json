@@ -670,7 +670,15 @@
           "Suona {genre}",
           "Metti {genre}",
           "Pleia {genre}",
-          "Di riprodurre {genre}"
+          "Di riprodurre {genre}",
+          "Riproduci genere {genre}",
+          "Suona genere {genre}",
+          "Metti genere {genre}",
+          "Pleia genere {genre}",
+          "Di riprodurre genere {genre}",
+          "Di suonare genere {genre}",
+          "Di mettere genere {genre}",
+          "Di pleiare genere {genre}"
         ],
         "slots": [
           {
@@ -1044,7 +1052,19 @@
           "consigliami qualcosa",
           "non so cosa ascoltare",
           "cosa guardo stasera",
-          "consiglia qualcosa"
+          "consiglia qualcosa",
+          "Suggerisci una canzone",
+          "Suggerisci un film",
+          "Suggerisci una {media_type}",
+          "Suggerisci un {media_type}",
+          "Consiglia una canzone",
+          "Consiglia un film",
+          "Consiglia una {media_type}",
+          "Consiglia un {media_type}",
+          "Di suggerire una {media_type}",
+          "Di suggerire un {media_type}",
+          "Di consigliare una {media_type}",
+          "Di consigliare un {media_type}"
         ],
         "slots": [
           {
@@ -1085,7 +1105,11 @@
           "Puoi trovare {query}",
           "Cerca il contenuto {query}",
           "Trova il brano {query}",
-          "c'è {query}"
+          "c'è {query}",
+          "c'è un film che si chiama {query}",
+          "c'è una canzone che si chiama {query}",
+          "c'è un video che si chiama {query}",
+          "c'è un album che si chiama {query}"
         ],
         "slots": [
           {
@@ -1834,6 +1858,16 @@
               "synonyms": [
                 "canzoni",
                 "brani"
+              ]
+            }
+          },
+          {
+            "id": "film",
+            "name": {
+              "value": "film",
+              "synonyms": [
+                "movies",
+                "cinema"
               ]
             }
           }

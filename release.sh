@@ -25,18 +25,38 @@ cat > Directory.Build.props <<EOF
 </Project>
 EOF
 
-# Add new version entry to manifest.json using python
+# Build release zip
+dotnet build Jellyfin.Plugin.AlexaSkill/Jellyfin.Plugin.AlexaSkill.csproj --configuration Release -warnaserror
+ZIP_DIR="/tmp/AlexaSkill_${VERSION}"
+rm -rf "$ZIP_DIR" "/tmp/AlexaSkill_${VERSION}.zip"
+mkdir -p "$ZIP_DIR"
+
+# Copy DLLs from build output and known dependency paths
+BUILD_OUT="Jellyfin.Plugin.AlexaSkill/bin/Release/net9.0"
+for dll in Alexa.NET.dll Alexa.NET.Management.dll Alexa.NET.ProactiveEvents.dll \
+           Alexa.NET.Profile.dll Alexa.NET.Reminders.dll Amazon.Lambda.Core.dll \
+           Amazon.Lambda.Serialization.Json.dll Refit.dll; do
+    cp "$BUILD_OUT/$dll" "$ZIP_DIR/"
+done
+cp "$BUILD_OUT/Jellyfin.Plugin.AlexaSkill.dll" "$ZIP_DIR/"
+cp "$BUILD_OUT/icon.png" "$ZIP_DIR/" 2>/dev/null || true
+
+cd /tmp && zip -j "AlexaSkill_${VERSION}.zip" "AlexaSkill_${VERSION}/" && cd -
+
+# Compute checksum from the built zip
+CHECKSUM=$(md5sum "/tmp/AlexaSkill_${VERSION}.zip" | cut -d' ' -f1)
+echo "Checksum: ${CHECKSUM}"
+
+# Add new version entry to manifest.json
 python3 -c "
 import json, datetime
 
 with open('manifest.json', 'r') as f:
     manifest = json.load(f)
 
-checksum = '$(cat /dev/null)'  # placeholder — compute after build
-
 new_version = {
     'version': '${VERSION}',
-    'checksum': checksum,
+    'checksum': '${CHECKSUM}',
     'sourceUrl': 'https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/${VERSION}/AlexaSkill_${VERSION}.zip',
     'changelog': 'See for more details: https://github.com/paoloantinori/jellyfin-alexa-plugin/releases',
     'targetAbi': '${TARGET_ABI}',
@@ -55,5 +75,11 @@ git commit -m "Bump version to ${VERSION} for release"
 git tag "${VERSION}"
 git push origin main
 git push origin "${VERSION}"
+
+# Create GitHub release and upload zip
+gh release create "${VERSION}" "/tmp/AlexaSkill_${VERSION}.zip" \
+    --repo paoloantinori/jellyfin-alexa-plugin \
+    --title "${VERSION}" \
+    --notes "Release ${VERSION}"
 
 echo "Done. Released ${VERSION} for Jellyfin ${TARGET_ABI}."

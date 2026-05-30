@@ -1,9 +1,10 @@
 ---
 id: JF-210
 title: Support slotless utterances on RecommendIntent (handler + model)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-05-23 17:24'
+updated_date: '2026-05-25 10:27'
 labels:
   - enhancement
   - interaction-model
@@ -45,21 +46,30 @@ English candidates:
 
 Similar for other locales.
 
-## Acceptance criteria
-- [ ] Handler gracefully handles missing `media_type` slot (no crash, returns a useful response)
-- [ ] Slotless utterances added to all 17 locale models
-- [ ] Unit tests cover the missing-slot path
-- [ ] NLU test fixtures updated for affected locales
+## Acceptance Criteria
+<!-- AC:BEGIN -->
+- [x] #1 Handler gracefully handles missing `media_type` slot (no crash, returns a useful response)
+- [x] #2 Slotless utterances added to all 17 locale models
+- [x] #3 Unit tests cover the missing-slot path
+- [x] #4 NLU test fixtures updated for affected locales
 <!-- SECTION:DESCRIPTION:END -->
+
+<!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
 - [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
 - [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
+- [x] #6 NLU test fixtures updated if interaction model changed
 - [ ] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 12 locales
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added 5 slotless utterances to RecommendIntent in it-IT model (only locale missing them — other 16 already had slotless samples). Added unit test verifying slotless path defaults to Audio+Movie. Consolidated duplicate test into one. Build 0 errors, 1875 tests pass, models valid.
+<!-- SECTION:FINAL_SUMMARY:END -->

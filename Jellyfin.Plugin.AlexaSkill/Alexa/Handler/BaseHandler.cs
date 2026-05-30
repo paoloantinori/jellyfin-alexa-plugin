@@ -487,8 +487,8 @@ public abstract class BaseHandler
             return BuildVideoAppAudioResponse(itemId, item, user);
         }
 
-        Logger.LogDebug("BuildAudioPlayerResponse: itemId={ItemId}, behavior={Behavior}, offsetMs={OffsetMs}, title={Title}",
-            itemId, playBehavior, offsetInMilliseconds, item?.Name);
+        Logger.LogDebug("BuildAudioPlayerResponse: itemId={ItemId}, behavior={Behavior}, offsetMs={OffsetMs}, title={Title}, streamUrl={StreamUrl}",
+            itemId, playBehavior, offsetInMilliseconds, item?.Name, streamUrl);
         string imageUrl = item != null ? GetImageUrl(itemId, user) : string.Empty;
         var imageSources = new AudioItemSources
         {
@@ -528,7 +528,7 @@ public abstract class BaseHandler
             Version = "1.0",
             Response = new ResponseBody
             {
-                ShouldEndSession = true,
+                ShouldEndSession = false,
                 Directives = new List<IDirective> { directive }
             }
         };

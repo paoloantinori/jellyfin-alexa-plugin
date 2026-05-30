@@ -231,7 +231,7 @@ public class CoverArtTests : PluginTestBase
         var response = handler.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
 
-        Assert.True(response.Response.ShouldEndSession);
+        Assert.False(response.Response.ShouldEndSession);
     }
 
     [Fact]

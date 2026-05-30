@@ -228,7 +228,13 @@
           "De passer les {musician}",
           "D'écouter les {musician}",
           "De lancer les {musician}",
-          "De diffuser les {musician}"
+          "De diffuser les {musician}",
+          "Lis la musique des {musician}",
+          "Lis les chansons des {musician}",
+          "J'écoute la musique de {musician}",
+          "Je veux écouter la musique de {musician}",
+          "Mets la musique des {musician}",
+          "Lance la musique des {musician}"
         ],
         "slots": [
           {

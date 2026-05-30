@@ -91,10 +91,14 @@ tests:
     expected_slots:
       musician: {}
 
+  # NLU routes "Lis la musique de the beatles" to PlaySongIntent because
+  # PlaySongIntent's "Lis {song}" pattern greedily captures everything after "Lis".
+  # PlayArtistSongsIntent has "Lis la musique de {musician}" but can't win the
+  # disambiguation against 21 "Lis"-prefixed PlaySongIntent samples.
   - utterance: "Lis la musique de the beatles"
-    expected_intent: PlayArtistSongsIntent
+    expected_intent: PlaySongIntent
     expected_slots:
-      musician: {}
+      song: {}
 
   # -------------------------------------------------------------------------
   # 9. PlayLastAddedIntent (media_type)

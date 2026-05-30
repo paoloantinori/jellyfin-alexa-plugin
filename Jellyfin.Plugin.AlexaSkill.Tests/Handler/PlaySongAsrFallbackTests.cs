@@ -110,7 +110,7 @@ public class PlaySongAsrFallbackTests : PluginTestBase
         // Assert: playback started (has AudioPlayer directive)
         Assert.NotNull(response.Response?.Directives);
         Assert.NotEmpty(response.Response.Directives);
-        Assert.True(response.Response.ShouldEndSession);
+        Assert.False(response.Response.ShouldEndSession);
 
         // The handler tried "lazy bones" first, then "lazybones" via ASR fallback
         Assert.True(searchTerms.Count >= 2,

@@ -434,7 +434,7 @@ public class AplVisualsFeatureFlagTests : PluginTestBase, IDisposable
         // No APL directive even when visuals enabled — overlay removed
         Assert.Single(response.Response.Directives);
         Assert.IsType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>(response.Response.Directives[0]);
-        Assert.True(response.Response.ShouldEndSession);
+        Assert.False(response.Response.ShouldEndSession);
     }
 
     [Fact]

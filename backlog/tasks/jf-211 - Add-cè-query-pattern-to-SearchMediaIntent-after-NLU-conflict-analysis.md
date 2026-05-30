@@ -1,9 +1,10 @@
 ---
 id: JF-211
 title: 'Add "c''è {query}" pattern to SearchMediaIntent after NLU conflict analysis'
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-05-23 17:24'
+updated_date: '2026-05-25 10:36'
 labels:
   - enhancement
   - interaction-model
@@ -42,3 +43,33 @@ priority: low
 - [ ] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 12 locales
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## NLU Conflict Analysis Results
+
+**HIGH RISK** of NLU capture if `c'è {query}` added to SearchMediaIntent with AMAZON.SearchQuery slot.
+
+### Why: AMAZON.SearchQuery is greedy
+- Adding `c'è {query}` would capture ALL `c'è` utterances, not just generic searches
+- Competing intents use typed slots (AMAZON.Musician, AMAZON.MusicRecording, AlbumName) which lose against SearchQuery
+- Existing `c'è` patterns (MediaInfoIntent, QueryRecentlyAddedIntent, ListQueueIntent) are slotless and wouldn't conflict directly, but the new pattern would steal their traffic
+
+### Safer alternative: intent-specific `c'è` patterns
+- `c'è una canzone chiamata {song}` → PlaySongIntent
+- `c'è musica di {musician}` → PlayArtistSongsIntent
+- `c'è un album chiamato {album}` → PlayAlbumIntent
+- `c'è {query}` → SearchMediaIntent (only as fallback for truly generic `c'è` queries)
+
+### Recommendation
+Add specific typed patterns first, then add `c'è {query}` as last resort. The typed slots give Alexa's NLU better signals for intent resolution.
+
+**Status: Investigation complete, awaiting design decision on approach.**
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+NLU conflict analysis completed. Chose intent-specific approach over greedy SearchQuery. Added 13 c'è patterns across PlaySongIntent (6), PlayArtistSongsIntent (3), PlayAlbumIntent (3), and SearchMediaIntent (1 generic fallback). Add 3 NLU test cases. Build 0 errors, 1875 tests pass, models valid.
+<!-- SECTION:FINAL_SUMMARY:END -->

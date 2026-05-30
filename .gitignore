@@ -38,3 +38,4 @@ test_media
 .claude.local.md
 .claude/worktrees/
 __pycache__/
+tmp/
