@@ -24,10 +24,11 @@ _Alpha software: features may change between releases. Always back up your confi
 8. [Account Linking](#account-linking)
 9. [Testing](#testing)
 10. [Supported Languages](#supported-languages)
-11. [Troubleshooting](#troubleshooting)
-12. [Third Party Notices](#third-party-notices)
-13. [All Voice Commands by Language](#all-voice-commands-by-language)
-14. [License](#license)
+11. [FAQ](#faq)
+12. [Troubleshooting](#troubleshooting)
+13. [Third Party Notices](#third-party-notices)
+14. [All Voice Commands by Language](#all-voice-commands-by-language)
+15. [License](#license)
 
 ## About
 
@@ -250,6 +251,8 @@ E2E test fixtures are in `tests/integration/fixtures/e2e_*.yaml`. Note that `sim
    - "Alexa, ask Jellyfin Player what's playing"
    - "Alexa, chiedi a mia collezione di suonare musica dei queen" (Italian)
 
+**Tip**: Before adding new utterances to the interaction model, type them in the simulator first. The **JSON Input** tab shows exactly which intent Alexa resolved and what slot values it extracted. If it says "No intent was resolved" or routes to the wrong intent, you need to adjust your sample utterances or invocation name — no amount of handler-side logic can fix a routing problem.
+
 ### Using Your Echo Device
 
 Once account linking is complete, try:
@@ -283,6 +286,22 @@ The skill supports **17 locales** across **11 languages**, each with full custom
 | Spanish (US) | es-US | [`model_es-US.json`](Jellyfin.Plugin.AlexaSkill/Alexa/InteractionModel/model_es-US.json) |
 
 Each JSON file contains all 58 intents with locale-specific sample utterances. To see the complete list of voice commands for any language, open the corresponding interaction model file and look at the `samples` arrays within each intent.
+
+## FAQ
+
+### My invocation name doesn't work — Alexa doesn't recognize it
+
+Choosing an invocation name is trickier than it seems. Two common pitfalls:
+
+1. **Foreign words in a non-matching locale**: If your Echo device is set to, say, Italian (it-IT), Alexa's speech recognition is tuned for Italian phonology. An invocation name containing English or other foreign words may be misrecognized or fail to trigger consistently. Pick a name that sounds natural in the device's locale language. For example, "mia collezione" works well for Italian because every word is native Italian.
+
+2. **Keywords that collide with built-in Alexa features**: Words like "video", "music", "radio", "tv", or "book" are heavily used by Amazon's own skills and services. An invocation name containing these words can cause Alexa to route your request to a built-in skill instead of yours, or leave the intent unresolved. Avoid these keywords entirely.
+
+If you're unsure whether a name will work, test it in the [Alexa Developer Console](https://developer.amazon.com/alexa/console/ask) simulator before committing (see the [Testing section](#using-the-alexa-simulator)).
+
+### How do I verify that my utterances route to the correct intent?
+
+Use the **Alexa Developer Console** simulator. Go to your skill → **Test** → enable **Development** mode → type or speak an utterance. The simulator shows which intent Alexa resolved, the extracted slot values, and the full request JSON. This is the fastest way to confirm that a new utterance or invocation name works before trying it on a real device.
 
 ## Troubleshooting
 
