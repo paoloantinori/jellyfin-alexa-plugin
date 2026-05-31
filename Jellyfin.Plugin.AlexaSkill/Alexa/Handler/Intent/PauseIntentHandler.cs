@@ -13,7 +13,10 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
 /// <summary>
-/// Handler for AMAZON.PauseIntent, AMAZON.StopIntent and AMAZON.CancelIntent intents and pause directive.
+/// Handler for AMAZON.PauseIntent, AMAZON.StopIntent, AMAZON.CancelIntent, and
+/// the hardware pause button (PlaybackControllerRequestType.Pause).
+/// All paths send AudioPlayer.Stop and end the session. Alexa routes resume
+/// to AMAZON.ResumeIntent automatically when audio was recently stopped.
 /// </summary>
 public class PauseIntentHandler : BaseHandler
 {
@@ -40,8 +43,8 @@ public class PauseIntentHandler : BaseHandler
 
     /// <summary>
     /// Pause or stop currently playing media.
-    /// All paths send AudioPlayer.Stop to guarantee audio stops on device.
-    /// Stop/Cancel ends the session. Pause keeps it open for resume and announces position.
+    /// All paths send AudioPlayer.Stop + ShouldEndSession=true.
+    /// Pause optionally includes a position card (no OutputSpeech).
     /// </summary>
     /// <param name="request">The skill request which should be handled.</param>
     /// <param name="context">The context of the skill intent request.</param>
@@ -56,47 +59,32 @@ public class PauseIntentHandler : BaseHandler
              string.Equals(ir.Intent.Name, IntentNames.AmazonCancel, System.StringComparison.Ordinal));
 
         Logger.LogDebug(
-            "PauseIntent: isStopOrCancel={IsStop}, device={DeviceId}, audioPlayer token={Token} activity={Activity} offset={OffsetMs}ms",
-            isStopOrCancel,
-            context.System.Device.DeviceID,
-            context.AudioPlayer?.Token,
-            context.AudioPlayer?.PlayerActivity,
-            context.AudioPlayer?.OffsetInMilliseconds);
+            "PauseIntent: isStopOrCancel={IsStop}, activity={Activity}, offset={OffsetMs}ms",
+            isStopOrCancel, context.AudioPlayer?.PlayerActivity, context.AudioPlayer?.OffsetInMilliseconds);
 
-        if (session?.FullNowPlayingItem != null)
-        {
-            Logger.LogDebug(
-                "PauseIntent: nowPlaying={ItemName} ({ItemId}), playState position={PositionTicks} ticks",
-                session.FullNowPlayingItem.Name,
-                session.FullNowPlayingItem.Id,
-                session.PlayState?.PositionTicks);
-        }
-        else
-        {
-            Logger.LogDebug("PauseIntent: no nowPlayingItem in session");
-        }
-
-        // Both pause and stop need AudioPlayer.Stop directive to guarantee audio stops.
-        // Stop/Cancel ends the session; Pause keeps it open for resume.
-        var response = BuildPauseResponse();
-
+        // All paths send AudioPlayer.Stop + ShouldEndSession=true via BuildPauseResponse().
         if (isStopOrCancel)
         {
-            response.Response.ShouldEndSession = true;
-            return Task.FromResult(response);
+            Logger.LogDebug("PauseIntent: STOP/CANCEL — ending session with AudioPlayer.Stop");
+            return Task.FromResult(BuildPauseResponse());
         }
 
-        // Pause: announce position and add visual card when seek is enabled
-        if (Plugin.Instance?.Configuration?.SeekEnabled == true && session?.NowPlayingItem != null)
+        // Pause: AudioPlayer.Stop + end session, with optional position card (no OutputSpeech).
+        var response = BuildPauseResponse();
+
+        bool seekEnabled = Plugin.Instance?.Configuration?.SeekEnabled == true;
+        bool announcePosition = Plugin.Instance?.Configuration?.PauseAnnouncePosition == true;
+        bool hasNowPlaying = session?.FullNowPlayingItem != null;
+
+        if (seekEnabled && announcePosition && hasNowPlaying)
         {
             string locale = GetLocale(request);
-            string positionText = BuildPositionDisplay(session, locale);
+            string positionText = BuildPositionDisplay(session!, locale);
             if (!string.IsNullOrEmpty(positionText))
             {
-                response.Response.OutputSpeech = new PlainTextOutputSpeech { Text = positionText };
                 response.Response.Card = new StandardCard
                 {
-                    Title = session.NowPlayingItem.Name ?? ResponseStrings.Get("NowPlayingCardTitle", locale),
+                    Title = session!.FullNowPlayingItem!.Name ?? ResponseStrings.Get("NowPlayingCardTitle", locale),
                     Content = positionText
                 };
             }

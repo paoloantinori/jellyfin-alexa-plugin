@@ -1,14 +1,16 @@
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 
 /// <summary>
 /// Response interceptor that logs the serialized response body at DEBUG level
-/// with PII sanitization (strips API access tokens and truncates user/stream tokens).
+/// with PII sanitization (strips API access tokens and truncates stream tokens).
+/// Uses Newtonsoft.Json to correctly serialize Alexa.NET polymorphic types
+/// (e.g., PlainTextOutputSpeech.Text, StandardCard.Title/Content).
 /// </summary>
 public partial class ResponseBodyLoggingInterceptor : IResponseInterceptor
 {
@@ -26,7 +28,7 @@ public partial class ResponseBodyLoggingInterceptor : IResponseInterceptor
             return Task.CompletedTask;
         }
 
-        string json = JsonSerializer.Serialize(context.Response);
+        string json = JsonConvert.SerializeObject(context.Response);
         string sanitized = Sanitize(json);
 
         _logger.LogDebug(

@@ -393,6 +393,9 @@ public class ConfigurationController : ControllerBase
         if (req.TryGetValue("SeekEnabled", out var seekToken) && seekToken.Type == JTokenType.Boolean)
         { config.SeekEnabled = seekToken.Value<bool>(); updated = true; }
 
+        if (req.TryGetValue("PauseAnnouncePosition", out var pauseAnnounceToken) && pauseAnnounceToken.Type == JTokenType.Boolean)
+        { config.PauseAnnouncePosition = pauseAnnounceToken.Value<bool>(); updated = true; }
+
         if (req.TryGetValue("NativeControlsForAudio", out var nativeControlsToken) && nativeControlsToken.Type == JTokenType.Boolean)
         { config.NativeControlsForAudio = nativeControlsToken.Value<bool>(); updated = true; }
 

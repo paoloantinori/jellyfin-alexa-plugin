@@ -139,6 +139,10 @@
                                 <label><input type="checkbox" is="emby-checkbox" id="SeekEnabled" /> <span>Seek Controls</span></label>
                                 <div class="fieldDescription checkboxFieldDescription">Enable skip forward/back and jump-to-position voice commands. Also adds progress display when asking what's playing.</div>
                             </div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="PauseAnnouncePosition" /> <span>Announce Position on Pause</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">When paused, speak the current playback position (e.g. "Paused at 2:15 of 4:30"). Requires Seek Controls. When off, pause is silent.</div>
+                            </div>
                     </details>
 
                     <details>
@@ -401,7 +405,7 @@
                     // Feature flags
                     ["RadioModeEnabled", "PodcastsEnabled", "LiveTvEnabled", "SleepTimerEnabled",
                      "QueueManagementEnabled", "BrowseLibraryEnabled", "RecommendationsEnabled",
-                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "AsrCompoundWordFixEnabled", "SeekEnabled",
+                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "AsrCompoundWordFixEnabled", "SeekEnabled", "PauseAnnouncePosition",
                      "ShuffleArtistSongs", "NativeControlsForAudio"].forEach(function(f) {
                         document.querySelector("#" + f).checked = config[f] !== false;
                     });
@@ -879,7 +883,7 @@
 
                     ["RadioModeEnabled", "PodcastsEnabled", "LiveTvEnabled", "SleepTimerEnabled",
                      "QueueManagementEnabled", "BrowseLibraryEnabled", "RecommendationsEnabled",
-                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "AsrCompoundWordFixEnabled", "SeekEnabled",
+                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "AsrCompoundWordFixEnabled", "SeekEnabled", "PauseAnnouncePosition",
                      "ShuffleArtistSongs", "NativeControlsForAudio"].forEach(function(f) {
                         config[f] = document.querySelector("#" + f).checked;
                     });
@@ -938,6 +942,7 @@
                         ResumeAnnounceTitle: config.ResumeAnnounceTitle,
                         AsrCompoundWordFixEnabled: config.AsrCompoundWordFixEnabled,
                         SeekEnabled: config.SeekEnabled,
+                        PauseAnnouncePosition: config.PauseAnnouncePosition,
                         NativeControlsForAudio: config.NativeControlsForAudio,
                         MusicEnabled: config.MusicEnabled,
                         VideosEnabled: config.VideosEnabled,

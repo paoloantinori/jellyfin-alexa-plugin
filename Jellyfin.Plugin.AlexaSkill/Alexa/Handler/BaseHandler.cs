@@ -407,12 +407,13 @@ public abstract class BaseHandler
     }
 
     /// <summary>
-    /// Build a pause response: AudioPlayer.Stop with the session kept open for resume.
+    /// Build a pause response: AudioPlayer.Stop with session ended.
+    /// Alexa routes resume to the skill automatically when audio was playing.
     /// </summary>
     public static SkillResponse BuildPauseResponse()
     {
         var response = ResponseBuilder.AudioPlayerStop();
-        response.Response.ShouldEndSession = false;
+        response.Response.ShouldEndSession = true;
         return response;
     }
 
@@ -528,7 +529,7 @@ public abstract class BaseHandler
             Version = "1.0",
             Response = new ResponseBody
             {
-                ShouldEndSession = false,
+                ShouldEndSession = true,
                 Directives = new List<IDirective> { directive }
             }
         };

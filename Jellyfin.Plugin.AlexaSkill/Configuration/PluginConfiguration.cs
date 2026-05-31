@@ -108,6 +108,12 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool AsrCompoundWordFixEnabled { get; set; } = true;
     public bool SeekEnabled { get; set; }
 
+    /// <summary>
+    /// Gets or sets a value indicating whether to announce playback position when the user pauses.
+    /// Requires SeekEnabled. When off, pause is silent (audio stops, no speech).
+    /// </summary>
+    public bool PauseAnnouncePosition { get; set; } = true;
+
     // Media type visibility — exclude content types from search and library queries
     public bool MusicEnabled { get; set; } = true;
     public bool VideosEnabled { get; set; } = true;
