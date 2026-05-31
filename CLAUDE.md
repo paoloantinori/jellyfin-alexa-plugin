@@ -77,7 +77,7 @@ Debug logs should capture: resolved intent/slot/entity names, matched Jellyfin i
 
 Handlers inherit `BaseHandler` and implement `CanHandle()` + `HandleAsync()`. `BaseHandler` provides:
 
-- `FuzzyMatch(query, candidates, selector)` — best-match via FuzzyStrings library
+- `FuzzyMatch(query, candidates, selector)` — best-match via FuzzyStrings library with Double Metaphone phonetic pre-filter for improved non-English name matching
 - `HandleFuzzyMiss()` — disambiguation with voice prompts; auto-plays near-exact matches (score >= 90) without qualifier
 - `GetStreamUrl()` / `GetVideoStreamUrl()` — `/Audio|Videos/{id}/stream?static=true`
 - `RetryAsync(operation, label)` — retry with exponential backoff, 6s timeout budget
@@ -100,6 +100,14 @@ All tiers go through `FuzzyMatch` to filter false positives. Results are served 
 ## Cross-Media-Type Fallback
 
 When a handler's primary search finds no results (e.g., PlaySongIntent finds no song), `BaseHandler.BuildArtistSongsResponseAsync` falls back to artist search. This is shared across PlaySong, PlayAlbum, and PlayVideo handlers via `BaseHandler`.
+
+## Search Response Mode
+
+`SearchResponseMode` controls the speed/recall trade-off for artist search, configurable per-user or globally (`DefaultSearchResponseMode` in config):
+- **Thorough** (default): full 4-tier fallback chain with disambiguation prompts. Best recall.
+- **Fast**: single query or reduced tiers with auto-play. Fastest response, may miss obscure matches.
+
+In Fast mode, `SearchWithAsrFallbackAsync` skips compound-word retries. Handlers call `GetSearchResponseMode(user)` to resolve the effective mode.
 
 ## ASR Compound-Word Fix
 

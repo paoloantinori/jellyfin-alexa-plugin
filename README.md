@@ -39,7 +39,7 @@ A Jellyfin plugin that creates a personal Alexa skill to play and control media 
 - **Playback control**: play songs, albums, artists, videos, TV episodes, audiobooks, podcasts, channels, and playlists
 - **Search & discovery**: search your library, get recommendations, browse by category, play random media
 - **APL visual carousel**: browse/search results displayed as tappable image cards on Echo Show devices, with album art and media thumbnails
-- **APL NowPlaying screen**: progress bar with elapsed/total time display on Echo Show devices during audio playback
+- **APL NowPlaying screen**: progress bar with elapsed/total time display on Echo Show devices during audio playback, plus enriched companion app card showing song, artist, album, and track number
 - **Resume offer**: when reopening the skill, offers to resume where you left off instead of starting fresh
 - **ASR compound-word fix**: automatically retries split compound words when Alexa's speech recognition joins or separates words (e.g., "soulcoughing" → "soul coughing")
 - **Queue management**: add to queue, play next, clear/list queue, shuffle, repeat, start over
@@ -57,6 +57,8 @@ A Jellyfin plugin that creates a personal Alexa skill to play and control media 
 - **Multi-language**: 17 locales across 11 languages with 58 intents each
 - **Audio and video**: supports both audio playback (AudioPlayer) and video launching
 - **Robust resume**: three-tier position fallback (Alexa context → Jellyfin session → device queue) ensures playback resumes correctly even after session state is cleared
+- **Fast/Thorough search mode**: per-user choice between fast single-query auto-play or thorough multi-tier fallback with disambiguation
+- **Phonetic matching**: Double Metaphone pre-filter improves fuzzy matching for non-English artist names (e.g., "soul coughing" matches even with heavy accent distortion)
 
 ## Prerequisites
 
@@ -171,7 +173,7 @@ The plugin uses **Login with Amazon (LWA)** to create and manage your Alexa skil
 3. Select the Jellyfin user from the dropdown
 4. Optionally customize the **invocation name** (default: "Jellyfin Player", Italian: "Mia Collezione")
 
-Per-user settings include **fuzzy match behavior** (Confirm or Auto-Play), **fuzzy match threshold** (0–100), **allowed libraries** (restrict to specific top-level folders), and **content type access** (music, videos, audiobooks, books).
+Per-user settings include **fuzzy match behavior** (Confirm or Auto-Play), **fuzzy match threshold** (0–100), **allowed libraries** (restrict to specific top-level folders), **content type access** (music, videos, audiobooks, books), and **search response mode** (Fast or Thorough). Fast mode skips fallback tiers and auto-plays the first match; Thorough runs the full fallback chain with disambiguation.
 
 ### Feature Flags
 
