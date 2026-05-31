@@ -537,8 +537,36 @@ public abstract class BaseHandler
         if (Plugin.Instance?.Configuration?.SeekEnabled == true && item != null
             && playBehavior != PlayBehavior.Enqueue)
         {
-            string title = item.Name ?? string.Empty;
-            string cardContent = title;
+            string cardTitle = item.Name ?? string.Empty;
+            var parts = new List<string>();
+
+            if (item is MediaBrowser.Controller.Entities.Audio.Audio audio)
+            {
+                string? artist = audio.Artists?.Count > 0 ? audio.Artists[0] : null;
+                if (!string.IsNullOrEmpty(artist))
+                {
+                    parts.Add(artist);
+                }
+
+                if (!string.IsNullOrEmpty(audio.Album))
+                {
+                    string album = audio.Album;
+                    if (audio.IndexNumber.HasValue)
+                    {
+                        album = $"#{audio.IndexNumber.Value} — {album}";
+                    }
+
+                    parts.Add(album);
+                }
+                else if (audio.IndexNumber.HasValue)
+                {
+                    parts.Add($"Track #{audio.IndexNumber.Value}");
+                }
+            }
+
+            string cardContent = parts.Count > 0
+                ? $"{cardTitle}\n{string.Join("\n", parts)}"
+                : cardTitle;
 
             long runTimeTicks = item.RunTimeTicks ?? 0;
             if (runTimeTicks > 0)
@@ -547,17 +575,17 @@ public abstract class BaseHandler
                 if (offsetInMilliseconds > 0)
                 {
                     long posTicks = (long)offsetInMilliseconds * TimeSpan.TicksPerMillisecond;
-                    cardContent = $"{title}\n{FormatPosition(posTicks)} / {total}";
+                    cardContent += $"\n{FormatPosition(posTicks)} / {total}";
                 }
                 else
                 {
-                    cardContent = $"{title}\n0:00 / {total}";
+                    cardContent += $"\n0:00 / {total}";
                 }
             }
 
             response.Response.Card = new StandardCard
             {
-                Title = string.Empty,
+                Title = cardTitle,
                 Content = cardContent
             };
         }
