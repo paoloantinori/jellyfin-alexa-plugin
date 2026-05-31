@@ -89,6 +89,13 @@ public class User
     public int FuzzySuggestionThreshold { get; set; } = 40;
 
     /// <summary>
+    /// Gets or sets the search response mode controlling speed vs recall trade-off.
+    /// When null (not explicitly set), the global default is used.
+    /// When set at user level, overrides the global default.
+    /// </summary>
+    public SearchResponseMode? SearchResponseMode { get; set; }
+
+    /// <summary>
     /// Transitions skill status from AccountLinkPending to Ready if the user
     /// has completed account linking (JellyfinToken is present).
     /// </summary>

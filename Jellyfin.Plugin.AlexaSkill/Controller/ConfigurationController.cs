@@ -8,6 +8,7 @@ using System.Web;
 using Alexa.NET.Management;
 using Alexa.NET.Management.Api;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Alexa.ModelDeployment;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Controller.Handler;
@@ -105,6 +106,7 @@ public class ConfigurationController : ControllerBase
             {
                 var ids = libraryIdsToken.ToObject<List<string>>();
                 pluginUser!.AllowedLibraryIds = ids?.Count > 0 ? ids : null;
+                LibraryFilter.InvalidateCache();
                 updated = true;
             }
         }
@@ -154,6 +156,22 @@ public class ConfigurationController : ControllerBase
         {
             pluginUser!.AnnouncePositionOnResume = announceToken.Value<bool>();
             updated = true;
+        }
+
+        // Handle SearchResponseMode (string enum: "Thorough", "Fast", or null for global default)
+        if (req.TryGetValue("SearchResponseMode", out var modeToken))
+        {
+            if (modeToken.Type == JTokenType.String
+                && Enum.TryParse<Configuration.SearchResponseMode>(modeToken.Value<string>(), ignoreCase: true, out var mode))
+            {
+                pluginUser!.SearchResponseMode = mode;
+                updated = true;
+            }
+            else if (modeToken.Type == JTokenType.Null)
+            {
+                pluginUser!.SearchResponseMode = null;
+                updated = true;
+            }
         }
 
         if (!updated)
@@ -445,6 +463,17 @@ public class ConfigurationController : ControllerBase
         {
             config.CustomModelLocale = customLocaleToken.Value<string>() ?? "en-US";
             updated = true;
+        }
+
+        // Handle DefaultSearchResponseMode (string enum: "Thorough" or "Fast")
+        if (req.TryGetValue("DefaultSearchResponseMode", out var defaultModeToken)
+            && defaultModeToken.Type == JTokenType.String)
+        {
+            if (Enum.TryParse<SearchResponseMode>(defaultModeToken.Value<string>(), ignoreCase: true, out var defaultMode))
+            {
+                config.DefaultSearchResponseMode = defaultMode;
+                updated = true;
+            }
         }
 
         if (!updated)

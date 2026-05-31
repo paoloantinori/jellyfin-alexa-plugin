@@ -896,7 +896,8 @@ public abstract class BaseHandler
     /// <returns>Results from the first successful search, or the original empty results.</returns>
     protected async Task<IReadOnlyList<T>> SearchWithAsrFallbackAsync<T>(
         string query,
-        Func<string, Task<IReadOnlyList<T>>> searchFunc)
+        Func<string, Task<IReadOnlyList<T>>> searchFunc,
+        SearchResponseMode mode = SearchResponseMode.Thorough)
     {
         IReadOnlyList<T> results = await searchFunc(query).ConfigureAwait(false) ?? Array.Empty<T>();
 
@@ -905,7 +906,7 @@ public abstract class BaseHandler
             return results;
         }
 
-        if (!_config.AsrCompoundWordFixEnabled)
+        if (!_config.AsrCompoundWordFixEnabled || mode == SearchResponseMode.Fast)
         {
             return results;
         }
@@ -981,6 +982,22 @@ public abstract class BaseHandler
         Logger.LogDebug("FuzzyMatch: query={Query}, best={BestMatch}, threshold={Threshold}, matched={Matched}",
             query, result != null ? selector(result) : "(null)", effectiveThreshold, result != null);
         return result;
+    }
+
+    /// <summary>
+    /// Gets the effective search response mode for a user, falling back to the global default.
+    /// Per-user setting (when explicitly set, i.e. non-null) takes precedence.
+    /// </summary>
+    protected SearchResponseMode GetSearchResponseMode(Entities.User? user)
+    {
+        if (user?.SearchResponseMode.HasValue == true)
+        {
+            Logger.LogDebug("SearchResponseMode: user={UserId} mode={Mode} source=PerUser", user.Id, user.SearchResponseMode.Value);
+            return user.SearchResponseMode.Value;
+        }
+
+        Logger.LogDebug("SearchResponseMode: user={UserId} mode={Mode} source=GlobalDefault", user?.Id, _config.DefaultSearchResponseMode);
+        return _config.DefaultSearchResponseMode;
     }
 
     /// <summary>

@@ -371,3 +371,77 @@ def test_e2e_reliability(request, reliability_fixture, reliability_smapi_client,
         f"Reliability failures for '{utterance}' ({locale}) over {iterations} iterations:\n"
         + "\n".join(f"  - {f}" for f in failures)
     )
+
+
+# ---------------------------------------------------------------------------
+# Fast mode E2E test — exercises the Fast SearchResponseMode code path
+# ---------------------------------------------------------------------------
+
+
+_FAST_MODE_ARTIST_UTTERANCES = [
+    # (utterance, locale, invocation_name)
+    ("metti una canzone dei soul coughing", "it-IT", "mia collezione"),
+    ("metti una canzone dei xyzzyfoo", "it-IT", "mia collezione"),
+]
+
+
+@pytest.mark.e2e
+@pytest.mark.parametrize(
+    "utterance,locale,invocation_name",
+    _FAST_MODE_ARTIST_UTTERANCES,
+    ids=[f"fast-{u[:30]}" for u, _, _ in _FAST_MODE_ARTIST_UTTERANCES],
+)
+def test_e2e_fast_mode(
+    request,
+    utterance: str,
+    locale: str,
+    invocation_name: str,
+    skill_id: str,
+    smapi_delay: float,
+    jellyfin_client,
+):
+    """Toggle user to Fast mode, run an artist query, verify it resolves.
+
+    This exercises the Fast-mode code paths:
+    - In-memory: tier 1 only, then tier 4 (fuzzy all) on miss — skips tiers 2-3
+    - DB fallback: single SearchTerm query, no ASR variants, no fallback tiers
+    - Disambiguation: auto-play best match instead of "Did you mean?"
+
+    After the test, resets the user back to Thorough mode (the global default).
+    """
+    if request.config.getoption("--dry-run"):
+        pytest.skip("dry-run mode: Fast mode E2E test skipped")
+
+    if jellyfin_client is None:
+        pytest.skip("Jellyfin E2E parameters not configured")
+
+    # Switch user to Fast mode
+    logger.info("FAST MODE: setting user %s to Fast mode", jellyfin_client.user_id)
+    jellyfin_client.set_search_mode("Fast")
+
+    try:
+        client = SmapiClient(
+            skill_id=skill_id,
+            locale=locale,
+            delay=smapi_delay,
+            invocation_name=invocation_name,
+        )
+
+        logger.info("FAST MODE [%s] (%s)", utterance, locale)
+        response = client.simulate(utterance)
+
+        result = SmapiClient.parse_nlu_result(response)
+        resolved_intent = result["intent"]
+
+        assert resolved_intent == "PlayArtistSongsIntent", (
+            f"Intent mismatch for '{utterance}' ({locale}) in Fast mode:\n"
+            f"  expected: PlayArtistSongsIntent\n"
+            f"  actual:   {resolved_intent}"
+        )
+
+        logger.info("  FAST MODE PASS: [%s] -> %s", utterance[:30], resolved_intent)
+
+    finally:
+        # Always reset back to global default (null = use global default)
+        logger.info("FAST MODE: resetting user %s to global default", jellyfin_client.user_id)
+        jellyfin_client.set_search_mode(None)

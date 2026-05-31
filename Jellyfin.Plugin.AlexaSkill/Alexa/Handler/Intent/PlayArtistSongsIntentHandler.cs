@@ -104,6 +104,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         var tierSw = Stopwatch.StartNew();
         int tierReached = 0;
         string searchSource = "Database";
+        SearchResponseMode mode = GetSearchResponseMode(user);
 
         // Pre-resolve library filter once for the entire request.
         // Used by both the in-memory and database paths, plus the final artist-songs query.
@@ -118,7 +119,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             searchSource = "InMemory";
             allowedLibraryIds = GetAllowedLibraryIds(user);
             topParentIds = allowedLibraryIds != null
-                ? Util.LibraryFilter.ResolveTopParentIds(allowedLibraryIds, _libraryManager)
+                ? Util.LibraryFilter.ResolveTopParentIds(allowedLibraryIds, _libraryManager, Logger)
                 : null;
             var allArtists = _artistIndex.GetArtists(topParentIds);
 
@@ -133,59 +134,78 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 "ArtistSearch: tier=1 duration={TierMs}ms results={Count} method=InMemoryContains query='{Query}'",
                 tierSw.ElapsedMilliseconds, artists.Count, musician);
 
-            // Tier 2: prefix first word + fuzzy (catches ASR truncation, e.g. "soul coughin" → "Soul Coughing")
-            string firstWord = musician.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? musician;
             if (artists.Count == 0)
             {
-                tierSw.Restart();
-                var prefixCandidates = allArtists
-                    .Where(a => a.Name.StartsWith(firstWord, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-                BaseItem? fuzzy = FuzzyMatch(musician, prefixCandidates, a => a.Name, user);
-                tierSw.Stop();
-                tierReached = 2;
-                Logger.LogInformation(
-                    "ArtistSearch: tier=2 duration={TierMs}ms matched={Matched} method=InMemoryPrefixFirstWord query='{Query}' prefix='{Prefix}'",
-                    tierSw.ElapsedMilliseconds, fuzzy != null, musician, firstWord);
-                if (fuzzy != null)
+                if (mode == SearchResponseMode.Fast)
                 {
-                    artists = new List<BaseItem> { fuzzy };
+                    // Fast mode: skip prefix tiers, go straight to fuzzy-all
+                    tierSw.Restart();
+                    BaseItem? fuzzy = FuzzyMatch(musician, allArtists, a => a.Name, user);
+                    tierSw.Stop();
+                    tierReached = 4;
+                    Logger.LogInformation(
+                        "ArtistSearch: tier=4 duration={TierMs}ms matched={Matched} method=InMemoryFuzzyAll query='{Query}' mode=Fast",
+                        tierSw.ElapsedMilliseconds, fuzzy != null, musician);
+                    if (fuzzy != null)
+                    {
+                        artists = new List<BaseItem> { fuzzy };
+                    }
                 }
-            }
-
-            // Tier 3: prefix full query + fuzzy (e.g. "Kidz Bop" → "Kidz Bop Kids")
-            // Only applies when the query has multiple words (tier 2 already covered single-word prefix).
-            if (artists.Count == 0 && !string.Equals(firstWord, musician, StringComparison.Ordinal))
-            {
-                tierSw.Restart();
-                var prefixCandidates = allArtists
-                    .Where(a => a.Name.StartsWith(musician, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-                BaseItem? fuzzy = FuzzyMatch(musician, prefixCandidates, a => a.Name, user);
-                tierSw.Stop();
-                tierReached = 3;
-                Logger.LogInformation(
-                    "ArtistSearch: tier=3 duration={TierMs}ms matched={Matched} method=InMemoryPrefixFull query='{Query}'",
-                    tierSw.ElapsedMilliseconds, fuzzy != null, musician);
-                if (fuzzy != null)
+                else
                 {
-                    artists = new List<BaseItem> { fuzzy };
-                }
-            }
+                    // Thorough mode: run tiers 2-4 as before (in-memory tiers are sub-ms, no need to parallelize)
+                    string firstWord = musician.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? musician;
 
-            // Tier 4: fuzzy match against ALL artists (catches misspellings)
-            if (artists.Count == 0)
-            {
-                tierSw.Restart();
-                BaseItem? fuzzy = FuzzyMatch(musician, allArtists, a => a.Name, user);
-                tierSw.Stop();
-                tierReached = 4;
-                Logger.LogInformation(
-                    "ArtistSearch: tier=4 duration={TierMs}ms matched={Matched} method=InMemoryFuzzyAll query='{Query}'",
-                    tierSw.ElapsedMilliseconds, fuzzy != null, musician);
-                if (fuzzy != null)
-                {
-                    artists = new List<BaseItem> { fuzzy };
+                    // Tier 2: prefix first word + fuzzy (catches ASR truncation, e.g. "soul coughin" → "Soul Coughing")
+                    tierSw.Restart();
+                    var prefixCandidates = allArtists
+                        .Where(a => a.Name.StartsWith(firstWord, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+                    BaseItem? tier2Match = FuzzyMatch(musician, prefixCandidates, a => a.Name, user);
+                    tierSw.Stop();
+                    tierReached = 2;
+                    Logger.LogInformation(
+                        "ArtistSearch: tier=2 duration={TierMs}ms matched={Matched} method=InMemoryPrefixFirstWord query='{Query}' prefix='{Prefix}'",
+                        tierSw.ElapsedMilliseconds, tier2Match != null, musician, firstWord);
+                    if (tier2Match != null)
+                    {
+                        artists = new List<BaseItem> { tier2Match };
+                    }
+
+                    // Tier 3: prefix full query + fuzzy (e.g. "Kidz Bop" → "Kidz Bop Kids")
+                    if (artists.Count == 0 && !string.Equals(firstWord, musician, StringComparison.Ordinal))
+                    {
+                        tierSw.Restart();
+                        var fullPrefixCandidates = allArtists
+                            .Where(a => a.Name.StartsWith(musician, StringComparison.OrdinalIgnoreCase))
+                            .ToList();
+                        BaseItem? tier3Match = FuzzyMatch(musician, fullPrefixCandidates, a => a.Name, user);
+                        tierSw.Stop();
+                        tierReached = 3;
+                        Logger.LogInformation(
+                            "ArtistSearch: tier=3 duration={TierMs}ms matched={Matched} method=InMemoryPrefixFull query='{Query}'",
+                            tierSw.ElapsedMilliseconds, tier3Match != null, musician);
+                        if (tier3Match != null)
+                        {
+                            artists = new List<BaseItem> { tier3Match };
+                        }
+                    }
+
+                    // Tier 4: fuzzy match against ALL artists (catches misspellings)
+                    if (artists.Count == 0)
+                    {
+                        tierSw.Restart();
+                        BaseItem? tier4Match = FuzzyMatch(musician, allArtists, a => a.Name, user);
+                        tierSw.Stop();
+                        tierReached = 4;
+                        Logger.LogInformation(
+                            "ArtistSearch: tier=4 duration={TierMs}ms matched={Matched} method=InMemoryFuzzyAll query='{Query}'",
+                            tierSw.ElapsedMilliseconds, tier4Match != null, musician);
+                        if (tier4Match != null)
+                        {
+                            artists = new List<BaseItem> { tier4Match };
+                        }
+                    }
                 }
             }
         }
@@ -195,96 +215,93 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             // Resolve library filter once and reuse across all fallback tiers.
             allowedLibraryIds = GetAllowedLibraryIds(user);
             topParentIds = allowedLibraryIds != null
-                ? Util.LibraryFilter.ResolveTopParentIds(allowedLibraryIds, _libraryManager)
+                ? Util.LibraryFilter.ResolveTopParentIds(allowedLibraryIds, _libraryManager, Logger)
                 : null;
 
-            artists = await SearchWithAsrFallbackAsync(musician,
-                searchTerm =>
-                {
-                    var q = new InternalItemsQuery()
+            if (mode == SearchResponseMode.Fast)
+            {
+                // Fast mode: single SearchTerm query, no fallback tiers, no ASR variants
+                artists = await SearchWithAsrFallbackAsync(musician,
+                    searchTerm =>
                     {
-                        Recursive = true,
-                        SearchTerm = searchTerm,
-                        IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
-                        TopParentIds = topParentIds!,
-                        DtoOptions = new DtoOptions(true)
-                    };
-                    return RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", cancellationToken);
-                }).ConfigureAwait(false);
+                        var q = new InternalItemsQuery()
+                        {
+                            Recursive = true,
+                            SearchTerm = searchTerm,
+                            IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
+                            TopParentIds = topParentIds!,
+                            DtoOptions = new DtoOptions(true)
+                        };
+                        return RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", cancellationToken);
+                    }, mode).ConfigureAwait(false);
 
-            tierSw.Stop();
-            tierReached = 1;
-            Logger.LogInformation(
-                "ArtistSearch: tier=1 duration={TierMs}ms results={Count} method=SearchTerm query='{Query}'",
-                tierSw.ElapsedMilliseconds,
-                artists.Count,
-                musician);
-
-            string firstWord = musician.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? musician;
-            if (artists.Count == 0)
-            {
-                tierSw.Restart();
-                BaseItem? fuzzy = await TryPrefixFallbackAsync(
-                    firstWord, musician, topParentIds, user, "GetArtistsFuzzy", cancellationToken).ConfigureAwait(false);
                 tierSw.Stop();
-                tierReached = 2;
+                tierReached = 1;
                 Logger.LogInformation(
-                    "ArtistSearch: tier=2 duration={TierMs}ms matched={Matched} method=PrefixFirstWord query='{Query}' prefix='{Prefix}'",
-                    tierSw.ElapsedMilliseconds,
-                    fuzzy != null,
-                    musician,
-                    firstWord);
-                if (fuzzy != null)
-                {
-                    artists = new List<BaseItem> { fuzzy };
-                }
+                    "ArtistSearch: tier=1 duration={TierMs}ms results={Count} method=SearchTerm query='{Query}' mode=Fast",
+                    tierSw.ElapsedMilliseconds, artists.Count, musician);
             }
-
-            if (artists.Count == 0 && !string.Equals(firstWord, musician, StringComparison.Ordinal))
+            else
             {
-                tierSw.Restart();
-                BaseItem? fullPrefixFuzzy = await TryPrefixFallbackAsync(
-                    musician, musician, topParentIds, user, "GetArtistsFullPrefix", cancellationToken).ConfigureAwait(false);
-                tierSw.Stop();
-                tierReached = 3;
-                Logger.LogInformation(
-                    "ArtistSearch: tier=3 duration={TierMs}ms matched={Matched} method=PrefixFullQuery query='{Query}'",
-                    tierSw.ElapsedMilliseconds,
-                    fullPrefixFuzzy != null,
-                    musician);
-                if (fullPrefixFuzzy != null)
-                {
-                    artists = new List<BaseItem> { fullPrefixFuzzy };
-                }
-            }
+                // Thorough mode: 4-tier fallback with ASR variants on tier 1
+                artists = await SearchWithAsrFallbackAsync(musician,
+                    searchTerm =>
+                    {
+                        var q = new InternalItemsQuery()
+                        {
+                            Recursive = true,
+                            SearchTerm = searchTerm,
+                            IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
+                            TopParentIds = topParentIds!,
+                            DtoOptions = new DtoOptions(true)
+                        };
+                        return RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", cancellationToken);
+                    }).ConfigureAwait(false);
 
-            if (artists.Count == 0)
-            {
-                tierSw.Restart();
-                BaseItem? containsFuzzy = await TryContainsFallbackAsync(
-                    musician, musician, topParentIds, user, "GetArtistsContains", cancellationToken).ConfigureAwait(false);
                 tierSw.Stop();
-                tierReached = 4;
+                tierReached = 1;
                 Logger.LogInformation(
-                    "ArtistSearch: tier=4 duration={TierMs}ms matched={Matched} method=Contains query='{Query}'",
-                    tierSw.ElapsedMilliseconds,
-                    containsFuzzy != null,
-                    musician);
-                if (containsFuzzy != null)
+                    "ArtistSearch: tier=1 duration={TierMs}ms results={Count} method=SearchTerm query='{Query}'",
+                    tierSw.ElapsedMilliseconds, artists.Count, musician);
+
+                // Early-exit on tier 1 hit
+                if (artists.Count == 0)
                 {
-                    artists = new List<BaseItem> { containsFuzzy };
+                    // Parallelize tiers 2-4: all independent, pick by priority order
+                    string firstWord = musician.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? musician;
+
+                    var tier2 = TryPrefixFallbackAsync(firstWord, musician, topParentIds, user, "GetArtistsFuzzy", cancellationToken);
+                    var tier3 = !string.Equals(firstWord, musician, StringComparison.Ordinal)
+                        ? TryPrefixFallbackAsync(musician, musician, topParentIds, user, "GetArtistsFullPrefix", cancellationToken)
+                        : Task.FromResult<BaseItem?>(null);
+                    var tier4 = TryContainsFallbackAsync(musician, musician, topParentIds, user, "GetArtistsContains", cancellationToken);
+
+                    BaseItem?[] parallelResults = await Task.WhenAll(tier2, tier3, tier4).ConfigureAwait(false);
+
+                    // Preserve priority: tier 2 > tier 3 > tier 4
+                    BaseItem? match = parallelResults[0] ?? parallelResults[1] ?? parallelResults[2];
+                    tierReached = match != null ? (parallelResults[0] != null ? 2 : parallelResults[1] != null ? 3 : 4) : 4;
+
+                    Logger.LogInformation(
+                        "ArtistSearch: tiers=2-4 (parallel) matched={Matched} tierHit={Tier} method=ParallelFallback query='{Query}'",
+                        match != null, tierReached, musician);
+                    if (match != null)
+                    {
+                        artists = new List<BaseItem> { match };
+                    }
                 }
             }
         }
 
         totalSw.Stop();
         Logger.LogInformation(
-            "ArtistSearch: total duration={TotalMs}ms tier_reached={Tier} results={Count} query='{Query}' source={Source}",
+            "ArtistSearch: total duration={TotalMs}ms tier_reached={Tier} results={Count} query='{Query}' source={Source} mode={Mode}",
             totalSw.ElapsedMilliseconds,
             tierReached,
             artists.Count,
             musician,
-            searchSource);
+            searchSource,
+            mode);
 
         if (artists.Count == 0)
         {
@@ -292,7 +309,10 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundArtist", locale, musician));
         }
 
-        if (artists.Count > 1)
+        // Disambiguation: in Fast mode, auto-play the best match
+        bool fastAutoPlay = mode == SearchResponseMode.Fast && artists.Count > 1;
+
+        if (artists.Count > 1 && !fastAutoPlay)
         {
             Logger.LogDebug("PlayArtistSongs: {Count} artists matched, running disambiguation", artists.Count);
             var (missOutcome, missResponse) = HandleFuzzyMiss(
@@ -321,6 +341,21 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 Logger.LogDebug("PlayArtistSongs: fuzzy miss outcome={Outcome}, returning response", missOutcome);
                 return missResponse;
             }
+        }
+        else if (fastAutoPlay)
+        {
+            // Fast mode: pick the best fuzzy match and auto-play
+            var best = FuzzyMatch(musician, artists, a => a.Name, user);
+            if (best != null)
+            {
+                artists = new List<BaseItem> { best };
+            }
+            else
+            {
+                artists = new List<BaseItem> { artists[0] };
+            }
+
+            Logger.LogDebug("PlayArtistSongs: fast auto-play picked '{Name}'", artists[0].Name);
         }
 
         string matchedArtistName = artists[0].Name;
@@ -470,6 +505,11 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             () => _libraryManager.GetItemList(query),
             retryLabel,
             cancellationToken).ConfigureAwait(false);
+
+        if (results == null || results.Count == 0)
+        {
+            return null;
+        }
 
         return FuzzyMatch(musician, results, a => a.Name, user);
     }

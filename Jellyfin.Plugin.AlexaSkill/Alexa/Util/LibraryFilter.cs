@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using Jellyfin.Data.Enums;
@@ -16,6 +17,18 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// </summary>
 public static class LibraryFilter
 {
+    /// <summary>
+    /// Cache for resolved top-parent IDs. Invalidated when user config changes
+    /// (library restrictions updated), never expires otherwise since folder
+    /// structure only changes on admin action.
+    /// </summary>
+    private static readonly ConcurrentDictionary<string, Guid[]> _topParentCache = new();
+
+    /// <summary>
+    /// Invalidate the entire top-parent cache. Call when a user's AllowedLibraryIds changes.
+    /// </summary>
+    public static void InvalidateCache() => _topParentCache.Clear();
+
     /// <summary>
     /// Parses the user's AllowedLibraryIds from strings to Guids.
     /// Returns null when no restriction is configured (backward compatible default).
@@ -46,17 +59,27 @@ public static class LibraryFilter
     /// Jellyfin's <see cref="InternalItemsQuery.TopParentIds"/> expects physical folder
     /// IDs (the actual media folders), not the virtual <see cref="CollectionFolder"/> IDs
     /// that the config UI stores from <c>/Library/MediaFolders</c>.
+    /// Results are cached until <see cref="InvalidateCache"/> is called.
     /// </summary>
     /// <param name="collectionFolderIds">CollectionFolder GUIDs from plugin config.</param>
     /// <param name="libraryManager">Jellyfin library manager for resolving folders.</param>
+    /// <param name="logger">Optional logger for cache hit/miss diagnostics.</param>
     /// <returns>Physical folder GUIDs suitable for TopParentIds, or the originals if resolution fails.</returns>
-    public static Guid[] ResolveTopParentIds(Guid[] collectionFolderIds, ILibraryManager libraryManager)
+    public static Guid[] ResolveTopParentIds(Guid[] collectionFolderIds, ILibraryManager libraryManager, ILogger? logger = null)
     {
         if (collectionFolderIds.Length == 0)
         {
             return collectionFolderIds;
         }
 
+        string cacheKey = string.Join(",", collectionFolderIds.OrderBy(g => g));
+        if (_topParentCache.TryGetValue(cacheKey, out Guid[]? cached))
+        {
+            logger?.LogDebug("LibraryFilter: cache hit for {Count} libraries", collectionFolderIds.Length);
+            return cached;
+        }
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         var resolved = new List<Guid>();
         foreach (var id in collectionFolderIds)
         {
@@ -91,7 +114,11 @@ public static class LibraryFilter
             }
         }
 
-        return resolved.Count > 0 ? resolved.ToArray() : collectionFolderIds;
+        sw.Stop();
+        Guid[] result = resolved.Count > 0 ? resolved.ToArray() : collectionFolderIds;
+        _topParentCache[cacheKey] = result;
+        logger?.LogDebug("LibraryFilter: cache miss, resolved {InputCount} → {OutputCount} top parents in {Ms}ms", collectionFolderIds.Length, result.Length, sw.ElapsedMilliseconds);
+        return result;
     }
 
     /// <summary>
@@ -108,8 +135,8 @@ public static class LibraryFilter
         var allowedIds = GetAllowedLibraryIds(user);
         if (allowedIds != null)
         {
-            logger?.LogDebug("ApplyLibraryFilter: applying {AllowedCount} allowed library IDs for user {UserId}", allowedIds.Length, user?.Id);
-            query.TopParentIds = ResolveTopParentIds(allowedIds, libraryManager);
+            query.TopParentIds = ResolveTopParentIds(allowedIds, libraryManager, logger);
+            logger?.LogDebug("ApplyLibraryFilter: user={UserId} libraries={Count} resolvedTopParents={TopParentCount}", user?.Id, allowedIds.Length, query.TopParentIds.Length);
         }
         else
         {

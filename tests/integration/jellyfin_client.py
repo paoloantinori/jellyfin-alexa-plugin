@@ -59,6 +59,18 @@ class JellyfinClient:
             )
         return resp.json() if resp.text.strip() else {}
 
+    def _patch(self, path: str, json_body: Any = None) -> Any:
+        url = f"{self.base_url}{path}"
+        resp = requests.request(
+            "PATCH", url, headers=self._headers, json=json_body,
+            timeout=self.timeout,
+        )
+        if resp.status_code >= 400:
+            raise JellyfinError(
+                f"PATCH {path} returned {resp.status_code}: {resp.text[:300]}"
+            )
+        return resp.json() if resp.text.strip() else {}
+
     def _delete(self, path: str) -> None:
         url = f"{self.base_url}{path}"
         resp = requests.delete(url, headers=self._headers, timeout=self.timeout)
@@ -158,3 +170,35 @@ class JellyfinClient:
             params["IncludeItemTypes"] = ",".join(item_types)
         data = self._get(f"/Users/{self.user_id}/Items", params=params)
         return data.get("Items", [])
+
+    def set_search_mode(self, mode: str | None) -> None:
+        """Set per-user SearchResponseMode via the plugin config API.
+
+        Args:
+            mode: "Fast" or "Thorough", or None to clear (use global default).
+        """
+        # Resolve username to GUID — the plugin endpoint requires a Jellyfin user GUID.
+        user_guid = self._resolve_user_guid()
+        body: dict[str, Any] = {}
+        if mode is not None:
+            body["SearchResponseMode"] = mode
+        else:
+            body["SearchResponseMode"] = None
+        self._patch(f"/alexaskill/api/user-skills/{user_guid}", body)
+
+    def _resolve_user_guid(self) -> str:
+        """Resolve the user_id (may be a username) to a Jellyfin user GUID."""
+        # If it's already a GUID, use it directly
+        import re
+        if re.match(r"^[0-9a-f]{32}$", self.user_id.replace("-", "")):
+            return self.user_id
+
+        # Otherwise look up by username from sessions
+        for session in self.get_sessions():
+            if (session.get("UserName", "").lower() == self.user_id.lower()
+                    and session.get("UserId")):
+                return session["UserId"]
+
+        raise JellyfinError(
+            f"Could not resolve username '{self.user_id}' to a GUID"
+        )

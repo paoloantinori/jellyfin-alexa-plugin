@@ -144,6 +144,12 @@ public class PluginConfiguration : BasePluginConfiguration
     public int MaxRecentlyAddedResults { get; set; } = 10;
     public int MaxRecommendationResults { get; set; } = 10;
 
+    /// <summary>
+    /// Gets or sets the default search response mode for users without an explicit per-user setting.
+    /// Controls the trade-off between search speed and recall quality.
+    /// </summary>
+    public SearchResponseMode DefaultSearchResponseMode { get; set; } = SearchResponseMode.Thorough;
+
     // Display preferences — items sent to APL visual templates (voice reads 5 max)
     public int MaxListDisplayItems { get; set; } = 15;
     public int MaxInProgressDisplayItems { get; set; } = 10;

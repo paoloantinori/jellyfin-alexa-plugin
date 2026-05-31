@@ -202,6 +202,14 @@
 
                     <details>
                         <summary><span class="accordion-title">Search Preferences</span></summary>
+                            <div class="selectContainer">
+                                <label class="selectLabel" for="DefaultSearchResponseMode">Default Search Mode</label>
+                                <select is="emby-select" id="DefaultSearchResponseMode" name="DefaultSearchResponseMode" class="emby-select-withcolor emby-select">
+                                    <option value="Thorough">Thorough — best match, slower response</option>
+                                    <option value="Fast">Fast — quick response, may miss obscure matches</option>
+                                </select>
+                                <div class="fieldDescription">Default search mode for all users. Can be overridden per-user in the User table below.</div>
+                            </div>
                             <div class="fieldDescription">Control how media search behaves. Fuzzy match settings are per-user (see User table below).</div>
                             <div class="inputContainer">
                                 <label class="inputLabel inputLabelUnfocused" for="MaxSearchResults">Max Search Results</label>
@@ -421,6 +429,7 @@
                     document.querySelector("#PrefetchThreshold").value = config.PrefetchThreshold != null ? config.PrefetchThreshold : 2;
 
                     // Search preferences
+                    document.querySelector("#DefaultSearchResponseMode").value = config.DefaultSearchResponseMode || "Thorough";
                     document.querySelector("#MaxSearchResults").value = config.MaxSearchResults != null ? config.MaxSearchResults : 20;
                     document.querySelector("#MaxBrowseResults").value = config.MaxBrowseResults != null ? config.MaxBrowseResults : 5;
                     document.querySelector("#MaxRecentlyAddedResults").value = config.MaxRecentlyAddedResults != null ? config.MaxRecentlyAddedResults : 10;
@@ -711,6 +720,28 @@
                 });
                 fmWrap.appendChild(fmSel);
 
+                // Search Mode dropdown (Fast vs Thorough)
+                let smLabel = document.createElement("label");
+                smLabel.style.cssText = "font-size:0.8em;color:#aaa;margin-top:0.3em;";
+                smLabel.textContent = "Search mode:";
+                fmWrap.appendChild(smLabel);
+                let smSel = document.createElement("select");
+                smSel.setAttribute("data-field", "SearchResponseMode");
+                smSel.style.minWidth = "120px";
+                smSel.style.padding = "0.2em 0.4em";
+                smSel.style.borderRadius = "3px";
+                smSel.style.backgroundColor = "#222";
+                smSel.style.color = "#ccc";
+                smSel.style.border = "1px solid #555";
+                smSel.style.fontSize = "0.85em";
+                [{v:"Thorough",t:"Thorough (best match)"},{v:"Fast",t:"Fast (quick response)"}].forEach(function(o){
+                    let opt = document.createElement("option");
+                    opt.value = o.v; opt.textContent = o.t;
+                    if (o.v === (user.SearchResponseMode || "Thorough")) opt.selected = true;
+                    smSel.appendChild(opt);
+                });
+                fmWrap.appendChild(smSel);
+
                 let threshRow = document.createElement("div");
                 threshRow.style.display = "flex";
                 threshRow.style.gap = "0.5em";
@@ -902,6 +933,7 @@
                     config.PrefetchThreshold = isNaN(pfRaw) ? 2 : pfRaw;
 
                     // Search preferences
+                    config.DefaultSearchResponseMode = document.querySelector("#DefaultSearchResponseMode").value || "Thorough";
                     var msrRaw = parseInt(document.querySelector("#MaxSearchResults").value);
                     config.MaxSearchResults = isNaN(msrRaw) ? 20 : msrRaw;
                     var mbrRaw = parseInt(document.querySelector("#MaxBrowseResults").value);
@@ -958,7 +990,8 @@
                         VideoAudioCacheSizeMB: config.VideoAudioCacheSizeMB,
                         CustomModelEnabled: config.CustomModelEnabled,
                         CustomModelUrl: config.CustomModelUrl,
-                        CustomModelLocale: config.CustomModelLocale
+                        CustomModelLocale: config.CustomModelLocale,
+                        DefaultSearchResponseMode: config.DefaultSearchResponseMode
                     };
                     ApiClient.ajax({
                         type: "PATCH",
@@ -1005,12 +1038,14 @@
                                 var fmBehavior = row.cells[4].querySelector('[data-field="FuzzyMatchBehavior"]');
                                 var fmThreshold = row.cells[4].querySelector('[data-field="FuzzyMatchThreshold"]');
                                 var fmSuggestion = row.cells[4].querySelector('[data-field="FuzzySuggestionThreshold"]');
+                                var searchMode = row.cells[4].querySelector('[data-field="SearchResponseMode"]');
                                 let data = {
                                     "InvocationName": row.cells[2].firstChild.value,
                                     "AllowedLibraryIds": selectedLibs,
                                     "FuzzyMatchBehavior": fmBehavior ? fmBehavior.value : "Confirm",
                                     "FuzzyMatchThreshold": fmThreshold ? parseInt(fmThreshold.value) || 60 : 60,
                                     "FuzzySuggestionThreshold": fmSuggestion ? parseInt(fmSuggestion.value) || 40 : 40,
+                                    "SearchResponseMode": searchMode ? searchMode.value : "Thorough",
                                     "AnnouncePositionOnResume": row.cells[4].querySelector('[data-field="AnnouncePositionOnResume"]')?.checked || false
                                 };
 
