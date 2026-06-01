@@ -620,3 +620,26 @@ tests:
   - utterance: "c'e un film che si chiama matrix"
     expected_intent: AMAZON.FallbackIntent
     expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 31. AMAZON.* built-in intents (regression guard)
+  # -------------------------------------------------------------------------
+  - utterance: "ferma"
+    expected_intent: AMAZON.StopIntent
+    expected_slots: {}
+
+  - utterance: "pausa"
+    expected_intent: AMAZON.PauseIntent
+    expected_slots: {}
+
+  - utterance: "riprendi"
+    expected_intent: AMAZON.ResumeIntent
+    expected_slots: {}
+
+  - utterance: "avanti"
+    expected_intent: AMAZON.NextIntent
+    expected_slots: {}
+
+  - utterance: "indietro"
+    expected_intent: AMAZON.PreviousIntent
+    expected_slots: {}

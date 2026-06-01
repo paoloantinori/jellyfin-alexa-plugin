@@ -245,4 +245,27 @@ public class PlayByGenreIntentHandlerTests : PluginTestBase
         Assert.NotNull(session.NowPlayingQueue);
         Assert.Equal(2, session.NowPlayingQueue.Count);
     }
+
+    [Fact]
+    public async Task HandleAsync_MusicDisabled_ReturnsNotFound()
+    {
+        TestHelpers.EnsurePluginInstance(_config, _loggerFactory, c => c.MusicEnabled = false, "genre-music-test");
+        SetupUserMock();
+
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreateIntentRequest(genre: "rock"),
+            CreateContext(),
+            CreateUser(),
+            CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.True(response.Response.ShouldEndSession);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.NotEmpty(speech);
+    }
 }

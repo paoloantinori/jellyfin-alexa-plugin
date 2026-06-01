@@ -169,3 +169,39 @@ tests:
     expected_slots:
       media_type: {}
     expected_response_type: any
+
+  # --- Play specific song (carrier phrase stripping) ---
+  - utterance: "suona la canzone bohemian rhapsody"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+    expected_response_type: any
+
+  # --- Play album ---
+  - utterance: "riproduci album thriller"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+    expected_response_type: any
+
+  # --- Pause (regression guard for stop/pause routing fix) ---
+  - utterance: "pausa"
+    expected_intent: AMAZON.PauseIntent
+    expected_slots: {}
+    expected_response_type: any
+
+  # --- Mark favorite ---
+  - utterance: "aggiungi ai preferiti"
+    expected_intent: MarkFavoriteIntent
+    expected_slots: {}
+    expected_response_type: any
+
+  # --- Resume ---
+  # NOTE: ResumeIntent requires audio to be playing. simulate-skill sends isolated
+  # requests without session continuity, so this may not resolve correctly.
+  # Kept as a regression guard — if SMAPI can't route it, the failure documents
+  # the limitation rather than being silently untested.
+  - utterance: "riprendi"
+    expected_intent: AMAZON.ResumeIntent
+    expected_slots: {}
+    expected_response_type: any

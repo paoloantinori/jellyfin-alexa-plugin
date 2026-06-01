@@ -610,3 +610,26 @@ tests:
     expected_intent: SearchMediaIntent
     expected_slots:
       query: {}
+
+  # -------------------------------------------------------------------------
+  # 35. AMAZON.* built-in intents (regression guard)
+  # -------------------------------------------------------------------------
+  - utterance: "stop"
+    expected_intent: AMAZON.StopIntent
+    expected_slots: {}
+
+  - utterance: "pause"
+    expected_intent: AMAZON.PauseIntent
+    expected_slots: {}
+
+  - utterance: "resume"
+    expected_intent: AMAZON.ResumeIntent
+    expected_slots: {}
+
+  - utterance: "next"
+    expected_intent: AMAZON.NextIntent
+    expected_slots: {}
+
+  - utterance: "previous"
+    expected_intent: AMAZON.PreviousIntent
+    expected_slots: {}
