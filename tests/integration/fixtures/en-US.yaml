@@ -377,6 +377,12 @@ tests:
 
   # (en-US already has "what {browse_category} do i have" — no new patterns added)
 
+  # Bare category — regression guard for follow-up slot resolution
+  - utterance: "books"
+    expected_intent: BrowseLibraryIntent
+    expected_slots:
+      browse_category: {}
+
   # -------------------------------------------------------------------------
   # 20. RecommendIntent (media_type)
   # -------------------------------------------------------------------------

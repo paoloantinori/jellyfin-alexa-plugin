@@ -220,6 +220,44 @@ explicit_intents:
       - Sfoglia {browse_category}
       - Mostra {browse_category}
       - Elenca {browse_category}
+      - "{browse_category}"
+      - solo {browse_category}
+      - vorrei {browse_category}
+      - mi piace {browse_category}
+      - mostra cantanti
+      - mostra i cantanti
+      - mostra dischi
+      - mostra i dischi
+      - mostra gruppi
+      - mostra i gruppi
+      - mostra musica
+      - mostra cartoni
+      - mostra i cartoni
+      - mostra video
+      - mostra libri
+      - mostra i libri
+      - sfoglia cantanti
+      - sfoglia dischi
+      - sfoglia gruppi
+      - sfoglia musica
+      - sfoglia cartoni
+      - sfoglia video
+      - sfoglia libri
+      - elenca cantanti
+      - elenca dischi
+      - elenca gruppi
+      - elenca musica
+      - elenca cartoni
+      - elenca video
+      - elenca libri
+      - quali cantanti abbiamo
+      - quali dischi abbiamo
+      - quali gruppi abbiamo
+      - quali cartoni abbiamo
+      - che cantanti ci sono
+      - che dischi ci sono
+      - che gruppi ci sono
+      - che cartoni ci sono
     slots:
       - name: browse_category
         type: BrowseCategory
@@ -375,6 +413,13 @@ types:
       - generi
       - serie
       - playlist
+      - libri
+      - cantanti
+      - gruppi
+      - dischi
+      - musica
+      - cartoni
+      - video
   LibraryQueryType:
     values:
       - id: tracks

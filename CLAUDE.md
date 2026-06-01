@@ -33,7 +33,7 @@ CI validates models, locales, and versions on every PR and push to main.
 
 - `Alexa/Handler/Intent/` — 58 intent handlers (one per intent, inherit `BaseHandler`)
 - `Alexa/Handler/BaseHandler.cs` — shared utilities: `FuzzyMatch`, `HandleFuzzyMiss`, `RetryAsync`, stream URLs, library filters
-- `Alexa/InteractionModel/` — 17 per-locale interaction model JSONs (`model_*.json`)
+- `Alexa/InteractionModel/` — 17 per-locale interaction model JSONs (`model_*.json`), generated from templates in `Alexa/InteractionModel/templates/`
 - `Alexa/Locale/` — Response strings: keys in `ResponseStrings.cs`, values in 17 `<locale>.json` files
 - `Alexa/SmapiManagement.cs` — SMAPI wrapper (skill CRUD, account linking, status polling)
 - `Alexa/ModelDeployment/` — Custom interaction model validation, fetch, deploy, restore via SMAPI
@@ -122,9 +122,15 @@ When enabled (`AsrCompoundWordFixEnabled`), `SearchWithAsrFallbackAsync` in `Bas
 
 ## Interaction Models
 
-17 locale files. After editing:
+17 locale files. The it-IT model is **generated from a YAML template** — do NOT edit the JSON directly.
 
-**Invocation names**: Default is `"jellyfin player"` (set in `Config.cs`). Italian (`it-IT`) uses `"mia collezione"` as its invocation name.
+**Model generator** (it-IT): `python3 scripts/generate_interaction_model.py it-IT`
+- Template: `Alexa/InteractionModel/templates/it-IT.yaml`
+- Output: `Alexa/InteractionModel/model_it-IT.json`
+- To add new slot values, samples, or vocabulary: edit the YAML template, then regenerate.
+- Other locales: edit JSON directly (only it-IT has the generator).
+
+After editing:
 1. Wrap in `{"interactionModel": <model>}` for SMAPI
 2. Deploy: `ask smapi set-interaction-model --skill-id <ID> --stage development --locale <XX> --interaction-model file:payload.json`
 3. Wait for build (~15-30s): `ask smapi get-skill-status --skill-id <ID>`

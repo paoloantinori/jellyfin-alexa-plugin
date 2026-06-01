@@ -503,6 +503,9 @@
           }
         ],
         "samples": [
+          "{browse_category}",
+          "alleen {browse_category}",
+          "ik wil {browse_category}",
           "browse {browse_category}",
           "laat {browse_category} zien",
           "lijst {browse_category}",

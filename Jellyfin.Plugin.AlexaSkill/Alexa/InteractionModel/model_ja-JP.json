@@ -452,6 +452,7 @@
           }
         ],
         "samples": [
+          "{browse_category}",
           "{browse_category} をブラウズして",
           "{browse_category} を見せて",
           "{browse_category} のリスト",

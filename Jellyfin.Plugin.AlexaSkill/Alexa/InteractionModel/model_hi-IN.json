@@ -476,6 +476,7 @@
           }
         ],
         "samples": [
+          "{browse_category}",
           "{browse_category} ब्राउज़ करो",
           "मुझे {browse_category} दिखाओ",
           "{browse_category} की लिस्ट दो",

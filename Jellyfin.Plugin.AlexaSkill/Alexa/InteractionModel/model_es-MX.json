@@ -460,6 +460,9 @@
           }
         ],
         "samples": [
+          "{browse_category}",
+          "solo {browse_category}",
+          "quiero {browse_category}",
           "explorar {browse_category}",
           "muéstrame {browse_category}",
           "lista {browse_category}",

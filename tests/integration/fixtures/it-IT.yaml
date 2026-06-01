@@ -281,6 +281,12 @@ tests:
     expected_slots:
       browse_category: {}
 
+  # Bare category — regression guard for follow-up slot resolution
+  - utterance: "libri"
+    expected_intent: BrowseLibraryIntent
+    expected_slots:
+      browse_category: {}
+
   # -------------------------------------------------------------------------
   # 15. RecommendIntent (media_type)
   # -------------------------------------------------------------------------

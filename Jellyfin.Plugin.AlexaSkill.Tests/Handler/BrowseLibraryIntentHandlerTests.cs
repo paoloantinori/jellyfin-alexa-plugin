@@ -361,7 +361,7 @@ public class BrowseLibraryIntentHandlerTests : PluginTestBase
     public async Task HandleAsync_BrowseBooks_DeduplicatesByParentId()
     {
         var handler = CreateHandler();
-        var request = CreateIntentRequest(category: "libri"); // Italian for "books"
+        var request = CreateIntentRequest(category: "libri");
         var context = CreateContext();
         var user = CreateUser();
         var session = CreateSession();
@@ -398,8 +398,127 @@ public class BrowseLibraryIntentHandlerTests : PluginTestBase
         Assert.NotNull(response.Response?.OutputSpeech);
 
         // The response should mention "2" books (1 parent-resolved + 1 standalone), not 4 tracks.
-        string speech = ((PlainTextOutputSpeech)response.Response.OutputSpeech).Text;
+        string speech = TestHelpers.GetSpeechText(response);
         Assert.Contains("2", speech);
         Assert.DoesNotContain("4", speech);
+    }
+
+    [Fact]
+    public async Task HandleAsync_BrowseBooks_ReturnsList()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(category: "libri");
+        request.Locale = "it-IT";
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var book = new Audio { Name = "Thinking, Fast and Slow", Id = Guid.NewGuid(), ParentId = Guid.NewGuid() };
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ItemIds == null || q.ItemIds.Length == 0)))
+            .Returns(new List<BaseItem> { book });
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ItemIds != null && q.ItemIds.Length > 0)))
+            .Returns(new List<BaseItem>());
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotNull(response.Response?.OutputSpeech);
+        Assert.Contains("1", TestHelpers.GetSpeechText(response));
+    }
+
+    [Fact]
+    public async Task HandleAsync_BooksDisabled_ReturnsNoResults()
+    {
+        _config.BooksEnabled = false;
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(category: "libri");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var book = new Audio { Name = "A Book", Id = Guid.NewGuid(), ParentId = Guid.NewGuid() };
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { book });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotNull(response.Response?.OutputSpeech);
+        // FilterByContentAccess removes AudioBook from IncludeItemTypes when BooksEnabled=false,
+        // so the query returns empty → NoBrowseResults (Tell, not Ask).
+        Assert.True(response.Response.ShouldEndSession == null || response.Response.ShouldEndSession == true);
+    }
+
+    [Fact]
+    public async Task HandleAsync_UnrecognizedCategory_ReturnsAsk()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(category: "puzzles");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotNull(response.Response?.OutputSpeech);
+        Assert.True(response.Response.ShouldEndSession == null || response.Response.ShouldEndSession == false,
+            "Unrecognized category should keep session open");
+        Assert.NotNull(response.Response?.Reprompt);
+    }
+
+    [Fact]
+    public async Task HandleAsync_GenresWithoutFilter_ReturnsResponse()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(category: "generi");
+        request.Locale = "it-IT";
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotNull(response.Response?.OutputSpeech);
+    }
+
+    [Theory]
+    [InlineData("dischi", typeof(MusicAlbum))]
+    [InlineData("cantanti", typeof(MusicArtist))]
+    [InlineData("gruppi", typeof(MusicArtist))]
+    [InlineData("musica", typeof(Audio))]
+    [InlineData("cartoni", typeof(MediaBrowser.Controller.Entities.TV.Series))]
+    [InlineData("video", typeof(MediaBrowser.Controller.Entities.Movies.Movie))]
+    public async Task HandleAsync_ItalianSynonyms_ReturnsList(string category, Type itemType)
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(category: category);
+        request.Locale = "it-IT";
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var item = (BaseItem)Activator.CreateInstance(itemType)!;
+        item.Name = "Test Item";
+        item.Id = Guid.NewGuid();
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { item });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotNull(response.Response?.OutputSpeech);
     }
 }

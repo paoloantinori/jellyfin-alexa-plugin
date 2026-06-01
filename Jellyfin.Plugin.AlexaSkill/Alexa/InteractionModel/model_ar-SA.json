@@ -467,6 +467,7 @@
           }
         ],
         "samples": [
+          "{browse_category}",
           "تصفح {browse_category}",
           "أرني {browse_category}",
           "أعرض {browse_category}",

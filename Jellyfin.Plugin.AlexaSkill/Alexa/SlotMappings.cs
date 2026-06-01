@@ -19,6 +19,8 @@ internal static class SlotMappings
         {
             { "artists", BaseItemKind.MusicArtist },
             { "artisti", BaseItemKind.MusicArtist },
+            { "cantanti", BaseItemKind.MusicArtist },
+            { "gruppi", BaseItemKind.MusicArtist },
             { "artistas", BaseItemKind.MusicArtist },
             { "artistes", BaseItemKind.MusicArtist },
             { "künstler", BaseItemKind.MusicArtist },
@@ -28,6 +30,7 @@ internal static class SlotMappings
             { "アーティスト", BaseItemKind.MusicArtist },
 
             { "albums", BaseItemKind.MusicAlbum },
+            { "dischi", BaseItemKind.MusicAlbum },
             { "alben", BaseItemKind.MusicAlbum },
             { "álbumes", BaseItemKind.MusicAlbum },
             { "álbuns", BaseItemKind.MusicAlbum },
@@ -37,6 +40,7 @@ internal static class SlotMappings
 
             { "movies", BaseItemKind.Movie },
             { "film", BaseItemKind.Movie },
+            { "video", BaseItemKind.Movie },
             { "filme", BaseItemKind.Movie },
             { "filmes", BaseItemKind.Movie },
             { "films", BaseItemKind.Movie },
@@ -46,6 +50,7 @@ internal static class SlotMappings
             { "映画", BaseItemKind.Movie },
 
             { "songs", BaseItemKind.Audio },
+            { "musica", BaseItemKind.Audio },
             { "brani", BaseItemKind.Audio },
             { "canzoni", BaseItemKind.Audio },
             { "canciones", BaseItemKind.Audio },
@@ -59,6 +64,7 @@ internal static class SlotMappings
 
             { "series", BaseItemKind.Series },
             { "serie", BaseItemKind.Series },
+            { "cartoni", BaseItemKind.Series },
             { "serien", BaseItemKind.Series },
             { "séries", BaseItemKind.Series },
             { "مسلسلات", BaseItemKind.Series },

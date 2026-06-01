@@ -138,6 +138,13 @@ tests:
       browse_category: {}
     expected_response_type: any
 
+  # Browse books — regression guard for "mostra libri" slot resolution
+  - utterance: "mostra libri"
+    expected_intent: BrowseLibraryIntent
+    expected_slots:
+      browse_category: {}
+    expected_response_type: any
+
   # In-progress media
   - utterance: "cosa stavo guardando"
     expected_intent: InProgressMediaListIntent

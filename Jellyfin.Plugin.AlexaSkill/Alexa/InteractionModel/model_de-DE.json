@@ -473,6 +473,9 @@
           }
         ],
         "samples": [
+          "{browse_category}",
+          "nur {browse_category}",
+          "ich möchte {browse_category}",
           "durchsuche {browse_category}",
           "zeige mir {browse_category}",
           "liste {browse_category}",

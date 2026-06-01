@@ -473,6 +473,9 @@
           }
         ],
         "samples": [
+          "{browse_category}",
+          "juste {browse_category}",
+          "je veux {browse_category}",
           "parcourir {browse_category}",
           "montre-moi {browse_category}",
           "lister {browse_category}",
