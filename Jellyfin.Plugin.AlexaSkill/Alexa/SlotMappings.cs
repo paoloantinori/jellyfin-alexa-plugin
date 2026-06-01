@@ -30,6 +30,7 @@ internal static class SlotMappings
             { "アーティスト", BaseItemKind.MusicArtist },
 
             { "albums", BaseItemKind.MusicAlbum },
+            { "album", BaseItemKind.MusicAlbum },
             { "dischi", BaseItemKind.MusicAlbum },
             { "alben", BaseItemKind.MusicAlbum },
             { "álbumes", BaseItemKind.MusicAlbum },

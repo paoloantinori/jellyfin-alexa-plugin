@@ -300,46 +300,22 @@
         "name": "BrowseLibraryIntent",
         "samples": [
           "Sfoglia {browse_category}",
+          "Sfoglia i {browse_category}",
           "Mostra {browse_category}",
+          "Mostra i {browse_category}",
           "Elenca {browse_category}",
+          "Elenca i {browse_category}",
+          "di mostrare {browse_category}",
+          "di sfogliare {browse_category}",
+          "di elencare {browse_category}",
           "{browse_category}",
           "solo {browse_category}",
           "vorrei {browse_category}",
           "mi piace {browse_category}",
-          "mostra cantanti",
-          "mostra i cantanti",
-          "mostra dischi",
-          "mostra i dischi",
-          "mostra gruppi",
-          "mostra i gruppi",
-          "mostra musica",
-          "mostra cartoni",
-          "mostra i cartoni",
-          "mostra video",
-          "mostra libri",
-          "mostra i libri",
-          "sfoglia cantanti",
-          "sfoglia dischi",
-          "sfoglia gruppi",
-          "sfoglia musica",
-          "sfoglia cartoni",
-          "sfoglia video",
-          "sfoglia libri",
-          "elenca cantanti",
-          "elenca dischi",
-          "elenca gruppi",
-          "elenca musica",
-          "elenca cartoni",
-          "elenca video",
-          "elenca libri",
-          "quali cantanti abbiamo",
-          "quali dischi abbiamo",
-          "quali gruppi abbiamo",
-          "quali cartoni abbiamo",
-          "che cantanti ci sono",
-          "che dischi ci sono",
-          "che gruppi ci sono",
-          "che cartoni ci sono"
+          "quali {browse_category} abbiamo",
+          "quali {browse_category} ci sono",
+          "che {browse_category} ci sono",
+          "che {browse_category} abbiamo"
         ],
         "slots": [
           {
@@ -1167,78 +1143,134 @@
         "values": [
           {
             "name": {
-              "value": "artisti"
-            }
+              "value": "artisti",
+              "synonyms": [
+                "gli artisti"
+              ]
+            },
+            "id": "artisti"
           },
           {
             "name": {
-              "value": "albums"
-            }
+              "value": "album",
+              "synonyms": [
+                "albums",
+                "gli album",
+                "dischi",
+                "i dischi"
+              ]
+            },
+            "id": "albums"
           },
           {
             "name": {
-              "value": "film"
-            }
+              "value": "film",
+              "synonyms": [
+                "i film",
+                "movies",
+                "cinema"
+              ]
+            },
+            "id": "film"
           },
           {
             "name": {
-              "value": "brani"
-            }
+              "value": "brani",
+              "synonyms": [
+                "i brani"
+              ]
+            },
+            "id": "brani"
           },
           {
             "name": {
-              "value": "canzoni"
-            }
+              "value": "canzoni",
+              "synonyms": [
+                "le canzoni"
+              ]
+            },
+            "id": "canzoni"
           },
           {
             "name": {
-              "value": "generi"
-            }
+              "value": "generi",
+              "synonyms": [
+                "i generi"
+              ]
+            },
+            "id": "generi"
           },
           {
             "name": {
-              "value": "serie"
-            }
+              "value": "serie",
+              "synonyms": [
+                "le serie"
+              ]
+            },
+            "id": "serie"
           },
           {
             "name": {
-              "value": "playlist"
-            }
+              "value": "playlist",
+              "synonyms": [
+                "le playlist"
+              ]
+            },
+            "id": "playlist"
           },
           {
             "name": {
-              "value": "libri"
-            }
+              "value": "libri",
+              "synonyms": [
+                "i libri"
+              ]
+            },
+            "id": "libri"
           },
           {
             "name": {
-              "value": "cantanti"
-            }
+              "value": "cantanti",
+              "synonyms": [
+                "i cantanti"
+              ]
+            },
+            "id": "cantanti"
           },
           {
             "name": {
-              "value": "gruppi"
-            }
+              "value": "gruppi",
+              "synonyms": [
+                "i gruppi"
+              ]
+            },
+            "id": "gruppi"
           },
           {
             "name": {
-              "value": "dischi"
-            }
+              "value": "musica",
+              "synonyms": [
+                "la musica"
+              ]
+            },
+            "id": "musica"
           },
           {
             "name": {
-              "value": "musica"
-            }
+              "value": "cartoni",
+              "synonyms": [
+                "i cartoni"
+              ]
+            },
+            "id": "cartoni"
           },
           {
             "name": {
-              "value": "cartoni"
-            }
-          },
-          {
-            "name": {
-              "value": "video"
-            }
+              "value": "video",
+              "synonyms": [
+                "i video"
+              ]
+            },
+            "id": "video"
           }
         ]
       },

@@ -91,7 +91,7 @@ public class BrowseLibraryIntentHandler : BaseHandler
         {
             if (intentRequest.Intent.Slots.TryGetValue("browse_category", out Slot? catSlot))
             {
-                browseCategory = catSlot.Value;
+                browseCategory = GetCanonicalSlotValue(catSlot) ?? catSlot.Value;
             }
 
             if (intentRequest.Intent.Slots.TryGetValue("filter", out Slot? filterSlot))
@@ -309,5 +309,29 @@ public class BrowseLibraryIntentHandler : BaseHandler
         TryAttachCarouselDirective(response, context, title, aplItems, locale: locale);
 
         return response;
+    }
+
+    /// <summary>
+    /// Extracts the canonical slot value from entity resolution.
+    /// When a user says a synonym (e.g. "gli album" for "album"),
+    /// slot.Value contains the raw spoken text but the canonical value
+    /// is available via resolutions.
+    /// </summary>
+    private static string? GetCanonicalSlotValue(Slot slot)
+    {
+        if (slot.Resolution?.Authorities is { Length: > 0 } authorities)
+        {
+            foreach (var authority in authorities)
+            {
+                if (authority.Status?.Code == "ER_SUCCESS_MATCH"
+                    && authority.Values is { Length: > 0 }
+                    && authority.Values[0].Value?.Name is string canonical)
+                {
+                    return canonical;
+                }
+            }
+        }
+
+        return null;
     }
 }

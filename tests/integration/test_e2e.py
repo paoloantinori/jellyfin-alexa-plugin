@@ -81,12 +81,20 @@ def test_e2e_full_chain(request, e2e_fixture, e2e_smapi_client, jellyfin_client)
 
     # --- Slot assertions ---
     resolved_slots = result["slots"]
-    for slot_name in expected_slots:
+    for slot_name, expected_val in expected_slots.items():
         assert slot_name in resolved_slots, (
             f"Missing slot '{slot_name}' for '{utterance}' ({locale}):\n"
             f"  expected: {sorted(expected_slots.keys())}\n"
             f"  resolved: {sorted(resolved_slots.keys())}"
         )
+
+        # {} means "any non-empty value" — catch unfilled slots
+        if isinstance(expected_val, dict) and not expected_val:
+            resolved_val = resolved_slots[slot_name].get("value", "")
+            assert resolved_val, (
+                f"Slot '{slot_name}' resolved empty for '{utterance}' ({locale}):\n"
+                f"  NLU matched intent but did not fill the slot"
+            )
 
     # --- Response assertions ---
     skill_response = _extract_skill_response(response)

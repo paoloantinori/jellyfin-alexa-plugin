@@ -218,46 +218,22 @@ explicit_intents:
   BrowseLibraryIntent:
     samples:
       - Sfoglia {browse_category}
+      - Sfoglia i {browse_category}
       - Mostra {browse_category}
+      - Mostra i {browse_category}
       - Elenca {browse_category}
+      - Elenca i {browse_category}
+      - di mostrare {browse_category}
+      - di sfogliare {browse_category}
+      - di elencare {browse_category}
       - "{browse_category}"
       - solo {browse_category}
       - vorrei {browse_category}
       - mi piace {browse_category}
-      - mostra cantanti
-      - mostra i cantanti
-      - mostra dischi
-      - mostra i dischi
-      - mostra gruppi
-      - mostra i gruppi
-      - mostra musica
-      - mostra cartoni
-      - mostra i cartoni
-      - mostra video
-      - mostra libri
-      - mostra i libri
-      - sfoglia cantanti
-      - sfoglia dischi
-      - sfoglia gruppi
-      - sfoglia musica
-      - sfoglia cartoni
-      - sfoglia video
-      - sfoglia libri
-      - elenca cantanti
-      - elenca dischi
-      - elenca gruppi
-      - elenca musica
-      - elenca cartoni
-      - elenca video
-      - elenca libri
-      - quali cantanti abbiamo
-      - quali dischi abbiamo
-      - quali gruppi abbiamo
-      - quali cartoni abbiamo
-      - che cantanti ci sono
-      - che dischi ci sono
-      - che gruppi ci sono
-      - che cartoni ci sono
+      - quali {browse_category} abbiamo
+      - quali {browse_category} ci sono
+      - che {browse_category} ci sono
+      - che {browse_category} abbiamo
     slots:
       - name: browse_category
         type: BrowseCategory
@@ -405,21 +381,48 @@ types:
       - Come mai
   BrowseCategory:
     values:
-      - artisti
-      - albums
-      - film
-      - brani
-      - canzoni
-      - generi
-      - serie
-      - playlist
-      - libri
-      - cantanti
-      - gruppi
-      - dischi
-      - musica
-      - cartoni
-      - video
+      - id: artisti
+        value: artisti
+        synonyms: [gli artisti]
+      - id: albums
+        value: album
+        synonyms: [albums, gli album, dischi, i dischi]
+      - id: film
+        value: film
+        synonyms: [i film, movies, cinema]
+      - id: brani
+        value: brani
+        synonyms: [i brani]
+      - id: canzoni
+        value: canzoni
+        synonyms: [le canzoni]
+      - id: generi
+        value: generi
+        synonyms: [i generi]
+      - id: serie
+        value: serie
+        synonyms: [le serie]
+      - id: playlist
+        value: playlist
+        synonyms: [le playlist]
+      - id: libri
+        value: libri
+        synonyms: [i libri]
+      - id: cantanti
+        value: cantanti
+        synonyms: [i cantanti]
+      - id: gruppi
+        value: gruppi
+        synonyms: [i gruppi]
+      - id: musica
+        value: musica
+        synonyms: [la musica]
+      - id: cartoni
+        value: cartoni
+        synonyms: [i cartoni]
+      - id: video
+        value: video
+        synonyms: [i video]
   MediaType:
     values:
       - id: media
