@@ -271,7 +271,7 @@ explicit_intents:
       - Di suggerire {media_type}
     slots:
       - name: media_type
-        type: AMAZON.SearchQuery
+        type: MediaType
   SleepTimerIntent:
     samples:
       - Imposta timer {duration_minutes}
@@ -307,7 +307,7 @@ explicit_intents:
       - Metti {media_type} a caso
     slots:
       - name: media_type
-        type: AMAZON.SearchQuery
+        type: MediaType
   ContinueWatchingIntent:
     samples:
       - Continua a guardare
@@ -420,6 +420,28 @@ types:
       - musica
       - cartoni
       - video
+  MediaType:
+    values:
+      - id: media
+        value: media
+      - id: video
+        value: video
+      - id: musica
+        value: musica
+        synonyms: [canzoni, brani]
+      - id: film
+        value: film
+        synonyms: [movies, cinema]
+  TimePeriod:
+    values:
+      - id: today
+        value: oggi
+      - id: this_week
+        value: questa settimana
+        synonyms: ["nell'ultima settimana", "la settimana scorsa", "negli ultimi giorni"]
+      - id: this_month
+        value: questo mese
+        synonyms: ["nell'ultimo mese", "il mese scorso"]
   LibraryQueryType:
     values:
       - id: tracks
@@ -511,7 +533,7 @@ templates:
       - "{infinitive} {last_added_time_phrase}"
     slots:
       - name: media_type
-        type: AMAZON.SearchQuery
+        type: MediaType
       - name: time_period
         type: TimePeriod
 
@@ -521,4 +543,4 @@ templates:
       - "{infinitive} {favorites_noun}"
     slots:
       - name: media_type
-        type: AMAZON.SearchQuery
+        type: MediaType

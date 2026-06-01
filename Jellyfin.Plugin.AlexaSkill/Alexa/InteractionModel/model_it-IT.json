@@ -361,7 +361,7 @@
         "slots": [
           {
             "name": "media_type",
-            "type": "AMAZON.SearchQuery"
+            "type": "MediaType"
           }
         ]
       },
@@ -415,7 +415,7 @@
         "slots": [
           {
             "name": "media_type",
-            "type": "AMAZON.SearchQuery"
+            "type": "MediaType"
           }
         ]
       },
@@ -945,7 +945,7 @@
         "slots": [
           {
             "name": "media_type",
-            "type": "AMAZON.SearchQuery"
+            "type": "MediaType"
           },
           {
             "name": "time_period",
@@ -976,7 +976,7 @@
         "slots": [
           {
             "name": "media_type",
-            "type": "AMAZON.SearchQuery"
+            "type": "MediaType"
           }
         ]
       }
@@ -1239,6 +1239,75 @@
             "name": {
               "value": "video"
             }
+          }
+        ]
+      },
+      {
+        "name": "MediaType",
+        "values": [
+          {
+            "name": {
+              "value": "media"
+            },
+            "id": "media"
+          },
+          {
+            "name": {
+              "value": "video"
+            },
+            "id": "video"
+          },
+          {
+            "name": {
+              "value": "musica",
+              "synonyms": [
+                "canzoni",
+                "brani"
+              ]
+            },
+            "id": "musica"
+          },
+          {
+            "name": {
+              "value": "film",
+              "synonyms": [
+                "movies",
+                "cinema"
+              ]
+            },
+            "id": "film"
+          }
+        ]
+      },
+      {
+        "name": "TimePeriod",
+        "values": [
+          {
+            "name": {
+              "value": "oggi"
+            },
+            "id": "today"
+          },
+          {
+            "name": {
+              "value": "questa settimana",
+              "synonyms": [
+                "nell'ultima settimana",
+                "la settimana scorsa",
+                "negli ultimi giorni"
+              ]
+            },
+            "id": "this_week"
+          },
+          {
+            "name": {
+              "value": "questo mese",
+              "synonyms": [
+                "nell'ultimo mese",
+                "il mese scorso"
+              ]
+            },
+            "id": "this_month"
           }
         ]
       },
