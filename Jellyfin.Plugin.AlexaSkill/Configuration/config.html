@@ -51,7 +51,7 @@
                             <div class="inputContainer">
                                 <label class="inputLabel inputLabelUnfocused" for="ServerAddress">Server Address</label>
                                 <input id="ServerAddress" name="ServerAddress" type="text" is="emby-input" />
-                                <div class="fieldDescription">The public accessable https address of this server.</div>
+                                <div class="fieldDescription">The public URL of this Jellyfin server (e.g. https://myserver.example.com).</div>
                             </div>
 
                             <button id="testConnectionButton" is="emby-button" type="button" class="raised button-alt emby-button" style="margin-bottom:1.5em;">
@@ -68,28 +68,28 @@
                                     <option id="wildcard" value="Wildcard">Wildcard</option>
                                     <option id="trusted" value="Trusted">Trusted</option>
                                     <option id="selfSigned" value="SelfSigned">SelfSigned</option>
-                                </select>
+                                <div class="fieldDescription">How Alexa verifies your server's SSL certificate. Most setups should use Wildcard. Use SelfSigned only if your server uses a self-signed certificate.</div>
                             </div>
 
                             <div class="inputContainer">
-                                <label class="inputLabel inputLabelUnfocused" for="LwaClientId">LWA Client ID</label>
+                                <label class="inputLabel inputLabelUnfocused" for="LwaClientId">Amazon Client ID</label>
                                 <input id="LwaClientId" name="LwaClientId" type="text" is="emby-input" />
-                                <div class="fieldDescription">The LWA client ID to authorize SMAPI requests.</div>
+                                <div class="fieldDescription">Client ID from your Amazon developer account (Login with Amazon security profile).</div>
                             </div>
 
                             <div class="inputContainer">
-                                <label class="inputLabel inputLabelUnfocused" for="LwaClientSecret">SMAPI Client Secret</label>
+                                <label class="inputLabel inputLabelUnfocused" for="LwaClientSecret">Amazon Client Secret</label>
                                 <input id="LwaClientSecret" name="LwaClientSecret" type="text" is="emby-input" />
-                                <div class="fieldDescription">The LWA client secret to authorize SMAPI requests.</div>
+                                <div class="fieldDescription">Client secret from the same Amazon security profile as the Client ID above.</div>
                             </div>
                     </details>
 
                     <details>
-                        <summary><span class="accordion-title">Feature Flags</span></summary>
+                        <summary><span class="accordion-title">Enable / Disable Features</span></summary>
                             <div class="fieldDescription">Disable intent groups you don't need. Disabled features return a polite "not available" message.</div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="RadioModeEnabled" /> <span>Radio Mode</span></label>
-                                <div class="fieldDescription checkboxFieldDescription">Enable radio mode with auto-similar tracks</div>
+                                <div class="fieldDescription checkboxFieldDescription">When a song ends, automatically find and play similar tracks from your library — like a Pandora station. Toggle on/off by voice ("turn on/off radio mode") or let PostPlay AutoPlay start it automatically.</div>
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="PodcastsEnabled" /> <span>Podcasts</span></label>
@@ -116,32 +116,24 @@
                                 <div class="fieldDescription checkboxFieldDescription">Enable media recommendations</div>
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
-                                <label><input type="checkbox" is="emby-checkbox" id="AplVisualsEnabled" /> <span>APL Visuals</span></label>
-                                <div class="fieldDescription checkboxFieldDescription">Enable visual templates on Echo Show and Fire TV</div>
+                                <label><input type="checkbox" is="emby-checkbox" id="AplVisualsEnabled" /> <span>Screen Display</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">Show album art, progress bars, and browse menus on Echo Show and Fire TV screens</div>
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="VideoPlaybackEnabled" /> <span>Video Playback</span></label>
                                 <div class="fieldDescription checkboxFieldDescription">Enable video playback on supported devices</div>
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
-                                <label><input type="checkbox" is="emby-checkbox" id="ResumeOfferEnabled" /> <span>Resume Offer</span></label>
-                                <div class="fieldDescription checkboxFieldDescription">Offer to resume previously playing content when the skill is reopened</div>
+                                <label><input type="checkbox" is="emby-checkbox" id="ResumeOfferEnabled" /> <span>Resume Prompt</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">When you open the skill and something was playing earlier, ask if you want to continue where you left off</div>
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="ResumeAnnounceTitle" /> <span>Announce Title on Resume</span></label>
                                 <div class="fieldDescription checkboxFieldDescription">Speak the content title when resuming playback. Disable for a briefer response with long titles.</div>
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
-                                <label><input type="checkbox" is="emby-checkbox" id="AsrCompoundWordFixEnabled" /> <span>ASR Compound Word Fix</span></label>
-                                <div class="fieldDescription checkboxFieldDescription">When Alexa splits compound words (e.g. 'lazybones' → 'lazy bones'), retry search with joined variants. Disable if search is too slow on misses.</div>
-                            </div>
-                            <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="SeekEnabled" /> <span>Seek Controls</span></label>
                                 <div class="fieldDescription checkboxFieldDescription">Enable skip forward/back and jump-to-position voice commands. Also adds progress display when asking what's playing.</div>
-                            </div>
-                            <div class="checkboxContainer checkboxContainer-withDescription">
-                                <label><input type="checkbox" is="emby-checkbox" id="PauseAnnouncePosition" /> <span>Announce Position on Pause</span></label>
-                                <div class="fieldDescription checkboxFieldDescription">When paused, speak the current playback position (e.g. "Paused at 2:15 of 4:30"). Requires Seek Controls. When off, pause is silent.</div>
                             </div>
                     </details>
 
@@ -173,6 +165,18 @@
                                 <label><input type="checkbox" is="emby-checkbox" id="NativeControlsForAudio" /> <span>Native Echo Show Controls</span></label>
                                 <div class="fieldDescription checkboxFieldDescription">Use native progress bar and elapsed time on Echo Show for audio playback. Trades album art for native transport controls (progress bar, scrubber). Requires a screen-equipped device; non-screen devices always use the standard audio player.</div>
                             </div>
+                            <div class="selectContainer">
+                                <label class="selectLabel" for="DefaultPostPlayBehavior">Post-Play Behavior</label>
+                                <select is="emby-select" id="DefaultPostPlayBehavior" name="DefaultPostPlayBehavior" class="emby-select-withcolor emby-select">
+                                    <option value="Stop">Stop — silence after playback ends</option>
+                                    <option value="AutoPlay">AutoPlay — continue with similar music</option>
+                                </select>
+                                <div class="fieldDescription">What happens when a song ends and the queue is exhausted. Can be overridden per-user in the User table below.</div>
+                            </div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="PauseAnnouncePosition" /> <span>Announce Position on Pause</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">When paused, speak the current playback position (e.g. "Paused at 2:15 of 4:30"). Requires Seek Controls to be enabled. When off, pause is silent.</div>
+                            </div>
                             <div class="inputContainer">
                                 <label class="inputLabel inputLabelUnfocused" for="InitialFetchSize">Initial Fetch Size</label>
                                 <input id="InitialFetchSize" name="InitialFetchSize" type="number" is="emby-input" min="1" max="20" />
@@ -194,9 +198,9 @@
                         <summary><span class="accordion-title">Cache Settings</span></summary>
                             <div class="fieldDescription">Control disk cache for generated video-audio MP4 files. Cached files let subsequent plays start instantly without ffmpeg re-encoding.</div>
                             <div class="inputContainer">
-                                <label class="inputLabel inputLabelUnfocused" for="VideoAudioCacheSizeMB">Video-Audio Cache Size (MB)</label>
+                                <label class="inputLabel inputLabelUnfocused" for="VideoAudioCacheSizeMB">Album Art Cache Size (MB)</label>
                                 <input id="VideoAudioCacheSizeMB" name="VideoAudioCacheSizeMB" type="number" is="emby-input" min="256" max="16384" />
-                                <div class="fieldDescription">Maximum disk space for cached MP4 files (256–16384 MB). Oldest files are evicted when the limit is exceeded. Default: 2048 (2 GB).</div>
+                                <div class="fieldDescription">Disk space for Echo Show album-art video files. When a song plays on a screen-equipped device, the plugin generates an MP4 with album art so the display stays active. Audio-only devices don't use this cache. Oldest files are evicted when the limit is exceeded. Default: 2048 (2 GB).</div>
                             </div>
                     </details>
 
@@ -210,13 +214,9 @@
                                 </select>
                                 <div class="fieldDescription">Default search mode for all users. Can be overridden per-user in the User table below.</div>
                             </div>
-                            <div class="selectContainer">
-                                <label class="selectLabel" for="DefaultPostPlayBehavior">Post-Play Behavior</label>
-                                <select is="emby-select" id="DefaultPostPlayBehavior" name="DefaultPostPlayBehavior" class="emby-select-withcolor emby-select">
-                                    <option value="Stop">Stop — silence after playback ends</option>
-                                    <option value="AutoPlay">AutoPlay — continue with similar music</option>
-                                </select>
-                                <div class="fieldDescription">What happens when a song ends and the queue is exhausted. Can be overridden per-user in the User table below.</div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="AsrCompoundWordFixEnabled" /> <span>Compound Word Fix</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">When Alexa splits compound words (e.g. 'lazybones' → 'lazy bones'), retry search with joined variants. Disable if search is too slow on misses.</div>
                             </div>
                             <div class="fieldDescription">Control how media search behaves. Fuzzy match settings are per-user (see User table below).</div>
                             <div class="inputContainer">
@@ -242,11 +242,11 @@
                     </details>
                     <details>
                         <summary><span class="accordion-title">Custom Interaction Model</span></summary>
-                            <div class="fieldDescription">Deploy a custom interaction model to override the built-in Alexa NLU model.</div>
+                            <div class="fieldDescription">Deploy a custom interaction model to override the built-in Alexa NLU model. The interaction model defines how Alexa interprets your voice commands — most users should leave this off.</div>
 
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="CustomModelEnabled" /> <span>Enable Custom Model</span></label>
-                                <div class="fieldDescription checkboxFieldDescription">Use a custom interaction model instead of the built-in one</div>
+                                <div class="fieldDescription checkboxFieldDescription">Replace the built-in voice command model with a custom one from a URL</div>
                             </div>
 
                             <div class="inputContainer">
@@ -329,7 +329,8 @@
                                 <th scope="col" class="detailTableHeaderCell">Skill ID</th>
                                 <th scope="col" class="detailTableHeaderCell">Invocation Name</th>
                                 <th scope="col" class="detailTableHeaderCell">Libraries</th>
-                                <th scope="col" class="detailTableHeaderCell">Fuzzy Match</th>
+                                <th scope="col" class="detailTableHeaderCell">Search Settings</th>
+                                <th scope="col" class="detailTableHeaderCell">Playback Settings</th>
                                 <th scope="col" class="detailTableHeaderCell">Status</th>
                                 <th scope="col" class="detailTableHeaderCell">Token</th>
                                 <th scope="col" class="detailTableHeaderCell">Action</th>
@@ -601,8 +602,8 @@
                 }
                 row.cells[1].innerHTML = user.UserSkill ? (user.UserSkill.SkillId || "") : "";
                 row.cells[2].firstChild.value = user.UserSkill ? user.UserSkill.InvocationName : "";
-                row.cells[5].innerHTML = user.UserSkill ? normalizeSkillStatus(user.UserSkill.UserSkillStatus) : "unsaved";
-                updateAuthorizeButton(row.cells[7].children[1], user, config);
+                row.cells[6].innerHTML = user.UserSkill ? normalizeSkillStatus(user.UserSkill.UserSkillStatus) : "unsaved";
+                updateAuthorizeButton(row.cells[8].children[1], user, config);
             }
 
             function showAjaxError(res, verb) {
@@ -704,7 +705,7 @@
                 td.appendChild(libBtn);
                 tr.appendChild(td);
 
-                // Fuzzy Match column
+                // Search Settings column
                 td = document.createElement("td");
                 td.classList.add("detailTableBodyCell");
                 td.style.verticalAlign = "middle";
@@ -721,7 +722,7 @@
                 fmSel.style.backgroundColor = "#222";
                 fmSel.style.color = "#ccc";
                 fmSel.style.border = "1px solid #555";
-                [{v:"Confirm",t:"Confirm"},{v:"AutoPlay",t:"Auto-play"}].forEach(function(o){
+                [{v:"Confirm",t:"Confirm match"},{v:"AutoPlay",t:"Auto-play match"}].forEach(function(o){
                     let opt = document.createElement("option");
                     opt.value = o.v; opt.textContent = o.t;
                     if (o.v === (user.FuzzyMatchBehavior || "Confirm")) opt.selected = true;
@@ -751,11 +752,57 @@
                 });
                 fmWrap.appendChild(smSel);
 
+                let threshRow = document.createElement("div");
+                threshRow.style.display = "flex";
+                threshRow.style.gap = "0.5em";
+                threshRow.style.alignItems = "center";
+                let tl1 = document.createElement("label");
+                tl1.textContent = "Auto-play ≥";
+                tl1.style.fontSize = "0.8em";
+                tl1.style.whiteSpace = "nowrap";
+                threshRow.appendChild(tl1);
+                let ti1 = document.createElement("input");
+                ti1.type = "number"; ti1.min = "0"; ti1.max = "100";
+                ti1.style.width = "3.5em"; ti1.style.fontSize = "0.85em";
+                ti1.setAttribute("data-field", "FuzzyMatchThreshold");
+                ti1.value = user.FuzzyMatchThreshold != null ? user.FuzzyMatchThreshold : 60;
+                threshRow.appendChild(ti1);
+                let tl2 = document.createElement("label");
+                tl2.textContent = "Suggest ≥";
+                tl2.style.fontSize = "0.8em";
+                tl2.style.whiteSpace = "nowrap";
+                threshRow.appendChild(tl2);
+                let ti2 = document.createElement("input");
+                ti2.type = "number"; ti2.min = "0"; ti2.max = "100";
+                ti2.style.width = "3.5em"; ti2.style.fontSize = "0.85em";
+                ti2.setAttribute("data-field", "FuzzySuggestionThreshold");
+                ti2.value = user.FuzzySuggestionThreshold != null ? user.FuzzySuggestionThreshold : 40;
+                threshRow.appendChild(ti2);
+                fmWrap.appendChild(threshRow);
+
+                let fmDesc = document.createElement("div");
+                fmDesc.classList.add("fieldDescription");
+                fmDesc.style.fontSize = "0.75em";
+                fmDesc.textContent = "Scores above Auto-play start immediately; above Suggest, Alexa asks \"did you mean...?\"";
+                fmWrap.appendChild(fmDesc);
+
+                td.appendChild(fmWrap);
+                tr.appendChild(td);
+
+                // Playback Settings column
+                td = document.createElement("td");
+                td.classList.add("detailTableBodyCell");
+                td.style.verticalAlign = "middle";
+                let pbWrap = document.createElement("div");
+                pbWrap.style.display = "flex";
+                pbWrap.style.flexDirection = "column";
+                pbWrap.style.gap = "0.3em";
+
                 // Post-Play Behavior dropdown
                 let ppLabel = document.createElement("label");
-                ppLabel.style.cssText = "font-size:0.8em;color:#aaa;margin-top:0.3em;";
-                ppLabel.textContent = "Post-play:";
-                fmWrap.appendChild(ppLabel);
+                ppLabel.style.cssText = "font-size:0.8em;color:#aaa;";
+                ppLabel.textContent = "After song ends:";
+                pbWrap.appendChild(ppLabel);
                 let ppSel = document.createElement("select");
                 ppSel.setAttribute("data-field", "PostPlayBehavior");
                 ppSel.style.minWidth = "120px";
@@ -771,41 +818,7 @@
                     if (o.v === (user.PostPlayBehavior || "Stop")) opt.selected = true;
                     ppSel.appendChild(opt);
                 });
-                fmWrap.appendChild(ppSel);
-
-                let threshRow = document.createElement("div");
-                threshRow.style.display = "flex";
-                threshRow.style.gap = "0.5em";
-                threshRow.style.alignItems = "center";
-                let tl1 = document.createElement("label");
-                tl1.textContent = "Match:";
-                tl1.style.fontSize = "0.8em";
-                tl1.style.whiteSpace = "nowrap";
-                threshRow.appendChild(tl1);
-                let ti1 = document.createElement("input");
-                ti1.type = "number"; ti1.min = "0"; ti1.max = "100";
-                ti1.style.width = "3.5em"; ti1.style.fontSize = "0.85em";
-                ti1.setAttribute("data-field", "FuzzyMatchThreshold");
-                ti1.value = user.FuzzyMatchThreshold != null ? user.FuzzyMatchThreshold : 60;
-                threshRow.appendChild(ti1);
-                let tl2 = document.createElement("label");
-                tl2.textContent = "Sug:";
-                tl2.style.fontSize = "0.8em";
-                tl2.style.whiteSpace = "nowrap";
-                threshRow.appendChild(tl2);
-                let ti2 = document.createElement("input");
-                ti2.type = "number"; ti2.min = "0"; ti2.max = "100";
-                ti2.style.width = "3.5em"; ti2.style.fontSize = "0.85em";
-                ti2.setAttribute("data-field", "FuzzySuggestionThreshold");
-                ti2.value = user.FuzzySuggestionThreshold != null ? user.FuzzySuggestionThreshold : 40;
-                threshRow.appendChild(ti2);
-                fmWrap.appendChild(threshRow);
-
-                let fmDesc = document.createElement("div");
-                fmDesc.classList.add("fieldDescription");
-                fmDesc.style.fontSize = "0.75em";
-                fmDesc.textContent = "Match=auto-accept threshold, Sug=did-you-mean threshold";
-                fmWrap.appendChild(fmDesc);
+                pbWrap.appendChild(ppSel);
 
                 let announceCb = document.createElement("label");
                 announceCb.style.cssText = "display:flex;align-items:center;gap:0.3em;margin-top:0.4em;font-size:0.8em;color:#aaa;cursor:pointer;";
@@ -815,12 +828,12 @@
                 announceInput.checked = user.AnnouncePositionOnResume === true;
                 announceInput.style.margin = "0";
                 announceCb.appendChild(announceInput);
-                let announceLabel = document.createElement("span");
-                announceLabel.textContent = "Announce position on resume";
-                announceCb.appendChild(announceLabel);
-                fmWrap.appendChild(announceCb);
+                let announceLbl = document.createElement("span");
+                announceLbl.textContent = "Announce position on resume";
+                announceCb.appendChild(announceLbl);
+                pbWrap.appendChild(announceCb);
 
-                td.appendChild(fmWrap);
+                td.appendChild(pbWrap);
                 tr.appendChild(td);
 
                 // Status column
@@ -1072,7 +1085,7 @@
                                 var fmThreshold = row.cells[4].querySelector('[data-field="FuzzyMatchThreshold"]');
                                 var fmSuggestion = row.cells[4].querySelector('[data-field="FuzzySuggestionThreshold"]');
                                 var searchMode = row.cells[4].querySelector('[data-field="SearchResponseMode"]');
-                                var postPlayMode = row.cells[4].querySelector('[data-field="PostPlayBehavior"]');
+                                var postPlayMode = row.cells[5].querySelector('[data-field="PostPlayBehavior"]');
                                 let data = {
                                     "InvocationName": row.cells[2].firstChild.value,
                                     "AllowedLibraryIds": selectedLibs,
@@ -1081,7 +1094,7 @@
                                     "FuzzySuggestionThreshold": fmSuggestion ? parseInt(fmSuggestion.value) || 40 : 40,
                                     "SearchResponseMode": searchMode ? searchMode.value : "Thorough",
                                     "PostPlayBehavior": postPlayMode ? postPlayMode.value : "Stop",
-                                    "AnnouncePositionOnResume": row.cells[4].querySelector('[data-field="AnnouncePositionOnResume"]')?.checked || false
+                                    "AnnouncePositionOnResume": row.cells[5].querySelector('[data-field="AnnouncePositionOnResume"]')?.checked || false
                                 };
 
                                 ApiClient.ajax({
