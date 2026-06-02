@@ -35,10 +35,10 @@ public class ItalianPhoneticSynonymsTests
     }
 
     [Theory]
-    [InlineData("Cannelloni", "i", "ll")]  // ends in vowel 'i', has doubled 'll'
-    [InlineData("Puccini", "i", "cc")]     // ends in vowel 'i', has doubled 'cc'
-    [InlineData("Roselli", "i", "ll")]     // ends in vowel 'i', has doubled 'll'
-    public void Generate_DoubledConsonantWithVowelEnding_ReturnsEmpty(string name, string ending, string doubled)
+    [InlineData("Cannelloni")]
+    [InlineData("Puccini")]
+    [InlineData("Roselli")]
+    public void Generate_DoubledConsonantWithVowelEnding_ReturnsEmpty(string name)
     {
         var result = ItalianPhoneticSynonyms.Generate(name);
         Assert.Empty(result);
