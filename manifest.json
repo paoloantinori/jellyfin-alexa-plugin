@@ -242,9 +242,9 @@
             },
             {
                 "version": "0.5.0.1",
-                "checksum": "placeholder",
+                "checksum": "a6b8a0786af8ae6dff017ac2cfaf4f90",
                 "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.5.0.1/AlexaSkill_0.5.0.1.zip",
-                "changelog": "placeholder",
+                "changelog": "Config page clarity: remove jargon, reorganize sections, split user table columns. Italian phonetic synonym unit tests (2131 total).",
                 "targetAbi": "10.11.0.0",
                 "timestamp": "2026-06-02T19:50:00Z"
             }
