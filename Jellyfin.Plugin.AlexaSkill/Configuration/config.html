@@ -214,8 +214,7 @@
                                 <label class="selectLabel" for="DefaultPostPlayBehavior">Post-Play Behavior</label>
                                 <select is="emby-select" id="DefaultPostPlayBehavior" name="DefaultPostPlayBehavior" class="emby-select-withcolor emby-select">
                                     <option value="Stop">Stop — silence after playback ends</option>
-                                    <option value="AutoPlay">AutoPlay — announce and continue with similar music</option>
-                                    <option value="Ask">Ask — prompt before continuing</option>
+                                    <option value="AutoPlay">AutoPlay — continue with similar music</option>
                                 </select>
                                 <div class="fieldDescription">What happens when a song ends and the queue is exhausted. Can be overridden per-user in the User table below.</div>
                             </div>
@@ -766,7 +765,7 @@
                 ppSel.style.color = "#ccc";
                 ppSel.style.border = "1px solid #555";
                 ppSel.style.fontSize = "0.85em";
-                [{v:"Stop",t:"Stop (silence)"},{v:"AutoPlay",t:"AutoPlay (continue)"},{v:"Ask",t:"Ask (prompt)"}].forEach(function(o){
+                [{v:"Stop",t:"Stop (silence)"},{v:"AutoPlay",t:"AutoPlay (continue)"}].forEach(function(o){
                     let opt = document.createElement("option");
                     opt.value = o.v; opt.textContent = o.t;
                     if (o.v === (user.PostPlayBehavior || "Stop")) opt.selected = true;

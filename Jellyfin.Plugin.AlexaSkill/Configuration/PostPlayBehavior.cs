@@ -11,12 +11,7 @@ public enum PostPlayBehavior
     Stop = 0,
 
     /// <summary>
-    /// Song ends, a brief announcement plays, then genre-related music starts automatically.
+    /// Song ends and similar music starts automatically via gapless transition.
     /// </summary>
-    AutoPlay = 1,
-
-    /// <summary>
-    /// Song ends and the user is asked whether they want to hear more music.
-    /// </summary>
-    Ask = 2
+    AutoPlay = 1
 }

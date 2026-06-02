@@ -69,16 +69,6 @@ public class NoIntentHandler : BaseHandler
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, Dictionary<string, object>? sessionAttributes, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
-        string deviceId = context.System.Device.DeviceID;
-
-        // PostPlay Ask rejection takes highest priority
-        if (PostPlayState.TryGet(session.UserId, deviceId, out var postPlayMode, out _)
-            && postPlayMode == PostPlayBehavior.Ask)
-        {
-            Logger.LogDebug("No: handling PostPlay Ask rejection");
-            PostPlayState.Remove(session.UserId, deviceId);
-            return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("PostPlayNoResponse", locale)));
-        }
 
         // Check for resume rejection first
         if (ResumeHelper.HasResumeState(sessionAttributes))

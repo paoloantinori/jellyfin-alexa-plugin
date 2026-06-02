@@ -86,15 +86,6 @@ public class YesIntentHandler : BaseHandler
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, Dictionary<string, object>? sessionAttributes, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
-        string deviceId = context.System.Device.DeviceID;
-
-        // PostPlay Ask confirmation takes highest priority
-        if (PostPlayState.TryGet(session.UserId, deviceId, out var postPlayMode, out var postPlayItemId)
-            && postPlayMode == PostPlayBehavior.Ask)
-        {
-            Logger.LogDebug("Yes: handling PostPlay Ask confirmation for item {ItemId}", postPlayItemId);
-            return HandlePostPlayYes(postPlayItemId!, session, user, context, locale, cancellationToken);
-        }
 
         // Check for resume confirmation first
         var resumeState = ResumeHelper.ReadState(sessionAttributes);
@@ -327,25 +318,5 @@ public class YesIntentHandler : BaseHandler
         session.FullNowPlayingItem = playlistItems[0];
         string itemId = playlistItems[0].Id.ToString();
         return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, playlistItems[0], user);
-    }
-
-    /// <summary>
-    /// Handle PostPlay Ask "yes": find similar tracks, play first, enable radio mode.
-    /// </summary>
-    private async Task<SkillResponse> HandlePostPlayYes(
-        string itemId,
-        SessionInfo session,
-        Entities.User user,
-        Context context,
-        string locale,
-        CancellationToken cancellationToken)
-    {
-        PostPlayState.Remove(session.UserId, context.System.Device.DeviceID);
-
-        SkillResponse? response = await TryBuildPostPlayResponseAsync(
-            itemId, session, user, context, locale,
-            _libraryManager, _userManager, cancellationToken).ConfigureAwait(false);
-
-        return response ?? ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale));
     }
 }

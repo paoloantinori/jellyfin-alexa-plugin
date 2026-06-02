@@ -223,9 +223,5 @@
   "ShowMorePage": "إليك العناصر التالية: {0}",
   "ShowMoreLastPage": "{0} إليك الـ {1} الأولى: {2}.",
   "QueryRecentlyAddedPartial": "{0} إليك الـ {1} الأولى: {2}.",
-  "FoundArtistInstead": "وجدت الفنان {0}. إليك موسيقى {0}.",
-  "PostPlayAutoPlayAnnouncement": "Playing more music by {0}",
-  "PostPlayAskPrompt": "Would you like to hear more music like this?",
-  "PostPlayAskReprompt": "You can say yes to hear more, or no to stop.",
-  "PostPlayNoResponse": "Alright, stopping playback."
+  "FoundArtistInstead": "وجدت الفنان {0}. إليك موسيقى {0}."
 }

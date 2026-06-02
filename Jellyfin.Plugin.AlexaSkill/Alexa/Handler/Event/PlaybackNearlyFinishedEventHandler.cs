@@ -116,26 +116,35 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             // Clean up continuation state when queue is exhausted
             QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID);
 
-            // Set PostPlay state only when radio mode is NOT active.
+            // PostPlay only when radio mode is NOT active.
             // Radio mode handles its own continuation; PostPlay is for single-track
             // playback that reaches queue exhaustion without radio.
             bool radioActive = RadioModeState.IsEnabled(session.UserId, context.System.Device.DeviceID);
             if (!radioActive)
             {
                 var postPlayMode = GetPostPlayBehavior(user);
-                if (postPlayMode != PostPlayBehavior.Stop)
+
+                if (postPlayMode == PostPlayBehavior.AutoPlay)
                 {
+                    // AutoPlay: find similar tracks and enqueue for gapless transition.
+                    // PlaybackNearlyFinished can return AudioPlayer.Play but NOT speech,
+                    // so the music continues seamlessly without announcement.
                     string? currentItemId = context.AudioPlayer?.Token;
                     if (!string.IsNullOrEmpty(currentItemId))
                     {
-                        PostPlayState.Set(session.UserId, context.System.Device.DeviceID, postPlayMode, currentItemId);
-                        Logger.LogDebug("PostPlay: set state mode={Mode} for item={ItemId}", postPlayMode, currentItemId);
+                        nextItemId = await AutoPopulatePostPlayTracks(
+                            currentItemId, session, user, context, cancellationToken).ConfigureAwait(false);
                     }
                 }
             }
 
-            Logger.LogDebug("No next item in queue, playback will end after current track");
-            return ResponseBuilder.Empty();
+            if (nextItemId == null)
+            {
+                Logger.LogDebug("No next item in queue, playback will end after current track");
+                return ResponseBuilder.Empty();
+            }
+
+            // PostPlay AutoPlay found tracks — fall through to enqueue below
         }
 
         // Pre-fetch the next item from the library to resolve metadata eagerly
@@ -411,6 +420,73 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         {
             session.NowPlayingQueue = queue;
             Logger.LogInformation("Radio mode: added {Count} similar tracks", addedCount);
+        }
+
+        return firstNewId;
+    }
+
+    /// <summary>
+    /// Find similar tracks to the specified item and append them to the queue
+    /// for PostPlay AutoPlay gapless transition. Enables RadioModeState for
+    /// subsequent continuation via the existing AutoPopulateRadioTracks flow.
+    /// </summary>
+    private async Task<Guid?> AutoPopulatePostPlayTracks(
+        string currentItemId,
+        SessionInfo session,
+        Entities.User user,
+        Context context,
+        CancellationToken cancellationToken)
+    {
+        BaseItem? item = _libraryManager.GetItemById(Guid.Parse(currentItemId));
+        var currentAudio = item as MediaBrowser.Controller.Entities.Audio.Audio;
+        if (currentAudio == null)
+        {
+            return null;
+        }
+
+        Jellyfin.Database.Implementations.Entities.User? jellyfinUser = _userManager.GetUserById(session.UserId);
+        if (jellyfinUser == null)
+        {
+            return null;
+        }
+
+        Entities.User? pluginUser = _config.GetUserById(session.UserId);
+        IReadOnlyList<BaseItem> similar = await FindRadioTracksAsync(
+            currentAudio, jellyfinUser, pluginUser!, _libraryManager, cancellationToken).ConfigureAwait(false);
+
+        if (similar.Count == 0)
+        {
+            Logger.LogInformation("PostPlay AutoPlay: no similar tracks found for {ItemName}", currentAudio.Name);
+            return null;
+        }
+
+        List<BaseItem> shuffled = similar.ToList();
+        Shuffle(shuffled);
+        if (shuffled.Count > 15)
+        {
+            shuffled.RemoveRange(15, shuffled.Count - 15);
+        }
+
+        var queue = new List<QueueItem>(session.NowPlayingQueue);
+        var seen = new HashSet<Guid>(queue.Select(q => q.Id));
+        Guid? firstNewId = null;
+        int addedCount = 0;
+
+        foreach (BaseItem track in shuffled)
+        {
+            if (seen.Add(track.Id))
+            {
+                queue.Add(new QueueItem { Id = track.Id });
+                firstNewId ??= track.Id;
+                addedCount++;
+            }
+        }
+
+        if (firstNewId != null)
+        {
+            session.NowPlayingQueue = queue;
+            RadioModeState.Enable(session.UserId, context.System.Device.DeviceID);
+            Logger.LogInformation("PostPlay AutoPlay: added {Count} similar tracks, radio mode enabled", addedCount);
         }
 
         return firstNewId;

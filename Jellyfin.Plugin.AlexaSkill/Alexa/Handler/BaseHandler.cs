@@ -1045,58 +1045,6 @@ public abstract class BaseHandler
     }
 
     /// <summary>
-    /// Shared core logic for PostPlay track finding and session setup.
-    /// Used by both PlaybackFinishedEventHandler (AutoPlay) and YesIntentHandler (Ask→Yes).
-    /// Returns the first radio track as a playable response, or null if no tracks found.
-    /// </summary>
-    protected async Task<SkillResponse?> TryBuildPostPlayResponseAsync(
-        string itemId,
-        SessionInfo session,
-        Entities.User user,
-        Context context,
-        string locale,
-        ILibraryManager libraryManager,
-        IUserManager userManager,
-        CancellationToken cancellationToken)
-    {
-        var currentAudio = libraryManager.GetItemById(Guid.Parse(itemId)) as MediaBrowser.Controller.Entities.Audio.Audio;
-        if (currentAudio == null)
-        {
-            Logger.LogWarning("PostPlay: item {ItemId} not found or not audio", itemId);
-            return null;
-        }
-
-        var (jellyfinUser, userError) = ResolveJellyfinUser(userManager, session.UserId, locale);
-        if (userError != null)
-        {
-            return null;
-        }
-
-        IReadOnlyList<BaseItem> tracks = await FindRadioTracksAsync(currentAudio, jellyfinUser!, user, libraryManager, cancellationToken).ConfigureAwait(false);
-        if (tracks.Count == 0)
-        {
-            Logger.LogInformation("PostPlay: no similar tracks found for {ItemName}", currentAudio.Name);
-            return null;
-        }
-
-        BaseItem firstTrack = tracks[0];
-        session.NowPlayingQueue = tracks.Select(t => new QueueItem { Id = t.Id }).ToList();
-        session.FullNowPlayingItem = firstTrack;
-
-        RadioModeState.Enable(session.UserId, context.System.Device.DeviceID);
-
-        Logger.LogInformation("PostPlay: playing {TrackName} after {ItemName}", firstTrack.Name, currentAudio.Name);
-
-        return BuildAudioPlayerResponse(
-            PlayBehavior.ReplaceAll,
-            GetStreamUrl(firstTrack.Id.ToString(), user),
-            firstTrack.Id.ToString(),
-            firstTrack,
-            user,
-            context);
-    }
-
-    /// <summary>
     /// Result of a fuzzy match attempt with suggestion support.
     /// </summary>
     protected enum FuzzyMissOutcome
