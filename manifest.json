@@ -234,11 +234,11 @@
             },
             {
                 "version": "0.5.0.0",
-                "checksum": "placeholder",
+                "checksum": "9115da2b54d47c15274fbd312c1014e8",
                 "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.5.0.0/AlexaSkill_0.5.0.0.zip",
-                "changelog": "placeholder",
+                "changelog": "PostPlay AutoPlay: automatically enqueue similar tracks when queue exhausts. Fast/Thorough search mode: per-user speed/recall trade-off. Double Metaphone phonetic matching for non-English artist names. Cross-media-type fallback (song to artist songs). On-the-fly MP4 video generation with album art for Echo Show. APL progress bar with elapsed/total time. Enriched NowPlaying card with artist, album, track number. ShuffleArtistSongs config option. Fix stop/pause routing (ShouldEndSession=true). Fix BrowseLibrary entity resolution for Italian articles. Italian invocation name changed to 'mia collezione'. LWA credential sanitization. 2084 unit tests. 17-locale Mermaid documentation.",
                 "targetAbi": "10.11.0.0",
-                "timestamp": "2026-06-02 00:00:00"
+                "timestamp": "2026-06-02 18:58:19"
             }
         ]
     }
