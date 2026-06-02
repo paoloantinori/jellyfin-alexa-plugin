@@ -58,6 +58,7 @@ A Jellyfin plugin that creates a personal Alexa skill to play and control media 
 - **Audio and video**: supports both audio playback (AudioPlayer) and video launching
 - **Robust resume**: three-tier position fallback (Alexa context → Jellyfin session → device queue) ensures playback resumes correctly even after session state is cleared
 - **Fast/Thorough search mode**: per-user choice between fast single-query auto-play or thorough multi-tier fallback with disambiguation
+- **PostPlay AutoPlay**: when a single song ends and the queue is empty, automatically enqueues similar tracks from your library (configurable per-user or globally)
 - **Phonetic matching**: Double Metaphone pre-filter improves fuzzy matching for non-English artist names (e.g., "soul coughing" matches even with heavy accent distortion)
 
 ## Prerequisites
@@ -173,7 +174,7 @@ The plugin uses **Login with Amazon (LWA)** to create and manage your Alexa skil
 3. Select the Jellyfin user from the dropdown
 4. Optionally customize the **invocation name** (default: "Jellyfin Player", Italian: "Mia Collezione")
 
-Per-user settings include **fuzzy match behavior** (Confirm or Auto-Play), **fuzzy match threshold** (0–100), **allowed libraries** (restrict to specific top-level folders), **content type access** (music, videos, audiobooks, books), and **search response mode** (Fast or Thorough). Fast mode skips fallback tiers and auto-plays the first match; Thorough runs the full fallback chain with disambiguation.
+Per-user settings include **fuzzy match behavior** (Confirm or Auto-Play), **fuzzy match threshold** (0–100), **allowed libraries** (restrict to specific top-level folders), **content type access** (music, videos, audiobooks, books), **search response mode** (Fast or Thorough), and **PostPlay behavior** (Stop or AutoPlay). Fast mode skips fallback tiers and auto-plays the first match; Thorough runs the full fallback chain with disambiguation. AutoPlay continues with similar tracks when a song ends and the queue is empty.
 
 ### Feature Flags
 

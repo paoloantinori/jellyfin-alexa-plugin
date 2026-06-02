@@ -6,7 +6,7 @@ C# Jellyfin plugin (net9.0) exposing an Alexa skill for media playback, search, 
 
 ```bash
 dotnet build Jellyfin.Plugin.AlexaSkill.sln
-dotnet test Jellyfin.Plugin.AlexaSkill.Tests          # ~2065 unit tests
+dotnet test Jellyfin.Plugin.AlexaSkill.Tests          # ~2084 unit tests
 python3 scripts/validate_interaction_models.py        # Check all 17 models (JSON, slots, drift)
 python3 scripts/validate_locales.py                   # Check locale key coverage (baseline-aware)
 python3 scripts/validate_versions.py                  # Check version consistency across files
@@ -57,7 +57,7 @@ CI validates models, locales, and versions on every PR and push to main.
 - `Alexa/Pipeline/` — Request routing pipeline
 - `Configuration/` — Plugin config DTO + Jellyfin config UI (`config.html`)
 - `Controller/` — ASP.NET API controllers (skill endpoint, config, simulator, health)
-- `docs/` — 102 Mermaid diagrams covering 6 feature flows × 17 locales
+- `docs/` — 103 Mermaid diagrams covering 6 feature flows × 17 locales
 - `tests/integration/` — NLU + E2E test suites (Python/pytest)
 - `Directory.Build.props` — Version numbers (single source of truth)
 
@@ -113,6 +113,16 @@ In Fast mode, `SearchWithAsrFallbackAsync` skips compound-word retries. Handlers
 
 When enabled (`AsrCompoundWordFixEnabled`), `SearchWithAsrFallbackAsync` in `BaseHandler` retries the original query with joined/split word variants. For example, "lazy bones" retries as "lazybones". Only triggers when the original query returns no results.
 
+## PostPlay Behavior
+
+When a single song finishes and the queue is empty, `PostPlayBehavior` controls what happens next (configurable per-user or globally via `DefaultPostPlayBehavior`):
+- **Stop** (default): silence after queue exhaustion
+- **AutoPlay**: `PlaybackNearlyFinishedEventHandler` detects queue exhaustion, finds similar tracks via `FindRadioTracksAsync`, enqueues the first one, and enables `RadioModeState` for gapless continuation
+
+AutoPlay is handled entirely in `PlaybackNearlyFinished` — it enqueues the next track before the current one ends, so there's no gap and no speech announcement. After the first AutoPlay track, `RadioModeState` handles subsequent transitions via the existing `AutoPopulateRadioTracks()`.
+
+Handlers call `GetPostPlayBehavior(user)` to resolve per-user override → global default (same pattern as `GetSearchResponseMode`).
+
 ## Code Conventions
 
 - `Nullable enable` on — nullability annotations required
@@ -156,6 +166,7 @@ NLU test fixtures in `tests/integration/fixtures/<locale>.yaml`. NLU tests use t
 - **SMAPI rate limits**: Space NLU tests with `SMAPI_DELAY=1.5`.
 - **ValueTuple serialization**: Never store `ValueTuple` in session attributes — Newtonsoft.Json serializes as Item1/Item2. Use named DTOs.
 - **Config.Users in API responses**: Never send `config.Users` via `updatePluginConfiguration` — it can wipe skill config entries. Use dedicated endpoints.
+- **AudioPlayer event restrictions**: `PlaybackFinished` and `PlaybackNearlyFinished` can ONLY return `AudioPlayer.Play` directives — no `outputSpeech`, `reprompt`, or `shouldEndSession=false`. Any response needing speech must come from intent handlers, not AudioPlayer events.
 - **Entity resolution for slot synonyms**: `slot.Value` always contains the raw spoken text (e.g. "gli album"). To get the canonical value ("album"), extract from `slot.Resolution.Authorities[0].Values[0].Value.Name` when `Status.Code == "ER_SUCCESS_MATCH"`. See `BrowseLibraryIntentHandler.GetCanonicalSlotValue()` for the pattern.
 
 ## Release

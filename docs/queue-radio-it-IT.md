@@ -47,9 +47,13 @@ graph TD
     Playing -->|"Riproduci radio {channel}"| Channel["PlayChannelIntent<br/>Riproduci canale radio internet"]
     Channel --> Playing
 
+    Playing -->|"Queue exhausted"| AutoPlay["PostPlay AutoPlay<br/>Auto-queue similar tracks"]
+    AutoPlay -->|"Enable radio mode"| RadioActive
+
     style Playing fill:#4CAF50,color:#fff
     style RadioActive fill:#9C27B0,color:#fff
     style Shuffled fill:#FF9800,color:#fff
     style SongLooping fill:#2196F3,color:#fff
     style AllLooping fill:#2196F3,color:#fff
+    style AutoPlay fill:#00BCD4,color:#fff
 ```

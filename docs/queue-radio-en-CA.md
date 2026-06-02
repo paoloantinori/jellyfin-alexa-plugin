@@ -1,4 +1,4 @@
-# Queue & Radio (en-US)
+# Queue & Radio (en-CA)
 
 ```mermaid
 graph TD
