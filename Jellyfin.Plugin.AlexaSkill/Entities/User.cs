@@ -96,6 +96,13 @@ public class User
     public SearchResponseMode? SearchResponseMode { get; set; }
 
     /// <summary>
+    /// Gets or sets the post-play behavior controlling what happens after queue exhaustion.
+    /// When null (not explicitly set), the global default is used.
+    /// When set at user level, overrides the global default.
+    /// </summary>
+    public PostPlayBehavior? PostPlayBehavior { get; set; }
+
+    /// <summary>
     /// Transitions skill status from AccountLinkPending to Ready if the user
     /// has completed account linking (JellyfinToken is present).
     /// </summary>

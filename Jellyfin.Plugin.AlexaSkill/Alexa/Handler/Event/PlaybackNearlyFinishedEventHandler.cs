@@ -116,6 +116,24 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             // Clean up continuation state when queue is exhausted
             QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID);
 
+            // Set PostPlay state only when radio mode is NOT active.
+            // Radio mode handles its own continuation; PostPlay is for single-track
+            // playback that reaches queue exhaustion without radio.
+            bool radioActive = RadioModeState.IsEnabled(session.UserId, context.System.Device.DeviceID);
+            if (!radioActive)
+            {
+                var postPlayMode = GetPostPlayBehavior(user);
+                if (postPlayMode != PostPlayBehavior.Stop)
+                {
+                    string? currentItemId = context.AudioPlayer?.Token;
+                    if (!string.IsNullOrEmpty(currentItemId))
+                    {
+                        PostPlayState.Set(session.UserId, context.System.Device.DeviceID, postPlayMode, currentItemId);
+                        Logger.LogDebug("PostPlay: set state mode={Mode} for item={ItemId}", postPlayMode, currentItemId);
+                    }
+                }
+            }
+
             Logger.LogDebug("No next item in queue, playback will end after current track");
             return ResponseBuilder.Empty();
         }

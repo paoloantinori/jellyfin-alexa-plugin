@@ -99,7 +99,7 @@ public class EventHandlerTests : PluginTestBase
     [Fact]
     public void PlaybackFinished_CanHandle_ReturnsTrueForPlaybackFinished()
     {
-        var handler = new PlaybackFinishedEventHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+        var handler = new PlaybackFinishedEventHandler(_sessionManagerMock.Object, _config, Mock.Of<ILibraryManager>(), Mock.Of<IUserManager>(), _loggerFactory);
         var request = CreateAudioPlayerRequest("AudioPlayer.PlaybackFinished");
 
         Assert.True(handler.CanHandle(request));
@@ -108,7 +108,7 @@ public class EventHandlerTests : PluginTestBase
     [Fact]
     public async Task PlaybackFinished_Handle_ReturnsEmptyResponse()
     {
-        var handler = new PlaybackFinishedEventHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+        var handler = new PlaybackFinishedEventHandler(_sessionManagerMock.Object, _config, Mock.Of<ILibraryManager>(), Mock.Of<IUserManager>(), _loggerFactory);
         var request = CreateAudioPlayerRequest("AudioPlayer.PlaybackFinished", offset: 10000);
 
         var response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);

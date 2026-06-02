@@ -223,5 +223,9 @@
   "ShowMorePage": "Ecco gli elementi successivi: {0}",
   "ShowMoreLastPage": "{0} Ecco i primi {1}: {2}.",
   "QueryRecentlyAddedPartial": "{0} Ecco i primi {1}: {2}.",
-  "FoundArtistInstead": "Ho trovato l'artista {0}. Ecco la musica di {0}."
+  "FoundArtistInstead": "Ho trovato l'artista {0}. Ecco la musica di {0}.",
+  "PostPlayAutoPlayAnnouncement": "Playing more music by {0}",
+  "PostPlayAskPrompt": "Would you like to hear more music like this?",
+  "PostPlayAskReprompt": "You can say yes to hear more, or no to stop.",
+  "PostPlayNoResponse": "Alright, stopping playback."
 }

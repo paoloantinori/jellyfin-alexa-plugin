@@ -1,4 +1,5 @@
 using Xunit;
+using PostPlayState = Jellyfin.Plugin.AlexaSkill.Alexa.PostPlayState;
 using QueueContinuationStore = Jellyfin.Plugin.AlexaSkill.Alexa.QueueContinuationStore;
 using RadioModeState = Jellyfin.Plugin.AlexaSkill.Alexa.RadioModeState;
 
@@ -13,8 +14,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests;
 /// <summary>
 /// Resets all shared static state in the constructor.
 /// Inherit from this class in every test class that references Plugin.Instance,
-/// QueueContinuationStore, RadioModeState, or other static singletons — whether
-/// directly or indirectly through BaseHandler methods (FilterByContentAccess,
+/// PostPlayState, QueueContinuationStore, RadioModeState, or other static singletons
+/// — whether directly or indirectly through BaseHandler methods (FilterByContentAccess,
 /// IfFeatureDisabled, ApplyLibraryFilter).
 ///
 /// This ensures each test class starts from a clean known-good state even though
@@ -25,6 +26,7 @@ public abstract class PluginTestBase
     protected PluginTestBase()
     {
         Plugin.ResetInstance();
+        PostPlayState.Clear();
         QueueContinuationStore.Clear();
         RadioModeState.Clear();
     }

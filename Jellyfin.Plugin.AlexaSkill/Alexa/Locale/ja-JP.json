@@ -223,5 +223,9 @@
   "ShowMorePage": "次のアイテムはこちらです: {0}",
   "ShowMoreLastPage": "{0} 最初の{1}件を表示します: {2}。",
   "QueryRecentlyAddedPartial": "{0} 最初の{1}件を表示します: {2}。",
-  "FoundArtistInstead": "アーティスト{0}を見つけました。{0}の音楽を再生します。"
+  "FoundArtistInstead": "アーティスト{0}を見つけました。{0}の音楽を再生します。",
+  "PostPlayAutoPlayAnnouncement": "Playing more music by {0}",
+  "PostPlayAskPrompt": "Would you like to hear more music like this?",
+  "PostPlayAskReprompt": "You can say yes to hear more, or no to stop.",
+  "PostPlayNoResponse": "Alright, stopping playback."
 }

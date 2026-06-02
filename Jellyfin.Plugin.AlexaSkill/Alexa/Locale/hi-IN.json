@@ -223,5 +223,9 @@
   "ShowMorePage": "यहाँ अगले आइटम हैं: {0}",
   "ShowMoreLastPage": "{0} यहाँ पहले {1} हैं: {2}।",
   "QueryRecentlyAddedPartial": "{0} यहाँ पहले {1} हैं: {2}।",
-  "FoundArtistInstead": "मुझे कलाकार {0} मिला। यहाँ {0} का संगीत है।"
+  "FoundArtistInstead": "मुझे कलाकार {0} मिला। यहाँ {0} का संगीत है।",
+  "PostPlayAutoPlayAnnouncement": "Playing more music by {0}",
+  "PostPlayAskPrompt": "Would you like to hear more music like this?",
+  "PostPlayAskReprompt": "You can say yes to hear more, or no to stop.",
+  "PostPlayNoResponse": "Alright, stopping playback."
 }

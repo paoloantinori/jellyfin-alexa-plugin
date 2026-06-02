@@ -174,6 +174,22 @@ public class ConfigurationController : ControllerBase
             }
         }
 
+        // Handle PostPlayBehavior (string enum: "Stop", "AutoPlay", "Ask", or null for global default)
+        if (req.TryGetValue("PostPlayBehavior", out var ppbToken))
+        {
+            if (ppbToken.Type == JTokenType.String
+                && Enum.TryParse<Configuration.PostPlayBehavior>(ppbToken.Value<string>(), ignoreCase: true, out var ppb))
+            {
+                pluginUser!.PostPlayBehavior = ppb;
+                updated = true;
+            }
+            else if (ppbToken.Type == JTokenType.Null)
+            {
+                pluginUser!.PostPlayBehavior = null;
+                updated = true;
+            }
+        }
+
         if (!updated)
         {
             return new JsonResult(new { error = "No valid fields to update" }) { StatusCode = 400 };

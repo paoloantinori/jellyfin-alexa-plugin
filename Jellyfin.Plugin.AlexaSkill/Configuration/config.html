@@ -210,6 +210,15 @@
                                 </select>
                                 <div class="fieldDescription">Default search mode for all users. Can be overridden per-user in the User table below.</div>
                             </div>
+                            <div class="selectContainer">
+                                <label class="selectLabel" for="DefaultPostPlayBehavior">Post-Play Behavior</label>
+                                <select is="emby-select" id="DefaultPostPlayBehavior" name="DefaultPostPlayBehavior" class="emby-select-withcolor emby-select">
+                                    <option value="Stop">Stop — silence after playback ends</option>
+                                    <option value="AutoPlay">AutoPlay — announce and continue with similar music</option>
+                                    <option value="Ask">Ask — prompt before continuing</option>
+                                </select>
+                                <div class="fieldDescription">What happens when a song ends and the queue is exhausted. Can be overridden per-user in the User table below.</div>
+                            </div>
                             <div class="fieldDescription">Control how media search behaves. Fuzzy match settings are per-user (see User table below).</div>
                             <div class="inputContainer">
                                 <label class="inputLabel inputLabelUnfocused" for="MaxSearchResults">Max Search Results</label>
@@ -430,6 +439,7 @@
 
                     // Search preferences
                     document.querySelector("#DefaultSearchResponseMode").value = config.DefaultSearchResponseMode || "Thorough";
+                    document.querySelector("#DefaultPostPlayBehavior").value = config.DefaultPostPlayBehavior || "Stop";
                     document.querySelector("#MaxSearchResults").value = config.MaxSearchResults != null ? config.MaxSearchResults : 20;
                     document.querySelector("#MaxBrowseResults").value = config.MaxBrowseResults != null ? config.MaxBrowseResults : 5;
                     document.querySelector("#MaxRecentlyAddedResults").value = config.MaxRecentlyAddedResults != null ? config.MaxRecentlyAddedResults : 10;
@@ -742,6 +752,28 @@
                 });
                 fmWrap.appendChild(smSel);
 
+                // Post-Play Behavior dropdown
+                let ppLabel = document.createElement("label");
+                ppLabel.style.cssText = "font-size:0.8em;color:#aaa;margin-top:0.3em;";
+                ppLabel.textContent = "Post-play:";
+                fmWrap.appendChild(ppLabel);
+                let ppSel = document.createElement("select");
+                ppSel.setAttribute("data-field", "PostPlayBehavior");
+                ppSel.style.minWidth = "120px";
+                ppSel.style.padding = "0.2em 0.4em";
+                ppSel.style.borderRadius = "3px";
+                ppSel.style.backgroundColor = "#222";
+                ppSel.style.color = "#ccc";
+                ppSel.style.border = "1px solid #555";
+                ppSel.style.fontSize = "0.85em";
+                [{v:"Stop",t:"Stop (silence)"},{v:"AutoPlay",t:"AutoPlay (continue)"},{v:"Ask",t:"Ask (prompt)"}].forEach(function(o){
+                    let opt = document.createElement("option");
+                    opt.value = o.v; opt.textContent = o.t;
+                    if (o.v === (user.PostPlayBehavior || "Stop")) opt.selected = true;
+                    ppSel.appendChild(opt);
+                });
+                fmWrap.appendChild(ppSel);
+
                 let threshRow = document.createElement("div");
                 threshRow.style.display = "flex";
                 threshRow.style.gap = "0.5em";
@@ -934,6 +966,7 @@
 
                     // Search preferences
                     config.DefaultSearchResponseMode = document.querySelector("#DefaultSearchResponseMode").value || "Thorough";
+                    config.DefaultPostPlayBehavior = document.querySelector("#DefaultPostPlayBehavior").value || "Stop";
                     var msrRaw = parseInt(document.querySelector("#MaxSearchResults").value);
                     config.MaxSearchResults = isNaN(msrRaw) ? 20 : msrRaw;
                     var mbrRaw = parseInt(document.querySelector("#MaxBrowseResults").value);
@@ -991,7 +1024,8 @@
                         CustomModelEnabled: config.CustomModelEnabled,
                         CustomModelUrl: config.CustomModelUrl,
                         CustomModelLocale: config.CustomModelLocale,
-                        DefaultSearchResponseMode: config.DefaultSearchResponseMode
+                        DefaultSearchResponseMode: config.DefaultSearchResponseMode,
+                        DefaultPostPlayBehavior: config.DefaultPostPlayBehavior
                     };
                     ApiClient.ajax({
                         type: "PATCH",
@@ -1039,6 +1073,7 @@
                                 var fmThreshold = row.cells[4].querySelector('[data-field="FuzzyMatchThreshold"]');
                                 var fmSuggestion = row.cells[4].querySelector('[data-field="FuzzySuggestionThreshold"]');
                                 var searchMode = row.cells[4].querySelector('[data-field="SearchResponseMode"]');
+                                var postPlayMode = row.cells[4].querySelector('[data-field="PostPlayBehavior"]');
                                 let data = {
                                     "InvocationName": row.cells[2].firstChild.value,
                                     "AllowedLibraryIds": selectedLibs,
@@ -1046,6 +1081,7 @@
                                     "FuzzyMatchThreshold": fmThreshold ? parseInt(fmThreshold.value) || 60 : 60,
                                     "FuzzySuggestionThreshold": fmSuggestion ? parseInt(fmSuggestion.value) || 40 : 40,
                                     "SearchResponseMode": searchMode ? searchMode.value : "Thorough",
+                                    "PostPlayBehavior": postPlayMode ? postPlayMode.value : "Stop",
                                     "AnnouncePositionOnResume": row.cells[4].querySelector('[data-field="AnnouncePositionOnResume"]')?.checked || false
                                 };
 

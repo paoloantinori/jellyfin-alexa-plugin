@@ -150,6 +150,12 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public SearchResponseMode DefaultSearchResponseMode { get; set; } = SearchResponseMode.Thorough;
 
+    /// <summary>
+    /// Gets or sets the default post-play behavior for users without an explicit per-user setting.
+    /// Controls what happens when playback ends and the queue is exhausted.
+    /// </summary>
+    public PostPlayBehavior DefaultPostPlayBehavior { get; set; } = PostPlayBehavior.Stop;
+
     // Display preferences — items sent to APL visual templates (voice reads 5 max)
     public int MaxListDisplayItems { get; set; } = 15;
     public int MaxInProgressDisplayItems { get; set; } = 10;

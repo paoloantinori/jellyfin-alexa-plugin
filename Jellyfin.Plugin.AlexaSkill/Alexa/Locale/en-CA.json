@@ -223,5 +223,9 @@
   "ShowMorePage": "Here are the next items: {0}",
   "ShowMoreLastPage": "{0} Here are the first {1}: {2}.",
   "QueryRecentlyAddedPartial": "{0} Here are the first {1}: {2}.",
-  "FoundArtistInstead": "I found the artist {0}. Here's music by {0}."
+  "FoundArtistInstead": "I found the artist {0}. Here's music by {0}.",
+  "PostPlayAutoPlayAnnouncement": "Playing more music by {0}",
+  "PostPlayAskPrompt": "Would you like to hear more music like this?",
+  "PostPlayAskReprompt": "You can say yes to hear more, or no to stop.",
+  "PostPlayNoResponse": "Alright, stopping playback."
 }
