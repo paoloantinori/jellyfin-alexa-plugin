@@ -171,10 +171,50 @@ NLU test fixtures in `tests/integration/fixtures/<locale>.yaml`. NLU tests use t
 
 ## Release
 
-1. Bump version in `Directory.Build.props` and `build.yaml`
-2. Run full test suite (unit + NLU for all locales)
-3. Commit, tag with version, push: `git push origin main --tags`
-4. Update `manifest.json` with new version entry (see `release.sh`)
+The CI workflow (`release-build.yml`) handles building, testing, zipping, creating the GitHub release, computing the manifest checksum, and committing the updated manifest back to main. It triggers on tag push.
+
+**Pre-flight checklist (before tagging):**
+
+1. **Bump version** in `Directory.Build.props` AND `build.yaml` (4-part format, e.g. `0.5.0.0`)
+2. **Update `build.yaml` changelog** — this becomes the manifest changelog and GitHub release description
+3. **Add placeholder entry to `manifest.json`** — add a new version object with `"checksum": "placeholder"`, `"changelog": "placeholder"`, correct `sourceUrl` and `targetAbi`. The CI replaces checksum and changelog after building the zip.
+4. **Run `python3 scripts/validate_versions.py`** — must show all 3 sources match
+5. **Build and test locally**: `dotnet build` (0 warnings) + `dotnet test` (all pass)
+6. **Verify `icon.jpg` exists** at `Jellyfin.Plugin.AlexaSkill/icon.jpg` — the release workflow copies it as `icon.png` into the zip
+
+**Tag and push:**
+
+```bash
+git add Directory.Build.props build.yaml manifest.json
+git commit -m "Release v0.5.0.0"
+git tag 0.5.0.0
+git push origin main --tags
+```
+
+**Post-release verification:**
+
+1. Check CI workflow passed: `gh run list --workflow=release-build.yml --limit=1`
+2. Verify GitHub release exists: `gh release view 0.5.0.0`
+3. Verify manifest.json was committed with correct checksum (not "placeholder")
+4. Verify the zip contains all expected DLLs + icon.png: download and `unzip -l`
+
+**How the CI release works:**
+
+1. Triggers on tag push (`*`)
+2. Validates tag matches `Directory.Build.props` version
+3. Runs validation scripts (models, locales, versions)
+4. `dotnet publish --configuration Release` + `dotnet test`
+5. Creates zip from publish output + `icon.jpg` (copied as `icon.png`)
+6. Creates GitHub release with `softprops/action-gh-release` (auto-generated release notes)
+7. `add_release_to_manifest.py` computes MD5 from the zip, updates manifest.json
+8. Commits manifest.json back to main
+
+**Common pitfalls:**
+
+- **Wrong checksum** → Jellyfin rejects the download. The CI computes the checksum from the actual zip, so this should be correct. NEVER manually edit checksums.
+- **Missing icon** → The zip must contain `icon.png`. The workflow copies `icon.jpg` as `icon.png`. If `icon.jpg` is missing from the source tree, the zip will have no icon.
+- **Stale changelog** → `build.yaml` changelog becomes the manifest entry. Update it before tagging.
+- **Version mismatch** → Tag must match `Directory.Build.props` version exactly, or CI rejects it.
 
 ## Backlog Workflow
 
