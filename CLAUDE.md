@@ -6,7 +6,7 @@ C# Jellyfin plugin (net9.0) exposing an Alexa skill for media playback, search, 
 
 ```bash
 dotnet build Jellyfin.Plugin.AlexaSkill.sln
-dotnet test Jellyfin.Plugin.AlexaSkill.Tests          # ~1861 unit tests
+dotnet test Jellyfin.Plugin.AlexaSkill.Tests          # ~2065 unit tests
 python3 scripts/validate_interaction_models.py        # Check all 17 models (JSON, slots, drift)
 python3 scripts/validate_locales.py                   # Check locale key coverage (baseline-aware)
 python3 scripts/validate_versions.py                  # Check version consistency across files
@@ -156,6 +156,7 @@ NLU test fixtures in `tests/integration/fixtures/<locale>.yaml`. NLU tests use t
 - **SMAPI rate limits**: Space NLU tests with `SMAPI_DELAY=1.5`.
 - **ValueTuple serialization**: Never store `ValueTuple` in session attributes — Newtonsoft.Json serializes as Item1/Item2. Use named DTOs.
 - **Config.Users in API responses**: Never send `config.Users` via `updatePluginConfiguration` — it can wipe skill config entries. Use dedicated endpoints.
+- **Entity resolution for slot synonyms**: `slot.Value` always contains the raw spoken text (e.g. "gli album"). To get the canonical value ("album"), extract from `slot.Resolution.Authorities[0].Values[0].Value.Name` when `Status.Code == "ER_SUCCESS_MATCH"`. See `BrowseLibraryIntentHandler.GetCanonicalSlotValue()` for the pattern.
 
 ## Release
 

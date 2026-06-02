@@ -954,7 +954,7 @@ Invocation name: **"mia collezione"**
 | Intent | Utterances |
 |--------|------------|
 | Add To Queue | `Aggiungi {song} alla coda` · `Aggiungi {song} di {musician} alla coda` · `Metti {song} in coda` · `Metti {song} di {musician} in coda` · `Accoda {song}` · `Accoda {song} di {musician}` · `Aggiungi {song} alla mia lista` · `Inserisci {song} nella coda` |
-| Browse Library | `Sfoglia {browse_category}` · `Mostra {browse_category}` · `Elenca {browse_category}` |
+| Browse Library | `Sfoglia {browse_category}` · `Sfoglia i {browse_category}` · `Mostra {browse_category}` · `Mostra i {browse_category}` · `Elenca {browse_category}` · `Elenca i {browse_category}` · `di mostrare {browse_category}` · `di sfogliare {browse_category}` · `di elencare {browse_category}` · `{browse_category}` · `solo {browse_category}` · `vorrei {browse_category}` · `mi piace {browse_category}` · `quali {browse_category} abbiamo` · `quali {browse_category} ci sono` · `che {browse_category} ci sono` · `che {browse_category} abbiamo` |
 | Clear Queue | `Cancella la coda` · `Svuota la coda` · `Pulisci la coda` · `Elimina tutto dalla coda` · `Cancella la mia lista` · `Svuota la mia lista` |
 | Continue Watching | `Continua a guardare` · `Riprendi a guardare` · `Continua il video` · `Riprendi il video` |
 | Follow Me | `continua da qui` · `segui la riproduzione` · `continua ad ascoltare` · `riprendi da dove ero rimasto` · `seguimi` · `trasferisci la riproduzione` · `continua la musica` · `riprendi l'ascolto` |
