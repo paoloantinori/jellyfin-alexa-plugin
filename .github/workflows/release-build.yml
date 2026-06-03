@@ -47,6 +47,9 @@ jobs:
       - name: Check version consistency
         run: python3 scripts/validate_versions.py
 
+      - name: Validate build.yaml
+        run: python3 scripts/validate_build_yaml.py
+
       - name: Build
         run: dotnet publish --configuration Release
 
@@ -87,4 +90,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add manifest.json
           git commit -m "Update manifest for v${{ steps.version.outputs.VERSION }}"
-          git push
+          git push origin HEAD:main

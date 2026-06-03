@@ -20,4 +20,4 @@ artifacts:
   - Amazon.Lambda.Serialization.Json.dll
   - Jellyfin.Plugin.AlexaSkill.dll
   - Refit.dll
-changelog: "Config page clarity: remove jargon, reorganize sections, split user table columns. Italian phonetic synonym unit tests (2131 total).": automatically enqueue similar tracks when queue exhausts. Fast/Thorough search mode: per-user speed/recall trade-off. Double Metaphone phonetic matching for non-English artist names (French, German, Spanish, Italian, Portuguese, Japanese, Dutch). Cross-media-type fallback (song → artist songs). On-the-fly MP4 video generation with album art for Echo Show. APL progress bar with elapsed/total time. Enriched NowPlaying card with artist, album, track number. ShuffleArtistSongs config option. Fix stop/pause routing (ShouldEndSession=true). Fix BrowseLibrary entity resolution for Italian articles. Italian invocation name changed to 'mia collezione'. LWA credential sanitization. 2084 unit tests. 17-locale Mermaid documentation."
+changelog: "Config page clarity: remove jargon, reorganize sections, split user table columns. Italian phonetic synonym unit tests (2131 total)."
