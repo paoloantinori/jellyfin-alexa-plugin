@@ -811,6 +811,36 @@
           "page suivante"
         ],
         "slots": []
+      },
+      {
+        "name": "FindSongIntent",
+        "samples": [
+          "trouve une chanson",
+          "aide moi a trouver une chanson",
+          "je cherche une chanson",
+          "trouve une chanson appelee {titleKeywords}",
+          "cherche une chanson appelee {titleKeywords}"
+        ],
+        "slots": [
+          {
+            "name": "titleKeywords",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
+        "name": "FindSongByArtistIntent",
+        "samples": [
+          "trouve une chanson de {musician}",
+          "aide moi a trouver une chanson de {musician}",
+          "je cherche une chanson de {musician}"
+        ],
+        "slots": [
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
+        ]
       }
     ],
     "types": [

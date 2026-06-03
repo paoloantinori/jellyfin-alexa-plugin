@@ -784,6 +784,44 @@
           "siguiente página"
         ],
         "slots": []
+      },
+      {
+        "name": "FindSongIntent",
+        "samples": [
+          "find a song",
+          "help me find a song",
+          "search for a song",
+          "I'm looking for a song",
+          "I need to find a song",
+          "find me a song",
+          "help me search for a song",
+          "I want to find a song",
+          "find a song called {titleKeywords}",
+          "search for a song called {titleKeywords}",
+          "find a song about {titleKeywords}",
+          "I'm looking for a song called {titleKeywords}"
+        ],
+        "slots": [
+          {
+            "name": "titleKeywords",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
+        "name": "FindSongByArtistIntent",
+        "samples": [
+          "find a song by {musician}",
+          "help me find a song by {musician}",
+          "search for a song by {musician}",
+          "I'm looking for a song by {musician}"
+        ],
+        "slots": [
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
+        ]
       }
     ],
     "types": [

@@ -329,6 +329,26 @@ explicit_intents:
         type: AMAZON.Musician
       - name: query_type
         type: LibraryQueryType
+  FindSongIntent:
+    samples:
+      - cerca una canzone
+      - aiutami a trovare una canzone
+      - sto cercando una canzone
+      - voglio trovare una canzone
+      - trova una canzone chiamata {titleKeywords}
+      - cerca una canzone chiamata {titleKeywords}
+      - cerca una canzone che parla di {titleKeywords}
+    slots:
+      - name: titleKeywords
+        type: AMAZON.SearchQuery
+  FindSongByArtistIntent:
+    samples:
+      - cerca una canzone di {musician}
+      - aiutami a trovare una canzone di {musician}
+      - sto cercando una canzone di {musician}
+    slots:
+      - name: musician
+        type: AMAZON.Musician
 
 # Custom slot type definitions. These are emitted into the model's types section.
 # Each type has a name and a list of values (with optional id and synonyms).

@@ -223,5 +223,17 @@
   "ShowMorePage": "Hier zijn de volgende items: {0}",
   "ShowMoreLastPage": "{0} Hier zijn de eerste {1}: {2}.",
   "QueryRecentlyAddedPartial": "{0} Hier zijn de eerste {1}: {2}.",
-  "FoundArtistInstead": "Ik heb de artiest {0} gevonden. Hier is muziek van {0}."
+  "FoundArtistInstead": "Ik heb de artiest {0} gevonden. Hier is muziek van {0}.",
+  "FindSongPromptKeywords": "What words do you remember from the title?",
+  "FindSongPromptArtist": "Who is the artist?",
+  "FindSongNoMatch": "I couldn't find a match. Try different words.",
+  "FindSongFoundOne": "I found {0} by {1}. Playing it now.",
+  "FindSongFoundMultiple": "I found {0} songs. {1}. Which one?",
+  "FindSongTooManyNarrow": "I found many songs with those words. Can you tell me the artist?",
+  "FindSongPlaying": "Playing {0} by {1}.",
+  "FindSongDisambiguatePick": "Which one? Say the number or the title.",
+  "FindSongArtistNotFound": "I couldn't find an artist called {0}. Try again.",
+  "FindSongTooVague": "I need more specific words to search. Try again with a few words from the title.",
+  "FindSongInvalidPick": "I didn't catch that. Please say the number or the title of the song.",
+  "FindSongCancelled": "Okay, I've stopped searching."
 }

@@ -64,6 +64,13 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
     }
 
     [Fact]
+    public void CanHandle_FindSongByArtistIntent_ReturnsTrue()
+    {
+        var request = CreateIntentRequest("FindSongByArtistIntent");
+        Assert.True(_handler.CanHandle(request));
+    }
+
+    [Fact]
     public void CanHandle_FallbackIntent_ReturnsTrue()
     {
         var request = CreateIntentRequest("AMAZON.FallbackIntent");
@@ -207,7 +214,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
         Assert.False(response.Response.ShouldEndSession);
         string speech = TestHelpers.GetSpeechText(response);
-        Assert.Contains("FindSongTooVague", speech);
+        Assert.Contains("more specific words", speech);
     }
 
     [Fact]
@@ -269,7 +276,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
         Assert.False(response.Response.ShouldEndSession);
         string speech = TestHelpers.GetSpeechText(response);
-        Assert.Contains("FindSongArtistNotFound", speech);
+        Assert.Contains("couldn't find an artist", speech);
 
         // State should remain AwaitingArtist
         var sessionData = ReadSessionData(response);
@@ -339,7 +346,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
         Assert.False(response.Response.ShouldEndSession);
         string speech = TestHelpers.GetSpeechText(response);
-        Assert.Contains("FindSongNoMatch", speech);
+        Assert.Contains("couldn't find a match", speech);
     }
 
     [Fact]
@@ -515,7 +522,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // Invalid pick → ShouldEndSession=false, keep Disambiguating state
         Assert.False(response.Response.ShouldEndSession);
         string speech = TestHelpers.GetSpeechText(response);
-        Assert.Contains("FindSongInvalidPick", speech);
+        Assert.Contains("didn't catch that", speech);
 
         var sessionData = ReadSessionData(response);
         Assert.NotNull(sessionData);
@@ -545,7 +552,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
         Assert.False(response.Response.ShouldEndSession);
         string speech = TestHelpers.GetSpeechText(response);
-        Assert.Contains("FindSongInvalidPick", speech);
+        Assert.Contains("didn't catch that", speech);
     }
 
     // ========== Session Data Serialization ==========
@@ -739,7 +746,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // Too many results → ask for artist
         Assert.False(response.Response.ShouldEndSession);
         string speech = TestHelpers.GetSpeechText(response);
-        Assert.Contains("FindSongTooManyNarrow", speech);
+        Assert.Contains("many songs with those words", speech);
 
         var sessionData = ReadSessionData(response);
         Assert.NotNull(sessionData);

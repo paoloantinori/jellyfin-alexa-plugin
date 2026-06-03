@@ -49,6 +49,7 @@ internal static class IntentNames
     public const string JumpToPosition = "JumpToPositionIntent";
     public const string ShowMore = "ShowMoreIntent";
     public const string FindSongIntent = "FindSongIntent";
+    public const string FindSongByArtistIntent = "FindSongByArtistIntent";
 
     public const string AmazonFallback = "AMAZON.FallbackIntent";
     public const string AmazonLoopOff = "AMAZON.LoopOffIntent";

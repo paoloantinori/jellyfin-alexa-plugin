@@ -223,5 +223,17 @@
   "ShowMorePage": "إليك العناصر التالية: {0}",
   "ShowMoreLastPage": "{0} إليك الـ {1} الأولى: {2}.",
   "QueryRecentlyAddedPartial": "{0} إليك الـ {1} الأولى: {2}.",
-  "FoundArtistInstead": "وجدت الفنان {0}. إليك موسيقى {0}."
+  "FoundArtistInstead": "وجدت الفنان {0}. إليك موسيقى {0}.",
+  "FindSongPromptKeywords": "What words do you remember from the title?",
+  "FindSongPromptArtist": "Who is the artist?",
+  "FindSongNoMatch": "I couldn't find a match. Try different words.",
+  "FindSongFoundOne": "I found {0} by {1}. Playing it now.",
+  "FindSongFoundMultiple": "I found {0} songs. {1}. Which one?",
+  "FindSongTooManyNarrow": "I found many songs with those words. Can you tell me the artist?",
+  "FindSongPlaying": "Playing {0} by {1}.",
+  "FindSongDisambiguatePick": "Which one? Say the number or the title.",
+  "FindSongArtistNotFound": "I couldn't find an artist called {0}. Try again.",
+  "FindSongTooVague": "I need more specific words to search. Try again with a few words from the title.",
+  "FindSongInvalidPick": "I didn't catch that. Please say the number or the title of the song.",
+  "FindSongCancelled": "Okay, I've stopped searching."
 }

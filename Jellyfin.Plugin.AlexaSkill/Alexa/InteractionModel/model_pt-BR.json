@@ -777,6 +777,36 @@
           "próxima página"
         ],
         "slots": []
+      },
+      {
+        "name": "FindSongIntent",
+        "samples": [
+          "encontre uma musica",
+          "me ajude a encontrar uma musica",
+          "estou procurando uma musica",
+          "encontre uma musica chamada {titleKeywords}",
+          "procure uma musica chamada {titleKeywords}"
+        ],
+        "slots": [
+          {
+            "name": "titleKeywords",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
+        "name": "FindSongByArtistIntent",
+        "samples": [
+          "encontre uma musica de {musician}",
+          "me ajude a encontrar uma musica de {musician}",
+          "estou procurando uma musica de {musician}"
+        ],
+        "slots": [
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
+        ]
       }
     ],
     "types": [

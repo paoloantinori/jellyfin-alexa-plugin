@@ -223,5 +223,17 @@
   "ShowMorePage": "Ecco gli elementi successivi: {0}",
   "ShowMoreLastPage": "{0} Ecco i primi {1}: {2}.",
   "QueryRecentlyAddedPartial": "{0} Ecco i primi {1}: {2}.",
-  "FoundArtistInstead": "Ho trovato l'artista {0}. Ecco la musica di {0}."
+  "FoundArtistInstead": "Ho trovato l'artista {0}. Ecco la musica di {0}.",
+  "FindSongPromptKeywords": "Quali parole ricordi del titolo?",
+  "FindSongPromptArtist": "Chi è l'artista?",
+  "FindSongNoMatch": "Non ho trovato nulla. Prova con altre parole.",
+  "FindSongFoundOne": "Ho trovato {0} di {1}. La riproduco.",
+  "FindSongFoundMultiple": "Ho trovato {0} canzoni. {1}. Quale?",
+  "FindSongTooManyNarrow": "Ho trovato molte canzoni con quelle parole. Sai dirmi l'artista?",
+  "FindSongPlaying": "Riproduco {0} di {1}.",
+  "FindSongDisambiguatePick": "Quale? Di' il numero o il titolo.",
+  "FindSongArtistNotFound": "Non ho trovato un artista chiamato {0}. Riprova.",
+  "FindSongTooVague": "Ho bisogno di parole più specifiche. Riprova con alcune parole del titolo.",
+  "FindSongInvalidPick": "Non ho capito. Di' il numero o il titolo della canzone.",
+  "FindSongCancelled": "Ok, ho interrotto la ricerca."
 }

@@ -75,7 +75,8 @@ public class FindSongIntentHandler : BaseHandler
 
         string intentName = intentRequest.Intent.Name;
 
-        if (string.Equals(intentName, IntentNames.FindSongIntent, StringComparison.Ordinal))
+        if (string.Equals(intentName, IntentNames.FindSongIntent, StringComparison.Ordinal)
+            || string.Equals(intentName, IntentNames.FindSongByArtistIntent, StringComparison.Ordinal))
         {
             return true;
         }
@@ -333,7 +334,8 @@ public class FindSongIntentHandler : BaseHandler
         session.NowPlayingQueue = new List<QueueItem> { new() { Id = item.Id } };
         session.FullNowPlayingItem = item;
 
-        string announcement = ResponseStrings.Get("FindSongFoundOne", locale, item.Name);
+        string artistDisplay = picked.ArtistName ?? sessionData.ArtistName ?? "Unknown";
+        string announcement = ResponseStrings.Get("FindSongFoundOne", locale, item.Name, artistDisplay);
         SkillResponse playResponse = BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, item, user, context);
         playResponse.Response.OutputSpeech = new PlainTextOutputSpeech { Text = announcement };
         return playResponse;
@@ -424,7 +426,8 @@ public class FindSongIntentHandler : BaseHandler
             session.NowPlayingQueue = new List<QueueItem> { new() { Id = song.Id } };
             session.FullNowPlayingItem = song;
 
-            string announcement = ResponseStrings.Get("FindSongFoundOne", locale, song.Name);
+            string artistDisplay = sessionData.ArtistName ?? "Unknown";
+            string announcement = ResponseStrings.Get("FindSongFoundOne", locale, song.Name, artistDisplay);
             SkillResponse singleResponse = BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, song, user, context);
             singleResponse.Response.OutputSpeech = new PlainTextOutputSpeech { Text = announcement };
             return singleResponse;
@@ -454,8 +457,8 @@ public class FindSongIntentHandler : BaseHandler
         sessionData.Candidates = disambigCandidates;
 
         // Build the list announcement
-        string foundMultipleMsg = ResponseStrings.Get("FindSongFoundMultiple", locale);
         var candidateNames = string.Join(", ", disambigCandidates.Select((c, i) => $"{i + 1}. {c.Name}"));
+        string foundMultipleMsg = ResponseStrings.Get("FindSongFoundMultiple", locale, disambigCandidates.Count, candidateNames);
         string fullPrompt = $"{foundMultipleMsg} {candidateNames}";
 
         SkillResponse disambigResponse = ResponseBuilder.Ask(fullPrompt, new Reprompt(foundMultipleMsg));

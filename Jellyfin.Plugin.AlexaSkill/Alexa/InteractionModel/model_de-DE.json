@@ -813,6 +813,38 @@
           "zeige mehr"
         ],
         "slots": []
+      },
+      {
+        "name": "FindSongIntent",
+        "samples": [
+          "finde ein lied",
+          "hilf mir ein lied zu finden",
+          "suche ein lied",
+          "ich suche ein lied",
+          "finde ein lied namens {titleKeywords}",
+          "suche ein lied namens {titleKeywords}"
+        ],
+        "slots": [
+          {
+            "name": "titleKeywords",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
+        "name": "FindSongByArtistIntent",
+        "samples": [
+          "finde ein lied von {musician}",
+          "hilf mir ein lied zu finden von {musician}",
+          "suche ein lied von {musician}",
+          "ich suche ein lied von {musician}"
+        ],
+        "slots": [
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
+        ]
       }
     ],
     "types": [
