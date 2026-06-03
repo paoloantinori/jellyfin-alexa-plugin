@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace Jellyfin.Plugin.AlexaSkill;
 
 /// <summary>
@@ -16,6 +18,17 @@ public static class Config
     /// Each user can override this with their own invocation name.
     /// </summary>
     public const string InvocationName = "jellyfin player";
+
+    /// <summary>
+    /// Per-locale invocation name overrides. When a locale is present here,
+    /// this value takes precedence over <see cref="InvocationName"/>.
+    /// This prevents the global default from overwriting locale-specific
+    /// invocation names already baked into the interaction model templates.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, string> LocaleInvocationNames = new Dictionary<string, string>()
+    {
+        ["it-IT"] = "mia collezione",
+    };
 
     /// <summary>
     /// Length of the CSRF token.

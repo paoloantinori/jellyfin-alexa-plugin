@@ -173,7 +173,10 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         Collection<SkillInteractionModel> models = new Collection<SkillInteractionModel>();
         foreach (Tuple<string, string> model in InteractionModels)
         {
-            models.Add(new SkillInteractionModel(model.Item1, model.Item2, invocationName));
+            string localeInvocation = Config.LocaleInvocationNames.TryGetValue(model.Item1, out string? localeName)
+                ? localeName
+                : invocationName;
+            models.Add(new SkillInteractionModel(model.Item1, model.Item2, localeInvocation));
         }
 
         return models;
