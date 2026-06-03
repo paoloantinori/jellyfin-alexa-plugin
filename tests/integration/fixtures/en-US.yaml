@@ -612,7 +612,43 @@ tests:
       query: {}
 
   # -------------------------------------------------------------------------
-  # 35. AMAZON.* built-in intents (regression guard)
+  # 35. FindSongIntent / FindSongByArtistIntent
+  # -------------------------------------------------------------------------
+  - utterance: "find a song by police"
+    expected_intent: FindSongByArtistIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "find a song called breath"
+    expected_intent: FindSongIntent
+    expected_slots:
+      titleKeywords: {}
+
+  - utterance: "search for a song"
+    expected_intent: FindSongIntent
+    expected_slots: {}
+
+  - utterance: "help me find a song by radiohead"
+    expected_intent: FindSongByArtistIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "find a song"
+    expected_intent: FindSongIntent
+    expected_slots: {}
+
+  - utterance: "I'm looking for a song by metallica"
+    expected_intent: FindSongByArtistIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "search for a song called bohemian rhapsody"
+    expected_intent: FindSongIntent
+    expected_slots:
+      titleKeywords: {}
+
+  # -------------------------------------------------------------------------
+  # 36. AMAZON.* built-in intents (regression guard)
   # -------------------------------------------------------------------------
   - utterance: "stop"
     expected_intent: AMAZON.StopIntent

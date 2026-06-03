@@ -205,3 +205,23 @@ tests:
     expected_intent: AMAZON.ResumeIntent
     expected_slots: {}
     expected_response_type: any
+
+  # --- FindSong: artist-scoped search ---
+  - utterance: "cerca una canzone dei police"
+    expected_intent: FindSongByArtistIntent
+    expected_slots:
+      musician: {}
+    expected_response_type: any
+
+  # --- FindSong: keyword-only search ---
+  - utterance: "trova una canzone chiamata breath"
+    expected_intent: FindSongIntent
+    expected_slots:
+      titleKeywords: {}
+    expected_response_type: any
+
+  # --- FindSong: bare invocation (no slots) ---
+  - utterance: "cerca una canzone"
+    expected_intent: FindSongIntent
+    expected_slots: {}
+    expected_response_type: any

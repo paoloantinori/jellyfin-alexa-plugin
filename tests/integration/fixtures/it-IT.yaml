@@ -622,7 +622,38 @@ tests:
     expected_slots: {}
 
   # -------------------------------------------------------------------------
-  # 31. AMAZON.* built-in intents (regression guard)
+  # 31. FindSongIntent / FindSongByArtistIntent
+  # -------------------------------------------------------------------------
+  - utterance: "cerca una canzone dei police"
+    expected_intent: FindSongByArtistIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "trova una canzone chiamata breath"
+    expected_intent: FindSongIntent
+    expected_slots:
+      titleKeywords: {}
+
+  - utterance: "cerca una canzone"
+    expected_intent: FindSongIntent
+    expected_slots: {}
+
+  - utterance: "aiutami a trovare una canzone dei radiohead"
+    expected_intent: FindSongByArtistIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "voglio trovare una canzone"
+    expected_intent: FindSongIntent
+    expected_slots: {}
+
+  - utterance: "cerca una canzone che parla di amore"
+    expected_intent: FindSongIntent
+    expected_slots:
+      titleKeywords: {}
+
+  # -------------------------------------------------------------------------
+  # 32. AMAZON.* built-in intents (regression guard)
   # -------------------------------------------------------------------------
   - utterance: "ferma"
     expected_intent: AMAZON.StopIntent
