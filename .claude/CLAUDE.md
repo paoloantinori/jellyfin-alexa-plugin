@@ -13,7 +13,8 @@ That file has the full mandatory checklist. Key rules that keep getting violated
 
 ## E2E Tests (SMAPI simulate-skill)
 
-Skill ID and Jellyfin creds are in `.claude.local.md` and env vars.
+Skill ID: `amzn1.ask.skill.33dfacd5-3676-4cdc-8b02-81efb227df83`
+Jellyfin API key: `69088d9a2bd74af5945b3d5683a087d3` (works for both plugin endpoints and /Sessions)
 
 ### Run all E2E tests
 ```bash
