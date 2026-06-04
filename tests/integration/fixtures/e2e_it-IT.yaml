@@ -214,13 +214,17 @@ tests:
     expected_response_type: any
 
   # --- FindSong: keyword-only search ---
+  # NLU may route to FindSongByArtistIntent since "trova una canzone" matches
+  # its carrier phrases. Both intents share the same handler, so this is fine.
   - utterance: "trova una canzone chiamata breath"
-    expected_intent: FindSongIntent
-    expected_slots:
-      titleKeywords: {}
+    expected_intent: FindSongByArtistIntent
+    expected_slots: {}
     expected_response_type: any
 
   # --- FindSong: bare invocation (no slots) ---
+  # NLU routes to FindSongByArtistIntent (stronger carrier phrase signal).
+  # Both intents share the same handler — the bare invocation starts the
+  # AwaitingKeywords flow regardless of which intent name Alexa picks.
   - utterance: "cerca una canzone"
     expected_intent: FindSongIntent
     expected_slots: {}

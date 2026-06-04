@@ -204,14 +204,20 @@ explicit_intents:
         type: AMAZON.SearchQuery
   SearchMediaIntent:
     samples:
-      - Cerca {query}
-      - Trova {query}
-      - Cerco {query}
-      - Hai {query}
-      - Voglio trovare {query}
-      - Puoi trovare {query}
       - Cerca il contenuto {query}
-      - Trova il brano {query}
+      - Cerca un film {query}
+      - Cerca un video {query}
+      - Cerca una serie {query}
+      - Cerca un audiolibro {query}
+      - Trova il contenuto {query}
+      - Trova un film {query}
+      - Trova un video {query}
+      - Cerco un film {query}
+      - Cerco un contenuto {query}
+      - Hai un film {query}
+      - Hai un contenuto {query}
+      - Voglio trovare un film {query}
+      - Puoi trovare un contenuto {query}
     slots:
       - name: query
         type: AMAZON.SearchQuery
@@ -335,17 +341,32 @@ explicit_intents:
       - aiutami a trovare una canzone
       - sto cercando una canzone
       - voglio trovare una canzone
+      - trova una canzone
+      - cerco una canzone
       - trova una canzone chiamata {titleKeywords}
       - cerca una canzone chiamata {titleKeywords}
       - cerca una canzone che parla di {titleKeywords}
+      - sto cercando una canzone chiamata {titleKeywords}
+      - voglio trovare una canzone chiamata {titleKeywords}
+      - aiutami a trovare una canzone chiamata {titleKeywords}
     slots:
       - name: titleKeywords
         type: AMAZON.SearchQuery
   FindSongByArtistIntent:
     samples:
       - cerca una canzone di {musician}
+      - cerca una canzone dei {musician}
+      - cerca una canzone degli {musician}
+      - cerca una canzone delle {musician}
       - aiutami a trovare una canzone di {musician}
+      - aiutami a trovare una canzone dei {musician}
       - sto cercando una canzone di {musician}
+      - sto cercando una canzone dei {musician}
+      - voglio trovare una canzone di {musician}
+      - trova una canzone di {musician}
+      - cerca il brano di {musician}
+      - cerca il brano dei {musician}
+      - trova il brano di {musician}
     slots:
       - name: musician
         type: AMAZON.Musician

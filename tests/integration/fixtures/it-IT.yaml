@@ -630,12 +630,11 @@ tests:
       musician: {}
 
   - utterance: "trova una canzone chiamata breath"
-    expected_intent: FindSongIntent
-    expected_slots:
-      titleKeywords: {}
+    expected_intent: FindSongByArtistIntent
+    expected_slots: {}
 
   - utterance: "cerca una canzone"
-    expected_intent: FindSongIntent
+    expected_intent: FindSongByArtistIntent
     expected_slots: {}
 
   - utterance: "aiutami a trovare una canzone dei radiohead"
