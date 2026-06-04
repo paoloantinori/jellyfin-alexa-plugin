@@ -76,7 +76,7 @@ tests:
   # -------------------------------------------------------------------------
   # 7. PlayLastAddedIntent (media_type, time_period)
   # -------------------------------------------------------------------------
-  - utterance: "Reroduce los últimos canciones añadidos"
+  - utterance: "Reproduce los últimos canciones añadidos"
     expected_intent: PlayLastAddedIntent
     expected_slots:
       media_type: {}
@@ -105,7 +105,7 @@ tests:
   # -------------------------------------------------------------------------
   # 9. PlayByGenreIntent (genre)
   # -------------------------------------------------------------------------
-  - utterance: "Reroduce música rock"
+  - utterance: "Reproduce música rock"
     expected_intent: PlayByGenreIntent
     expected_slots:
       genre: {}
@@ -169,7 +169,7 @@ tests:
     expected_slots:
       media_type: {}
 
-  - utterance: "Reroduce mis favoritos"
+  - utterance: "Reproduce mis favoritos"
     expected_intent: PlayFavoritesIntent
     expected_slots: {}
 

@@ -497,7 +497,8 @@
           "empfehle einen film",
           "schlage etwas vor",
           "spiele etwas das mir gefällt",
-          "empfehle {media_type}"
+          "empfehle {media_type}",
+          "schlage {media_type} vor"
         ]
       },
       {

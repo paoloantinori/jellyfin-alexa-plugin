@@ -137,7 +137,9 @@
           "play a song called {song}",
           "play the song called {song}",
           "play a song called {song} by {musician}",
-          "play the song called {song} by {musician}"
+          "play the song called {song} by {musician}",
+          "play the song {song} from {musician}",
+          "play {song} from {musician}"
         ],
         "slots": [
           {

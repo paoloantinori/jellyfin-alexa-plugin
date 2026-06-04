@@ -393,6 +393,7 @@
           "Quel {media_info_type} est-ce",
           "Quelle {media_info_type} est-ce",
           "Qu'est-ce qui joue",
+          "Qu'est-ce qui est en cours",
           "Quelle est cette chanson",
           "Qui chante",
           "Qui chante cette chanson",
@@ -497,7 +498,8 @@
           "recommande un film",
           "suggère quelque chose",
           "joue quelque chose que j'aimerais",
-          "recommande {media_type}"
+          "recommande {media_type}",
+          "suggère {media_type}"
         ]
       },
       {

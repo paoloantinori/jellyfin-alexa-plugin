@@ -485,7 +485,8 @@
           "recomienda una película",
           "sugiere algo",
           "reproduce algo que me guste",
-          "recomienda {media_type}"
+          "recomienda {media_type}",
+          "sugiere {media_type}"
         ]
       },
       {
