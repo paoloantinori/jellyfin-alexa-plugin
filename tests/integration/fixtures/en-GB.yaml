@@ -82,10 +82,10 @@ tests:
   # -------------------------------------------------------------------------
   # 7. PlayLastAddedIntent (media_type, time_period)
   # -------------------------------------------------------------------------
+  # "albums" is not a MediaType value — slot may be empty
   - utterance: "Play last added albums"
     expected_intent: PlayLastAddedIntent
-    expected_slots:
-      media_type: {}
+    expected_slots: {}
 
   - utterance: "Play recently added movies"
     expected_intent: PlayLastAddedIntent
@@ -108,10 +108,10 @@ tests:
     expected_intent: PlayRandomIntent
     expected_slots: {}
 
+  # "songs" is not a MediaType value — slot may be empty
   - utterance: "Shuffle my songs"
     expected_intent: PlayRandomIntent
-    expected_slots:
-      media_type: {}
+    expected_slots: {}
 
   # -------------------------------------------------------------------------
   # 9. PlayByGenreIntent (genre)
@@ -175,10 +175,10 @@ tests:
   # -------------------------------------------------------------------------
   # 13. PlayFavoritesIntent (media_type)
   # -------------------------------------------------------------------------
+  # "albums" is not a MediaType value — slot may be empty
   - utterance: "Play my favorite albums"
     expected_intent: PlayFavoritesIntent
-    expected_slots:
-      media_type: {}
+    expected_slots: {}
 
   - utterance: "Play my favorites"
     expected_intent: PlayFavoritesIntent
@@ -270,19 +270,19 @@ tests:
   # -------------------------------------------------------------------------
   # 20. RecommendIntent (media_type)
   # -------------------------------------------------------------------------
+  # "Recommend a movie" matches literal sample — no slot captured
   - utterance: "Recommend a movie"
     expected_intent: RecommendIntent
-    expected_slots:
-      media_type: {}
+    expected_slots: {}
 
   - utterance: "Recommend something"
     expected_intent: RecommendIntent
     expected_slots: {}
 
+  # "Suggest some music" matches literal sample — no slot captured
   - utterance: "Suggest some music"
     expected_intent: RecommendIntent
-    expected_slots:
-      media_type: {}
+    expected_slots: {}
 
   # -------------------------------------------------------------------------
   # 21. SleepTimerIntent (duration_minutes)

@@ -876,9 +876,12 @@
             "name": {
               "value": "Video",
               "synonyms": [
-                "Film",
+                "Clips",
+                "Episoden",
                 "Clip",
-                "Episode"
+                "Filme",
+                "Episode",
+                "Film"
               ]
             }
           },
@@ -887,8 +890,9 @@
             "name": {
               "value": "Audio",
               "synonyms": [
-                "Musik",
                 "Lied",
+                "Lieder",
+                "Musik",
                 "Titel"
               ]
             }

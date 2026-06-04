@@ -85,6 +85,11 @@ explicit_intents:
       - Pleia {title}
       - Di riprodurre {title}
       - Di suonare {title}
+      - voglio guardare {title}
+      - fai vedere {title}
+      - fammi vedere {title}
+      - mostra {title}
+      - voglio vedere {title}
     slots:
       - name: title
         type: AMAZON.SearchQuery
@@ -95,6 +100,9 @@ explicit_intents:
       - Metti {genre}
       - Pleia {genre}
       - Di riprodurre {genre}
+      - Riproduci genere {genre}
+      - Suona genere {genre}
+      - Metti genere {genre}
     slots:
       - name: genre
         type: AMAZON.SearchQuery
@@ -193,6 +201,9 @@ explicit_intents:
       - Riprendi a guardare
       - Cosa ho lasciato a metà
       - Cosa ho lasciato a meta
+      - quali video non ho finito
+      - cosa non ho finito di guardare
+      - video non finiti
   PlayEpisodeIntent:
     samples:
       - Riproduci {series_name} stagione {season_number} episodio {episode_number}
@@ -270,6 +281,9 @@ explicit_intents:
       - Consiglia una canzone
       - Consiglia un brano
       - Raccomanda una canzone
+      - cosa mi consigli
+      - cosa mi consiglí
+      - consigliami qualcosa
     slots:
       - name: media_type
         type: MediaType
@@ -386,6 +400,9 @@ explicit_intents:
       - cerca il brano di {musician}
       - cerca il brano dei {musician}
       - trova il brano di {musician}
+      - c'e una canzone di {musician}
+      - c'e una canzone dei {musician}
+      - c'e un brano di {musician}
     slots:
       - name: musician
         type: AMAZON.Musician
@@ -613,12 +630,13 @@ types:
         value: media
       - id: video
         value: video
+        synonyms: [video, i video]
       - id: musica
         value: musica
-        synonyms: [canzoni, brani, "una canzone", "un brano", "le canzoni", "i brani"]
+        synonyms: [canzoni, brani, "una canzone", "un brano", "le canzoni", "i brani", canzone, brano]
       - id: film
         value: film
-        synonyms: [movies, cinema, "un film", "i film"]
+        synonyms: [movies, cinema, "un film", "i film", "una pellicola"]
   TimePeriod:
     values:
       - id: today
@@ -722,6 +740,8 @@ templates:
       - "{infinitive} {album_noun} {album}"
       - "{imperative} {album_noun} {album} {artist_article} {musician}"
       - "{infinitive} {album_noun} {album} {artist_article} {musician}"
+      - "c'e un album chiamato {album}"
+      - "c'e un disco chiamato {album}"
     slots:
       - name: album
         type: AlbumName

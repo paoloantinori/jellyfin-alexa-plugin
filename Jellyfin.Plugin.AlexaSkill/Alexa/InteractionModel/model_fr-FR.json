@@ -873,8 +873,11 @@
               "value": "vidéo",
               "synonyms": [
                 "film",
+                "films",
                 "clip",
-                "épisode"
+                "épisode",
+                "clips",
+                "épisodes"
               ]
             }
           },
@@ -883,9 +886,11 @@
             "name": {
               "value": "Audio",
               "synonyms": [
-                "musique",
+                "morceau",
+                "morceaux",
                 "chanson",
-                "morceau"
+                "musique",
+                "chansons"
               ]
             }
           }

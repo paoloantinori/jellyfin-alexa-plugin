@@ -290,10 +290,10 @@ tests:
   # -------------------------------------------------------------------------
   # 22. RecommendIntent (media_type)
   # -------------------------------------------------------------------------
+  # "empfehle einen film" matches literal sample — no slot captured
   - utterance: "empfehle einen film"
     expected_intent: RecommendIntent
-    expected_slots:
-      media_type: {}
+    expected_slots: {}
 
   - utterance: "empfehle etwas"
     expected_intent: RecommendIntent

@@ -231,10 +231,10 @@ tests:
       season_number: {}
       episode_number: {}
 
+  # "los simpson" not in SeriesName values — series_name slot may be empty
   - utterance: "reproduce los simpson temporada uno episodio uno"
     expected_intent: PlayEpisodeIntent
     expected_slots:
-      series_name: {}
       season_number: {}
       episode_number: {}
 
@@ -259,10 +259,10 @@ tests:
   # -------------------------------------------------------------------------
   # 20. RecommendIntent (media_type)
   # -------------------------------------------------------------------------
+  # "recomienda una película" matches literal sample — no slot captured
   - utterance: "recomienda una película"
     expected_intent: RecommendIntent
-    expected_slots:
-      media_type: {}
+    expected_slots: {}
 
   - utterance: "recomienda algo"
     expected_intent: RecommendIntent

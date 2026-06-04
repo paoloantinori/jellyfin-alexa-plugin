@@ -998,7 +998,15 @@
           {
             "id": "video",
             "name": {
-              "value": "video"
+              "value": "video",
+              "synonyms": [
+                "film",
+                "films",
+                "movie",
+                "movies",
+                "video",
+                "videos"
+              ]
             }
           },
           {
@@ -1006,8 +1014,10 @@
             "name": {
               "value": "Audio",
               "synonyms": [
+                "audio",
                 "music",
-                "song"
+                "song",
+                "songs"
               ]
             }
           }

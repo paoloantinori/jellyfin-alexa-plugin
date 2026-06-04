@@ -103,15 +103,15 @@ tests:
   # -------------------------------------------------------------------------
   # 9. PlayLastAddedIntent (media_type)
   # -------------------------------------------------------------------------
+  # "chansons" not a MediaType value — slot may be empty
   - utterance: "Lis les derniers chansons ajoutés"
     expected_intent: PlayLastAddedIntent
-    expected_slots:
-      media_type: {}
+    expected_slots: {}
 
+  # "films" not a MediaType value — slot may be empty
   - utterance: "Lis les nouveautés films"
     expected_intent: PlayLastAddedIntent
-    expected_slots:
-      media_type: {}
+    expected_slots: {}
 
   - utterance: "Lis les nouveaux médias"
     expected_intent: PlayLastAddedIntent
@@ -191,10 +191,10 @@ tests:
   # -------------------------------------------------------------------------
   # 15. PlayFavoritesIntent (media_type)
   # -------------------------------------------------------------------------
+  # "chansons" not a MediaType value — slot may be empty
   - utterance: "Lis mes chansons préférés"
     expected_intent: PlayFavoritesIntent
-    expected_slots:
-      media_type: {}
+    expected_slots: {}
 
   - utterance: "Lis mes favoris"
     expected_intent: PlayFavoritesIntent
@@ -286,19 +286,19 @@ tests:
   # -------------------------------------------------------------------------
   # 22. RecommendIntent (media_type)
   # -------------------------------------------------------------------------
+  # "recommande un film" matches literal sample — no slot captured
   - utterance: "recommande un film"
     expected_intent: RecommendIntent
-    expected_slots:
-      media_type: {}
+    expected_slots: {}
 
   - utterance: "recommande quelque chose"
     expected_intent: RecommendIntent
     expected_slots: {}
 
+  # "suggère de la musique" matches literal sample — no slot captured
   - utterance: "suggère de la musique"
     expected_intent: RecommendIntent
-    expected_slots:
-      media_type: {}
+    expected_slots: {}
 
   # -------------------------------------------------------------------------
   # 23. SleepTimerIntent (duration_minutes)

@@ -100,7 +100,12 @@
           "Metti {title}",
           "Pleia {title}",
           "Di riprodurre {title}",
-          "Di suonare {title}"
+          "Di suonare {title}",
+          "voglio guardare {title}",
+          "fai vedere {title}",
+          "fammi vedere {title}",
+          "mostra {title}",
+          "voglio vedere {title}"
         ],
         "slots": [
           {
@@ -116,7 +121,10 @@
           "Suona {genre}",
           "Metti {genre}",
           "Pleia {genre}",
-          "Di riprodurre {genre}"
+          "Di riprodurre {genre}",
+          "Riproduci genere {genre}",
+          "Suona genere {genre}",
+          "Metti genere {genre}"
         ],
         "slots": [
           {
@@ -252,7 +260,10 @@
           "Mostrami i video in corso",
           "Riprendi a guardare",
           "Cosa ho lasciato a metà",
-          "Cosa ho lasciato a meta"
+          "Cosa ho lasciato a meta",
+          "quali video non ho finito",
+          "cosa non ho finito di guardare",
+          "video non finiti"
         ]
       },
       {
@@ -360,7 +371,10 @@
           "Suggerisci un film",
           "Consiglia una canzone",
           "Consiglia un brano",
-          "Raccomanda una canzone"
+          "Raccomanda una canzone",
+          "cosa mi consigli",
+          "cosa mi consiglí",
+          "consigliami qualcosa"
         ],
         "slots": [
           {
@@ -523,7 +537,10 @@
           "trova una canzone di {musician}",
           "cerca il brano di {musician}",
           "cerca il brano dei {musician}",
-          "trova il brano di {musician}"
+          "trova il brano di {musician}",
+          "c'e una canzone di {musician}",
+          "c'e una canzone dei {musician}",
+          "c'e un brano di {musician}"
         ],
         "slots": [
           {
@@ -866,7 +883,9 @@
           "Di pleiare disco {album} di {musician}",
           "Di pleiare disco {album} dei {musician}",
           "Di pleiare disco {album} degli {musician}",
-          "Di pleiare disco {album} delle {musician}"
+          "Di pleiare disco {album} delle {musician}",
+          "c'e un album chiamato {album}",
+          "c'e un disco chiamato {album}"
         ],
         "slots": [
           {
@@ -1533,7 +1552,11 @@
           },
           {
             "name": {
-              "value": "video"
+              "value": "video",
+              "synonyms": [
+                "video",
+                "i video"
+              ]
             },
             "id": "video"
           },
@@ -1546,7 +1569,9 @@
                 "una canzone",
                 "un brano",
                 "le canzoni",
-                "i brani"
+                "i brani",
+                "canzone",
+                "brano"
               ]
             },
             "id": "musica"
@@ -1558,7 +1583,8 @@
                 "movies",
                 "cinema",
                 "un film",
-                "i film"
+                "i film",
+                "una pellicola"
               ]
             },
             "id": "film"
