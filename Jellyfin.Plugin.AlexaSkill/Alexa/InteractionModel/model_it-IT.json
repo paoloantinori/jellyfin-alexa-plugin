@@ -511,6 +511,181 @@
         ]
       },
       {
+        "name": "AddToQueueIntent",
+        "samples": [
+          "aggiungi {song} alla coda",
+          "metti {song} in coda",
+          "accoda {song}",
+          "accoda {song} di {musician}",
+          "aggiungi {song} di {musician} alla coda",
+          "metti {song} di {musician} in coda"
+        ],
+        "slots": [
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
+        ]
+      },
+      {
+        "name": "ClearQueueIntent",
+        "samples": [
+          "svuota la coda",
+          "pulisci la coda",
+          "cancella la coda",
+          "elimina la coda",
+          "rimuovi tutto dalla coda",
+          "svuota la mia coda"
+        ]
+      },
+      {
+        "name": "FollowMeIntent",
+        "samples": [
+          "seguimi",
+          "continua ad ascoltare",
+          "riprendi da dove ero rimasto",
+          "riprendi da dove ero rimasta",
+          "trasferisci l'ascolto",
+          "continua da qui",
+          "segui da questa stanza"
+        ]
+      },
+      {
+        "name": "ListQueueIntent",
+        "samples": [
+          "cosa c'è nella coda",
+          "cosa c'è in coda",
+          "cosa c'è dopo",
+          "cosa suona dopo",
+          "mostra la coda",
+          "elenca la coda",
+          "qual è la prossima canzone",
+          "mostrami la coda"
+        ]
+      },
+      {
+        "name": "LoopSongOnIntent",
+        "samples": [
+          "ripeti questo brano",
+          "ripeti questa canzone",
+          "metti in loop questo brano",
+          "metti in loop questa canzone",
+          "ripeti per sempre questo brano"
+        ]
+      },
+      {
+        "name": "PlayBookIntent",
+        "samples": [
+          "riproduci {book}",
+          "riproduci il libro {book}",
+          "riproduci l'audiolibro {book}",
+          "ascolta {book}",
+          "ascolta il libro {book}",
+          "ascolta l'audiolibro {book}",
+          "suona il libro {book}",
+          "metti il libro {book}"
+        ],
+        "slots": [
+          {
+            "name": "book",
+            "type": "AudiobookTitle"
+          }
+        ]
+      },
+      {
+        "name": "PlayNextIntent",
+        "samples": [
+          "riproduci {song} dopo",
+          "suona {song} dopo",
+          "metti {song} dopo",
+          "riproduci {song} di {musician} dopo",
+          "suona {song} di {musician} dopo",
+          "voglio ascoltare {song} dopo",
+          "ascolta {song} dopo",
+          "metti {song} di {musician} dopo"
+        ],
+        "slots": [
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
+        ]
+      },
+      {
+        "name": "PlayRadioIntent",
+        "samples": [
+          "riproduci radio",
+          "suona radio",
+          "metti radio",
+          "attiva la radio",
+          "modalità radio",
+          "riproduci simili",
+          "suona brani simili",
+          "continua con musica simile",
+          "metti musica simile"
+        ]
+      },
+      {
+        "name": "QueryRecentlyAddedIntent",
+        "samples": [
+          "cosa c'è di nuovo",
+          "cosa è stato aggiunto di recente",
+          "quali novità ci sono",
+          "mostra le novità",
+          "mostrami gli ultimi aggiunti",
+          "ci sono novità",
+          "quali sono le novità",
+          "elenca gli ultimi aggiunti"
+        ]
+      },
+      {
+        "name": "ShowMoreIntent",
+        "samples": [
+          "mostra di più",
+          "altra pagina",
+          "più risultati",
+          "vedi altro",
+          "altro",
+          "cos'altro",
+          "continua",
+          "avanti",
+          "successivo",
+          "ancora"
+        ]
+      },
+      {
+        "name": "TurnRadioOffIntent",
+        "samples": [
+          "disattiva la radio",
+          "spegni la radio",
+          "disattiva modalità radio",
+          "modalità radio spenta",
+          "ferma la radio",
+          "radio spenta",
+          "disabilita radio"
+        ]
+      },
+      {
+        "name": "TurnRadioOnIntent",
+        "samples": [
+          "attiva la radio",
+          "accendi la radio",
+          "attiva modalità radio",
+          "modalità radio accesa",
+          "radio accesa",
+          "abilita radio",
+          "abilita modalità radio"
+        ]
+      },
+      {
         "name": "PlaySongIntent",
         "samples": [
           "Riproduci il brano {song}",
@@ -1586,6 +1761,95 @@
             "name": {
               "value": "decimo"
             }
+          }
+        ]
+      },
+      {
+        "name": "AudiobookTitle",
+        "values": [
+          {
+            "name": {
+              "value": "Il Nome della Rosa"
+            }
+          },
+          {
+            "name": {
+              "value": "Se Questo È un Uomo"
+            }
+          },
+          {
+            "name": {
+              "value": "La Coscienza di Zeno"
+            }
+          },
+          {
+            "name": {
+              "value": "Il Gattopardo"
+            }
+          },
+          {
+            "name": {
+              "value": "Cent'anni di Solitudine"
+            }
+          },
+          {
+            "name": {
+              "value": "Il Piccolo Principe"
+            }
+          },
+          {
+            "name": {
+              "value": "Harry Potter e la Pietra Filosofale"
+            }
+          },
+          {
+            "name": {
+              "value": "Il Signore degli Anelli"
+            }
+          }
+        ]
+      },
+      {
+        "name": "MediaInfoType",
+        "values": [
+          {
+            "name": {
+              "value": "chi canta",
+              "synonyms": [
+                "chi è l'artista",
+                "chi suona"
+              ]
+            },
+            "id": "artist"
+          },
+          {
+            "name": {
+              "value": "che album è",
+              "synonyms": [
+                "quale album è"
+              ]
+            },
+            "id": "album"
+          },
+          {
+            "name": {
+              "value": "quanto dura",
+              "synonyms": [
+                "quanto è lungo",
+                "durata"
+              ]
+            },
+            "id": "duration"
+          },
+          {
+            "name": {
+              "value": "che brano è",
+              "synonyms": [
+                "che canzone è",
+                "come si chiama"
+              ]
+            },
+            "id": "title"
           }
         ]
       }
