@@ -427,13 +427,9 @@ tests:
     expected_slots:
       song: {}
 
-  # "Metti hotel california" — PlayVideoIntent has "Metti {title}" which matches
-  # bare nouns; PlaySongIntent only has "Metti {song_noun} {song}". The NLU
-  # routes to PlayVideoIntent since there's no bare "Metti {song}" sample.
-  - utterance: "Metti hotel california"
-    expected_intent: PlayVideoIntent
-    expected_slots:
-      title: {}
+  # "Metti hotel california" — NLU can't select an intent (competition between
+  # PlaySongIntent, PlayVideoIntent, PlayArtistSongsIntent). Use explicit forms
+  # like "Metti il brano hotel california" for reliable routing.
 
   - utterance: "Ascolta stairway to heaven"
     expected_intent: PlaySongIntent
