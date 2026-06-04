@@ -578,18 +578,20 @@ tests:
 
   # -------------------------------------------------------------------------
   # 29. SearchMediaIntent (query)
+  # Bare "Cerca/Trova/Hai" patterns were narrowed in JF-251 to prevent NLU
+  # competition. Use media-type-qualified carriers instead.
   # -------------------------------------------------------------------------
-  - utterance: "Cerca bohemian rhapsody"
+  - utterance: "Cerca un film bohemian rhapsody"
     expected_intent: SearchMediaIntent
     expected_slots:
       query: {}
 
-  - utterance: "Trova inception"
+  - utterance: "Trova un film inception"
     expected_intent: SearchMediaIntent
     expected_slots:
       query: {}
 
-  - utterance: "Hai breaking bad"
+  - utterance: "Hai un film breaking bad"
     expected_intent: SearchMediaIntent
     expected_slots:
       query: {}
@@ -601,18 +603,16 @@ tests:
   # music-related c'e queries, and route generic ones to SearchMediaIntent.
   # -------------------------------------------------------------------------
   - utterance: "c'e una canzone di radiohead"
-    expected_intent: PlayArtistSongsIntent
+    expected_intent: FindSongByArtistIntent
     expected_slots:
       musician: {}
 
-  # "c'e un album chiamato {album}" routes to PlayArtistSongsIntent despite
-  # PlayAlbumIntent having "c'è un album chiamato {album}" — PlayArtistSongsIntent's
-  # 200+ samples (including many "c'è" patterns) overwhelm the album-specific match.
-  # Accept this routing; users should use "Riproduci album {album}" for reliable routing.
+  # "c'e un album chiamato {album}" now routes to PlayAlbumIntent — the
+  # album-specific pattern wins over PlayArtistSongsIntent.
   - utterance: "c'e un album chiamato dark side of the moon"
-    expected_intent: PlayArtistSongsIntent
+    expected_intent: PlayAlbumIntent
     expected_slots:
-      musician: {}
+      album: {}
 
   # "c'e un film che si chiama matrix" hits FallbackIntent — the NLU can't match
   # it to any intent reliably. SearchMediaIntent's "c'è {query}" pattern isn't
