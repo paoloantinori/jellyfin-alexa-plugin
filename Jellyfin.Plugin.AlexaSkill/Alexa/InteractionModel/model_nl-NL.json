@@ -720,14 +720,26 @@
           }
         ],
         "samples": [
-          "zoek naar {query}",
-          "vind {query}",
-          "zoek {query}",
-          "zoek {query} op",
-          "heb je {query}",
-          "ik wil {query} vinden",
-          "kun je {query} vinden",
-          "vind me {query}"
+          "zoek naar een film {query}",
+          "zoek naar content {query}",
+          "zoek naar een video {query}",
+          "zoek naar een serie {query}",
+          "vind een film {query}",
+          "vind content {query}",
+          "vind een video {query}",
+          "zoek een film {query}",
+          "zoek content {query}",
+          "zoek een video {query}",
+          "zoek een film {query} op",
+          "zoek content {query} op",
+          "heb je een film {query}",
+          "heb je content {query}",
+          "ik wil een film vinden {query}",
+          "ik wil content vinden {query}",
+          "kun je een film vinden {query}",
+          "kun je content vinden {query}",
+          "vind me een film {query}",
+          "vind me content {query}"
         ]
       },
       {

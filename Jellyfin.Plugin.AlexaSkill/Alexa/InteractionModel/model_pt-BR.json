@@ -740,12 +740,22 @@
           }
         ],
         "samples": [
-          "procurar {query}",
-          "encontrar {query}",
-          "buscar {query}",
-          "vocês têm {query}",
-          "quero encontrar {query}",
-          "pode encontrar {query}"
+          "procurar um filme {query}",
+          "procurar conteúdo {query}",
+          "procurar um vídeo {query}",
+          "procurar uma série {query}",
+          "encontrar um filme {query}",
+          "encontrar conteúdo {query}",
+          "encontrar um vídeo {query}",
+          "buscar um filme {query}",
+          "buscar conteúdo {query}",
+          "buscar um vídeo {query}",
+          "vocês têm um filme {query}",
+          "vocês têm conteúdo {query}",
+          "quero encontrar um filme {query}",
+          "quero encontrar conteúdo {query}",
+          "pode encontrar um filme {query}",
+          "pode encontrar conteúdo {query}"
         ]
       },
       {
