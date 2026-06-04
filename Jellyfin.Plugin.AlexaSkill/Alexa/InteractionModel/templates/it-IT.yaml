@@ -494,8 +494,6 @@ explicit_intents:
       - altro
       - cos'altro
       - continua
-      - avanti
-      - successivo
       - ancora
   TurnRadioOffIntent:
     samples:
