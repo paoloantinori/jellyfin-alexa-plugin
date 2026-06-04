@@ -173,6 +173,19 @@ explicit_intents:
       - Dimmi cosa sta suonando
       - Che cosa suona
       - Chi suona adesso
+      - "{media_info_type}"
+      - "{media_info_type} questa canzone"
+      - "{media_info_type} questo brano"
+      - "{media_info_type} questo video"
+      - "{media_info_type} questo film"
+      - Dimmi {media_info_type}
+      - "Dimmi {media_info_type} di questa canzone"
+      - "Dimmi {media_info_type} di questo brano"
+      - "{media_info_type} di questo brano"
+      - "{media_info_type} di questa canzone"
+    slots:
+      - name: media_info_type
+        type: MediaInfoType
   InProgressMediaListIntent:
     samples:
       - Cosa stavo guardando
@@ -251,6 +264,12 @@ explicit_intents:
       - Di consigliare {media_type}
       - Di raccomandare {media_type}
       - Di suggerire {media_type}
+      - Suggerisci una canzone
+      - Suggerisci un brano
+      - Suggerisci un film
+      - Consiglia una canzone
+      - Consiglia un brano
+      - Raccomanda una canzone
     slots:
       - name: media_type
         type: MediaType
@@ -598,10 +617,10 @@ types:
         value: video
       - id: musica
         value: musica
-        synonyms: [canzoni, brani]
+        synonyms: [canzoni, brani, "una canzone", "un brano", "le canzoni", "i brani"]
       - id: film
         value: film
-        synonyms: [movies, cinema]
+        synonyms: [movies, cinema, "un film", "i film"]
   TimePeriod:
     values:
       - id: today

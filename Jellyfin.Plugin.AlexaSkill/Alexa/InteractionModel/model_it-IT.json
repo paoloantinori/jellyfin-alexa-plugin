@@ -226,7 +226,23 @@
           "Informazioni su questa canzone",
           "Dimmi cosa sta suonando",
           "Che cosa suona",
-          "Chi suona adesso"
+          "Chi suona adesso",
+          "{media_info_type}",
+          "{media_info_type} questa canzone",
+          "{media_info_type} questo brano",
+          "{media_info_type} questo video",
+          "{media_info_type} questo film",
+          "Dimmi {media_info_type}",
+          "Dimmi {media_info_type} di questa canzone",
+          "Dimmi {media_info_type} di questo brano",
+          "{media_info_type} di questo brano",
+          "{media_info_type} di questa canzone"
+        ],
+        "slots": [
+          {
+            "name": "media_info_type",
+            "type": "MediaInfoType"
+          }
         ]
       },
       {
@@ -338,7 +354,13 @@
           "Suggerisci {media_type}",
           "Di consigliare {media_type}",
           "Di raccomandare {media_type}",
-          "Di suggerire {media_type}"
+          "Di suggerire {media_type}",
+          "Suggerisci una canzone",
+          "Suggerisci un brano",
+          "Suggerisci un film",
+          "Consiglia una canzone",
+          "Consiglia un brano",
+          "Raccomanda una canzone"
         ],
         "slots": [
           {
@@ -1522,7 +1544,11 @@
               "value": "musica",
               "synonyms": [
                 "canzoni",
-                "brani"
+                "brani",
+                "una canzone",
+                "un brano",
+                "le canzoni",
+                "i brani"
               ]
             },
             "id": "musica"
@@ -1532,7 +1558,9 @@
               "value": "film",
               "synonyms": [
                 "movies",
-                "cinema"
+                "cinema",
+                "un film",
+                "i film"
               ]
             },
             "id": "film"
