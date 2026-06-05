@@ -319,6 +319,12 @@ explicit_intents:
       - Riproduci musica {mood}
       - Suona musica {mood}
       - Metti musica {mood}
+      - Suonare musica {mood}
+      - Ascoltare musica {mood}
+      - Riprodurre musica {mood}
+      - Mettere musica {mood}
+      - Di suonare musica {mood}
+      - Di riprodurre musica {mood}
       - Musica mattutina
       - Musica serale
       - Musica per cena
@@ -326,6 +332,7 @@ explicit_intents:
       - Musica per concentrarmi
       - Musica per festa
       - Musica rilassante
+      - Suonare musica rilassante
     slots:
       - name: mood
         type: AMAZON.SearchQuery
@@ -800,6 +807,8 @@ templates:
     templates:
       - "{imperative} {favorites_noun}"
       - "{infinitive} {favorites_noun}"
+      - "{imperative} i miei {media_type} preferiti"
+      - "{infinitive} i miei {media_type} preferiti"
     slots:
       - name: media_type
         type: MediaType

@@ -422,13 +422,20 @@
           "Riproduci musica {mood}",
           "Suona musica {mood}",
           "Metti musica {mood}",
+          "Suonare musica {mood}",
+          "Ascoltare musica {mood}",
+          "Riprodurre musica {mood}",
+          "Mettere musica {mood}",
+          "Di suonare musica {mood}",
+          "Di riprodurre musica {mood}",
           "Musica mattutina",
           "Musica serale",
           "Musica per cena",
           "Musica per allenamento",
           "Musica per concentrarmi",
           "Musica per festa",
-          "Musica rilassante"
+          "Musica rilassante",
+          "Suonare musica rilassante"
         ],
         "slots": [
           {
@@ -1388,7 +1395,17 @@
           "Di pleiare i miei preferiti",
           "Di pleiare {media_type} preferiti",
           "Di ascoltare i miei preferiti",
-          "Di ascoltare {media_type} preferiti"
+          "Di ascoltare {media_type} preferiti",
+          "Riproduci i miei {media_type} preferiti",
+          "Suona i miei {media_type} preferiti",
+          "Metti i miei {media_type} preferiti",
+          "Pleia i miei {media_type} preferiti",
+          "Ascolta i miei {media_type} preferiti",
+          "Di riprodurre i miei {media_type} preferiti",
+          "Di suonare i miei {media_type} preferiti",
+          "Di mettere i miei {media_type} preferiti",
+          "Di pleiare i miei {media_type} preferiti",
+          "Di ascoltare i miei {media_type} preferiti"
         ],
         "slots": [
           {

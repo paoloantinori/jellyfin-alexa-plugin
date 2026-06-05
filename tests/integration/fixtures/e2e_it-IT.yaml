@@ -4,8 +4,7 @@ tests:
   # --- Playback intents ---
   - utterance: "riproduci i miei preferiti"
     expected_intent: PlayFavoritesIntent
-    expected_slots:
-      media_type: {}
+    expected_slots: {}
     expected_response_type: any
 
   - utterance: "suonare musica rilassante"
