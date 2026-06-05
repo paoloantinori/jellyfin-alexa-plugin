@@ -72,7 +72,7 @@ public class ConfigurationController : ControllerBase
     [Authorize(Policy = "RequiresElevation")]
     public ActionResult UpdateUserSkill([FromRoute] string userId, [FromBody] dynamic json)
     {
-        if (!TryResolvePluginUser(userId, out var pluginUser, out var error))
+        if (!TryResolvePluginUser(userId, out var pluginUser, out var error, autoProvision: true))
         {
             return error!;
         }
@@ -903,7 +903,7 @@ public class ConfigurationController : ControllerBase
         return true;
     }
 
-    private bool TryResolvePluginUser(string userId, out Jellyfin.Plugin.AlexaSkill.Entities.User? pluginUser, out ActionResult? error)
+    private bool TryResolvePluginUser(string userId, out Jellyfin.Plugin.AlexaSkill.Entities.User? pluginUser, out ActionResult? error, bool autoProvision = false)
     {
         pluginUser = null;
         error = null;
@@ -917,8 +917,44 @@ public class ConfigurationController : ControllerBase
         pluginUser = Plugin.Instance!.Configuration.GetUserById(userIdGuid);
         if (pluginUser == null)
         {
-            error = new JsonResult(new { error = "Could not find user" }) { StatusCode = 404 };
-            return false;
+            if (!autoProvision)
+            {
+                error = new JsonResult(new { error = "Could not find user" }) { StatusCode = 404 };
+                return false;
+            }
+
+            // Validate the GUID corresponds to a real Jellyfin user
+            var jellyfinUser = _userManager.GetUserById(userIdGuid);
+            if (jellyfinUser == null)
+            {
+                error = new JsonResult(new { error = "Could not find Jellyfin user" }) { StatusCode = 404 };
+                return false;
+            }
+
+            // Auto-provision a new plugin user with default settings
+            pluginUser = new Jellyfin.Plugin.AlexaSkill.Entities.User
+            {
+                Id = userIdGuid,
+            };
+
+            try
+            {
+                Plugin.Instance.Configuration.AddUser(pluginUser);
+            }
+            catch (ArgumentException)
+            {
+                // Race condition: user was added between GetUserById and AddUser.
+                // Re-resolve and continue.
+                pluginUser = Plugin.Instance.Configuration.GetUserById(userIdGuid);
+                if (pluginUser == null)
+                {
+                    error = new JsonResult(new { error = "Could not find user" }) { StatusCode = 404 };
+                    return false;
+                }
+            }
+
+            Plugin.Instance.SaveConfiguration();
+            _logger.LogInformation("Auto-provisioned plugin user for Jellyfin user {UserId}", userIdGuid);
         }
 
         return true;

@@ -540,6 +540,148 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
     }
 
     // ===================================================================
+    // Auto-provision tests -- PATCH auto-creates plugin user when Jellyfin
+    // user exists but has no plugin config entry
+    // ===================================================================
+
+    [Fact]
+    public void UpdateUserSkill_ValidJellyfinUser_NoPluginEntry_AutoProvisions()
+    {
+        // A valid Jellyfin user that has no plugin config entry
+        var jellyfinUserId = Guid.NewGuid();
+        SetupJellyfinUser("alice", jellyfinUserId);
+
+        Assert.Empty(_config.Users);
+
+        var json = JsonConvert.SerializeObject(new
+        {
+            SearchResponseMode = "Fast"
+        });
+
+        var result = _controller.UpdateUserSkill(jellyfinUserId.ToString(), json);
+
+        var jsonResult = Assert.IsType<JsonResult>(result);
+        Assert.Null(jsonResult.StatusCode); // 200
+
+        Assert.Single(_config.Users);
+        Assert.Equal(jellyfinUserId, _config.Users[0].Id);
+        Assert.Equal(Configuration.SearchResponseMode.Fast, _config.Users[0].SearchResponseMode);
+    }
+
+    [Fact]
+    public void UpdateUserSkill_ValidJellyfinUser_NoPluginEntry_MultipleFields()
+    {
+        var jellyfinUserId = Guid.NewGuid();
+        SetupJellyfinUser("bob", jellyfinUserId);
+
+        var json = JsonConvert.SerializeObject(new
+        {
+            SearchResponseMode = "Fast",
+            PostPlayBehavior = "AutoPlay",
+            FuzzyMatchThreshold = 75
+        });
+
+        var result = _controller.UpdateUserSkill(jellyfinUserId.ToString(), json);
+
+        var jsonResult = Assert.IsType<JsonResult>(result);
+        Assert.Null(jsonResult.StatusCode); // 200
+
+        Assert.Single(_config.Users);
+        var user = _config.Users[0];
+        Assert.Equal(jellyfinUserId, user.Id);
+        Assert.Equal(Configuration.SearchResponseMode.Fast, user.SearchResponseMode);
+        Assert.Equal(Configuration.PostPlayBehavior.AutoPlay, user.PostPlayBehavior);
+        Assert.Equal(75, user.FuzzyMatchThreshold);
+    }
+
+    [Fact]
+    public void UpdateUserSkill_InvalidJellyfinUserId_Returns404()
+    {
+        // A GUID that does not correspond to any Jellyfin user
+        var unknownGuid = Guid.NewGuid();
+        // _userManagerMock.GetUserById returns null by default for unsetup GUIDs
+
+        var json = JsonConvert.SerializeObject(new
+        {
+            SearchResponseMode = "Fast"
+        });
+
+        var result = _controller.UpdateUserSkill(unknownGuid.ToString(), json);
+
+        var jsonResult = Assert.IsType<JsonResult>(result);
+        Assert.Equal(404, jsonResult.StatusCode);
+        Assert.Empty(_config.Users); // no auto-provision happened
+    }
+
+    [Fact]
+    public void UpdateUserSkill_AutoProvisionedUser_NullFields_HaveDefaults()
+    {
+        var jellyfinUserId = Guid.NewGuid();
+        SetupJellyfinUser("charlie", jellyfinUserId);
+
+        var json = JsonConvert.SerializeObject(new
+        {
+            FuzzyMatchThreshold = 90
+        });
+
+        _controller.UpdateUserSkill(jellyfinUserId.ToString(), json);
+
+        Assert.Single(_config.Users);
+        var user = _config.Users[0];
+        Assert.Equal(jellyfinUserId, user.Id);
+        Assert.Null(user.UserSkill); // no skill created
+        Assert.Null(user.SearchResponseMode); // not set, will use global default
+        Assert.Null(user.PostPlayBehavior); // not set, will use global default
+        Assert.Equal(90, user.FuzzyMatchThreshold); // only this was set
+    }
+
+    [Fact]
+    public async Task DeleteUserSkill_DoesNotAutoProvision_Returns404()
+    {
+        // DeleteUserSkill should NOT auto-provision — only UpdateUserSkill does
+        var jellyfinUserId = Guid.NewGuid();
+        SetupJellyfinUser("dave", jellyfinUserId);
+
+        var result = await _controller.DeleteUserSkill(jellyfinUserId.ToString());
+
+        var jsonResult = Assert.IsType<JsonResult>(result);
+        Assert.Equal(404, jsonResult.StatusCode);
+        Assert.Empty(_config.Users);
+    }
+
+    [Fact]
+    public void GetUserSkillAuthorisation_DoesNotAutoProvision_Returns404()
+    {
+        var jellyfinUserId = Guid.NewGuid();
+        SetupJellyfinUser("eve", jellyfinUserId);
+
+        var result = _controller.GetUserSkillAuthorisation(jellyfinUserId.ToString());
+
+        var jsonResult = Assert.IsType<JsonResult>(result);
+        Assert.Equal(404, jsonResult.StatusCode);
+        Assert.Empty(_config.Users);
+    }
+
+    [Fact]
+    public void UpdateUserSkill_ExistingPluginUser_DoesNotReProvision()
+    {
+        // When user already exists in plugin config, no new entry is created
+        var jellyfinUserId = Guid.NewGuid();
+        SetupJellyfinUser("frank", jellyfinUserId);
+        AddUserDirect(jellyfinUserId, "frank");
+
+        var json = JsonConvert.SerializeObject(new
+        {
+            SearchResponseMode = "Thorough"
+        });
+
+        _controller.UpdateUserSkill(jellyfinUserId.ToString(), json);
+
+        Assert.Single(_config.Users); // still just one
+        Assert.Equal(Configuration.SearchResponseMode.Thorough, _config.Users[0].SearchResponseMode);
+    }
+
+    // ===================================================================
     // Data-layer test -- 3-user variant not covered by PluginConfigurationTests
     // ===================================================================
 
@@ -816,9 +958,9 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
 
     /// <summary>
     /// Sets up the mock IUserManager to return a real Jellyfin user with the
-    /// given name and ID when GetUserByName is called. Uses the concrete type
-    /// because <c>User.Id</c> and <c>User.Username</c> are not virtual, so
-    /// Moq cannot intercept them.
+    /// given name and ID. Sets up both <c>GetUserByName</c> and <c>GetUserById</c>
+    /// lookups. Uses the concrete type because <c>User.Id</c> and
+    /// <c>User.Username</c> are not virtual, so Moq cannot intercept them.
     /// </summary>
     private void SetupJellyfinUser(string username, Guid userId)
     {
@@ -830,6 +972,9 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
 
         _userManagerMock
             .Setup(m => m.GetUserByName(username))
+            .Returns(jellyfinUser);
+        _userManagerMock
+            .Setup(m => m.GetUserById(userId))
             .Returns(jellyfinUser);
     }
 }
