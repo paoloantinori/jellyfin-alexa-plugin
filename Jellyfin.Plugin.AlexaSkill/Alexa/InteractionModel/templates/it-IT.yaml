@@ -9,12 +9,13 @@
 invocationName: mia collezione
 
 vocabulary:
-  imperative: [Riproduci, Suona, Metti, Pleia]
-  infinitive: [Di riprodurre, Di suonare, Di mettere, Di pleiare]
+  imperative: [Riproduci, Suona, Metti, Pleia, Ascolta]
+  infinitive: [Di riprodurre, Di suonare, Di mettere, Di pleiare, Di ascoltare]
 
   song_noun: [il brano, la canzone, il pezzo, la traccia]
   album_noun: [album, disco]
   artist_article: [di, dei, degli, delle]
+  artist_carrier: [la band, il gruppo, il cantante, la cantante]
   media_noun: [brani, canzoni, musica, un brano, una canzone, un pezzo, una traccia]
   favorites_noun: [i miei preferiti, "{media_type} preferiti"]
   last_added_phrase: ["novità {media_type}", "ultimi {media_type} aggiunti", "nuovi media"]
@@ -26,7 +27,6 @@ vocabulary:
 static_intents:
   - AMAZON.CancelIntent
   - AMAZON.HelpIntent
-  - AMAZON.StopIntent
   - AMAZON.FallbackIntent
   - AMAZON.PauseIntent
   - AMAZON.ResumeIntent
@@ -41,6 +41,14 @@ static_intents:
 # Intents with explicit samples (not generated from templates).
 # Each has a "samples" list and optional "slots" list.
 explicit_intents:
+  AMAZON.StopIntent:
+    samples:
+      - ferma
+      - ferma tutto
+      - ferma la musica
+      - ferma riproduzione
+      - ferma la riproduzione
+      - stop
   LoopAllOffIntent:
     samples:
       - Disattiva loop
@@ -243,6 +251,10 @@ explicit_intents:
       - Hai un contenuto {query}
       - Voglio trovare un film {query}
       - Puoi trovare un contenuto {query}
+      - Cerca il brano {query}
+      - Trova il brano {query}
+      - Cerca la canzone {query}
+      - Trova la canzone {query}
     slots:
       - name: query
         type: AMAZON.SearchQuery
@@ -265,6 +277,10 @@ explicit_intents:
       - quali {browse_category} ci sono
       - che {browse_category} ci sono
       - che {browse_category} abbiamo
+      - mostra libri
+      - mostra artisti
+      - mostra film
+      - mostra album
     slots:
       - name: browse_category
         type: BrowseCategory
@@ -321,6 +337,12 @@ explicit_intents:
       - Suona {media_type} a caso
       - Metti {media_type} casuali
       - Metti {media_type} a caso
+      - Riprodurre {media_type} casuali
+      - Riprodurre {media_type} a caso
+      - Suonare {media_type} casuali
+      - Suonare {media_type} a caso
+      - Mettere {media_type} casuali
+      - Mettere {media_type} a caso
     slots:
       - name: media_type
         type: MediaType
@@ -383,6 +405,9 @@ explicit_intents:
       - sto cercando una canzone chiamata {titleKeywords}
       - voglio trovare una canzone chiamata {titleKeywords}
       - aiutami a trovare una canzone chiamata {titleKeywords}
+      - trova la canzone chiamata {titleKeywords}
+      - cerca la canzone chiamata {titleKeywords}
+      - cerco una canzone chiamata {titleKeywords}
     slots:
       - name: titleKeywords
         type: AMAZON.SearchQuery
@@ -519,7 +544,7 @@ explicit_intents:
       - spegni la radio
       - disattiva modalità radio
       - modalità radio spenta
-      - ferma la radio
+      - ferma riproduzione radio
       - radio spenta
       - disabilita radio
   TurnRadioOnIntent:
@@ -753,6 +778,8 @@ templates:
     templates:
       - "{imperative} {media_noun} {artist_article} {musician}"
       - "{infinitive} {media_noun} {artist_article} {musician}"
+      - "{imperative} {artist_carrier} {musician}"
+      - "{infinitive} {artist_carrier} {musician}"
     slots:
       - name: musician
         type: AMAZON.Musician

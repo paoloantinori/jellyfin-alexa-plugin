@@ -9,9 +9,6 @@
         "name": "AMAZON.HelpIntent"
       },
       {
-        "name": "AMAZON.StopIntent"
-      },
-      {
         "name": "AMAZON.FallbackIntent"
       },
       {
@@ -40,6 +37,17 @@
       },
       {
         "name": "AMAZON.StartOverIntent"
+      },
+      {
+        "name": "AMAZON.StopIntent",
+        "samples": [
+          "ferma",
+          "ferma tutto",
+          "ferma la musica",
+          "ferma riproduzione",
+          "ferma la riproduzione",
+          "stop"
+        ]
       },
       {
         "name": "LoopAllOffIntent",
@@ -321,7 +329,11 @@
           "Hai un film {query}",
           "Hai un contenuto {query}",
           "Voglio trovare un film {query}",
-          "Puoi trovare un contenuto {query}"
+          "Puoi trovare un contenuto {query}",
+          "Cerca il brano {query}",
+          "Trova il brano {query}",
+          "Cerca la canzone {query}",
+          "Trova la canzone {query}"
         ],
         "slots": [
           {
@@ -349,7 +361,11 @@
           "quali {browse_category} abbiamo",
           "quali {browse_category} ci sono",
           "che {browse_category} ci sono",
-          "che {browse_category} abbiamo"
+          "che {browse_category} abbiamo",
+          "mostra libri",
+          "mostra artisti",
+          "mostra film",
+          "mostra album"
         ],
         "slots": [
           {
@@ -429,7 +445,13 @@
           "Suona {media_type} casuali",
           "Suona {media_type} a caso",
           "Metti {media_type} casuali",
-          "Metti {media_type} a caso"
+          "Metti {media_type} a caso",
+          "Riprodurre {media_type} casuali",
+          "Riprodurre {media_type} a caso",
+          "Suonare {media_type} casuali",
+          "Suonare {media_type} a caso",
+          "Mettere {media_type} casuali",
+          "Mettere {media_type} a caso"
         ],
         "slots": [
           {
@@ -514,7 +536,10 @@
           "cerca una canzone che parla di {titleKeywords}",
           "sto cercando una canzone chiamata {titleKeywords}",
           "voglio trovare una canzone chiamata {titleKeywords}",
-          "aiutami a trovare una canzone chiamata {titleKeywords}"
+          "aiutami a trovare una canzone chiamata {titleKeywords}",
+          "trova la canzone chiamata {titleKeywords}",
+          "cerca la canzone chiamata {titleKeywords}",
+          "cerco una canzone chiamata {titleKeywords}"
         ],
         "slots": [
           {
@@ -706,7 +731,7 @@
           "spegni la radio",
           "disattiva modalità radio",
           "modalità radio spenta",
-          "ferma la radio",
+          "ferma riproduzione radio",
           "radio spenta",
           "disabilita radio"
         ]
@@ -742,6 +767,10 @@
           "Pleia la canzone {song}",
           "Pleia il pezzo {song}",
           "Pleia la traccia {song}",
+          "Ascolta il brano {song}",
+          "Ascolta la canzone {song}",
+          "Ascolta il pezzo {song}",
+          "Ascolta la traccia {song}",
           "Di riprodurre il brano {song}",
           "Di riprodurre la canzone {song}",
           "Di riprodurre il pezzo {song}",
@@ -758,6 +787,10 @@
           "Di pleiare la canzone {song}",
           "Di pleiare il pezzo {song}",
           "Di pleiare la traccia {song}",
+          "Di ascoltare il brano {song}",
+          "Di ascoltare la canzone {song}",
+          "Di ascoltare il pezzo {song}",
+          "Di ascoltare la traccia {song}",
           "Riproduci {song} di {musician}",
           "Riproduci {song} dei {musician}",
           "Riproduci {song} degli {musician}",
@@ -774,6 +807,10 @@
           "Pleia {song} dei {musician}",
           "Pleia {song} degli {musician}",
           "Pleia {song} delle {musician}",
+          "Ascolta {song} di {musician}",
+          "Ascolta {song} dei {musician}",
+          "Ascolta {song} degli {musician}",
+          "Ascolta {song} delle {musician}",
           "Di riprodurre {song} di {musician}",
           "Di riprodurre {song} dei {musician}",
           "Di riprodurre {song} degli {musician}",
@@ -789,7 +826,11 @@
           "Di pleiare {song} di {musician}",
           "Di pleiare {song} dei {musician}",
           "Di pleiare {song} degli {musician}",
-          "Di pleiare {song} delle {musician}"
+          "Di pleiare {song} delle {musician}",
+          "Di ascoltare {song} di {musician}",
+          "Di ascoltare {song} dei {musician}",
+          "Di ascoltare {song} degli {musician}",
+          "Di ascoltare {song} delle {musician}"
         ],
         "slots": [
           {
@@ -813,6 +854,8 @@
           "Metti disco {album}",
           "Pleia album {album}",
           "Pleia disco {album}",
+          "Ascolta album {album}",
+          "Ascolta disco {album}",
           "Di riprodurre album {album}",
           "Di riprodurre disco {album}",
           "Di suonare album {album}",
@@ -821,6 +864,8 @@
           "Di mettere disco {album}",
           "Di pleiare album {album}",
           "Di pleiare disco {album}",
+          "Di ascoltare album {album}",
+          "Di ascoltare disco {album}",
           "Riproduci album {album} di {musician}",
           "Riproduci album {album} dei {musician}",
           "Riproduci album {album} degli {musician}",
@@ -853,6 +898,14 @@
           "Pleia disco {album} dei {musician}",
           "Pleia disco {album} degli {musician}",
           "Pleia disco {album} delle {musician}",
+          "Ascolta album {album} di {musician}",
+          "Ascolta album {album} dei {musician}",
+          "Ascolta album {album} degli {musician}",
+          "Ascolta album {album} delle {musician}",
+          "Ascolta disco {album} di {musician}",
+          "Ascolta disco {album} dei {musician}",
+          "Ascolta disco {album} degli {musician}",
+          "Ascolta disco {album} delle {musician}",
           "Di riprodurre album {album} di {musician}",
           "Di riprodurre album {album} dei {musician}",
           "Di riprodurre album {album} degli {musician}",
@@ -885,6 +938,14 @@
           "Di pleiare disco {album} dei {musician}",
           "Di pleiare disco {album} degli {musician}",
           "Di pleiare disco {album} delle {musician}",
+          "Di ascoltare album {album} di {musician}",
+          "Di ascoltare album {album} dei {musician}",
+          "Di ascoltare album {album} degli {musician}",
+          "Di ascoltare album {album} delle {musician}",
+          "Di ascoltare disco {album} di {musician}",
+          "Di ascoltare disco {album} dei {musician}",
+          "Di ascoltare disco {album} degli {musician}",
+          "Di ascoltare disco {album} delle {musician}",
           "c'e un album chiamato {album}",
           "c'e un disco chiamato {album}"
         ],
@@ -1014,6 +1075,34 @@
           "Pleia una traccia dei {musician}",
           "Pleia una traccia degli {musician}",
           "Pleia una traccia delle {musician}",
+          "Ascolta brani di {musician}",
+          "Ascolta brani dei {musician}",
+          "Ascolta brani degli {musician}",
+          "Ascolta brani delle {musician}",
+          "Ascolta canzoni di {musician}",
+          "Ascolta canzoni dei {musician}",
+          "Ascolta canzoni degli {musician}",
+          "Ascolta canzoni delle {musician}",
+          "Ascolta musica di {musician}",
+          "Ascolta musica dei {musician}",
+          "Ascolta musica degli {musician}",
+          "Ascolta musica delle {musician}",
+          "Ascolta un brano di {musician}",
+          "Ascolta un brano dei {musician}",
+          "Ascolta un brano degli {musician}",
+          "Ascolta un brano delle {musician}",
+          "Ascolta una canzone di {musician}",
+          "Ascolta una canzone dei {musician}",
+          "Ascolta una canzone degli {musician}",
+          "Ascolta una canzone delle {musician}",
+          "Ascolta un pezzo di {musician}",
+          "Ascolta un pezzo dei {musician}",
+          "Ascolta un pezzo degli {musician}",
+          "Ascolta un pezzo delle {musician}",
+          "Ascolta una traccia di {musician}",
+          "Ascolta una traccia dei {musician}",
+          "Ascolta una traccia degli {musician}",
+          "Ascolta una traccia delle {musician}",
           "Di riprodurre brani di {musician}",
           "Di riprodurre brani dei {musician}",
           "Di riprodurre brani degli {musician}",
@@ -1125,7 +1214,75 @@
           "Di pleiare una traccia di {musician}",
           "Di pleiare una traccia dei {musician}",
           "Di pleiare una traccia degli {musician}",
-          "Di pleiare una traccia delle {musician}"
+          "Di pleiare una traccia delle {musician}",
+          "Di ascoltare brani di {musician}",
+          "Di ascoltare brani dei {musician}",
+          "Di ascoltare brani degli {musician}",
+          "Di ascoltare brani delle {musician}",
+          "Di ascoltare canzoni di {musician}",
+          "Di ascoltare canzoni dei {musician}",
+          "Di ascoltare canzoni degli {musician}",
+          "Di ascoltare canzoni delle {musician}",
+          "Di ascoltare musica di {musician}",
+          "Di ascoltare musica dei {musician}",
+          "Di ascoltare musica degli {musician}",
+          "Di ascoltare musica delle {musician}",
+          "Di ascoltare un brano di {musician}",
+          "Di ascoltare un brano dei {musician}",
+          "Di ascoltare un brano degli {musician}",
+          "Di ascoltare un brano delle {musician}",
+          "Di ascoltare una canzone di {musician}",
+          "Di ascoltare una canzone dei {musician}",
+          "Di ascoltare una canzone degli {musician}",
+          "Di ascoltare una canzone delle {musician}",
+          "Di ascoltare un pezzo di {musician}",
+          "Di ascoltare un pezzo dei {musician}",
+          "Di ascoltare un pezzo degli {musician}",
+          "Di ascoltare un pezzo delle {musician}",
+          "Di ascoltare una traccia di {musician}",
+          "Di ascoltare una traccia dei {musician}",
+          "Di ascoltare una traccia degli {musician}",
+          "Di ascoltare una traccia delle {musician}",
+          "Riproduci la band {musician}",
+          "Riproduci il gruppo {musician}",
+          "Riproduci il cantante {musician}",
+          "Riproduci la cantante {musician}",
+          "Suona la band {musician}",
+          "Suona il gruppo {musician}",
+          "Suona il cantante {musician}",
+          "Suona la cantante {musician}",
+          "Metti la band {musician}",
+          "Metti il gruppo {musician}",
+          "Metti il cantante {musician}",
+          "Metti la cantante {musician}",
+          "Pleia la band {musician}",
+          "Pleia il gruppo {musician}",
+          "Pleia il cantante {musician}",
+          "Pleia la cantante {musician}",
+          "Ascolta la band {musician}",
+          "Ascolta il gruppo {musician}",
+          "Ascolta il cantante {musician}",
+          "Ascolta la cantante {musician}",
+          "Di riprodurre la band {musician}",
+          "Di riprodurre il gruppo {musician}",
+          "Di riprodurre il cantante {musician}",
+          "Di riprodurre la cantante {musician}",
+          "Di suonare la band {musician}",
+          "Di suonare il gruppo {musician}",
+          "Di suonare il cantante {musician}",
+          "Di suonare la cantante {musician}",
+          "Di mettere la band {musician}",
+          "Di mettere il gruppo {musician}",
+          "Di mettere il cantante {musician}",
+          "Di mettere la cantante {musician}",
+          "Di pleiare la band {musician}",
+          "Di pleiare il gruppo {musician}",
+          "Di pleiare il cantante {musician}",
+          "Di pleiare la cantante {musician}",
+          "Di ascoltare la band {musician}",
+          "Di ascoltare il gruppo {musician}",
+          "Di ascoltare il cantante {musician}",
+          "Di ascoltare la cantante {musician}"
         ],
         "slots": [
           {
@@ -1149,6 +1306,9 @@
           "Pleia novità {media_type}",
           "Pleia ultimi {media_type} aggiunti",
           "Pleia nuovi media",
+          "Ascolta novità {media_type}",
+          "Ascolta ultimi {media_type} aggiunti",
+          "Ascolta nuovi media",
           "Di riprodurre novità {media_type}",
           "Di riprodurre ultimi {media_type} aggiunti",
           "Di riprodurre nuovi media",
@@ -1161,6 +1321,9 @@
           "Di pleiare novità {media_type}",
           "Di pleiare ultimi {media_type} aggiunti",
           "Di pleiare nuovi media",
+          "Di ascoltare novità {media_type}",
+          "Di ascoltare ultimi {media_type} aggiunti",
+          "Di ascoltare nuovi media",
           "Riproduci {media_type} aggiunti {time_period}",
           "Riproduci novità {media_type} {time_period}",
           "Riproduci {media_type} {time_period}",
@@ -1173,6 +1336,9 @@
           "Pleia {media_type} aggiunti {time_period}",
           "Pleia novità {media_type} {time_period}",
           "Pleia {media_type} {time_period}",
+          "Ascolta {media_type} aggiunti {time_period}",
+          "Ascolta novità {media_type} {time_period}",
+          "Ascolta {media_type} {time_period}",
           "Di riprodurre {media_type} aggiunti {time_period}",
           "Di riprodurre novità {media_type} {time_period}",
           "Di riprodurre {media_type} {time_period}",
@@ -1184,7 +1350,10 @@
           "Di mettere {media_type} {time_period}",
           "Di pleiare {media_type} aggiunti {time_period}",
           "Di pleiare novità {media_type} {time_period}",
-          "Di pleiare {media_type} {time_period}"
+          "Di pleiare {media_type} {time_period}",
+          "Di ascoltare {media_type} aggiunti {time_period}",
+          "Di ascoltare novità {media_type} {time_period}",
+          "Di ascoltare {media_type} {time_period}"
         ],
         "slots": [
           {
@@ -1208,6 +1377,8 @@
           "Metti {media_type} preferiti",
           "Pleia i miei preferiti",
           "Pleia {media_type} preferiti",
+          "Ascolta i miei preferiti",
+          "Ascolta {media_type} preferiti",
           "Di riprodurre i miei preferiti",
           "Di riprodurre {media_type} preferiti",
           "Di suonare i miei preferiti",
@@ -1215,7 +1386,9 @@
           "Di mettere i miei preferiti",
           "Di mettere {media_type} preferiti",
           "Di pleiare i miei preferiti",
-          "Di pleiare {media_type} preferiti"
+          "Di pleiare {media_type} preferiti",
+          "Di ascoltare i miei preferiti",
+          "Di ascoltare {media_type} preferiti"
         ],
         "slots": [
           {
