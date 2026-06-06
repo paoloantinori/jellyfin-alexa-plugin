@@ -196,8 +196,12 @@ public class FindSongIntentHandler : BaseHandler
         string? musician = GetSlotValue(intentRequest, "musician");
         string? transcript = GetSlotValue(intentRequest, "titleKeywords");
 
+        // Fallback: extract text from any slot when NLU misroutes to unexpected intent
+        string? anySlot = GetAnySlotValue(intentRequest);
+
         string? artistInput = !string.IsNullOrWhiteSpace(musician) ? musician.Trim()
             : !string.IsNullOrWhiteSpace(transcript) ? transcript.Trim()
+            : !string.IsNullOrWhiteSpace(anySlot) ? anySlot.Trim()
             : null;
 
         if (string.IsNullOrWhiteSpace(artistInput))
@@ -247,6 +251,14 @@ public class FindSongIntentHandler : BaseHandler
 
         if (string.IsNullOrWhiteSpace(keywords))
         {
+            // Fallback: extract text from any slot in the intent. When Alexa NLU
+            // misroutes the user's short reply (e.g. "family") to an unexpected intent
+            // like BrowseLibraryIntent, the text may end up in that intent's slots.
+            keywords = GetAnySlotValue(intentRequest);
+        }
+
+        if (string.IsNullOrWhiteSpace(keywords))
+        {
             string prompt = ResponseStrings.Get("FindSongPromptKeywords", locale);
             SkillResponse retryResponse = ResponseBuilder.Ask(prompt, new Reprompt(prompt));
             retryResponse.SessionAttributes = BuildSessionAttributes(sessionData);
@@ -287,7 +299,8 @@ public class FindSongIntentHandler : BaseHandler
 
         // Extract the user's input
         string? input = GetSlotValue(intentRequest, "titleKeywords")
-            ?? GetSlotValue(intentRequest, "musician");
+            ?? GetSlotValue(intentRequest, "musician")
+            ?? GetAnySlotValue(intentRequest);
 
         // If no slot, try the raw intent transcript
         if (string.IsNullOrWhiteSpace(input))
@@ -610,6 +623,31 @@ public class FindSongIntentHandler : BaseHandler
         }
 
         return string.IsNullOrWhiteSpace(slot.Value) ? null : slot.Value;
+    }
+
+    /// <summary>
+    /// Extract text from any slot in the intent, used as a fallback when the expected
+    /// slots (titleKeywords, musician) are not present. This handles the case where
+    /// Alexa NLU routes the user's reply to an unexpected intent (e.g. ShowMoreIntent
+    /// or BrowseLibraryIntent) during a multi-turn FindSong dialog.
+    /// </summary>
+    internal static string? GetAnySlotValue(IntentRequest intentRequest)
+    {
+        if (intentRequest.Intent.Slots == null || intentRequest.Intent.Slots.Count == 0)
+        {
+            return null;
+        }
+
+        // Return the first non-empty slot value
+        foreach (var slot in intentRequest.Intent.Slots.Values)
+        {
+            if (!string.IsNullOrWhiteSpace(slot.Value))
+            {
+                return slot.Value;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>

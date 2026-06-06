@@ -712,6 +712,170 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         Assert.True(response.Response.ShouldEndSession);
     }
 
+    // ========== Arbitrary Intent Routing (session-based override) ==========
+
+    [Fact]
+    public async Task AwaitingKeywords_ShowMoreIntent_ExtractsFromAnySlot()
+    {
+        // Simulates: user is in FindSong dialog, NLU routes "family" to ShowMoreIntent
+        // ShowMoreIntent has no standard slots, so we test with a slot that carries
+        // the text under an arbitrary name (mimicking what NLU might produce).
+        var artistId = Guid.NewGuid();
+        var songId = Guid.NewGuid();
+
+        SetupJellyfinUser();
+        SetupArtistSearch(artistId, "Beirut");
+        SetupSongSearch(new List<BaseItem> { CreateAudioItem(songId, "Family") });
+
+        var user = CreateTestUser();
+        var session = CreateSession();
+
+        var existingData = new FindSongSessionData
+        {
+            State = FindSongState.AwaitingKeywords,
+            ArtistId = artistId,
+            ArtistName = "Beirut"
+        };
+        var sessionAttrs = BuildSessionAttributes(existingData);
+
+        // ShowMoreIntent with an arbitrary slot containing the user's text
+        var request = CreateIntentRequest("ShowMoreIntent", new Dictionary<string, string?>
+        {
+            ["showMoreSlot"] = "family"
+        });
+
+        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+
+        // Should have found the song and auto-played (single match)
+        Assert.True(response.Response.ShouldEndSession);
+    }
+
+    [Fact]
+    public async Task AwaitingKeywords_ShowMoreIntent_NoSlots_PromptsForKeywords()
+    {
+        // ShowMoreIntent with no slots at all — can't extract keywords
+        SetupJellyfinUser();
+        var user = CreateTestUser();
+        var session = CreateSession();
+
+        var existingData = new FindSongSessionData
+        {
+            State = FindSongState.AwaitingKeywords,
+            ArtistName = "Beirut"
+        };
+        var sessionAttrs = BuildSessionAttributes(existingData);
+
+        // ShowMoreIntent with no slots
+        var request = CreateIntentRequest("ShowMoreIntent");
+
+        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+
+        // Can't extract keywords → should re-prompt
+        Assert.False(response.Response.ShouldEndSession);
+        Assert.NotNull(response.SessionAttributes);
+
+        // State should remain AwaitingKeywords
+        var sessionData = ReadSessionData(response);
+        Assert.NotNull(sessionData);
+        Assert.Equal(FindSongState.AwaitingKeywords, sessionData.State);
+    }
+
+    [Fact]
+    public async Task AwaitingKeywords_BrowseLibraryIntent_ExtractsFromBrowseCategorySlot()
+    {
+        // Simulates: user is in FindSong dialog, NLU routes "family" to BrowseLibraryIntent
+        // which has a "browse_category" slot that captures "family"
+        var artistId = Guid.NewGuid();
+        var songId = Guid.NewGuid();
+
+        SetupJellyfinUser();
+        SetupArtistSearch(artistId, "Beirut");
+        SetupSongSearch(new List<BaseItem> { CreateAudioItem(songId, "Family") });
+
+        var user = CreateTestUser();
+        var session = CreateSession();
+
+        var existingData = new FindSongSessionData
+        {
+            State = FindSongState.AwaitingKeywords,
+            ArtistId = artistId,
+            ArtistName = "Beirut"
+        };
+        var sessionAttrs = BuildSessionAttributes(existingData);
+
+        // BrowseLibraryIntent with browse_category slot
+        var request = CreateIntentRequest("BrowseLibraryIntent", new Dictionary<string, string?>
+        {
+            ["browse_category"] = "family"
+        });
+
+        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+
+        // Should have found the song and auto-played
+        Assert.True(response.Response.ShouldEndSession);
+    }
+
+    [Fact]
+    public async Task AwaitingArtist_ShowMoreIntent_ExtractsFromAnySlot()
+    {
+        // Simulates: user is in AwaitingArtist state, NLU routes "beirut" to ShowMoreIntent
+        var artistId = Guid.NewGuid();
+        var songId = Guid.NewGuid();
+
+        SetupJellyfinUser();
+        SetupArtistSearch(artistId, "Beirut");
+        SetupSongSearch(new List<BaseItem> { CreateAudioItem(songId, "Family") });
+
+        var user = CreateTestUser();
+        var session = CreateSession();
+
+        var existingData = new FindSongSessionData
+        {
+            State = FindSongState.AwaitingArtist,
+            Keywords = "family"
+        };
+        var sessionAttrs = BuildSessionAttributes(existingData);
+
+        var request = CreateIntentRequest("ShowMoreIntent", new Dictionary<string, string?>
+        {
+            ["someSlot"] = "Beirut"
+        });
+
+        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+
+        // Should have found the artist and song, then auto-played
+        Assert.True(response.Response.ShouldEndSession);
+    }
+
+    // ========== GetAnySlotValue ==========
+
+    [Fact]
+    public void GetAnySlotValue_NoSlots_ReturnsNull()
+    {
+        var request = CreateIntentRequest("ShowMoreIntent");
+        Assert.Null(FindSongIntentHandler.GetAnySlotValue(request));
+    }
+
+    [Fact]
+    public void GetAnySlotValue_WithSlotValue_ReturnsValue()
+    {
+        var request = CreateIntentRequest("SomeIntent", new Dictionary<string, string?>
+        {
+            ["arbitrarySlot"] = "family"
+        });
+        Assert.Equal("family", FindSongIntentHandler.GetAnySlotValue(request));
+    }
+
+    [Fact]
+    public void GetAnySlotValue_EmptySlotValue_ReturnsNull()
+    {
+        var request = CreateIntentRequest("SomeIntent", new Dictionary<string, string?>
+        {
+            ["emptySlot"] = ""
+        });
+        Assert.Null(FindSongIntentHandler.GetAnySlotValue(request));
+    }
+
     // ========== Too Many Results Without Artist ==========
 
     [Fact]

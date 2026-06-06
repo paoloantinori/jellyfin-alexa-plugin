@@ -12,6 +12,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Controller.Handler;
@@ -320,6 +321,25 @@ public class AlexaSkillController : ControllerBase
 
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(6));
 
+                // Session-aware routing: if a FindSong multi-turn dialog is active,
+                // always route to FindSongIntentHandler regardless of what intent Alexa's
+                // NLU assigned. Short replies like "family" often get misrouted by NLU
+                // (e.g. to ShowMoreIntent or BrowseLibraryIntent) when the user is in
+                // a multi-turn FindSong conversation.
+                string intentName = req.Request is IntentRequest intentReq ? intentReq.Intent?.Name ?? "null" : "n/a";
+
+                if (req.Session?.Attributes != null
+                    && req.Session.Attributes.ContainsKey("FindSongSessionData"))
+                {
+                    var findSongHandler = _handlers.OfType<FindSongIntentHandler>().FirstOrDefault();
+                    if (findSongHandler != null)
+                    {
+                        _logger.LogDebug("Routing to FindSongIntentHandler due to active FindSong session (NLU intent was {Intent})", intentName);
+                        SkillResponse findSongResponse = await _pipeline.ExecuteAsync(findSongHandler, req.Request, req.Context, req.Session, cts.Token).ConfigureAwait(false);
+                        return SkillResponseContent(findSongResponse);
+                    }
+                }
+
                 foreach (BaseHandler h in _handlers)
                 {
                     if (h.CanHandle(req.Request))
@@ -329,7 +349,6 @@ public class AlexaSkillController : ControllerBase
                     }
                 }
 
-                string intentName = req.Request is IntentRequest ir ? ir.Intent?.Name ?? "null" : "n/a";
                 string locale = BaseHandler.GetLocalePublic(req.Request);
                 _logger.LogWarning("Unhandled skill request: {RequestType} intent={IntentName} locale={Locale}", req.Request.Type, intentName, locale);
                 return SkillResponseContent(ResponseBuilder.Tell(ResponseStrings.Get("CouldNotUnderstand", locale)));
