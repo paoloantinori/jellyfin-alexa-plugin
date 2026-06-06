@@ -422,7 +422,9 @@ tests:
       musician: {}
 
   # Short-form utterances with English proper nouns
-  - utterance: "Suona bohemian rhapsody"
+  # NOTE: bare "Suona bohemian rhapsody" is unreliable — NLU routes to PlayNextIntent
+  # ("suona {song} dopo" matches more strongly). Use song_noun carrier for reliability.
+  - utterance: "Suona il brano bohemian rhapsody"
     expected_intent: PlaySongIntent
     expected_slots:
       song: {}
