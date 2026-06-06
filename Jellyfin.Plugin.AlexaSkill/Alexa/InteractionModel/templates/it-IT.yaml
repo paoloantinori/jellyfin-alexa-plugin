@@ -327,8 +327,6 @@ explicit_intents:
       - Musica per allenamento
       - Musica per concentrarmi
       - Musica per festa
-      - Musica rilassante
-      - Suonare musica rilassante
     slots:
       - name: mood
         type: AMAZON.SearchQuery
