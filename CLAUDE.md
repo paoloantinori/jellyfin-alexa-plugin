@@ -176,6 +176,105 @@ NLU test fixtures in `tests/integration/fixtures/<locale>.yaml`. NLU tests use t
 - **AudioPlayer event restrictions**: `PlaybackFinished` and `PlaybackNearlyFinished` can ONLY return `AudioPlayer.Play` directives — no `outputSpeech`, `reprompt`, or `shouldEndSession=false`. Any response needing speech must come from intent handlers, not AudioPlayer events.
 - **Entity resolution for slot synonyms**: `slot.Value` always contains the raw spoken text (e.g. "gli album"). To get the canonical value ("album"), extract from `slot.Resolution.Authorities[0].Values[0].Value.Name` when `Status.Code == "ER_SUCCESS_MATCH"`. See `BrowseLibraryIntentHandler.GetCanonicalSlotValue()` for the pattern.
 
+## Interaction Model Anti-Patterns — DO NOT REPEAT
+
+These patterns have caused bugs repeatedly across many sessions. Every rule here was extracted from real commits that fixed real failures.
+
+### 1. Static Samples Without Slots (MOST COMMON — 7+ incidents)
+
+**NEVER add a concrete utterance like `"mostra artisti"` to an intent that uses slots.** Alexa's NLU preferentially matches the static variant and delivers an empty slot to the handler.
+
+```
+# ❌ WRONG — "mostra artisti" matches but browse_category is empty
+"mostra artisti"
+"mostra libri"
+"Mostra {browse_category}"
+
+# ✅ RIGHT — only slotted variants; handler prompts if slot is empty
+"Mostra {browse_category}"
+"Sfoglia {browse_category}"
+"Elenca {browse_category}"
+```
+
+**Detection**: After editing any model JSON, search for samples without `{`:
+```bash
+grep -rn '"[A-Z][a-z].*"' model_*.json | grep -v '{' | grep samples
+```
+
+### 2. AMAZON.SearchQuery Coexistence (9+ incidents)
+
+**`AMAZON.SearchQuery` CANNOT coexist with ANY other slot type in the same intent.** SMAPI rejects the model build. Use custom slot types instead.
+
+```
+# ❌ WRONG — two different slot types, one is SearchQuery
+"slots": [{"name": "media_type", "type": "MediaType"}, {"name": "query", "type": "AMAZON.SearchQuery"}]
+
+# ✅ RIGHT — use custom types for all slots
+"slots": [{"name": "media_type", "type": "MediaType"}, {"name": "time_period", "type": "TimePeriod"}]
+```
+
+**Detection**: Already caught by `validate_interaction_models.py` check #6.
+
+### 3. NLU Intent Competition (9+ incidents)
+
+**Short/greedy patterns on one intent steal utterances from more specific intents.** Always qualify broad intents with carrier words or media-type nouns.
+
+```
+# ❌ WRONG — SearchMediaIntent captures "trova una canzone" before FindSongIntent
+"Cerca {query}"          # too greedy
+"Trova {query}"          # too greedy
+
+# ✅ RIGHT — qualify with media type so specific intents can match
+"Cerca un film {query}"
+"Cerca il contenuto {query}"
+```
+
+**Detection**: Run NLU test suite after ANY model change. Watch for intent misclassification.
+
+### 4. Cross-Locale Drift (8+ incidents)
+
+**Always add new intents/slots to ALL 17 locales simultaneously.** For it-IT, edit the YAML template and regenerate (`python3 scripts/generate_interaction_model.py it-IT`). For others, edit JSON directly.
+
+**Detection**: Already caught by `validate_interaction_models.py` cross-locale checks.
+
+### 5. Custom Samples on Built-in Intents (3 incidents, all locales)
+
+**NEVER add custom samples to `AMAZON.*` intents.** They break built-in behavior. If you need custom phrases, create a new custom intent.
+
+```
+# ❌ WRONG — breaks built-in NextIntent
+{"name": "AMAZON.NextIntent", "samples": ["avanti", "successivo"]}
+
+# ✅ RIGHT — empty samples, handle "avanti" in handler code or a custom intent
+{"name": "AMAZON.NextIntent", "samples": []}
+```
+
+**Detection**: `grep -rn '"AMAZON\.' model_*.json | grep -v '"samples": \[\]'`
+
+### 6. Vocabulary Expansion Side Effects (YAML Template Only)
+
+Adding a verb to `imperative`/`infinitive` vocabulary in the it-IT YAML template generates samples across ALL template intents via Cartesian product. A verb appropriate for one intent may produce nonsensical samples for another.
+
+**Rule**: After editing the YAML template vocabulary, regenerate and inspect the diff for unexpected samples across unrelated intents.
+
+### 7. Slot Value Guards Must Use IsNullOrWhiteSpace
+
+When Alexa partially matches, slots arrive as empty strings or whitespace. Always use `IsNullOrWhiteSpace`, never `IsNullOrEmpty`:
+
+```csharp
+// ❌ WRONG — " " passes through
+if (!string.IsNullOrEmpty(genreSlot))
+
+// ✅ RIGHT — " " is caught
+if (!string.IsNullOrWhiteSpace(genreSlot))
+```
+
+### 8. Missing Slot Type Values for Test Fixtures
+
+Test fixtures that use entity names (album/song/genre) must have those names in the corresponding custom slot type. If the slot type doesn't include the value, NLU can't fill the slot.
+
+**Rule**: Cross-reference test fixture `expected_slots` values against slot type `values` arrays in the model JSON.
+
 ## Release
 
 The CI workflow (`release-build.yml`) handles building, testing, zipping, creating the GitHub release, computing the manifest checksum, and committing the updated manifest back to main. It triggers on tag push.
