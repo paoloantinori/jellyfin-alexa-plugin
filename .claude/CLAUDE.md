@@ -8,12 +8,12 @@ That file has the full mandatory checklist. Key rules that keep getting violated
 2. **DISCOVER skill ID before E2E tests** — Run `ask smapi list-skills-for-vendor` to find the current Jellyfin skill. Update `~/.ask/ask_states.json`. The plugin creates new skills when config is wiped.
 3. **ENABLE skill after deploy** — `ask smapi set-skill-enablement --skill-id <ID> --stage development`
 4. **VERIFY config survived** after deploy. Restore from backup if lost.
-5. **CLEANUP stale skills** — Multiple Jellyfin skills cause NLU competition. Delete old ones.
+5. **NEVER delete skills** — SMAPI skill deletion is irreversible. NEVER run `ask smapi delete-skill`. A project hook blocks it. If cleanup is needed, ask the user to delete manually.
 6. **Use `$JELLYFIN_URL`** (public URL) for E2E tests, NOT localhost (that's minix-only).
 
 ## E2E Tests (SMAPI simulate-skill)
 
-Skill ID: `amzn1.ask.skill.33dfacd5-3676-4cdc-8b02-81efb227df83`
+Skill ID: DISCOVER DYNAMICALLY via `ask smapi list-skills-for-vendor` — see .claude.local.md Step 2
 Jellyfin API key: `69088d9a2bd74af5945b3d5683a087d3` (works for both plugin endpoints and /Sessions)
 
 ### Run all E2E tests

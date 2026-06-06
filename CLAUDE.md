@@ -134,6 +134,13 @@ Handlers call `GetPostPlayBehavior(user)` to resolve per-user override → globa
 
 17 locale files. The it-IT model is **generated from a YAML template** — do NOT edit the JSON directly.
 
+**Key vocabulary** (it-IT template, expanded via Cartesian product):
+- `imperative`: [Riproduci, Suona, Metti, Pleia, Ascolta]
+- `infinitive`: [Di riprodurre, Di suonare, Di mettere, Di pleiare, Di ascoltare]
+- `artist_carrier`: [la band, il gruppo, il cantante, la cantante] — disambiguates artist from radio/genre
+- `song_noun`: [il brano, la canzone, il pezzo, la traccia]
+- `media_noun`: [brani, canzoni, musica, un brano, una canzone, un pezzo, una traccia]
+
 **Model generator** (it-IT): `python3 scripts/generate_interaction_model.py it-IT`
 - Template: `Alexa/InteractionModel/templates/it-IT.yaml`
 - Output: `Alexa/InteractionModel/model_it-IT.json`
