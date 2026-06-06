@@ -48,6 +48,10 @@ public class AlexaSkillController : ControllerBase
     private readonly RequestPipeline _pipeline;
     private readonly IEnumerable<BaseHandler> _handlers;
 
+    // Lazy-cached handler references used for session-aware routing.
+    private FindSongIntentHandler? _findSongHandler;
+    private readonly object _handlerCacheLock = new();
+
     private readonly CsrfTokenHandler _csrfTokenHandler;
 
     /// <summary>
@@ -331,7 +335,15 @@ public class AlexaSkillController : ControllerBase
                 if (req.Session?.Attributes != null
                     && req.Session.Attributes.ContainsKey("FindSongSessionData"))
                 {
-                    var findSongHandler = _handlers.OfType<FindSongIntentHandler>().FirstOrDefault();
+                    var findSongHandler = _findSongHandler;
+                    if (findSongHandler == null)
+                    {
+                        lock (_handlerCacheLock)
+                        {
+                            findSongHandler = _findSongHandler ??= _handlers.OfType<FindSongIntentHandler>().FirstOrDefault();
+                        }
+                    }
+
                     if (findSongHandler != null)
                     {
                         _logger.LogDebug("Routing to FindSongIntentHandler due to active FindSong session (NLU intent was {Intent})", intentName);
