@@ -381,10 +381,11 @@ public class BrowseLibraryIntentHandlerTests : PluginTestBase
             new Audio { Name = "Book B (standalone)", Id = Guid.NewGuid(), ParentId = parentC },
         };
 
-        // Parent folder for Book A with correct book-level name.
+        // Parent folder for Book A — use a regular Folder (book subfolder), not a CollectionFolder
+        // which would be filtered out as a library root.
         var parentItems = new List<BaseItem>
         {
-            new CollectionFolder { Name = "Book A Full Title", Id = parentA },
+            new Folder { Name = "Book A Full Title", Id = parentA },
         };
 
         _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ItemIds != null && q.ItemIds.Length > 0)))
@@ -401,6 +402,82 @@ public class BrowseLibraryIntentHandlerTests : PluginTestBase
         string speech = TestHelpers.GetSpeechText(response);
         Assert.Contains("2", speech);
         Assert.DoesNotContain("4", speech);
+    }
+
+    [Fact]
+    public async Task HandleAsync_BrowseBooks_FiltersOutLibraryRootFolders()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(category: "libri");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        Guid rootFolderId = Guid.NewGuid();
+
+        // Simulate a flat audiobook library: multiple tracks whose parent is the library root folder.
+        var tracks = new List<BaseItem>
+        {
+            new Audio { Name = "Track 1", Id = Guid.NewGuid(), ParentId = rootFolderId },
+            new Audio { Name = "Track 2", Id = Guid.NewGuid(), ParentId = rootFolderId },
+        };
+
+        // Parent resolution returns a CollectionFolder named "Audiobooks" — the library root.
+        var parentItems = new List<BaseItem>
+        {
+            new CollectionFolder { Name = "Audiobooks", Id = rootFolderId },
+        };
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ItemIds != null && q.ItemIds.Length > 0)))
+            .Returns(parentItems);
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ItemIds == null || q.ItemIds.Length == 0)))
+            .Returns(tracks);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        string speech = TestHelpers.GetSpeechText(response);
+
+        // "Audiobooks" root folder must NOT appear in the response.
+        Assert.DoesNotContain("Audiobooks", speech);
+    }
+
+    [Fact]
+    public async Task HandleAsync_BrowseBooks_FiltersOutAggregateFolders()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(category: "libri");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        Guid rootFolderId = Guid.NewGuid();
+
+        var tracks = new List<BaseItem>
+        {
+            new Audio { Name = "Chapter 1", Id = Guid.NewGuid(), ParentId = rootFolderId },
+            new Audio { Name = "Chapter 2", Id = Guid.NewGuid(), ParentId = rootFolderId },
+        };
+
+        var parentItems = new List<BaseItem>
+        {
+            new AggregateFolder { Name = "Books Library", Id = rootFolderId },
+        };
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ItemIds != null && q.ItemIds.Length > 0)))
+            .Returns(parentItems);
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ItemIds == null || q.ItemIds.Length == 0)))
+            .Returns(tracks);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.DoesNotContain("Books Library", speech);
     }
 
     [Fact]
@@ -450,9 +527,10 @@ public class BrowseLibraryIntentHandlerTests : PluginTestBase
 
         Assert.NotNull(response);
         Assert.NotNull(response.Response?.OutputSpeech);
-        // FilterByContentAccess removes AudioBook from IncludeItemTypes when BooksEnabled=false,
-        // so the query returns empty → NoBrowseResults (Tell, not Ask).
-        Assert.True(response.Response.ShouldEndSession == null || response.Response.ShouldEndSession == true);
+        // List results keep session open so user can pick an item.
+        // (FilterByContentAccess would normally remove AudioBook items when BooksEnabled=false,
+        // but the mock bypasses that, so BuildListResponse still returns the item.)
+        Assert.True(response.Response.ShouldEndSession == null || response.Response.ShouldEndSession == false);
     }
 
     [Fact]
@@ -489,6 +567,64 @@ public class BrowseLibraryIntentHandlerTests : PluginTestBase
 
         Assert.NotNull(response);
         Assert.NotNull(response.Response?.OutputSpeech);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ShortList_KeepsSessionOpenForSelection()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(category: "artists");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        // 3 items — fits in one voice page (≤5)
+        var items = new List<BaseItem>
+        {
+            new MusicArtist { Name = "Artist A", Id = Guid.NewGuid() },
+            new MusicArtist { Name = "Artist B", Id = Guid.NewGuid() },
+            new MusicArtist { Name = "Artist C", Id = Guid.NewGuid() },
+        };
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(items);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.True(response.Response.ShouldEndSession == null || response.Response.ShouldEndSession == false,
+            "Non-truncated browse list should keep session open so user can pick an item");
+        Assert.NotNull(response.Response?.Reprompt);
+    }
+
+    [Fact]
+    public async Task HandleAsync_TruncatedList_KeepsSessionOpen()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(category: "artists");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var items = new List<BaseItem>();
+        for (int i = 0; i < 8; i++)
+        {
+            items.Add(new MusicArtist { Name = $"Artist {i + 1}", Id = Guid.NewGuid() });
+        }
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(items);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.True(response.Response.ShouldEndSession == null || response.Response.ShouldEndSession == false,
+            "Truncated browse list should keep session open");
+        Assert.NotNull(response.Response?.Reprompt);
     }
 
     [Theory]

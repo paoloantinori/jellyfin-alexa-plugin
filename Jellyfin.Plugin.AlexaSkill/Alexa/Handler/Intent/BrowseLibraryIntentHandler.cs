@@ -218,7 +218,16 @@ public class BrowseLibraryIntentHandler : BaseHandler
 
         IReadOnlyList<BaseItem> parents = await RetryAsync(() => _libraryManager.GetItemList(parentQuery), "GetAudioBookParents", cancellationToken).ConfigureAwait(false);
 
-        return parents.Concat(standaloneBooks).Take(MaxDisplayItems).ToList();
+        // Filter out library root folders (CollectionFolder, AggregateFolder) — they are
+        // organizational containers, not actual books. This happens when audiobook tracks
+        // sit directly under a library root in a flat folder structure.
+        var filtered = parents.Where(p => p is not CollectionFolder && p is not AggregateFolder).ToList();
+        if (filtered.Count != parents.Count)
+        {
+            Logger.LogDebug("BrowseLibrary: filtered out {RemovedCount} library root folders from AudioBook parents", parents.Count - filtered.Count);
+        }
+
+        return filtered.Concat(standaloneBooks).Take(MaxDisplayItems).ToList();
     }
 
     /// <summary>
@@ -287,9 +296,7 @@ public class BrowseLibraryIntentHandler : BaseHandler
             speech = ResponseStrings.Get("BrowseResults", locale, total.ToString(CultureInfo.InvariantCulture), voiceListText);
         }
 
-        SkillResponse response = isTruncated
-            ? ResponseBuilder.Ask(speech, new Reprompt(ResponseStrings.Get("ShowMorePrompt", locale)))
-            : ResponseBuilder.Tell(speech);
+        SkillResponse response = ResponseBuilder.Ask(speech, new Reprompt(ResponseStrings.Get("CarouselReprompt", locale)));
 
         // Store pagination state for ShowMoreIntent when truncated
         if (isTruncated)
