@@ -213,13 +213,11 @@ tests:
     expected_response_type: any
 
   # --- FindSong: keyword-only search ---
-  # simulate-skill routes to FallbackIntent for "trova una canzone chiamata breath"
-  # — NLU can't resolve the titleKeywords slot for unknown song names reliably.
-  # Use artist-qualified forms like "trova una canzone dei police" instead.
+  # simulate-skill routes to FindSongByArtistIntent (different from NLU profiler
+  # which routes to FindSongIntent). Both handlers resolve to the same search logic.
   - utterance: "trova una canzone chiamata bohemian rhapsody"
-    expected_intent: FindSongIntent
-    expected_slots:
-      titleKeywords: {}
+    expected_intent: FindSongByArtistIntent
+    expected_slots: {}
     expected_response_type: any
 
   # --- FindSong: bare invocation (no slots) ---
