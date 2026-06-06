@@ -119,6 +119,16 @@ internal static class TestHelpers
     }
 
     /// <summary>
+    /// Asserts that the response keeps the session open (ShouldEndSession is explicitly false).
+    /// This is more precise than checking null || false — ResponseBuilder.Ask() always sets false.
+    /// </summary>
+    internal static void AssertSessionOpen(SkillResponse response, string message = "Session should remain open")
+    {
+        global::Xunit.Assert.NotNull(response);
+        global::Xunit.Assert.False(response.Response.ShouldEndSession ?? true, message);
+    }
+
+    /// <summary>
     /// Sets Plugin.Instance with the provided configuration so IfFeatureDisabled
     /// can read from Plugin.Instance.Configuration. When the instance already exists,
     /// only the specific flag is synced via <paramref name="syncFlag"/>.

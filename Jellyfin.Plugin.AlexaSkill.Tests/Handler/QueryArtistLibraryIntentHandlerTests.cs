@@ -374,6 +374,72 @@ public class QueryArtistLibraryIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
+    public async Task HandleAsync_ShortTrackList_KeepsSessionOpenForSelection()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(musician: "Beatles");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var artist = new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() };
+        var track1 = new Audio { Name = "Yesterday", Id = Guid.NewGuid() };
+        var track2 = new Audio { Name = "Let It Be", Id = Guid.NewGuid() };
+        var track3 = new Audio { Name = "Hey Jude", Id = Guid.NewGuid() };
+
+        int callCount = 0;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(() =>
+            {
+                callCount++;
+                return callCount == 1
+                    ? new List<BaseItem> { artist }
+                    : new List<BaseItem> { track1, track2, track3 };
+            });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        TestHelpers.AssertSessionOpen(response, "Non-truncated track list should keep session open so user can pick an item");
+        Assert.NotNull(response.Response?.Reprompt);
+    }
+
+    [Fact]
+    public async Task HandleAsync_TruncatedTrackList_KeepsSessionOpen()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(musician: "Beatles");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var artist = new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() };
+        var tracks = new List<BaseItem>();
+        for (int i = 0; i < 10; i++)
+        {
+            tracks.Add(new Audio { Name = $"Track {i}", Id = Guid.NewGuid() });
+        }
+
+        int callCount = 0;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(() =>
+            {
+                callCount++;
+                return callCount == 1
+                    ? new List<BaseItem> { artist }
+                    : tracks;
+            });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        TestHelpers.AssertSessionOpen(response, "Truncated track list should keep session open");
+        Assert.NotNull(response.Response?.Reprompt);
+    }
+
+    [Fact]
     public async Task HandleAsync_AlbumsByArtist_WithApl_IncludesAplDirective()
     {
         EnsureVisualsEnabled();

@@ -63,6 +63,18 @@ public class PlaybackStartedEventHandler : BaseHandler
 
         await SessionManager.OnPlaybackStart(playbackStartInfo).ConfigureAwait(false);
 
-        return BuildKeepAliveResponse();
+        // Keep the session open (shouldEndSession=false) so that AMAZON.StopIntent
+        // is routed to the skill. The Alexa platform auto-routes Pause/Resume/Next/
+        // Previous to AudioPlayer skills regardless of session state, but StopIntent
+        // is NOT auto-routed — it requires an active session. Without an open session,
+        // "Alexa, stop" / "Alexa, ferma" is silently swallowed by the platform.
+        return new SkillResponse
+        {
+            Version = "1.0",
+            Response = new ResponseBody
+            {
+                ShouldEndSession = false
+            }
+        };
     }
 }

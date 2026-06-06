@@ -144,7 +144,7 @@ public class ListTruncationTests : PluginTestBase
         // Should contain show more prompt
         Assert.Contains("show more", speech, StringComparison.OrdinalIgnoreCase);
         // Session should be kept open (Ask, not Tell)
-        Assert.True(response.Response.ShouldEndSession == null || response.Response.ShouldEndSession == false);
+        TestHelpers.AssertSessionOpen(response);
         Assert.NotNull(response.Response.Reprompt);
     }
 
@@ -194,8 +194,9 @@ public class ListTruncationTests : PluginTestBase
         Assert.Contains("Artist 3", speech);
         // No show more prompt when items fit
         Assert.DoesNotContain("show more", speech, StringComparison.OrdinalIgnoreCase);
-        // Session ends normally
-        Assert.True(response.Response.ShouldEndSession == true);
+        // Session stays open so user can pick an item
+        TestHelpers.AssertSessionOpen(response);
+        Assert.NotNull(response.Response.Reprompt);
     }
 
     // ================================================================
@@ -255,11 +256,11 @@ public class ListTruncationTests : PluginTestBase
         // Show more prompt
         Assert.Contains("show more", speech, StringComparison.OrdinalIgnoreCase);
         // Session open
-        Assert.True(response.Response.ShouldEndSession == null || response.Response.ShouldEndSession == false);
+        TestHelpers.AssertSessionOpen(response);
     }
 
     [Fact]
-    public async Task QueryArtistLibrary_FewTracks_UsesFullKeyAndEndsSession()
+    public async Task QueryArtistLibrary_FewTracks_UsesFullKeyAndKeepsSessionOpen()
     {
         var handler = new QueryArtistLibraryIntentHandler(
             _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
@@ -305,7 +306,9 @@ public class ListTruncationTests : PluginTestBase
         Assert.Contains("Track 1", speech);
         Assert.Contains("Track 3", speech);
         Assert.DoesNotContain("show more", speech, StringComparison.OrdinalIgnoreCase);
-        Assert.True(response.Response.ShouldEndSession == true);
+        // Session stays open so user can pick an item
+        TestHelpers.AssertSessionOpen(response);
+        Assert.NotNull(response.Response.Reprompt);
     }
 
     [Fact]
@@ -411,12 +414,12 @@ public class ListTruncationTests : PluginTestBase
         // Show more prompt
         Assert.Contains("show more", speech, StringComparison.OrdinalIgnoreCase);
         // Session open
-        Assert.True(response.Response.ShouldEndSession == null || response.Response.ShouldEndSession == false);
+        TestHelpers.AssertSessionOpen(response);
         Assert.NotNull(response.Response.Reprompt);
     }
 
     [Fact]
-    public async Task InProgressMedia_FewItems_UsesFullKeyAndEndsSession()
+    public async Task InProgressMedia_FewItems_UsesFullKeyAndKeepsSessionOpen()
     {
         var handler = new InProgressMediaListIntentHandler(
             _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
@@ -455,7 +458,9 @@ public class ListTruncationTests : PluginTestBase
         Assert.Contains("Track 1", speech);
         Assert.Contains("Track 3", speech);
         Assert.DoesNotContain("show more", speech, StringComparison.OrdinalIgnoreCase);
-        Assert.True(response.Response.ShouldEndSession == true);
+        // Session stays open so user can pick an item
+        TestHelpers.AssertSessionOpen(response);
+        Assert.NotNull(response.Response.Reprompt);
     }
 
     [Fact]
@@ -498,7 +503,9 @@ public class ListTruncationTests : PluginTestBase
         Assert.Contains("Track 5", speech);
         // Exactly 5 items = no truncation
         Assert.DoesNotContain("show more", speech, StringComparison.OrdinalIgnoreCase);
-        Assert.True(response.Response.ShouldEndSession == true);
+        // Session stays open so user can pick an item
+        TestHelpers.AssertSessionOpen(response);
+        Assert.NotNull(response.Response.Reprompt);
     }
 
     // ================================================================
@@ -555,7 +562,7 @@ public class ListTruncationTests : PluginTestBase
         // Show more prompt
         Assert.Contains("show more", speech, StringComparison.OrdinalIgnoreCase);
         // Session open
-        Assert.True(response.Response.ShouldEndSession == null || response.Response.ShouldEndSession == false);
+        TestHelpers.AssertSessionOpen(response);
         Assert.NotNull(response.Response.Reprompt);
     }
 
@@ -693,12 +700,12 @@ public class ListTruncationTests : PluginTestBase
         // Show more prompt
         Assert.Contains("show more", speech, StringComparison.OrdinalIgnoreCase);
         // Session open
-        Assert.True(response.Response.ShouldEndSession == null || response.Response.ShouldEndSession == false);
+        TestHelpers.AssertSessionOpen(response);
         Assert.NotNull(response.Response.Reprompt);
     }
 
     [Fact]
-    public async Task RecentlyAdded_FewItems_EndsSessionNormally()
+    public async Task RecentlyAdded_FewItems_KeepsSessionOpen()
     {
         var handler = new QueryRecentlyAddedIntentHandler(
             _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
@@ -733,7 +740,9 @@ public class ListTruncationTests : PluginTestBase
         Assert.Contains("New Song", speech);
         Assert.Contains("New Movie", speech);
         Assert.DoesNotContain("show more", speech, StringComparison.OrdinalIgnoreCase);
-        Assert.True(response.Response.ShouldEndSession == true);
+        // Session stays open so user can pick an item
+        TestHelpers.AssertSessionOpen(response);
+        Assert.NotNull(response.Response.Reprompt);
     }
 
     [Fact]
@@ -771,7 +780,9 @@ public class ListTruncationTests : PluginTestBase
         string speech = TestHelpers.GetSpeechText(response);
         Assert.Contains("Item 5", speech);
         Assert.DoesNotContain("show more", speech, StringComparison.OrdinalIgnoreCase);
-        Assert.True(response.Response.ShouldEndSession == true);
+        // Session stays open so user can pick an item
+        TestHelpers.AssertSessionOpen(response);
+        Assert.NotNull(response.Response.Reprompt);
     }
 
     [Fact]

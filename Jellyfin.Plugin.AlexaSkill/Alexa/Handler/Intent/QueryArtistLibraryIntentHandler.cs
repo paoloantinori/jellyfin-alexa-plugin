@@ -214,14 +214,16 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
         if (total <= VoicePageSize)
         {
             string list = string.Join(", ", items.Select(i => i.Name));
-            response = ResponseBuilder.Tell(ResponseStrings.Get(listKey, locale, artistName, total, list));
+            response = ResponseBuilder.Ask(
+                ResponseStrings.Get(listKey, locale, artistName, total, list),
+                new Reprompt(ResponseStrings.Get("CarouselReprompt", locale)));
         }
         else
         {
             string partialList = string.Join(", ", items.Take(VoicePageSize).Select(i => i.Name));
             string speech = ResponseStrings.Get(partialKey, locale, artistName, total, VoicePageSize, partialList);
             speech += " " + ResponseStrings.Get("ShowMorePrompt", locale);
-            response = ResponseBuilder.Ask(speech, new Reprompt(ResponseStrings.Get("ShowMorePrompt", locale)));
+            response = ResponseBuilder.Ask(speech, new Reprompt(ResponseStrings.Get("CarouselReprompt", locale)));
 
             // Store pagination state for ShowMoreIntent
             response.SessionAttributes = new Dictionary<string, object>();

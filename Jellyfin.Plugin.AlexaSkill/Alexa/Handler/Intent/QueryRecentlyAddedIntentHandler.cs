@@ -156,9 +156,7 @@ public class QueryRecentlyAddedIntentHandler : BaseHandler
             speech = $"{intro} {voiceListText}. {prompt}";
         }
 
-        SkillResponse response = isTruncated
-            ? ResponseBuilder.Ask(speech, new Reprompt(ResponseStrings.Get("ShowMorePrompt", locale)))
-            : ResponseBuilder.Tell(speech);
+        SkillResponse response = ResponseBuilder.Ask(speech, new Reprompt(ResponseStrings.Get("CarouselReprompt", locale)));
 
         // Store pagination state for ShowMoreIntent when truncated
         if (isTruncated)

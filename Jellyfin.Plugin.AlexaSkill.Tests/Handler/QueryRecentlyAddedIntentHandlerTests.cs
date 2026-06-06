@@ -278,7 +278,7 @@ public class QueryRecentlyAddedIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
-    public async Task HandleAsync_DoesNotReturnAudioPlayerDirective()
+    public async Task HandleAsync_ShortList_KeepsSessionOpenForSelection()
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest();
@@ -288,22 +288,59 @@ public class QueryRecentlyAddedIntentHandlerTests : PluginTestBase
 
         SetupUserMock();
 
+        // 3 items — fits in one voice page (≤5), so non-truncated path
         var audio = new Audio
         {
             Name = "Test Song",
             Id = Guid.NewGuid(),
             Artists = new List<string> { "Test Artist" }
         };
+        var movie = new Movie
+        {
+            Name = "Test Movie",
+            Id = Guid.NewGuid()
+        };
+        var episode = new Episode
+        {
+            Name = "Test Episode",
+            Id = Guid.NewGuid()
+        };
 
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns(new List<BaseItem> { audio });
+            .Returns(new List<BaseItem> { audio, movie, episode });
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
-        Assert.NotNull(response);
-        // Should end session (Tell, not Ask) with no AudioPlayer directive
-        Assert.True(response.Response.ShouldEndSession);
+        // List prompts user to "say the number to play one" — session must stay open
+        TestHelpers.AssertSessionOpen(response, "Non-truncated list should keep session open so user can pick an item");
+        Assert.NotNull(response.Response?.Reprompt);
         Assert.Empty(response.Response.Directives);
+    }
+
+    [Fact]
+    public async Task HandleAsync_TruncatedList_KeepsSessionOpen()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest();
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var items = new List<BaseItem>();
+        for (int i = 0; i < 8; i++)
+        {
+            items.Add(new Audio { Name = $"Song {i + 1}", Id = Guid.NewGuid(), Artists = new List<string> { $"Artist {i + 1}" } });
+        }
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(items);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        TestHelpers.AssertSessionOpen(response, "Truncated list should keep session open");
+        Assert.NotNull(response.Response?.Reprompt);
     }
 
     [Fact]
