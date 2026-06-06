@@ -277,10 +277,6 @@ explicit_intents:
       - quali {browse_category} ci sono
       - che {browse_category} ci sono
       - che {browse_category} abbiamo
-      - mostra libri
-      - mostra artisti
-      - mostra film
-      - mostra album
     slots:
       - name: browse_category
         type: BrowseCategory

@@ -361,11 +361,7 @@
           "quali {browse_category} abbiamo",
           "quali {browse_category} ci sono",
           "che {browse_category} ci sono",
-          "che {browse_category} abbiamo",
-          "mostra libri",
-          "mostra artisti",
-          "mostra film",
-          "mostra album"
+          "che {browse_category} abbiamo"
         ],
         "slots": [
           {
