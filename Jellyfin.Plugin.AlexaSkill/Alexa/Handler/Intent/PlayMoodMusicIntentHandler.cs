@@ -46,28 +46,208 @@ public class PlayMoodMusicIntentHandler : BaseHandler
     };
 
     /// <summary>
-    /// Maps localized (Italian) mood words to their English MoodGenreMap keys.
+    /// Maps localized mood words to their English MoodGenreMap keys.
     /// This allows non-English users to use native mood words that resolve to
     /// the same genre arrays as their English counterparts.
+    /// Covers: it-IT, de-DE, es-ES, fr-FR, pt-BR.
+    /// Entries are sorted alphabetically by key. Shared words across locales
+    /// (e.g. "triste" in it-IT/es-ES/fr-FR/pt-BR) appear once since all map
+    /// to the same English key and the dictionary uses OrdinalIgnoreCase.
     /// </summary>
     private static readonly Dictionary<string, string> LocalizedMoodMap = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["rilassante"] = "relaxing",
+        // de-DE
+        ["abend"] = "evening",
+        ["abends"] = "evening",
+        ["abendessen"] = "dinner",
+
+        // de-DE
+        ["beruhigend"] = "chill",
+        ["beschwingt"] = "upbeat",
+
+        // it-IT
+        ["allenamento"] = "workout",
         ["allegra"] = "happy",
         ["allegramente"] = "happy",
-        ["energica"] = "energetic",
-        ["energico"] = "energetic",
+
+        // es-ES + pt-BR
+        ["alegre"] = "happy",
+
+        // es-ES + pt-BR
+        ["animada"] = "upbeat",
+
+        // es-ES + pt-BR
+        ["animado"] = "upbeat",
+
+        // it-IT + pt-BR
+        ["calma"] = "chill",
+
+        // pt-BR
+        ["calmo"] = "chill",
+
+        // it-IT + es-ES
+        ["cena"] = "dinner",
+
+        // fr-FR
+        ["concentration"] = "focus",
+
+        // es-ES
+        ["concentración"] = "focus",
+
+        // pt-BR
+        ["concentração"] = "focus",
+
+        // it-IT
         ["concentrazione"] = "focus",
+
+        // it-IT (compound moods)
+        ["da allenamento"] = "workout",
+        ["da cena"] = "dinner",
+        ["da festa"] = "party",
+
+        // fr-FR
+        ["détendant"] = "relaxing",
+        ["détendu"] = "relaxing",
+        ["détendue"] = "relaxing",
+        ["dîner"] = "dinner",
+        ["dynamique"] = "upbeat",
+
+        // fr-FR
+        ["énergique"] = "energetic",
+
+        // es-ES
+        ["enérgica"] = "energetic",
+        ["enérgico"] = "energetic",
+        ["entrenamiento"] = "workout",
+
+        // fr-FR
+        ["entraînement"] = "workout",
+
+        // de-DE
+        ["energisch"] = "energetic",
+        ["entspannend"] = "relaxing",
+        ["entspannt"] = "relaxing",
+
+        // pt-BR
+        ["energética"] = "energetic",
+        ["energético"] = "energetic",
+        ["exercício"] = "workout",
+
+        // de-DE
+        ["feier"] = "party",
+
+        // es-ES + pt-BR
+        ["feliz"] = "happy",
+
+        // it-IT + pt-BR
+        ["festa"] = "party",
+
+        // es-ES
+        ["fiesta"] = "party",
+
+        // pt-BR
+        ["foco"] = "focus",
+
+        // de-DE
+        ["fokus"] = "focus",
+        ["fröhlich"] = "happy",
+        ["glücklich"] = "happy",
+
+        // fr-FR
+        ["heureuse"] = "happy",
+        ["heureux"] = "happy",
+
+        // fr-FR
+        ["joyeuse"] = "happy",
+        ["joyeux"] = "happy",
+
+        // pt-BR
+        ["jantar"] = "dinner",
+
+        // pt-BR
+        ["manhã"] = "morning",
+
+        // fr-FR + pt-BR (shared word, one entry covers both)
+        ["matinal"] = "morning",
+
+        // it-IT + es-ES
+        ["mattutina"] = "morning",
+
+        // es-ES
+        ["matutino"] = "morning",
+
+        // de-DE
+        ["morgens"] = "morning",
+
+        // es-ES
+        ["nocturna"] = "evening",
+        ["nocturno"] = "evening",
+
+        // pt-BR
+        ["noite"] = "evening",
+        ["noturna"] = "evening",
+        ["noturno"] = "evening",
+
+        // de-DE
+        ["party"] = "party",
+
+        // fr-FR
+        ["reposant"] = "chill",
+
+        // es-ES
+        ["relajado"] = "chill",
+        ["relajante"] = "relaxing",
+
+        // pt-BR
+        ["relaxada"] = "relaxing",
+        ["relaxado"] = "relaxing",
+
+        // it-IT + pt-BR
+        ["relaxante"] = "relaxing",
+
+        // it-IT
+        ["rilassante"] = "relaxing",
+
+        // de-DE
+        ["romantisch"] = "romantic",
+
+        // it-IT
         ["romantica"] = "romantic",
         ["romantico"] = "romantic",
-        ["triste"] = "sad",
-        ["tristezza"] = "sad",
-        ["festa"] = "party",
-        ["allenamento"] = "workout",
-        ["mattutina"] = "morning",
+
+        // es-ES
+        ["romántica"] = "romantic",
+        ["romántico"] = "romantic",
+
+        // fr-FR
+        ["romantique"] = "romantic",
+
+        // pt-BR
+        ["romântica"] = "romantic",
+        ["romântico"] = "romantic",
+
+        // it-IT
         ["serale"] = "evening",
-        ["cena"] = "dinner",
-        ["calma"] = "chill"
+
+        // fr-FR
+        ["soirée"] = "evening",
+
+        // es-ES
+        ["tranquila"] = "relaxing",
+        ["tranquilo"] = "relaxing",
+
+        // de-DE
+        ["training"] = "workout",
+        ["traurig"] = "sad",
+
+        // pt-BR
+        ["treino"] = "workout",
+
+        // it-IT + es-ES + fr-FR + pt-BR
+        ["triste"] = "sad",
+
+        // it-IT
+        ["tristezza"] = "sad"
     };
 
     private readonly ILibraryManager _libraryManager;

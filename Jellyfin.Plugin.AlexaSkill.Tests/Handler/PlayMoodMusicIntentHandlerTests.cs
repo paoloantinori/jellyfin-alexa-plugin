@@ -353,6 +353,240 @@ public class PlayMoodMusicIntentHandlerTests : PluginTestBase
         Assert.NotEmpty(response.Response.Directives);
     }
 
+    // --- Italian compound moods ---
+
+    [Fact]
+    public void ResolveGenres_ItalianMood_DaFesta_ReturnsPartyGenres()
+    {
+        string[] compoundGenres = PlayMoodMusicIntentHandler.ResolveGenres("da festa", hour: -1);
+        string[] partyGenres = PlayMoodMusicIntentHandler.ResolveGenres("party", hour: -1);
+
+        Assert.Equal(partyGenres, compoundGenres);
+        Assert.Contains("dance", compoundGenres);
+    }
+
+    [Fact]
+    public void ResolveGenres_ItalianMood_DaAllenamento_ReturnsWorkoutGenres()
+    {
+        string[] compoundGenres = PlayMoodMusicIntentHandler.ResolveGenres("da allenamento", hour: -1);
+        string[] workoutGenres = PlayMoodMusicIntentHandler.ResolveGenres("workout", hour: -1);
+
+        Assert.Equal(workoutGenres, compoundGenres);
+        Assert.Contains("electronic", compoundGenres);
+    }
+
+    [Fact]
+    public void ResolveGenres_ItalianMood_DaCena_ReturnsDinnerGenres()
+    {
+        string[] compoundGenres = PlayMoodMusicIntentHandler.ResolveGenres("da cena", hour: -1);
+        string[] dinnerGenres = PlayMoodMusicIntentHandler.ResolveGenres("dinner", hour: -1);
+
+        Assert.Equal(dinnerGenres, compoundGenres);
+        Assert.Contains("jazz", compoundGenres);
+    }
+
+    // --- German (de-DE) moods ---
+
+    [Fact]
+    public void ResolveGenres_GermanMood_Entspannend_ReturnsRelaxingGenres()
+    {
+        string[] germanGenres = PlayMoodMusicIntentHandler.ResolveGenres("entspannend", hour: -1);
+        string[] englishGenres = PlayMoodMusicIntentHandler.ResolveGenres("relaxing", hour: -1);
+
+        Assert.Equal(englishGenres, germanGenres);
+        Assert.Contains("ambient", germanGenres);
+    }
+
+    [Fact]
+    public void ResolveGenres_GermanMood_Traurig_ReturnsSadGenres()
+    {
+        string[] germanGenres = PlayMoodMusicIntentHandler.ResolveGenres("traurig", hour: -1);
+        string[] englishGenres = PlayMoodMusicIntentHandler.ResolveGenres("sad", hour: -1);
+
+        Assert.Equal(englishGenres, germanGenres);
+        Assert.Contains("blues", germanGenres);
+    }
+
+    [Fact]
+    public void ResolveGenres_GermanMood_Feier_ReturnsPartyGenres()
+    {
+        string[] germanGenres = PlayMoodMusicIntentHandler.ResolveGenres("feier", hour: -1);
+        string[] englishGenres = PlayMoodMusicIntentHandler.ResolveGenres("party", hour: -1);
+
+        Assert.Equal(englishGenres, germanGenres);
+        Assert.Contains("dance", germanGenres);
+    }
+
+    [Fact]
+    public void ResolveGenres_GermanMood_Abendessen_ReturnsDinnerGenres()
+    {
+        string[] germanGenres = PlayMoodMusicIntentHandler.ResolveGenres("abendessen", hour: -1);
+        string[] englishGenres = PlayMoodMusicIntentHandler.ResolveGenres("dinner", hour: -1);
+
+        Assert.Equal(englishGenres, germanGenres);
+        Assert.Contains("jazz", germanGenres);
+    }
+
+    // --- Spanish (es-ES) moods ---
+
+    [Fact]
+    public void ResolveGenres_SpanishMood_Relajante_ReturnsRelaxingGenres()
+    {
+        string[] spanishGenres = PlayMoodMusicIntentHandler.ResolveGenres("relajante", hour: -1);
+        string[] englishGenres = PlayMoodMusicIntentHandler.ResolveGenres("relaxing", hour: -1);
+
+        Assert.Equal(englishGenres, spanishGenres);
+        Assert.Contains("ambient", spanishGenres);
+    }
+
+    [Fact]
+    public void ResolveGenres_SpanishMood_Animado_ReturnsUpbeatGenres()
+    {
+        string[] spanishGenres = PlayMoodMusicIntentHandler.ResolveGenres("animado", hour: -1);
+        string[] englishGenres = PlayMoodMusicIntentHandler.ResolveGenres("upbeat", hour: -1);
+
+        Assert.Equal(englishGenres, spanishGenres);
+        Assert.Contains("pop", spanishGenres);
+    }
+
+    [Fact]
+    public void ResolveGenres_SpanishMood_Entrenamiento_ReturnsWorkoutGenres()
+    {
+        string[] spanishGenres = PlayMoodMusicIntentHandler.ResolveGenres("entrenamiento", hour: -1);
+        string[] englishGenres = PlayMoodMusicIntentHandler.ResolveGenres("workout", hour: -1);
+
+        Assert.Equal(englishGenres, spanishGenres);
+        Assert.Contains("electronic", spanishGenres);
+    }
+
+    [Fact]
+    public void ResolveGenres_SpanishMood_Nocturno_ReturnsEveningGenres()
+    {
+        string[] spanishGenres = PlayMoodMusicIntentHandler.ResolveGenres("nocturno", hour: -1);
+        string[] englishGenres = PlayMoodMusicIntentHandler.ResolveGenres("evening", hour: -1);
+
+        Assert.Equal(englishGenres, spanishGenres);
+        Assert.Contains("jazz", spanishGenres);
+    }
+
+    // --- French (fr-FR) moods ---
+
+    [Fact]
+    public void ResolveGenres_FrenchMood_Détendu_ReturnsRelaxingGenres()
+    {
+        string[] frenchGenres = PlayMoodMusicIntentHandler.ResolveGenres("détendu", hour: -1);
+        string[] englishGenres = PlayMoodMusicIntentHandler.ResolveGenres("relaxing", hour: -1);
+
+        Assert.Equal(englishGenres, frenchGenres);
+        Assert.Contains("ambient", frenchGenres);
+    }
+
+    [Fact]
+    public void ResolveGenres_FrenchMood_Énergique_ReturnsEnergeticGenres()
+    {
+        string[] frenchGenres = PlayMoodMusicIntentHandler.ResolveGenres("énergique", hour: -1);
+        string[] englishGenres = PlayMoodMusicIntentHandler.ResolveGenres("energetic", hour: -1);
+
+        Assert.Equal(englishGenres, frenchGenres);
+        Assert.Contains("rock", frenchGenres);
+    }
+
+    [Fact]
+    public void ResolveGenres_FrenchMood_Soirée_ReturnsEveningGenres()
+    {
+        string[] frenchGenres = PlayMoodMusicIntentHandler.ResolveGenres("soirée", hour: -1);
+        string[] englishGenres = PlayMoodMusicIntentHandler.ResolveGenres("evening", hour: -1);
+
+        Assert.Equal(englishGenres, frenchGenres);
+        Assert.Contains("jazz", frenchGenres);
+    }
+
+    [Fact]
+    public void ResolveGenres_FrenchMood_Entraînement_ReturnsWorkoutGenres()
+    {
+        string[] frenchGenres = PlayMoodMusicIntentHandler.ResolveGenres("entraînement", hour: -1);
+        string[] englishGenres = PlayMoodMusicIntentHandler.ResolveGenres("workout", hour: -1);
+
+        Assert.Equal(englishGenres, frenchGenres);
+        Assert.Contains("electronic", frenchGenres);
+    }
+
+    // --- Portuguese (pt-BR) moods ---
+
+    [Fact]
+    public void ResolveGenres_PortugueseMood_Relaxante_ReturnsRelaxingGenres()
+    {
+        string[] ptGenres = PlayMoodMusicIntentHandler.ResolveGenres("relaxante", hour: -1);
+        string[] englishGenres = PlayMoodMusicIntentHandler.ResolveGenres("relaxing", hour: -1);
+
+        Assert.Equal(englishGenres, ptGenres);
+        Assert.Contains("ambient", ptGenres);
+    }
+
+    [Fact]
+    public void ResolveGenres_PortugueseMood_Treino_ReturnsWorkoutGenres()
+    {
+        string[] ptGenres = PlayMoodMusicIntentHandler.ResolveGenres("treino", hour: -1);
+        string[] englishGenres = PlayMoodMusicIntentHandler.ResolveGenres("workout", hour: -1);
+
+        Assert.Equal(englishGenres, ptGenres);
+        Assert.Contains("electronic", ptGenres);
+    }
+
+    [Fact]
+    public void ResolveGenres_PortugueseMood_Noite_ReturnsEveningGenres()
+    {
+        string[] ptGenres = PlayMoodMusicIntentHandler.ResolveGenres("noite", hour: -1);
+        string[] englishGenres = PlayMoodMusicIntentHandler.ResolveGenres("evening", hour: -1);
+
+        Assert.Equal(englishGenres, ptGenres);
+        Assert.Contains("jazz", ptGenres);
+    }
+
+    [Fact]
+    public void ResolveGenres_PortugueseMood_Jantar_ReturnsDinnerGenres()
+    {
+        string[] ptGenres = PlayMoodMusicIntentHandler.ResolveGenres("jantar", hour: -1);
+        string[] englishGenres = PlayMoodMusicIntentHandler.ResolveGenres("dinner", hour: -1);
+
+        Assert.Equal(englishGenres, ptGenres);
+        Assert.Contains("jazz", ptGenres);
+    }
+
+    // --- Cross-locale and edge cases ---
+
+    [Fact]
+    public void ResolveGenres_Calma_SharedByItalianAndPortuguese_ReturnsChillGenres()
+    {
+        // "calma" exists in both Italian and Portuguese, both map to "chill"
+        string[] calmaGenres = PlayMoodMusicIntentHandler.ResolveGenres("calma", hour: -1);
+        string[] chillGenres = PlayMoodMusicIntentHandler.ResolveGenres("chill", hour: -1);
+
+        Assert.Equal(chillGenres, calmaGenres);
+        Assert.Contains("chillout", calmaGenres);
+        Assert.Contains("ambient", calmaGenres);
+    }
+
+    [Fact]
+    public void ResolveGenres_SubstringMatch_GermanInLongerPhrase()
+    {
+        // Substring match: "unheimlich entspannend" should match "entspannend"
+        string[] phraseGenres = PlayMoodMusicIntentHandler.ResolveGenres("unheimlich entspannend", hour: -1);
+        string[] relaxingGenres = PlayMoodMusicIntentHandler.ResolveGenres("relaxing", hour: -1);
+
+        Assert.Equal(relaxingGenres, phraseGenres);
+    }
+
+    [Fact]
+    public void ResolveGenres_SubstringMatch_SpanishInLongerPhrase()
+    {
+        // Substring match: "música muy relajante" should match "relajante"
+        string[] phraseGenres = PlayMoodMusicIntentHandler.ResolveGenres("música muy relajante", hour: -1);
+        string[] relaxingGenres = PlayMoodMusicIntentHandler.ResolveGenres("relaxing", hour: -1);
+
+        Assert.Equal(relaxingGenres, phraseGenres);
+    }
+
     [Fact]
     public async Task HandleAsync_ArtistGenreFallback_FindsTracks()
     {
