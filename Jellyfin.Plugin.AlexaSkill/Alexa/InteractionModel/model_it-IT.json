@@ -954,7 +954,9 @@
           "Di ascoltare disco {album} degli {musician}",
           "Di ascoltare disco {album} delle {musician}",
           "c'e un album chiamato {album}",
-          "c'e un disco chiamato {album}"
+          "c'e un disco chiamato {album}",
+          "Fai suonare l'album {album}",
+          "Fai suonare il disco {album}"
         ],
         "slots": [
           {
@@ -1582,6 +1584,11 @@
           {
             "name": {
               "value": "A Night at the Opera"
+            }
+          },
+          {
+            "name": {
+              "value": "Abbey Road"
             }
           },
           {

@@ -611,6 +611,7 @@ types:
       - Back in Black
       - Rumours
       - A Night at the Opera
+      - Abbey Road
       - La cura
       - Come mai
   BrowseCategory:
@@ -775,6 +776,8 @@ templates:
       - "{infinitive} {album_noun} {album} {artist_article} {musician}"
       - "c'e un album chiamato {album}"
       - "c'e un disco chiamato {album}"
+      - "Fai suonare l'album {album}"
+      - "Fai suonare il disco {album}"
     slots:
       - name: album
         type: AlbumName
