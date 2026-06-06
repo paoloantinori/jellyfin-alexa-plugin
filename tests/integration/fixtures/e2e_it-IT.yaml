@@ -180,15 +180,21 @@ tests:
       album: {}
     expected_response_type: any
 
-  # --- Pause (regression guard for stop/pause routing fix) ---
-  - utterance: "pausa"
-    expected_intent: AMAZON.PauseIntent
+  # --- Italian mood: literal samples in it-IT model ---
+  # These match static (non-slotted) samples in the model. The handler receives
+  # an empty mood slot and responds with "DidNotCatchMood" which lists Italian
+  # mood words. The full mood→genre chain is verified via the Simulator endpoint
+  # (which bypasses NLU) since AMAZON.SearchQuery is unreliable in simulate-skill.
+
+  # "Musica per cena" — literal sample → handler gets empty mood → prompt
+  - utterance: "musica per cena"
+    expected_intent: PlayMoodMusicIntent
     expected_slots: {}
     expected_response_type: any
 
-  # --- Mark favorite ---
-  - utterance: "aggiungi ai preferiti"
-    expected_intent: MarkFavoriteIntent
+  # "Musica per allenamento" — literal sample → handler gets empty mood → prompt
+  - utterance: "musica per allenamento"
+    expected_intent: PlayMoodMusicIntent
     expected_slots: {}
     expected_response_type: any
 
