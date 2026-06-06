@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using global::Alexa.NET;
 using global::Alexa.NET.Request;
 using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
+using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -277,5 +279,120 @@ public class PlayMoodMusicIntentHandlerTests : PluginTestBase
         string[] genres = PlayMoodMusicIntentHandler.ResolveGenres("funkyspacerock", hour: 12);
         Assert.Single(genres);
         Assert.Equal("funkyspacerock", genres[0]);
+    }
+
+    [Fact]
+    public void ResolveGenres_ItalianMood_Rilassante_ReturnsRelaxingGenres()
+    {
+        string[] rilassanteGenres = PlayMoodMusicIntentHandler.ResolveGenres("rilassante", hour: -1);
+        string[] relaxingGenres = PlayMoodMusicIntentHandler.ResolveGenres("relaxing", hour: -1);
+
+        Assert.Equal(relaxingGenres, rilassanteGenres);
+        Assert.Contains("ambient", rilassanteGenres);
+        Assert.Contains("jazz", rilassanteGenres);
+    }
+
+    [Fact]
+    public void ResolveGenres_ItalianMood_Allegra_ReturnsHappyGenres()
+    {
+        string[] allegraGenres = PlayMoodMusicIntentHandler.ResolveGenres("allegra", hour: -1);
+        string[] happyGenres = PlayMoodMusicIntentHandler.ResolveGenres("happy", hour: -1);
+
+        Assert.Equal(happyGenres, allegraGenres);
+        Assert.Contains("pop", allegraGenres);
+        Assert.Contains("dance", allegraGenres);
+    }
+
+    [Fact]
+    public void ResolveGenres_ItalianMood_Calma_ReturnsChillGenres()
+    {
+        string[] calmaGenres = PlayMoodMusicIntentHandler.ResolveGenres("calma", hour: -1);
+        string[] chillGenres = PlayMoodMusicIntentHandler.ResolveGenres("chill", hour: -1);
+
+        Assert.Equal(chillGenres, calmaGenres);
+        Assert.Contains("chillout", calmaGenres);
+        Assert.Contains("ambient", calmaGenres);
+    }
+
+    [Fact]
+    public void ResolveGenres_ItalianMood_Unknown_ReturnsRawMood()
+    {
+        string[] genres = PlayMoodMusicIntentHandler.ResolveGenres("sconosciuta", hour: -1);
+
+        Assert.Single(genres);
+        Assert.Equal("sconosciuta", genres[0]);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ItalianMood_Rilassante_PlaysFromMappedGenres()
+    {
+        var handler = CreateHandler();
+        var intent = new Intent { Name = IntentNames.PlayMoodMusic };
+        intent.Slots = new Dictionary<string, global::Alexa.NET.Request.Slot>
+        {
+            ["mood"] = new global::Alexa.NET.Request.Slot { Name = "mood", Value = "rilassante" }
+        };
+        var request = new IntentRequest { Intent = intent, Locale = "it-IT", RequestId = "test-req" };
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var audio = new Audio { Name = "Italian Chill Track", Id = Guid.NewGuid() };
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { audio });
+
+        _libraryManagerMock.Setup(l => l.GetItemById(audio.Id))
+            .Returns(audio);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotEmpty(response.Response.Directives);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ArtistGenreFallback_FindsTracks()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(mood: "relaxing");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var artist = new MusicArtist { Name = "Ambient Artist", Id = Guid.NewGuid() };
+        var audio = new Audio { Name = "Ambient Track", Id = Guid.NewGuid() };
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) =>
+            {
+                // First calls are track-genre search (BaseItemKind.Audio with Genres) → return empty
+                // Then artist-genre search (BaseItemKind.MusicArtist with Genres) → return artist
+                // Then artist track search (BaseItemKind.Audio with ArtistIds) → return audio
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicArtist))
+                {
+                    return new List<BaseItem> { artist };
+                }
+
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0)
+                {
+                    return new List<BaseItem> { audio };
+                }
+
+                // Track-genre search: return empty to trigger artist fallback
+                return new List<BaseItem>();
+            });
+
+        _libraryManagerMock.Setup(l => l.GetItemById(audio.Id))
+            .Returns(audio);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotEmpty(response.Response.Directives);
     }
 }
