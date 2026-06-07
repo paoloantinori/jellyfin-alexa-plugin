@@ -1302,5 +1302,33 @@
         ]
       }
     ]
+  },
+  "dialog": {
+    "intents": [
+      {
+        "name": "FindSongIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "titleKeywords",
+            "type": "AMAZON.SearchQuery",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "FindSongByArtistIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      }
+    ]
   }
 }

@@ -132,7 +132,17 @@ def build_model(config: dict) -> dict:
                         if slot.get("name") == slot_name:
                             slot["samples"] = samples_list
 
-    return {"languageModel": language_model}
+    result: dict = {"languageModel": language_model}
+
+    # Pass through dialog section if defined in the YAML template.
+    # Dialog.ElicitSlot requires the target intent to be listed in
+    # dialog.intents — without it Alexa silently ignores the directive
+    # and routes follow-up utterances through general NLU.
+    dialog_config = config.get("dialog")
+    if dialog_config:
+        result["dialog"] = dialog_config
+
+    return result
 
 
 def main():

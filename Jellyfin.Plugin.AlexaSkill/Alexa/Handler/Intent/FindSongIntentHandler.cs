@@ -10,6 +10,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
@@ -141,9 +142,13 @@ public class FindSongIntentHandler : BaseHandler
 
     /// <summary>
     /// First invocation with no session state. Determine which piece of info we have
-    /// and prompt for the missing piece.
+    /// and prompt for the missing piece using Dialog.ElicitSlot so Alexa captures the
+    /// user's reply as a slot value rather than routing it through NLU (which would
+    /// send short replies to FallbackIntent with no slots).
+    /// When the artist is provided upfront, resolves the artist ID immediately so
+    /// the search is artist-scoped and doesn't need to re-ask for the artist later.
     /// </summary>
-    private Task<SkillResponse> HandleFirstInvocationAsync(Request request, Context context, Entities.User user, SessionInfo session, string locale, CancellationToken cancellationToken)
+    private async Task<SkillResponse> HandleFirstInvocationAsync(Request request, Context context, Entities.User user, SessionInfo session, string locale, CancellationToken cancellationToken)
     {
         var intentRequest = (IntentRequest)request;
 
@@ -154,14 +159,31 @@ public class FindSongIntentHandler : BaseHandler
 
         if (!string.IsNullOrWhiteSpace(musician))
         {
-            // Artist provided, need keywords
-            sessionData.ArtistName = musician.Trim();
+            // Artist provided — resolve to a Jellyfin ID now so the search
+            // is artist-scoped and we don't need to re-ask for the artist.
+            string artistInput = musician.Trim();
+            sessionData.ArtistName = artistInput;
             sessionData.State = FindSongState.AwaitingKeywords;
 
-            string prompt = ResponseStrings.Get("FindSongPromptKeywords", locale);
-            SkillResponse response = ResponseBuilder.Ask(prompt, new Reprompt(prompt));
-            response.SessionAttributes = BuildSessionAttributes(sessionData);
-            return Task.FromResult(response);
+            IReadOnlyList<BaseItem> artists = await ArtistSearch.SearchAsync(
+                artistInput, user, _libraryManager, _artistIndex, Logger,
+                (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
+                cancellationToken).ConfigureAwait(false);
+
+            if (artists.Count > 0)
+            {
+                sessionData.ArtistId = artists[0].Id;
+                sessionData.ArtistName = artists[0].Name;
+                Logger.LogDebug("FindSong: resolved artist '{Input}' to '{Name}' (Id={Id})", artistInput, artists[0].Name, artists[0].Id);
+            }
+            else
+            {
+                Logger.LogDebug("FindSong: could not resolve artist '{Input}', will search without artist filter", artistInput);
+            }
+
+            return ElicitTitleKeywords(
+                ResponseStrings.Get("FindSongPromptKeywords", locale),
+                sessionData);
         }
 
         if (!string.IsNullOrWhiteSpace(titleKeywords))
@@ -169,20 +191,16 @@ public class FindSongIntentHandler : BaseHandler
             // Keywords provided, need artist
             sessionData.Keywords = titleKeywords.Trim();
             sessionData.State = FindSongState.AwaitingArtist;
-
-            string prompt = ResponseStrings.Get("FindSongPromptArtist", locale);
-            SkillResponse response = ResponseBuilder.Ask(prompt, new Reprompt(prompt));
-            response.SessionAttributes = BuildSessionAttributes(sessionData);
-            return Task.FromResult(response);
+            return ElicitArtist(
+                ResponseStrings.Get("FindSongPromptArtist", locale),
+                sessionData);
         }
 
         // Neither provided, prompt for keywords first
         sessionData.State = FindSongState.AwaitingKeywords;
-
-        string keywordPrompt = ResponseStrings.Get("FindSongPromptKeywords", locale);
-        SkillResponse kwResponse = ResponseBuilder.Ask(keywordPrompt, new Reprompt(keywordPrompt));
-        kwResponse.SessionAttributes = BuildSessionAttributes(sessionData);
-        return Task.FromResult(kwResponse);
+        return ElicitTitleKeywords(
+            ResponseStrings.Get("FindSongPromptKeywords", locale),
+            sessionData);
     }
 
     /// <summary>
@@ -206,10 +224,8 @@ public class FindSongIntentHandler : BaseHandler
 
         if (string.IsNullOrWhiteSpace(artistInput))
         {
-            string prompt = ResponseStrings.Get("FindSongPromptArtist", locale);
-            SkillResponse retryResponse = ResponseBuilder.Ask(prompt, new Reprompt(prompt));
-            retryResponse.SessionAttributes = BuildSessionAttributes(sessionData);
-            return retryResponse;
+            return ElicitArtist(ResponseStrings.Get("FindSongPromptArtist", locale),
+                sessionData);
         }
 
         // Resolve the artist
@@ -221,9 +237,8 @@ public class FindSongIntentHandler : BaseHandler
         if (artists.Count == 0)
         {
             string notFoundMsg = ResponseStrings.Get("FindSongArtistNotFound", locale, artistInput);
-            SkillResponse notFoundResponse = ResponseBuilder.Ask(notFoundMsg, new Reprompt(notFoundMsg));
-            notFoundResponse.SessionAttributes = BuildSessionAttributes(sessionData);
-            return notFoundResponse;
+            return ElicitArtist(notFoundMsg,
+                sessionData);
         }
 
         // Artist found — store it and proceed to search
@@ -259,10 +274,8 @@ public class FindSongIntentHandler : BaseHandler
 
         if (string.IsNullOrWhiteSpace(keywords))
         {
-            string prompt = ResponseStrings.Get("FindSongPromptKeywords", locale);
-            SkillResponse retryResponse = ResponseBuilder.Ask(prompt, new Reprompt(prompt));
-            retryResponse.SessionAttributes = BuildSessionAttributes(sessionData);
-            return retryResponse;
+            return ElicitTitleKeywords(ResponseStrings.Get("FindSongPromptKeywords", locale),
+                sessionData);
         }
 
         // Tokenize and check for stop-words-only
@@ -270,10 +283,8 @@ public class FindSongIntentHandler : BaseHandler
 
         if (tokens.Length == 0)
         {
-            string vagueMsg = ResponseStrings.Get("FindSongTooVague", locale);
-            SkillResponse vagueResponse = ResponseBuilder.Ask(vagueMsg, new Reprompt(vagueMsg));
-            vagueResponse.SessionAttributes = BuildSessionAttributes(sessionData);
-            return vagueResponse;
+            return ElicitTitleKeywords(ResponseStrings.Get("FindSongTooVague", locale),
+                sessionData);
         }
 
         // Store keywords and proceed to search
@@ -307,9 +318,8 @@ public class FindSongIntentHandler : BaseHandler
         {
             // Cannot determine pick — ask again
             string invalidMsg = ResponseStrings.Get("FindSongInvalidPick", locale);
-            SkillResponse invalidResponse = ResponseBuilder.Ask(invalidMsg, new Reprompt(invalidMsg));
-            invalidResponse.SessionAttributes = BuildSessionAttributes(sessionData);
-            return invalidResponse;
+            return ElicitTitleKeywords(invalidMsg,
+                sessionData);
         }
 
         input = input.Trim();
@@ -320,9 +330,8 @@ public class FindSongIntentHandler : BaseHandler
         if (!pickIndex.HasValue || pickIndex.Value < 0 || pickIndex.Value >= sessionData.Candidates.Count)
         {
             string invalidMsg = ResponseStrings.Get("FindSongInvalidPick", locale);
-            SkillResponse invalidResponse = ResponseBuilder.Ask(invalidMsg, new Reprompt(invalidMsg));
-            invalidResponse.SessionAttributes = BuildSessionAttributes(sessionData);
-            return invalidResponse;
+            return ElicitTitleKeywords(invalidMsg,
+                sessionData);
         }
 
         FindSongCandidate picked = sessionData.Candidates[pickIndex.Value];
@@ -370,9 +379,8 @@ public class FindSongIntentHandler : BaseHandler
         if (keywordTokens.Length == 0)
         {
             string vagueMsg = ResponseStrings.Get("FindSongTooVague", locale);
-            SkillResponse vagueResponse = ResponseBuilder.Ask(vagueMsg, new Reprompt(vagueMsg));
-            vagueResponse.SessionAttributes = BuildSessionAttributes(sessionData);
-            return vagueResponse;
+            return ElicitTitleKeywords(vagueMsg,
+                sessionData);
         }
 
         List<BaseItem> songs;
@@ -425,9 +433,8 @@ public class FindSongIntentHandler : BaseHandler
         if (songs.Count == 0)
         {
             string noMatchMsg = ResponseStrings.Get("FindSongNoMatch", locale);
-            SkillResponse noMatchResponse = ResponseBuilder.Ask(noMatchMsg, new Reprompt(noMatchMsg));
-            noMatchResponse.SessionAttributes = BuildSessionAttributes(sessionData);
-            return noMatchResponse;
+            return ElicitTitleKeywords(noMatchMsg,
+                sessionData);
         }
 
         // Single match — auto-play
@@ -456,9 +463,8 @@ public class FindSongIntentHandler : BaseHandler
             sessionData.State = FindSongState.AwaitingArtist;
             sessionData.Candidates = null;
 
-            SkillResponse narrowResponse = ResponseBuilder.Ask(narrowMsg, new Reprompt(narrowMsg));
-            narrowResponse.SessionAttributes = BuildSessionAttributes(sessionData);
-            return narrowResponse;
+            return ElicitArtist(narrowMsg,
+                sessionData);
         }
 
         // 1-4 matches — present disambiguation list with real scores
@@ -474,9 +480,8 @@ public class FindSongIntentHandler : BaseHandler
         string foundMultipleMsg = ResponseStrings.Get("FindSongFoundMultiple", locale, disambigCandidates.Count, candidateNames);
         string fullPrompt = $"{foundMultipleMsg} {candidateNames}";
 
-        SkillResponse disambigResponse = ResponseBuilder.Ask(fullPrompt, new Reprompt(foundMultipleMsg));
-        disambigResponse.SessionAttributes = BuildSessionAttributes(sessionData);
-        return disambigResponse;
+        return ElicitTitleKeywords(fullPrompt,
+            sessionData);
     }
 
     /// <summary>
@@ -689,6 +694,57 @@ public class FindSongIntentHandler : BaseHandler
         return new Dictionary<string, object>
         {
             [SessionDataKey] = JsonConvert.SerializeObject(sessionData)
+        };
+    }
+
+    /// <summary>
+    /// Prompt the user for song title keywords using Dialog.ElicitSlot.
+    /// Alexa captures the next utterance directly into the titleKeywords slot.
+    /// </summary>
+    private static SkillResponse ElicitTitleKeywords(string prompt, FindSongSessionData sessionData)
+        => BuildElicitSlotResponse(IntentNames.Slots.TitleKeywords, IntentNames.FindSongIntent, prompt, sessionData);
+
+    /// <summary>
+    /// Prompt the user for an artist name using Dialog.ElicitSlot.
+    /// Uses AMAZON.SearchQuery (titleKeywords slot) instead of AMAZON.Musician because
+    /// built-in entity types like AMAZON.Musician validate the captured text against Amazon's
+    /// database — indie/obscure artists fail resolution, causing Alexa to route the utterance
+    /// to general NLU (Netflix, Amazon Music, etc.) instead of filling the slot.
+    /// AMAZON.SearchQuery accepts any free-form text without entity validation.
+    /// The handler extracts the text from titleKeywords in HandleAwaitingArtistAsync.
+    /// </summary>
+    private static SkillResponse ElicitArtist(string prompt, FindSongSessionData sessionData)
+        => BuildElicitSlotResponse(IntentNames.Slots.TitleKeywords, IntentNames.FindSongIntent, prompt, sessionData);
+
+    /// <summary>
+    /// Build a response that uses Dialog.ElicitSlot to capture the user's next utterance
+    /// as a specific slot value. Always targets the titleKeywords slot (AMAZON.SearchQuery)
+    /// on FindSongIntent, regardless of whether we're asking for keywords or artist name.
+    /// AMAZON.SearchQuery accepts any free-form text without built-in entity validation,
+    /// which prevents Alexa from routing the utterance to other skills when the artist
+    /// name isn't in Amazon's entity database (e.g. indie bands).
+    /// The handler differentiates between keywords and artist based on session state.
+    /// </summary>
+    private static SkillResponse BuildElicitSlotResponse(
+        string slotName,
+        string intentName,
+        string prompt,
+        FindSongSessionData sessionData)
+    {
+        return new SkillResponse
+        {
+            Version = "1.0",
+            SessionAttributes = BuildSessionAttributes(sessionData),
+            Response = new ResponseBody
+            {
+                ShouldEndSession = false,
+                OutputSpeech = new PlainTextOutputSpeech { Text = prompt },
+                Reprompt = new Reprompt(prompt),
+                Directives = new List<IDirective>
+                {
+                    new ElicitSlotDirective(slotName, intentName)
+                }
+            }
         };
     }
 }

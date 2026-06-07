@@ -175,6 +175,7 @@ NLU test fixtures in `tests/integration/fixtures/<locale>.yaml`. NLU tests use t
 - **Config.Users in API responses**: Never send `config.Users` via `updatePluginConfiguration` — it can wipe skill config entries. Use dedicated endpoints.
 - **AudioPlayer event restrictions**: `PlaybackFinished` and `PlaybackNearlyFinished` can ONLY return `AudioPlayer.Play` directives — no `outputSpeech`, `reprompt`, or `shouldEndSession=false`. Any response needing speech must come from intent handlers, not AudioPlayer events.
 - **Entity resolution for slot synonyms**: `slot.Value` always contains the raw spoken text (e.g. "gli album"). To get the canonical value ("album"), extract from `slot.Resolution.Authorities[0].Values[0].Value.Name` when `Status.Code == "ER_SUCCESS_MATCH"`. See `BrowseLibraryIntentHandler.GetCanonicalSlotValue()` for the pattern.
+- **Dialog.ElicitSlot requires model registration**: Any intent that uses `Dialog.ElicitSlot` directives MUST be listed in the interaction model's `dialog.intents` array. Without this registration, Alexa **silently ignores** the directive — the session stays open (`ShouldEndSession=false`) but the user's follow-up goes through general NLU, which routes music queries to Amazon Music instead of back to the skill. Set `elicitationRequired: false` on slots when controlling dialog manually from code. This must be done in ALL 17 locales. For it-IT, add to the YAML template's `dialog` section and regenerate.
 
 ## Interaction Model Anti-Patterns — DO NOT REPEAT
 
@@ -274,6 +275,35 @@ if (!string.IsNullOrWhiteSpace(genreSlot))
 Test fixtures that use entity names (album/song/genre) must have those names in the corresponding custom slot type. If the slot type doesn't include the value, NLU can't fill the slot.
 
 **Rule**: Cross-reference test fixture `expected_slots` values against slot type `values` arrays in the model JSON.
+
+### 9. Dialog.ElicitSlot Without Model Registration (1 incident — silently broken)
+
+**`Dialog.ElicitSlot` silently fails if the target intent is not listed in the model's `dialog.intents` array.** No error, no warning. The session stays open, the user hears the prompt, but the directive is dropped. The user's follow-up goes through Alexa's general NLU, which routes music queries to Amazon Music. The skill never receives the request.
+
+```json
+// ❌ WRONG — model has no dialog section or FindSongIntent is missing from dialog.intents
+// Code sends Dialog.ElicitSlot for FindSongIntent → Alexa silently ignores it
+
+// ✅ RIGHT — model's dialog.intents includes the target intent
+"dialog": {
+  "intents": [
+    {
+      "name": "FindSongIntent",
+      "confirmationRequired": false,
+      "slots": [
+        { "name": "titleKeywords", "type": "AMAZON.SearchQuery", "confirmationRequired": false, "elicitationRequired": false }
+      ]
+    }
+  ]
+}
+```
+
+**Detection**: If a handler uses `ElicitSlotDirective`, verify the intent appears in `dialog.intents` in the model JSON:
+```bash
+python3 -c "import json; d=json.load(open('model_it-IT.json')); m=d.get('interactionModel',d); print([i['name'] for i in m.get('dialog',{}).get('intents',[])])"
+```
+
+**Why this is so insidious**: Everything *looks* like it works — Alexa speaks the prompt, the user responds — but the response goes to Amazon Music instead of the skill. There is zero error feedback.
 
 ## Release
 

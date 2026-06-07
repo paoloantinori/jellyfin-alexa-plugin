@@ -809,3 +809,23 @@ templates:
     slots:
       - name: media_type
         type: MediaType
+
+# Dialog configuration for intents that use Dialog.ElicitSlot directives.
+# Without these entries Alexa silently ignores ElicitSlot and routes
+# the user's follow-up utterance through general NLU (→ Amazon Music).
+dialog:
+  intents:
+    - name: FindSongIntent
+      confirmationRequired: false
+      slots:
+        - name: titleKeywords
+          type: AMAZON.SearchQuery
+          confirmationRequired: false
+          elicitationRequired: false
+    - name: FindSongByArtistIntent
+      confirmationRequired: false
+      slots:
+        - name: musician
+          type: AMAZON.Musician
+          confirmationRequired: false
+          elicitationRequired: false
