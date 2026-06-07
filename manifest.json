@@ -247,6 +247,14 @@
                 "changelog": "Config page clarity: remove jargon, reorganize sections, split user table columns. Italian phonetic synonym unit tests (2131 total).",
                 "targetAbi": "10.11.0.0",
                 "timestamp": "2026-06-02T19:50:00Z"
+            },
+            {
+                "version": "0.6.0.0",
+                "checksum": "placeholder",
+                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.6.0.0/AlexaSkill_0.6.0.0.zip",
+                "changelog": "placeholder",
+                "targetAbi": "10.11.0.0",
+                "timestamp": "2026-06-07T00:00:00Z"
             }
         ]
     }

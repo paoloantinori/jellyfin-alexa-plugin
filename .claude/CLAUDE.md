@@ -45,6 +45,12 @@ Jellyfin API key: `69088d9a2bd74af5945b3d5683a087d3` (works for both plugin endp
 - Artist E2E matrix covers: exact match, ASR truncation, multi-word prefix ("led zep"), "The" prefix ("beatles"), not found ("xyzzyfoo"), disambiguation carriers ("band radiohead", "gruppo pink floyd", "cantante soul coughing")
 - Deploy interaction model: `ask smapi set-interaction-model --skill-id $ASK_SKILL_ID --stage development --locale it-IT --interaction-model file:/tmp/payload.json`
 
+## Test Safety — NEVER use `--no-build` after code changes
+
+`dotnet test --no-build` skips compilation and runs against the **last built** test DLL. If you changed source code but only built a different configuration (e.g. `dotnet build -c Release`), the Debug test DLL is stale and tests the **old code** — failures get caught by CI, not locally.
+
+**Rule**: After ANY code change, run `dotnet test` **without** `--no-build`. Only use `--no-build` when you haven't touched source files since the last build.
+
 ## Simulator (Built-in Intent Tester)
 
 For quick handler-level testing without SMAPI/NLU. Runs on minix localhost:
