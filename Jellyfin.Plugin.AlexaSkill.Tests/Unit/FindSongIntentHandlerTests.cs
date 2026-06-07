@@ -97,6 +97,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
     public async Task FirstInvocation_WithMusicianSlot_EntersAwaitingKeywords()
     {
         SetupJellyfinUser();
+        SetupArtistSearch(Guid.NewGuid(), "Pink Floyd");
         var user = CreateTestUser();
         var session = CreateSession();
 
@@ -117,6 +118,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         Assert.NotNull(sessionData);
         Assert.Equal(FindSongState.AwaitingKeywords, sessionData.State);
         Assert.Equal("Pink Floyd", sessionData.ArtistName);
+        Assert.NotNull(sessionData.ArtistId);
     }
 
     [Fact]
@@ -167,6 +169,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
     public async Task FirstInvocation_WithBothSlots_SkipsToAwaitingKeywords()
     {
         SetupJellyfinUser();
+        SetupArtistSearch(Guid.NewGuid(), "Pink Floyd");
         var user = CreateTestUser();
         var session = CreateSession();
 
@@ -185,6 +188,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         Assert.NotNull(sessionData);
         Assert.Equal(FindSongState.AwaitingKeywords, sessionData.State);
         Assert.Equal("Pink Floyd", sessionData.ArtistName);
+        Assert.NotNull(sessionData.ArtistId);
     }
 
     // ========== AwaitingKeywords ==========
