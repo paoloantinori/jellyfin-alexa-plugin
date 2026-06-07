@@ -6,7 +6,7 @@ C# Jellyfin plugin (net9.0) exposing an Alexa skill for media playback, search, 
 
 ```bash
 dotnet build Jellyfin.Plugin.AlexaSkill.sln
-dotnet test Jellyfin.Plugin.AlexaSkill.Tests          # ~2084 unit tests
+dotnet test Jellyfin.Plugin.AlexaSkill.Tests          # ~2256 unit tests
 python3 scripts/validate_interaction_models.py        # Check all 17 models (JSON, slots, drift)
 python3 scripts/validate_locales.py                   # Check locale key coverage (baseline-aware)
 python3 scripts/validate_versions.py                  # Check version consistency across files
@@ -31,7 +31,7 @@ CI validates models, locales, and versions on every PR and push to main.
 
 ## Project Layout
 
-- `Alexa/Handler/Intent/` — 58 intent handlers (one per intent, inherit `BaseHandler`)
+- `Alexa/Handler/Intent/` — 60 intent handlers (one per intent, inherit `BaseHandler`)
 - `Alexa/Handler/BaseHandler.cs` — shared utilities: `FuzzyMatch`, `HandleFuzzyMiss`, `RetryAsync`, stream URLs, library filters
 - `Alexa/InteractionModel/` — 17 per-locale interaction model JSONs (`model_*.json`), generated from templates in `Alexa/InteractionModel/templates/`
 - `Alexa/Locale/` — Response strings: keys in `ResponseStrings.cs`, values in 17 `<locale>.json` files
@@ -49,6 +49,9 @@ CI validates models, locales, and versions on every PR and push to main.
 - `Alexa/Util/` — Shared utility classes
 - `Alexa/ArtistIndexService.cs` — In-memory artist index with event-driven refresh
 - `Alexa/CircuitBreaker.cs` — Circuit breaker for external API resilience
+- `Alexa/Util/ArtistSearch.cs` — 4-tier artist search fallback chain (shared by PlayArtist and FindSong)
+- `Alexa/Util/KeywordMatcher.cs` — Partial title tokenization and scoring for song search
+- `Alexa/Directive/ElicitSlotDirective.cs` — Dialog.ElicitSlot support for multi-turn conversations
 - `Alexa/ErrorClassifier.cs` — Categorizes errors for user-facing responses
 - `Alexa/CustomerProfileService.cs` — Amazon customer profile lookups
 - `Alexa/SlotMappings.cs` — Slot name → type mappings (consistency enforcement)
@@ -128,7 +131,8 @@ Handlers call `GetPostPlayBehavior(user)` to resolve per-user override → globa
 - `Nullable enable` on — nullability annotations required
 - `jellyfin.ruleset` controls code analysis (AllEnabledByDefault, `TreatWarningsAsErrors` = true)
 - Intent handlers use `async/await` with `ConfigureAwait(false)`
-- Feature flag tests use one file per flag, `AssertDisabledWhenFlagOff` helper
+- Feature flag tests use one file per flag, `AssertDisabledByFlagOff` helper
+- **NEVER use `dotnet test --no-build` after code changes** — it runs against stale DLLs and misses failures that CI catches. Always omit `--no-build` when source files have changed.
 
 ## Interaction Models
 

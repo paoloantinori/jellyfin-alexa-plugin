@@ -38,6 +38,7 @@ A Jellyfin plugin that creates a personal Alexa skill to play and control media 
 
 - **Playback control**: play songs, albums, artists, videos, TV episodes, audiobooks, podcasts, channels, and playlists
 - **Search & discovery**: search your library, get recommendations, browse by category, play random media
+- **Conversational song search**: multi-turn "find a song" dialog — guide the skill with artist name and keywords, then pick from disambiguated results
 - **APL visual carousel**: browse/search results displayed as tappable image cards on Echo Show devices, with album art and media thumbnails
 - **APL NowPlaying screen**: progress bar with elapsed/total time display on Echo Show devices during audio playback, plus enriched companion app card showing song, artist, album, and track number
 - **Resume offer**: when reopening the skill, offers to resume where you left off instead of starting fresh
