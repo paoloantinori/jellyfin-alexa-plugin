@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -132,7 +133,10 @@ public class VideoAudioController : ControllerBase
 
         // Build ffmpeg arguments (includes output file path directly)
         var ffmpegArgs = BuildFfmpegArguments(artUrl, audioUrl, useBlackFrame, cachePath);
-        _logger.LogDebug("VideoAudio: ffmpeg arguments: {Args}", ffmpegArgs);
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("VideoAudio: ffmpeg arguments: {Args}", string.Join(" ", ffmpegArgs));
+        }
 
         using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
 
@@ -191,31 +195,49 @@ public class VideoAudioController : ControllerBase
     }
 
     /// <summary>
-    /// Build ffmpeg argument string for combining album art + audio into MP4.
+    /// Build ffmpeg argument list for combining album art + audio into MP4.
+    /// Returns individual arguments for use with <see cref="ProcessStartInfo.ArgumentList"/>,
+    /// which passes each token directly to the OS — no shell interpretation, no injection risk.
     /// </summary>
     /// <param name="artUrl">Album art URL (null for black frame fallback).</param>
     /// <param name="audioUrl">Audio stream URL.</param>
     /// <param name="useBlackFrame">Whether to generate a black frame instead of using art.</param>
     /// <param name="outputPath">File path for the output MP4.</param>
-    /// <returns>ffmpeg argument string.</returns>
-    internal static string BuildFfmpegArguments(string? artUrl, string audioUrl, bool useBlackFrame, string outputPath)
+    /// <returns>List of ffmpeg arguments (one token per entry).</returns>
+    internal static List<string> BuildFfmpegArguments(string? artUrl, string audioUrl, bool useBlackFrame, string outputPath)
     {
-        // Input arguments
-        string inputArgs = useBlackFrame
-            ? "-f lavfi -i \"color=c=black:s=1280x720:d=999\" -framerate 1"
-            : $"-loop 1 -framerate 1 -i \"{artUrl}\"";
+        var args = new List<string>();
 
-        return
-            $"{inputArgs} " +
-            $"-i \"{audioUrl}\" " +
-            "-c:v libx264 -tune stillimage -preset ultrafast -crf 28 " +
-            "-c:a aac -b:a 128k " +
-            "-pix_fmt yuv420p -r 1 " +
-            "-vf \"scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:black\" " +
-            "-f mp4 -movflags frag_keyframe+empty_moov " +
-            "-shortest " +
-            $"\"{outputPath}\"";
+        if (useBlackFrame)
+        {
+            args.AddRange(BlackFrameInputArgs);
+        }
+        else
+        {
+            args.AddRange(ArtInputPrefixArgs);
+            args.Add(artUrl!);
+        }
+
+        args.Add("-i");
+        args.Add(audioUrl);
+        args.AddRange(VideoCodecArgs);
+        args.AddRange(AudioCodecArgs);
+        args.AddRange(PixelFormatArgs);
+        args.AddRange(VideoFilterArgs);
+        args.AddRange(OutputFormatArgs);
+        args.Add("-shortest");
+        args.Add(outputPath);
+
+        return args;
     }
+
+    private static readonly string[] BlackFrameInputArgs = ["-f", "lavfi", "-i", "color=c=black:s=1280x720:d=999"];
+    private static readonly string[] ArtInputPrefixArgs = ["-loop", "1", "-framerate", "1", "-i"];
+    private static readonly string[] VideoCodecArgs = ["-c:v", "libx264", "-tune", "stillimage", "-preset", "ultrafast", "-crf", "28"];
+    private static readonly string[] AudioCodecArgs = ["-c:a", "aac", "-b:a", "128k"];
+    private static readonly string[] PixelFormatArgs = ["-pix_fmt", "yuv420p", "-r", "1"];
+    private static readonly string[] VideoFilterArgs = ["-vf", "scale=1280x720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:black"];
+    private static readonly string[] OutputFormatArgs = ["-f", "mp4", "-movflags", "frag_keyframe+empty_moov"];
 
     /// <summary>
     /// Get the album art DateModified ticks for use as a cache key component.
@@ -300,29 +322,33 @@ public class VideoAudioController : ControllerBase
 
     /// <summary>
     /// Run ffmpeg to generate the MP4 file to disk.
+    /// Uses <see cref="ProcessStartInfo.ArgumentList"/> to pass arguments as individual tokens,
+    /// eliminating shell interpretation and command-line injection risk (CWE-78/CWE-88).
     /// </summary>
     /// <param name="ffmpegPath">Path to ffmpeg binary.</param>
-    /// <param name="arguments">ffmpeg command-line arguments.</param>
+    /// <param name="arguments">ffmpeg command-line arguments as individual tokens.</param>
     /// <param name="outputPath">Path to write the output file.</param>
     /// <param name="cancellationToken">Cancellation token for timeout/abort.</param>
     private async Task RunFfmpegToFileAsync(
         string ffmpegPath,
-        string arguments,
+        List<string> arguments,
         string outputPath,
         CancellationToken cancellationToken)
     {
         using var process = new Process();
-#pragma warning disable CA3006 // itemId is validated as GUID — no user input in arguments
         process.StartInfo = new ProcessStartInfo
         {
             FileName = ffmpegPath,
-            Arguments = arguments,
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = false,
             RedirectStandardError = true
         };
-#pragma warning restore CA3006
+
+        foreach (string arg in arguments)
+        {
+            process.StartInfo.ArgumentList.Add(arg);
+        }
 
         process.Start();
 

@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -115,23 +117,24 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         string audioUrl = "http://localhost:8096/Audio/456/stream?static=true";
         string outputPath = "/tmp/test-output.mp4";
 
-        string args = VideoAudioController.BuildFfmpegArguments(artUrl, audioUrl, false, outputPath);
+        List<string> args = VideoAudioController.BuildFfmpegArguments(artUrl, audioUrl, false, outputPath);
 
-        Assert.Contains("-loop 1", args, StringComparison.Ordinal);
-        Assert.Contains(artUrl, args, StringComparison.Ordinal);
-        Assert.Contains(audioUrl, args, StringComparison.Ordinal);
-        Assert.Contains("libx264", args, StringComparison.Ordinal);
-        Assert.Contains("-tune stillimage", args, StringComparison.Ordinal);
-        Assert.Contains("-preset ultrafast", args, StringComparison.Ordinal);
-        Assert.Contains("scale=1280:720", args, StringComparison.Ordinal);
-        Assert.Contains("pad=1280:720", args, StringComparison.Ordinal);
-        Assert.Contains("-c:a aac", args, StringComparison.Ordinal);
-        Assert.Contains("-pix_fmt yuv420p", args, StringComparison.Ordinal);
-        Assert.Contains("frag_keyframe+empty_moov", args, StringComparison.Ordinal);
-        Assert.Contains("-shortest", args, StringComparison.Ordinal);
-        Assert.Contains(outputPath, args, StringComparison.Ordinal);
-        Assert.DoesNotContain("-f lavfi", args, StringComparison.Ordinal);
-        Assert.DoesNotContain("pipe:1", args, StringComparison.Ordinal);
+        // Verify key flags are present as individual tokens
+        Assert.Contains("-loop", args);
+        Assert.Contains("1", args);
+        Assert.Contains(artUrl, args);
+        Assert.Contains(audioUrl, args);
+        Assert.Contains("libx264", args);
+        Assert.Contains("stillimage", args);
+        Assert.Contains("ultrafast", args);
+        Assert.Contains("scale=1280x720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:black", args);
+        Assert.Contains("aac", args);
+        Assert.Contains("yuv420p", args);
+        Assert.Contains("frag_keyframe+empty_moov", args);
+        Assert.Contains("-shortest", args);
+        Assert.Contains(outputPath, args);
+        Assert.DoesNotContain("lavfi", args);
+        Assert.DoesNotContain("color=c=black", args);
     }
 
     /// <summary>
@@ -143,12 +146,62 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         string audioUrl = "http://localhost:8096/Audio/456/stream?static=true";
         string outputPath = "/tmp/test-output.mp4";
 
-        string args = VideoAudioController.BuildFfmpegArguments(null, audioUrl, true, outputPath);
+        List<string> args = VideoAudioController.BuildFfmpegArguments(null, audioUrl, true, outputPath);
 
-        Assert.Contains("-f lavfi", args, StringComparison.Ordinal);
-        Assert.Contains("color=c=black:s=1280x720", args, StringComparison.Ordinal);
-        Assert.Contains(audioUrl, args, StringComparison.Ordinal);
-        Assert.DoesNotContain("-loop 1", args, StringComparison.Ordinal);
+        Assert.Contains("-f", args);
+        Assert.Contains("lavfi", args);
+        Assert.Contains("color=c=black:s=1280x720:d=999", args);
+        Assert.Contains(audioUrl, args);
+        Assert.DoesNotContain("-loop", args);
+    }
+
+    /// <summary>
+    /// Verify that BuildFfmpegArguments returns individual tokens (not a concatenated string),
+    /// which is the mechanism that prevents command-line injection (CWE-78/CWE-88).
+    /// Shell metacharacters in URLs/paths are harmless when passed via ArgumentList.
+    /// </summary>
+    [Fact]
+    public void BuildFfmpegArguments_ReturnsTokenList_NotConcatenatedString()
+    {
+        // Use a URL with characters that would be dangerous in a shell string
+        string maliciousArtUrl = "http://evil.host/item'; rm -rf /; '";
+        string audioUrl = "http://localhost:8096/Audio/456/stream?static=true";
+        string outputPath = "/tmp/test-output.mp4";
+
+        List<string> args = VideoAudioController.BuildFfmpegArguments(maliciousArtUrl, audioUrl, false, outputPath);
+
+        // The malicious URL must be a SINGLE token in the list — not split or interpreted
+        Assert.Contains(maliciousArtUrl, args);
+        // Verify it's a proper token list, not a single concatenated string
+        Assert.True(args.Count > 10, "Should return many individual tokens, not a single string");
+        // Verify no shell quoting artifacts — tokens are raw, ArgumentList handles escaping
+        Assert.All(args, arg => Assert.DoesNotContain("\"", arg));
+    }
+
+    /// <summary>
+    /// Verify that argument order is correct: input flags come before output format flags.
+    /// This ensures ffmpeg receives arguments in the expected sequence.
+    /// </summary>
+    [Fact]
+    public void BuildFfmpegArguments_ArgumentOrder_IsCorrect()
+    {
+        string artUrl = "http://localhost:8096/Items/123/Images/Primary";
+        string audioUrl = "http://localhost:8096/Audio/456/stream?static=true";
+        string outputPath = "/tmp/test-output.mp4";
+
+        List<string> args = VideoAudioController.BuildFfmpegArguments(artUrl, audioUrl, false, outputPath);
+
+        // Input comes before codec args, codec args before output
+        int inputIdx = args.IndexOf("-i");
+        int codecIdx = args.IndexOf("-c:v");
+        int outputIdx = args.IndexOf("-f");
+        int shortestIdx = args.IndexOf("-shortest");
+
+        Assert.True(inputIdx > 0, "-i should appear after input flags");
+        Assert.True(codecIdx > inputIdx, "-c:v should appear after -i");
+        Assert.True(outputIdx > codecIdx, "-f (output) should appear after -c:v");
+        Assert.True(shortestIdx > outputIdx, "-shortest should appear after output format");
+        Assert.Equal(outputPath, args[^1]);
     }
 
     /// <summary>
