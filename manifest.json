@@ -250,11 +250,11 @@
             },
             {
                 "version": "0.6.0.0",
-                "checksum": "placeholder",
+                "checksum": "c3f9271d9414ea12e5a4b1feeaffd2e7",
                 "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.6.0.0/AlexaSkill_0.6.0.0.zip",
-                "changelog": "placeholder",
+                "changelog": "FindSong: multi-turn conversational song search with partial-title keyword matching. Localized mood-to-genre mappings (de-DE, es-ES, fr-FR, pt-BR). Auto-provision plugin users on config PATCH. NLU routing fixes across all 17 locales. BrowseLibrary and PlayAlbum slot resolution fixes. Session management improvements for list handlers.",
                 "targetAbi": "10.11.0.0",
-                "timestamp": "2026-06-07T00:00:00Z"
+                "timestamp": "2026-06-07 21:04:05"
             }
         ]
     }
