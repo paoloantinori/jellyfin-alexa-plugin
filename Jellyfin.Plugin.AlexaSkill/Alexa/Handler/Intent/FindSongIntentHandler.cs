@@ -43,6 +43,7 @@ public class FindSongIntentHandler : BaseHandler
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
     private readonly IArtistIndex? _artistIndex;
+    private readonly ISongNgramIndex? _songNgramIndex;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="FindSongIntentHandler"/> class.
@@ -53,17 +54,20 @@ public class FindSongIntentHandler : BaseHandler
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
     /// <param name="artistIndex">Optional in-memory artist index for fast search.</param>
+    /// <param name="songNgramIndex">Optional in-memory song n-gram index for fast partial-title lookup.</param>
     public FindSongIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
         ILoggerFactory loggerFactory,
-        IArtistIndex? artistIndex = null) : base(sessionManager, config, loggerFactory)
+        IArtistIndex? artistIndex = null,
+        ISongNgramIndex? songNgramIndex = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _artistIndex = artistIndex;
+        _songNgramIndex = songNgramIndex;
     }
 
     /// <inheritdoc/>
@@ -408,22 +412,39 @@ public class FindSongIntentHandler : BaseHandler
         }
         else
         {
-            // Global search: use NameContains for first keyword token, then KeywordMatcher post-filter
-            string firstToken = keywordTokens[0];
-            var nameQuery = new InternalItemsQuery
+            // Try n-gram index first (O(1) lookup), fall back to DB query if unavailable
+            Guid[]? topParentIds = GetAllowedLibraryIds(user);
+            if (_songNgramIndex is { IsReady: true })
             {
-                User = jellyfinUser,
-                Recursive = true,
-                NameContains = firstToken,
-                IncludeItemTypes = new[] { BaseItemKind.Audio },
-                DtoOptions = new DtoOptions(true)
-            };
-            ApplyLibraryFilter(nameQuery, user, _libraryManager);
+                Logger.LogDebug("FindSong: searching n-gram index (keywords={Keywords})", string.Join(" ", keywordTokens));
+                scored = _songNgramIndex.Search(keywordTokens, locale, topParentIds);
+            }
+            else
+            {
+                scored = new List<(BaseItem, double)>();
+            }
 
-            IReadOnlyList<BaseItem> nameMatches = await RetryAsync(() => _libraryManager.GetItemList(nameQuery), "GetSongsByNameContains", cancellationToken).ConfigureAwait(false);
+            if (scored.Count == 0)
+            {
+                // Fallback: DB NameContains query + KeywordMatcher post-filter
+                Logger.LogDebug("FindSong: n-gram index miss or unavailable, falling back to DB query");
+                string firstToken = keywordTokens[0];
+                var nameQuery = new InternalItemsQuery
+                {
+                    User = jellyfinUser,
+                    Recursive = true,
+                    NameContains = firstToken,
+                    IncludeItemTypes = new[] { BaseItemKind.Audio },
+                    DtoOptions = new DtoOptions(true)
+                };
+                ApplyLibraryFilter(nameQuery, user, _libraryManager);
 
-            // Post-filter with KeywordMatcher
-            scored = KeywordMatcher.Score(nameMatches, keywordTokens, locale);
+                IReadOnlyList<BaseItem> nameMatches = await RetryAsync(() => _libraryManager.GetItemList(nameQuery), "GetSongsByNameContains", cancellationToken).ConfigureAwait(false);
+
+                // Post-filter with KeywordMatcher
+                scored = KeywordMatcher.Score(nameMatches, keywordTokens, locale);
+            }
+
             songs = scored.Select(s => s.Item).ToList();
         }
 

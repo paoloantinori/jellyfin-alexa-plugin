@@ -57,6 +57,11 @@ public class Registrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<IArtistIndex>(sp => sp.GetRequiredService<ArtistIndexService>());
         serviceCollection.AddHostedService(sp => sp.GetRequiredService<ArtistIndexService>());
 
+        // In-memory song n-gram index (also registered as hosted service for startup loading)
+        serviceCollection.AddSingleton<SongNgramIndexService>();
+        serviceCollection.AddSingleton<ISongNgramIndex>(sp => sp.GetRequiredService<SongNgramIndexService>());
+        serviceCollection.AddHostedService(sp => sp.GetRequiredService<SongNgramIndexService>());
+
         // Scheduled tasks (visible in Jellyfin dashboard)
         serviceCollection.AddSingleton<TokenRefreshTask>();
         serviceCollection.AddSingleton<CacheCleanupTask>();
