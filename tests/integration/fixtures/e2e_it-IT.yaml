@@ -137,6 +137,41 @@ tests:
       browse_category: {}
     expected_response_type: any
 
+  # Browse film (verb + article + category)
+  - utterance: "elenca i film"
+    expected_intent: BrowseLibraryIntent
+    expected_slots:
+      browse_category: {}
+    expected_response_type: any
+
+  # Browse serie (different verb variant)
+  - utterance: "sfoglia le serie"
+    expected_intent: BrowseLibraryIntent
+    expected_slots:
+      browse_category: {}
+    expected_response_type: any
+
+  # Browse artisti (no article variant)
+  - utterance: "mostra artisti"
+    expected_intent: BrowseLibraryIntent
+    expected_slots:
+      browse_category: {}
+    expected_response_type: any
+
+  # Browse canzoni (question form)
+  - utterance: "quali canzoni abbiamo"
+    expected_intent: BrowseLibraryIntent
+    expected_slots:
+      browse_category: {}
+    expected_response_type: any
+
+  # Browse generi (question form)
+  - utterance: "che generi ci sono"
+    expected_intent: BrowseLibraryIntent
+    expected_slots:
+      browse_category: {}
+    expected_response_type: any
+
   # "mostra libri" routes correctly via profile-nlu (BrowseLibraryIntent + browse_category=libri)
   # but goes to FallbackIntent in simulate-skill (different NLU engine).
   # Tested in NLU fixtures instead.
