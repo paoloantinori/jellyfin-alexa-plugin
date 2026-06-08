@@ -1,7 +1,7 @@
 ---
 name: Alexa Skill
 guid: c5df7de0-8777-4b3c-a70d-5c3dae359c9e
-version: 0.6.0.0
+version: 0.6.0.1
 targetAbi: 10.11.0.0
 framework: net9.0
 overview: Alexa skill plugin for Jellyfin
@@ -20,4 +20,4 @@ artifacts:
   - Amazon.Lambda.Serialization.Json.dll
   - Jellyfin.Plugin.AlexaSkill.dll
   - Refit.dll
-changelog: "FindSong: multi-turn conversational song search with partial-title keyword matching. Localized mood-to-genre mappings (de-DE, es-ES, fr-FR, pt-BR). Auto-provision plugin users on config PATCH. NLU routing fixes across all 17 locales. BrowseLibrary and PlayAlbum slot resolution fixes. Session management improvements for list handlers."
+changelog: "Security fix: replace ProcessStartInfo.Arguments with ArgumentList in VideoAudioController (CodeQL #143, CWE-78/CWE-88). Fix black frame ffmpeg -framerate positioning."
