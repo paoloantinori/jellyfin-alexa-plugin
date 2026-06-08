@@ -37,4 +37,17 @@ public interface ISongNgramIndex
     /// <param name="topParentIds">Optional library folder IDs to filter by.</param>
     /// <returns>Ranked list of (Item, Score) tuples, sorted by score descending.</returns>
     List<(BaseItem Item, double Score)> Search(string[] keywordTokens, string locale, Guid[]? topParentIds = null);
+
+    /// <summary>
+    /// Search for songs using phonetic (Double Metaphone) matching on title tokens.
+    /// Only intended as a fallback when <see cref="Search"/> returns no results.
+    /// Encodes user keywords phonetically and matches against pre-computed phonetic
+    /// token codes in the index. Uses relaxed keyword coverage (50%+) and applies
+    /// a score penalty to rank phonetic matches below exact matches.
+    /// </summary>
+    /// <param name="keywordTokens">Pre-tokenized user keywords.</param>
+    /// <param name="locale">Locale string for tokenization and scoring.</param>
+    /// <param name="topParentIds">Optional library folder IDs to filter by.</param>
+    /// <returns>Ranked list of (Item, Score) tuples with phonetic penalty applied.</returns>
+    List<(BaseItem Item, double Score)> SearchPhonetic(string[] keywordTokens, string locale, Guid[]? topParentIds = null);
 }

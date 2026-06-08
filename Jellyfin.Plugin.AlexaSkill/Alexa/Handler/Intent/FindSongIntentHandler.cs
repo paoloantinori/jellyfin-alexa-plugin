@@ -426,6 +426,17 @@ public class FindSongIntentHandler : BaseHandler
 
             if (scored.Count == 0)
             {
+                // Phonetic fallback: try Double Metaphone matching when exact token match misses.
+                // Only activates when feature flag is enabled and the n-gram index is available.
+                if (_config.PhoneticSongSearchEnabled && _songNgramIndex is { IsReady: true })
+                {
+                    Logger.LogDebug("FindSong: exact match miss, trying phonetic search (keywords={Keywords})", string.Join(" ", keywordTokens));
+                    scored = _songNgramIndex.SearchPhonetic(keywordTokens, locale, topParentIds);
+                }
+            }
+
+            if (scored.Count == 0)
+            {
                 // Fallback: DB NameContains query + KeywordMatcher post-filter
                 Logger.LogDebug("FindSong: n-gram index miss or unavailable, falling back to DB query");
                 string firstToken = keywordTokens[0];

@@ -28,6 +28,7 @@ public class SongNgramIndexService : ISongNgramIndex, IHostedService, IDisposabl
     private readonly ILogger<SongNgramIndexService> _logger;
     private volatile Dictionary<string, List<SongEntry>> _bigramIndex = new();
     private volatile Dictionary<string, List<SongEntry>> _singleTokenIndex = new();
+    private volatile Dictionary<string, List<SongEntry>> _phoneticTokenIndex = new();
     private volatile Dictionary<Guid, Guid> _songTopParentMap = new();
     private volatile List<SongEntry> _allEntries = [];
     private volatile bool _isReady;
@@ -46,6 +47,80 @@ public class SongNgramIndexService : ISongNgramIndex, IHostedService, IDisposabl
         _logger = logger;
         _libraryManager.ItemAdded += OnLibraryChanged;
         _libraryManager.ItemRemoved += OnLibraryChanged;
+    }
+
+    /// <inheritdoc />
+    public List<(BaseItem Item, double Score)> SearchPhonetic(string[] keywordTokens, string locale, Guid[]? topParentIds = null)
+    {
+        if (!_isReady || keywordTokens.Length == 0)
+        {
+            return new List<(BaseItem, double)>();
+        }
+
+        var phoneticIdx = _phoneticTokenIndex;
+        var topParentMap = _songTopParentMap;
+        var allSongs = _allEntries;
+
+        // Encode each keyword token phonetically and collect candidate song IDs
+        var candidateIds = new HashSet<Guid>();
+        foreach (string token in keywordTokens)
+        {
+            var (primary, alternate) = DoubleMetaphone.Encode(token);
+
+            if (!string.IsNullOrEmpty(primary) && phoneticIdx.TryGetValue(primary, out var entries))
+            {
+                foreach (var entry in entries)
+                {
+                    candidateIds.Add(entry.Song.Id);
+                }
+            }
+
+            if (!string.IsNullOrEmpty(alternate) && phoneticIdx.TryGetValue(alternate, out var altEntries))
+            {
+                foreach (var entry in altEntries)
+                {
+                    candidateIds.Add(entry.Song.Id);
+                }
+            }
+        }
+
+        if (candidateIds.Count == 0)
+        {
+            return new List<(BaseItem, double)>();
+        }
+
+        var candidates = allSongs.Where(e => candidateIds.Contains(e.Song.Id)).ToList();
+
+        // Filter by library access
+        if (topParentIds != null && topParentIds.Length > 0)
+        {
+            candidates = candidates.Where(e =>
+                topParentMap.TryGetValue(e.Song.Id, out var parentId) &&
+                Array.IndexOf(topParentIds, parentId) >= 0).ToList();
+        }
+
+        if (candidates.Count == 0)
+        {
+            return new List<(BaseItem, double)>();
+        }
+
+        var songs = candidates.Select(e => e.Song).ToList();
+        return KeywordMatcher.ScorePhonetic(songs, keywordTokens, locale);
+    }
+
+    /// <summary>
+    /// Adds a song entry to a string-keyed index under the given key.
+    /// Shared by bigram, single-token, and phonetic index building.
+    /// </summary>
+    private static void AddToIndex(Dictionary<string, List<SongEntry>> index, string key, SongEntry entry)
+    {
+        if (!index.TryGetValue(key, out var list))
+        {
+            list = new List<SongEntry>();
+            index[key] = list;
+        }
+
+        list.Add(entry);
     }
 
     /// <inheritdoc />
@@ -189,6 +264,7 @@ public class SongNgramIndexService : ISongNgramIndex, IHostedService, IDisposabl
             var entries = new List<SongEntry>(songs.Count);
             var bigramIndex = new Dictionary<string, List<SongEntry>>(songs.Count);
             var singleTokenIndex = new Dictionary<string, List<SongEntry>>(songs.Count * 3);
+            var phoneticTokenIndex = new Dictionary<string, List<SongEntry>>(songs.Count * 3);
             var topParentMap = new Dictionary<Guid, Guid>(songs.Count);
 
             foreach (var song in songs)
@@ -205,39 +281,41 @@ public class SongNgramIndexService : ISongNgramIndex, IHostedService, IDisposabl
                 for (int i = 0; i < tokens.Length - 1; i++)
                 {
                     string bigram = tokens[i] + " " + tokens[i + 1];
-                    if (!bigramIndex.TryGetValue(bigram, out var list))
-                    {
-                        list = new List<SongEntry>();
-                        bigramIndex[bigram] = list;
-                    }
-
-                    list.Add(entry);
+                    AddToIndex(bigramIndex, bigram, entry);
                 }
 
                 // Index individual tokens for single-keyword fallback
                 foreach (string token in tokens)
                 {
-                    if (!singleTokenIndex.TryGetValue(token, out var list))
+                    AddToIndex(singleTokenIndex, token, entry);
+
+                    // Index phonetic codes for misspelling tolerance
+                    var (primary, alternate) = DoubleMetaphone.Encode(token);
+                    if (!string.IsNullOrEmpty(primary))
                     {
-                        list = new List<SongEntry>();
-                        singleTokenIndex[token] = list;
+                        AddToIndex(phoneticTokenIndex, primary, entry);
                     }
 
-                    list.Add(entry);
+                    if (!string.IsNullOrEmpty(alternate) && !string.Equals(alternate, primary, StringComparison.OrdinalIgnoreCase))
+                    {
+                        AddToIndex(phoneticTokenIndex, alternate, entry);
+                    }
                 }
             }
 
             _bigramIndex = bigramIndex;
             _singleTokenIndex = singleTokenIndex;
+            _phoneticTokenIndex = phoneticTokenIndex;
             _songTopParentMap = topParentMap;
             _allEntries = entries;
             _isReady = true;
 
-            _logger.LogInformation("Song n-gram index {Action}: {SongCount} songs, {BigramCount} bigrams, {TokenCount} unique tokens",
+            _logger.LogInformation("Song n-gram index {Action}: {SongCount} songs, {BigramCount} bigrams, {TokenCount} unique tokens, {PhoneticCount} phonetic codes",
                 songs.Count > 0 ? "loaded" : "initialized (empty library)",
                 songs.Count,
                 bigramIndex.Count,
-                singleTokenIndex.Count);
+                singleTokenIndex.Count,
+                phoneticTokenIndex.Count);
         }
         catch (OperationCanceledException)
         {

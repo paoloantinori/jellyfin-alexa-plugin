@@ -31,6 +31,21 @@ internal static class KeywordMatcher
     private const double TitleCoverageWeight = 0.3;
 
     /// <summary>
+    /// Penalty multiplier applied to phonetic match scores. Phonetic matches are inherently
+    /// less certain than exact matches, so they receive a lower score to avoid false positives
+    /// outranking legitimate exact matches in mixed-result scenarios.
+    /// </summary>
+    private const double PhoneticPenalty = 0.75;
+
+    /// <summary>
+    /// Minimum keyword coverage required for phonetic matching. Relaxed from 1.0 (100%)
+    /// to 0.5 (50%) because phonetic encoding collapses different spellings into the same
+    /// code, which can cause false keyword-to-title matches. Requiring all keywords to match
+    /// phonetically would be too strict when the user misspells multiple words differently.
+    /// </summary>
+    private const double MinPhoneticKeywordCoverage = 0.5;
+
+    /// <summary>
     /// Stop words keyed by locale prefix (e.g. "en" for en-US, en-GB, etc.).
     /// Unknown locale prefixes default to an empty set.
     /// </summary>
@@ -209,5 +224,131 @@ internal static class KeywordMatcher
 
         int dashIndex = locale.IndexOf('-');
         return dashIndex > 0 ? locale.Substring(0, dashIndex) : locale;
+    }
+
+    /// <summary>
+    /// Scores candidate songs against user keyword tokens using Double Metaphone
+    /// phonetic matching. This is the phonetic counterpart to <see cref="Score"/> —
+    /// it relaxes keyword coverage from 100% to 50% and applies a penalty multiplier
+    /// so phonetic matches rank below exact matches.
+    /// Designed for non-native speakers who misspell titles (e.g. "rapsodi" for "rhapsody").
+    /// </summary>
+    /// <param name="songs">Candidate songs (already filtered by phonetic index lookup).</param>
+    /// <param name="keywordTokens">Pre-tokenized user keywords.</param>
+    /// <param name="locale">The locale string for tokenizing song titles.</param>
+    /// <returns>List of (Item, Score) tuples sorted by score descending, with phonetic penalty applied.</returns>
+    public static List<(BaseItem Item, double Score)> ScorePhonetic(
+        IReadOnlyList<BaseItem> songs, string[] keywordTokens, string locale)
+    {
+        if (keywordTokens.Length == 0 || songs.Count == 0)
+        {
+            return new List<(BaseItem, double)>();
+        }
+
+        // Pre-compute phonetic codes for keyword tokens once
+        var keywordPhonetics = new (string Primary, string? Alternate)[keywordTokens.Length];
+        for (int i = 0; i < keywordTokens.Length; i++)
+        {
+            keywordPhonetics[i] = DoubleMetaphone.Encode(keywordTokens[i]);
+        }
+
+        var results = new List<(BaseItem Item, double Score)>();
+
+        foreach (var song in songs)
+        {
+            string title = song.Name ?? string.Empty;
+            string[] titleTokens = Tokenize(title, locale);
+
+            if (titleTokens.Length == 0)
+            {
+                continue;
+            }
+
+            // Compute phonetic codes for title tokens
+            var titlePhonetics = new (string Primary, string? Alternate)[titleTokens.Length];
+            for (int i = 0; i < titleTokens.Length; i++)
+            {
+                titlePhonetics[i] = DoubleMetaphone.Encode(titleTokens[i]);
+            }
+
+            // Phonetic keyword coverage: how many user keywords phonetically match any title token
+            int keywordsFound = 0;
+            foreach (var (kwPrimary, kwAlternate) in keywordPhonetics)
+            {
+                if (string.IsNullOrEmpty(kwPrimary))
+                {
+                    continue;
+                }
+
+                bool found = false;
+                foreach (var (ttPrimary, ttAlternate) in titlePhonetics)
+                {
+                    if (FuzzyMatcher.PhoneticCodesMatch(kwPrimary, kwAlternate, ttPrimary, ttAlternate))
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (found)
+                {
+                    keywordsFound++;
+                }
+            }
+
+            double keywordCoverage = (double)keywordsFound / keywordTokens.Length;
+
+            // Relaxed coverage threshold for phonetic matching
+            if (keywordCoverage < MinPhoneticKeywordCoverage)
+            {
+                continue;
+            }
+
+            // Title coverage: how many title tokens are phonetically covered by user keywords
+            int titleTokensCovered = 0;
+            foreach (var (ttPrimary, ttAlternate) in titlePhonetics)
+            {
+                if (string.IsNullOrEmpty(ttPrimary))
+                {
+                    continue;
+                }
+
+                foreach (var (kwPrimary, kwAlternate) in keywordPhonetics)
+                {
+                    if (FuzzyMatcher.PhoneticCodesMatch(kwPrimary, kwAlternate, ttPrimary, ttAlternate))
+                    {
+                        titleTokensCovered++;
+                        break;
+                    }
+                }
+            }
+
+            double titleCoverage = titleTokens.Length > 0
+                ? (double)titleTokensCovered / titleTokens.Length
+                : 0;
+
+            double score = ((KeywordCoverageWeight * keywordCoverage) + (TitleCoverageWeight * titleCoverage))
+                * 100.0 * PhoneticPenalty;
+
+            // Positional bonus: first title token phonetically matches any keyword
+            if (titleTokens.Length > 0 && titlePhonetics.Length > 0)
+            {
+                var (firstPrimary, firstAlternate) = titlePhonetics[0];
+                foreach (var (kwPrimary, kwAlternate) in keywordPhonetics)
+                {
+                    if (FuzzyMatcher.PhoneticCodesMatch(kwPrimary, kwAlternate, firstPrimary, firstAlternate))
+                    {
+                        score += PositionalBonus;
+                        break;
+                    }
+                }
+            }
+
+            results.Add((song, score));
+        }
+
+        return results
+            .OrderByDescending(r => r.Score)
+            .ToList();
     }
 }

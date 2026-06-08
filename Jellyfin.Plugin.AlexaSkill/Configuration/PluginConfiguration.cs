@@ -106,6 +106,16 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool ResumeOfferEnabled { get; set; } = true;
     public bool ResumeAnnounceTitle { get; set; } = true;
     public bool AsrCompoundWordFixEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether phonetic (Double Metaphone) matching
+    /// is enabled for song title search. When enabled, misspelled titles (e.g. "rapsodi"
+    /// for "rhapsody") can still match via phonetic encoding. Native English speakers
+    /// can disable this to avoid false-positive phonetic matches.
+    /// Phonetic search only activates when exact token matching yields no results,
+    /// so disabling it has no effect on the fast path.
+    /// </summary>
+    public bool PhoneticSongSearchEnabled { get; set; } = true;
     public bool SeekEnabled { get; set; }
 
     /// <summary>
