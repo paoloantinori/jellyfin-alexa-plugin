@@ -35,12 +35,17 @@ public class CustomerProfileServiceTests
 
     private static Context CreateContext(string? token = "test-token")
     {
+        return CreateContext(token, "https://api.amazonalexa.com");
+    }
+
+    private static Context CreateContext(string? token, string? endpoint)
+    {
         return new Context
         {
             System = new global::Alexa.NET.Request.AlexaSystem
             {
                 ApiAccessToken = token,
-                ApiEndpoint = "https://api.amazonalexa.com",
+                ApiEndpoint = endpoint,
                 User = new global::Alexa.NET.Request.User()
             }
         };
@@ -64,6 +69,42 @@ public class CustomerProfileServiceTests
     }
 
     [Fact]
+    public async Task GetGivenNameAsync_EmptyToken_ReturnsNull()
+    {
+        var service = CreateService();
+        var context = CreateContext(token: string.Empty);
+        string? result = await service.GetGivenNameAsync(context, CancellationToken.None);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task GetGivenNameAsync_MissingEndpoint_ReturnsNull()
+    {
+        var service = CreateService();
+        var context = CreateContext(token: "valid-token", endpoint: null);
+        string? result = await service.GetGivenNameAsync(context, CancellationToken.None);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task GetGivenNameAsync_EmptyEndpoint_ReturnsNull()
+    {
+        var service = CreateService();
+        var context = CreateContext(token: "valid-token", endpoint: string.Empty);
+        string? result = await service.GetGivenNameAsync(context, CancellationToken.None);
+        Assert.Null(result);
+    }
+
+    // NOTE: Happy-path and whitespace-name tests for GetGivenNameAsync are not feasible here.
+    // CustomerProfileClient is instantiated directly inside the method via `new CustomerProfileClient(endpoint, token)`,
+    // so it cannot be mocked via DI. Testing the actual Amazon Profile API call would require
+    // refactoring the service to accept an abstraction (e.g., ICustomerProfileClient factory).
+    // The guard-clause tests above cover the null/empty/missing credential paths.
+    // Whitespace-only name handling (string.IsNullOrWhiteSpace check on line 48) is also
+    // untestable without mocking the client, since we cannot control the return value of
+    // client.GivenName().
+
+    [Fact]
     public async Task GetTimezoneAsync_NullContext_ReturnsNull()
     {
         var service = CreateService();
@@ -79,6 +120,39 @@ public class CustomerProfileServiceTests
         string? result = await service.GetTimezoneAsync(context, CancellationToken.None);
         Assert.Null(result);
     }
+
+    [Fact]
+    public async Task GetTimezoneAsync_EmptyToken_ReturnsNull()
+    {
+        var service = CreateService();
+        var context = CreateContext(token: string.Empty);
+        string? result = await service.GetTimezoneAsync(context, CancellationToken.None);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task GetTimezoneAsync_MissingEndpoint_ReturnsNull()
+    {
+        var service = CreateService();
+        var context = CreateContext(token: "valid-token", endpoint: null);
+        string? result = await service.GetTimezoneAsync(context, CancellationToken.None);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task GetTimezoneAsync_EmptyEndpoint_ReturnsNull()
+    {
+        var service = CreateService();
+        var context = CreateContext(token: "valid-token", endpoint: string.Empty);
+        string? result = await service.GetTimezoneAsync(context, CancellationToken.None);
+        Assert.Null(result);
+    }
+
+    // NOTE: Happy-path and error-path tests for GetTimezoneAsync (valid timezone, HTTP errors,
+    // empty timezone array, malformed JSON) are not feasible here. The method uses a static
+    // HttpClient that cannot be injected or mocked. Testing would require refactoring to accept
+    // an HttpClient or IHttpMessageHandler factory. The guard-clause tests above cover the
+    // null/empty/missing credential and endpoint paths.
 }
 
 public class LaunchRequestHandlerTests
