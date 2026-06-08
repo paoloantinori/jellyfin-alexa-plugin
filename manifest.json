@@ -258,11 +258,11 @@
             },
             {
                 "version": "0.6.0.1",
-                "checksum": "placeholder",
+                "checksum": "4dcde44dee82512088c8f7e684e0fa88",
                 "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.6.0.1/AlexaSkill_0.6.0.1.zip",
-                "changelog": "placeholder",
+                "changelog": "Security fix: replace ProcessStartInfo.Arguments with ArgumentList in VideoAudioController (CodeQL #143, CWE-78/CWE-88). Fix black frame ffmpeg -framerate positioning.",
                 "targetAbi": "10.11.0.0",
-                "timestamp": "2026-06-08T00:00:00Z"
+                "timestamp": "2026-06-08 06:04:45"
             }
         ]
     }
