@@ -1,18 +1,75 @@
+<div align="center">
+
+<img src="Jellyfin.Plugin.AlexaSkill/icon.jpg" alt="Jellyfin Alexa Plugin" width="128" />
+
 # Jellyfin Alexa Plugin
 
-Control your Jellyfin media server with Alexa voice commands. Play music, videos, playlists, search your library, manage favorites, and more — across 17 locales.
+**Control your Jellyfin media server with Alexa voice commands.**
+
+Play music, videos, playlists, search your library, manage favorites, and more — across 17 locales.
+
+<br/>
+
+[![dev build](https://github.com/paoloantinori/jellyfin-alexa-plugin/actions/workflows/dev-build.yml/badge.svg)](https://github.com/paoloantinori/jellyfin-alexa-plugin/actions/workflows/dev-build.yml/badge.svg)
+[![GitHub all releases](https://img.shields.io/github/downloads/paoloantinori/jellyfin-alexa-plugin/total?label=total%20downloads)](https://github.com/paoloantinori/jellyfin-alexa-plugin/releases)
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
+
+<br/>
+
+<p>
+  <img src="screenshots/echo-show-carousel.jpg" alt="Browse results on Echo Show" width="340" />
+  &nbsp;&nbsp;&nbsp;
+  <img src="screenshots/echo-show-nowplaying.jpg" alt="Now Playing on Echo Show" width="340" />
+</p>
+
+<br/>
+
+<i>Fork of the <a href="https://github.com/infinityofspace/jellyfin-alexa-plugin">original project by infinityofspace</a>, migrated to Jellyfin 10.11.x with additional features and bug fixes.</i>
+
+<br/>
+
+⚠️ _Alpha software: features may change between releases. Always back up your configuration before updating._
+
+</div>
 
 ---
 
-[![dev build](https://github.com/paoloantinori/jellyfin-alexa-plugin/actions/workflows/dev-build.yml/badge.svg)](https://github.com/paoloantinori/jellyfin-alexa-plugin/actions/workflows/dev-build.yml) ![GitHub all releases](https://img.shields.io/github/downloads/paoloantinori/jellyfin-alexa-plugin/total?label=total%20downloads)
+## ✨ Highlights
+
+<table>
+<tr>
+<td width="50%">
+
+### 🎵 Music & Audio
+Play songs, albums, artists, audiobooks, podcasts, and playlists. Conversational song search with multi-turn dialog. Phonetic matching for accented speech. AutoPlay radio mode when the queue ends.
+
+</td>
+<td width="50%">
+
+### 📺 Video & TV
+Play movies, TV episodes, and channels. Resume playback with three-tier position fallback. APL visual carousel with tappable image cards on Echo Show devices.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🔍 Smart Search
+4-tier artist search fallback chain. Bigram index for O(1) song title lookup. ASR compound-word fix. Configurable Fast/Thorough modes per user.
+
+</td>
+<td width="50%">
+
+### 🌍 17 Locales
+Full custom utterances in 11 languages: English (5 variants), Spanish (3), French (2), German, Italian, Portuguese, Arabic, Dutch, Hindi, and Japanese.
+
+</td>
+</tr>
+</table>
 
 ---
 
-_This is a fork of the [original project by infinityofspace](https://github.com/infinityofspace/jellyfin-alexa-plugin), migrated to Jellyfin 10.11.x with additional features and bug fixes._
-
-_Alpha software: features may change between releases. Always back up your configuration before updating._
-
-### Table of Contents
+## 📋 Table of Contents
 
 1. [About](#about)
 2. [Features](#features)
@@ -154,7 +211,9 @@ The plugin uses **Login with Amazon (LWA)** to create and manage your Alexa skil
 
 ## Plugin Configuration
 
-![Plugin Configuration](screenshots/settings.png)
+<div align="center">
+  <img src="screenshots/settings.png" alt="Plugin Configuration" width="700" />
+</div>
 
 1. Open your Jellyfin admin dashboard
 2. Go to **Plugins** and find **AlexaSkill** in the installed plugins list
@@ -308,7 +367,7 @@ If you're unsure whether a name will work, test it in the [Alexa Developer Conso
 
 ### How do I verify that my utterances route to the correct intent?
 
-Use the **Alexa Developer Console** simulator. Go to your skill → **Test** → enable **Development** mode → type or speak an utterance. The simulator shows which intent Alexa resolved, the extracted slot values, and the full request JSON. This is the fastest way to confirm that a new utterance or invocation name works before trying it on a real device.
+Use the **Alexa Developer Console** simulator. Go to your skill → **test** → enable **Development** mode → type or speak an utterance. The simulator shows which intent Alexa resolved, the extracted slot values, and the full request JSON. This is the fastest way to confirm that a new utterance or invocation name works before trying it on a real device.
 
 ## Troubleshooting
 
