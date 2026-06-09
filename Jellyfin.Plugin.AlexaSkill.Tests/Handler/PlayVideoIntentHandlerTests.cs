@@ -283,7 +283,7 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
-    public async Task Handle_VideoResponse_EndsSession()
+    public async Task Handle_VideoResponse_ShouldEndSessionIsNull()
     {
         var movie = CreateTestItem("Test Video");
 
@@ -298,7 +298,7 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
             TestHelpers.CreateTestUser(),
             CreateSession(), CancellationToken.None);
 
-        // VideoApp.Launch responses MUST end the session — null/false breaks intent routing
-        Assert.True(response.Response.ShouldEndSession);
+        // VideoApp.Launch must NOT include shouldEndSession — Alexa rejects it
+        Assert.Null(response.Response.ShouldEndSession);
     }
 }

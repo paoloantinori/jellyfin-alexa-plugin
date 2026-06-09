@@ -608,7 +608,9 @@ public abstract class BaseHandler
             Version = "1.0",
             Response = new ResponseBody
             {
-                ShouldEndSession = true,
+                // VideoApp.Launch must NOT include shouldEndSession — Alexa rejects it.
+                // Null omits the field from JSON serialization.
+                ShouldEndSession = null,
                 Directives = new List<IDirective>
                 {
                     new Directive.VideoAppLaunchDirective

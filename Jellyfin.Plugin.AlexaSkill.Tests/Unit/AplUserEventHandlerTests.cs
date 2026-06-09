@@ -820,8 +820,8 @@ public class AplUserEventHandlerVideoAppTests : PluginTestBase
         Assert.Empty(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
         // Should NOT have an APL NowPlaying directive — VideoApp renders its own UI
         Assert.Empty(response.Response.Directives.OfType<AplRenderDocumentDirective>());
-        // VideoApp responses MUST end the session — null/false breaks intent routing
-        Assert.True(response.Response.ShouldEndSession);
+        // VideoApp.Launch must NOT include shouldEndSession — Alexa rejects it
+        Assert.Null(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -849,8 +849,8 @@ public class AplUserEventHandlerVideoAppTests : PluginTestBase
         // Queue should contain the folder's children
         Assert.Single(session.NowPlayingQueue);
         Assert.Equal(child.Id, session.FullNowPlayingItem!.Id);
-        // VideoApp responses MUST end the session — null/false breaks intent routing
-        Assert.True(response.Response.ShouldEndSession);
+        // VideoApp.Launch must NOT include shouldEndSession — Alexa rejects it
+        Assert.Null(response.Response.ShouldEndSession);
     }
 
     [Fact]

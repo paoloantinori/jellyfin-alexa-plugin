@@ -143,7 +143,8 @@ public class PlayVideoIntentHandler : BaseHandler
             Version = "1.0",
             Response = new ResponseBody
             {
-                ShouldEndSession = true,
+                // VideoApp.Launch must NOT include shouldEndSession
+                ShouldEndSession = null,
                 Directives = new List<IDirective>
                 {
                     new VideoAppLaunchDirective

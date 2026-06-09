@@ -562,8 +562,8 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
         var directive = Assert.IsType<VideoAppLaunchDirective>(
             Assert.Single(response.Response.Directives));
         Assert.NotNull(directive.VideoItem);
-        // VideoApp responses MUST end the session — null/false breaks intent routing
-        Assert.True(response.Response.ShouldEndSession);
+        // VideoApp.Launch must NOT include shouldEndSession — Alexa rejects it
+        Assert.Null(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -583,7 +583,8 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
 
         Assert.Contains("/alexaskill/api/video-audio/", directive.VideoItem.Source);
         Assert.Contains(itemId, directive.VideoItem.Source);
-        Assert.True(response.Response.ShouldEndSession);
+        // VideoApp.Launch must NOT include shouldEndSession — Alexa rejects it
+        Assert.Null(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -604,7 +605,8 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
         // Should NOT contain the raw /Audio/.../stream path
         Assert.DoesNotContain("/Audio/", directive.VideoItem.Source);
         Assert.DoesNotContain("/stream", directive.VideoItem.Source);
-        Assert.True(response.Response.ShouldEndSession);
+        // VideoApp.Launch must NOT include shouldEndSession — Alexa rejects it
+        Assert.Null(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -662,7 +664,8 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
 
         Assert.NotNull(directive.VideoItem.Metadata);
         Assert.Equal("Stairway to Heaven", directive.VideoItem.Metadata.Title);
-        Assert.True(response.Response.ShouldEndSession);
+        // VideoApp.Launch must NOT include shouldEndSession — Alexa rejects it
+        Assert.Null(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -686,7 +689,8 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
             Assert.Single(response.Response.Directives));
 
         Assert.Equal("Queen", directive.VideoItem.Metadata.Subtitle);
-        Assert.True(response.Response.ShouldEndSession);
+        // VideoApp.Launch must NOT include shouldEndSession — Alexa rejects it
+        Assert.Null(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -715,16 +719,17 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
             Assert.Single(response.Response.Directives));
 
         Assert.Equal(string.Empty, directive.VideoItem.Metadata.Title);
-        Assert.True(response.Response.ShouldEndSession);
+        // VideoApp.Launch must NOT include shouldEndSession — Alexa rejects it
+        Assert.Null(response.Response.ShouldEndSession);
     }
 
     [Fact]
     public void BuildAudioPlayerResponse_NativeControlsOn_ShouldEndSession()
     {
-        // Regression test: VideoApp responses MUST use ShouldEndSession=true.
-        // Using null/false keeps the session open, which breaks intent routing —
-        // the Echo sends SessionEndedRequest instead of routing to the correct
-        // intent handler (same issue as AudioPlayer with ShouldEndSession=false).
+        // Regression test: VideoApp.Launch must NOT include shouldEndSession.
+        // Alexa rejects the response with INVALID_RESPONSE:
+        //   "shouldEndSession flag is not allowed with LaunchVideoApp.Launch Directive"
+        // The field must be null (omitted from JSON), not true or false.
         var handler = CreateHandler();
         var song = CreateSong("Test Song");
         var user = CreateUser();
@@ -736,9 +741,7 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
 
         Assert.IsType<VideoAppLaunchDirective>(
             Assert.Single(response.Response.Directives));
-        Assert.True(response.Response.ShouldEndSession,
-            "VideoApp responses must set ShouldEndSession=true to match the Movie " +
-            "handler pattern and prevent session-based intent routing failures");
+        Assert.Null(response.Response.ShouldEndSession); // VideoApp.Launch must NOT include shouldEndSession
     }
 }
 

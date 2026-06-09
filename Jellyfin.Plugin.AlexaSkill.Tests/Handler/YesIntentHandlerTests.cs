@@ -185,7 +185,8 @@ public class YesIntentHandlerTests : PluginTestBase
             CancellationToken.None);
 
         response.HasDirective<Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>();
-        Assert.True(response.Response.ShouldEndSession);
+        // VideoApp.Launch must NOT include shouldEndSession
+        Assert.Null(response.Response.ShouldEndSession);
     }
 
     [Fact]

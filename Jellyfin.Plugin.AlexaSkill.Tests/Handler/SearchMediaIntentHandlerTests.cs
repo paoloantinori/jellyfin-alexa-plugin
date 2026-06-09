@@ -208,7 +208,8 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
         Assert.NotNull(response);
-        Assert.True(response.Response.ShouldEndSession);
+        // VideoApp.Launch must NOT include shouldEndSession
+        Assert.Null(response.Response.ShouldEndSession);
         Assert.NotEmpty(response.Response.Directives);
         Assert.NotNull(session.FullNowPlayingItem);
         Assert.Equal(movie, session.FullNowPlayingItem);
