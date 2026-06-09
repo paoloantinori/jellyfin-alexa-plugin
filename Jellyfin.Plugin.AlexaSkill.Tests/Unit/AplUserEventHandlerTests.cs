@@ -516,6 +516,200 @@ public class AplUserEventHandlerTests : PluginTestBase
         Assert.NotNull(response);
         Assert.Null(response.Response.OutputSpeech);
     }
+
+    // ─── Folder Resolution Tests ────────────────────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_CarouselTapOnFolder_ResolvesToFirstChildAudio()
+    {
+        // Folder with 3 audio children → should play first child
+        var folderId = Guid.NewGuid();
+        var child1 = new Audio { Name = "Chapter 1", Id = Guid.NewGuid() };
+        var child2 = new Audio { Name = "Chapter 2", Id = Guid.NewGuid() };
+        var child3 = new Audio { Name = "Chapter 3", Id = Guid.NewGuid() };
+
+        var folder = new Folder { Name = "My Audiobook", Id = folderId };
+
+        _libraryManager.Setup(l => l.GetItemById(folderId)).Returns(folder);
+        _libraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { child1, child2, child3 });
+
+        var request = CreateAplEvent("carouselTap", folderId.ToString());
+        var session = CreateSession();
+
+        var response = await _handler.HandleAsync(request, _context, _user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        // Should have queued all children
+        Assert.Equal(3, session.NowPlayingQueue.Count);
+        Assert.Equal(child1.Id, session.NowPlayingQueue[0].Id);
+        Assert.Equal(child1, session.FullNowPlayingItem);
+    }
+
+    [Fact]
+    public async Task HandleAsync_CarouselTapOnFolder_NoAudioChildren_ReturnsErrorMessage()
+    {
+        // Folder with no audio children → should return error speech
+        var folderId = Guid.NewGuid();
+        var folder = new Folder { Name = "Empty Folder", Id = folderId };
+
+        _libraryManager.Setup(l => l.GetItemById(folderId)).Returns(folder);
+        _libraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var request = CreateAplEvent("carouselTap", folderId.ToString());
+        var session = CreateSession();
+
+        var response = await _handler.HandleAsync(request, _context, _user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotNull(response.Response.OutputSpeech);
+        Assert.Contains("no playable content", ((PlainTextOutputSpeech)response.Response.OutputSpeech).Text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task HandleAsync_CarouselTapOnAudioItem_SkipsFolderResolution()
+    {
+        // Regular audio item → should NOT trigger folder resolution
+        var audioId = Guid.NewGuid();
+        var audio = new Audio { Name = "Song", Id = audioId };
+
+        _libraryManager.Setup(l => l.GetItemById(audioId)).Returns(audio);
+
+        var request = CreateAplEvent("carouselTap", audioId.ToString());
+        var session = CreateSession();
+
+        var response = await _handler.HandleAsync(request, _context, _user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.Single(session.NowPlayingQueue);
+        Assert.Equal(audioId, session.NowPlayingQueue[0].Id);
+        // GetItemList should NOT have been called (no folder resolution)
+        _libraryManager.Verify(l => l.GetItemList(It.IsAny<InternalItemsQuery>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_CarouselTapOnFolder_QueueContainsAllChildren()
+    {
+        // Verify the full queue is built from folder children
+        var folderId = Guid.NewGuid();
+        var children = new List<BaseItem>();
+        for (int i = 0; i < 5; i++)
+        {
+            children.Add(new Audio { Name = $"Track {i + 1}", Id = Guid.NewGuid() });
+        }
+
+        var folder = new Folder { Name = "Album", Id = folderId };
+
+        _libraryManager.Setup(l => l.GetItemById(folderId)).Returns(folder);
+        _libraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(children);
+
+        var request = CreateAplEvent("carouselTap", folderId.ToString());
+        var session = CreateSession();
+
+        await _handler.HandleAsync(request, _context, _user, session, CancellationToken.None);
+
+        Assert.Equal(5, session.NowPlayingQueue.Count);
+        // First in queue is the first child
+        Assert.Equal(children[0].Id, session.NowPlayingQueue[0].Id);
+        // Last in queue is the last child
+        Assert.Equal(children[4].Id, session.NowPlayingQueue[4].Id);
+    }
+
+    // ─── Folder Resolution Tests ────────────────────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_CarouselTapOnFolder_ResolvesToFirstChildAudio()
+    {
+        // Folder with 3 audio children → should play first child
+        var folderId = Guid.NewGuid();
+        var child1 = new Audio { Name = "Chapter 1", Id = Guid.NewGuid() };
+        var child2 = new Audio { Name = "Chapter 2", Id = Guid.NewGuid() };
+        var child3 = new Audio { Name = "Chapter 3", Id = Guid.NewGuid() };
+
+        var folder = new Folder { Name = "My Audiobook", Id = folderId };
+
+        _libraryManager.Setup(l => l.GetItemById(folderId)).Returns(folder);
+        _libraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { child1, child2, child3 });
+
+        var request = CreateAplEvent("carouselTap", folderId.ToString());
+        var session = CreateSession();
+
+        var response = await _handler.HandleAsync(request, _context, _user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        // Should have queued all children
+        Assert.Equal(3, session.NowPlayingQueue.Count);
+        Assert.Equal(child1.Id, session.NowPlayingQueue[0].Id);
+        Assert.Equal(child1, session.FullNowPlayingItem);
+    }
+
+    [Fact]
+    public async Task HandleAsync_CarouselTapOnFolder_NoAudioChildren_ReturnsErrorMessage()
+    {
+        var folderId = Guid.NewGuid();
+        var folder = new Folder { Name = "Empty Folder", Id = folderId };
+
+        _libraryManager.Setup(l => l.GetItemById(folderId)).Returns(folder);
+        _libraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var request = CreateAplEvent("carouselTap", folderId.ToString());
+        var session = CreateSession();
+
+        var response = await _handler.HandleAsync(request, _context, _user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotNull(response.Response.OutputSpeech);
+        Assert.Contains("no playable content", ((PlainTextOutputSpeech)response.Response.OutputSpeech).Text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task HandleAsync_CarouselTapOnAudioItem_SkipsFolderResolution()
+    {
+        var audioId = Guid.NewGuid();
+        var audio = new Audio { Name = "Song", Id = audioId };
+
+        _libraryManager.Setup(l => l.GetItemById(audioId)).Returns(audio);
+
+        var request = CreateAplEvent("carouselTap", audioId.ToString());
+        var session = CreateSession();
+
+        var response = await _handler.HandleAsync(request, _context, _user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.Single(session.NowPlayingQueue);
+        Assert.Equal(audioId, session.NowPlayingQueue[0].Id);
+        _libraryManager.Verify(l => l.GetItemList(It.IsAny<InternalItemsQuery>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_CarouselTapOnFolder_QueueContainsAllChildren()
+    {
+        var folderId = Guid.NewGuid();
+        var children = new List<BaseItem>();
+        for (int i = 0; i < 5; i++)
+        {
+            children.Add(new Audio { Name = $"Track {i + 1}", Id = Guid.NewGuid() });
+        }
+
+        var folder = new Folder { Name = "Album", Id = folderId };
+
+        _libraryManager.Setup(l => l.GetItemById(folderId)).Returns(folder);
+        _libraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(children);
+
+        var request = CreateAplEvent("carouselTap", folderId.ToString());
+        var session = CreateSession();
+
+        await _handler.HandleAsync(request, _context, _user, session, CancellationToken.None);
+
+        Assert.Equal(5, session.NowPlayingQueue.Count);
+        Assert.Equal(children[0].Id, session.NowPlayingQueue[0].Id);
+        Assert.Equal(children[4].Id, session.NowPlayingQueue[4].Id);
+    }
 }
 
 // AplUserEventRequest and AplUserEventRequestConverter tests

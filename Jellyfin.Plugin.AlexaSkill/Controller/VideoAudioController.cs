@@ -89,6 +89,14 @@ public class VideoAudioController : ControllerBase
             return NotFound(new { error = "Item not found" });
         }
 
+        // Only items with media sources (Audio, Video) can be streamed.
+        // Folders, Book folders, etc. would cause ffmpeg to fail with a 500 from Jellyfin.
+        if (item is not MediaBrowser.Controller.Entities.IHasMediaSources)
+        {
+            _logger.LogWarning("VideoAudio: item {ItemId} ({ItemType}) is not a streamable media type", itemId, item.GetType().Name);
+            return BadRequest(new { error = "Item is not a streamable media type" });
+        }
+
         var config = Plugin.Instance?.Configuration;
         if (config == null || string.IsNullOrWhiteSpace(config.ServerAddress))
         {

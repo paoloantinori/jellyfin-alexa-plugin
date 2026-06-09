@@ -61,6 +61,7 @@ A Jellyfin plugin that creates a personal Alexa skill to play and control media 
 - **Fast/Thorough search mode**: per-user choice between fast single-query auto-play or thorough multi-tier fallback with disambiguation
 - **PostPlay AutoPlay**: when a single song ends and the queue is empty, automatically enqueues similar tracks from your library (configurable per-user or globally)
 - **Phonetic matching**: Double Metaphone pre-filter improves fuzzy matching for non-English artist names (e.g., "soul coughing" matches even with heavy accent distortion)
+- **Phonetic song search**: When an exact title match fails, a phonetic fallback matches misspelled song titles (e.g., "rapsodi" finds "Rhapsody", "fotograf" finds "Photograph"). Protected by a feature flag so native speakers can opt out
 
 ## Prerequisites
 

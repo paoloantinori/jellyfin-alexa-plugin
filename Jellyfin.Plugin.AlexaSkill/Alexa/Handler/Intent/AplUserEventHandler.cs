@@ -8,6 +8,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
+using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
@@ -17,6 +18,7 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
+using SortOrder = Jellyfin.Database.Implementations.Enums.SortOrder;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
 
@@ -206,6 +208,40 @@ public class AplUserEventHandler : BaseHandler
                     }
                 }
             });
+        }
+
+        // Folder items (audiobooks, music folders, etc.) need to be resolved to their
+        // first audio child. Without this, GetStreamUrl() generates /Audio/{folderId}/stream
+        // which fails because Folders don't have media sources.
+        if (item is Folder folder)
+        {
+            var childQuery = new InternalItemsQuery
+            {
+                ParentId = folder.Id,
+                MediaTypes = new[] { MediaType.Audio },
+                Recursive = true,
+                OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) }
+            };
+
+            var children = _libraryManager.GetItemList(childQuery);
+
+            if (children.Count == 0)
+            {
+                Logger.LogWarning("AplUserEvent HandleSelectItem: folder {FolderName} has no audio children", folder.Name);
+                return Task.FromResult(ResponseBuilder.Tell("This folder has no playable content."));
+            }
+
+            item = children[0];
+            itemIdStr = item.Id.ToString();
+
+            Logger.LogDebug(
+                "AplUserEvent HandleSelectItem: resolved folder {FolderName} to first child {ChildName} ({ChildId})",
+                folder.Name, item.Name, itemIdStr);
+
+            // Queue remaining children
+            var queueItems = children.Select(c => new QueueItem { Id = c.Id }).ToList();
+            session.NowPlayingQueue = queueItems;
+            session.FullNowPlayingItem = item;
         }
 
         int offsetMs = GetResumeOffset(item, session, request);

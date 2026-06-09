@@ -6,7 +6,7 @@ C# Jellyfin plugin (net9.0) exposing an Alexa skill for media playback, search, 
 
 ```bash
 dotnet build Jellyfin.Plugin.AlexaSkill.sln
-dotnet test Jellyfin.Plugin.AlexaSkill.Tests          # ~2256 unit tests
+dotnet test Jellyfin.Plugin.AlexaSkill.Tests          # ~2302 unit tests
 python3 scripts/validate_interaction_models.py        # Check all 17 models (JSON, slots, drift)
 python3 scripts/validate_locales.py                   # Check locale key coverage (baseline-aware)
 python3 scripts/validate_versions.py                  # Check version consistency across files
@@ -60,7 +60,15 @@ CI validates models, locales, and versions on every PR and push to main.
 - `Alexa/Pipeline/` — Request routing pipeline
 - `Configuration/` — Plugin config DTO + Jellyfin config UI (`config.html`)
 - `Controller/` — ASP.NET API controllers (skill endpoint, config, simulator, health)
-- `docs/` — 103 Mermaid diagrams covering 6 feature flows × 17 locales
+- `Alexa/SongNgramIndexService.cs` — In-memory n-gram + phonetic index for O(1) song title lookup
+- `Alexa/ISongNgramIndex.cs` — Interface for song n-gram index (Search + SearchPhonetic)
+- `Alexa/Diagnostics/` — Diagnostic helpers for troubleshooting
+- `Alexa/Entities/` — Data transfer objects and entity types
+- `Alexa/EntryPoints/` — Plugin entry points (service registration, DI)
+- `Alexa/Exceptions/` — Custom exception types
+- `Alexa/Lwa/` — Login with Amazon (LWA) OAuth flow
+- `Alexa/ProactiveEvents/` — Proactive event notifications via Alexa
+- `docs/` — 104 Mermaid diagrams covering 6 feature flows × 17 locales
 - `tests/integration/` — NLU + E2E test suites (Python/pytest)
 - `Directory.Build.props` — Version numbers (single source of truth)
 
@@ -99,6 +107,15 @@ New intents need: handler class + `IntentNames.cs` entry + interaction model sam
 4. `NameContains` full query — substring match anywhere in name
 
 All tiers go through `FuzzyMatch` to filter false positives. Results are served from the in-memory `ArtistIndexService` when available.
+
+## Song Search Pipeline
+
+`FindSongIntentHandler` uses a 3-stage search chain in `SearchAndRespondAsync()`:
+1. **N-gram index** (`SongNgramIndexService.Search`) — O(1) bigram/single-token lookup → `KeywordMatcher.Score` with 100% keyword coverage. Fast path.
+2. **Phonetic index** (`SongNgramIndexService.SearchPhonetic`) — Double Metaphone phonetic code lookup → `KeywordMatcher.ScorePhonetic` with 50% keyword coverage + 0.75 penalty. Cold path, only on exact-match miss. Protected by `PhoneticSongSearchEnabled` feature flag (default: true).
+3. **DB fallback** — Jellyfin search API query. Slowest, last resort.
+
+The n-gram index is a background hosted service (`SongNgramIndexService`) that loads all `Audio` items at startup, builds bigram/single-token/phonetic dictionaries, and refreshes on library changes (debounced 5s). Pre-computed phonetic codes make phonetic lookup O(1) — only the user's 2-3 keywords need encoding at query time.
 
 ## Cross-Media-Type Fallback
 

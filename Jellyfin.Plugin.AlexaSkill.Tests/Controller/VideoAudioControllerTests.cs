@@ -263,6 +263,32 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.False(File.Exists(path2));
     }
 
+    /// <summary>
+    /// Verify that the endpoint returns 400 when the item is a Folder
+    /// (not a streamable media type). Folders don't implement IHasMediaSources
+    /// and would cause ffmpeg to fail with a 500 from Jellyfin's /Audio/ endpoint.
+    /// </summary>
+    [Fact]
+    public async Task StreamVideoAudio_FolderItem_Returns400()
+    {
+        var folder = new MediaBrowser.Controller.Entities.Folder
+        {
+            Name = "Audiobooks",
+            Id = Guid.NewGuid()
+        };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(folder.Id)).Returns(folder);
+
+        var controller = CreateController();
+        controller.FfmpegPath = "/usr/bin/ffmpeg";
+
+        ActionResult result = await controller.StreamVideoAudio(folder.Id.ToString());
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.NotNull(badRequest.Value);
+    }
+
     private VideoAudioController CreateController()
     {
         return new VideoAudioController(
