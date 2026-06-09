@@ -5,6 +5,7 @@
   "RemovedFromFavorites": "تمت إزالة الوسائط من المفضلة.",
   "NoMediaPlaying": "لا يوجد شيء قيد التشغيل حالياً.",
   "PlaybackFailed": "حدث خطأ أثناء تشغيل الوسائط. يرجى المحاولة مرة أخرى.",
+  "FolderNoPlayableContent": "This folder has no playable content.",
   "SomethingWrong": "حدث خطأ ما، يرجى المحاولة مرة أخرى.",
   "CouldNotUnderstand": "لم أتمكن من فهم ذلك، يرجى المحاولة مرة أخرى.",
   "UnsupportedIntent": "عذراً، لا يمكنني فعل ذلك بعد. حاول أن تطلب مني تشغيل الموسيقى أو التحكم في التشغيل.",

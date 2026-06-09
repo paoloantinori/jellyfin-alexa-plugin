@@ -123,6 +123,7 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
         // Should return audio player directive (artist songs playback), not "not found"
         Assert.NotNull(response.Response?.Directives);
         Assert.NotEmpty(response.Response.Directives);
+        Assert.True(response.Response.ShouldEndSession);
 
         // Queue should have the artist's songs
         Assert.NotNull(session.NowPlayingQueue);
@@ -164,6 +165,7 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
         Assert.NotNull(response.Response?.Directives);
         Assert.NotEmpty(response.Response.Directives);
         Assert.Single(session.NowPlayingQueue);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -194,6 +196,7 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
         Assert.True(response.Response?.Directives == null || response.Response.Directives.Count == 0);
         string speech = TestHelpers.GetSpeechText(response);
         Assert.Contains("sunrise", speech, StringComparison.OrdinalIgnoreCase);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -214,6 +217,7 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
 
         string speech = TestHelpers.GetSpeechText(response);
         Assert.Contains("unknown artist", speech, StringComparison.OrdinalIgnoreCase);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -242,6 +246,7 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
 
         string speech = TestHelpers.GetSpeechText(response);
         Assert.Contains("Norah Jones", speech, StringComparison.OrdinalIgnoreCase);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -357,5 +362,6 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
         var continuation = QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID);
         Assert.NotNull(continuation);
         Assert.Equal("Artist", continuation.SourceType);
+        Assert.True(response.Response.ShouldEndSession);
     }
 }

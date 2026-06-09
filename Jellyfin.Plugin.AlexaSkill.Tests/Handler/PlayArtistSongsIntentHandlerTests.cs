@@ -138,6 +138,7 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         // Verify the index was queried, not the DB
         _artistIndexMock.Verify(i => i.GetArtists(It.IsAny<Guid[]?>()), Times.Once);
         _libraryManagerMock.Verify(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == Jellyfin.Data.Enums.BaseItemKind.MusicArtist))), Times.Never);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -171,6 +172,7 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         Assert.NotNull(response);
         // Verify DB was queried (fallback path)
         _libraryManagerMock.Verify(l => l.GetItemList(It.IsAny<InternalItemsQuery>()), Times.AtLeastOnce);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -201,6 +203,7 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
 
         Assert.NotNull(response);
         _libraryManagerMock.Verify(l => l.GetItemList(It.IsAny<InternalItemsQuery>()), Times.AtLeastOnce);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -225,6 +228,7 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
 
         Assert.NotNull(response);
         Assert.NotNull(response.Response?.Directives);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -241,6 +245,7 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         Assert.NotNull(response);
         string speech = TestHelpers.GetSpeechText(response);
         Assert.Contains("artist", speech, StringComparison.OrdinalIgnoreCase);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -262,6 +267,7 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         Assert.NotNull(response);
         string speech = TestHelpers.GetSpeechText(response);
         Assert.Contains("Unknown", speech);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -287,6 +293,7 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
 
         Assert.NotNull(response);
         Assert.NotNull(response.Response?.OutputSpeech);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     /// <summary>
@@ -356,6 +363,7 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
             l => l.GetItemById(libraryId),
             Times.Once,
             "Library filter should be resolved exactly once per request, not once per query tier");
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     /// <summary>
@@ -411,6 +419,7 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         // GetItemById should be called exactly twice (once per library ID), not 2*N per query
         _libraryManagerMock.Verify(l => l.GetItemById(libraryId1), Times.Once);
         _libraryManagerMock.Verify(l => l.GetItemById(libraryId2), Times.Once);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     /// <summary>
@@ -458,6 +467,7 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
             l => l.GetItemById(libraryId),
             Times.Once,
             "In-memory path should resolve library filter exactly once");
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -494,6 +504,7 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         Assert.Equal(songs[0].Id, session.NowPlayingQueue[0].Id);
         Assert.Equal(songs[1].Id, session.NowPlayingQueue[1].Id);
         Assert.Equal(songs[2].Id, session.NowPlayingQueue[2].Id);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -542,5 +553,6 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         }
 
         Assert.True(anyReordered, "Shuffle should reorder at least one item in a 20-song queue");
+        Assert.True(response.Response.ShouldEndSession);
     }
 }

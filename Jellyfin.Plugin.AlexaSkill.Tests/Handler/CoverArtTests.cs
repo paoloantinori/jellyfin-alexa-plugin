@@ -86,6 +86,7 @@ public class CoverArtTests : PluginTestBase
         Assert.NotEmpty(directive.AudioItem.Metadata.Art.Sources);
         Assert.NotNull(directive.AudioItem.Metadata.BackgroundImage);
         Assert.NotEmpty(directive.AudioItem.Metadata.BackgroundImage.Sources);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -106,6 +107,7 @@ public class CoverArtTests : PluginTestBase
         string expectedImageUrl = "http://localhost:8096/Items/11111111-1111-1111-1111-111111111111/Images/Primary?api_key=my-api-key";
         Assert.Equal(expectedImageUrl, directive.AudioItem.Metadata.Art.Sources[0].Url);
         Assert.Equal(expectedImageUrl, directive.AudioItem.Metadata.BackgroundImage.Sources[0].Url);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -125,6 +127,7 @@ public class CoverArtTests : PluginTestBase
 
         Assert.Equal(streamUrl, directive.AudioItem.Stream.Url);
         Assert.Equal(itemId, directive.AudioItem.Stream.Token);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -143,6 +146,7 @@ public class CoverArtTests : PluginTestBase
             Assert.Single(response.Response.Directives));
 
         Assert.Equal(30000, directive.AudioItem.Stream.OffsetInMilliseconds);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -161,6 +165,7 @@ public class CoverArtTests : PluginTestBase
             Assert.Single(response.Response.Directives));
 
         Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -181,6 +186,7 @@ public class CoverArtTests : PluginTestBase
         Assert.Equal(string.Empty, directive.AudioItem.Metadata.Title);
         Assert.Equal(string.Empty, directive.AudioItem.Metadata.Art.Sources[0].Url);
         Assert.Equal(string.Empty, directive.AudioItem.Metadata.BackgroundImage.Sources[0].Url);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -199,6 +205,7 @@ public class CoverArtTests : PluginTestBase
             Assert.Single(response.Response.Directives));
 
         Assert.Equal(PlayBehavior.ReplaceAll, directive.PlayBehavior);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -217,6 +224,7 @@ public class CoverArtTests : PluginTestBase
             Assert.Single(response.Response.Directives));
 
         Assert.Equal(PlayBehavior.Enqueue, directive.PlayBehavior);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -247,6 +255,7 @@ public class CoverArtTests : PluginTestBase
             PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
 
         Assert.Equal("1.0", response.Version);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -263,6 +272,7 @@ public class CoverArtTests : PluginTestBase
 
         Assert.NotNull(response.Response.Directives);
         Assert.Single(response.Response.Directives);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -283,6 +293,7 @@ public class CoverArtTests : PluginTestBase
         Assert.Equal(
             directive.AudioItem.Metadata.Art.Sources[0].Url,
             directive.AudioItem.Metadata.BackgroundImage.Sources[0].Url);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -303,6 +314,7 @@ public class CoverArtTests : PluginTestBase
 
         Assert.Contains(songId.ToString(), directive.AudioItem.Metadata.Art.Sources[0].Url);
         Assert.Contains("Images/Primary", directive.AudioItem.Metadata.Art.Sources[0].Url);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -321,6 +333,7 @@ public class CoverArtTests : PluginTestBase
             Assert.Single(response.Response.Directives));
 
         Assert.Contains("api_key=secret-key-123", directive.AudioItem.Metadata.Art.Sources[0].Url);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -339,6 +352,7 @@ public class CoverArtTests : PluginTestBase
             Assert.Single(response.Response.Directives));
 
         Assert.Equal("Rock & Roll - Live (Remastered)", directive.AudioItem.Metadata.Title);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -357,6 +371,7 @@ public class CoverArtTests : PluginTestBase
             Assert.Single(response.Response.Directives));
 
         Assert.Equal(PlayBehavior.ReplaceEnqueued, directive.PlayBehavior);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -381,6 +396,7 @@ public class CoverArtTests : PluginTestBase
             Assert.Single(response.Response.Directives));
 
         Assert.Equal("Queen", directive.AudioItem.Metadata.Subtitle);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -405,6 +421,7 @@ public class CoverArtTests : PluginTestBase
             Assert.Single(response.Response.Directives));
 
         Assert.Equal("Greatest Hits", directive.AudioItem.Metadata.Subtitle);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -427,6 +444,7 @@ public class CoverArtTests : PluginTestBase
             Assert.Single(response.Response.Directives));
 
         Assert.Equal(string.Empty, directive.AudioItem.Metadata.Subtitle);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -450,6 +468,7 @@ public class CoverArtTests : PluginTestBase
             Assert.Single(response.Response.Directives));
 
         Assert.Equal("Breaking Bad", directive.AudioItem.Metadata.Subtitle);
+        Assert.True(response.Response.ShouldEndSession);
     }
 }
 
@@ -543,6 +562,8 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
         var directive = Assert.IsType<VideoAppLaunchDirective>(
             Assert.Single(response.Response.Directives));
         Assert.NotNull(directive.VideoItem);
+        // VideoApp responses MUST end the session — null/false breaks intent routing
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -562,6 +583,7 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
 
         Assert.Contains("/alexaskill/api/video-audio/", directive.VideoItem.Source);
         Assert.Contains(itemId, directive.VideoItem.Source);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -582,6 +604,7 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
         // Should NOT contain the raw /Audio/.../stream path
         Assert.DoesNotContain("/Audio/", directive.VideoItem.Source);
         Assert.DoesNotContain("/stream", directive.VideoItem.Source);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -601,6 +624,7 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
         var directive = Assert.IsType<AudioPlayerPlayDirective>(
             Assert.Single(response.Response.Directives));
         Assert.Equal(PlayBehavior.Enqueue, directive.PlayBehavior);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -618,6 +642,7 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
         // Resume with offset should stay as AudioPlayer
         Assert.IsType<AudioPlayerPlayDirective>(
             Assert.Single(response.Response.Directives));
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -637,6 +662,7 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
 
         Assert.NotNull(directive.VideoItem.Metadata);
         Assert.Equal("Stairway to Heaven", directive.VideoItem.Metadata.Title);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -660,6 +686,7 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
             Assert.Single(response.Response.Directives));
 
         Assert.Equal("Queen", directive.VideoItem.Metadata.Subtitle);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -688,6 +715,30 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
             Assert.Single(response.Response.Directives));
 
         Assert.Equal(string.Empty, directive.VideoItem.Metadata.Title);
+        Assert.True(response.Response.ShouldEndSession);
+    }
+
+    [Fact]
+    public void BuildAudioPlayerResponse_NativeControlsOn_ShouldEndSession()
+    {
+        // Regression test: VideoApp responses MUST use ShouldEndSession=true.
+        // Using null/false keeps the session open, which breaks intent routing —
+        // the Echo sends SessionEndedRequest instead of routing to the correct
+        // intent handler (same issue as AudioPlayer with ShouldEndSession=false).
+        var handler = CreateHandler();
+        var song = CreateSong("Test Song");
+        var user = CreateUser();
+        string itemId = song.Id.ToString();
+        string streamUrl = handler.GetStreamUrl(itemId, user);
+
+        var response = handler.BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
+
+        Assert.IsType<VideoAppLaunchDirective>(
+            Assert.Single(response.Response.Directives));
+        Assert.True(response.Response.ShouldEndSession,
+            "VideoApp responses must set ShouldEndSession=true to match the Movie " +
+            "handler pattern and prevent session-based intent routing failures");
     }
 }
 

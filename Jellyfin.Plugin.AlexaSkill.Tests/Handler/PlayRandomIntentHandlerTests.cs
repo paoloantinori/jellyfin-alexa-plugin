@@ -139,6 +139,7 @@ public class PlayRandomIntentHandlerTests : PluginTestBase
 
         Assert.NotNull(response);
         Assert.NotNull(response.Response?.OutputSpeech);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -162,6 +163,7 @@ public class PlayRandomIntentHandlerTests : PluginTestBase
         Assert.NotNull(response);
         Assert.NotNull(response.Response?.Directives);
         Assert.NotEmpty(response.Response.Directives);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -252,6 +254,7 @@ public class PlayRandomIntentHandlerTests : PluginTestBase
 
         Assert.NotNull(response);
         Assert.NotNull(response.Response?.OutputSpeech);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     private static Audio CreateTestAudio(string name, Guid id)

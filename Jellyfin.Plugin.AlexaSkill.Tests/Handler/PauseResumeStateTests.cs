@@ -206,6 +206,7 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
         // Should not throw even without DeviceQueueManager
         var response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
         Assert.NotNull(response);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     // ---- ResumeIntentHandler uses DeviceQueue fallback ----
@@ -240,6 +241,7 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
         // Verify the offset used is from AudioPlayer context (10s), not DeviceQueue (60s)
         var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
         Assert.Equal(10000, directive.AudioItem.Stream.OffsetInMilliseconds);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -272,6 +274,7 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
         // Verify the offset used is from DeviceQueue (45s)
         var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
         Assert.Equal(45000, directive.AudioItem.Stream.OffsetInMilliseconds);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -304,6 +307,7 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
         // Offset should be 0 (from context), NOT from DeviceQueue (token mismatch)
         var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
         Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -325,6 +329,7 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
 
         Assert.NotNull(response);
         Assert.Contains(response.Response.Directives, d => d is AudioPlayerPlayDirective);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -349,6 +354,7 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
 
         Assert.NotNull(response);
         Assert.NotNull(response.Response.OutputSpeech);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -372,6 +378,7 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
 
         Assert.NotNull(response);
         Assert.Null(response.Response.OutputSpeech);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     // ---- Integration: Stop then Resume flow ----
@@ -416,6 +423,7 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
         // Verify the resume uses the DeviceQueue position
         var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
         Assert.Equal(45000, directive.AudioItem.Stream.OffsetInMilliseconds);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     // ---- PlayBehavior and PlaybackController tests ----
@@ -440,6 +448,7 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
 
         var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
         Assert.Equal(PlayBehavior.ReplaceAll, directive.PlayBehavior);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -520,6 +529,7 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
         Assert.Contains("1 minutes", speech.Text);
         Assert.Contains("30 seconds", speech.Text);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -545,6 +555,7 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
             context, user, session, CancellationToken.None);
 
         Assert.Null(response.Response.OutputSpeech);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -571,6 +582,7 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
 
         // Offset is 0, so no announcement even with the flag enabled
         Assert.Null(response.Response.OutputSpeech);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -593,5 +605,6 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
 
         // No config entry for this user → no announcement
         Assert.Null(response.Response.OutputSpeech);
+        Assert.True(response.Response.ShouldEndSession);
     }
 }

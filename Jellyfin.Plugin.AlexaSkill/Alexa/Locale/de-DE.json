@@ -5,6 +5,7 @@
   "RemovedFromFavorites": "Aus den Favoriten entfernt.",
   "NoMediaPlaying": "Es wird gerade nichts abgespielt.",
   "PlaybackFailed": "Beim Abspielen ist etwas schiefgelaufen. Bitte versuche es erneut.",
+  "FolderNoPlayableContent": "This folder has no playable content.",
   "SomethingWrong": "Etwas ist schiefgelaufen, bitte versuche es erneut.",
   "CouldNotUnderstand": "Ich konnte das nicht verstehen, bitte versuche es erneut.",
   "UnsupportedIntent": "Leider kann ich das noch nicht. Versuche, mich nach Musik oder Wiedergabesteuerung zu fragen.",

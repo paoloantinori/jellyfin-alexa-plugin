@@ -5,6 +5,7 @@
   "RemovedFromFavorites": "Media removed from the favorites list.",
   "NoMediaPlaying": "Nothing is currently playing.",
   "PlaybackFailed": "Something went wrong while playing your media. Please try again.",
+  "FolderNoPlayableContent": "This folder has no playable content.",
   "SomethingWrong": "Something went wrong, please try again.",
   "CouldNotUnderstand": "I could not understand that, please try again.",
   "UnsupportedIntent": "Sorry, I can't do that yet. Try asking me to play music or control playback.",

@@ -5,6 +5,7 @@
   "RemovedFromFavorites": "Mídia removida dos favoritos.",
   "NoMediaPlaying": "Nada está tocando no momento.",
   "PlaybackFailed": "Algo deu errado ao reproduzir sua mídia. Por favor, tente novamente.",
+  "FolderNoPlayableContent": "This folder has no playable content.",
   "SomethingWrong": "Algo deu errado, por favor tente novamente.",
   "CouldNotUnderstand": "Não consegui entender, por favor tente novamente.",
   "UnsupportedIntent": "Desculpe, ainda não consigo fazer isso. Tente me pedir para tocar música ou controlar a reprodução.",

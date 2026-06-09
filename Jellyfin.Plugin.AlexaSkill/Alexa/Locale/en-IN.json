@@ -130,6 +130,7 @@
   "NowPlayingWithPositionSsml": "<say-as interpret-as=\"interjection\">now playing</say-as><break time=\"300ms\"/><emphasis level=\"moderate\">{0}</emphasis><break time=\"200ms\"/>Position: {1}",
   "PlayNextConfirmed": "{0} will play next.",
   "PlaybackFailed": "Something went wrong while playing your media. Please try again.",
+  "FolderNoPlayableContent": "This folder has no playable content.",
   "PlaylistEmpty": "The playlist is empty.",
   "PositionOfTotal": "{0} of {1}",
   "QueryRecentlyAddedEmpty": "No recently added items found.",

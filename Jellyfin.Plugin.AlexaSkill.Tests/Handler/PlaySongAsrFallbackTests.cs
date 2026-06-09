@@ -182,6 +182,7 @@ public class PlaySongAsrFallbackTests : PluginTestBase
         // Assert: playback started
         Assert.NotNull(response.Response?.Directives);
         Assert.NotEmpty(response.Response.Directives);
+        Assert.True(response.Response.ShouldEndSession);
 
         // Only the original search — no ASR variants attempted
         Assert.Single(searchTerms);

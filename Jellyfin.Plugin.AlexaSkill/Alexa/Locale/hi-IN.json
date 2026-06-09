@@ -5,6 +5,7 @@
   "RemovedFromFavorites": "मीडिया को पसंदीदा से हटाया गया।",
   "NoMediaPlaying": "अभी कुछ भी चल नहीं रहा है।",
   "PlaybackFailed": "मीडिया चलाते समय कुछ गड़बड़ हो गई। कृपया दोबारा प्रयास करें।",
+  "FolderNoPlayableContent": "This folder has no playable content.",
   "SomethingWrong": "कुछ गड़बड़ हो गई, कृपया दोबारा प्रयास करें।",
   "CouldNotUnderstand": "मैं वह समझ नहीं पाया, कृपया दोबारा प्रयास करें।",
   "UnsupportedIntent": "क्षमा करें, मैं अभी वह नहीं कर सकता। मुझसे संगीत चलाने या प्लेबैक नियंत्रित करने के लिए कहें।",

@@ -608,7 +608,7 @@ public abstract class BaseHandler
             Version = "1.0",
             Response = new ResponseBody
             {
-                ShouldEndSession = null,
+                ShouldEndSession = true,
                 Directives = new List<IDirective>
                 {
                     new Directive.VideoAppLaunchDirective
@@ -1586,6 +1586,42 @@ public abstract class BaseHandler
         else
         {
             Logger.LogWarning("APL BuildCarouselDirective returned null for '{Token}' with {Count} items", token, items.Count);
+        }
+    }
+
+    /// <summary>
+    /// Attach an APL NowPlaying screen directive to a response when the device supports APL.
+    /// No-op on non-APL devices, when visuals are disabled, or when the response has no
+    /// AudioPlayer directive (e.g. VideoApp path).
+    /// </summary>
+    private protected void TryAttachNowPlayingDirective(
+        SkillResponse response,
+        MediaBrowser.Controller.Entities.BaseItem item,
+        string itemId,
+        Entities.User user,
+        Context? context)
+    {
+        if (!Apl.AplHelper.VisualsEnabled || !Apl.AplHelper.DeviceSupportsApl(context))
+        {
+            return;
+        }
+
+        // Only attach when the response carries an AudioPlayer.Play directive.
+        // VideoApp responses render their own UI and don't need APL.
+        if (!response.Response.Directives.Any(d => d is AudioPlayerPlayDirective))
+        {
+            return;
+        }
+
+        string imageUrl = GetImageUrl(itemId, user);
+        var directive = Apl.AplHelper.BuildNowPlayingDirective(item, imageUrl, imageUrl, context);
+        if (directive != null)
+        {
+            response.Response.Directives.Add(directive);
+        }
+        else
+        {
+            Logger.LogDebug("APL BuildNowPlayingDirective returned null for item '{ItemName}'", item.Name);
         }
     }
 

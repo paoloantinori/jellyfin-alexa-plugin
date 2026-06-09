@@ -6,6 +6,7 @@
   "RemovedFromFavorites": "Média retiré des favoris.",
   "NoMediaPlaying": "Rien n'est en cours de lecture.",
   "PlaybackFailed": "Un problème est survenu lors de la lecture. Veuillez réessayer.",
+  "FolderNoPlayableContent": "This folder has no playable content.",
   "SomethingWrong": "Un problème est survenu, veuillez réessayer.",
   "CouldNotUnderstand": "Je n'ai pas compris, veuillez réessayer.",
   "UnsupportedIntent": "Désolé, je ne peux pas encore faire ça. Essayez de me demander de jouer de la musique ou de contrôler la lecture.",

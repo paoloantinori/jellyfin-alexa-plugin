@@ -138,6 +138,7 @@ public class PlayBookIntentHandlerTests : PluginTestBase
         Assert.NotNull(response.Response.OutputSpeech);
         string speech = TestHelpers.GetSpeechText(response);
         Assert.Contains("book", speech, StringComparison.OrdinalIgnoreCase);
+        Assert.False(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -227,6 +228,7 @@ public class PlayBookIntentHandlerTests : PluginTestBase
         var audioDirective = response.Response.Directives?[0] as AudioPlayerPlayDirective;
         Assert.NotNull(audioDirective);
         Assert.Equal(PlayBehavior.ReplaceAll, audioDirective.PlayBehavior);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]

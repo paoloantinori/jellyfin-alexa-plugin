@@ -283,7 +283,7 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
-    public async Task Handle_VideoResponse_DoesNotSetShouldEndSession()
+    public async Task Handle_VideoResponse_EndsSession()
     {
         var movie = CreateTestItem("Test Video");
 
@@ -298,6 +298,7 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
             TestHelpers.CreateTestUser(),
             CreateSession(), CancellationToken.None);
 
-        Assert.Null(response.Response.ShouldEndSession);
+        // VideoApp.Launch responses MUST end the session — null/false breaks intent routing
+        Assert.True(response.Response.ShouldEndSession);
     }
 }

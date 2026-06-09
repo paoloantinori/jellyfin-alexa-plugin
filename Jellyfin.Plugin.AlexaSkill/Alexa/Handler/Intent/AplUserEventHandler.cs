@@ -11,6 +11,7 @@ using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
@@ -184,11 +185,11 @@ public class AplUserEventHandler : BaseHandler
             "AplUserEvent HandleSelectItem: resolved item={ItemName} ({ItemId}), type={ItemType}",
             item.Name, itemIdStr, item.GetType().Name);
 
-        session.NowPlayingQueue = new List<QueueItem> { new() { Id = item.Id } };
-        session.FullNowPlayingItem = item;
-
         if (item is MediaBrowser.Controller.Entities.Movies.Movie)
         {
+            session.NowPlayingQueue = new List<QueueItem> { new() { Id = item.Id } };
+            session.FullNowPlayingItem = item;
+
             return Task.FromResult(new SkillResponse
             {
                 Version = "1.0",
@@ -220,6 +221,7 @@ public class AplUserEventHandler : BaseHandler
                 ParentId = folder.Id,
                 MediaTypes = new[] { MediaType.Audio },
                 Recursive = true,
+                Limit = 500,
                 OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) }
             };
 
@@ -228,7 +230,8 @@ public class AplUserEventHandler : BaseHandler
             if (children.Count == 0)
             {
                 Logger.LogWarning("AplUserEvent HandleSelectItem: folder {FolderName} has no audio children", folder.Name);
-                return Task.FromResult(ResponseBuilder.Tell("This folder has no playable content."));
+                string locale = GetLocale(request);
+                return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("FolderNoPlayableContent", locale)));
             }
 
             item = children[0];
@@ -243,10 +246,19 @@ public class AplUserEventHandler : BaseHandler
             session.NowPlayingQueue = queueItems;
             session.FullNowPlayingItem = item;
         }
+        else
+        {
+            session.NowPlayingQueue = new List<QueueItem> { new() { Id = item.Id } };
+            session.FullNowPlayingItem = item;
+        }
 
         int offsetMs = GetResumeOffset(item, session, request);
 
-        return Task.FromResult(BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemIdStr, user), itemIdStr, item, user, context, offsetMs));
+        var response = BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemIdStr, user), itemIdStr, item, user, context, offsetMs);
+
+        TryAttachNowPlayingDirective(response, item, itemIdStr, user, context);
+
+        return Task.FromResult(response);
     }
 
     private int GetResumeOffset(BaseItem item, SessionInfo session, Request request)
