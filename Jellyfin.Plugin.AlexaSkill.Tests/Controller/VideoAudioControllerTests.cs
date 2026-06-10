@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -9,6 +10,7 @@ using Jellyfin.Plugin.AlexaSkill.Controller;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.MediaEncoding;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -288,6 +290,89 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         var badRequest = Assert.IsType<BadRequestObjectResult>(result);
         Assert.NotNull(badRequest.Value);
+    }
+
+    /// <summary>
+    /// Verify that on a cache miss, the controller returns a FileStreamResult
+    /// (streaming while ffmpeg writes) instead of a PhysicalFileResult.
+    /// </summary>
+    [Fact]
+    public async Task StreamVideoAudio_CacheMiss_ReturnsFileStreamResult()
+    {
+        // Create a fake audio item with media sources
+        var audioItem = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Test Song",
+            Id = Guid.NewGuid()
+        };
+
+        _libraryManagerMock.Setup(m => m.GetItemById(audioItem.Id)).Returns(audioItem);
+
+        // Create a fake ffmpeg script that writes dummy MP4 data to the last argument and exits 0.
+        // Uses eval+last arg extraction so the output path (last positional param) is correct
+        // regardless of how many preceding flags ffmpeg receives.
+        string fakeFfmpegPath = Path.Combine(_tempDir, "fake-ffmpeg");
+        string fakeFfmpegScript = "#!/bin/sh\n" +
+            "last_arg=\"${@: -1}\"\n" +
+            "dd if=/dev/zero bs=1024 count=12 of=\"$last_arg\" 2>/dev/null\n" +
+            "exit 0\n";
+        File.WriteAllText(fakeFfmpegPath, fakeFfmpegScript);
+#pragma warning disable CA3003, CA1416 // test-created path; Unix-only test
+        File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+#pragma warning restore CA3003, CA1416
+
+        var controller = CreateController();
+        controller.FfmpegPath = fakeFfmpegPath;
+
+        // Set up HttpContext with RequestAborted so the controller can register
+        // the client-disconnect callback
+        var httpContext = new DefaultHttpContext
+        {
+            RequestAborted = CancellationToken.None
+        };
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = httpContext
+        };
+
+        ActionResult result = await controller.StreamVideoAudio(audioItem.Id.ToString());
+
+        // On cache miss, the controller should return FileStreamResult (not PhysicalFileResult)
+        var fileResult = Assert.IsType<FileStreamResult>(result);
+        Assert.Equal("video/mp4", fileResult.ContentType);
+        Assert.NotNull(fileResult.FileStream);
+    }
+
+    /// <summary>
+    /// Verify that on a cache hit, the controller returns a PhysicalFileResult
+    /// (with range processing enabled for seeking), not a FileStreamResult.
+    /// </summary>
+    [Fact]
+    public async Task StreamVideoAudio_CacheHit_ReturnsPhysicalFileResult()
+    {
+        var audioItem = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Test Song",
+            Id = Guid.NewGuid()
+        };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(audioItem.Id)).Returns(audioItem);
+
+        // Pre-populate cache with a valid file (>= 10 KB)
+        string cachePath = _cache.GetCacheFilePath(audioItem.Id.ToString("D"), 0);
+        Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
+        await File.WriteAllTextAsync(cachePath, new string('x', 12 * 1024));
+
+        var controller = CreateController();
+        controller.FfmpegPath = "/usr/bin/ffmpeg";
+
+        ActionResult result = await controller.StreamVideoAudio(audioItem.Id.ToString());
+
+        // On cache hit, PhysicalFileResult is returned (not FileStreamResult)
+        var physicalResult = Assert.IsType<PhysicalFileResult>(result);
+        Assert.Equal("video/mp4", physicalResult.ContentType);
+        Assert.True(physicalResult.EnableRangeProcessing);
     }
 
     private VideoAudioController CreateController()

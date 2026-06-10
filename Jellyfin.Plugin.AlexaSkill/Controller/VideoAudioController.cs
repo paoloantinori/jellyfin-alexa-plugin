@@ -163,32 +163,76 @@ public class VideoAudioController : ControllerBase
                 _logger.LogDebug("VideoAudio: ffmpeg arguments: {Args}", string.Join(" ", ffmpegArgs));
             }
 
-            using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+            // Stream-while-writing: start ffmpeg, open the output file for reading
+            // while ffmpeg writes, and return a FileStreamResult immediately.
+            // The client receives data as ffmpeg produces it instead of waiting
+            // for the entire file to be generated first.
+#pragma warning disable CA3003 // cachePath is built from GUID-validated itemId and numeric ticks
+            var ffmpegProcess = StartFfmpegProcess(ffmpeg, ffmpegArgs);
 
             try
             {
-                // Generate with frag_keyframe+empty_moov for immediate streamability.
-                await RunFfmpegToFileAsync(ffmpeg, ffmpegArgs, cachePath, cts.Token).ConfigureAwait(false);
+                // Wait for ffmpeg to create the output file (it opens the file on startup).
+                // This is nearly instantaneous in practice but guards against the race
+                // between process.Start() and the file appearing on disk.
+                // Also check if ffmpeg has already exited (e.g. invalid input) to avoid
+                // a 1-second spin-wait when the process fails fast.
+                bool fileAppeared = false;
+                for (int i = 0; i < 100; i++)
+                {
+                    if (System.IO.File.Exists(cachePath))
+                    {
+                        fileAppeared = true;
+                        break;
+                    }
 
-                // Background: remux to a separate .fs.mp4 file with +faststart for seeking.
-                // Writes to a NEW file — never overwrites the fragmented version. No race condition.
-                // Next play will prefer the seekable version via GetCachedFile.
-                _ = RemuxToFaststartAsync(ffmpeg, cachePath, itemId, artModifiedTicks);
+                    if (ffmpegProcess.HasExited)
+                    {
+                        break;
+                    }
 
-                _logger.LogDebug("VideoAudio: serving generated file for item {ItemId}", itemId);
-                return PhysicalFile(cachePath, "video/mp4", enableRangeProcessing: true);
+                    await Task.Delay(10).ConfigureAwait(false);
+                }
+
+                if (!fileAppeared)
+                {
+                    _logger.LogWarning("VideoAudio: ffmpeg failed to create output for item {ItemId} (exit code {ExitCode})", itemId, ffmpegProcess.ExitCode);
+                    ffmpegProcess.Dispose();
+                    return StatusCode(500, new { error = "Video generation failed" });
+                }
+
+                var stream = new FileStream(
+                    cachePath,
+                    new FileStreamOptions
+                    {
+                        Mode = FileMode.Open,
+                        Access = FileAccess.Read,
+                        Share = FileShare.ReadWrite | FileShare.Delete,
+                        Options = FileOptions.Asynchronous | FileOptions.SequentialScan
+                    });
+
+                // Kill ffmpeg if the client disconnects mid-stream
+                HttpContext.RequestAborted.Register(static state =>
+                {
+                    var proc = (Process)state!;
+                    try { proc.Kill(); }
+                    catch { /* already exited */ }
+                }, ffmpegProcess);
+
+                // Monitor ffmpeg completion in the background: trigger remux + cleanup
+                // FileStreamResult owns the stream lifetime — monitor must NOT dispose it.
+                _ = MonitorFfmpegAndRemuxAsync(ffmpegProcess, ffmpeg, cachePath, itemId, artModifiedTicks);
+#pragma warning restore CA3003
+
+                _logger.LogDebug("VideoAudio: streaming generated file for item {ItemId}", itemId);
+                return new FileStreamResult(stream, "video/mp4");
             }
-            catch (OperationCanceledException)
+            catch
             {
-                _logger.LogWarning("VideoAudio: ffmpeg timed out for item {ItemId}", itemId);
-                DeleteCacheFile(cachePath);
-                return StatusCode(504, new { error = "Video generation timed out" });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "VideoAudio: ffmpeg failed for item {ItemId}", itemId);
-                DeleteCacheFile(cachePath);
-                return StatusCode(500, new { error = "Video generation failed" });
+                // FileStream creation failed — kill and clean up the ffmpeg process
+                try { ffmpegProcess.Kill(); } catch { /* already exited */ }
+                ffmpegProcess.Dispose();
+                throw;
             }
         }
     }
@@ -352,21 +396,18 @@ public class VideoAudioController : ControllerBase
     }
 
     /// <summary>
-    /// Run ffmpeg to generate the MP4 file to disk.
-    /// Uses <see cref="ProcessStartInfo.ArgumentList"/> to pass arguments as individual tokens,
-    /// eliminating shell interpretation and command-line injection risk (CWE-78/CWE-88).
+    /// Start an ffmpeg process writing to disk without awaiting its completion.
+    /// Used by the stream-while-writing path so the response can start sending
+    /// data while ffmpeg is still producing output.
+    /// The caller is responsible for awaiting <see cref="Process.WaitForExitAsync"/>
+    /// and disposing the process.
     /// </summary>
     /// <param name="ffmpegPath">Path to ffmpeg binary.</param>
     /// <param name="arguments">ffmpeg command-line arguments as individual tokens.</param>
-    /// <param name="outputPath">Path to write the output file.</param>
-    /// <param name="cancellationToken">Cancellation token for timeout/abort.</param>
-    private async Task RunFfmpegToFileAsync(
-        string ffmpegPath,
-        List<string> arguments,
-        string outputPath,
-        CancellationToken cancellationToken)
+    /// <returns>The started ffmpeg <see cref="Process"/> (not yet awaited).</returns>
+    private Process StartFfmpegProcess(string ffmpegPath, List<string> arguments)
     {
-        using var process = new Process();
+        var process = new Process();
         process.StartInfo = new ProcessStartInfo
         {
             FileName = ffmpegPath,
@@ -383,8 +424,8 @@ public class VideoAudioController : ControllerBase
 
         process.Start();
 
-        // Read stderr asynchronously to prevent deadlock
-        var stderrTask = Task.Run(async () =>
+        // Drain stderr asynchronously to prevent deadlock
+        _ = Task.Run(async () =>
         {
             using var reader = process.StandardError;
             string? line;
@@ -392,40 +433,62 @@ public class VideoAudioController : ControllerBase
             {
                 _logger.LogDebug("ffmpeg stderr: {Line}", line);
             }
-        }, cancellationToken);
+        });
 
-        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-        await stderrTask.ConfigureAwait(false);
-
-        if (process.ExitCode != 0)
-        {
-            _logger.LogWarning("ffmpeg exited with code {ExitCode}", process.ExitCode);
-            throw new InvalidOperationException($"ffmpeg exited with code {process.ExitCode}");
-        }
-
-        // Background eviction — don't block the response
-        _ = Task.Run(() => _cache.EvictIfNeeded(), CancellationToken.None);
+        return process;
     }
 
     /// <summary>
-    /// Delete an incomplete cache file. Called when ffmpeg fails or times out.
+    /// Monitor an ffmpeg process that was started by <see cref="StartFfmpegProcess"/>.
+    /// Waits for the process to exit (with a 5-minute timeout), then triggers the
+    /// background faststart remux. Disposes the process when done.
+    /// The read stream is NOT disposed here — <see cref="FileStreamResult"/> owns it.
     /// </summary>
-    /// <param name="cachePath">Path to the cache file to delete.</param>
-    private void DeleteCacheFile(string cachePath)
+    /// <param name="process">The ffmpeg process (started, not yet awaited).</param>
+    /// <param name="ffmpegPath">Path to ffmpeg binary (for remux).</param>
+    /// <param name="cachePath">Path to the fragmented MP4 cache file.</param>
+    /// <param name="itemId">Item ID for remux path computation.</param>
+    /// <param name="artModifiedTicks">Art ticks for remux path computation.</param>
+    /// <returns>A task representing the background monitoring operation.</returns>
+    private async Task MonitorFfmpegAndRemuxAsync(
+        Process process,
+        string ffmpegPath,
+        string cachePath,
+        string itemId,
+        long artModifiedTicks)
     {
         try
         {
-#pragma warning disable CA3003 // cachePath is built from GUID-validated itemId and numeric ticks
-            if (System.IO.File.Exists(cachePath))
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+            await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+
+            if (process.ExitCode != 0)
             {
-                System.IO.File.Delete(cachePath);
-#pragma warning restore CA3003
-                _logger.LogDebug("Deleted incomplete cache file: {Path}", cachePath);
+                _logger.LogWarning("ffmpeg exited with code {ExitCode} for item {ItemId}", process.ExitCode, itemId);
+            }
+            else
+            {
+                // Background: remux to a separate .fs.mp4 file with +faststart for seeking.
+                // Writes to a NEW file — never overwrites the fragmented version.
+                // Next play will prefer the seekable version via GetCachedFile.
+                _ = RemuxToFaststartAsync(ffmpegPath, cachePath, itemId, artModifiedTicks);
+
+                // Background eviction — don't block
+                _ = Task.Run(() => _cache.EvictIfNeeded(), CancellationToken.None);
             }
         }
-        catch (IOException ex)
+        catch (OperationCanceledException)
         {
-            _logger.LogDebug(ex, "Failed to delete incomplete cache file: {Path}", cachePath);
+            _logger.LogWarning("ffmpeg timed out (5 min) for item {ItemId}", itemId);
+            try { process.Kill(); } catch { /* already exited */ }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ffmpeg monitoring failed for item {ItemId}", itemId);
+        }
+        finally
+        {
+            process.Dispose();
         }
     }
 
@@ -454,40 +517,13 @@ public class VideoAudioController : ControllerBase
 
         try
         {
-            using var process = new Process();
-            process.StartInfo = new ProcessStartInfo
-            {
-                FileName = ffmpegPath,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardError = true
-            };
+            var remuxArgs = new List<string> { "-i", fragmentedPath, "-c", "copy" };
+            remuxArgs.AddRange(FaststartRemuxArgs);
+            remuxArgs.Add(faststartPath);
 
-            // ffmpeg -i fragmented.mp4 -c copy -f mp4 -movflags +faststart output.fs.mp4
-            process.StartInfo.ArgumentList.Add("-i");
-            process.StartInfo.ArgumentList.Add(fragmentedPath);
-            process.StartInfo.ArgumentList.Add("-c");
-            process.StartInfo.ArgumentList.Add("copy");
-            foreach (string arg in FaststartRemuxArgs)
-            {
-                process.StartInfo.ArgumentList.Add(arg);
-            }
-            process.StartInfo.ArgumentList.Add(faststartPath);
-
-            process.Start();
-
-            var stderrTask = Task.Run(async () =>
-            {
-                using var reader = process.StandardError;
-                string? line;
-                while ((line = await reader.ReadLineAsync().ConfigureAwait(false)) != null)
-                {
-                    _logger.LogDebug("ffmpeg remux stderr: {Line}", line);
-                }
-            });
+            using var process = StartFfmpegProcess(ffmpegPath, remuxArgs);
 
             await process.WaitForExitAsync().ConfigureAwait(false);
-            await stderrTask.ConfigureAwait(false);
 
             if (process.ExitCode != 0)
             {
