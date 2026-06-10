@@ -219,14 +219,15 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
-    /// Verify that a cached file is detected as a cache hit.
+    /// Verify that a valid cached file (>= 10 KB) is detected as a cache hit.
     /// </summary>
     [Fact]
     public async Task CacheHit_ReturnsExistingFile()
     {
         string path = _cache.GetCacheFilePath("test-item", 12345);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await File.WriteAllTextAsync(path, "cached content");
+        // Write enough data to exceed the minimum valid file size (10 KB)
+        await File.WriteAllTextAsync(path, new string('x', 12 * 1024));
 
         var result = await _cache.GetCachedFile("test-item", 12345);
 

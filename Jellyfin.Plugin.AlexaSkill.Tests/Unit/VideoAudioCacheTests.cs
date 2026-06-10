@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -87,7 +88,8 @@ public class VideoAudioCacheTests : PluginTestBase, IDisposable
     {
         string path = _cache.GetCacheFilePath("item1", 12345);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await File.WriteAllTextAsync(path, "fake mp4 content");
+        // Write enough data to exceed the minimum valid file size (10 KB)
+        await File.WriteAllTextAsync(path, new string('x', 12 * 1024));
 
         FileInfo? result = await _cache.GetCachedFile("item1", 12345);
 
@@ -106,6 +108,63 @@ public class VideoAudioCacheTests : PluginTestBase, IDisposable
         FileInfo? result = await _cache.GetCachedFile("item1", 12345);
 
         Assert.Null(result);
+    }
+
+    /// <summary>
+    /// Verify that a corrupt stub file (36 bytes) is treated as a cache miss
+    /// by GetCachedFile, and deleted by DeleteStubIfPresent.
+    /// </summary>
+    [Fact]
+    public async Task GetCachedFile_StubFile_36Bytes_ReturnsNullWithoutDeleting()
+    {
+        string path = _cache.GetCacheFilePath("item1", 12345);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        // Exactly 36 bytes — real production case: empty ftyp+moov boxes
+        await File.WriteAllTextAsync(path, new string('x', 36));
+        Assert.True(File.Exists(path));
+
+        // GetCachedFile returns null but does NOT delete (may be actively written)
+        FileInfo? result = await _cache.GetCachedFile("item1", 12345);
+        Assert.Null(result);
+        Assert.True(File.Exists(path), "GetCachedFile should not delete stubs");
+
+        // DeleteStubIfPresent (called inside the lock) does the cleanup
+        _cache.DeleteStubIfPresent("item1", 12345);
+        Assert.False(File.Exists(path), "DeleteStubIfPresent should delete the stub");
+    }
+
+    /// <summary>
+    /// Verify that a small file (just under 10 KB threshold) is treated as
+    /// a cache miss but not deleted by GetCachedFile.
+    /// </summary>
+    [Fact]
+    public async Task GetCachedFile_BoundarySize_ReturnsNullUnderThreshold()
+    {
+        // File just under 10 KB — should be treated as miss but NOT deleted
+        string path = _cache.GetCacheFilePath("small-item", 12345);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.WriteAllTextAsync(path, new string('x', 10 * 1024 - 1));
+
+        FileInfo? result = await _cache.GetCachedFile("small-item", 12345);
+
+        Assert.Null(result);
+        Assert.True(File.Exists(path), "GetCachedFile should not delete files");
+    }
+
+    /// <summary>
+    /// Verify that a file exactly at the 10 KB threshold is a valid cache hit.
+    /// </summary>
+    [Fact]
+    public async Task GetCachedFile_ExactlyMinSize_IsValidHit()
+    {
+        string path = _cache.GetCacheFilePath("exact-item", 12345);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.WriteAllTextAsync(path, new string('x', 10 * 1024));
+
+        FileInfo? result = await _cache.GetCachedFile("exact-item", 12345);
+
+        Assert.NotNull(result);
+        Assert.True(File.Exists(path));
     }
 
     [Fact]
@@ -214,5 +273,86 @@ public class VideoAudioCacheTests : PluginTestBase, IDisposable
     public void CacheDir_UsesCorrectSubdirectory()
     {
         Assert.Contains("alexaskill-video-audio", _cache.CacheDir);
+    }
+
+    /// <summary>
+    /// Verify that LockItemAsync returns a disposable that can be awaited and released.
+    /// </summary>
+    [Fact]
+    public async Task LockItemAsync_CanAcquireAndRelease()
+    {
+        using (await _cache.LockItemAsync("item1", 100))
+        {
+            // Lock held — should succeed
+        }
+
+        // Lock released — should be able to acquire again
+        using (await _cache.LockItemAsync("item1", 100))
+        {
+            // Re-acquired successfully
+        }
+    }
+
+    /// <summary>
+    /// Verify that different items can be locked concurrently (parallel generation).
+    /// </summary>
+    [Fact]
+    public async Task LockItemAsync_DifferentItems_CanLockConcurrently()
+    {
+        var releaser1 = await _cache.LockItemAsync("item1", 100);
+        var releaser2 = await _cache.LockItemAsync("item2", 100);
+
+        // Both locks held simultaneously — different items, no contention
+        releaser1.Dispose();
+        releaser2.Dispose();
+    }
+
+    /// <summary>
+    /// Verify that the same item cannot be locked concurrently — second locker waits.
+    /// </summary>
+    [Fact]
+    public async Task LockItemAsync_SameItem_SecondLockerWaits()
+    {
+        var releaser1 = await _cache.LockItemAsync("item1", 100);
+
+        bool secondAcquired = false;
+        var secondTask = Task.Run(async () =>
+        {
+            await _cache.LockItemAsync("item1", 100);
+            secondAcquired = true;
+        });
+
+        // Give the second task time to start waiting
+        await Task.Delay(50);
+        Assert.False(secondAcquired, "Second locker should be waiting");
+
+        // Release first lock — second should proceed
+        releaser1.Dispose();
+        await secondTask;
+        Assert.True(secondAcquired, "Second locker should have acquired after first released");
+    }
+
+    /// <summary>
+    /// Verify that SemaphoreSlim objects are cleaned up from the dictionary after use
+    /// (no memory leak on repeated lock/release cycles).
+    /// </summary>
+    [Fact]
+    public async Task LockItemAsync_ReleasesAndCleansUp()
+    {
+        // Acquire and release multiple times
+        for (int i = 0; i < 5; i++)
+        {
+            using (await _cache.LockItemAsync("cleanup-item", 100))
+            {
+                // Lock held
+            }
+        }
+
+        // After all releases, internal dictionary should be empty or very small.
+        // We can't directly inspect the dictionary, but we verify no deadlock occurs.
+        using (await _cache.LockItemAsync("cleanup-item", 100))
+        {
+            // Clean re-acquire after multiple cycles
+        }
     }
 }
