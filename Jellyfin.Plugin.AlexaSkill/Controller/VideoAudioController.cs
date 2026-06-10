@@ -69,44 +69,14 @@ public class VideoAudioController : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult> StreamVideoAudio([FromRoute] string itemId)
     {
-        if (string.IsNullOrWhiteSpace(itemId) || !Guid.TryParse(itemId, out Guid itemGuid))
+        var validation = ValidateVideoAudioRequest(itemId);
+        if (validation.Error != null)
         {
-            return BadRequest(new { error = "Invalid itemId format" });
+            return validation.Error;
         }
-
-        // Resolve ffmpeg path
-        string ffmpeg = ResolveFfmpegPath();
-        if (string.IsNullOrEmpty(ffmpeg))
-        {
-            _logger.LogError("ffmpeg not available for VideoAudio request");
-            return StatusCode(503, new { error = "ffmpeg is not available on this server" });
-        }
-
-        MediaBrowser.Controller.Entities.BaseItem? item = _libraryManager.GetItemById(itemGuid);
-        if (item == null)
-        {
-            _logger.LogWarning("VideoAudio: item {ItemId} not found", itemId);
-            return NotFound(new { error = "Item not found" });
-        }
-
-        // Only items with media sources (Audio, Video) can be streamed.
-        // Folders, Book folders, etc. would cause ffmpeg to fail with a 500 from Jellyfin.
-        if (item is not MediaBrowser.Controller.Entities.IHasMediaSources)
-        {
-            _logger.LogWarning("VideoAudio: item {ItemId} ({ItemType}) is not a streamable media type", itemId, item.GetType().Name);
-            return BadRequest(new { error = "Item is not a streamable media type" });
-        }
-
-        var config = Plugin.Instance?.Configuration;
-        if (config == null || string.IsNullOrWhiteSpace(config.ServerAddress))
-        {
-            return StatusCode(503, new { error = "Plugin not configured" });
-        }
-
-        string serverUrl = config.ServerAddress.TrimEnd('/');
 
         // Determine cache key: itemId + album art modification time
-        long artModifiedTicks = GetArtModifiedTicks(item);
+        long artModifiedTicks = GetArtModifiedTicks(validation.Item);
 
         // Check cache first (fast path — no lock needed)
         FileInfo? cached = await _cache.GetCachedFile(itemId, artModifiedTicks).ConfigureAwait(false);
@@ -135,11 +105,11 @@ public class VideoAudioController : ControllerBase
 
             // Build audio URL (ffmpeg fetches it directly via HTTP).
             // Jellyfin's /Audio/{id}/stream endpoint works without auth for static streams.
-            string audioUrl = $"{serverUrl}/Audio/{itemId}/stream?static=true";
+            string audioUrl = $"{validation.ServerUrl}/Audio/{itemId}/stream?static=true";
 
             // Determine album art URL — prefer item image, then parent, then black frame.
             // Image endpoints also work without auth.
-            string? artUrl = ResolveArtUrl(item, serverUrl);
+            string? artUrl = ResolveArtUrl(validation.Item, validation.ServerUrl);
             bool useBlackFrame = artUrl == null;
 
             _logger.LogDebug(
@@ -168,7 +138,7 @@ public class VideoAudioController : ControllerBase
             // The client receives data as ffmpeg produces it instead of waiting
             // for the entire file to be generated first.
 #pragma warning disable CA3003 // cachePath is built from GUID-validated itemId and numeric ticks
-            var ffmpegProcess = StartFfmpegProcess(ffmpeg, ffmpegArgs);
+            var ffmpegProcess = StartFfmpegProcess(validation.FfmpegPath, ffmpegArgs);
 
             try
             {
@@ -221,7 +191,7 @@ public class VideoAudioController : ControllerBase
 
                 // Monitor ffmpeg completion in the background: trigger remux + cleanup
                 // FileStreamResult owns the stream lifetime — monitor must NOT dispose it.
-                _ = MonitorFfmpegAndRemuxAsync(ffmpegProcess, ffmpeg, cachePath, itemId, artModifiedTicks);
+                _ = MonitorFfmpegAndRemuxAsync(ffmpegProcess, validation.FfmpegPath, cachePath, itemId, artModifiedTicks);
 #pragma warning restore CA3003
 
                 _logger.LogDebug("VideoAudio: streaming generated file for item {ItemId}", itemId);
@@ -234,6 +204,228 @@ public class VideoAudioController : ControllerBase
                 ffmpegProcess.Dispose();
                 throw;
             }
+        }
+    }
+
+    /// <summary>
+    /// Stream an HLS playlist combining album art and audio for the given item.
+    /// HLS provides native seek support and correct duration display on Echo Show from first play.
+    /// If a cached HLS directory exists (same item + same album art), serves the playlist directly.
+    /// Otherwise, generates HLS segments via ffmpeg, waits for completion, then serves the
+    /// complete playlist. Unlike the MP4 endpoint, the playlist must be complete before serving
+    /// so the HLS client sees all segments and the correct total duration.
+    /// </summary>
+    /// <param name="itemId">The Jellyfin audio item ID.</param>
+    /// <returns>An HLS playlist (.m3u8) file.</returns>
+    [HttpGet("{itemId}/stream.m3u8")]
+    [AllowAnonymous]
+    public async Task<ActionResult> StreamHlsVideoAudio([FromRoute] string itemId)
+    {
+        var validation = ValidateVideoAudioRequest(itemId);
+        if (validation.Error != null)
+        {
+            return validation.Error;
+        }
+
+        long artModifiedTicks = GetArtModifiedTicks(validation.Item);
+
+        // Check cache first (fast path — no lock needed)
+        FileInfo? cached = await _cache.GetCachedHlsPlaylist(itemId, artModifiedTicks).ConfigureAwait(false);
+        if (cached != null)
+        {
+            _logger.LogDebug("VideoAudio HLS: serving cached playlist for item {ItemId}", itemId);
+#pragma warning disable CA3003 // path derived from GUID-validated itemId
+            return PhysicalFile(cached.FullName, "application/vnd.apple.mpegurl");
+#pragma warning restore CA3003
+        }
+
+        // Cache miss — acquire per-item lock
+        using (await _cache.LockItemAsync(itemId, artModifiedTicks).ConfigureAwait(false))
+        {
+            // Clean up any corrupt/partial HLS directory from a previous failed generation
+            _cache.CleanupHlsStub(itemId, artModifiedTicks);
+
+            // Double-check cache after acquiring lock
+            cached = await _cache.GetCachedHlsPlaylist(itemId, artModifiedTicks).ConfigureAwait(false);
+            if (cached != null)
+            {
+                _logger.LogDebug("VideoAudio HLS: serving playlist generated by concurrent request for item {ItemId}", itemId);
+#pragma warning disable CA3003
+                return PhysicalFile(cached.FullName, "application/vnd.apple.mpegurl");
+#pragma warning restore CA3003
+            }
+
+            string audioUrl = $"{validation.ServerUrl}/Audio/{itemId}/stream?static=true";
+            string? artUrl = ResolveArtUrl(validation.Item, validation.ServerUrl);
+            bool useBlackFrame = artUrl == null;
+
+            _logger.LogDebug(
+                "VideoAudio HLS: itemId={ItemId}, artUrl={ArtUrl}, useBlackFrame={UseBlackFrame}",
+                itemId,
+                artUrl ?? "(black frame)",
+                useBlackFrame);
+
+#pragma warning disable CA3003 // paths derived from GUID-validated itemId
+            string hlsDir = _cache.GetHlsDirectoryPath(itemId, artModifiedTicks);
+            Directory.CreateDirectory(hlsDir);
+
+            string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
+            string segmentPath = Path.Combine(hlsDir, "seg_%03d.ts");
+            string hlsBaseUrl = $"/alexaskill/api/video-audio/{itemId}/segments/";
+
+            var ffmpegArgs = BuildHlsFfmpegArguments(artUrl, audioUrl, useBlackFrame, playlistPath, segmentPath, hlsBaseUrl);
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug("VideoAudio HLS: ffmpeg arguments: {Args}", string.Join(" ", ffmpegArgs));
+            }
+
+            // Generate HLS: wait for ffmpeg to complete so the playlist has all segments
+            // and the Echo Show sees the correct total duration from the first request.
+            using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+
+            try
+            {
+                await RunFfmpegToCompletionAsync(validation.FfmpegPath, ffmpegArgs, cts.Token).ConfigureAwait(false);
+
+                // Register the HLS directory for fast segment lookups (avoids filesystem scan per segment)
+                _cache.RegisterHlsDirectory(itemId, artModifiedTicks);
+
+                // Background eviction — don't block the response
+                _ = Task.Run(() => _cache.EvictIfNeeded(), CancellationToken.None);
+
+                _logger.LogDebug("VideoAudio HLS: serving generated playlist for item {ItemId}", itemId);
+                return PhysicalFile(playlistPath, "application/vnd.apple.mpegurl");
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogWarning("VideoAudio HLS: ffmpeg timed out for item {ItemId}", itemId);
+                return StatusCode(504, new { error = "HLS generation timed out" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "VideoAudio HLS: ffmpeg failed for item {ItemId}", itemId);
+                return StatusCode(500, new { error = "HLS generation failed" });
+            }
+#pragma warning restore CA3003
+        }
+    }
+
+    /// <summary>
+    /// Serve an individual HLS segment (.ts) file for a given item.
+    /// The segment name is validated against a strict pattern (seg_NNN.ts) to prevent
+    /// directory traversal attacks. The segment directory is resolved via the cache service.
+    /// </summary>
+    /// <param name="itemId">The Jellyfin audio item ID.</param>
+    /// <param name="segmentName">The segment file name (e.g. "seg_000.ts").</param>
+    /// <returns>The segment file.</returns>
+    [HttpGet("{itemId}/segments/{segmentName}")]
+    [AllowAnonymous]
+    public ActionResult GetSegment([FromRoute] string itemId, [FromRoute] string segmentName)
+    {
+        if (string.IsNullOrWhiteSpace(itemId) || !Guid.TryParse(itemId, out _))
+        {
+            return BadRequest(new { error = "Invalid itemId format" });
+        }
+
+        // Validate segment name to prevent directory traversal
+        if (!VideoAudioCache.IsValidSegmentName(segmentName))
+        {
+            _logger.LogWarning("VideoAudio: rejected invalid segment name '{SegmentName}' for item {ItemId}", segmentName, itemId);
+            return BadRequest(new { error = "Invalid segment name" });
+        }
+
+        string? segmentPath = _cache.FindSegmentPath(itemId, segmentName);
+        if (segmentPath == null)
+        {
+            return NotFound(new { error = "Segment not found" });
+        }
+
+#pragma warning disable CA3003 // segmentPath validated via GUID itemId + strict segment name pattern
+        return PhysicalFile(segmentPath, "video/mp2t", enableRangeProcessing: true);
+#pragma warning restore CA3003
+    }
+
+    /// <summary>
+    /// Validate a video-audio request: parse itemId, resolve ffmpeg, look up the item,
+    /// check it's a streamable media type, and verify plugin configuration.
+    /// Shared by both MP4 and HLS endpoints to avoid duplicating validation logic.
+    /// </summary>
+    /// <param name="itemId">The raw itemId string from the route.</param>
+    /// <returns>A validated result, or a result with <see cref="ValidatedRequest.Error"/> set.</returns>
+    private ValidatedRequest ValidateVideoAudioRequest(string itemId)
+    {
+        if (string.IsNullOrWhiteSpace(itemId) || !Guid.TryParse(itemId, out Guid itemGuid))
+        {
+            return new ValidatedRequest { Error = BadRequest(new { error = "Invalid itemId format" }) };
+        }
+
+        string ffmpeg = ResolveFfmpegPath();
+        if (string.IsNullOrEmpty(ffmpeg))
+        {
+            _logger.LogError("ffmpeg not available for VideoAudio request");
+            return new ValidatedRequest { Error = StatusCode(503, new { error = "ffmpeg is not available on this server" }) };
+        }
+
+        MediaBrowser.Controller.Entities.BaseItem? item = _libraryManager.GetItemById(itemGuid);
+        if (item == null)
+        {
+            _logger.LogWarning("VideoAudio: item {ItemId} not found", itemId);
+            return new ValidatedRequest { Error = NotFound(new { error = "Item not found" }) };
+        }
+
+        if (item is not MediaBrowser.Controller.Entities.IHasMediaSources)
+        {
+            _logger.LogWarning("VideoAudio: item {ItemId} ({ItemType}) is not a streamable media type", itemId, item.GetType().Name);
+            return new ValidatedRequest { Error = BadRequest(new { error = "Item is not a streamable media type" }) };
+        }
+
+        var config = Plugin.Instance?.Configuration;
+        if (config == null || string.IsNullOrWhiteSpace(config.ServerAddress))
+        {
+            return new ValidatedRequest { Error = StatusCode(503, new { error = "Plugin not configured" }) };
+        }
+
+        return new ValidatedRequest
+        {
+            FfmpegPath = ffmpeg,
+            Item = item,
+            ServerUrl = config.ServerAddress.TrimEnd('/')
+        };
+    }
+
+    /// <summary>
+    /// Holds the result of <see cref="ValidateVideoAudioRequest"/>. If validation passes,
+    /// <see cref="Error"/> is null and the other fields are populated.
+    /// </summary>
+    private sealed class ValidatedRequest
+    {
+        public ActionResult? Error { get; set; }
+        public string FfmpegPath { get; set; } = string.Empty;
+        public MediaBrowser.Controller.Entities.BaseItem Item { get; set; } = null!;
+        public string ServerUrl { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// Run ffmpeg to completion: start the process, await exit with a cancellation token,
+    /// and throw on non-zero exit code. Used by HLS generation (which needs the complete
+    /// output before serving) and by the faststart remux.
+    /// </summary>
+    /// <param name="ffmpegPath">Path to ffmpeg binary.</param>
+    /// <param name="arguments">ffmpeg command-line arguments as individual tokens.</param>
+    /// <param name="cancellationToken">Cancellation token for timeout/abort.</param>
+    private async Task RunFfmpegToCompletionAsync(
+        string ffmpegPath,
+        List<string> arguments,
+        CancellationToken cancellationToken)
+    {
+        using var process = StartFfmpegProcess(ffmpegPath, arguments);
+
+        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+
+        if (process.ExitCode != 0)
+        {
+            _logger.LogWarning("ffmpeg exited with code {ExitCode}", process.ExitCode);
+            throw new InvalidOperationException($"ffmpeg exited with code {process.ExitCode}");
         }
     }
 
@@ -313,6 +505,76 @@ public class VideoAudioController : ControllerBase
     private static readonly string[] VideoFilterArgs = ["-vf", "scale=1280x720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:black"];
     private static readonly string[] OutputFormatArgs = ["-f", "mp4", "-movflags", "frag_keyframe+empty_moov"];
     private static readonly string[] FaststartRemuxArgs = ["-f", "mp4", "-movflags", "+faststart"];
+
+    /// <summary>
+    /// Build ffmpeg argument list for generating HLS output (playlist + segments).
+    /// Returns individual arguments for use with <see cref="ProcessStartInfo.ArgumentList"/>.
+    /// HLS provides native seek support and correct duration display on Echo Show from first play.
+    /// </summary>
+    /// <param name="artUrl">Album art URL (null for black frame fallback).</param>
+    /// <param name="audioUrl">Audio stream URL.</param>
+    /// <param name="useBlackFrame">Whether to generate a black frame instead of using art.</param>
+    /// <param name="playlistPath">File path for the output .m3u8 playlist.</param>
+    /// <param name="segmentPath">File path template for segments (e.g. dir/seg_%03d.ts).</param>
+    /// <param name="hlsBaseUrl">Base URL prefix for segment URLs in the playlist.</param>
+    /// <returns>List of ffmpeg arguments (one token per entry).</returns>
+    internal static List<string> BuildHlsFfmpegArguments(
+        string? artUrl,
+        string audioUrl,
+        bool useBlackFrame,
+        string playlistPath,
+        string segmentPath,
+        string hlsBaseUrl)
+    {
+        var args = new List<string>();
+
+        // Input: album art (looped) or black frame
+        if (useBlackFrame)
+        {
+            args.AddRange(BlackFrameInputArgs);
+        }
+        else
+        {
+            args.AddRange(ArtInputPrefixArgs);
+            args.Add(artUrl!);
+        }
+
+        args.Add("-i");
+        args.Add(audioUrl);
+
+        // Video codec
+        args.AddRange(VideoCodecArgs);
+
+        // Audio codec
+        args.AddRange(AudioCodecArgs);
+
+        // Pixel format + frame rate
+        args.AddRange(PixelFormatArgs);
+
+        // Video filter (scale + pad)
+        args.AddRange(VideoFilterArgs);
+
+        // HLS-specific flags
+        args.Add("-hls_time");
+        args.Add("4");
+        args.Add("-hls_list_size");
+        args.Add("0");
+        args.Add("-hls_flags");
+        args.Add("append_list+delete_segments+omit_endlist");
+
+        // Segment file name template
+        args.Add("-hls_segment_filename");
+        args.Add(segmentPath);
+
+        // Base URL for segment references in the playlist
+        args.Add("-hls_base_url");
+        args.Add(hlsBaseUrl);
+
+        args.Add("-shortest");
+        args.Add(playlistPath);
+
+        return args;
+    }
 
     /// <summary>
     /// Get the album art DateModified ticks for use as a cache key component.

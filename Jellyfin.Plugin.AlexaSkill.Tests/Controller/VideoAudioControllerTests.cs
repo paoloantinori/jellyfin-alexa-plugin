@@ -383,4 +383,425 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             _cache,
             _loggerFactory);
     }
+
+    // ========== HLS Tests ==========
+
+    /// <summary>
+    /// Verify that the HLS endpoint returns 400 when itemId is not a valid GUID.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsVideoAudio_InvalidItemId_Returns400()
+    {
+        var controller = CreateController();
+
+        ActionResult result = await controller.StreamHlsVideoAudio("not-a-guid");
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.NotNull(badRequest.Value);
+    }
+
+    /// <summary>
+    /// Verify that the HLS endpoint returns 404 when the item is not found.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsVideoAudio_ItemNotFound_Returns404()
+    {
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(It.IsAny<Guid>())).Returns((MediaBrowser.Controller.Entities.BaseItem?)null);
+
+        var controller = CreateController();
+        controller.FfmpegPath = "/usr/bin/ffmpeg";
+
+        ActionResult result = await controller.StreamHlsVideoAudio(Guid.NewGuid().ToString());
+
+        var notFound = Assert.IsType<NotFoundObjectResult>(result);
+        Assert.NotNull(notFound.Value);
+    }
+
+    /// <summary>
+    /// Verify that the HLS endpoint returns 400 when the item is a Folder
+    /// (not a streamable media type).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsVideoAudio_FolderItem_Returns400()
+    {
+        var folder = new MediaBrowser.Controller.Entities.Folder
+        {
+            Name = "Audiobooks",
+            Id = Guid.NewGuid()
+        };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(folder.Id)).Returns(folder);
+
+        var controller = CreateController();
+        controller.FfmpegPath = "/usr/bin/ffmpeg";
+
+        ActionResult result = await controller.StreamHlsVideoAudio(folder.Id.ToString());
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.NotNull(badRequest.Value);
+    }
+
+    /// <summary>
+    /// Verify that BuildHlsFfmpegArguments produces correct arguments with HLS-specific flags,
+    /// including segment template, base URL, and HLS time/list size settings.
+    /// </summary>
+    [Fact]
+    public void BuildHlsFfmpegArguments_WithArtUrl_ContainsAllExpectedFlags()
+    {
+        string artUrl = "http://localhost:8096/Items/123/Images/Primary";
+        string audioUrl = "http://localhost:8096/Audio/456/stream?static=true";
+        string playlistPath = "/tmp/test-output/stream.m3u8";
+        string segmentPath = "/tmp/test-output/seg_%03d.ts";
+        string hlsBaseUrl = "/alexaskill/api/video-audio/456/segments/";
+
+        List<string> args = VideoAudioController.BuildHlsFfmpegArguments(
+            artUrl, audioUrl, false, playlistPath, segmentPath, hlsBaseUrl);
+
+        // Verify key input flags
+        Assert.Contains("-loop", args);
+        Assert.Contains("1", args);
+        Assert.Contains(artUrl, args);
+        Assert.Contains(audioUrl, args);
+
+        // Verify codec flags
+        Assert.Contains("libx264", args);
+        Assert.Contains("stillimage", args);
+        Assert.Contains("ultrafast", args);
+        Assert.Contains("aac", args);
+
+        // Verify HLS-specific flags
+        Assert.Contains("-hls_time", args);
+        Assert.Contains("4", args);
+        Assert.Contains("-hls_list_size", args);
+        Assert.Contains("0", args);
+        Assert.Contains("-hls_flags", args);
+        Assert.Contains("append_list+delete_segments+omit_endlist", args);
+        Assert.Contains("-hls_segment_filename", args);
+        Assert.Contains(segmentPath, args);
+        Assert.Contains("-hls_base_url", args);
+        Assert.Contains(hlsBaseUrl, args);
+
+        // Verify output
+        Assert.Contains("-shortest", args);
+        Assert.Contains(playlistPath, args);
+
+        // Verify no MP4 output format flags (HLS uses its own format)
+        Assert.DoesNotContain("frag_keyframe+empty_moov", args);
+    }
+
+    /// <summary>
+    /// Verify that BuildHlsFfmpegArguments produces correct arguments with black frame fallback.
+    /// </summary>
+    [Fact]
+    public void BuildHlsFfmpegArguments_BlackFrame_ContainsLavfiInput()
+    {
+        string audioUrl = "http://localhost:8096/Audio/456/stream?static=true";
+        string playlistPath = "/tmp/test-output/stream.m3u8";
+        string segmentPath = "/tmp/test-output/seg_%03d.ts";
+        string hlsBaseUrl = "/alexaskill/api/video-audio/456/segments/";
+
+        List<string> args = VideoAudioController.BuildHlsFfmpegArguments(
+            null, audioUrl, true, playlistPath, segmentPath, hlsBaseUrl);
+
+        Assert.Contains("-f", args);
+        Assert.Contains("lavfi", args);
+        Assert.Contains("color=c=black:s=1280x720:d=999", args);
+        Assert.Contains(audioUrl, args);
+        Assert.DoesNotContain("-loop", args);
+    }
+
+    /// <summary>
+    /// Verify that the HLS cache hit path returns a PhysicalFileResult with
+    /// the correct HLS content type (application/vnd.apple.mpegurl).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsVideoAudio_CacheHit_ReturnsPhysicalFileResult()
+    {
+        var audioItem = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Test Song",
+            Id = Guid.NewGuid()
+        };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(audioItem.Id)).Returns(audioItem);
+
+        // Pre-populate HLS cache with a valid playlist (>= 10 KB)
+        string hlsDir = _cache.GetHlsDirectoryPath(audioItem.Id.ToString("D"), 0);
+        Directory.CreateDirectory(hlsDir);
+        string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
+        await File.WriteAllTextAsync(playlistPath, new string('x', 12 * 1024));
+
+        var controller = CreateController();
+        controller.FfmpegPath = "/usr/bin/ffmpeg";
+
+        ActionResult result = await controller.StreamHlsVideoAudio(audioItem.Id.ToString());
+
+        var physicalResult = Assert.IsType<PhysicalFileResult>(result);
+        Assert.Equal("application/vnd.apple.mpegurl", physicalResult.ContentType);
+    }
+
+    /// <summary>
+    /// Verify that on a cache miss, the HLS controller returns a FileStreamResult
+    /// with the HLS content type while ffmpeg generates segments.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsVideoAudio_CacheMiss_ReturnsPhysicalFileResult()
+    {
+        var audioItem = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Test Song",
+            Id = Guid.NewGuid()
+        };
+
+        _libraryManagerMock.Setup(m => m.GetItemById(audioItem.Id)).Returns(audioItem);
+
+        // Create a fake ffmpeg script that writes a dummy HLS playlist
+        string fakeFfmpegPath = Path.Combine(_tempDir, "fake-ffmpeg-hls");
+        string fakeFfmpegScript = "#!/bin/sh\n" +
+            "playlist_path=\"${@: -1}\"\n" +
+            "playlist_dir=\"$(dirname \"$playlist_path\")\"\n" +
+            "mkdir -p \"$playlist_dir\"\n" +
+            "dd if=/dev/zero bs=1024 count=12 of=\"$playlist_path\" 2>/dev/null\n" +
+            "exit 0\n";
+        File.WriteAllText(fakeFfmpegPath, fakeFfmpegScript);
+#pragma warning disable CA3003, CA1416 // test-created path; Unix-only test
+        File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+#pragma warning restore CA3003, CA1416
+
+        var controller = CreateController();
+        controller.FfmpegPath = fakeFfmpegPath;
+
+        var httpContext = new DefaultHttpContext
+        {
+            RequestAborted = CancellationToken.None
+        };
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = httpContext
+        };
+
+        ActionResult result = await controller.StreamHlsVideoAudio(audioItem.Id.ToString());
+
+        // HLS waits for ffmpeg to complete, then serves the playlist via PhysicalFile
+        var physicalResult = Assert.IsType<PhysicalFileResult>(result);
+        Assert.Equal("application/vnd.apple.mpegurl", physicalResult.ContentType);
+    }
+
+    // ========== Segment Endpoint Tests ==========
+
+    /// <summary>
+    /// Verify that the segment endpoint returns 400 for an invalid itemId.
+    /// </summary>
+    [Fact]
+    public void GetSegment_InvalidItemId_Returns400()
+    {
+        var controller = CreateController();
+
+        ActionResult result = controller.GetSegment("not-a-guid", "seg_000.ts");
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    /// <summary>
+    /// Verify that the segment endpoint returns 400 for an invalid segment name
+    /// (directory traversal prevention).
+    /// </summary>
+    [Fact]
+    public void GetSegment_InvalidSegmentName_Returns400()
+    {
+        var controller = CreateController();
+
+        // Test various traversal and injection attempts
+        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(Guid.NewGuid().ToString(), "../etc/passwd"));
+        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(Guid.NewGuid().ToString(), "../../secret"));
+        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(Guid.NewGuid().ToString(), "seg_000.ts/../../etc/passwd"));
+        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(Guid.NewGuid().ToString(), ""));
+        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(Guid.NewGuid().ToString(), "seg_00.ts"));
+        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(Guid.NewGuid().ToString(), "seg_0000.ts"));
+        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(Guid.NewGuid().ToString(), "segment.ts"));
+    }
+
+    /// <summary>
+    /// Verify that the segment endpoint returns 404 when the segment file doesn't exist.
+    /// </summary>
+    [Fact]
+    public void GetSegment_SegmentNotFound_Returns404()
+    {
+        var controller = CreateController();
+
+        ActionResult result = controller.GetSegment(Guid.NewGuid().ToString(), "seg_000.ts");
+
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    /// <summary>
+    /// Verify that the segment endpoint returns a .ts file with correct content type
+    /// when the segment exists in the HLS cache directory.
+    /// </summary>
+    [Fact]
+    public void GetSegment_ValidSegment_ReturnsFile()
+    {
+        Guid itemId = Guid.NewGuid();
+        string itemIdStr = itemId.ToString("D");
+        long artTicks = 0;
+
+        // Create an HLS directory with a segment file
+        string hlsDir = _cache.GetHlsDirectoryPath(itemIdStr, artTicks);
+        Directory.CreateDirectory(hlsDir);
+        string segmentPath = Path.Combine(hlsDir, "seg_000.ts");
+        File.WriteAllText(segmentPath, new string('x', 1024));
+
+        var controller = CreateController();
+
+        ActionResult result = controller.GetSegment(itemIdStr, "seg_000.ts");
+
+        var physicalResult = Assert.IsType<PhysicalFileResult>(result);
+        Assert.Equal("video/mp2t", physicalResult.ContentType);
+        Assert.True(physicalResult.EnableRangeProcessing);
+    }
+
+    // ========== VideoAudioCache HLS Tests ==========
+
+    /// <summary>
+    /// Verify that GetHlsDirectoryPath returns the expected path format.
+    /// </summary>
+    [Fact]
+    public void HlsDirectoryPath_Format_ContainsExpectedComponents()
+    {
+        string path = _cache.GetHlsDirectoryPath("abc123", 999);
+
+        Assert.Contains("abc123_999", path);
+        Assert.EndsWith("abc123_999", path);
+    }
+
+    /// <summary>
+    /// Verify that GetHlsPlaylistPath returns the expected path format with stream.m3u8.
+    /// </summary>
+    [Fact]
+    public void HlsPlaylistPath_Format_ContainsM3u8()
+    {
+        string path = _cache.GetHlsPlaylistPath("abc123", 999);
+
+        Assert.EndsWith("stream.m3u8", path);
+        Assert.Contains("abc123_999", path);
+    }
+
+    /// <summary>
+    /// Verify that IsValidSegmentName accepts valid names and rejects invalid ones.
+    /// </summary>
+    [Fact]
+    public void IsValidSegmentName_AcceptsValidAndRejectsInvalid()
+    {
+        // Valid names
+        Assert.True(VideoAudioCache.IsValidSegmentName("seg_000.ts"));
+        Assert.True(VideoAudioCache.IsValidSegmentName("seg_001.ts"));
+        Assert.True(VideoAudioCache.IsValidSegmentName("seg_999.ts"));
+
+        // Invalid names (traversal, wrong format, etc.)
+        Assert.False(VideoAudioCache.IsValidSegmentName(""));
+        Assert.False(VideoAudioCache.IsValidSegmentName("../etc/passwd"));
+        Assert.False(VideoAudioCache.IsValidSegmentName("seg_00.ts"));      // only 2 digits
+        Assert.False(VideoAudioCache.IsValidSegmentName("seg_0000.ts"));    // 4 digits
+        Assert.False(VideoAudioCache.IsValidSegmentName("segment.ts"));
+        Assert.False(VideoAudioCache.IsValidSegmentName("SEG_000.ts"));     // uppercase
+        Assert.False(VideoAudioCache.IsValidSegmentName("seg_000.mp4"));
+    }
+
+    /// <summary>
+    /// Verify that FindHlsDirectoryByScan returns the correct directory when it exists,
+    /// and null when it doesn't.
+    /// </summary>
+    [Fact]
+    public void FindHlsDirectoryByScan_ReturnsCorrectDirectory()
+    {
+        string itemId = Guid.NewGuid().ToString("D");
+
+        // No directory exists yet
+        Assert.Null(_cache.FindHlsDirectoryByScan(itemId));
+
+        // Create the HLS directory with a playlist
+        string hlsDir = _cache.GetHlsDirectoryPath(itemId, 12345);
+        Directory.CreateDirectory(hlsDir);
+        File.WriteAllText(Path.Combine(hlsDir, "stream.m3u8"), "#EXTM3U");
+
+        string? found = _cache.FindHlsDirectoryByScan(itemId);
+        Assert.NotNull(found);
+        Assert.Equal(hlsDir, found);
+    }
+
+    /// <summary>
+    /// Verify that FindHlsDirectoryByScan returns the most recent directory when
+    /// multiple directories exist for the same item.
+    /// </summary>
+    [Fact]
+    public void FindHlsDirectoryByScan_MultipleDirs_ReturnsMostRecent()
+    {
+        string itemId = Guid.NewGuid().ToString("D");
+
+        // Create two directories with different art ticks
+        string oldDir = _cache.GetHlsDirectoryPath(itemId, 100);
+        Directory.CreateDirectory(oldDir);
+        File.WriteAllText(Path.Combine(oldDir, "stream.m3u8"), "#EXTM3U");
+
+        // Ensure the new directory has a later creation time
+        System.Threading.Thread.Sleep(50);
+        string newDir = _cache.GetHlsDirectoryPath(itemId, 200);
+        Directory.CreateDirectory(newDir);
+        File.WriteAllText(Path.Combine(newDir, "stream.m3u8"), "#EXTM3U");
+
+        string? found = _cache.FindHlsDirectoryByScan(itemId);
+        Assert.NotNull(found);
+        Assert.Equal(newDir, found);
+    }
+
+    /// <summary>
+    /// Verify that GetCachedHlsPlaylist returns the playlist when it exists with valid size.
+    /// </summary>
+    [Fact]
+    public async Task HlsCacheHit_ReturnsExistingPlaylist()
+    {
+        string itemId = Guid.NewGuid().ToString("D");
+        string hlsDir = _cache.GetHlsDirectoryPath(itemId, 0);
+        Directory.CreateDirectory(hlsDir);
+        string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
+        await File.WriteAllTextAsync(playlistPath, new string('x', 12 * 1024));
+
+        FileInfo? result = await _cache.GetCachedHlsPlaylist(itemId, 0);
+
+        Assert.NotNull(result);
+        Assert.Equal(playlistPath, result!.FullName);
+    }
+
+    /// <summary>
+    /// Verify that GetCachedHlsPlaylist returns null on cache miss.
+    /// </summary>
+    [Fact]
+    public async Task HlsCacheMiss_ReturnsNull()
+    {
+        FileInfo? result = await _cache.GetCachedHlsPlaylist("nonexistent", 0);
+
+        Assert.Null(result);
+    }
+
+    /// <summary>
+    /// Verify that Cleanup removes HLS directories in addition to flat MP4 files.
+    /// </summary>
+    [Fact]
+    public void HlsCleanup_RemovesDirectory()
+    {
+        string itemId = Guid.NewGuid().ToString("D");
+        string hlsDir = _cache.GetHlsDirectoryPath(itemId, 0);
+        Directory.CreateDirectory(hlsDir);
+        File.WriteAllText(Path.Combine(hlsDir, "stream.m3u8"), "#EXTM3U");
+        File.WriteAllText(Path.Combine(hlsDir, "seg_000.ts"), "data");
+
+        Assert.True(Directory.Exists(hlsDir));
+
+        _cache.Cleanup(itemId);
+
+        Assert.False(Directory.Exists(hlsDir));
+    }
 }

@@ -384,13 +384,14 @@ public abstract class BaseHandler
         => BuildStreamUrl("Videos/", itemId, user);
 
     /// <summary>
-    /// Get a video-audio URL that combines album art with audio into an MP4 stream
+    /// Get a video-audio URL that combines album art with audio into an HLS stream
     /// for Echo Show VideoApp playback with native progress bar controls.
+    /// HLS provides correct duration and seek support from the very first play.
     /// </summary>
     /// <param name="itemId">Id of the audio item.</param>
-    /// <returns>URL to the video-audio endpoint.</returns>
+    /// <returns>URL to the HLS video-audio endpoint.</returns>
     public string GetVideoAudioUrl(string itemId)
-        => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/{itemId}").ToString();
+        => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/{itemId}/stream.m3u8").ToString();
 
     private string BuildStreamUrl(string pathSegment, string itemId, Entities.User user)
         => new Uri(new Uri(_config.ServerAddress), $"{pathSegment}{itemId}/stream?static=true&api_key={user.JellyfinToken}").ToString();

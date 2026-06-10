@@ -604,7 +604,8 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
 
         // Should NOT contain the raw /Audio/.../stream path
         Assert.DoesNotContain("/Audio/", directive.VideoItem.Source);
-        Assert.DoesNotContain("/stream", directive.VideoItem.Source);
+        // HLS URL contains /stream.m3u8 — check that there's no raw audio stream endpoint
+        Assert.DoesNotMatch(@"^https?://[^/]+/Audio/.+/stream\b", directive.VideoItem.Source);
         // VideoApp.Launch must NOT include shouldEndSession — Alexa rejects it
         Assert.Null(response.Response.ShouldEndSession);
     }
@@ -701,7 +702,7 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
 
         string url = handler.TestGetVideoAudioUrl(itemId);
 
-        Assert.Equal("http://localhost:8096/alexaskill/api/video-audio/33333333-3333-3333-3333-333333333333", url);
+        Assert.Equal("http://localhost:8096/alexaskill/api/video-audio/33333333-3333-3333-3333-333333333333/stream.m3u8", url);
     }
 
     [Fact]
