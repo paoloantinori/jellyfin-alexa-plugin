@@ -468,6 +468,17 @@ public class VideoAudioController : ControllerBase
             // Segments served by existing GetSegment endpoint using parentId as key
             string hlsBaseUrl = $"/alexaskill/api/video-audio/{parentId}/segments/";
 
+            // Pre-write the complete HLS playlist with all chapter durations BEFORE
+            // starting ffmpeg. This gives the Echo Show the correct total book duration
+            // immediately, instead of showing a partial duration from progressive serving.
+            // ffmpeg will overwrite this playlist as it generates segments — that's fine,
+            // we serve the pre-written version and let ffmpeg update the file in the background.
+            // After ffmpeg completes, the final playlist will be cached for subsequent plays.
+            var sortedChapters = chapters
+                .OrderBy(c => c.SortName ?? c.Name)
+                .ToList();
+            WriteAudiobookPlaylist(playlistPath, hlsBaseUrl, sortedChapters);
+
             var ffmpegArgs = BuildHlsAudiobookFfmpegArguments(
                 concatListPath, artUrl, useBlackFrame, playlistPath, segmentPath, hlsBaseUrl);
 
@@ -476,59 +487,43 @@ public class VideoAudioController : ControllerBase
                 _logger.LogDebug("VideoAudio audiobook HLS: ffmpeg arguments: {Args}", string.Join(" ", ffmpegArgs));
             }
 
-            // Start ffmpeg — same progressive approach as single-item HLS.
-            // Serve the playlist as soon as the first segment is ready.
+            // Start ffmpeg in the background — don't wait for completion.
+            // ffmpeg will generate segments and overwrite the pre-written playlist.
+            // The Echo Show starts playing from segment 0 while ffmpeg generates ahead.
+            // At ~21x encode speed, ffmpeg is far ahead of real-time playback.
             var ffmpegProcess = StartFfmpegProcess(ffmpeg, ffmpegArgs);
 
-            try
+            // Register the HLS directory for segment lookups immediately.
+            _cache.RegisterHlsDirectory(parentId, artModifiedTicks);
+
+            // Monitor ffmpeg in background — logs errors, triggers eviction when done.
+            _ = MonitorFfmpegHlsAsync(ffmpegProcess, hlsDir, parentId, artModifiedTicks);
+
+            // Wait briefly for the first segment to appear so we don't serve a playlist
+            // that references zero actual segment files (Echo Show would fail immediately).
+            string firstSegmentPath = Path.Combine(hlsDir, "seg_000.ts");
+            for (int i = 0; i < 100; i++) // up to ~10 seconds
             {
-                // Wait for the first segment file to appear on disk.
-                string firstSegmentPath = Path.Combine(hlsDir, "seg_000.ts");
-                bool segmentAppeared = false;
-                for (int i = 0; i < 200; i++) // up to ~20 seconds
+                if (System.IO.File.Exists(firstSegmentPath))
                 {
-                    if (System.IO.File.Exists(firstSegmentPath) && System.IO.File.Exists(playlistPath))
-                    {
-                        segmentAppeared = true;
-                        break;
-                    }
-
-                    if (ffmpegProcess.HasExited)
-                    {
-                        break;
-                    }
-
-                    await Task.Delay(100).ConfigureAwait(false);
+                    break;
                 }
 
-                if (!segmentAppeared)
+                if (ffmpegProcess.HasExited)
                 {
                     _logger.LogWarning(
-                        "VideoAudio audiobook HLS: ffmpeg failed to create first segment for parent {ParentId} ({ChapterCount} chapters, exit code {ExitCode})",
-                        parentId, chapters.Count, ffmpegProcess.HasExited ? ffmpegProcess.ExitCode : -1);
-                    try { ffmpegProcess.Kill(); } catch { /* already exited */ }
-                    ffmpegProcess.Dispose();
-                    return StatusCode(500, new { error = "HLS generation failed" });
+                        "VideoAudio audiobook HLS: ffmpeg exited early for parent {ParentId} (exit code {ExitCode})",
+                        parentId, ffmpegProcess.ExitCode);
+                    break;
                 }
 
-                // Register the HLS directory for segment lookups under the parent ID.
-                // The existing GetSegment endpoint uses this to find segments.
-                _cache.RegisterHlsDirectory(parentId, artModifiedTicks);
-
-                // Monitor ffmpeg in background with long timeout (audiobook-length content)
-                _ = MonitorFfmpegHlsAsync(ffmpegProcess, hlsDir, parentId, artModifiedTicks);
-
-                _logger.LogDebug(
-                    "VideoAudio audiobook HLS: serving partial playlist for parent {ParentId} ({ChapterCount} chapters)",
-                    parentId, chapters.Count);
-                return PhysicalFile(playlistPath, "application/vnd.apple.mpegurl");
+                await Task.Delay(100).ConfigureAwait(false);
             }
-            catch
-            {
-                try { ffmpegProcess.Kill(); } catch { /* already exited */ }
-                ffmpegProcess.Dispose();
-                throw;
-            }
+
+            _logger.LogDebug(
+                "VideoAudio audiobook HLS: serving pre-written playlist for parent {ParentId} ({ChapterCount} chapters)",
+                parentId, sortedChapters.Count);
+            return PhysicalFile(playlistPath, "application/vnd.apple.mpegurl");
 #pragma warning restore CA3003
         }
     }
@@ -892,6 +887,43 @@ public class VideoAudioController : ControllerBase
         args.Add(playlistPath);
 
         return args;
+    }
+
+    /// <summary>
+    /// Pre-write a complete HLS playlist for an audiobook with all chapter durations.
+    /// Each chapter becomes one segment (~250s). This gives the player the correct
+    /// total book duration immediately, before ffmpeg has generated any segments.
+    /// ffmpeg will overwrite this file as it generates segments — the pre-written
+    /// version is only used for the first request (before caching kicks in).
+    /// </summary>
+    /// <param name="playlistPath">File path for the .m3u8 playlist.</param>
+    /// <param name="hlsBaseUrl">Base URL prefix for segment references.</param>
+    /// <param name="chapters">Sorted list of chapter items with duration info.</param>
+    internal static void WriteAudiobookPlaylist(
+        string playlistPath,
+        string hlsBaseUrl,
+        List<MediaBrowser.Controller.Entities.BaseItem> chapters)
+    {
+        using var writer = new StreamWriter(playlistPath);
+        writer.WriteLine("#EXTM3U");
+        writer.WriteLine("#EXT-X-VERSION:3");
+        writer.WriteLine("#EXT-X-TARGETDURATION:250");
+        writer.WriteLine("#EXT-X-MEDIA-SEQUENCE:0");
+
+        for (int i = 0; i < chapters.Count; i++)
+        {
+            var chapter = chapters[i];
+            // RunTimeTicks is in 100-nanosecond intervals; convert to seconds
+            double durationSeconds = chapter.RunTimeTicks.HasValue && chapter.RunTimeTicks.Value > 0
+                ? chapter.RunTimeTicks.Value / 10000000.0
+                : 250.0; // fallback if duration unknown
+
+            writer.WriteLine("#EXT-X-DISCONTINUITY");
+            writer.WriteLine($"#EXTINF:{durationSeconds:F6},");
+            writer.WriteLine($"{hlsBaseUrl}seg_{i:D3}.ts");
+        }
+
+        writer.WriteLine("#EXT-X-ENDLIST");
     }
 
     /// <summary>
