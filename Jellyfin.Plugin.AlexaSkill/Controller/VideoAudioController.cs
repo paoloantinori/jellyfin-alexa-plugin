@@ -2,14 +2,19 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
+using MediaBrowser.Controller.Dto;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.MediaEncoding;
 using MediaBrowser.Model.Entities;
+using MediaBrowser.Model.Querying;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -211,9 +216,10 @@ public class VideoAudioController : ControllerBase
     /// Stream an HLS playlist combining album art and audio for the given item.
     /// HLS provides native seek support and correct duration display on Echo Show from first play.
     /// If a cached HLS directory exists (same item + same album art), serves the playlist directly.
-    /// Otherwise, generates HLS segments via ffmpeg, waits for completion, then serves the
-    /// complete playlist. Unlike the MP4 endpoint, the playlist must be complete before serving
-    /// so the HLS client sees all segments and the correct total duration.
+    /// Otherwise, starts ffmpeg generating HLS segments and serves the playlist as soon as the
+    /// first segment is ready — without waiting for the entire file to be encoded. This avoids
+    /// timeout issues with long content (audiobooks) where full encoding could take minutes.
+    /// The Echo Show re-fetches the playlist periodically and discovers new segments as they appear.
     /// </summary>
     /// <param name="itemId">The Jellyfin audio item ID.</param>
     /// <returns>An HLS playlist (.m3u8) file.</returns>
@@ -229,7 +235,9 @@ public class VideoAudioController : ControllerBase
 
         long artModifiedTicks = GetArtModifiedTicks(validation.Item);
 
-        // Check cache first (fast path — no lock needed)
+        // Check cache first (fast path — no lock needed).
+        // HLS playlists are served even when small (partial/in-progress) because
+        // ffmpeg writes atomically via .tmp rename — the file is always consistent.
         FileInfo? cached = await _cache.GetCachedHlsPlaylist(itemId, artModifiedTicks).ConfigureAwait(false);
         if (cached != null)
         {
@@ -259,12 +267,6 @@ public class VideoAudioController : ControllerBase
             string? artUrl = ResolveArtUrl(validation.Item, validation.ServerUrl);
             bool useBlackFrame = artUrl == null;
 
-            _logger.LogDebug(
-                "VideoAudio HLS: itemId={ItemId}, artUrl={ArtUrl}, useBlackFrame={UseBlackFrame}",
-                itemId,
-                artUrl ?? "(black frame)",
-                useBlackFrame);
-
 #pragma warning disable CA3003 // paths derived from GUID-validated itemId
             string hlsDir = _cache.GetHlsDirectoryPath(itemId, artModifiedTicks);
             Directory.CreateDirectory(hlsDir);
@@ -279,32 +281,253 @@ public class VideoAudioController : ControllerBase
                 _logger.LogDebug("VideoAudio HLS: ffmpeg arguments: {Args}", string.Join(" ", ffmpegArgs));
             }
 
-            // Generate HLS: wait for ffmpeg to complete so the playlist has all segments
-            // and the Echo Show sees the correct total duration from the first request.
-            using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+            // Start ffmpeg without waiting — generate segments in the background.
+            // Serve the playlist as soon as the first segment is ready so the Echo Show
+            // can start playback immediately, even for long content like audiobooks.
+            var ffmpegProcess = StartFfmpegProcess(validation.FfmpegPath, ffmpegArgs);
 
             try
             {
-                await RunFfmpegToCompletionAsync(validation.FfmpegPath, ffmpegArgs, cts.Token).ConfigureAwait(false);
+                // Wait for the first segment file to appear on disk.
+                // ffmpeg creates the playlist atomically (.tmp rename), so once the
+                // segment file exists, the playlist references are valid.
+                string firstSegmentPath = Path.Combine(hlsDir, "seg_000.ts");
+                bool segmentAppeared = false;
+                for (int i = 0; i < 200; i++) // up to ~20 seconds
+                {
+                    if (System.IO.File.Exists(firstSegmentPath) && System.IO.File.Exists(playlistPath))
+                    {
+                        segmentAppeared = true;
+                        break;
+                    }
+
+                    if (ffmpegProcess.HasExited)
+                    {
+                        break;
+                    }
+
+                    await Task.Delay(100).ConfigureAwait(false);
+                }
+
+                if (!segmentAppeared)
+                {
+                    _logger.LogWarning("VideoAudio HLS: ffmpeg failed to create first segment for item {ItemId} (exit code {ExitCode})", itemId, ffmpegProcess.HasExited ? ffmpegProcess.ExitCode : -1);
+                    try { ffmpegProcess.Kill(); } catch { /* already exited */ }
+                    ffmpegProcess.Dispose();
+                    return StatusCode(500, new { error = "HLS generation failed" });
+                }
 
                 // Register the HLS directory for fast segment lookups (avoids filesystem scan per segment)
                 _cache.RegisterHlsDirectory(itemId, artModifiedTicks);
 
-                // Background eviction — don't block the response
-                _ = Task.Run(() => _cache.EvictIfNeeded(), CancellationToken.None);
+                // Monitor ffmpeg in the background: wait for completion, log errors, trigger eviction.
+                _ = MonitorFfmpegHlsAsync(ffmpegProcess, hlsDir, itemId, artModifiedTicks);
 
-                _logger.LogDebug("VideoAudio HLS: serving generated playlist for item {ItemId}", itemId);
+                // Serve the partial playlist immediately — the Echo Show will start
+                // fetching segments and re-request the playlist for updates.
+                _logger.LogDebug("VideoAudio HLS: serving partial playlist for item {ItemId}", itemId);
                 return PhysicalFile(playlistPath, "application/vnd.apple.mpegurl");
             }
-            catch (OperationCanceledException)
+            catch
             {
-                _logger.LogWarning("VideoAudio HLS: ffmpeg timed out for item {ItemId}", itemId);
-                return StatusCode(504, new { error = "HLS generation timed out" });
+                try { ffmpegProcess.Kill(); } catch { /* already exited */ }
+                ffmpegProcess.Dispose();
+                throw;
             }
-            catch (Exception ex)
+#pragma warning restore CA3003
+        }
+    }
+
+    /// <summary>
+    /// Stream an HLS playlist that concatenates all chapters of an audiobook into
+    /// one continuous stream. Gives the full book duration in the Echo Show seek bar
+    /// and allows seeking across the entire book via VideoApp.Launch.
+    /// Uses ffmpeg's concat demuxer to join chapter audio URLs sequentially.
+    /// Segments are served by the existing <see cref="GetSegment"/> endpoint using
+    /// the parent GUID as the cache key — no collision with single-item entries.
+    /// </summary>
+    /// <param name="parentId">The audiobook parent folder ID.</param>
+    /// <returns>An HLS playlist (.m3u8) file spanning all chapters.</returns>
+    [HttpGet("audiobook/{parentId}/stream.m3u8")]
+    [AllowAnonymous]
+    public async Task<ActionResult> StreamHlsAudiobook([FromRoute] string parentId)
+    {
+        if (string.IsNullOrWhiteSpace(parentId) || !Guid.TryParse(parentId, out Guid parentGuid))
+        {
+            return BadRequest(new { error = "Invalid parentId format" });
+        }
+
+        string ffmpeg = ResolveFfmpegPath();
+        if (string.IsNullOrEmpty(ffmpeg))
+        {
+            _logger.LogError("ffmpeg not available for audiobook HLS request");
+            return StatusCode(503, new { error = "ffmpeg is not available on this server" });
+        }
+
+        var config = Plugin.Instance?.Configuration;
+        if (config == null || string.IsNullOrWhiteSpace(config.ServerAddress))
+        {
+            return StatusCode(503, new { error = "Plugin not configured" });
+        }
+
+        string serverUrl = config.ServerAddress.TrimEnd('/');
+
+        // Find the parent item (audiobook folder)
+        MediaBrowser.Controller.Entities.BaseItem? parent = _libraryManager.GetItemById(parentGuid);
+        if (parent == null)
+        {
+            _logger.LogWarning("VideoAudio audiobook HLS: parent {ParentId} not found", parentId);
+            return NotFound(new { error = "Parent item not found" });
+        }
+
+        // Get all AudioBook children sorted naturally by name (chapter order)
+        var childrenQuery = new InternalItemsQuery
+        {
+            ParentId = parentGuid,
+            IncludeItemTypes = new[] { BaseItemKind.AudioBook },
+            Recursive = true,
+            DtoOptions = new DtoOptions(true)
+        };
+
+        IReadOnlyList<MediaBrowser.Controller.Entities.BaseItem> chapters =
+            _libraryManager.GetItemList(childrenQuery);
+
+        if (chapters.Count == 0)
+        {
+            _logger.LogWarning("VideoAudio audiobook HLS: no AudioBook chapters found under parent {ParentId}", parentId);
+            return NotFound(new { error = "No audiobook chapters found" });
+        }
+
+        // Single chapter — use regular single-item HLS (no concat needed)
+        if (chapters.Count == 1)
+        {
+            _logger.LogDebug("VideoAudio audiobook HLS: single chapter, redirecting to single-item HLS for {ItemId}", chapters[0].Id);
+            return await StreamHlsVideoAudio(chapters[0].Id.ToString()).ConfigureAwait(false);
+        }
+
+        _logger.LogDebug(
+            "VideoAudio audiobook HLS: generating concat stream for '{BookName}' ({ParentId}) with {ChapterCount} chapters",
+            parent.Name, parentId, chapters.Count);
+
+        // Resolve art from the parent (book cover)
+        long artModifiedTicks = GetArtModifiedTicks(parent);
+        string? artUrl = ResolveArtUrl(parent, serverUrl);
+        bool useBlackFrame = artUrl == null;
+
+        // Check cache first (keyed by parent ID — different GUID than any chapter)
+        FileInfo? cached = await _cache.GetCachedHlsPlaylist(parentId, artModifiedTicks).ConfigureAwait(false);
+        if (cached != null)
+        {
+            _logger.LogDebug("VideoAudio audiobook HLS: serving cached playlist for parent {ParentId}", parentId);
+#pragma warning disable CA3003
+            return PhysicalFile(cached.FullName, "application/vnd.apple.mpegurl");
+#pragma warning restore CA3003
+        }
+
+        // Cache miss — acquire per-parent lock
+        using (await _cache.LockItemAsync(parentId, artModifiedTicks).ConfigureAwait(false))
+        {
+            _cache.CleanupHlsStub(parentId, artModifiedTicks);
+
+            // Double-check cache after acquiring lock
+            cached = await _cache.GetCachedHlsPlaylist(parentId, artModifiedTicks).ConfigureAwait(false);
+            if (cached != null)
             {
-                _logger.LogError(ex, "VideoAudio HLS: ffmpeg failed for item {ItemId}", itemId);
-                return StatusCode(500, new { error = "HLS generation failed" });
+                _logger.LogDebug("VideoAudio audiobook HLS: serving playlist generated by concurrent request for parent {ParentId}", parentId);
+#pragma warning disable CA3003
+                return PhysicalFile(cached.FullName, "application/vnd.apple.mpegurl");
+#pragma warning restore CA3003
+            }
+
+#pragma warning disable CA3003 // paths derived from GUID-validated parentId
+            string hlsDir = _cache.GetHlsDirectoryPath(parentId, artModifiedTicks);
+            Directory.CreateDirectory(hlsDir);
+
+            // Write ffmpeg concat input file listing all chapter audio URLs.
+            // The concat demuxer reads each chapter sequentially — it doesn't preload
+            // all URLs upfront, so the first segment appears in ~5 seconds regardless
+            // of total chapter count.
+            string concatListPath = Path.Combine(hlsDir, "chapters.txt");
+            var writer = new StreamWriter(concatListPath);
+            try
+            {
+                foreach (var chapter in chapters)
+                {
+                    string audioUrl = $"{serverUrl}/Audio/{chapter.Id}/stream?static=true";
+                    await writer.WriteLineAsync($"file '{audioUrl}'").ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                await writer.DisposeAsync().ConfigureAwait(false);
+            }
+
+            string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
+            // Segments will be ~250s each (one per chapter) — %03d (max 999) is sufficient
+            string segmentPath = Path.Combine(hlsDir, "seg_%03d.ts");
+            // Segments served by existing GetSegment endpoint using parentId as key
+            string hlsBaseUrl = $"/alexaskill/api/video-audio/{parentId}/segments/";
+
+            var ffmpegArgs = BuildHlsAudiobookFfmpegArguments(
+                concatListPath, artUrl, useBlackFrame, playlistPath, segmentPath, hlsBaseUrl);
+
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug("VideoAudio audiobook HLS: ffmpeg arguments: {Args}", string.Join(" ", ffmpegArgs));
+            }
+
+            // Start ffmpeg — same progressive approach as single-item HLS.
+            // Serve the playlist as soon as the first segment is ready.
+            var ffmpegProcess = StartFfmpegProcess(ffmpeg, ffmpegArgs);
+
+            try
+            {
+                // Wait for the first segment file to appear on disk.
+                string firstSegmentPath = Path.Combine(hlsDir, "seg_000.ts");
+                bool segmentAppeared = false;
+                for (int i = 0; i < 200; i++) // up to ~20 seconds
+                {
+                    if (System.IO.File.Exists(firstSegmentPath) && System.IO.File.Exists(playlistPath))
+                    {
+                        segmentAppeared = true;
+                        break;
+                    }
+
+                    if (ffmpegProcess.HasExited)
+                    {
+                        break;
+                    }
+
+                    await Task.Delay(100).ConfigureAwait(false);
+                }
+
+                if (!segmentAppeared)
+                {
+                    _logger.LogWarning(
+                        "VideoAudio audiobook HLS: ffmpeg failed to create first segment for parent {ParentId} ({ChapterCount} chapters, exit code {ExitCode})",
+                        parentId, chapters.Count, ffmpegProcess.HasExited ? ffmpegProcess.ExitCode : -1);
+                    try { ffmpegProcess.Kill(); } catch { /* already exited */ }
+                    ffmpegProcess.Dispose();
+                    return StatusCode(500, new { error = "HLS generation failed" });
+                }
+
+                // Register the HLS directory for segment lookups under the parent ID.
+                // The existing GetSegment endpoint uses this to find segments.
+                _cache.RegisterHlsDirectory(parentId, artModifiedTicks);
+
+                // Monitor ffmpeg in background with long timeout (audiobook-length content)
+                _ = MonitorFfmpegHlsAsync(ffmpegProcess, hlsDir, parentId, artModifiedTicks);
+
+                _logger.LogDebug(
+                    "VideoAudio audiobook HLS: serving partial playlist for parent {ParentId} ({ChapterCount} chapters)",
+                    parentId, chapters.Count);
+                return PhysicalFile(playlistPath, "application/vnd.apple.mpegurl");
+            }
+            catch
+            {
+                try { ffmpegProcess.Kill(); } catch { /* already exited */ }
+                ffmpegProcess.Dispose();
+                throw;
             }
 #pragma warning restore CA3003
         }
@@ -498,6 +721,7 @@ public class VideoAudioController : ControllerBase
     }
 
     private static readonly string[] BlackFrameInputArgs = ["-f", "lavfi", "-i", "color=c=black:s=1280x720:d=999"];
+    private static readonly string[] AudiobookBlackFrameInputArgs = ["-f", "lavfi", "-i", "color=c=black:s=1280x720:d=999999"];
     private static readonly string[] ArtInputPrefixArgs = ["-loop", "1", "-framerate", "1", "-i"];
     private static readonly string[] VideoCodecArgs = ["-c:v", "libx264", "-tune", "stillimage", "-preset", "ultrafast", "-crf", "28"];
     private static readonly string[] AudioCodecArgs = ["-c:a", "aac", "-b:a", "128k"];
@@ -560,7 +784,7 @@ public class VideoAudioController : ControllerBase
         args.Add("-hls_list_size");
         args.Add("0");
         args.Add("-hls_flags");
-        args.Add("append_list+delete_segments+omit_endlist");
+        args.Add("append_list");
 
         // Segment file name template
         args.Add("-hls_segment_filename");
@@ -570,6 +794,100 @@ public class VideoAudioController : ControllerBase
         args.Add("-hls_base_url");
         args.Add(hlsBaseUrl);
 
+        args.Add("-shortest");
+        args.Add(playlistPath);
+
+        return args;
+    }
+
+    /// <summary>
+    /// Build ffmpeg argument list for generating HLS output from concatenated audiobook chapters.
+    /// Uses the concat demuxer (<c>-f concat</c>) to join all chapter audio URLs sequentially
+    /// into one continuous stream. The concat demuxer opens each chapter lazily (not upfront),
+    /// so the first HLS segment appears in ~5 seconds regardless of total chapter count.
+    /// The art input uses a very long duration (27+ hours) to cover any audiobook length
+    /// when using the black frame fallback.
+    /// </summary>
+    /// <param name="concatListPath">Path to the ffmpeg concat input file listing chapter URLs.</param>
+    /// <param name="artUrl">Album art URL (null for black frame fallback).</param>
+    /// <param name="useBlackFrame">Whether to generate a black frame instead of using art.</param>
+    /// <param name="playlistPath">Output playlist file path.</param>
+    /// <param name="segmentPath">Segment filename template (e.g. "seg_%03d.ts").</param>
+    /// <param name="hlsBaseUrl">Base URL prefix for segment references in the playlist.</param>
+    /// <returns>List of ffmpeg arguments (one token per entry).</returns>
+    internal static List<string> BuildHlsAudiobookFfmpegArguments(
+        string concatListPath,
+        string? artUrl,
+        bool useBlackFrame,
+        string playlistPath,
+        string segmentPath,
+        string hlsBaseUrl)
+    {
+        var args = new List<string>();
+
+        // Input 0: concat demuxer for all chapters (read sequentially, not preloaded)
+        // -protocol_whitelist is required because the concat demuxer restricts which
+        // protocols can be used in the input file. Without it, HTTPS URLs fail with
+        // "Protocol 'https' not on whitelist 'file,crypto,data'!"
+        args.Add("-protocol_whitelist");
+        args.Add("file,http,https,tcp,tls,crypto,data");
+        args.Add("-f");
+        args.Add("concat");
+        args.Add("-safe");
+        args.Add("0");
+        args.Add("-i");
+        args.Add(concatListPath);
+
+        // Input 1: album art (looped) or black frame with long duration for audiobooks
+        if (useBlackFrame)
+        {
+            // 999999 seconds ≈ 11.5 days — covers any audiobook length
+            args.AddRange(AudiobookBlackFrameInputArgs);
+        }
+        else
+        {
+            args.AddRange(ArtInputPrefixArgs);
+            args.Add(artUrl!);
+        }
+
+        // Explicit stream mapping: take video from art input (input 1), audio from
+        // concat input (input 0, first audio stream only). This ignores any embedded
+        // cover art in chapter MP3 files, which would otherwise cause stream layout
+        // mismatches between chapters and break the HLS muxer.
+        args.Add("-map");
+        args.Add("1:0");    // art video → output video
+        args.Add("-map");
+        args.Add("0:a:0");  // concat first audio stream → output audio
+
+        // Video codec
+        args.AddRange(VideoCodecArgs);
+
+        // Audio codec
+        args.AddRange(AudioCodecArgs);
+
+        // Pixel format + frame rate
+        args.AddRange(PixelFormatArgs);
+
+        // Video filter (scale + pad)
+        args.AddRange(VideoFilterArgs);
+
+        // HLS-specific flags
+        args.Add("-hls_time");
+        args.Add("4");
+        args.Add("-hls_list_size");
+        args.Add("0");
+        args.Add("-hls_flags");
+        args.Add("append_list");
+
+        // Segment file name template
+        args.Add("-hls_segment_filename");
+        args.Add(segmentPath);
+
+        // Base URL for segment references in the playlist
+        args.Add("-hls_base_url");
+        args.Add(hlsBaseUrl);
+
+        // Stop when the shorter input ends (audio = finite chapters, art = infinite loop)
         args.Add("-shortest");
         args.Add(playlistPath);
 
@@ -747,6 +1065,57 @@ public class VideoAudioController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "ffmpeg monitoring failed for item {ItemId}", itemId);
+        }
+        finally
+        {
+            process.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Monitor an HLS ffmpeg process running in the background. Waits for the process
+    /// to exit (with a long timeout for audiobook-length content), logs the outcome,
+    /// and triggers cache eviction. Disposes the process when done.
+    /// Unlike <see cref="MonitorFfmpegAndRemuxAsync"/>, there is no remux step —
+    /// HLS segments are already seekable individually.
+    /// </summary>
+    /// <param name="process">The ffmpeg process (started, not yet awaited).</param>
+    /// <param name="hlsDir">The HLS directory containing playlist and segments.</param>
+    /// <param name="itemId">Item ID for logging.</param>
+    /// <param name="artModifiedTicks">Art ticks for logging.</param>
+    /// <returns>A task representing the background monitoring operation.</returns>
+    private async Task MonitorFfmpegHlsAsync(
+        Process process,
+        string hlsDir,
+        string itemId,
+        long artModifiedTicks)
+    {
+        try
+        {
+            // Long timeout for audiobook-length content (hours at 21x speed = minutes)
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(30));
+            await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+
+            if (process.ExitCode != 0)
+            {
+                _logger.LogWarning("VideoAudio HLS: ffmpeg exited with code {ExitCode} for item {ItemId}", process.ExitCode, itemId);
+            }
+            else
+            {
+                _logger.LogDebug("VideoAudio HLS: ffmpeg completed for item {ItemId}", itemId);
+            }
+
+            // Background eviction — don't block
+            _ = Task.Run(() => _cache.EvictIfNeeded(), CancellationToken.None);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("VideoAudio HLS: ffmpeg timed out (30 min) for item {ItemId}", itemId);
+            try { process.Kill(); } catch { /* already exited */ }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "VideoAudio HLS: ffmpeg monitoring failed for item {ItemId}", itemId);
         }
         finally
         {

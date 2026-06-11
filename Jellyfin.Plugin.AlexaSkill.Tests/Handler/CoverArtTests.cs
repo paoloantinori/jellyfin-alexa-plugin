@@ -744,6 +744,28 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
             Assert.Single(response.Response.Directives));
         Assert.Null(response.Response.ShouldEndSession); // VideoApp.Launch must NOT include shouldEndSession
     }
+
+    /// <summary>
+    /// Verify that songs (Audio type) route to VideoApp when native controls are on.
+    /// Songs use the single-item HLS endpoint.
+    /// </summary>
+    [Fact]
+    public void BuildAudioPlayerResponse_NativeControlsOn_SongStillUsesVideoApp()
+    {
+        var handler = CreateHandler();
+        var song = CreateSong("Test Song");
+        var user = CreateUser();
+        string itemId = song.Id.ToString();
+        string streamUrl = handler.GetStreamUrl(itemId, user);
+
+        var response = handler.BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
+
+        // Songs (Audio type) use VideoApp via single-item HLS
+        var directive = Assert.IsType<VideoAppLaunchDirective>(
+            Assert.Single(response.Response.Directives));
+        Assert.Null(response.Response.ShouldEndSession); // VideoApp.Launch must NOT include shouldEndSession
+    }
 }
 
 /// <summary>

@@ -393,6 +393,17 @@ public abstract class BaseHandler
     public string GetVideoAudioUrl(string itemId)
         => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/{itemId}/stream.m3u8").ToString();
 
+    /// <summary>
+    /// Get a video-audio URL for an audiobook that concatenates all chapters into
+    /// one continuous HLS stream. The parent ID is the book folder containing all
+    /// AudioBook chapter items. Segments are served by the existing segment endpoint
+    /// using the parent GUID as the cache key (no collision with single-item entries).
+    /// </summary>
+    /// <param name="parentId">Id of the audiobook parent folder.</param>
+    /// <returns>URL to the audiobook HLS concat endpoint.</returns>
+    public string GetAudiobookVideoAudioUrl(string parentId)
+        => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/audiobook/{parentId}/stream.m3u8").ToString();
+
     private string BuildStreamUrl(string pathSegment, string itemId, Entities.User user)
         => new Uri(new Uri(_config.ServerAddress), $"{pathSegment}{itemId}/stream?static=true&api_key={user.JellyfinToken}").ToString();
 
@@ -482,6 +493,8 @@ public abstract class BaseHandler
         // Route initial playback through VideoApp when native controls are enabled.
         // Enqueue/ReplaceEnqueued stay as AudioPlayer for queue building.
         // Resume (offset > 0) also stays as AudioPlayer since VideoApp has no offset support.
+        // AudioBook items use a special concat HLS endpoint that joins all chapters into
+        // one continuous stream, giving the full book duration in the seek bar.
         if (Plugin.Instance?.Configuration?.NativeControlsForAudio == true
             && playBehavior == PlayBehavior.ReplaceAll
             && offsetInMilliseconds == 0)
@@ -598,11 +611,27 @@ public abstract class BaseHandler
     /// Build a VideoApp.Launch response for audio playback using the video-audio
     /// endpoint, which combines album art with audio into a streamable MP4.
     /// Gives native progress bar / scrubber on Echo Show.
+    /// For AudioBook items, uses a special concat HLS endpoint that joins all chapters
+    /// into one continuous stream so the seek bar shows the full book duration.
     /// </summary>
     public SkillResponse BuildVideoAppAudioResponse(string itemId, BaseItem? item, Entities.User user)
     {
-        string videoAudioUrl = GetVideoAudioUrl(itemId);
-        Logger.LogDebug("BuildVideoAppAudioResponse: itemId={ItemId}, title={Title}, url={Url}", itemId, item?.Name, videoAudioUrl);
+        bool isAudioBook = item != null && item.GetType().Name.Equals("AudioBook", StringComparison.Ordinal);
+
+        string videoAudioUrl;
+        if (isAudioBook && item!.ParentId != Guid.Empty)
+        {
+            // Multi-chapter audiobook: use concat HLS endpoint keyed by parent book ID.
+            // The endpoint concatenates all chapters into one continuous HLS stream,
+            // giving the full book duration in the Echo Show seek bar.
+            videoAudioUrl = GetAudiobookVideoAudioUrl(item.ParentId.ToString());
+            Logger.LogDebug("BuildVideoAppAudioResponse: itemId={ItemId}, parentId={ParentId}, title={Title}, url={Url} (audiobook concat)", itemId, item.ParentId, item.Name, videoAudioUrl);
+        }
+        else
+        {
+            videoAudioUrl = GetVideoAudioUrl(itemId);
+            Logger.LogDebug("BuildVideoAppAudioResponse: itemId={ItemId}, title={Title}, url={Url}", itemId, item?.Name, videoAudioUrl);
+        }
 
         return new SkillResponse
         {

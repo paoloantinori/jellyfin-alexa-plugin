@@ -477,7 +477,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.Contains("-hls_list_size", args);
         Assert.Contains("0", args);
         Assert.Contains("-hls_flags", args);
-        Assert.Contains("append_list+delete_segments+omit_endlist", args);
+        Assert.Contains("append_list", args);
         Assert.Contains("-hls_segment_filename", args);
         Assert.Contains(segmentPath, args);
         Assert.Contains("-hls_base_url", args);
@@ -544,8 +544,9 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
-    /// Verify that on a cache miss, the HLS controller returns a FileStreamResult
-    /// with the HLS content type while ffmpeg generates segments.
+    /// Verify that on a cache miss, the HLS controller starts ffmpeg, waits for the
+    /// first segment to appear, and returns a PhysicalFileResult with the playlist.
+    /// The fake ffmpeg script creates both the segment file and playlist, then exits.
     /// </summary>
     [Fact]
     public async Task StreamHlsVideoAudio_CacheMiss_ReturnsPhysicalFileResult()
@@ -558,13 +559,20 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         _libraryManagerMock.Setup(m => m.GetItemById(audioItem.Id)).Returns(audioItem);
 
-        // Create a fake ffmpeg script that writes a dummy HLS playlist
+        // Create a fake ffmpeg script that writes a segment file and playlist.
+        // The new HLS endpoint waits for seg_000.ts to appear before serving the playlist.
         string fakeFfmpegPath = Path.Combine(_tempDir, "fake-ffmpeg-hls");
         string fakeFfmpegScript = "#!/bin/sh\n" +
             "playlist_path=\"${@: -1}\"\n" +
             "playlist_dir=\"$(dirname \"$playlist_path\")\"\n" +
             "mkdir -p \"$playlist_dir\"\n" +
-            "dd if=/dev/zero bs=1024 count=12 of=\"$playlist_path\" 2>/dev/null\n" +
+            // Create a segment file so the endpoint detects it and serves the playlist
+            "dd if=/dev/zero bs=1024 count=4 of=\"$playlist_dir/seg_000.ts\" 2>/dev/null\n" +
+            // Create the playlist file (ffmpeg uses .tmp + rename in production)
+            "echo '#EXTM3U' > \"$playlist_path\"\n" +
+            "echo '#EXT-X-VERSION:3' >> \"$playlist_path\"\n" +
+            "echo '#EXTINF:4.000,' >> \"$playlist_path\"\n" +
+            "echo 'seg_000.ts' >> \"$playlist_path\"\n" +
             "exit 0\n";
         File.WriteAllText(fakeFfmpegPath, fakeFfmpegScript);
 #pragma warning disable CA3003, CA1416 // test-created path; Unix-only test
@@ -585,7 +593,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         ActionResult result = await controller.StreamHlsVideoAudio(audioItem.Id.ToString());
 
-        // HLS waits for ffmpeg to complete, then serves the playlist via PhysicalFile
+        // HLS serves the playlist via PhysicalFile as soon as the first segment appears
         var physicalResult = Assert.IsType<PhysicalFileResult>(result);
         Assert.Equal("application/vnd.apple.mpegurl", physicalResult.ContentType);
     }
@@ -620,7 +628,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.IsType<BadRequestObjectResult>(controller.GetSegment(Guid.NewGuid().ToString(), "seg_000.ts/../../etc/passwd"));
         Assert.IsType<BadRequestObjectResult>(controller.GetSegment(Guid.NewGuid().ToString(), ""));
         Assert.IsType<BadRequestObjectResult>(controller.GetSegment(Guid.NewGuid().ToString(), "seg_00.ts"));
-        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(Guid.NewGuid().ToString(), "seg_0000.ts"));
+        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(Guid.NewGuid().ToString(), "seg_00000.ts"));   // 5 digits
         Assert.IsType<BadRequestObjectResult>(controller.GetSegment(Guid.NewGuid().ToString(), "segment.ts"));
     }
 
@@ -695,16 +703,21 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     [Fact]
     public void IsValidSegmentName_AcceptsValidAndRejectsInvalid()
     {
-        // Valid names
+        // Valid names (3 digits — single-item HLS)
         Assert.True(VideoAudioCache.IsValidSegmentName("seg_000.ts"));
         Assert.True(VideoAudioCache.IsValidSegmentName("seg_001.ts"));
         Assert.True(VideoAudioCache.IsValidSegmentName("seg_999.ts"));
+
+        // Valid names (4 digits — audiobook concat HLS)
+        Assert.True(VideoAudioCache.IsValidSegmentName("seg_0000.ts"));
+        Assert.True(VideoAudioCache.IsValidSegmentName("seg_0001.ts"));
+        Assert.True(VideoAudioCache.IsValidSegmentName("seg_9999.ts"));
 
         // Invalid names (traversal, wrong format, etc.)
         Assert.False(VideoAudioCache.IsValidSegmentName(""));
         Assert.False(VideoAudioCache.IsValidSegmentName("../etc/passwd"));
         Assert.False(VideoAudioCache.IsValidSegmentName("seg_00.ts"));      // only 2 digits
-        Assert.False(VideoAudioCache.IsValidSegmentName("seg_0000.ts"));    // 4 digits
+        Assert.False(VideoAudioCache.IsValidSegmentName("seg_00000.ts"));   // 5 digits
         Assert.False(VideoAudioCache.IsValidSegmentName("segment.ts"));
         Assert.False(VideoAudioCache.IsValidSegmentName("SEG_000.ts"));     // uppercase
         Assert.False(VideoAudioCache.IsValidSegmentName("seg_000.mp4"));
@@ -803,5 +816,309 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         _cache.Cleanup(itemId);
 
         Assert.False(Directory.Exists(hlsDir));
+    }
+
+    // ========== Audiobook HLS Tests ==========
+
+    /// <summary>
+    /// Verify that BuildHlsAudiobookFfmpegArguments produces correct concat demuxer arguments.
+    /// </summary>
+    [Fact]
+    public void BuildHlsAudiobookFfmpegArguments_WithArt_ContainsConcatDemuxer()
+    {
+        string concatListPath = "/tmp/test/chapters.txt";
+        string artUrl = "http://localhost:8096/Items/parent/Images/Primary";
+        string playlistPath = "/tmp/test/stream.m3u8";
+        string segmentPath = "/tmp/test/seg_%03d.ts";
+        string hlsBaseUrl = "/alexaskill/api/video-audio/parent-id/segments/";
+
+        List<string> args = VideoAudioController.BuildHlsAudiobookFfmpegArguments(
+            concatListPath, artUrl, false, playlistPath, segmentPath, hlsBaseUrl);
+
+        // Verify concat demuxer input
+        Assert.Contains("-f", args);
+        Assert.Contains("concat", args);
+        Assert.Contains("-safe", args);
+        Assert.Contains("0", args);
+        Assert.Contains(concatListPath, args);
+
+        // Verify art input (looped)
+        Assert.Contains("-loop", args);
+        Assert.Contains(artUrl, args);
+
+        // Verify codecs
+        Assert.Contains("libx264", args);
+        Assert.Contains("aac", args);
+
+        // Verify HLS flags
+        Assert.Contains("-hls_time", args);
+        Assert.Contains("4", args);
+        Assert.Contains("-hls_flags", args);
+        Assert.Contains("append_list", args);
+        Assert.Contains("-hls_base_url", args);
+        Assert.Contains(hlsBaseUrl, args);
+
+        // Verify output
+        Assert.Contains("-shortest", args);
+        Assert.Contains(playlistPath, args);
+
+        // No MP4 format flags
+        Assert.DoesNotContain("frag_keyframe+empty_moov", args);
+
+        // No single audio -i input (concat demuxer replaces it)
+        int inputIndex = args.IndexOf("-i");
+        Assert.Equal(concatListPath, args[inputIndex + 1]);
+    }
+
+    /// <summary>
+    /// Verify that BuildHlsAudiobookFfmpegArguments uses a long-duration black frame
+    /// (999999s ≈ 11.5 days) to cover any audiobook length.
+    /// </summary>
+    [Fact]
+    public void BuildHlsAudiobookFfmpegArguments_BlackFrame_UsesLongDuration()
+    {
+        string concatListPath = "/tmp/test/chapters.txt";
+        string playlistPath = "/tmp/test/stream.m3u8";
+        string segmentPath = "/tmp/test/seg_%03d.ts";
+        string hlsBaseUrl = "/alexaskill/api/video-audio/parent-id/segments/";
+
+        List<string> args = VideoAudioController.BuildHlsAudiobookFfmpegArguments(
+            concatListPath, null, true, playlistPath, segmentPath, hlsBaseUrl);
+
+        // Black frame with long duration (not the 999s used for songs)
+        Assert.Contains("color=c=black:s=1280x720:d=999999", args);
+        Assert.DoesNotContain("color=c=black:s=1280x720:d=999", args);
+        Assert.Contains(concatListPath, args);
+    }
+
+    /// <summary>
+    /// Verify that StreamHlsAudiobook returns 400 for an invalid parentId.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_InvalidParentId_Returns400()
+    {
+        var controller = CreateController();
+
+        ActionResult result = await controller.StreamHlsAudiobook("not-a-guid");
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    /// <summary>
+    /// Verify that StreamHlsAudiobook returns 404 when the parent is not found.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_ParentNotFound_Returns404()
+    {
+        Guid parentId = Guid.NewGuid();
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns((MediaBrowser.Controller.Entities.BaseItem?)null);
+
+        var controller = CreateController();
+
+        ActionResult result = await controller.StreamHlsAudiobook(parentId.ToString());
+
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    /// <summary>
+    /// Verify that StreamHlsAudiobook returns 404 when the parent has no AudioBook children.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_NoChapters_Returns404()
+    {
+        Guid parentId = Guid.NewGuid();
+        var parentItem = new MediaBrowser.Controller.Entities.Folder
+        {
+            Name = "Empty Book",
+            Id = parentId
+        };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(parentItem);
+        _libraryManagerMock.Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Returns(new List<MediaBrowser.Controller.Entities.BaseItem>());
+
+        var controller = CreateController();
+
+        ActionResult result = await controller.StreamHlsAudiobook(parentId.ToString());
+
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    /// <summary>
+    /// Verify that StreamHlsAudiobook with a single chapter redirects to single-item HLS.
+    /// This avoids unnecessary concat overhead for single-file audiobooks.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_SingleChapter_RedirectsToSingleItemHls()
+    {
+        Guid parentId = Guid.NewGuid();
+        Guid chapterId = Guid.NewGuid();
+        var parentItem = new MediaBrowser.Controller.Entities.Folder
+        {
+            Name = "Single Chapter Book",
+            Id = parentId
+        };
+        var chapterItem = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Chapter 1",
+            Id = chapterId
+        };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(parentItem);
+        _libraryManagerMock.Setup(m => m.GetItemById(chapterId)).Returns(chapterItem);
+        _libraryManagerMock.Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { chapterItem });
+
+        var controller = CreateController();
+
+        // Single chapter should redirect to single-item HLS which will return 400
+        // because the folder doesn't have media sources — but the key behavior is
+        // that the method was called (not the concat path)
+        ActionResult result = await controller.StreamHlsAudiobook(parentId.ToString());
+
+        // The redirect calls StreamHlsVideoAudio with the chapter ID,
+        // which validates the item has IHasMediaSources — Audio items do have it.
+        // With the mock setup, this should work as a cache miss path.
+        // Should NOT be "no chapters found" — single chapter redirects to single-item HLS
+        Assert.IsNotType<NotFoundObjectResult>(result);
+    }
+
+    /// <summary>
+    /// Verify that StreamHlsAudiobook generates concat HLS for multi-chapter audiobooks.
+    /// Uses a fake ffmpeg script to simulate HLS segment generation.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_MultiChapter_ReturnsConcatHlsPlaylist()
+    {
+        Guid parentId = Guid.NewGuid();
+        Guid chapter1Id = Guid.NewGuid();
+        Guid chapter2Id = Guid.NewGuid();
+        var parentItem = new MediaBrowser.Controller.Entities.Folder
+        {
+            Name = "Test Book",
+            Id = parentId
+        };
+        var chapter1 = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Chapter 1",
+            Id = chapter1Id
+        };
+        var chapter2 = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Chapter 2",
+            Id = chapter2Id
+        };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(parentItem);
+        _libraryManagerMock.Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { chapter1, chapter2 });
+
+        // Create a fake ffmpeg script that simulates HLS generation
+        string fakeFfmpegPath = Path.Combine(_tempDir, "fake-ffmpeg-audiobook");
+        string fakeFfmpegScript = "#!/bin/sh\n" +
+            "playlist_path=\"${@: -1}\"\n" +
+            "playlist_dir=\"$(dirname \"$playlist_path\")\"\n" +
+            "mkdir -p \"$playlist_dir\"\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$playlist_dir/seg_000.ts\" 2>/dev/null\n" +
+            "echo '#EXTM3U' > \"$playlist_path\"\n" +
+            "echo '#EXT-X-VERSION:3' >> \"$playlist_path\"\n" +
+            "echo '#EXTINF:4.000,' >> \"$playlist_path\"\n" +
+            "echo 'seg_000.ts' >> \"$playlist_path\"\n" +
+            "exit 0\n";
+        File.WriteAllText(fakeFfmpegPath, fakeFfmpegScript);
+#pragma warning disable CA3003, CA1416
+        File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+#pragma warning restore CA3003, CA1416
+
+        var controller = CreateController();
+        controller.FfmpegPath = fakeFfmpegPath;
+
+        var httpContext = new DefaultHttpContext
+        {
+            RequestAborted = CancellationToken.None
+        };
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = httpContext
+        };
+
+        ActionResult result = await controller.StreamHlsAudiobook(parentId.ToString());
+
+        var physicalResult = Assert.IsType<PhysicalFileResult>(result);
+        Assert.Equal("application/vnd.apple.mpegurl", physicalResult.ContentType);
+    }
+
+    /// <summary>
+    /// Verify that the concat chapters.txt file is written correctly with all chapter URLs.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_WritesCorrectConcatList()
+    {
+        Guid parentId = Guid.NewGuid();
+        Guid chapter1Id = Guid.NewGuid();
+        Guid chapter2Id = Guid.NewGuid();
+        var parentItem = new MediaBrowser.Controller.Entities.Folder
+        {
+            Name = "Concat Test Book",
+            Id = parentId
+        };
+        var chapter1 = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Chapter 1",
+            Id = chapter1Id
+        };
+        var chapter2 = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Chapter 2",
+            Id = chapter2Id
+        };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(parentItem);
+        _libraryManagerMock.Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { chapter1, chapter2 });
+
+        // Create a fake ffmpeg that writes the concat list and creates segments
+        string fakeFfmpegPath = Path.Combine(_tempDir, "fake-ffmpeg-concat-check");
+        string fakeFfmpegScript = "#!/bin/sh\n" +
+            "playlist_path=\"${@: -1}\"\n" +
+            "playlist_dir=\"$(dirname \"$playlist_path\")\"\n" +
+            "mkdir -p \"$playlist_dir\"\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$playlist_dir/seg_000.ts\" 2>/dev/null\n" +
+            "echo '#EXTM3U' > \"$playlist_path\"\n" +
+            "echo '#EXT-X-VERSION:3' >> \"$playlist_path\"\n" +
+            "echo '#EXTINF:4.000,' >> \"$playlist_path\"\n" +
+            "echo 'seg_000.ts' >> \"$playlist_path\"\n" +
+            "exit 0\n";
+        File.WriteAllText(fakeFfmpegPath, fakeFfmpegScript);
+#pragma warning disable CA3003, CA1416
+        File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+#pragma warning restore CA3003, CA1416
+
+        var controller = CreateController();
+        controller.FfmpegPath = fakeFfmpegPath;
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { RequestAborted = CancellationToken.None }
+        };
+
+        await controller.StreamHlsAudiobook(parentId.ToString());
+
+        // Verify the concat list was written with correct chapter URLs
+        string hlsDir = _cache.GetHlsDirectoryPath(parentId.ToString(), 0);
+        string concatListPath = Path.Combine(hlsDir, "chapters.txt");
+        Assert.True(File.Exists(concatListPath));
+
+        string concatContent = File.ReadAllText(concatListPath);
+        Assert.Contains(chapter1Id.ToString(), concatContent);
+        Assert.Contains(chapter2Id.ToString(), concatContent);
+        Assert.Contains("/Audio/", concatContent);
+        Assert.Contains("/stream?static=true", concatContent);
+        Assert.Equal(2, concatContent.Split("file '", StringSplitOptions.RemoveEmptyEntries).Length);
     }
 }

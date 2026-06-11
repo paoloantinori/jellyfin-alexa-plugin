@@ -186,7 +186,8 @@ public class VideoAudioCache
     /// <summary>
     /// Clean up a corrupt/partial HLS directory from a previous failed generation.
     /// Only called inside the per-item lock to avoid racing with active generation.
-    /// Deletes the directory only if the playlist file is below <see cref="MinValidFileSize"/>.
+    /// Deletes the directory only if the playlist file is missing or empty (0 bytes),
+    /// which indicates ffmpeg never successfully wrote a segment.
     /// </summary>
     /// <param name="itemId">The Jellyfin item ID.</param>
     /// <param name="artModifiedTicks">Ticks from the album art's DateModified.</param>
@@ -209,9 +210,9 @@ public class VideoAudioCache
         }
 
         var fi = new FileInfo(playlistPath);
-        if (fi.Length < MinValidFileSize)
+        if (fi.Length == 0)
         {
-            _logger.LogWarning("VideoAudio HLS: removing stub directory ({Size} bytes playlist): {Path}", fi.Length, dirPath);
+            _logger.LogWarning("VideoAudio HLS: removing stub directory (empty playlist): {Path}", dirPath);
             try { Directory.Delete(dirPath, recursive: true); }
             catch (IOException ex) { _logger.LogDebug(ex, "Failed to delete HLS stub directory: {Path}", dirPath); }
         }
@@ -451,7 +452,11 @@ public class VideoAudioCache
     }
 
     /// <summary>
-    /// Returns the cached HLS playlist file if it exists and has valid size, null otherwise.
+    /// Returns the cached HLS playlist file if it exists and has any content, null otherwise.
+    /// HLS playlists are served even when small because ffmpeg writes them atomically
+    /// (.tmp rename) — a non-empty file is always a valid partial or complete playlist.
+    /// This allows the Echo Show to start playback as soon as the first segment is ready,
+    /// without waiting for the entire content to be encoded.
     /// </summary>
     /// <param name="itemId">The Jellyfin item ID.</param>
     /// <param name="artModifiedTicks">Ticks from the album art's DateModified.</param>
@@ -463,7 +468,7 @@ public class VideoAudioCache
         var fi = new FileInfo(path);
 #pragma warning restore CA3003
 
-        if (fi.Exists && fi.Length >= MinValidFileSize)
+        if (fi.Exists && fi.Length > 0)
         {
             _logger.LogDebug("VideoAudio HLS cache hit: {Path} ({Size} bytes)", path, fi.Length);
             return Task.FromResult<FileInfo?>(fi);
@@ -482,13 +487,32 @@ public class VideoAudioCache
     /// <returns>True if the name is valid, false otherwise.</returns>
     public static bool IsValidSegmentName(string segmentName)
     {
-        // Expected format: seg_NNN.ts where NNN is exactly 3 digits (total 10 chars)
-        return segmentName.Length == 10
-            && segmentName.StartsWith("seg_", StringComparison.Ordinal)
-            && char.IsDigit(segmentName[4])
-            && char.IsDigit(segmentName[5])
-            && char.IsDigit(segmentName[6])
-            && segmentName.EndsWith(".ts", StringComparison.Ordinal);
+        // Expected formats:
+        //   seg_NNN.ts   (3 digits, 10 chars) — single-item HLS
+        //   seg_NNNN.ts  (4 digits, 11 chars) — audiobook concat HLS
+        // The prefix and suffix are checked first, then all chars between must be digits.
+        if (!segmentName.StartsWith("seg_", StringComparison.Ordinal)
+            || !segmentName.EndsWith(".ts", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        // "seg_" = 4 chars, ".ts" = 3 chars → middle part is the digit sequence
+        int digitCount = segmentName.Length - 7; // 4 + 3
+        if (digitCount < 3 || digitCount > 4)
+        {
+            return false;
+        }
+
+        for (int i = 4; i < 4 + digitCount; i++)
+        {
+            if (!char.IsDigit(segmentName[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>
