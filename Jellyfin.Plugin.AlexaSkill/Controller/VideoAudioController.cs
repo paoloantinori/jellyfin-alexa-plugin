@@ -463,9 +463,8 @@ public class VideoAudioController : ControllerBase
             }
 
             string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
-            // Segments will be ~30s each (~8 per chapter). %04d supports 9999 segments
-            // (100 chapters × 8 segments = 800, well within range).
-            string segmentPath = Path.Combine(hlsDir, "seg_%04d.ts");
+            // Segments will be ~250s each (one per chapter) — %03d (max 999) is sufficient
+            string segmentPath = Path.Combine(hlsDir, "seg_%03d.ts");
             // Segments served by existing GetSegment endpoint using parentId as key
             string hlsBaseUrl = $"/alexaskill/api/video-audio/{parentId}/segments/";
 
@@ -477,50 +476,52 @@ public class VideoAudioController : ControllerBase
                 _logger.LogDebug("VideoAudio audiobook HLS: ffmpeg arguments: {Args}", string.Join(" ", ffmpegArgs));
             }
 
-            // Start ffmpeg and wait for FULL completion before serving the playlist.
-            // Unlike single-item HLS, audiobooks cannot use progressive serving because
-            // the Echo Show calculates total duration from the playlist content. If we
-            // serve after only 2 segments (~60s), it reports the book as 1 minute long.
-            // Audiobook encoding takes minutes but the result is cached permanently.
+            // Start ffmpeg — same progressive approach as single-item HLS.
+            // Serve the playlist as soon as the first segment is ready.
             var ffmpegProcess = StartFfmpegProcess(ffmpeg, ffmpegArgs);
 
             try
             {
-                // Wait for ffmpeg to finish with a long timeout (audiobook-length content).
-                // A 100-chapter book at ~21x encode speed takes ~10-15 minutes.
-                using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(30));
-                await ffmpegProcess.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+                // Wait for the first segment file to appear on disk.
+                string firstSegmentPath = Path.Combine(hlsDir, "seg_000.ts");
+                bool segmentAppeared = false;
+                for (int i = 0; i < 200; i++) // up to ~20 seconds
+                {
+                    if (System.IO.File.Exists(firstSegmentPath) && System.IO.File.Exists(playlistPath))
+                    {
+                        segmentAppeared = true;
+                        break;
+                    }
 
-                if (ffmpegProcess.ExitCode != 0)
+                    if (ffmpegProcess.HasExited)
+                    {
+                        break;
+                    }
+
+                    await Task.Delay(100).ConfigureAwait(false);
+                }
+
+                if (!segmentAppeared)
                 {
                     _logger.LogWarning(
-                        "VideoAudio audiobook HLS: ffmpeg exited with code {ExitCode} for parent {ParentId} ({ChapterCount} chapters)",
-                        ffmpegProcess.ExitCode, parentId, chapters.Count);
+                        "VideoAudio audiobook HLS: ffmpeg failed to create first segment for parent {ParentId} ({ChapterCount} chapters, exit code {ExitCode})",
+                        parentId, chapters.Count, ffmpegProcess.HasExited ? ffmpegProcess.ExitCode : -1);
+                    try { ffmpegProcess.Kill(); } catch { /* already exited */ }
                     ffmpegProcess.Dispose();
                     return StatusCode(500, new { error = "HLS generation failed" });
                 }
 
                 // Register the HLS directory for segment lookups under the parent ID.
+                // The existing GetSegment endpoint uses this to find segments.
                 _cache.RegisterHlsDirectory(parentId, artModifiedTicks);
 
-                // Trigger background eviction
-                _ = Task.Run(() => _cache.EvictIfNeeded(), CancellationToken.None);
-
-                ffmpegProcess.Dispose();
+                // Monitor ffmpeg in background with long timeout (audiobook-length content)
+                _ = MonitorFfmpegHlsAsync(ffmpegProcess, hlsDir, parentId, artModifiedTicks);
 
                 _logger.LogDebug(
-                    "VideoAudio audiobook HLS: serving complete playlist for parent {ParentId} ({ChapterCount} chapters)",
+                    "VideoAudio audiobook HLS: serving partial playlist for parent {ParentId} ({ChapterCount} chapters)",
                     parentId, chapters.Count);
-#pragma warning disable CA3003
                 return PhysicalFile(playlistPath, "application/vnd.apple.mpegurl");
-#pragma warning restore CA3003
-            }
-            catch (OperationCanceledException)
-            {
-                _logger.LogWarning("VideoAudio audiobook HLS: ffmpeg timed out (30 min) for parent {ParentId}", parentId);
-                try { ffmpegProcess.Kill(); } catch { /* already exited */ }
-                ffmpegProcess.Dispose();
-                return StatusCode(500, new { error = "HLS generation timed out" });
             }
             catch
             {
@@ -870,24 +871,15 @@ public class VideoAudioController : ControllerBase
         // Video filter (scale + pad)
         args.AddRange(VideoFilterArgs);
 
-        // GOP size of 30 frames at 1fps = 30-second keyframe interval.
-        // This lets the HLS muxer split segments within chapters instead of
-        // creating one giant segment per chapter (~250s/4MB).
-        // Using -g instead of -force_key_frames because the latter's time
-        // expression resets at concat demuxer chapter boundaries, which
-        // confused the HLS muxer and caused ffmpeg to crash mid-encode.
-        args.Add("-g");
-        args.Add("30");
-
-        // HLS-specific flags: 30-second segments for responsive seeking.
+        // HLS-specific flags
         args.Add("-hls_time");
-        args.Add("30");
+        args.Add("4");
         args.Add("-hls_list_size");
         args.Add("0");
         args.Add("-hls_flags");
-        args.Add("append_list+independent_segments");
+        args.Add("append_list");
 
-        // Segment file name template — use %04d for 100+ chapters
+        // Segment file name template
         args.Add("-hls_segment_filename");
         args.Add(segmentPath);
 
