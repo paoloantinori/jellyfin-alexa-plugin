@@ -415,9 +415,32 @@ public class VideoAudioController : ControllerBase
         bool useBlackFrame = artUrl == null;
 
         // Check cache first (keyed by parent ID — different GUID than any chapter)
+        // For audiobooks, prefer the pre-written full playlist over ffmpeg's partial one.
+        // The pre-written file has correct total duration; ffmpeg's stream.m3u8 is partial
+        // until encoding completes. We check if ffmpeg's playlist is complete by looking
+        // for #EXT-X-ENDLIST (ffmpeg appends this when done).
         FileInfo? cached = await _cache.GetCachedHlsPlaylist(parentId, artModifiedTicks).ConfigureAwait(false);
         if (cached != null)
         {
+            // If the cached playlist is ffmpeg's stream.m3u8 and it's incomplete (no ENDLIST),
+            // check if the pre-written full playlist exists and prefer that instead.
+            if (!cached.Name.Equals("playlist-full.m3u8", StringComparison.Ordinal))
+            {
+                string prewrittenPath = Path.Combine(cached.DirectoryName!, "playlist-full.m3u8");
+#pragma warning disable CA3003
+                if (System.IO.File.Exists(prewrittenPath))
+                {
+                    // Check if ffmpeg's playlist is complete (has ENDLIST)
+                    string content = await System.IO.File.ReadAllTextAsync(cached.FullName).ConfigureAwait(false);
+                    if (!content.Contains("#EXT-X-ENDLIST", StringComparison.Ordinal))
+                    {
+                        _logger.LogDebug("VideoAudio audiobook HLS: serving pre-written playlist (ffmpeg still running) for parent {ParentId}", parentId);
+                        return PhysicalFile(prewrittenPath, "application/vnd.apple.mpegurl");
+                    }
+                }
+#pragma warning restore CA3003
+            }
+
             _logger.LogDebug("VideoAudio audiobook HLS: serving cached playlist for parent {ParentId}", parentId);
 #pragma warning disable CA3003
             return PhysicalFile(cached.FullName, "application/vnd.apple.mpegurl");
