@@ -850,11 +850,12 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.Contains("libx264", args);
         Assert.Contains("aac", args);
 
-        // Verify HLS flags
+        // Verify HLS flags — audiobook uses 30s segments for responsive seeking
         Assert.Contains("-hls_time", args);
-        Assert.Contains("4", args);
+        Assert.Contains("30", args);
         Assert.Contains("-hls_flags", args);
-        Assert.Contains("append_list", args);
+        Assert.Contains("append_list+independent_segments", args);
+        Assert.Contains("-force_key_frames", args);
         Assert.Contains("-hls_base_url", args);
         Assert.Contains(hlsBaseUrl, args);
 

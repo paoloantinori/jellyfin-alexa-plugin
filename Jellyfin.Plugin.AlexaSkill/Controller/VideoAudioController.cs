@@ -463,8 +463,9 @@ public class VideoAudioController : ControllerBase
             }
 
             string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
-            // Segments will be ~250s each (one per chapter) — %03d (max 999) is sufficient
-            string segmentPath = Path.Combine(hlsDir, "seg_%03d.ts");
+            // Segments will be ~30s each (~8 per chapter). %04d supports 9999 segments
+            // (100 chapters × 8 segments = 800, well within range).
+            string segmentPath = Path.Combine(hlsDir, "seg_%04d.ts");
             // Segments served by existing GetSegment endpoint using parentId as key
             string hlsBaseUrl = $"/alexaskill/api/video-audio/{parentId}/segments/";
 
@@ -871,15 +872,24 @@ public class VideoAudioController : ControllerBase
         // Video filter (scale + pad)
         args.AddRange(VideoFilterArgs);
 
-        // HLS-specific flags
+        // Force keyframes every 30 seconds so the HLS muxer can split segments
+        // within chapters. Without this, the concat demuxer creates one segment
+        // per chapter (~250s each), making seeking very slow (4MB per segment).
+        args.Add("-force_key_frames");
+        args.Add("expr:gte(t,n_forced*30)");
+
+        // HLS-specific flags: 30-second segments for responsive seeking.
+        // independent_segments allows each segment to be decoded alone (needed
+        // for random access / seek). append_list lets ffmpeg update the playlist
+        // progressively as segments are generated.
         args.Add("-hls_time");
-        args.Add("4");
+        args.Add("30");
         args.Add("-hls_list_size");
         args.Add("0");
         args.Add("-hls_flags");
-        args.Add("append_list");
+        args.Add("append_list+independent_segments");
 
-        // Segment file name template
+        // Segment file name template — use %04d for 100+ chapters
         args.Add("-hls_segment_filename");
         args.Add(segmentPath);
 
