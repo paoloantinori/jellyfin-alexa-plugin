@@ -250,7 +250,7 @@ ffmpeg -f concat -safe 0 -i chapters.txt \
 - **VideoApp.Launch requires video track**: Echo Show's VideoApp expects H.264 video. Audio-only HLS plays but seeking doesn't work. 1fps black frames provide the keyframes needed for seeking.
 - **Echo Show VideoApp does NOT support AudioPlayer features**: No album art, no metadata, no queue management. Trade-off: seek bar (VideoApp) vs album art (AudioPlayer).
 - **AudioPlayer custom skills get NO scrubber/progress bar**: Only the Music/Radio/Podcast Skill API (Amazon partnership required) gets the native player with seek bar. Custom skills using `AudioPlayer.Play` get only play/pause/next/previous buttons.
-- **Pre-written playlists don't work**: Writing an M3U8 that references segments before they exist fails on Echo Show. The player validates segments before starting playback. Always serve only segments that exist on disk.
+- **Pre-written event playlists (no ENDLIST) DO work**: A playlist WITHOUT `#EXT-X-ENDLIST` is an event playlist — the player plays available segments without failing on missing ones. This is how first-play gets correct total duration. VOD playlists (WITH ENDLIST) referencing missing segments DO fail.
 
 ## Interaction Model Anti-Patterns — DO NOT REPEAT
 

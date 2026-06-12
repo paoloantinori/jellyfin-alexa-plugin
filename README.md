@@ -114,6 +114,7 @@ A Jellyfin plugin that creates a personal Alexa skill to play and control media 
 - **Custom interaction models**: deploy your own interaction model via URL for any locale
 - **Multi-language**: 17 locales across 11 languages with 58 intents each
 - **Audio and video**: supports both audio playback (AudioPlayer) and video launching
+- **Audiobook seek bar**: multi-chapter audiobooks on Echo Show get a full-book seek bar via HLS concat streaming, with accurate seeking across chapters
 - **Robust resume**: three-tier position fallback (Alexa context → Jellyfin session → device queue) ensures playback resumes correctly even after session state is cleared
 - **Fast/Thorough search mode**: per-user choice between fast single-query auto-play or thorough multi-tier fallback with disambiguation
 - **PostPlay AutoPlay**: when a single song ends and the queue is empty, automatically enqueues similar tracks from your library (configurable per-user or globally)
