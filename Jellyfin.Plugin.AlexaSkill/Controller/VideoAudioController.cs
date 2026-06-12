@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
@@ -36,6 +38,23 @@ public class VideoAudioController : ControllerBase
     private readonly IMediaEncoder _mediaEncoder;
     private readonly VideoAudioCache _cache;
     private readonly ILogger<VideoAudioController> _logger;
+
+    /// <summary>
+    /// Tracks audiobook HLS encode operations currently in progress by parentId.
+    /// Prevents concurrent ffmpeg processes for the same audiobook (Echo Show
+    /// sends multiple rapid requests for stream.m3u8).
+    /// Key: parentId string, Value: dummy bool (presence = active).
+    /// </summary>
+    private static readonly ConcurrentDictionary<string, bool> _activeAudiobookEncodes = new();
+
+    /// <summary>
+    /// Compiled regex for extracting trailing chapter number from audiobook filenames
+    /// (e.g. "The Upside of Irrationality 065.mp3" → 65).
+    /// </summary>
+    private static readonly Regex _chapterNumberRegex = new(@"(\d+)\s*$", RegexOptions.Compiled);
+
+    private const string HlsExtInf = "#EXTINF:";
+    private const string HlsEndList = "#EXT-X-ENDLIST";
 
     /// <summary>
     /// Initializes a new instance of the <see cref="VideoAudioController"/> class.
@@ -380,7 +399,7 @@ public class VideoAudioController : ControllerBase
             return NotFound(new { error = "Parent item not found" });
         }
 
-        // Get all AudioBook children sorted naturally by name (chapter order)
+        // Get all AudioBook children.
         var childrenQuery = new InternalItemsQuery
         {
             ParentId = parentGuid,
@@ -409,41 +428,50 @@ public class VideoAudioController : ControllerBase
             "VideoAudio audiobook HLS: generating concat stream for '{BookName}' ({ParentId}) with {ChapterCount} chapters",
             parent.Name, parentId, chapters.Count);
 
-        // Resolve art from the parent (book cover)
+        // Resolve art from the parent (book cover) for cache key only.
+        // Always use black frame for audiobook HLS — the 1fps black frame video is the
+        // proven approach for seeking, and VideoApp.Launch doesn't display album art anyway.
+        // Using album art with -loop requires a video filter to ensure even dimensions for
+        // libx264, and the art image may have arbitrary dimensions.
         long artModifiedTicks = GetArtModifiedTicks(parent);
-        string? artUrl = ResolveArtUrl(parent, serverUrl);
-        bool useBlackFrame = artUrl == null;
 
         // Check cache first (keyed by parent ID — different GUID than any chapter)
-        // For audiobooks, prefer the pre-written full playlist over ffmpeg's partial one.
-        // The pre-written file has correct total duration; ffmpeg's stream.m3u8 is partial
-        // until encoding completes. We check if ffmpeg's playlist is complete by looking
-        // for #EXT-X-ENDLIST (ffmpeg appends this when done).
+        // For audiobooks with 10s segments, we cannot serve a pre-written playlist because
+        // it would reference thousands of segments that don't exist yet. Instead:
+        // - During encoding: serve ffmpeg's live stream.m3u8 (only lists existing segments)
+        // - After encoding: serve the completed cached stream.m3u8 (has ENDLIST)
+        // We validate completeness by checking for ENDLIST + segment count >= chapter count.
         FileInfo? cached = await _cache.GetCachedHlsPlaylist(parentId, artModifiedTicks).ConfigureAwait(false);
         if (cached != null)
         {
-            // If the cached playlist is ffmpeg's stream.m3u8 and it's incomplete (no ENDLIST),
-            // check if the pre-written full playlist exists and prefer that instead.
-            if (!cached.Name.Equals("playlist-full.m3u8", StringComparison.Ordinal))
+            cached = await ValidateAudiobookCacheAsync(cached, chapters.Count, parentId).ConfigureAwait(false);
+
+            if (cached != null)
             {
-                string prewrittenPath = Path.Combine(cached.DirectoryName!, "playlist-full.m3u8");
+                _logger.LogDebug("VideoAudio audiobook HLS: serving cached playlist for parent {ParentId}", parentId);
 #pragma warning disable CA3003
-                if (System.IO.File.Exists(prewrittenPath))
-                {
-                    // Check if ffmpeg's playlist is complete (has ENDLIST)
-                    string content = await System.IO.File.ReadAllTextAsync(cached.FullName).ConfigureAwait(false);
-                    if (!content.Contains("#EXT-X-ENDLIST", StringComparison.Ordinal))
-                    {
-                        _logger.LogDebug("VideoAudio audiobook HLS: serving pre-written playlist (ffmpeg still running) for parent {ParentId}", parentId);
-                        return PhysicalFile(prewrittenPath, "application/vnd.apple.mpegurl");
-                    }
-                }
+                return PhysicalFile(cached.FullName, "application/vnd.apple.mpegurl");
 #pragma warning restore CA3003
             }
+        }
 
-            _logger.LogDebug("VideoAudio audiobook HLS: serving cached playlist for parent {ParentId}", parentId);
+        // Guard: if an encode is already running for this audiobook (from a concurrent
+        // Echo Show request), serve the pre-written event playlist instead of starting
+        // another ffmpeg. The pre-written playlist has correct total duration and no
+        // ENDLIST, so the player plays available segments.
+        if (_activeAudiobookEncodes.TryGetValue(parentId, out _))
+        {
+            _logger.LogDebug("VideoAudio audiobook HLS: encode already in progress for {ParentId}, serving pre-written playlist", parentId);
+            string hlsDir = _cache.GetHlsDirectoryPath(parentId, artModifiedTicks);
 #pragma warning disable CA3003
-            return PhysicalFile(cached.FullName, "application/vnd.apple.mpegurl");
+            string prewrittenPath = Path.Combine(hlsDir, "playlist-full.m3u8");
+            if (System.IO.File.Exists(prewrittenPath))
+            {
+                return PhysicalFile(prewrittenPath, "application/vnd.apple.mpegurl");
+            }
+
+            _logger.LogWarning("VideoAudio audiobook HLS: pre-written playlist not available for {ParentId}, returning 503", parentId);
+            return StatusCode(503, "Encode in progress");
 #pragma warning restore CA3003
         }
 
@@ -452,21 +480,54 @@ public class VideoAudioController : ControllerBase
         {
             _cache.CleanupHlsStub(parentId, artModifiedTicks);
 
-            // Double-check cache after acquiring lock
+            // Double-check cache after acquiring lock (another request's encode may have completed)
             cached = await _cache.GetCachedHlsPlaylist(parentId, artModifiedTicks).ConfigureAwait(false);
             if (cached != null)
             {
-                _logger.LogDebug("VideoAudio audiobook HLS: serving playlist generated by concurrent request for parent {ParentId}", parentId);
+                cached = await ValidateAudiobookCacheAsync(cached, chapters.Count, parentId).ConfigureAwait(false);
+
+                if (cached != null)
+                {
+                    _logger.LogDebug("VideoAudio audiobook HLS: serving playlist generated by concurrent request for parent {ParentId}", parentId);
 #pragma warning disable CA3003
-                return PhysicalFile(cached.FullName, "application/vnd.apple.mpegurl");
+                    return PhysicalFile(cached.FullName, "application/vnd.apple.mpegurl");
 #pragma warning restore CA3003
+                }
             }
 
 #pragma warning disable CA3003 // paths derived from GUID-validated parentId
             string hlsDir = _cache.GetHlsDirectoryPath(parentId, artModifiedTicks);
             Directory.CreateDirectory(hlsDir);
 
-            // Write ffmpeg concat input file listing all chapter audio URLs.
+            // Sort chapters by file path number for correct playback order.
+            // Audiobook chapters are typically named "... 001.mp3", "... 002.mp3" etc.
+            // Jellyfin doesn't always parse these into IndexNumber, and SortName/Name
+            // may be identical across all chapters. Extract the trailing number from
+            // the filename for natural chapter order.
+            _logger.LogInformation(
+                "Audiobook chapter sort: first item Name={Name}, Path={Path}, Id={Id}",
+                chapters[0].Name, chapters[0].Path, chapters[0].Id);
+
+            var sortedChapters = chapters
+                .OrderBy(c =>
+                {
+                    string? path = c.Path;
+                    if (string.IsNullOrEmpty(path))
+                    {
+                        return int.MaxValue;
+                    }
+
+                    string filename = System.IO.Path.GetFileNameWithoutExtension(path);
+                    var match = _chapterNumberRegex.Match(filename);
+                    return match.Success ? int.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) : int.MaxValue;
+                })
+                .ToList();
+
+            _logger.LogInformation(
+                "Audiobook chapter sort result: first={FirstPath}, last={LastPath}",
+                sortedChapters[0].Path, sortedChapters[^1].Path);
+
+            // Write ffmpeg concat input file listing all chapter audio URLs in sorted order.
             // The concat demuxer reads each chapter sequentially — it doesn't preload
             // all URLs upfront, so the first segment appears in ~5 seconds regardless
             // of total chapter count.
@@ -474,7 +535,7 @@ public class VideoAudioController : ControllerBase
             var writer = new StreamWriter(concatListPath);
             try
             {
-                foreach (var chapter in chapters)
+                foreach (var chapter in sortedChapters)
                 {
                     string audioUrl = $"{serverUrl}/Audio/{chapter.Id}/stream?static=true";
                     await writer.WriteLineAsync($"file '{audioUrl}'").ConfigureAwait(false);
@@ -485,25 +546,45 @@ public class VideoAudioController : ControllerBase
                 await writer.DisposeAsync().ConfigureAwait(false);
             }
 
+            // Write metadata for post-encode validation in MonitorFfmpegHlsAsync.
+            // Records the expected chapter count at encode time so the monitor can
+            // detect incomplete encodes without re-querying the Jellyfin library.
+            var encodeMetadata = new
+            {
+                ExpectedChapterCount = chapters.Count,
+                ExpectedDurationTicks = chapters.Sum(c => c.RunTimeTicks ?? 0),
+                ParentId = parentId,
+                CreatedAt = DateTime.UtcNow.ToString("O")
+            };
+            string metadataPath = Path.Combine(hlsDir, "encode-metadata.json");
+#pragma warning disable CA3003
+            using (var metadataStream = System.IO.File.Create(metadataPath))
+            {
+                await System.Text.Json.JsonSerializer.SerializeAsync(
+                    metadataStream,
+                    encodeMetadata,
+                    cancellationToken: CancellationToken.None).ConfigureAwait(false);
+            }
+#pragma warning restore CA3003
+
             string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
-            // Segments will be ~250s each (one per chapter) — %03d (max 999) is sufficient
-            string segmentPath = Path.Combine(hlsDir, "seg_%03d.ts");
+            // 10-second segments: 8.3h audiobook → ~3001 segments. Use %04d (max 9999).
+            // IsValidSegmentName only accepts 3-4 digit names (seg_NNN.ts or seg_NNNN.ts).
+            string segmentPath = Path.Combine(hlsDir, "seg_%04d.ts");
             // Segments served by existing GetSegment endpoint using parentId as key
             string hlsBaseUrl = $"/alexaskill/api/video-audio/{parentId}/segments/";
 
             // Pre-write a complete HLS playlist to a SEPARATE file from what ffmpeg uses.
             // This gives the Echo Show the correct total book duration immediately.
-            // ffmpeg writes to stream.m3u8 (its own file) via append_list.
+            // ffmpeg writes to stream.m3u8 (its own file).
             // After ffmpeg completes, stream.m3u8 becomes the cached playlist.
-            // The pre-written file is a separate artifact used only for the first request.
-            var sortedChapters = chapters
-                .OrderBy(c => c.SortName ?? c.Name)
-                .ToList();
+            // The pre-written file has NO ENDLIST — treated as an event playlist so the
+            // player plays available segments without failing on missing ones.
             string prewrittenPath = Path.Combine(hlsDir, "playlist-full.m3u8");
             WriteAudiobookPlaylist(prewrittenPath, hlsBaseUrl, sortedChapters);
 
             var ffmpegArgs = BuildHlsAudiobookFfmpegArguments(
-                concatListPath, artUrl, useBlackFrame, playlistPath, segmentPath, hlsBaseUrl);
+                concatListPath, null, true, playlistPath, segmentPath, hlsBaseUrl);
 
             if (_logger.IsEnabled(LogLevel.Debug))
             {
@@ -516,24 +597,37 @@ public class VideoAudioController : ControllerBase
             // Register the HLS directory for segment lookups immediately.
             _cache.RegisterHlsDirectory(parentId, artModifiedTicks);
 
+            // Mark this audiobook as actively encoding to prevent concurrent ffmpeg launches.
+            _activeAudiobookEncodes.TryAdd(parentId, true);
+
             // Monitor ffmpeg in background — logs errors, triggers eviction when done.
             _ = MonitorFfmpegHlsAsync(ffmpegProcess, hlsDir, parentId, artModifiedTicks);
 
             // Wait briefly for the first segment to appear so we don't serve a playlist
             // that references zero actual segment files (Echo Show would fail immediately).
-            string firstSegmentPath = Path.Combine(hlsDir, "seg_000.ts");
+            string firstSegmentPath = Path.Combine(hlsDir, "seg_0000.ts");
             for (int i = 0; i < 100; i++) // up to ~10 seconds
             {
+#pragma warning disable CA3003
                 if (System.IO.File.Exists(firstSegmentPath))
                 {
                     break;
                 }
+#pragma warning restore CA3003
 
-                if (ffmpegProcess.HasExited)
+                try
                 {
-                    _logger.LogWarning(
-                        "VideoAudio audiobook HLS: ffmpeg exited early for parent {ParentId} (exit code {ExitCode})",
-                        parentId, ffmpegProcess.ExitCode);
+                    if (ffmpegProcess.HasExited)
+                    {
+                        _logger.LogWarning(
+                            "VideoAudio audiobook HLS: ffmpeg exited early for parent {ParentId} (exit code {ExitCode})",
+                            parentId, ffmpegProcess.ExitCode);
+                        break;
+                    }
+                }
+                catch (InvalidOperationException)
+                {
+                    // Process already disposed by MonitorFfmpegHlsAsync — encoding failed
                     break;
                 }
 
@@ -543,6 +637,11 @@ public class VideoAudioController : ControllerBase
             _logger.LogDebug(
                 "VideoAudio audiobook HLS: serving pre-written playlist for parent {ParentId} ({ChapterCount} chapters)",
                 parentId, sortedChapters.Count);
+
+            // Serve the pre-written event playlist (no ENDLIST) so the Echo Show gets
+            // the correct total book duration. The player treats it as an event playlist
+            // and plays available segments without failing on missing ones. ffmpeg generates
+            // segments in the background, staying ahead of real-time playback.
             return PhysicalFile(prewrittenPath, "application/vnd.apple.mpegurl");
 #pragma warning restore CA3003
         }
@@ -554,7 +653,7 @@ public class VideoAudioController : ControllerBase
     /// directory traversal attacks. The segment directory is resolved via the cache service.
     /// </summary>
     /// <param name="itemId">The Jellyfin audio item ID.</param>
-    /// <param name="segmentName">The segment file name (e.g. "seg_000.ts").</param>
+    /// <param name="segmentName">The segment file name (e.g. "seg_0000.ts").</param>
     /// <returns>The segment file.</returns>
     [HttpGet("{itemId}/segments/{segmentName}")]
     [AllowAnonymous]
@@ -827,7 +926,7 @@ public class VideoAudioController : ControllerBase
     /// <param name="artUrl">Album art URL (null for black frame fallback).</param>
     /// <param name="useBlackFrame">Whether to generate a black frame instead of using art.</param>
     /// <param name="playlistPath">Output playlist file path.</param>
-    /// <param name="segmentPath">Segment filename template (e.g. "seg_%03d.ts").</param>
+    /// <param name="segmentPath">Segment filename template (e.g. "seg_%04d.ts").</param>
     /// <param name="hlsBaseUrl">Base URL prefix for segment references in the playlist.</param>
     /// <returns>List of ffmpeg arguments (one token per entry).</returns>
     internal static List<string> BuildHlsAudiobookFfmpegArguments(
@@ -874,25 +973,27 @@ public class VideoAudioController : ControllerBase
         args.Add("-map");
         args.Add("0:a:0");  // concat first audio stream → output audio
 
-        // Video codec
-        args.AddRange(VideoCodecArgs);
+        // Video: 1fps black frame at minimum quality — fast to encode, provides keyframes every
+        // second for accurate seeking. VideoApp.Launch requires a video track for the seek bar.
+        args.AddRange([
+            "-c:v", "libx264",
+            "-tune", "stillimage",
+            "-preset", "ultrafast",
+            "-crf", "51",
+            "-r", "1",
+            "-g", "1",          // keyframe every 1s for accurate seeking
+            "-pix_fmt", "yuv420p"
+        ]);
 
-        // Audio codec
-        args.AddRange(AudioCodecArgs);
+        // Audio: copy without re-encoding (MP3 remux is instant, no quality loss)
+        args.AddRange(["-c:a", "copy"]);
 
-        // Pixel format + frame rate
-        args.AddRange(PixelFormatArgs);
-
-        // Video filter (scale + pad)
-        args.AddRange(VideoFilterArgs);
-
-        // HLS-specific flags
+        // HLS-specific flags — 10-second segments required by ExoPlayer (Echo Show).
+        // Longer segments (e.g. 250s) cause buffer stalls after seeking.
         args.Add("-hls_time");
-        args.Add("4");
+        args.Add("10");
         args.Add("-hls_list_size");
         args.Add("0");
-        args.Add("-hls_flags");
-        args.Add("append_list");
 
         // Segment file name template
         args.Add("-hls_segment_filename");
@@ -910,11 +1011,11 @@ public class VideoAudioController : ControllerBase
     }
 
     /// <summary>
-    /// Pre-write a complete HLS playlist for an audiobook with all chapter durations.
-    /// Each chapter becomes one segment (~250s). This gives the player the correct
-    /// total book duration immediately, before ffmpeg has generated any segments.
-    /// ffmpeg will overwrite this file as it generates segments — the pre-written
-    /// version is only used for the first request (before caching kicks in).
+    /// Pre-write a complete HLS playlist for an audiobook with all segment durations.
+    /// Written WITHOUT #EXT-X-ENDLIST so the player treats it as an event playlist —
+    /// it plays available segments without failing on missing ones. This gives the Echo
+    /// Show the correct total book duration immediately, while ffmpeg generates segments
+    /// in the background. ffmpeg writes its own stream.m3u8 separately.
     /// </summary>
     /// <param name="playlistPath">File path for the .m3u8 playlist.</param>
     /// <param name="hlsBaseUrl">Base URL prefix for segment references.</param>
@@ -927,24 +1028,87 @@ public class VideoAudioController : ControllerBase
         using var writer = new StreamWriter(playlistPath);
         writer.WriteLine("#EXTM3U");
         writer.WriteLine("#EXT-X-VERSION:3");
-        writer.WriteLine("#EXT-X-TARGETDURATION:250");
+        writer.WriteLine("#EXT-X-TARGETDURATION:10");
         writer.WriteLine("#EXT-X-MEDIA-SEQUENCE:0");
 
-        for (int i = 0; i < chapters.Count; i++)
+        int segmentIndex = 0;
+        foreach (var chapter in chapters)
         {
-            var chapter = chapters[i];
-            // RunTimeTicks is in 100-nanosecond intervals; convert to seconds
             double durationSeconds = chapter.RunTimeTicks.HasValue && chapter.RunTimeTicks.Value > 0
                 ? chapter.RunTimeTicks.Value / 10000000.0
-                : 250.0; // fallback if duration unknown
+                : 250.0;
 
-            writer.WriteLine("#EXT-X-DISCONTINUITY");
-            writer.WriteLine($"#EXTINF:{durationSeconds:F6},");
-            writer.WriteLine($"{hlsBaseUrl}seg_{i:D3}.ts");
+            // Split chapter into 10-second segments to match ffmpeg's output
+            int segmentsInChapter = Math.Max(1, (int)Math.Ceiling(durationSeconds / 10.0));
+            double segmentDuration = durationSeconds / segmentsInChapter;
+
+            for (int s = 0; s < segmentsInChapter; s++)
+            {
+                writer.WriteLine("#EXT-X-DISCONTINUITY");
+                writer.WriteLine($"{HlsExtInf}{segmentDuration:F6},");
+                writer.WriteLine($"{hlsBaseUrl}seg_{segmentIndex:D4}.ts");
+                segmentIndex++;
+            }
         }
 
-        // No #EXT-X-ENDLIST — treat as event playlist so the player plays available
-        // segments and doesn't fail on segments not yet generated by ffmpeg.
+        // No #EXT-X-ENDLIST — event playlist so the player plays available segments
+        // without failing on ones not yet generated by ffmpeg.
+    }
+
+    /// <summary>
+    /// Count the number of segments in an HLS playlist by counting #EXTINF: lines.
+    /// Used to validate that a cached playlist has the expected number of segments
+    /// compared to the library's chapter count.
+    /// </summary>
+    /// <param name="playlistContent">The full text content of the .m3u8 file.</param>
+    /// <returns>The number of #EXTINF entries (segments) in the playlist.</returns>
+    internal static int CountSegmentsInPlaylist(string playlistContent)
+    {
+        int count = 0;
+        int index = 0;
+        while ((index = playlistContent.IndexOf(HlsExtInf, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += HlsExtInf.Length;
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// Validate a cached audiobook HLS playlist and invalidate if stale.
+    /// Reads the playlist file, checks for ENDLIST (encoding complete), and validates
+    /// that segment count >= chapter count. If the cache is stale (incomplete encode),
+    /// cleans up and returns null. Used by both the fast-path and double-check-path
+    /// to avoid duplicating validation logic.
+    /// </summary>
+    /// <param name="cached">The cached playlist file info (stream.m3u8).</param>
+    /// <param name="chapterCount">Expected minimum segment count (from live library).</param>
+    /// <param name="parentId">Parent audiobook ID for logging and cleanup.</param>
+    /// <returns>The original <paramref name="cached"/> if valid, or null if invalidated.</returns>
+    private async Task<FileInfo?> ValidateAudiobookCacheAsync(FileInfo cached, int chapterCount, string parentId)
+    {
+#pragma warning disable CA3003 // paths derived from GUID-validated parentId
+        string content = await System.IO.File.ReadAllTextAsync(cached.FullName).ConfigureAwait(false);
+        if (content.Contains(HlsEndList, StringComparison.Ordinal))
+        {
+            int cachedSegments = CountSegmentsInPlaylist(content);
+            if (cachedSegments < chapterCount)
+            {
+                _logger.LogWarning(
+                    "Audiobook HLS cache invalidated for {ParentId}: expected >= {Expected} segments, found only {Actual} — re-encoding",
+                    parentId, chapterCount, cachedSegments);
+                _cache.Cleanup(parentId);
+                return null;
+            }
+        }
+        else
+        {
+            _logger.LogDebug("VideoAudio audiobook HLS: serving live ffmpeg playlist (encoding in progress) for parent {ParentId}", parentId);
+        }
+#pragma warning restore CA3003
+
+        return cached;
     }
 
     /// <summary>
@@ -1149,13 +1313,78 @@ public class VideoAudioController : ControllerBase
             using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(30));
             await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
 
+            // Post-completion diagnostics — gather metrics for structured logging
+            int segmentFileCount = 0;
+            int playlistSegmentCount = 0;
+            int expectedChapterCount = 0;
+
+            // Count actual .ts segment files on disk
+            try
+            {
+#pragma warning disable CA3003
+                segmentFileCount = Directory.GetFiles(hlsDir, "seg_*.ts").Length;
+#pragma warning restore CA3003
+            }
+            catch (DirectoryNotFoundException)
+            {
+                // Directory already cleaned up
+            }
+
+            // Parse playlist for segment count
+            string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
+#pragma warning disable CA3003
+            if (System.IO.File.Exists(playlistPath))
+            {
+                try
+                {
+                    string content = await System.IO.File.ReadAllTextAsync(playlistPath).ConfigureAwait(false);
+                    playlistSegmentCount = CountSegmentsInPlaylist(content);
+                }
+                catch (IOException)
+                {
+                    // Best effort
+                }
+            }
+
+            // Read expected chapter count from metadata written at encode time
+            string metadataPath = Path.Combine(hlsDir, "encode-metadata.json");
+            if (System.IO.File.Exists(metadataPath))
+            {
+                try
+                {
+                    string json = await System.IO.File.ReadAllTextAsync(metadataPath).ConfigureAwait(false);
+                    using var doc = System.Text.Json.JsonDocument.Parse(json);
+                    if (doc.RootElement.TryGetProperty("ExpectedChapterCount", out var countProp))
+                    {
+                        expectedChapterCount = countProp.GetInt32();
+                    }
+                }
+                catch (Exception)
+                {
+                    // Best effort — metadata is optional
+                }
+            }
+#pragma warning restore CA3003
+
+            // Structured logging based on outcome
             if (process.ExitCode != 0)
             {
-                _logger.LogWarning("VideoAudio HLS: ffmpeg exited with code {ExitCode} for item {ItemId}", process.ExitCode, itemId);
+                _logger.LogWarning(
+                    "Audiobook HLS encoding FAILED for {ParentId}: ffmpeg exit code {ExitCode}, {SegmentFileCount} segment files, {PlaylistSegmentCount} playlist entries{MetaInfo}",
+                    itemId, process.ExitCode, segmentFileCount, playlistSegmentCount,
+                    expectedChapterCount > 0 ? $" (expected {expectedChapterCount})" : string.Empty);
+            }
+            else if (expectedChapterCount > 0 && playlistSegmentCount != expectedChapterCount)
+            {
+                _logger.LogWarning(
+                    "Audiobook HLS encoding INCOMPLETE for {ParentId}: ffmpeg exited 0 but produced {PlaylistSegmentCount}/{ExpectedCount} playlist segments, {SegmentFileCount} segment files on disk",
+                    itemId, playlistSegmentCount, expectedChapterCount, segmentFileCount);
             }
             else
             {
-                _logger.LogDebug("VideoAudio HLS: ffmpeg completed for item {ItemId}", itemId);
+                _logger.LogDebug(
+                    "Audiobook HLS encoding complete for {ParentId}: {SegmentFileCount} segments",
+                    itemId, segmentFileCount);
             }
 
             // Background eviction — don't block
@@ -1163,15 +1392,17 @@ public class VideoAudioController : ControllerBase
         }
         catch (OperationCanceledException)
         {
-            _logger.LogWarning("VideoAudio HLS: ffmpeg timed out (30 min) for item {ItemId}", itemId);
+            _logger.LogWarning("Audiobook HLS encoding TIMED OUT (30 min) for {ParentId}", itemId);
             try { process.Kill(); } catch { /* already exited */ }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "VideoAudio HLS: ffmpeg monitoring failed for item {ItemId}", itemId);
+            _logger.LogWarning(ex, "Audiobook HLS: ffmpeg monitoring failed for {ParentId}", itemId);
         }
         finally
         {
+            // Always clear the active encode flag so future requests can start a fresh encode
+            _activeAudiobookEncodes.TryRemove(itemId, out _);
             process.Dispose();
         }
     }

@@ -846,15 +846,15 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.Contains("-loop", args);
         Assert.Contains(artUrl, args);
 
-        // Verify codecs
+        // Verify codecs: 1fps video (not re-encoded art) + audio copy (no AAC re-encode)
         Assert.Contains("libx264", args);
-        Assert.Contains("aac", args);
+        Assert.Contains("copy", args);
+        Assert.DoesNotContain("aac", args); // audiobook uses audio copy, not AAC re-encode
 
-        // Verify HLS flags
+        // Verify HLS flags: 10-second segments (ExoPlayer requirement), no append_list
         Assert.Contains("-hls_time", args);
-        Assert.Contains("4", args);
-        Assert.Contains("-hls_flags", args);
-        Assert.Contains("append_list", args);
+        Assert.Contains("10", args);
+        Assert.DoesNotContain("-hls_flags", args);
         Assert.Contains("-hls_base_url", args);
         Assert.Contains(hlsBaseUrl, args);
 
@@ -1023,11 +1023,11 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             "playlist_path=\"${@: -1}\"\n" +
             "playlist_dir=\"$(dirname \"$playlist_path\")\"\n" +
             "mkdir -p \"$playlist_dir\"\n" +
-            "dd if=/dev/zero bs=1024 count=4 of=\"$playlist_dir/seg_000.ts\" 2>/dev/null\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$playlist_dir/seg_0000.ts\" 2>/dev/null\n" +
             "echo '#EXTM3U' > \"$playlist_path\"\n" +
             "echo '#EXT-X-VERSION:3' >> \"$playlist_path\"\n" +
-            "echo '#EXTINF:4.000,' >> \"$playlist_path\"\n" +
-            "echo 'seg_000.ts' >> \"$playlist_path\"\n" +
+            "echo '#EXTINF:10.000,' >> \"$playlist_path\"\n" +
+            "echo 'seg_0000.ts' >> \"$playlist_path\"\n" +
             "exit 0\n";
         File.WriteAllText(fakeFfmpegPath, fakeFfmpegScript);
 #pragma warning disable CA3003, CA1416
@@ -1088,11 +1088,11 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             "playlist_path=\"${@: -1}\"\n" +
             "playlist_dir=\"$(dirname \"$playlist_path\")\"\n" +
             "mkdir -p \"$playlist_dir\"\n" +
-            "dd if=/dev/zero bs=1024 count=4 of=\"$playlist_dir/seg_000.ts\" 2>/dev/null\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$playlist_dir/seg_0000.ts\" 2>/dev/null\n" +
             "echo '#EXTM3U' > \"$playlist_path\"\n" +
             "echo '#EXT-X-VERSION:3' >> \"$playlist_path\"\n" +
-            "echo '#EXTINF:4.000,' >> \"$playlist_path\"\n" +
-            "echo 'seg_000.ts' >> \"$playlist_path\"\n" +
+            "echo '#EXTINF:10.000,' >> \"$playlist_path\"\n" +
+            "echo 'seg_0000.ts' >> \"$playlist_path\"\n" +
             "exit 0\n";
         File.WriteAllText(fakeFfmpegPath, fakeFfmpegScript);
 #pragma warning disable CA3003, CA1416

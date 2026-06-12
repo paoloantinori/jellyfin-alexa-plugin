@@ -378,6 +378,7 @@ public class VideoAudioCache
     /// <param name="itemId">The Jellyfin item ID to invalidate.</param>
     public void Cleanup(string itemId)
     {
+#pragma warning disable CA3003 // itemId is GUID-validated by callers before reaching this method
         if (!Directory.Exists(_cacheDir))
         {
             return;
@@ -424,6 +425,7 @@ public class VideoAudioCache
         {
             _logger.LogDebug("Cleaned up {Count} cache file(s)/dir(s) for item {ItemId}", deleted, itemId);
         }
+#pragma warning restore CA3003
     }
 
     /// <summary>

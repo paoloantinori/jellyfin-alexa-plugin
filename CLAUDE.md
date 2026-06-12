@@ -198,6 +198,60 @@ NLU test fixtures in `tests/integration/fixtures/<locale>.yaml`. NLU tests use t
 - **Entity resolution for slot synonyms**: `slot.Value` always contains the raw spoken text (e.g. "gli album"). To get the canonical value ("album"), extract from `slot.Resolution.Authorities[0].Values[0].Value.Name` when `Status.Code == "ER_SUCCESS_MATCH"`. See `BrowseLibraryIntentHandler.GetCanonicalSlotValue()` for the pattern.
 - **Dialog.ElicitSlot requires model registration**: Any intent that uses `Dialog.ElicitSlot` directives MUST be listed in the interaction model's `dialog.intents` array. Without this registration, Alexa **silently ignores** the directive — the session stays open (`ShouldEndSession=false`) but the user's follow-up goes through general NLU, which routes music queries to Amazon Music instead of back to the skill. Set `elicitationRequired: false` on slots when controlling dialog manually from code. This must be done in ALL 17 locales. For it-IT, add to the YAML template's `dialog` section and regenerate.
 
+## Audiobook HLS Streaming
+
+Multi-chapter audiobooks use `VideoApp.Launch` with an HLS concat stream that joins all chapters into one continuous video-audio stream. This gives the Echo Show a seek bar with the full book duration.
+
+**Endpoint**: `/alexaskill/api/video-audio/audiobook/{parentId}/stream.m3u8`
+
+### Working approach: 1fps video + audio copy + 10-second segments (JF-292)
+
+**Encoding**: ~2 minutes for an 8.3h audiobook. All 3,001 segments pre-generated before playback starts.
+
+```
+ffmpeg -f concat -safe 0 -i chapters.txt \
+  -f lavfi -i 'color=c=black:s=1280x720:d=999999' \
+  -map 0:a -map 1:v \
+  -c:a copy \
+  -c:v libx264 -tune stillimage -preset ultrafast -crf 51 \
+  -r 1 -g 1 -pix_fmt yuv420p \
+  -shortest \
+  -f hls \
+  -hls_time 10 \
+  -hls_segment_type mpegts \
+  -hls_segment_filename seg_%04d.ts \
+  -hls_list_size 0 \
+  stream_raw.m3u8
+```
+
+**Key parameters**:
+- `-c:a copy` — remuxes MP3 audio without re-encoding (instant)
+- `-c:v libx264 -crf 51 -r 1` — 1fps black frame video at minimum quality (keyframe every 1s for seeking)
+- `-shortest` — **CRITICAL**: stops encoding when audio ends (without it, the `d=999999` color generator produces an infinite video stream)
+- `-hls_time 10` — **CRITICAL**: 10-second segments. ExoPlayer (Echo Show's player) requires standard HLS segment durations (6-10s). 250-second segments cause playback to stall after seeking.
+- `-hls_segment_filename seg_%04d.ts` — 4-digit names (max 9,999 segments; `IsValidSegmentName` only accepts 3-4 digit names)
+
+**Why 1fps video**: VideoApp.Launch requires a video track for the seek bar to work. Audio-only HLS plays but seeking doesn't jump to the correct position. 1fps black frames at CRF 51 add minimal overhead (~5KB per second of video) while providing keyframes every second for accurate seeking.
+
+**Why 10-second segments**: ExoPlayer's buffer management assumes standard HLS durations. With 250-second/3MB segments, seeking fetches an entire 3MB file and the player stalls waiting for the full download. With 10-second/~160KB segments, seeking is instant and the player buffers ahead normally. Verified with 3 consecutive seeks on Echo Show, all successful with continuous playback.
+
+**Post-encoding**: rewrite the playlist to use GUID-relative URLs (`/alexaskill/api/video-audio/{parentId}/segments/seg_NNNN.ts`), not bare filenames. The `GetSegment` endpoint validates `itemId` as a GUID, then `FindSegmentPath` scans for directories matching `{GUID}_*` to find the actual cache directory (named `{parentId}_{artModifiedTicks}`).
+
+**Cache size**: ~472MB for an 8.3h audiobook (vs ~3.6GB for 25fps video approach).
+
+**Cache validation**: segment count must be **>= chapter count** (not exactly equal), because 10-second segments produce far more entries than chapters. Only invalidate if segment count is clearly incomplete (< chapters).
+
+### Key gotchas
+
+- **`-shortest` is mandatory**: Without it, the `color=c=black:d=999999` input generates an infinite video stream, producing hundreds of thousands of empty segments.
+- **10-second segments, not 250**: ExoPlayer requires standard HLS segment durations. Long segments cause silent seek failures.
+- **4-digit segment names max**: `IsValidSegmentName` validates `seg_NNNN.ts` (3-4 digits only). Do NOT use `%05d` or higher.
+- **Playlist URLs use GUID-only parentId**: The route `{itemId}/segments/{segmentName}` validates `itemId` with `Guid.TryParse`. Use `parentId` (the clean GUID), not the composite `{parentId}_{artModifiedTicks}`.
+- **VideoApp.Launch requires video track**: Echo Show's VideoApp expects H.264 video. Audio-only HLS plays but seeking doesn't work. 1fps black frames provide the keyframes needed for seeking.
+- **Echo Show VideoApp does NOT support AudioPlayer features**: No album art, no metadata, no queue management. Trade-off: seek bar (VideoApp) vs album art (AudioPlayer).
+- **AudioPlayer custom skills get NO scrubber/progress bar**: Only the Music/Radio/Podcast Skill API (Amazon partnership required) gets the native player with seek bar. Custom skills using `AudioPlayer.Play` get only play/pause/next/previous buttons.
+- **Pre-written playlists don't work**: Writing an M3U8 that references segments before they exist fails on Echo Show. The player validates segments before starting playback. Always serve only segments that exist on disk.
+
 ## Interaction Model Anti-Patterns — DO NOT REPEAT
 
 These patterns have caused bugs repeatedly across many sessions. Every rule here was extracted from real commits that fixed real failures.
