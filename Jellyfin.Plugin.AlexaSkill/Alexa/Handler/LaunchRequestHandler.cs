@@ -74,6 +74,7 @@ public class LaunchRequestHandler : BaseHandler
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
+        ArgumentNullException.ThrowIfNull(session);
 
         // Check if audio was playing before this re-launch (AudioPlayer context carries the token/offset)
         if (_config.ResumeOfferEnabled)
@@ -85,7 +86,7 @@ public class LaunchRequestHandler : BaseHandler
                 // The token may be stale — pointing to an item from a previous AudioPlayer session
                 // while the actual last-played item was played via VideoApp.
                 // Cross-reference with server-side progress to detect and correct this mismatch.
-                if (_config.NativeControlsForAudio && session != null)
+                if (_config.NativeControlsForAudio)
                 {
                     var resolved = ResolveActualLastPlayed(context, user, session, locale);
                     if (resolved != null)
@@ -95,6 +96,27 @@ public class LaunchRequestHandler : BaseHandler
                 }
 
                 return await HandleResumeOfferAsync(request, context, user, session!, locale, cancellationToken).ConfigureAwait(false);
+            }
+
+            // No AudioPlayer token — but with NativeControlsForAudio the last play may have
+            // been via VideoApp.Launch (audiobooks, native-controls audio), which never sets
+            // the token. If the device has a recorded last-played item, offer a resume prompt
+            // instead of falling through to the legacy auto-play session-queue path.
+            if (_config.NativeControlsForAudio)
+            {
+                string? deviceId = context.System?.Device?.DeviceID;
+                string? lastPlayed = !string.IsNullOrEmpty(deviceId)
+                    ? Plugin.Instance?.DeviceQueueManager?.GetLastPlayedItemId(deviceId)
+                    : null;
+                if (!string.IsNullOrEmpty(lastPlayed))
+                {
+                    Logger.LogDebug("LaunchResume: no AudioPlayer token but device has last-played {ItemId}, offering resume", lastPlayed);
+                    SkillResponse? offer = BuildDeviceLastPlayedOffer(context, user, session, locale, lastPlayed);
+                    if (offer != null)
+                    {
+                        return offer;
+                    }
+                }
             }
 
             // check if we have any media in the queue (legacy Jellyfin session-based resume)
@@ -168,9 +190,24 @@ public class LaunchRequestHandler : BaseHandler
             return null;
         }
 
-        // Look up the item and its best-known position. Position comes from the item's
-        // UserData (server-side progress for that specific item) — the cross-device concern
-        // only affected WHICH item to pick, not the position of a known item.
+        // AudioPlayer token is stale — offer resume for the device's actual last-played item.
+        Logger.LogInformation(
+            "LaunchResume: NativeControlsForAudio stale token detected. AudioPlayer={AudioPlayerToken}, device last-played='{ItemId}'. Using device item.",
+            audioPlayerToken, lastPlayedItemId);
+
+        return BuildDeviceLastPlayedOffer(context, user, session, locale, lastPlayedItemId);
+    }
+
+    /// <summary>
+    /// Build a resume offer for the device's last-played item, looking up its best-known
+    /// position from UserData. Used when there is no reliable AudioPlayer token — e.g. the
+    /// last play was via VideoApp.Launch (audiobooks, native-controls audio), which never
+    /// sets context.AudioPlayer.Token. Returns null if the item no longer exists so the
+    /// caller can fall through to another path.
+    /// </summary>
+    private SkillResponse? BuildDeviceLastPlayedOffer(
+        Context context, Entities.User user, SessionInfo session, string locale, string lastPlayedItemId)
+    {
         BaseItem? item = null;
         if (Guid.TryParse(lastPlayedItemId, out Guid itemGuid))
         {
@@ -179,7 +216,7 @@ public class LaunchRequestHandler : BaseHandler
 
         if (item == null)
         {
-            Logger.LogDebug("LaunchResume: device last-played item {ItemId} no longer exists, using AudioPlayer token", lastPlayedItemId);
+            Logger.LogDebug("LaunchResume: device last-played item {ItemId} no longer exists", lastPlayedItemId);
             return null;
         }
 
@@ -190,11 +227,6 @@ public class LaunchRequestHandler : BaseHandler
             UserItemData? userData = _userDataManager.GetUserData(jellyfinUser, item);
             positionTicks = userData?.PlaybackPositionTicks ?? 0;
         }
-
-        // AudioPlayer token is stale — offer resume for the device's actual last-played item
-        Logger.LogInformation(
-            "LaunchResume: NativeControlsForAudio stale token detected. AudioPlayer={AudioPlayerToken}, device last-played='{ItemName}' ({ItemId}). Using device item.",
-            audioPlayerToken, item.Name, lastPlayedItemId);
 
         int offsetMs = (int)Math.Min(TimeSpan.FromTicks(positionTicks).TotalMilliseconds, int.MaxValue);
         return BuildResumeOfferResponse(item, lastPlayedItemId, offsetMs, user, locale, context);
