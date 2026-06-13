@@ -55,6 +55,48 @@ public sealed class DeviceQueueManager : IDisposable
     }
 
     /// <summary>
+    /// Records the last user-initiated play on a device. Called from the
+    /// BuildAudioPlayerResponse chokepoint on every ReplaceAll play, so it captures
+    /// all play paths (intent handlers, APL carousel taps, resume confirmations).
+    /// This is the device-specific source of truth that survives VideoApp.Launch
+    /// plays which do not update context.AudioPlayer.Token.
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    /// <param name="itemId">The item ID that was played.</param>
+    public void RecordLastPlayed(string deviceId, string itemId)
+    {
+        DeviceQueue queue = GetOrCreateQueue(deviceId);
+
+        // Short-circuit when the item hasn't changed — avoids timer churn and
+        // redundant disk writes when the same item is replayed or re-issued.
+        if (string.Equals(queue.LastPlayedItemId, itemId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        queue.LastPlayedItemId = itemId;
+        SchedulePersistInternal(deviceId);
+
+        _logger.LogDebug(
+            "Recorded last played for device {DeviceId}: item={ItemId}",
+            deviceId, itemId);
+    }
+
+    /// <summary>
+    /// Gets the last-played item ID for a device without creating a queue entry.
+    /// Read-side counterpart to <see cref="RecordLastPlayed"/>. Returns null if the
+    /// device has no recorded play.
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    /// <returns>The last-played item ID, or null if none recorded.</returns>
+    public string? GetLastPlayedItemId(string deviceId)
+    {
+        return _queues.TryGetValue(deviceId, out DeviceQueue? queue)
+            ? queue.LastPlayedItemId
+            : null;
+    }
+
+    /// <summary>
     /// Sets the queue for a device and schedules a debounced persist to disk.
     /// </summary>
     /// <param name="deviceId">The Alexa device ID.</param>

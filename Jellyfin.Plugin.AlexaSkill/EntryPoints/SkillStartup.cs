@@ -36,6 +36,7 @@ public class SkillStartup : IHostedService, IDisposable
     private readonly CircuitBreaker _circuitBreaker;
     private readonly RequestCounters _requestCounters;
     private readonly JellyfinConnectivityChecker _connectivityChecker;
+    private readonly Alexa.Playback.DeviceQueueManager _deviceQueueManager;
     private CancellationTokenSource? _cts;
     private Task? _runningTask;
     private bool _disposed;
@@ -50,6 +51,7 @@ public class SkillStartup : IHostedService, IDisposable
     /// <param name="circuitBreaker">Circuit breaker for backend health tracking.</param>
     /// <param name="requestCounters">Request counters for metrics tracking.</param>
     /// <param name="connectivityChecker">Connectivity checker for Jellyfin server health.</param>
+    /// <param name="deviceQueueManager">Per-device playback queue manager.</param>
     public SkillStartup(
         ISessionManager sessionManager,
         ILoggerFactory loggerFactory,
@@ -58,7 +60,8 @@ public class SkillStartup : IHostedService, IDisposable
         SearchResultCache searchCache,
         CircuitBreaker circuitBreaker,
         RequestCounters requestCounters,
-        JellyfinConnectivityChecker connectivityChecker)
+        JellyfinConnectivityChecker connectivityChecker,
+        Alexa.Playback.DeviceQueueManager deviceQueueManager)
     {
         _sessionManager = sessionManager;
         _httpClientFactory = httpClientFactory;
@@ -67,6 +70,7 @@ public class SkillStartup : IHostedService, IDisposable
         _circuitBreaker = circuitBreaker;
         _requestCounters = requestCounters;
         _connectivityChecker = connectivityChecker;
+        _deviceQueueManager = deviceQueueManager;
         _logger = loggerFactory.CreateLogger<SkillStartup>();
     }
 
@@ -80,6 +84,7 @@ public class SkillStartup : IHostedService, IDisposable
         Plugin.Instance!.CircuitBreaker = _circuitBreaker;
         Plugin.Instance!.RequestCounters = _requestCounters;
         Plugin.Instance!.ConnectivityChecker = _connectivityChecker;
+        Plugin.Instance!.DeviceQueueManager = _deviceQueueManager;
 
         PluginConfiguration configuration = Plugin.Instance!.Configuration;
 

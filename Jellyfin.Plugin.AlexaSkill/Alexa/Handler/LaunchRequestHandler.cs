@@ -8,7 +8,6 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
-using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
@@ -136,48 +135,69 @@ public class LaunchRequestHandler : BaseHandler
     /// <summary>
     /// When NativeControlsForAudio is enabled, playback routes through VideoApp.Launch
     /// which does not update context.AudioPlayer.Token. The token may be stale.
-    /// This method queries the server for the actual last-played item with progress
-    /// and returns a resume offer for that item if it differs from the AudioPlayer token.
-    /// Returns null if the AudioPlayer token matches the server-side item (not stale)
-    /// or if no server-side item is found.
+    /// This method checks the per-device queue's LastPlayedItemId (recorded at the
+    /// BuildAudioPlayerResponse chokepoint on every play, including VideoApp and APL
+    /// carousel taps) and returns a resume offer for that item if it differs from the
+    /// stale AudioPlayer token. Device-specific, so it never surfaces content played on
+    /// other clients (e.g. the Jellyfin phone app). Returns null if the token already
+    /// matches the device's last-played item (not stale) or if none is recorded.
     /// </summary>
     private SkillResponse? ResolveActualLastPlayed(
         Context context, Entities.User user, SessionInfo session, string locale)
     {
-        var (jellyfinUser, _) = ResolveJellyfinUser(_userManager, session.UserId, locale);
-        if (jellyfinUser == null)
+        string? deviceId = context.System?.Device?.DeviceID;
+        if (string.IsNullOrEmpty(deviceId))
         {
+            Logger.LogDebug("LaunchResume: NativeControlsForAudio stale-token check: no device ID in context, using AudioPlayer token");
             return null;
         }
 
-        Entities.User pluginUser = _config.GetUserById(user.Id) ?? user;
-        BaseItemKind[] contentTypes = FilterByContentAccess(new[] { BaseItemKind.Audio, BaseItemKind.Movie, BaseItemKind.Episode, BaseItemKind.AudioBook });
+        string? lastPlayedItemId = Plugin.Instance?.DeviceQueueManager?.GetLastPlayedItemId(deviceId);
 
-        var (serverItem, serverTicks) = FindLastPlayedItemWithProgress(
-            jellyfinUser, _libraryManager, _userDataManager, pluginUser, contentTypes, Logger);
-
-        if (serverItem == null)
+        if (string.IsNullOrEmpty(lastPlayedItemId))
         {
-            Logger.LogDebug("LaunchResume: NativeControlsForAudio stale-token check: no server-side item found, using AudioPlayer token");
+            Logger.LogDebug("LaunchResume: NativeControlsForAudio stale-token check: no device last-played recorded, using AudioPlayer token");
             return null;
         }
 
         string audioPlayerToken = context.AudioPlayer!.Token!;
-        string serverItemId = serverItem.Id.ToString();
 
-        if (string.Equals(audioPlayerToken, serverItemId, StringComparison.Ordinal))
+        if (string.Equals(audioPlayerToken, lastPlayedItemId, StringComparison.Ordinal))
         {
-            Logger.LogDebug("LaunchResume: NativeControlsForAudio stale-token check: AudioPlayer token matches server item '{Name}'", serverItem.Name);
+            Logger.LogDebug("LaunchResume: NativeControlsForAudio stale-token check: AudioPlayer token matches device last-played '{ItemId}'", lastPlayedItemId);
             return null;
         }
 
-        // AudioPlayer token is stale — offer resume for the actual last-played item
-        Logger.LogInformation(
-            "LaunchResume: NativeControlsForAudio stale token detected. AudioPlayer={AudioPlayerToken}, server='{ServerName}' ({ServerId}). Using server-side item.",
-            audioPlayerToken, serverItem.Name, serverItemId);
+        // Look up the item and its best-known position. Position comes from the item's
+        // UserData (server-side progress for that specific item) — the cross-device concern
+        // only affected WHICH item to pick, not the position of a known item.
+        BaseItem? item = null;
+        if (Guid.TryParse(lastPlayedItemId, out Guid itemGuid))
+        {
+            item = _libraryManager.GetItemById(itemGuid);
+        }
 
-        int offsetMs = (int)Math.Min(TimeSpan.FromTicks(serverTicks).TotalMilliseconds, int.MaxValue);
-        return BuildResumeOfferResponse(serverItem, serverItemId, offsetMs, user, locale, context);
+        if (item == null)
+        {
+            Logger.LogDebug("LaunchResume: device last-played item {ItemId} no longer exists, using AudioPlayer token", lastPlayedItemId);
+            return null;
+        }
+
+        var (jellyfinUser, _) = ResolveJellyfinUser(_userManager, session.UserId, locale);
+        long positionTicks = 0;
+        if (jellyfinUser != null)
+        {
+            UserItemData? userData = _userDataManager.GetUserData(jellyfinUser, item);
+            positionTicks = userData?.PlaybackPositionTicks ?? 0;
+        }
+
+        // AudioPlayer token is stale — offer resume for the device's actual last-played item
+        Logger.LogInformation(
+            "LaunchResume: NativeControlsForAudio stale token detected. AudioPlayer={AudioPlayerToken}, device last-played='{ItemName}' ({ItemId}). Using device item.",
+            audioPlayerToken, item.Name, lastPlayedItemId);
+
+        int offsetMs = (int)Math.Min(TimeSpan.FromTicks(positionTicks).TotalMilliseconds, int.MaxValue);
+        return BuildResumeOfferResponse(item, lastPlayedItemId, offsetMs, user, locale, context);
     }
 
     /// <summary>

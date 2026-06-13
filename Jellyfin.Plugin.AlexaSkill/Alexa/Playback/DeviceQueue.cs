@@ -55,4 +55,14 @@ public sealed class DeviceQueue
     /// play A, switch to B, return to A → A resumes from saved position.
     /// </summary>
     public Dictionary<string, long> ItemPositionState { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets the item ID of the last user-initiated play on this device.
+    /// Recorded at the BuildAudioPlayerResponse chokepoint for every ReplaceAll play,
+    /// so it captures playback paths that bypass SetQueue (e.g. APL carousel taps).
+    /// Unlike context.AudioPlayer.Token, this is updated by VideoApp.Launch plays too,
+    /// making it the reliable device-specific source of truth for "what did this Echo
+    /// last play" when NativeControlsForAudio routes playback through VideoApp.
+    /// </summary>
+    public string? LastPlayedItemId { get; set; }
 }

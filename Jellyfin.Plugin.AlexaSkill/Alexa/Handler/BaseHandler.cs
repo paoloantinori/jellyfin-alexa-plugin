@@ -490,6 +490,20 @@ public abstract class BaseHandler
     /// <returns>A SkillResponse containing the AudioPlayer directive.</returns>
     public SkillResponse BuildAudioPlayerResponse(PlayBehavior playBehavior, string streamUrl, string itemId, MediaBrowser.Controller.Entities.BaseItem? item, Entities.User user, Context? context, int offsetInMilliseconds = 0)
     {
+        // Record the last user-initiated play for this device (ReplaceAll = a new item starts).
+        // This is the universal chokepoint: every play path flows through here, including APL
+        // carousel taps and resume confirmations that bypass SetQueue. Captures VideoApp.Launch
+        // plays too (which don't update context.AudioPlayer.Token), giving LaunchRequestHandler
+        // a reliable device-specific "what did this Echo last play" signal.
+        if (playBehavior == PlayBehavior.ReplaceAll)
+        {
+            string? deviceId = context?.System?.Device?.DeviceID;
+            if (!string.IsNullOrEmpty(deviceId))
+            {
+                Plugin.Instance?.DeviceQueueManager?.RecordLastPlayed(deviceId, itemId);
+            }
+        }
+
         // Route initial playback through VideoApp when native controls are enabled.
         // Enqueue/ReplaceEnqueued stay as AudioPlayer for queue building.
         // Resume (offset > 0) also stays as AudioPlayer since VideoApp has no offset support.

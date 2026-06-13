@@ -154,6 +154,12 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public RequestCounters RequestCounters { get; internal set; } = new RequestCounters();
 
     /// <summary>
+    /// Gets the per-device playback queue manager. Set from DI in SkillStartup.
+    /// Accessed by BaseHandler to record last-played items at the play chokepoint.
+    /// </summary>
+    public Alexa.Playback.DeviceQueueManager? DeviceQueueManager { get; internal set; }
+
+    /// <summary>
     /// Sets the HttpClientFactory from DI registration.
     /// </summary>
     internal IHttpClientFactory? HttpClientFactory
