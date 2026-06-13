@@ -102,6 +102,7 @@ public class ResumeOnRelaunchTests : PluginTestBase, IDisposable
             _config,
             _libraryManagerMock.Object,
             _userManagerMock.Object,
+            Mock.Of<IUserDataManager>(),
             _loggerFactory);
     }
 

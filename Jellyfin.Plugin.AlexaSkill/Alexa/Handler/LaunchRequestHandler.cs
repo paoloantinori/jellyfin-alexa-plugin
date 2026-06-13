@@ -8,6 +8,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
+using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
@@ -28,6 +29,7 @@ public class LaunchRequestHandler : BaseHandler
 {
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
+    private readonly IUserDataManager _userDataManager;
     private readonly CustomerProfileService _profileService;
 
     /// <summary>
@@ -37,16 +39,19 @@ public class LaunchRequestHandler : BaseHandler
     /// <param name="config">The plugin configuration.</param>
     /// <param name="libraryManager">The library manager instance.</param>
     /// <param name="userManager">The user manager instance.</param>
+    /// <param name="userDataManager">The user data manager instance for progress lookups.</param>
     /// <param name="loggerFactory">Logger factory instance.</param>
     public LaunchRequestHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
+        IUserDataManager userDataManager,
         ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
+        _userDataManager = userDataManager;
         _profileService = new CustomerProfileService(loggerFactory.CreateLogger<CustomerProfileService>());
     }
 
@@ -76,7 +81,21 @@ public class LaunchRequestHandler : BaseHandler
         {
             if (!string.IsNullOrEmpty(context.AudioPlayer?.Token))
             {
-                return await HandleResumeOfferAsync(request, context, user, session, locale, cancellationToken).ConfigureAwait(false);
+                // When NativeControlsForAudio is enabled, initial playback routes through
+                // VideoApp.Launch which does NOT update context.AudioPlayer.Token.
+                // The token may be stale — pointing to an item from a previous AudioPlayer session
+                // while the actual last-played item was played via VideoApp.
+                // Cross-reference with server-side progress to detect and correct this mismatch.
+                if (_config.NativeControlsForAudio && session != null)
+                {
+                    var resolved = ResolveActualLastPlayed(context, user, session, locale);
+                    if (resolved != null)
+                    {
+                        return resolved;
+                    }
+                }
+
+                return await HandleResumeOfferAsync(request, context, user, session!, locale, cancellationToken).ConfigureAwait(false);
             }
 
             // check if we have any media in the queue (legacy Jellyfin session-based resume)
@@ -111,6 +130,65 @@ public class LaunchRequestHandler : BaseHandler
                 cancellationToken).ConfigureAwait(false);
         }
 
+        return BuildResumeOfferResponse(item, itemId, offsetMs, user, locale, context);
+    }
+
+    /// <summary>
+    /// When NativeControlsForAudio is enabled, playback routes through VideoApp.Launch
+    /// which does not update context.AudioPlayer.Token. The token may be stale.
+    /// This method queries the server for the actual last-played item with progress
+    /// and returns a resume offer for that item if it differs from the AudioPlayer token.
+    /// Returns null if the AudioPlayer token matches the server-side item (not stale)
+    /// or if no server-side item is found.
+    /// </summary>
+    private SkillResponse? ResolveActualLastPlayed(
+        Context context, Entities.User user, SessionInfo session, string locale)
+    {
+        var (jellyfinUser, _) = ResolveJellyfinUser(_userManager, session.UserId, locale);
+        if (jellyfinUser == null)
+        {
+            return null;
+        }
+
+        Entities.User pluginUser = _config.GetUserById(user.Id) ?? user;
+        BaseItemKind[] contentTypes = FilterByContentAccess(new[] { BaseItemKind.Audio, BaseItemKind.Movie, BaseItemKind.Episode, BaseItemKind.AudioBook });
+
+        var (serverItem, serverTicks) = FindLastPlayedItemWithProgress(
+            jellyfinUser, _libraryManager, _userDataManager, pluginUser, contentTypes, Logger);
+
+        if (serverItem == null)
+        {
+            Logger.LogDebug("LaunchResume: NativeControlsForAudio stale-token check: no server-side item found, using AudioPlayer token");
+            return null;
+        }
+
+        string audioPlayerToken = context.AudioPlayer!.Token!;
+        string serverItemId = serverItem.Id.ToString();
+
+        if (string.Equals(audioPlayerToken, serverItemId, StringComparison.Ordinal))
+        {
+            Logger.LogDebug("LaunchResume: NativeControlsForAudio stale-token check: AudioPlayer token matches server item '{Name}'", serverItem.Name);
+            return null;
+        }
+
+        // AudioPlayer token is stale — offer resume for the actual last-played item
+        Logger.LogInformation(
+            "LaunchResume: NativeControlsForAudio stale token detected. AudioPlayer={AudioPlayerToken}, server='{ServerName}' ({ServerId}). Using server-side item.",
+            audioPlayerToken, serverItem.Name, serverItemId);
+
+        int offsetMs = (int)Math.Min(TimeSpan.FromTicks(serverTicks).TotalMilliseconds, int.MaxValue);
+        return BuildResumeOfferResponse(serverItem, serverItemId, offsetMs, user, locale, context);
+    }
+
+    /// <summary>
+    /// Build the resume-offer response: SSML/plain text prompt, APL screen, and
+    /// session attributes storing the resume state for YesIntent confirmation.
+    /// Shared by HandleResumeOfferAsync (AudioPlayer context) and ResolveActualLastPlayed (server-side).
+    /// </summary>
+    private SkillResponse BuildResumeOfferResponse(
+        BaseItem? item, string itemId, long offsetMs,
+        Entities.User user, string locale, Context context)
+    {
         string title = item?.Name ?? ResponseStrings.Get("UnknownMedia", locale);
         string? resumeSsml = GetSsml("ResumePromptSsml", locale, EscapeXml(title));
         string repromptText = ResponseStrings.Get("ResumeReprompt", locale);
@@ -126,14 +204,12 @@ public class LaunchRequestHandler : BaseHandler
             response = ResponseBuilder.Ask(prompt, new Reprompt(repromptText));
         }
 
-        // Attach APL screen showing the content artwork when device supports it
         TryAttachResumeOfferScreen(response, item, itemId, user, locale, context);
 
-        // Store resume state in session attributes using proper DTO for serialization
         var resumeState = new ResumeHelper.ResumeState
         {
             ItemId = itemId,
-            OffsetMs = offsetMs
+            OffsetMs = (int)Math.Min(offsetMs, int.MaxValue)
         };
 
         response.SessionAttributes = new Dictionary<string, object>

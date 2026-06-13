@@ -182,6 +182,7 @@ public class LaunchRequestHandlerTests
             _config,
             _libraryManagerMock.Object,
             userManagerMock.Object,
+            Mock.Of<IUserDataManager>(),
             _loggerFactory);
     }
 
