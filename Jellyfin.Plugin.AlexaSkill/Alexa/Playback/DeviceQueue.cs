@@ -58,9 +58,11 @@ public sealed class DeviceQueue
 
     /// <summary>
     /// Gets or sets the item ID of the last user-initiated play on this device.
-    /// Recorded at the BuildAudioPlayerResponse chokepoint for every ReplaceAll play,
-    /// so it captures playback paths that bypass SetQueue (e.g. APL carousel taps).
-    /// Unlike context.AudioPlayer.Token, this is updated by VideoApp.Launch plays too,
+    /// Recorded at two sites: audio (incl. audiobooks, with chapter precision) in
+    /// <c>BaseHandler.BuildAudioPlayerResponse</c>, and video (movies/episodes) in
+    /// <c>LastPlayedResponseInterceptor</c> (the response-pipeline chokepoint that catches
+    /// VideoApp.Launch plays bypassing BuildAudioPlayerResponse). Unlike
+    /// <c>context.AudioPlayer.Token</c>, this is updated by VideoApp.Launch plays too,
     /// making it the reliable device-specific source of truth for "what did this Echo
     /// last play" when NativeControlsForAudio routes playback through VideoApp.
     /// </summary>

@@ -116,6 +116,7 @@ public class Registrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<IRequestInterceptor, LoggingRequestInterceptor>();
         serviceCollection.AddSingleton<IResponseInterceptor, SessionAttributesInterceptor>();
         serviceCollection.AddSingleton<IResponseInterceptor, DynamicEntitiesInterceptor>();
+        serviceCollection.AddSingleton<IResponseInterceptor, LastPlayedResponseInterceptor>();
         serviceCollection.AddSingleton<IResponseInterceptor, LoggingResponseInterceptor>();
         serviceCollection.AddSingleton<IResponseInterceptor, MetricsResponseInterceptor>();
         serviceCollection.AddSingleton<IResponseInterceptor, ResponseBodyLoggingInterceptor>();
