@@ -252,6 +252,15 @@ ffmpeg -f concat -safe 0 -i chapters.txt \
 - **AudioPlayer custom skills get NO scrubber/progress bar**: Only the Music/Radio/Podcast Skill API (Amazon partnership required) gets the native player with seek bar. Custom skills using `AudioPlayer.Play` get only play/pause/next/previous buttons.
 - **Pre-written event playlists (no ENDLIST) DO work**: A playlist WITHOUT `#EXT-X-ENDLIST` is an event playlist — the player plays available segments without failing on missing ones. This is how first-play gets correct total duration. VOD playlists (WITH ENDLIST) referencing missing segments DO fail.
 
+### Audiobook Resume (NativeControlsForBooks)
+
+When `NativeControlsForBooks` is on, audiobooks play via VideoApp and resume from the last position. Position is tracked by watching HLS segment requests (`AudiobookPositionTracker`, keyed by book parent-folder ID, conservative `(highWaterMark−1)×10s`). Resume serves a **sliced** playlist (`AudiobookPlaylistBuilder`, `?start=<ticks>`) that begins at the target segment.
+
+- **Why sliced, not `#EXT-X-START`**: The Echo Show's ExoPlayer **ignores `#EXT-X-START`** (verified on hardware — resume restarted from 0 even with the hint correctly served). Slicing works because it uses the same event-playlist mechanism as first-play. The `StartHint` strategy is kept in `AudiobookPlaylistBuilder` as a dormant fallback but is not active.
+- **Known limitation — resume clock is relative**: Because the sliced playlist's first segment IS the resume segment, the player's elapsed-time/seek-bar timeline is **relative to the resume point**, not the book's absolute timeline. Resuming at 3:00 of a book shows as `0:00` on the seek bar, and the bar spans `[resumePoint → end]`. This is the unavoidable cost of seek-bar resume on the Echo; the audio position is correct. (The only way to get absolute time is `#EXT-X-START`, which the Echo ignores, or AudioPlayer, which has no seek bar.)
+- **All playlist return paths must inject `?start=`**: `StreamHlsAudiobook` has four playlist returns (cache hit, encode-in-progress, concurrent-generated, post-encode). All route through `ServeAudiobookPlaylistAsync`, which injects the resume slice when `startTicks > 0`. Do not add a raw `PhysicalFile(playlist)` return without it.
+- **Tracker key is the book parent-folder GUID**: `GetSegment` records segments keyed by the URL `itemId` (= parentId). Resume lookups use `item.ParentId`. `AudiobookPositionTracker.NormalizeKey` canonicalizes both to GUID `"N"` format — do not bypass it, or record (dashed URL) and read (`"N"`) keys will silently mismatch and resume will fall back to 0.
+
 ## Interaction Model Anti-Patterns — DO NOT REPEAT
 
 These patterns have caused bugs repeatedly across many sessions. Every rule here was extracted from real commits that fixed real failures.
