@@ -236,6 +236,9 @@ public class LaunchRequestHandler : BaseHandler
         {
             string bookId = (item.ParentId != Guid.Empty ? item.ParentId : item.Id).ToString("N");
             long trackedTicks = Plugin.Instance?.AudiobookPositionTracker?.GetPositionTicks(bookId) ?? 0;
+            Logger.LogDebug(
+                "LaunchResume: audiobook resume check bookId={BookId}, trackedTicks={Ticks}, userDataTicks={UserData}",
+                bookId, trackedTicks, positionTicks);
             if (trackedTicks > 0)
             {
                 positionTicks = trackedTicks;

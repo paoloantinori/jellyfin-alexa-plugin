@@ -53,7 +53,7 @@ public sealed class AudiobookPositionTracker : IDisposable
     /// Record that a segment was requested for a book. Updates the high-water mark if this
     /// segment is further than the current one. Debounced per-book persistence.
     /// </summary>
-    /// <param name="bookParentId">The audiobook parent-folder ID (GUID "N" format).</param>
+    /// <param name="bookParentId">The audiobook parent-folder ID (any GUID format — normalized internally).</param>
     /// <param name="segmentNumber">The zero-based segment index fetched.</param>
     public void RecordSegment(string bookParentId, int segmentNumber)
     {
@@ -62,8 +62,18 @@ public sealed class AudiobookPositionTracker : IDisposable
             return;
         }
 
-        _positions.AddOrUpdate(bookParentId, segmentNumber, (_, existing) => Math.Max(existing, segmentNumber));
+        string key = NormalizeKey(bookParentId);
+        _positions.TryGetValue(key, out int previous);
+        if (segmentNumber <= previous)
+        {
+            return; // ignore backward/seek fetches below the high-water mark
+        }
+
+        _positions[key] = segmentNumber;
         SchedulePersist();
+        _logger.LogDebug(
+            "AudiobookPositionTracker: book {BookId} advanced to segment {Segment} (from {Previous})",
+            key, segmentNumber, previous);
     }
 
     /// <summary>
@@ -81,7 +91,8 @@ public sealed class AudiobookPositionTracker : IDisposable
             return 0;
         }
 
-        if (!_positions.TryGetValue(bookParentId, out int highWaterMark) || highWaterMark <= 0)
+        string key = NormalizeKey(bookParentId);
+        if (!_positions.TryGetValue(key, out int highWaterMark) || highWaterMark <= 0)
         {
             return 0;
         }
@@ -93,13 +104,23 @@ public sealed class AudiobookPositionTracker : IDisposable
     /// <summary>
     /// Clear tracked position for a book (e.g. when the book is finished/marked played).
     /// </summary>
-    /// <param name="bookParentId">The audiobook parent-folder ID (GUID "N" format).</param>
+    /// <param name="bookParentId">The audiobook parent-folder ID (any GUID format).</param>
     public void Clear(string bookParentId)
     {
-        if (_positions.TryRemove(bookParentId, out _))
+        if (_positions.TryRemove(NormalizeKey(bookParentId), out _))
         {
             SchedulePersist();
         }
+    }
+
+    /// <summary>
+    /// Normalize a book ID to a canonical key (GUID "N" format, no dashes) so the record
+    /// path (raw URL itemId with dashes) and the read path (ToString("N")) match. Falls back
+    /// to the raw input if it isn't a GUID.
+    /// </summary>
+    private static string NormalizeKey(string bookParentId)
+    {
+        return Guid.TryParse(bookParentId, out Guid g) ? g.ToString("N") : bookParentId;
     }
 
     private void SchedulePersist()
