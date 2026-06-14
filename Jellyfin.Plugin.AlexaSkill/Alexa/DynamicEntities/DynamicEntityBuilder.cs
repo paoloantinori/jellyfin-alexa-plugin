@@ -392,7 +392,7 @@ public class DynamicEntityBuilder : IDisposable
             values.Add(new LastPlayedSlotValue
             {
                 Id = CatalogValue.FormatId(catalogType, item.Id),
-                DisplayName = item.Name,
+                DisplayName = SlotValueHelper.Truncate(item.Name),
                 SlotTypeName = slotTypeName
             });
 
@@ -528,8 +528,8 @@ public class DynamicEntityBuilder : IDisposable
             Id = CatalogValue.FormatId(catalogType, item.Id),
             Name = new DynamicSlotValueName
             {
-                Value = item.Name,
-                Synonyms = synonyms.Count > 0 ? synonyms : null
+                Value = SlotValueHelper.Truncate(item.Name),
+                Synonyms = synonyms.Count > 0 ? synonyms.Select(SlotValueHelper.Truncate).ToList() : null
             }
         });
 
