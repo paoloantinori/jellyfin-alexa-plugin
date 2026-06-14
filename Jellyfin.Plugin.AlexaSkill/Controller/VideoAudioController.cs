@@ -369,7 +369,9 @@ public class VideoAudioController : ControllerBase
     /// <returns>An HLS playlist (.m3u8) file spanning all chapters.</returns>
     [HttpGet("audiobook/{parentId}/stream.m3u8")]
     [AllowAnonymous]
-    public async Task<ActionResult> StreamHlsAudiobook([FromRoute] string parentId)
+    public async Task<ActionResult> StreamHlsAudiobook(
+        [FromRoute] string parentId,
+        [FromQuery(Name = "start")] long? startTicks = null)
     {
         if (string.IsNullOrWhiteSpace(parentId) || !Guid.TryParse(parentId, out Guid parentGuid))
         {
@@ -642,6 +644,11 @@ public class VideoAudioController : ControllerBase
             // the correct total book duration. The player treats it as an event playlist
             // and plays available segments without failing on missing ones. ffmpeg generates
             // segments in the background, staying ahead of real-time playback.
+            if (startTicks.HasValue && startTicks.Value > 0)
+            {
+                return await ServeResumePlaylistAsync(prewrittenPath, startTicks.Value).ConfigureAwait(false);
+            }
+
             return PhysicalFile(prewrittenPath, "application/vnd.apple.mpegurl");
 #pragma warning restore CA3003
         }
@@ -671,6 +678,11 @@ public class VideoAudioController : ControllerBase
             return BadRequest(new { error = "Invalid segment name" });
         }
 
+        // Record audiobook playback progress via the segment request. Anonymous endpoint,
+        // so keyed by itemId (the book parent-folder ID for audiobook concat streams).
+        // Best-effort: never fail the segment request over tracking.
+        RecordSegmentForTracking(itemId, segmentName);
+
         string? segmentPath = _cache.FindSegmentPath(itemId, segmentName);
         if (segmentPath == null)
         {
@@ -680,6 +692,50 @@ public class VideoAudioController : ControllerBase
 #pragma warning disable CA3003 // segmentPath validated via GUID itemId + strict segment name pattern
         return PhysicalFile(segmentPath, "video/mp2t", enableRangeProcessing: true);
 #pragma warning restore CA3003
+    }
+
+    /// <summary>
+    /// Best-effort audiobook position tracking: parse the segment number from a
+    /// <c>seg_NNN[N].ts</c> name and record it. For audiobook concat streams, itemId is
+    /// the book parent-folder ID (matches the resume-time lookup key). Single-item
+    /// segment requests are keyed by their own itemId and simply never read at resume.
+    /// </summary>
+    private void RecordSegmentForTracking(string itemId, string segmentName)
+    {
+        // Format: "seg_" + digits + ".ts"  → digits span [4, Length-3)
+        if (segmentName.Length < 8 || !segmentName.StartsWith("seg_", StringComparison.Ordinal) || !segmentName.EndsWith(".ts", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        string digits = segmentName.Substring(4, segmentName.Length - 7);
+        if (int.TryParse(digits, out int segmentNumber))
+        {
+            Plugin.Instance?.AudiobookPositionTracker?.RecordSegment(itemId, segmentNumber);
+        }
+    }
+
+    /// <summary>
+    /// Read a base audiobook playlist, inject a resume hint for the given start position,
+    /// and return it as content. Falls back to serving the base playlist unchanged on error.
+    /// </summary>
+    private async Task<ActionResult> ServeResumePlaylistAsync(string basePlaylistPath, long startTicks)
+    {
+        try
+        {
+#pragma warning disable CA3003 // basePlaylistPath is a validated internal cache file (parentId is GUID-validated upstream)
+            string content = await System.IO.File.ReadAllTextAsync(basePlaylistPath).ConfigureAwait(false);
+#pragma warning restore CA3003
+            string resumeContent = Alexa.Playback.AudiobookPlaylistBuilder.BuildResumePlaylist(content, startTicks);
+            return Content(resumeContent, "application/vnd.apple.mpegurl");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to serve resume playlist from {Path}, serving base", basePlaylistPath);
+#pragma warning disable CA3003 // path is an internal cache file resolved by the controller
+            return PhysicalFile(basePlaylistPath, "application/vnd.apple.mpegurl");
+#pragma warning restore CA3003
+        }
     }
 
     /// <summary>

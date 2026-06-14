@@ -45,7 +45,10 @@ public class SkillStartupTests : PluginTestBase
         var deviceQueueManager = new Jellyfin.Plugin.AlexaSkill.Alexa.Playback.DeviceQueueManager(
             Path.Combine(Path.GetTempPath(), "alexa_test_queues_" + Guid.NewGuid().ToString("N")),
             _loggerFactory.CreateLogger<Jellyfin.Plugin.AlexaSkill.Alexa.Playback.DeviceQueueManager>());
-        return new SkillStartup(_sessionManagerMock.Object, _loggerFactory, _httpClientFactory, mdm, _searchCache, new CircuitBreaker(), new RequestCounters(), _connectivityChecker, deviceQueueManager);
+        var positionTracker = new Jellyfin.Plugin.AlexaSkill.Alexa.Playback.AudiobookPositionTracker(
+            Path.Combine(Path.GetTempPath(), "alexa_test_pos_" + Guid.NewGuid().ToString("N")),
+            _loggerFactory.CreateLogger<Jellyfin.Plugin.AlexaSkill.Alexa.Playback.AudiobookPositionTracker>());
+        return new SkillStartup(_sessionManagerMock.Object, _loggerFactory, _httpClientFactory, mdm, _searchCache, new CircuitBreaker(), new RequestCounters(), _connectivityChecker, deviceQueueManager, positionTracker);
     }
 
     [Fact]

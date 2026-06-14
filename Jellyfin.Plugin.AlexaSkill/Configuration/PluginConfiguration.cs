@@ -144,6 +144,14 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public bool NativeControlsForAudio { get; set; } = false;
 
+    /// <summary>
+    /// Use VideoApp.Launch for audiobook playback instead of AudioPlayer.Play.
+    /// Independent from <see cref="NativeControlsForAudio"/> (which governs music): gives the
+    /// native progress bar/scrubber on Echo Show for audiobooks and enables HLS-based resume.
+    /// Videos are always VideoApp — no toggle.
+    /// </summary>
+    public bool NativeControlsForBooks { get; set; } = false;
+
     public int InitialFetchSize { get; set; } = 5;
     public int ContinuationBatchSize { get; set; } = 10;
     public int PrefetchThreshold { get; set; } = 2;

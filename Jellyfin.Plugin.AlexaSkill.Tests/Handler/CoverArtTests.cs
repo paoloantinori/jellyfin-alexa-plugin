@@ -706,15 +706,18 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
     }
 
     [Fact]
-    public void BuildAudioPlayerResponse_NativeControlsOn_NullItem_EmptyTitle()
+    public void BuildAudioPlayerResponse_NativeControlsOn_EmptyNameItem_EmptyTitle()
     {
         var handler = CreateHandler();
         var user = CreateUser();
-        string itemId = Guid.NewGuid().ToString();
+        // Per-type routing requires a typed audio item; an empty name still routes to VideoApp
+        // and must surface an empty (not null) title.
+        var song = CreateSong(string.Empty);
+        string itemId = song.Id.ToString();
         string streamUrl = handler.GetStreamUrl(itemId, user);
 
         var response = handler.BuildAudioPlayerResponse(
-            PlayBehavior.ReplaceAll, streamUrl, itemId, null!, user);
+            PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
 
         var directive = Assert.IsType<VideoAppLaunchDirective>(
             Assert.Single(response.Response.Directives));

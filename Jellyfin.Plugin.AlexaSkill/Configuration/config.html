@@ -165,6 +165,10 @@
                                 <label><input type="checkbox" is="emby-checkbox" id="NativeControlsForAudio" /> <span>Native Echo Show Controls</span></label>
                                 <div class="fieldDescription checkboxFieldDescription">Use native progress bar and elapsed time on Echo Show for audio playback. Trades album art for native transport controls (progress bar, scrubber). Requires a screen-equipped device; non-screen devices always use the standard audio player.</div>
                             </div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="NativeControlsForBooks" /> <span>Native Echo Show Controls (Audiobooks)</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">Use native progress bar and scrubber for audiobooks on Echo Show, independent from the music toggle above. When enabled on a screen device, audiobooks play via VideoApp with a seek bar and HLS-based resume (resumes ~10s before your last position). When off, audiobooks use the standard audio player.</div>
+                            </div>
                             <div class="selectContainer">
                                 <label class="selectLabel" for="DefaultPostPlayBehavior">Post-Play Behavior</label>
                                 <select is="emby-select" id="DefaultPostPlayBehavior" name="DefaultPostPlayBehavior" class="emby-select-withcolor emby-select">
@@ -423,7 +427,7 @@
                     ["RadioModeEnabled", "PodcastsEnabled", "LiveTvEnabled", "SleepTimerEnabled",
                      "QueueManagementEnabled", "BrowseLibraryEnabled", "RecommendationsEnabled",
                      "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "AsrCompoundWordFixEnabled", "SeekEnabled", "PauseAnnouncePosition",
-                     "ShuffleArtistSongs", "NativeControlsForAudio"].forEach(function(f) {
+                     "ShuffleArtistSongs", "NativeControlsForAudio", "NativeControlsForBooks"].forEach(function(f) {
                         document.querySelector("#" + f).checked = config[f] !== false;
                     });
 
@@ -959,7 +963,7 @@
                     ["RadioModeEnabled", "PodcastsEnabled", "LiveTvEnabled", "SleepTimerEnabled",
                      "QueueManagementEnabled", "BrowseLibraryEnabled", "RecommendationsEnabled",
                      "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "AsrCompoundWordFixEnabled", "SeekEnabled", "PauseAnnouncePosition",
-                     "ShuffleArtistSongs", "NativeControlsForAudio"].forEach(function(f) {
+                     "ShuffleArtistSongs", "NativeControlsForAudio", "NativeControlsForBooks"].forEach(function(f) {
                         config[f] = document.querySelector("#" + f).checked;
                     });
 
@@ -1021,6 +1025,7 @@
                         SeekEnabled: config.SeekEnabled,
                         PauseAnnouncePosition: config.PauseAnnouncePosition,
                         NativeControlsForAudio: config.NativeControlsForAudio,
+                        NativeControlsForBooks: config.NativeControlsForBooks,
                         MusicEnabled: config.MusicEnabled,
                         VideosEnabled: config.VideosEnabled,
                         BooksEnabled: config.BooksEnabled,

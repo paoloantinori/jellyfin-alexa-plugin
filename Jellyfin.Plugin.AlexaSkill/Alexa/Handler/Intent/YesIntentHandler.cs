@@ -187,8 +187,27 @@ public class YesIntentHandler : BaseHandler
         string itemId = item.Id.ToString();
         session.FullNowPlayingItem = item;
 
+        // Audiobook resume via VideoApp resume playlist (keeps the seek bar). The position
+        // is encoded in the playlist via #EXT-X-START; VideoApp.Launch has no offset param.
+        if (resumeState.UseResumePlaylist)
+        {
+            string bookId = (item.ParentId != Guid.Empty ? item.ParentId : item.Id).ToString("N");
+            long startTicks = Plugin.Instance?.AudiobookPositionTracker?.GetPositionTicks(bookId) ?? 0;
+            if (startTicks <= 0)
+            {
+                // Tracker cleared between offer and confirm — fall back to the offered offset.
+                startTicks = TimeSpan.FromMilliseconds(Math.Min(resumeState.OffsetMs, int.MaxValue)).Ticks;
+            }
+
+            SkillResponse response = BuildAudiobookResumeResponse(item, startTicks);
+            response.Response.OutputSpeech = _config.ResumeAnnounceTitle
+                ? BuildOutputSpeech("ResumingSsml", "Resuming", locale, EscapeXml(item.Name ?? ResponseStrings.Get("UnknownMedia", locale)))
+                : BuildOutputSpeech("ResumeBriefSsml", "ResumeBrief", locale);
+            return Task.FromResult(response);
+        }
+
         int offsetMs = (int)Math.Min(resumeState.OffsetMs, int.MaxValue);
-        SkillResponse response = BuildAudioPlayerResponse(
+        SkillResponse standardResponse = BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll,
             GetStreamUrl(itemId, user),
             itemId,
@@ -201,14 +220,14 @@ public class YesIntentHandler : BaseHandler
         if (_config.ResumeAnnounceTitle)
         {
             string title = item.Name ?? ResponseStrings.Get("UnknownMedia", locale);
-            response.Response.OutputSpeech = BuildOutputSpeech("ResumingSsml", "Resuming", locale, EscapeXml(title));
+            standardResponse.Response.OutputSpeech = BuildOutputSpeech("ResumingSsml", "Resuming", locale, EscapeXml(title));
         }
         else
         {
-            response.Response.OutputSpeech = BuildOutputSpeech("ResumeBriefSsml", "ResumeBrief", locale);
+            standardResponse.Response.OutputSpeech = BuildOutputSpeech("ResumeBriefSsml", "ResumeBrief", locale);
         }
 
-        return Task.FromResult(response);
+        return Task.FromResult(standardResponse);
     }
 
     private SkillResponse PlaySong(BaseItem song, Entities.User user, SessionInfo session)

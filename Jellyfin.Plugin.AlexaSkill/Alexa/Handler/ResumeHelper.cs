@@ -20,6 +20,15 @@ internal static class ResumeHelper
 
         [JsonProperty("offsetMs")]
         public long OffsetMs { get; set; }
+
+        /// <summary>
+        /// When true, resume via the audiobook HLS resume playlist (VideoApp + #EXT-X-START)
+        /// instead of AudioPlayer + offset. Set by the resume-offer builder for audiobooks
+        /// with a tracked position under NativeControlsForBooks. Defaults false for backward
+        /// compatibility (existing session attributes deserialize without it).
+        /// </summary>
+        [JsonProperty("useResumePlaylist")]
+        public bool UseResumePlaylist { get; set; }
     }
 
     /// <summary>

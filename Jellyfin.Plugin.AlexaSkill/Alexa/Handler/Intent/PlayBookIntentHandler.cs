@@ -252,7 +252,45 @@ public class PlayBookIntentHandler : BaseHandler
         }
 
         string itemId = trackItems[startIndex].Id.ToString();
-        SkillResponse response = BuildAudioPlayerResponse(
+
+        // Native controls for books: play via the VideoApp concat stream (seek bar). With a
+        // tracked position, resume via the #EXT-X-START playlist; otherwise start fresh.
+        // The concat URL keys by the chapter's ParentId (the book folder) — same key the
+        // tracker records under, so resume lookup is consistent.
+        if (Plugin.Instance?.Configuration?.NativeControlsForBooks == true)
+        {
+            string bookId = (trackItems[startIndex].ParentId != Guid.Empty
+                ? trackItems[startIndex].ParentId
+                : trackItems[startIndex].Id).ToString("N");
+            long startTicks = Plugin.Instance?.AudiobookPositionTracker?.GetPositionTicks(bookId) ?? 0;
+            if (startTicks <= 0 && resumeTicks > 0)
+            {
+                startTicks = resumeTicks; // fall back to chapter-relative progress if tracker is cold
+            }
+
+            bool resuming = startTicks > 0;
+            SkillResponse response = resuming
+                ? BuildAudiobookResumeResponse(trackItems[startIndex], startTicks)
+                : BuildVideoAppAudioResponse(itemId, trackItems[startIndex], user);
+
+            if (resuming)
+            {
+                string bookName = EscapeXml(books[0].Name);
+                string trackName = EscapeXml(trackItems[startIndex].Name);
+                string? ssml = GetSsml("ResumingBookSsml", locale, bookName, trackName);
+                response.Response.OutputSpeech = ssml != null
+                    ? new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" }
+                    : new PlainTextOutputSpeech
+                    {
+                        Text = ResponseStrings.Get("ResumingBook", locale, books[0].Name, trackItems[startIndex].Name)
+                    };
+                response.Response.ShouldEndSession = true;
+            }
+
+            return response;
+        }
+
+        SkillResponse standardResponse = BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, trackItems[startIndex], user, context, offsetMs);
 
         // Add resume announcement when not starting from the beginning
@@ -262,15 +300,15 @@ public class PlayBookIntentHandler : BaseHandler
             string trackName = EscapeXml(trackItems[startIndex].Name);
             string? ssml = GetSsml("ResumingBookSsml", locale, bookName, trackName);
 
-            response.Response.OutputSpeech = ssml != null
+            standardResponse.Response.OutputSpeech = ssml != null
                 ? new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" }
                 : new PlainTextOutputSpeech
                 {
                     Text = ResponseStrings.Get("ResumingBook", locale, books[0].Name, trackItems[startIndex].Name)
                 };
-            response.Response.ShouldEndSession = true;
+            standardResponse.Response.ShouldEndSession = true;
         }
 
-        return response;
+        return standardResponse;
     }
 }

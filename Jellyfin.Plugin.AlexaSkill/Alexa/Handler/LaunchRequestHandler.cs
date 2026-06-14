@@ -228,8 +228,23 @@ public class LaunchRequestHandler : BaseHandler
             positionTicks = userData?.PlaybackPositionTicks ?? 0;
         }
 
+        // For audiobooks with native controls, prefer the segment-based tracker position
+        // (accurate for HLS concat playback) and signal resume-via-playlist to YesIntent.
+        bool useResumePlaylist = false;
+        if (item.GetType().Name.Equals("AudioBook", StringComparison.Ordinal)
+            && Plugin.Instance?.Configuration?.NativeControlsForBooks == true)
+        {
+            string bookId = (item.ParentId != Guid.Empty ? item.ParentId : item.Id).ToString("N");
+            long trackedTicks = Plugin.Instance?.AudiobookPositionTracker?.GetPositionTicks(bookId) ?? 0;
+            if (trackedTicks > 0)
+            {
+                positionTicks = trackedTicks;
+                useResumePlaylist = true;
+            }
+        }
+
         int offsetMs = (int)Math.Min(TimeSpan.FromTicks(positionTicks).TotalMilliseconds, int.MaxValue);
-        return BuildResumeOfferResponse(item, lastPlayedItemId, offsetMs, user, locale, context);
+        return BuildResumeOfferResponse(item, lastPlayedItemId, offsetMs, user, locale, context, useResumePlaylist);
     }
 
     /// <summary>
@@ -239,7 +254,7 @@ public class LaunchRequestHandler : BaseHandler
     /// </summary>
     private SkillResponse BuildResumeOfferResponse(
         BaseItem? item, string itemId, long offsetMs,
-        Entities.User user, string locale, Context context)
+        Entities.User user, string locale, Context context, bool useResumePlaylist = false)
     {
         string title = item?.Name ?? ResponseStrings.Get("UnknownMedia", locale);
         string? resumeSsml = GetSsml("ResumePromptSsml", locale, EscapeXml(title));
@@ -261,7 +276,8 @@ public class LaunchRequestHandler : BaseHandler
         var resumeState = new ResumeHelper.ResumeState
         {
             ItemId = itemId,
-            OffsetMs = (int)Math.Min(offsetMs, int.MaxValue)
+            OffsetMs = (int)Math.Min(offsetMs, int.MaxValue),
+            UseResumePlaylist = useResumePlaylist
         };
 
         response.SessionAttributes = new Dictionary<string, object>

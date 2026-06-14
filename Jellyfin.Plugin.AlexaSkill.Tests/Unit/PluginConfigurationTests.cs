@@ -47,6 +47,25 @@ public class PluginConfigurationTests
     }
 
     [Fact]
+    public void Constructor_InitializesNativeControlsFlagsFalse()
+    {
+        var config = CreateConfig();
+        Assert.False(config.NativeControlsForAudio);
+        Assert.False(config.NativeControlsForBooks);
+    }
+
+    [Fact]
+    public void NativeControlsForBooks_IndependentFromAudio()
+    {
+        var config = CreateConfig();
+        config.NativeControlsForAudio = true;
+        Assert.False(config.NativeControlsForBooks);
+
+        config.NativeControlsForBooks = true;
+        Assert.True(config.NativeControlsForAudio); // unchanged
+    }
+
+    [Fact]
     public void AddUser_AddsUserToList()
     {
         var config = CreateConfig();

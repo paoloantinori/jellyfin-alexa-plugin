@@ -37,6 +37,7 @@ public class SkillStartup : IHostedService, IDisposable
     private readonly RequestCounters _requestCounters;
     private readonly JellyfinConnectivityChecker _connectivityChecker;
     private readonly Alexa.Playback.DeviceQueueManager _deviceQueueManager;
+    private readonly Alexa.Playback.AudiobookPositionTracker _positionTracker;
     private CancellationTokenSource? _cts;
     private Task? _runningTask;
     private bool _disposed;
@@ -61,7 +62,8 @@ public class SkillStartup : IHostedService, IDisposable
         CircuitBreaker circuitBreaker,
         RequestCounters requestCounters,
         JellyfinConnectivityChecker connectivityChecker,
-        Alexa.Playback.DeviceQueueManager deviceQueueManager)
+        Alexa.Playback.DeviceQueueManager deviceQueueManager,
+        Alexa.Playback.AudiobookPositionTracker positionTracker)
     {
         _sessionManager = sessionManager;
         _httpClientFactory = httpClientFactory;
@@ -71,6 +73,7 @@ public class SkillStartup : IHostedService, IDisposable
         _requestCounters = requestCounters;
         _connectivityChecker = connectivityChecker;
         _deviceQueueManager = deviceQueueManager;
+        _positionTracker = positionTracker;
         _logger = loggerFactory.CreateLogger<SkillStartup>();
     }
 
@@ -85,6 +88,7 @@ public class SkillStartup : IHostedService, IDisposable
         Plugin.Instance!.RequestCounters = _requestCounters;
         Plugin.Instance!.ConnectivityChecker = _connectivityChecker;
         Plugin.Instance!.DeviceQueueManager = _deviceQueueManager;
+        Plugin.Instance!.AudiobookPositionTracker = _positionTracker;
 
         PluginConfiguration configuration = Plugin.Instance!.Configuration;
 

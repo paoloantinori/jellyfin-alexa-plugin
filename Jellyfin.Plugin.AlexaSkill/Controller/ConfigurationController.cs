@@ -433,6 +433,9 @@ public class ConfigurationController : ControllerBase
         if (req.TryGetValue("NativeControlsForAudio", out var nativeControlsToken) && nativeControlsToken.Type == JTokenType.Boolean)
         { config.NativeControlsForAudio = nativeControlsToken.Value<bool>(); updated = true; }
 
+        if (req.TryGetValue("NativeControlsForBooks", out var nativeBooksToken) && nativeBooksToken.Type == JTokenType.Boolean)
+        { config.NativeControlsForBooks = nativeBooksToken.Value<bool>(); updated = true; }
+
         if (req.TryGetValue("InitialFetchSize", out var fetchToken) && fetchToken.Type == JTokenType.Integer)
         { config.InitialFetchSize = fetchToken.Value<int>(); updated = true; }
 

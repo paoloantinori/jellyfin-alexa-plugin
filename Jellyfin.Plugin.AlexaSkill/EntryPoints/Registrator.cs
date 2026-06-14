@@ -39,6 +39,12 @@ public class Registrator : IPluginServiceRegistrator
             string dataDir = Path.Combine(Plugin.Instance!.DataFolderPath, "queues");
             return new DeviceQueueManager(dataDir, logger);
         });
+        serviceCollection.AddSingleton<Alexa.Playback.AudiobookPositionTracker>(sp =>
+        {
+            var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger<Alexa.Playback.AudiobookPositionTracker>();
+            string dataDir = Path.Combine(Plugin.Instance!.DataFolderPath, "queues");
+            return new Alexa.Playback.AudiobookPositionTracker(dataDir, logger);
+        });
         serviceCollection.AddSingleton<RequestCounters>();
         serviceCollection.AddSingleton<SearchResultCache>();
         serviceCollection.AddSingleton<CircuitBreaker>();

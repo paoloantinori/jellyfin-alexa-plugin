@@ -160,6 +160,13 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public Alexa.Playback.DeviceQueueManager? DeviceQueueManager { get; internal set; }
 
     /// <summary>
+    /// Gets the global audiobook position tracker (segment-based). Set from DI in SkillStartup.
+    /// Accessed by VideoAudioController to record segment requests and by the resume flow to
+    /// read the tracked position.
+    /// </summary>
+    public Alexa.Playback.AudiobookPositionTracker? AudiobookPositionTracker { get; internal set; }
+
+    /// <summary>
     /// Sets the HttpClientFactory from DI registration.
     /// </summary>
     internal IHttpClientFactory? HttpClientFactory

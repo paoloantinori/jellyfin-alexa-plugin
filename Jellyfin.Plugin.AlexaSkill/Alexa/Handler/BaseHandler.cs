@@ -404,6 +404,17 @@ public abstract class BaseHandler
     public string GetAudiobookVideoAudioUrl(string parentId)
         => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/audiobook/{parentId}/stream.m3u8").ToString();
 
+    /// <summary>
+    /// Get a resume-aware audiobook HLS URL with a start-position hint. The endpoint reads
+    /// <c>?start=&lt;ticks&gt;</c> and injects <c>#EXT-X-START</c> into the playlist so VideoApp
+    /// can resume at position (VideoApp.Launch has no offset parameter of its own).
+    /// </summary>
+    /// <param name="parentId">Id of the audiobook parent folder.</param>
+    /// <param name="startTicks">Resume position in .NET ticks.</param>
+    /// <returns>URL to the resume-aware audiobook HLS endpoint.</returns>
+    public string GetAudiobookResumeUrl(string parentId, long startTicks)
+        => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/audiobook/{parentId}/stream.m3u8?start={startTicks}").ToString();
+
     private string BuildStreamUrl(string pathSegment, string itemId, Entities.User user)
         => new Uri(new Uri(_config.ServerAddress), $"{pathSegment}{itemId}/stream?static=true&api_key={user.JellyfinToken}").ToString();
 
@@ -504,16 +515,31 @@ public abstract class BaseHandler
             }
         }
 
-        // Route initial playback through VideoApp when native controls are enabled.
-        // Enqueue/ReplaceEnqueued stay as AudioPlayer for queue building.
-        // Resume (offset > 0) also stays as AudioPlayer since VideoApp has no offset support.
+        // Route initial playback through VideoApp when native controls are enabled for the
+        // item's category. Enqueue/ReplaceEnqueued stay as AudioPlayer for queue building.
+        // Resume (offset > 0) also stays as AudioPlayer since VideoApp has no offset support
+        // (audiobook resume is handled separately via a resume-aware HLS playlist).
         // AudioBook items use a special concat HLS endpoint that joins all chapters into
         // one continuous stream, giving the full book duration in the seek bar.
-        if (Plugin.Instance?.Configuration?.NativeControlsForAudio == true
-            && playBehavior == PlayBehavior.ReplaceAll
-            && offsetInMilliseconds == 0)
+        if (playBehavior == PlayBehavior.ReplaceAll && offsetInMilliseconds == 0)
         {
-            return BuildVideoAppAudioResponse(itemId, item, user);
+            bool wantsNativeControls = false;
+            if (item != null)
+            {
+                if (item.GetType().Name.Equals("AudioBook", StringComparison.Ordinal))
+                {
+                    wantsNativeControls = Plugin.Instance?.Configuration?.NativeControlsForBooks == true;
+                }
+                else if (item is MediaBrowser.Controller.Entities.Audio.Audio)
+                {
+                    wantsNativeControls = Plugin.Instance?.Configuration?.NativeControlsForAudio == true;
+                }
+            }
+
+            if (wantsNativeControls)
+            {
+                return BuildVideoAppAudioResponse(itemId, item, user);
+            }
         }
 
         Logger.LogDebug("BuildAudioPlayerResponse: itemId={ItemId}, behavior={Behavior}, offsetMs={OffsetMs}, title={Title}, streamUrl={StreamUrl}",
@@ -665,6 +691,50 @@ public abstract class BaseHandler
                             Metadata = new Directive.VideoItemMetadata
                             {
                                 Title = item?.Name ?? string.Empty,
+                                Subtitle = GetSubtitle(item)
+                            }
+                        }
+                    }
+                }
+            }
+        };
+    }
+
+    /// <summary>
+    /// Build a VideoApp.Launch response for an audiobook RESUME, pointing at the resume-aware
+    /// HLS playlist (<c>?start=&lt;ticks&gt;</c>). The position is encoded in the playlist via
+    /// <c>#EXT-X-START</c> — VideoApp.Launch has no offset parameter, so this keeps the seek bar
+    /// AND resumes at position. Use the book's parent-folder ID for the concat stream.
+    /// </summary>
+    /// <param name="item">An audiobook chapter item (its ParentId is the book folder).</param>
+    /// <param name="startTicks">Resume position in .NET ticks.</param>
+    /// <returns>A VideoApp.Launch SkillResponse targeting the resume playlist.</returns>
+    public SkillResponse BuildAudiobookResumeResponse(MediaBrowser.Controller.Entities.BaseItem item, long startTicks)
+    {
+        Guid parentId = item.ParentId != Guid.Empty ? item.ParentId : item.Id;
+        string videoAudioUrl = GetAudiobookResumeUrl(parentId.ToString(), startTicks);
+
+        Logger.LogDebug(
+            "BuildAudiobookResumeResponse: itemId={ItemId}, parentId={ParentId}, startTicks={Ticks}, url={Url}",
+            item.Id, parentId, startTicks, videoAudioUrl);
+
+        return new SkillResponse
+        {
+            Version = "1.0",
+            Response = new ResponseBody
+            {
+                // VideoApp.Launch must NOT include shouldEndSession.
+                ShouldEndSession = null,
+                Directives = new List<IDirective>
+                {
+                    new Directive.VideoAppLaunchDirective
+                    {
+                        VideoItem = new Directive.VideoItem
+                        {
+                            Source = videoAudioUrl,
+                            Metadata = new Directive.VideoItemMetadata
+                            {
+                                Title = item.Name ?? string.Empty,
                                 Subtitle = GetSubtitle(item)
                             }
                         }
