@@ -185,8 +185,14 @@ public class BrowseLibraryIntentHandler : BaseHandler
 
         // AudioBook: multi-file audiobooks produce one AudioBook item per chapter/track,
         // all sharing the same ParentId (the book folder). Resolve parent items to get
-        // correct book-level names. Single-track parents (single-file audiobooks) are
-        // kept as-is since they are already the top-level item.
+        // correct book-level names. Single-file audiobooks are kept as-is.
+        //
+        // Group by ParentId, but only resolve a multi-item group's parent when the tracks are
+        // homogeneous (one Album/name = chapters of a single book). When several single-file
+        // audiobooks sit directly under a library root, they share the root's ParentId but
+        // have distinct Albums — treating that group as "one book" would resolve the library
+        // root folder (e.g. "Audiobooks") and surface it as a result. Keeping heterogeneous
+        // groups standalone avoids that.
         var grouped = raw.GroupBy(i => i.ParentId).ToList();
         var parentIdsToResolve = new List<Guid>();
         var standaloneBooks = new List<BaseItem>();
@@ -196,10 +202,26 @@ public class BrowseLibraryIntentHandler : BaseHandler
             if (group.Count() == 1)
             {
                 standaloneBooks.Add(group.First());
+                continue;
+            }
+
+            // Homogeneous group (a single Album — a multi-chapter book's tracks share one
+            // Album, even when it's unset) → resolve its parent folder. Heterogeneous (distinct
+            // Albums = separate single-file books that share a container folder, e.g. a library
+            // root) → keep each standalone so the container is never surfaced as a "book".
+            int distinctBooks = group
+                .Select(i => (i as Audio)?.Album ?? string.Empty)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count();
+
+            if (distinctBooks == 1)
+            {
+                parentIdsToResolve.Add(group.Key);
             }
             else
             {
-                parentIdsToResolve.Add(group.Key);
+                standaloneBooks.AddRange(group);
+                Logger.LogDebug("BrowseLibrary: kept {Count} heterogeneous AudioBook items standalone under shared parent {ParentId}", group.Count(), group.Key);
             }
         }
 
@@ -219,8 +241,8 @@ public class BrowseLibraryIntentHandler : BaseHandler
         IReadOnlyList<BaseItem> parents = await RetryAsync(() => _libraryManager.GetItemList(parentQuery), "GetAudioBookParents", cancellationToken).ConfigureAwait(false);
 
         // Filter out library root folders (CollectionFolder, AggregateFolder) — they are
-        // organizational containers, not actual books. This happens when audiobook tracks
-        // sit directly under a library root in a flat folder structure.
+        // organizational containers, not actual books. Defense in depth: the homogeneity
+        // check above already prevents root resolution for the common flat-layout case.
         var filtered = parents.Where(p => p is not CollectionFolder && p is not AggregateFolder).ToList();
         if (filtered.Count != parents.Count)
         {

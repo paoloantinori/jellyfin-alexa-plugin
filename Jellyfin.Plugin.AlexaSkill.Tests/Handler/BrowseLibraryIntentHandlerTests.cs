@@ -445,6 +445,53 @@ public class BrowseLibraryIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
+    public async Task HandleAsync_BrowseBooks_KeepsSingleFileBooksStandalone_UnderPlainFolderRoot()
+    {
+        // Regression for jf-266's real-world case: several single-file audiobooks sit
+        // directly under a library root that is a plain Folder (not CollectionFolder/
+        // AggregateFolder, so the type filter misses it). Each book has a distinct Album.
+        // They must be listed individually, and the root folder must NEVER be resolved/shown.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(category: "libri");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        Guid rootFolderId = Guid.NewGuid();
+
+        var tracks = new List<BaseItem>
+        {
+            new Audio { Name = "Honest Truth", Id = Guid.NewGuid(), ParentId = rootFolderId, Album = "Honest Truth" },
+            new Audio { Name = "Power Moves", Id = Guid.NewGuid(), ParentId = rootFolderId, Album = "Power Moves" },
+            new Audio { Name = "Radical Candor", Id = Guid.NewGuid(), ParentId = rootFolderId, Album = "Radical Candor" }
+        };
+
+        // If the root were resolved, it would return this plain Folder. It must never be reached.
+        var parentItems = new List<BaseItem>
+        {
+            new Folder { Name = "Audiobooks", Id = rootFolderId }
+        };
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ItemIds != null && q.ItemIds.Length > 0)))
+            .Returns(parentItems);
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ItemIds == null || q.ItemIds.Length == 0)))
+            .Returns(tracks);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        string speech = TestHelpers.GetSpeechText(response);
+
+        // The library root folder must NOT appear (it is a plain Folder, not CollectionFolder).
+        Assert.DoesNotContain("Audiobooks", speech);
+        // Each single-file book should be listed individually.
+        Assert.Contains("Honest Truth", speech);
+        Assert.Contains("Radical Candor", speech);
+    }
+
+    [Fact]
     public async Task HandleAsync_BrowseBooks_FiltersOutAggregateFolders()
     {
         var handler = CreateHandler();
