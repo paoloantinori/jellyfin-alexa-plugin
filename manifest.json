@@ -266,11 +266,11 @@
             },
             {
                 "version": "0.7.0.0",
-                "checksum": "placeholder",
+                "checksum": "722c2a4e7e03016375a8c93a79f997df",
                 "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.7.0.0/AlexaSkill_0.7.0.0.zip",
                 "changelog": "Audiobook seek bar on Echo Show via HLS concat streaming (JF-292): multi-chapter books get a full-book timeline with accurate seeking. Per-category native controls (NativeControlsForBooks) with audiobook position tracking and resume from last position. Resume offer extended to VideoApp (movies/episodes), tracked per-device. VideoAudio cache with per-item locking and background faststart remux for instant first-play. Phonetic song search fallback (JF-285) and O(1) bigram index for fast song title lookup (JF-246). Fixes: 'mostra libri' showing Audiobooks root folder (JF-266), Folder items crashing on APL carousel tap (JF-152), VideoApp ShouldEndSession breaking audiobook/video playback (JF-288), stale resume item with NativeControlsForAudio.",
                 "targetAbi": "10.11.0.0",
-                "timestamp": "2026-06-15 00:00:00"
+                "timestamp": "2026-06-15 20:21:40"
             }
         ]
     }
