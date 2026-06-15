@@ -209,6 +209,12 @@ public class BrowseLibraryIntentHandler : BaseHandler
             // Album, even when it's unset) → resolve its parent folder. Heterogeneous (distinct
             // Albums = separate single-file books that share a container folder, e.g. a library
             // root) → keep each standalone so the container is never surfaced as a "book".
+            //
+            // Known edge case: if 2+ single-file books under the SAME plain-Folder container
+            // both lack Album metadata, they collide on the "" sentinel and are treated as
+            // homogeneous, resolving the container. This is indistinguishable from a genuine
+            // multi-chapter book with unset Album (which must resolve), so it's accepted; the
+            // CollectionFolder/AggregateFolder filter below catches typed library roots.
             int distinctBooks = group
                 .Select(i => (i as Audio)?.Album ?? string.Empty)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
