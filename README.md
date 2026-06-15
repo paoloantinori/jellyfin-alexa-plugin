@@ -10,7 +10,7 @@ Play music, videos, playlists, search your library, manage favorites, and more â
 
 <br/>
 
-[![dev build](https://github.com/paoloantinori/jellyfin-alexa-plugin/actions/workflows/dev-build.yml/badge.svg)](https://github.com/paoloantinori/jellyfin-alexa-plugin/actions/workflows/dev-build.yml/badge.svg)
+[![CI](https://github.com/paoloantinori/jellyfin-alexa-plugin/actions/workflows/ci.yml/badge.svg)](https://github.com/paoloantinori/jellyfin-alexa-plugin/actions/workflows/ci.yml)
 [![GitHub all releases](https://img.shields.io/github/downloads/paoloantinori/jellyfin-alexa-plugin/total?label=total%20downloads)](https://github.com/paoloantinori/jellyfin-alexa-plugin/releases)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 

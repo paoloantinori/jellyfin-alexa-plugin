@@ -21,13 +21,12 @@ Env vars: `ASK_SKILL_ID`, `SMAPI_DELAY` (default 1.5s), `SMAPI_TIMEOUT`, `JELLYF
 
 ## CI
 
-GitHub Actions runs on every PR and push to main (`ci.yml`):
-- **build-and-test**: Release build with `-warnaserror` + full test suite
-- **validate-models**: Interaction model structural validation (advisory)
-- **validate-locales**: Locale key coverage vs baseline (fails on new gaps only)
-- **validate-versions**: Directory.Build.props / build.yaml / manifest.json consistency
-
-CI validates models, locales, and versions on every PR and push to main.
+GitHub Actions runs the validation/build pipeline on **PRs to main** and via manual `workflow_dispatch` — it does **not** rebuild on every push to main. Release builds run only on tag push (see [Release](#release)). Pipelines:
+- `ci.yml` — PR-gated: **build-and-test** (Release build with `-warnaserror` + full test suite), **validate-models** (advisory), **validate-locales** (baseline-aware), **validate-versions**, **validate-build-yaml**
+- `dev-build.yml` — manual-only (`workflow_dispatch`): downloadable dev DLL artifact zip
+- `release-build.yml` — tag push only: build + test + zip + GitHub release + manifest update
+- `pages.yml` — docs-site deploy (path-filtered to `docs-site/`)
+- `codeql-analysis.yml` — security scan on PR/push to main + weekly schedule
 
 ## Project Layout
 
