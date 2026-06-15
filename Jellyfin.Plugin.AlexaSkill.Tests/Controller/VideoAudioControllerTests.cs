@@ -313,7 +313,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         // regardless of how many preceding flags ffmpeg receives.
         string fakeFfmpegPath = Path.Combine(_tempDir, "fake-ffmpeg");
         string fakeFfmpegScript = "#!/bin/sh\n" +
-            "last_arg=\"${@: -1}\"\n" +
+            // POSIX sh (dash) has no "${@: -1}" — iterate to the last positional arg instead
+            "for last_arg in \"$@\"; do :; done\n" +
             "dd if=/dev/zero bs=1024 count=12 of=\"$last_arg\" 2>/dev/null\n" +
             "exit 0\n";
         File.WriteAllText(fakeFfmpegPath, fakeFfmpegScript);
@@ -563,7 +564,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         // The new HLS endpoint waits for seg_000.ts to appear before serving the playlist.
         string fakeFfmpegPath = Path.Combine(_tempDir, "fake-ffmpeg-hls");
         string fakeFfmpegScript = "#!/bin/sh\n" +
-            "playlist_path=\"${@: -1}\"\n" +
+            // POSIX sh (dash) has no "${@: -1}" — iterate to the last positional arg instead
+            "for playlist_path in \"$@\"; do :; done\n" +
             "playlist_dir=\"$(dirname \"$playlist_path\")\"\n" +
             "mkdir -p \"$playlist_dir\"\n" +
             // Create a segment file so the endpoint detects it and serves the playlist
@@ -915,6 +917,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns((MediaBrowser.Controller.Entities.BaseItem?)null);
 
         var controller = CreateController();
+        controller.FfmpegPath = "/usr/bin/ffmpeg";
 
         ActionResult result = await controller.StreamHlsAudiobook(parentId.ToString());
 
@@ -940,6 +943,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             .Returns(new List<MediaBrowser.Controller.Entities.BaseItem>());
 
         var controller = CreateController();
+        controller.FfmpegPath = "/usr/bin/ffmpeg";
 
         ActionResult result = await controller.StreamHlsAudiobook(parentId.ToString());
 
@@ -1020,7 +1024,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         // Create a fake ffmpeg script that simulates HLS generation
         string fakeFfmpegPath = Path.Combine(_tempDir, "fake-ffmpeg-audiobook");
         string fakeFfmpegScript = "#!/bin/sh\n" +
-            "playlist_path=\"${@: -1}\"\n" +
+            // POSIX sh (dash) has no "${@: -1}" — iterate to the last positional arg instead
+            "for playlist_path in \"$@\"; do :; done\n" +
             "playlist_dir=\"$(dirname \"$playlist_path\")\"\n" +
             "mkdir -p \"$playlist_dir\"\n" +
             "dd if=/dev/zero bs=1024 count=4 of=\"$playlist_dir/seg_0000.ts\" 2>/dev/null\n" +
@@ -1085,7 +1090,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         // Create a fake ffmpeg that writes the concat list and creates segments
         string fakeFfmpegPath = Path.Combine(_tempDir, "fake-ffmpeg-concat-check");
         string fakeFfmpegScript = "#!/bin/sh\n" +
-            "playlist_path=\"${@: -1}\"\n" +
+            // POSIX sh (dash) has no "${@: -1}" — iterate to the last positional arg instead
+            "for playlist_path in \"$@\"; do :; done\n" +
             "playlist_dir=\"$(dirname \"$playlist_path\")\"\n" +
             "mkdir -p \"$playlist_dir\"\n" +
             "dd if=/dev/zero bs=1024 count=4 of=\"$playlist_dir/seg_0000.ts\" 2>/dev/null\n" +
