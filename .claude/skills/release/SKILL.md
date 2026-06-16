@@ -85,14 +85,21 @@ grep '^version:' build.yaml
 
 ## Step 4: Validate
 
+### 4a. Local build + validators
 ```bash
 dotnet build Jellyfin.Plugin.AlexaSkill.sln -c Release -warnaserror
-dotnet test Jellyfin.Plugin.AlexaSkill.Tests -c Release
 python3 scripts/validate_interaction_models.py
-python3 scripts/validate_versions.py
+python3 scripts/validate_versions.py   # MUST PASS: props == build.yaml == manifest latest
 ```
 
-All must pass with 0 errors.
+### 4b. Run tests in a CI-matching container (REQUIRED before tagging)
+A green local `dotnet test` is **not** sufficient. The dev box (Fedora: `/bin/sh`=bash, ffmpeg installed) differs from the ubuntu runner (`/bin/sh`=dash, **no** ffmpeg). Environment-dependent failures — bash-only shell syntax in spawned scripts, missing system binaries — only surface on the runner, *after* the tag is pushed. Run the suite under the runner's failure surface first:
+```bash
+podman run --rm -v "$PWD":/src:z -w /src \
+  mcr.microsoft.com/dotnet/sdk:9.0 \
+  dotnet test Jellyfin.Plugin.AlexaSkill.Tests -c Release
+```
+(`docker` works the same if that's what you have; `:z` handles SELinux labels on Fedora.) The Debian image gives `/bin/sh`=dash and ships no ffmpeg — matching the ubuntu runner's failure surface (not identical to `ubuntu-latest`, but far closer than Fedora). All tests must pass here before tagging. (Origin: 0.7.0.0 release — 2382 passed on Fedora, 4 failed in CI. See `feedback_ci_env_tests` memory.) If podman/docker is unavailable, at minimum `dash -n` any shell scripts the tests generate.
 
 ## Step 5: Deploy and Rebuild Models
 
@@ -100,8 +107,11 @@ Run the `deploy` skill to push the new DLL. The version change triggers automati
 
 ## Step 6: Commit, Tag, Push
 
+Before committing, append a **placeholder** `manifest.json` entry for the new version (`checksum: "placeholder"`, changelog from `build.yaml`) so `validate_versions.py` passes — release CI's `add_release_to_manifest.py` replaces it with the real MD5 computed from the built zip. Without the placeholder, release CI fails at the validate-versions step.
+
 ```bash
-git add Directory.Build.props build.yaml
+# Stage ONLY the release files — NEVER `git add -A` (lots of untracked noise in this tree)
+git add Directory.Build.props build.yaml manifest.json
 git commit -m "Release v${NEW_VERSION}: <one-line summary>"
 git tag "${NEW_VERSION}"
 git push origin main --tags
@@ -109,16 +119,26 @@ git push origin main --tags
 
 **Tag must match the version exactly** (no `v` prefix — the version string `0.4.0.0` is the tag).
 
-## Step 7: Monitor CI
-
+**If the release run fails** (e.g. tests): the release was never published, so move the unreleased tag to the fix commit and force-push rather than bumping the version for a test-only fix:
 ```bash
-gh run list --workflow=release-build.yml --limit 3
+git tag -f "${NEW_VERSION}" <fix-commit> && git push -f origin "${NEW_VERSION}"
 ```
 
-Wait for the release build to complete. Check:
-- GitHub Releases page has the new version with zip artifact
-- `manifest.json` was auto-updated with new version + checksum
-- Jellyfin plugin catalog will detect the new version automatically
+## Step 7: Monitor CI + Verify (MANDATORY — recurring failure points)
+
+```bash
+gh run watch <run-id> --exit-status     # wait for green
+```
+
+Then verify **all three**:
+- **GitHub release** exists with the zip: `gh release view ${NEW_VERSION}`
+- **Manifest checksum was replaced** — must be a real 32-char MD5, NOT `"placeholder"`: `grep placeholder manifest.json` → empty. Pull the bot's commit first: `git pull --ff-only origin main`.
+- **Set curated release notes** — `generate_release_notes` yields near-empty notes for this direct-to-main repo (no PRs to summarize). Write a Features/Fixes body from `build.yaml`'s changelog and set it:
+  ```bash
+  gh release edit ${NEW_VERSION} --notes-file <curated-notes.md>
+  ```
+
+Jellyfin's plugin catalog auto-detects the new version from `manifest.json`.
 
 ## Files That Change
 
@@ -127,4 +147,4 @@ Wait for the release build to complete. Check:
 | `Directory.Build.props` | `<Version>`, `<AssemblyVersion>`, `<FileVersion>` |
 | `build.yaml` | `version` field |
 
-`manifest.json` is updated automatically by the release CI — do NOT edit it manually.
+`manifest.json`: append a `placeholder` entry before tagging (Step 6) — release CI overwrites it with the real checksum. Never hand-write the checksum; CI computes it from the zip.
