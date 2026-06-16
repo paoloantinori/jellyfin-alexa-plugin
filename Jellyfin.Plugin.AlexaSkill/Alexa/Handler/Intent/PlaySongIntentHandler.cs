@@ -52,6 +52,25 @@ public class PlaySongIntentHandler : BaseHandler
         "a música ", "a faixa ", "música ",
     };
 
+    /// <summary>
+    /// Minimum fuzzy-match score required for the cross-media-type artist fallback
+    /// (no musician slot, song not found). Higher than the normal default threshold
+    /// because a wrong-artist false positive is worse than a clean "song not found".
+    /// Observed bug: "la ballata del genesio" matched artist "Lamb" at score 75.
+    /// </summary>
+    private const int CrossMediaArtistThreshold = 85;
+
+    /// <summary>
+    /// Maximum number of words in the song query for the cross-media-type artist
+    /// fallback to even be attempted. The fallback exists to catch NLU misroutes of
+    /// SHORT artist names into the song slot (e.g. "strokes" → "The Strokes"). A
+    /// multi-word song title is a poor artist query, so a clean not-found is better
+    /// than risking a wrong-artist match.
+    /// </summary>
+    private const int CrossMediaArtistMaxWords = 2;
+
+    private static readonly char[] WhitespaceChars = new[] { ' ', '\t', '\n', '\r' };
+
     // Generic words meaning "music/songs" across supported locales.
     // When Alexa captures one of these as the {song} slot alongside a {musician} slot,
     // the user means "play music by <artist>" not "play a song titled 'music'".
@@ -210,7 +229,19 @@ public class PlaySongIntentHandler : BaseHandler
             // Cross-media-type fallback: no songs found and no musician slot.
             // The NLU may have routed an artist name to PlaySongIntent by mistake
             // (e.g. "mettere gli strokes" → song="strokes" instead of artist="strokes").
-            // Try searching for an artist with the same query.
+            // Try searching for an artist with the same query — but only for SHORT
+            // queries, since a multi-word song title is a poor artist query and a
+            // wrong-artist false positive is worse than a clean "song not found"
+            // (observed: "la ballata del genesio" matched artist "Lamb" at score 75).
+            int wordCount = songQuery.Split(WhitespaceChars, StringSplitOptions.RemoveEmptyEntries).Length;
+            if (wordCount > CrossMediaArtistMaxWords)
+            {
+                Logger.LogInformation(
+                    "PlaySong: skipping artist fallback for {WordCount}-word query '{Query}' (max {Max})",
+                    wordCount, songQuery, CrossMediaArtistMaxWords);
+                return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByName", locale, songQuery));
+            }
+
             Logger.LogDebug("PlaySong: no songs found, trying artist fallback with query='{Query}'", songQuery);
             IReadOnlyList<BaseItem> fallbackArtists = await Util.ArtistSearch.SearchAsync(
                 songQuery, user, _libraryManager, _artistIndex, Logger,
@@ -220,16 +251,26 @@ public class PlaySongIntentHandler : BaseHandler
             if (fallbackArtists.Count > 0)
             {
                 var bestMatch = FuzzyMatcher.FindBestMatchWithScore(songQuery, fallbackArtists, a => a.Name);
-                if (bestMatch.HasValue && bestMatch.Value.Score >= FuzzyMatcher.GetDefaultThreshold(user))
+                // Require a stronger match than the normal threshold: a wrong artist
+                // is worse than a clean not-found. Take the max so a user who raised
+                // their fuzzy threshold above 85 is still respected.
+                int crossMediaThreshold = Math.Max(FuzzyMatcher.GetDefaultThreshold(user), CrossMediaArtistThreshold);
+                if (bestMatch.HasValue && bestMatch.Value.Score >= crossMediaThreshold)
                 {
                     BaseItem artist = bestMatch.Value.Item;
                     Logger.LogInformation(
-                        "PlaySong: artist fallback found '{ArtistName}' with score={Score} for query='{Query}'",
-                        artist.Name, bestMatch.Value.Score, songQuery);
+                        "PlaySong: artist fallback found '{ArtistName}' with score={Score} for query='{Query}' (threshold={Threshold})",
+                        artist.Name, bestMatch.Value.Score, songQuery, crossMediaThreshold);
 
                     return await PlayArtistSongsFallback(
                         artist.Id, artist.Name, jellyfinUser!, user, session, context, locale, cancellationToken,
                         announcement: ResponseStrings.Get("FoundArtistInstead", locale, artist.Name)).ConfigureAwait(false);
+                }
+                else if (bestMatch.HasValue)
+                {
+                    Logger.LogInformation(
+                        "PlaySong: artist fallback rejected '{ArtistName}' score={Score}<{Threshold} for query='{Query}'",
+                        bestMatch.Value.Item.Name, bestMatch.Value.Score, crossMediaThreshold, songQuery);
                 }
             }
 

@@ -186,6 +186,131 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
     }
 
     [Fact]
+    public async Task PlaySong_NoSongs_NoMusician_MultiWordTitle_SkipsArtistFallback()
+    {
+        // JF-295: a multi-word song title that misses must NOT fall back to a
+        // fuzzy artist match. Observed bug: "la ballata del genesio" matched
+        // artist "Lamb" at score 75. A clean "song not found" is better than a
+        // wrong artist. Even though the mock returns a plausible artist, the
+        // word-count gate must short-circuit before the artist search.
+        SetupUserMock();
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                // Song search: empty (no such song)
+                if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))
+                    return new List<BaseItem>();
+
+                // Artist search would return a false-positive match — but the
+                // word-count gate must prevent us from even getting here.
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                    return new List<BaseItem> { new MusicArtist { Name = "Lamb", Id = Guid.NewGuid() } };
+
+                return new List<BaseItem>();
+            });
+
+        var handler = CreateSongHandler();
+        var request = CreateSongIntent("la ballata del genesio"); // 4 words, no musician slot
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // Should NOT fall back to artist playback — clean "song not found"
+        Assert.True(response.Response?.Directives == null || response.Response.Directives.Count == 0);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("la ballata del genesio", speech, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Lamb", speech);
+        // Queue must be empty — no artist songs enqueued
+        Assert.True(session.NowPlayingQueue == null || session.NowPlayingQueue.Count == 0);
+    }
+
+    [Fact]
+    public async Task PlaySong_NoSongs_NoMusician_MultiWordTitle_DoesNotInvokeArtistSearch()
+    {
+        // Companion to the above: verify the word-count gate skips the artist
+        // DB query entirely (no MusicArtist query should be issued).
+        SetupUserMock();
+
+        bool artistQueryIssued = false;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))
+                    return new List<BaseItem>();
+
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                {
+                    artistQueryIssued = true;
+                    return new List<BaseItem> { new MusicArtist { Name = "Lamb", Id = Guid.NewGuid() } };
+                }
+
+                return new List<BaseItem>();
+            });
+
+        var handler = CreateSongHandler();
+        // 3 words — above the 2-word gate
+        var request = CreateSongIntent("ballata del genesio");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.False(artistQueryIssued, "Cross-media artist search must NOT be issued for a 3+ word song title");
+        Assert.True(response.Response?.Directives == null || response.Response.Directives.Count == 0);
+    }
+
+    [Fact]
+    public async Task PlaySong_NoSongs_NoMusician_SingleWordMisroute_StillFallsBackToArtist()
+    {
+        // JF-295 regression guard: the word-count gate must NOT break the
+        // original purpose of the cross-media fallback — catching NLU misroutes
+        // of SHORT artist names into the song slot. A single-word query like
+        // "strokes" should still resolve to "The Strokes" via the fallback.
+        var artistId = Guid.NewGuid();
+        var song1 = new Audio { Name = "Last Nite", Id = Guid.NewGuid() };
+
+        SetupUserMock();
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                // Song search: empty
+                if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))
+                    return new List<BaseItem>();
+
+                // Artist search: returns a strong match
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                    return new List<BaseItem> { new MusicArtist { Name = "The Strokes", Id = artistId } };
+
+                // Artist songs fallback
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0 && q.MediaTypes != null && q.MediaTypes.Contains(MediaType.Audio))
+                    return new List<BaseItem> { song1 };
+
+                return new List<BaseItem>();
+            });
+
+        var handler = CreateSongHandler();
+        var request = CreateSongIntent("strokes"); // single word, no musician slot
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // Should fall back to artist playback
+        Assert.NotNull(response.Response?.Directives);
+        Assert.NotEmpty(response.Response.Directives);
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Single(session.NowPlayingQueue);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Strokes", speech);
+    }
+
+    [Fact]
     public async Task PlaySong_SongsFound_NoFallbackTriggered()
     {
         var songId = Guid.NewGuid();
