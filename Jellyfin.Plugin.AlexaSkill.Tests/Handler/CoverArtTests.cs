@@ -604,7 +604,8 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
 
         // Should NOT contain the raw /Audio/.../stream path
         Assert.DoesNotContain("/Audio/", directive.VideoItem.Source);
-        // HLS URL contains /stream.m3u8 — check that there's no raw audio stream endpoint
+        // Songs use the stream-while-writing MP4 endpoint (no HLS .m3u8 playlist)
+        Assert.DoesNotContain(".m3u8", directive.VideoItem.Source);
         Assert.DoesNotMatch(@"^https?://[^/]+/Audio/.+/stream\b", directive.VideoItem.Source);
         // VideoApp.Launch must NOT include shouldEndSession — Alexa rejects it
         Assert.Null(response.Response.ShouldEndSession);
@@ -702,7 +703,52 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
 
         string url = handler.TestGetVideoAudioUrl(itemId);
 
-        Assert.Equal("http://localhost:8096/alexaskill/api/video-audio/33333333-3333-3333-3333-333333333333/stream.m3u8", url);
+        Assert.Equal("http://localhost:8096/alexaskill/api/video-audio/33333333-3333-3333-3333-333333333333", url);
+    }
+
+    [Fact]
+    public void BuildVideoAppAudioResponse_AudioItem_UsesMp4Endpoint()
+    {
+        // JF-292: single songs use the cheap stream-while-writing MP4 endpoint,
+        // NOT the expensive HLS encode. The URL must not carry a .m3u8 playlist.
+        var handler = CreateHandler();
+        var song = CreateSong(id: Guid.Parse("44444444-4444-4444-4444-444444444444"));
+        var user = CreateUser();
+        string itemId = song.Id.ToString();
+
+        var response = handler.BuildVideoAppAudioResponse(itemId, song, user);
+
+        var directive = Assert.IsType<VideoAppLaunchDirective>(
+            Assert.Single(response.Response.Directives));
+        Assert.Equal(
+            $"http://localhost:8096/alexaskill/api/video-audio/{itemId}",
+            directive.VideoItem.Source);
+        Assert.DoesNotContain(".m3u8", directive.VideoItem.Source);
+    }
+
+    [Fact]
+    public void BuildVideoAppAudioResponse_AudioBookItem_UsesHlsEndpoint()
+    {
+        // Audiobooks keep HLS concat (seek bar with full book duration).
+        var handler = CreateHandler();
+        var parent = Guid.Parse("55555555-5555-5555-5555-555555555555");
+        var book = new AudioBook
+        {
+            Name = "My Book",
+            Id = Guid.NewGuid(),
+            ParentId = parent
+        };
+        var user = CreateUser();
+        string itemId = book.Id.ToString();
+
+        var response = handler.BuildVideoAppAudioResponse(itemId, book, user);
+
+        var directive = Assert.IsType<VideoAppLaunchDirective>(
+            Assert.Single(response.Response.Directives));
+        Assert.Equal(
+            $"http://localhost:8096/alexaskill/api/video-audio/audiobook/{parent}/stream.m3u8",
+            directive.VideoItem.Source);
+        Assert.Contains(".m3u8", directive.VideoItem.Source);
     }
 
     [Fact]
