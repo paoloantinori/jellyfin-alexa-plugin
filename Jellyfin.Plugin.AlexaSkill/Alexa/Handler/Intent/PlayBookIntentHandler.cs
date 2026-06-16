@@ -85,8 +85,8 @@ public class PlayBookIntentHandler : BaseHandler
                 new Reprompt(ResponseStrings.Get("ElicitBookName", locale)));
         }
 
-        await SendProgressiveResponse(
-            context, request, ResponseStrings.Get("SearchingBook", locale)).ConfigureAwait(false);
+        RunFireAndForget(SendProgressiveResponse(
+            context, request, ResponseStrings.Get("SearchingBook", locale)));
 
         var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
         if (userError != null)

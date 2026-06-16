@@ -100,7 +100,7 @@ public class PlayByDecadeIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchDecade", locale));
         }
 
-        await SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)).ConfigureAwait(false);
+        RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
 
         var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
         if (userError != null)

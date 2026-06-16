@@ -71,7 +71,7 @@ public class PlayRandomIntentHandler : BaseHandler
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
 
-        await SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)).ConfigureAwait(false);
+        RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
 
         string? mediaTypeSlot = null;
         string? genreSlot = null;

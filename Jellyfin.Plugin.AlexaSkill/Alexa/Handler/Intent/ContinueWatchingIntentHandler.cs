@@ -66,17 +66,18 @@ public class ContinueWatchingIntentHandler : BaseHandler
     /// <param name="session">The session instance.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A skill response.</returns>
-    public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
+    public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
         Logger.LogDebug("ContinueWatching: entered, locale={Locale}", locale);
 
-        await SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)).ConfigureAwait(false);
+        // Fire-and-forget: never block the handler response on this best-effort "searching…" ping.
+        RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
 
         var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
         if (userError != null)
         {
-            return userError;
+            return Task.FromResult(userError);
         }
 
         BaseItemKind[] contentTypes = FilterByContentAccess(new[] { BaseItemKind.Audio, BaseItemKind.Movie, BaseItemKind.Episode });
@@ -86,7 +87,7 @@ public class ContinueWatchingIntentHandler : BaseHandler
         if (resumeItem == null)
         {
             Logger.LogDebug("ContinueWatching: no in-progress item found, returning Tell");
-            return ResponseBuilder.Tell(ResponseStrings.Get("NoContinueWatching", locale));
+            return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("NoContinueWatching", locale)));
         }
 
         Logger.LogDebug("ContinueWatching: found item '{ItemName}' ({ItemId}), resumeTicks={ResumeTicks}", resumeItem.Name, resumeItem.Id, resumeTicks);
@@ -97,7 +98,7 @@ public class ContinueWatchingIntentHandler : BaseHandler
         if (resumeItem is MediaBrowser.Controller.Entities.Movies.Movie
             or MediaBrowser.Controller.Entities.TV.Episode)
         {
-            return new SkillResponse
+            return Task.FromResult(new SkillResponse
             {
                 Version = "1.0",
                 Response = new ResponseBody
@@ -115,9 +116,9 @@ public class ContinueWatchingIntentHandler : BaseHandler
                         }
                     }
                 }
-            };
+            });
         }
 
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, resumeItem, user, context, offsetMs);
+        return Task.FromResult(BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, resumeItem, user, context, offsetMs));
     }
 }

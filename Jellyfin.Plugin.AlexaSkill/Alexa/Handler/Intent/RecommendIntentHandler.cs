@@ -89,7 +89,7 @@ public class RecommendIntentHandler : BaseHandler
 
         Logger.LogDebug("Recommend: entered, locale={Locale}, mediaType={MediaType}", locale, mediaType);
 
-        await SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)).ConfigureAwait(false);
+        RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
 
         var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
         if (userError != null)

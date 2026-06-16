@@ -91,7 +91,7 @@ public class PlayLastAddedIntentHandler : BaseHandler
         string searchingText = timeLabel != null
             ? ResponseStrings.Get("SearchingMediaTime", locale, timeLabel)
             : ResponseStrings.Get("SearchingMedia", locale);
-        await SendProgressiveResponse(context, request, searchingText).ConfigureAwait(false);
+        RunFireAndForget(SendProgressiveResponse(context, request, searchingText));
 
         InternalItemsQuery query = new InternalItemsQuery()
         {

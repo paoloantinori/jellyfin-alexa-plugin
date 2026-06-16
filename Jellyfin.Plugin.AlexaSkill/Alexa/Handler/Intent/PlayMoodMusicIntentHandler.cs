@@ -304,7 +304,7 @@ public class PlayMoodMusicIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchMood", locale));
         }
 
-        await SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)).ConfigureAwait(false);
+        RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
 
         var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
         if (userError != null)

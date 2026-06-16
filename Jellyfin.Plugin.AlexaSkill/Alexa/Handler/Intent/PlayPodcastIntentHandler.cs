@@ -70,7 +70,7 @@ public class PlayPodcastIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchPodcastName", locale));
         }
 
-        await SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingPodcast", locale)).ConfigureAwait(false);
+        RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingPodcast", locale)));
 
         var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
         if (userError != null)

@@ -95,7 +95,7 @@ public class PlayFavoritesIntentHandler : BaseHandler
             }
         }
 
-        await SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)).ConfigureAwait(false);
+        RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
 
         InternalItemsQuery query = new InternalItemsQuery()
         {

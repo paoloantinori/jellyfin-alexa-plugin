@@ -968,10 +968,18 @@ public abstract class BaseHandler
     /// A fresh HttpClient is created per call because ProgressiveResponse sets BaseAddress
     /// internally, which cannot be modified on an HttpClient that has already sent a request.
     /// </summary>
+    /// <remarks>
+    /// This call is best-effort and non-critical: it is invoked FIRE-AND-FORGET from
+    /// handler paths (via <see cref="RunFireAndForget"/>) so it never blocks the final
+    /// handler response (50-200ms Alexa API round-trip). The entire body is wrapped in
+    /// try/catch so the returned <see cref="Task"/> can never fault — callers MUST NOT
+    /// await it inside request handlers. Use <see cref="RunFireAndForget"/> to discard
+    /// the task safely and analyzer-cleanly (observes the result to avoid CA2012).
+    /// </remarks>
     /// <param name="context">The Alexa context containing API access token.</param>
     /// <param name="request">The request containing the request ID.</param>
     /// <param name="message">The message to speak to the user.</param>
-    /// <returns>A task representing the async operation.</returns>
+    /// <returns>A task representing the async operation. Always completes successfully (never faults).</returns>
     protected async Task SendProgressiveResponse(Context context, Request request, string message)
     {
         Logger.LogDebug("SendProgressiveResponse: sending message={Message}", message);
@@ -987,8 +995,35 @@ public abstract class BaseHandler
         }
         catch (Exception ex)
         {
+            // Best-effort ping: never propagate. Swallowing here guarantees the discarded
+            // Task at call sites can never fault (no unobserved-exception escalation).
             Logger.LogWarning(ex, "Failed to send progressive response");
         }
+    }
+
+    /// <summary>
+    /// Safely run a best-effort <see cref="Task"/> fire-and-forget without awaiting it.
+    /// Attaches a continuation that observes the task's completion, which prevents
+    /// CA2012 (unobserved task exceptions) and keeps the build analyzer-clean under
+    /// TreatWarningsAsErrors + AllEnabledByDefault. The task is expected to already be
+    /// self-protecting (its own try/catch), so the continuation only logs on the rare
+    /// case where the task still faults despite that.
+    /// </summary>
+    /// <param name="task">The task to run without awaiting.</param>
+    /// <param name="operationName">Optional label for diagnostic logging if the task faults.</param>
+    protected void RunFireAndForget(Task task, string operationName = "FireAndForget")
+    {
+        // CA2007: ConfigureAwait(false) is the project convention for library code.
+        // CA2012: observing via ContinueWith marks the exception as observed.
+        task.ConfigureAwait(false)
+            .GetAwaiter()
+            .OnCompleted(() =>
+            {
+                if (task.IsFaulted)
+                {
+                    Logger.LogWarning(task.Exception, "{Operation} task faulted unexpectedly", operationName);
+                }
+            });
     }
 
     /// <summary>

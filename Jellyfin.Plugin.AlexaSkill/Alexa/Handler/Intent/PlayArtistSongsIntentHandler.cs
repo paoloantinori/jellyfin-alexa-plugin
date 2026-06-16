@@ -92,7 +92,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchArtistName", locale));
         }
 
-        await SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)).ConfigureAwait(false);
+        RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
 
         var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
         if (userError != null)

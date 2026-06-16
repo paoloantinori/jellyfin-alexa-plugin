@@ -90,8 +90,8 @@ public class SearchMediaIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("CouldNotUnderstand", locale));
         }
 
-        await SendProgressiveResponse(
-            context, request, ResponseStrings.Get("SearchingMedia", locale)).ConfigureAwait(false);
+        RunFireAndForget(SendProgressiveResponse(
+            context, request, ResponseStrings.Get("SearchingMedia", locale)));
 
         var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
         if (userError != null)
