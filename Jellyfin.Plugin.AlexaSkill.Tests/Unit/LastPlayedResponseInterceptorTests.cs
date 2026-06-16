@@ -115,7 +115,7 @@ public class LastPlayedResponseInterceptorTests : IDisposable
         // Audio routed through VideoApp (NativeControlsForAudio) — handled by BaseHandler.
         string guid = Guid.NewGuid().ToString();
         var ctx = CreateContext(ResponseWithDirective(
-            VideoApp($"https://jellyfin.example/alexaskill/api/video-audio/{guid}")));
+            VideoApp($"https://jellyfin.example/alexaskill/api/video-audio/{guid}/stream.m3u8")));
 
         await _interceptor.ProcessAsync(ctx, CancellationToken.None);
 

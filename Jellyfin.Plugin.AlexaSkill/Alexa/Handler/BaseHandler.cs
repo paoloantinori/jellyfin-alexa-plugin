@@ -391,7 +391,7 @@ public abstract class BaseHandler
     /// <param name="itemId">Id of the audio item.</param>
     /// <returns>URL to the HLS video-audio endpoint.</returns>
     public string GetVideoAudioUrl(string itemId)
-        => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/{itemId}").ToString();
+        => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/{itemId}/stream.m3u8").ToString();
 
     /// <summary>
     /// Get a video-audio URL for an audiobook that concatenates all chapters into
