@@ -513,6 +513,146 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.DoesNotContain("-loop", args);
     }
 
+    // ========== Codec-Aware Audio Copy Tests (JF-293) ==========
+
+    /// <summary>
+    /// Verify that BuildFfmpegArguments emits -c:a copy (and no bitrate flag) when the
+    /// source audio codec is mp3. This avoids a 3-10s AAC re-encode per song.
+    /// </summary>
+    [Fact]
+    public void BuildFfmpegArguments_SourceMp3_EmitsAudioCopyWithoutBitrate()
+    {
+        string artUrl = "http://localhost:8096/Items/123/Images/Primary";
+        string audioUrl = "http://localhost:8096/Audio/456/stream?static=true";
+        string outputPath = "/tmp/test-output.mp4";
+
+        List<string> args = VideoAudioController.BuildFfmpegArguments(
+            artUrl, audioUrl, false, outputPath, sourceAudioCodec: "mp3");
+
+        // -c:a copy is present as adjacent tokens
+        int codecIdx = args.IndexOf("-c:a");
+        Assert.True(codecIdx >= 0, "args should contain -c:a");
+        Assert.Equal("copy", args[codecIdx + 1]);
+
+        // No bitrate flag — copy does not transcode
+        Assert.DoesNotContain("-b:a", args);
+        Assert.DoesNotContain("128k", args);
+    }
+
+    /// <summary>
+    /// Verify that BuildFfmpegArguments emits -c:a copy for AAC sources too.
+    /// </summary>
+    [Fact]
+    public void BuildFfmpegArguments_SourceAac_EmitsAudioCopy()
+    {
+        string audioUrl = "http://localhost:8096/Audio/456/stream?static=true";
+        string outputPath = "/tmp/test-output.mp4";
+
+        List<string> args = VideoAudioController.BuildFfmpegArguments(
+            null, audioUrl, true, outputPath, sourceAudioCodec: "aac");
+
+        int codecIdx = args.IndexOf("-c:a");
+        Assert.Equal("copy", args[codecIdx + 1]);
+        Assert.DoesNotContain("-b:a", args);
+    }
+
+    /// <summary>
+    /// Verify that an incompatible source codec (flac) falls back to AAC transcode.
+    /// </summary>
+    [Fact]
+    public void BuildFfmpegArguments_SourceFlac_TranscodesToAac()
+    {
+        string audioUrl = "http://localhost:8096/Audio/456/stream?static=true";
+        string outputPath = "/tmp/test-output.mp4";
+
+        List<string> args = VideoAudioController.BuildFfmpegArguments(
+            null, audioUrl, true, outputPath, sourceAudioCodec: "flac");
+
+        int codecIdx = args.IndexOf("-c:a");
+        Assert.Equal("aac", args[codecIdx + 1]);
+        Assert.Contains("-b:a", args);
+        Assert.Contains("128k", args);
+    }
+
+    /// <summary>
+    /// Verify that an unknown/null source codec defaults to AAC transcode (safe behavior).
+    /// </summary>
+    [Fact]
+    public void BuildFfmpegArguments_SourceUnknown_TranscodesToAac()
+    {
+        string audioUrl = "http://localhost:8096/Audio/456/stream?static=true";
+        string outputPath = "/tmp/test-output.mp4";
+
+        // null codec
+        List<string> argsNull = VideoAudioController.BuildFfmpegArguments(
+            null, audioUrl, true, outputPath, sourceAudioCodec: null);
+        int codecIdxNull = argsNull.IndexOf("-c:a");
+        Assert.Equal("aac", argsNull[codecIdxNull + 1]);
+        Assert.Contains("128k", argsNull);
+
+        // omitted codec (default) — backwards compatible with pre-JF-293 callers
+        List<string> argsDefault = VideoAudioController.BuildFfmpegArguments(
+            null, audioUrl, true, outputPath);
+        Assert.Equal("aac", argsDefault[argsDefault.IndexOf("-c:a") + 1]);
+    }
+
+    /// <summary>
+    /// Verify that the HLS arg builder also honors -c:a copy for mp3 sources.
+    /// </summary>
+    [Fact]
+    public void BuildHlsFfmpegArguments_SourceMp3_EmitsAudioCopy()
+    {
+        string audioUrl = "http://localhost:8096/Audio/456/stream?static=true";
+        string playlistPath = "/tmp/test-output/stream.m3u8";
+        string segmentPath = "/tmp/test-output/seg_%03d.ts";
+        string hlsBaseUrl = "/alexaskill/api/video-audio/456/segments/";
+
+        List<string> args = VideoAudioController.BuildHlsFfmpegArguments(
+            null, audioUrl, true, playlistPath, segmentPath, hlsBaseUrl, sourceAudioCodec: "mp3");
+
+        int codecIdx = args.IndexOf("-c:a");
+        Assert.Equal("copy", args[codecIdx + 1]);
+        Assert.DoesNotContain("-b:a", args);
+    }
+
+    /// <summary>
+    /// Verify that the HLS arg builder transcodes incompatible codecs to AAC.
+    /// </summary>
+    [Fact]
+    public void BuildHlsFfmpegArguments_SourceFlac_TranscodesToAac()
+    {
+        string audioUrl = "http://localhost:8096/Audio/456/stream?static=true";
+        string playlistPath = "/tmp/test-output/stream.m3u8";
+        string segmentPath = "/tmp/test-output/seg_%03d.ts";
+        string hlsBaseUrl = "/alexaskill/api/video-audio/456/segments/";
+
+        List<string> args = VideoAudioController.BuildHlsFfmpegArguments(
+            null, audioUrl, true, playlistPath, segmentPath, hlsBaseUrl, sourceAudioCodec: "flac");
+
+        int codecIdx = args.IndexOf("-c:a");
+        Assert.Equal("aac", args[codecIdx + 1]);
+        Assert.Contains("128k", args);
+    }
+
+    /// <summary>
+    /// Verify the BuildAudioCodecArgs helper directly: mp3/aac → copy, others/null → transcode.
+    /// </summary>
+    [Theory]
+    [InlineData("mp3", "copy")]
+    [InlineData("aac", "copy")]
+    [InlineData("MP3", "copy")] // case-insensitive
+    [InlineData("flac", "aac")]
+    [InlineData("opus", "aac")]
+    [InlineData("", "aac")]
+    [InlineData(null, "aac")]
+    public void BuildAudioCodecArgs_SelectsCopyOrTranscodeByCodec(string? codec, string expectedFirst)
+    {
+        string[] audioArgs = VideoAudioController.BuildAudioCodecArgs(codec);
+
+        Assert.Equal("-c:a", audioArgs[0]);
+        Assert.Equal(expectedFirst, audioArgs[1]);
+    }
+
     /// <summary>
     /// Verify that the HLS cache hit path returns a PhysicalFileResult with
     /// the correct HLS content type (application/vnd.apple.mpegurl).

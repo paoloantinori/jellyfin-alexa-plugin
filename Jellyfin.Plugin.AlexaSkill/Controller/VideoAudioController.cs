@@ -18,6 +18,7 @@ using MediaBrowser.Controller.MediaEncoding;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
@@ -36,8 +37,22 @@ public class VideoAudioController : ControllerBase
 {
     private readonly ILibraryManager _libraryManager;
     private readonly IMediaEncoder _mediaEncoder;
+    private readonly IMediaSourceManager? _mediaSourceManager;
     private readonly VideoAudioCache _cache;
     private readonly ILogger<VideoAudioController> _logger;
+
+    /// <summary>
+    /// Source audio codecs that are stream-copy-compatible with the MP4/HLS muxer used
+    /// by the single-item video-audio endpoint. When the item's first audio stream uses
+    /// one of these codecs, ffmpeg remuxes with <c>-c:a copy</c> (instant, no quality
+    /// loss) instead of re-encoding to AAC (~3-10s per song). Any other codec falls back
+    /// to AAC re-encode for muxer compatibility.
+    /// </summary>
+    private static readonly HashSet<string> CopyCompatibleAudioCodecs = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "mp3",
+        "aac"
+    };
 
     /// <summary>
     /// Tracks audiobook HLS encode operations currently in progress by parentId.
@@ -68,9 +83,30 @@ public class VideoAudioController : ControllerBase
         IMediaEncoder mediaEncoder,
         VideoAudioCache cache,
         ILoggerFactory loggerFactory)
+        : this(libraryManager, mediaEncoder, cache, loggerFactory, mediaSourceManager: null)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="VideoAudioController"/> class with
+    /// a media source manager for resolving the source audio codec (enables -c:a copy).
+    /// </summary>
+    /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
+    /// <param name="mediaEncoder">Instance of the <see cref="IMediaEncoder"/> interface.</param>
+    /// <param name="cache">Instance of the <see cref="VideoAudioCache"/> service.</param>
+    /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
+    /// <param name="mediaSourceManager">Instance of the <see cref="IMediaSourceManager"/> interface (optional — null falls back to AAC transcode).</param>
+    [ActivatorUtilitiesConstructor]
+    public VideoAudioController(
+        ILibraryManager libraryManager,
+        IMediaEncoder mediaEncoder,
+        VideoAudioCache cache,
+        ILoggerFactory loggerFactory,
+        IMediaSourceManager? mediaSourceManager)
     {
         _libraryManager = libraryManager;
         _mediaEncoder = mediaEncoder;
+        _mediaSourceManager = mediaSourceManager;
         _cache = cache;
         _logger = loggerFactory.CreateLogger<VideoAudioController>();
     }
@@ -136,11 +172,19 @@ public class VideoAudioController : ControllerBase
             string? artUrl = ResolveArtUrl(validation.Item, validation.ServerUrl);
             bool useBlackFrame = artUrl == null;
 
+            // Resolve the source audio codec to decide -c:a copy vs AAC transcode.
+            // mp3/aac sources are remuxed (instant); anything else is re-encoded to AAC.
+            string? sourceAudioCodec = ResolveSourceAudioCodec(validation.Item);
+            bool useAudioCopy = sourceAudioCodec != null
+                && CopyCompatibleAudioCodecs.Contains(sourceAudioCodec);
+
             _logger.LogDebug(
-                "VideoAudio: itemId={ItemId}, artUrl={ArtUrl}, useBlackFrame={UseBlackFrame}",
+                "VideoAudio: itemId={ItemId}, artUrl={ArtUrl}, useBlackFrame={UseBlackFrame}, sourceAudioCodec={SourceAudioCodec}, audioMode={AudioMode}",
                 itemId,
                 artUrl ?? "(black frame)",
-                useBlackFrame);
+                useBlackFrame,
+                sourceAudioCodec ?? "(unknown)",
+                useAudioCopy ? "copy" : "transcode");
 
             // Prepare cache file path
             string cachePath = _cache.GetCacheFilePath(itemId, artModifiedTicks);
@@ -151,7 +195,7 @@ public class VideoAudioController : ControllerBase
             }
 
             // Build ffmpeg arguments (includes output file path directly)
-            var ffmpegArgs = BuildFfmpegArguments(artUrl, audioUrl, useBlackFrame, cachePath);
+            var ffmpegArgs = BuildFfmpegArguments(artUrl, audioUrl, useBlackFrame, cachePath, sourceAudioCodec);
             if (_logger.IsEnabled(LogLevel.Debug))
             {
                 _logger.LogDebug("VideoAudio: ffmpeg arguments: {Args}", string.Join(" ", ffmpegArgs));
@@ -286,6 +330,17 @@ public class VideoAudioController : ControllerBase
             string? artUrl = ResolveArtUrl(validation.Item, validation.ServerUrl);
             bool useBlackFrame = artUrl == null;
 
+            // Resolve source audio codec: mp3/aac → -c:a copy, else AAC transcode
+            string? sourceAudioCodec = ResolveSourceAudioCodec(validation.Item);
+            bool useAudioCopy = sourceAudioCodec != null
+                && CopyCompatibleAudioCodecs.Contains(sourceAudioCodec);
+
+            _logger.LogDebug(
+                "VideoAudio HLS: itemId={ItemId}, sourceAudioCodec={SourceAudioCodec}, audioMode={AudioMode}",
+                itemId,
+                sourceAudioCodec ?? "(unknown)",
+                useAudioCopy ? "copy" : "transcode");
+
 #pragma warning disable CA3003 // paths derived from GUID-validated itemId
             string hlsDir = _cache.GetHlsDirectoryPath(itemId, artModifiedTicks);
             Directory.CreateDirectory(hlsDir);
@@ -294,7 +349,7 @@ public class VideoAudioController : ControllerBase
             string segmentPath = Path.Combine(hlsDir, "seg_%03d.ts");
             string hlsBaseUrl = $"/alexaskill/api/video-audio/{itemId}/segments/";
 
-            var ffmpegArgs = BuildHlsFfmpegArguments(artUrl, audioUrl, useBlackFrame, playlistPath, segmentPath, hlsBaseUrl);
+            var ffmpegArgs = BuildHlsFfmpegArguments(artUrl, audioUrl, useBlackFrame, playlistPath, segmentPath, hlsBaseUrl, sourceAudioCodec);
             if (_logger.IsEnabled(LogLevel.Debug))
             {
                 _logger.LogDebug("VideoAudio HLS: ffmpeg arguments: {Args}", string.Join(" ", ffmpegArgs));
@@ -830,6 +885,40 @@ public class VideoAudioController : ControllerBase
     }
 
     /// <summary>
+    /// Resolve the source audio codec for an item by reading its first audio media stream.
+    /// Used to decide between <c>-c:a copy</c> (mp3/aac) and AAC transcode for the
+    /// single-item video-audio path. Returns null when the codec cannot be determined
+    /// (e.g. media source manager unavailable, no audio stream, or a DB read failure),
+    /// in which case the caller falls back to AAC transcode.
+    /// </summary>
+    /// <param name="item">The Jellyfin audio item.</param>
+    /// <returns>Lowercase audio codec string (e.g. "mp3", "aac", "flac"), or null.</returns>
+    internal string? ResolveSourceAudioCodec(MediaBrowser.Controller.Entities.BaseItem item)
+    {
+        if (_mediaSourceManager == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            foreach (var stream in _mediaSourceManager.GetMediaStreams(item.Id))
+            {
+                if (stream.Type == MediaStreamType.Audio && !string.IsNullOrWhiteSpace(stream.Codec))
+                {
+                    return stream.Codec.ToLowerInvariant();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "VideoAudio: could not resolve source audio codec for item {ItemId}", item.Id);
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Resolve the album art URL for the given item. Returns null if no suitable image is available.
     /// Priority: item's own Primary image > parent (album) Primary image > parent ID fallback > null.
     /// </summary>
@@ -869,8 +958,9 @@ public class VideoAudioController : ControllerBase
     /// <param name="audioUrl">Audio stream URL.</param>
     /// <param name="useBlackFrame">Whether to generate a black frame instead of using art.</param>
     /// <param name="outputPath">File path for the output MP4.</param>
+    /// <param name="sourceAudioCodec">Source audio codec (e.g. "mp3") for -c:a copy decision, or null to transcode.</param>
     /// <returns>List of ffmpeg arguments (one token per entry).</returns>
-    internal static List<string> BuildFfmpegArguments(string? artUrl, string audioUrl, bool useBlackFrame, string outputPath)
+    internal static List<string> BuildFfmpegArguments(string? artUrl, string audioUrl, bool useBlackFrame, string outputPath, string? sourceAudioCodec = null)
     {
         var args = new List<string>();
 
@@ -887,7 +977,7 @@ public class VideoAudioController : ControllerBase
         args.Add("-i");
         args.Add(audioUrl);
         args.AddRange(VideoCodecArgs);
-        args.AddRange(AudioCodecArgs);
+        args.AddRange(BuildAudioCodecArgs(sourceAudioCodec));
         args.AddRange(PixelFormatArgs);
         args.AddRange(VideoFilterArgs);
         args.AddRange(OutputFormatArgs);
@@ -902,6 +992,20 @@ public class VideoAudioController : ControllerBase
     private static readonly string[] ArtInputPrefixArgs = ["-loop", "1", "-framerate", "1", "-i"];
     private static readonly string[] VideoCodecArgs = ["-c:v", "libx264", "-tune", "stillimage", "-preset", "ultrafast", "-crf", "28"];
     private static readonly string[] AudioCodecArgs = ["-c:a", "aac", "-b:a", "128k"];
+    private static readonly string[] AudioCopyArgs = ["-c:a", "copy"];
+
+    /// <summary>
+    /// Build the ffmpeg audio codec arguments for the single-item MP4/HLS path based on
+    /// the resolved source audio codec. Returns <c>-c:a copy</c> for stream-copy-compatible
+    /// codecs (mp3, aac) and the AAC re-encode args for everything else (or when the codec
+    /// is unknown).
+    /// </summary>
+    /// <param name="sourceAudioCodec">Lowercase source audio codec (e.g. "mp3"), or null/empty if unknown.</param>
+    /// <returns>ffmpeg audio codec argument tokens.</returns>
+    internal static string[] BuildAudioCodecArgs(string? sourceAudioCodec)
+        => !string.IsNullOrWhiteSpace(sourceAudioCodec) && CopyCompatibleAudioCodecs.Contains(sourceAudioCodec)
+            ? AudioCopyArgs
+            : AudioCodecArgs;
     private static readonly string[] PixelFormatArgs = ["-pix_fmt", "yuv420p", "-r", "1"];
     private static readonly string[] VideoFilterArgs = ["-vf", "scale=1280x720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:black"];
     private static readonly string[] OutputFormatArgs = ["-f", "mp4", "-movflags", "frag_keyframe+empty_moov"];
@@ -918,6 +1022,7 @@ public class VideoAudioController : ControllerBase
     /// <param name="playlistPath">File path for the output .m3u8 playlist.</param>
     /// <param name="segmentPath">File path template for segments (e.g. dir/seg_%03d.ts).</param>
     /// <param name="hlsBaseUrl">Base URL prefix for segment URLs in the playlist.</param>
+    /// <param name="sourceAudioCodec">Source audio codec (e.g. "mp3") for -c:a copy decision, or null to transcode.</param>
     /// <returns>List of ffmpeg arguments (one token per entry).</returns>
     internal static List<string> BuildHlsFfmpegArguments(
         string? artUrl,
@@ -925,7 +1030,8 @@ public class VideoAudioController : ControllerBase
         bool useBlackFrame,
         string playlistPath,
         string segmentPath,
-        string hlsBaseUrl)
+        string hlsBaseUrl,
+        string? sourceAudioCodec = null)
     {
         var args = new List<string>();
 
@@ -946,8 +1052,8 @@ public class VideoAudioController : ControllerBase
         // Video codec
         args.AddRange(VideoCodecArgs);
 
-        // Audio codec
-        args.AddRange(AudioCodecArgs);
+        // Audio codec — copy when source is mp3/aac, else transcode to AAC
+        args.AddRange(BuildAudioCodecArgs(sourceAudioCodec));
 
         // Pixel format + frame rate
         args.AddRange(PixelFormatArgs);
