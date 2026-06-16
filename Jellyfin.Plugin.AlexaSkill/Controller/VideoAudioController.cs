@@ -990,7 +990,11 @@ public class VideoAudioController : ControllerBase
     private static readonly string[] BlackFrameInputArgs = ["-f", "lavfi", "-i", "color=c=black:s=1280x720:d=999"];
     private static readonly string[] AudiobookBlackFrameInputArgs = ["-f", "lavfi", "-i", "color=c=black:s=1280x720:d=999999"];
     private static readonly string[] ArtInputPrefixArgs = ["-loop", "1", "-framerate", "1", "-i"];
-    private static readonly string[] VideoCodecArgs = ["-c:v", "libx264", "-tune", "stillimage", "-preset", "ultrafast", "-crf", "28"];
+    // -g 1 forces a keyframe every 1s (1fps). Without it libx264 uses its default GOP
+    // (250) → a keyframe only every ~4min at 1fps → the HLS muxer can't cut at -hls_time
+    // boundaries, so segments span ~4min and the first segment takes ~18s of encode time
+    // to appear (the "forever" delay on cache-miss plays). Mirrors the audiobook path.
+    private static readonly string[] VideoCodecArgs = ["-c:v", "libx264", "-tune", "stillimage", "-preset", "ultrafast", "-crf", "28", "-g", "1"];
     private static readonly string[] AudioCodecArgs = ["-c:a", "aac", "-b:a", "128k"];
     private static readonly string[] AudioCopyArgs = ["-c:a", "copy"];
 

@@ -616,6 +616,28 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// Verify the video encoder forces a keyframe every 1s (-g 1) so the HLS muxer can
+    /// cut segments at -hls_time boundaries. Without -g, libx264's default GOP (250) at
+    /// 1fps yields a keyframe only every ~4min → segments span ~4min → the first segment
+    /// takes ~18s of encode time to appear (the cache-miss "forever" delay).
+    /// </summary>
+    [Fact]
+    public void BuildHlsFfmpegArguments_ForcesKeyframeEverySecond()
+    {
+        string audioUrl = "http://localhost:8096/Audio/456/stream?static=true";
+        string playlistPath = "/tmp/test-output/stream.m3u8";
+        string segmentPath = "/tmp/test-output/seg_%03d.ts";
+        string hlsBaseUrl = "/alexaskill/api/video-audio/456/segments/";
+
+        List<string> args = VideoAudioController.BuildHlsFfmpegArguments(
+            null, audioUrl, true, playlistPath, segmentPath, hlsBaseUrl, sourceAudioCodec: null);
+
+        int gIdx = args.IndexOf("-g");
+        Assert.True(gIdx >= 0, "expected -g (keyframe interval) in HLS args");
+        Assert.Equal("1", args[gIdx + 1]);
+    }
+
+    /// <summary>
     /// Verify that the HLS arg builder transcodes incompatible codecs to AAC.
     /// </summary>
     [Fact]
