@@ -103,6 +103,17 @@ public class User
     public PostPlayBehavior? PostPlayBehavior { get; set; }
 
     /// <summary>
+    /// Gets or sets a per-user override for whether music (Audio items) plays via VideoApp
+    /// (native seek bar, requires ffmpeg video-audio encode) or plain AudioPlayer (raw stream,
+    /// zero ffmpeg, instant, no seek bar). When null (not explicitly set), the global
+    /// <see cref="Configuration.PluginConfiguration.NativeControlsForAudio"/> default is used.
+    /// True forces VideoApp for this user; false forces plain AudioPlayer for this user.
+    /// Audiobooks are governed by <see cref="Configuration.PluginConfiguration.NativeControlsForBooks"/>
+    /// and are not affected by this setting.
+    /// </summary>
+    public bool? VideoAppForAudio { get; set; }
+
+    /// <summary>
     /// Transitions skill status from AccountLinkPending to Ready if the user
     /// has completed account linking (JellyfinToken is present).
     /// </summary>

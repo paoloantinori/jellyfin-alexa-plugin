@@ -163,7 +163,7 @@
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="NativeControlsForAudio" /> <span>Native Echo Show Controls</span></label>
-                                <div class="fieldDescription checkboxFieldDescription">Use native progress bar and elapsed time on Echo Show for audio playback. Trades album art for native transport controls (progress bar, scrubber). Requires a screen-equipped device; non-screen devices always use the standard audio player.</div>
+                                <div class="fieldDescription checkboxFieldDescription">Use native progress bar and elapsed time on Echo Show for audio playback. Trades album art for native transport controls (progress bar, scrubber). Requires a screen-equipped device; non-screen devices always use the standard audio player. This is the default for users who do not have a per-user "Music delivery" override set in the User table below.</div>
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="NativeControlsForBooks" /> <span>Native Echo Show Controls (Audiobooks)</span></label>
@@ -837,6 +837,33 @@
                 announceCb.appendChild(announceLbl);
                 pbWrap.appendChild(announceCb);
 
+                // Music delivery: VideoApp (seek bar) vs AudioPlayer (raw stream), or inherit global default
+                let vaaLabel = document.createElement("label");
+                vaaLabel.style.cssText = "font-size:0.8em;color:#aaa;margin-top:0.4em;";
+                vaaLabel.textContent = "Music delivery:";
+                pbWrap.appendChild(vaaLabel);
+                let vaaSel = document.createElement("select");
+                vaaSel.setAttribute("data-field", "VideoAppForAudio");
+                vaaSel.style.minWidth = "140px";
+                vaaSel.style.padding = "0.2em 0.4em";
+                vaaSel.style.borderRadius = "3px";
+                vaaSel.style.backgroundColor = "#222";
+                vaaSel.style.color = "#ccc";
+                vaaSel.style.border = "1px solid #555";
+                vaaSel.style.fontSize = "0.85em";
+                let vaaVal = user.VideoAppForAudio == null ? "inherit" : (user.VideoAppForAudio === true ? "true" : "false");
+                [
+                    {v:"inherit", t:"Use default (global)"},
+                    {v:"true", t:"VideoApp (seek bar)"},
+                    {v:"false", t:"AudioPlayer (raw stream)"}
+                ].forEach(function(o){
+                    let opt = document.createElement("option");
+                    opt.value = o.v; opt.textContent = o.t;
+                    if (o.v === vaaVal) opt.selected = true;
+                    vaaSel.appendChild(opt);
+                });
+                pbWrap.appendChild(vaaSel);
+
                 td.appendChild(pbWrap);
                 tr.appendChild(td);
 
@@ -1091,6 +1118,13 @@
                                 var fmSuggestion = row.cells[4].querySelector('[data-field="FuzzySuggestionThreshold"]');
                                 var searchMode = row.cells[4].querySelector('[data-field="SearchResponseMode"]');
                                 var postPlayMode = row.cells[5].querySelector('[data-field="PostPlayBehavior"]');
+                                var vaaSel = row.cells[5].querySelector('[data-field="VideoAppForAudio"]');
+                                // Map the select's tri-state to JSON: inherit -> null (use global), true/false -> bool
+                                var vaaValue = null;
+                                if (vaaSel) {
+                                    if (vaaSel.value === "true") vaaValue = true;
+                                    else if (vaaSel.value === "false") vaaValue = false;
+                                }
                                 let data = {
                                     "InvocationName": row.cells[2].firstChild.value,
                                     "AllowedLibraryIds": selectedLibs,
@@ -1099,7 +1133,8 @@
                                     "FuzzySuggestionThreshold": fmSuggestion ? parseInt(fmSuggestion.value) || 40 : 40,
                                     "SearchResponseMode": searchMode ? searchMode.value : "Thorough",
                                     "PostPlayBehavior": postPlayMode ? postPlayMode.value : "Stop",
-                                    "AnnouncePositionOnResume": row.cells[5].querySelector('[data-field="AnnouncePositionOnResume"]')?.checked || false
+                                    "AnnouncePositionOnResume": row.cells[5].querySelector('[data-field="AnnouncePositionOnResume"]')?.checked || false,
+                                    "VideoAppForAudio": vaaValue
                                 };
 
                                 ApiClient.ajax({

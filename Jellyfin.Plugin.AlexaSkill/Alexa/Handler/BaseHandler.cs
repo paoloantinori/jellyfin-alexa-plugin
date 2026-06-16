@@ -532,7 +532,7 @@ public abstract class BaseHandler
                 }
                 else if (item is MediaBrowser.Controller.Entities.Audio.Audio)
                 {
-                    wantsNativeControls = Plugin.Instance?.Configuration?.NativeControlsForAudio == true;
+                    wantsNativeControls = GetVideoAppForAudio(user);
                 }
             }
 
@@ -1193,6 +1193,27 @@ public abstract class BaseHandler
 
         Logger.LogDebug("PostPlayBehavior: user={UserId} mode={Mode} source=GlobalDefault", user?.Id, _config.DefaultPostPlayBehavior);
         return _config.DefaultPostPlayBehavior;
+    }
+
+    /// <summary>
+    /// Gets the effective "play music via VideoApp" preference for a user, falling back to the
+    /// global <see cref="Configuration.PluginConfiguration.NativeControlsForAudio"/> default.
+    /// Per-user setting (when explicitly set, i.e. non-null) takes precedence. When true, music
+    /// (Audio items) is routed through VideoApp.Launch (native seek bar, ffmpeg video-audio
+    /// encode); when false, music uses plain AudioPlayer.Play with the raw stream URL. Audiobooks
+    /// are governed by <c>NativeControlsForBooks</c> and are not affected by this resolver.
+    /// </summary>
+    protected bool GetVideoAppForAudio(Entities.User? user)
+    {
+        if (user?.VideoAppForAudio.HasValue == true)
+        {
+            Logger.LogDebug("VideoAppForAudio: user={UserId} value={Value} source=PerUser", user.Id, user.VideoAppForAudio.Value);
+            return user.VideoAppForAudio.Value;
+        }
+
+        bool global = _config.NativeControlsForAudio;
+        Logger.LogDebug("VideoAppForAudio: user={UserId} value={Value} source=GlobalDefault", user?.Id, global);
+        return global;
     }
 
     /// <summary>

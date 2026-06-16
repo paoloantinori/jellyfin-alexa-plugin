@@ -190,6 +190,21 @@ public class ConfigurationController : ControllerBase
             }
         }
 
+        // Handle VideoAppForAudio (boolean, or null to inherit the global NativeControlsForAudio default)
+        if (req.TryGetValue("VideoAppForAudio", out var vaaToken))
+        {
+            if (vaaToken.Type == JTokenType.Boolean)
+            {
+                pluginUser!.VideoAppForAudio = vaaToken.Value<bool>();
+                updated = true;
+            }
+            else if (vaaToken.Type == JTokenType.Null)
+            {
+                pluginUser!.VideoAppForAudio = null;
+                updated = true;
+            }
+        }
+
         if (!updated)
         {
             return new JsonResult(new { error = "No valid fields to update" }) { StatusCode = 400 };
