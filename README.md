@@ -93,33 +93,47 @@ A Jellyfin plugin that creates a personal Alexa skill to play and control media 
 
 ## Features
 
-- **Playback control**: play songs, albums, artists, videos, TV episodes, audiobooks, podcasts, channels, and playlists
-- **Search & discovery**: search your library, get recommendations, browse by category, play random media
-- **Conversational song search**: multi-turn "find a song" dialog — guide the skill with artist name and keywords, then pick from disambiguated results
-- **APL visual carousel**: browse/search results displayed as tappable image cards on Echo Show devices, with album art and media thumbnails
-- **APL NowPlaying screen**: progress bar with elapsed/total time display on Echo Show devices during audio playback, plus enriched companion app card showing song, artist, album, and track number
-- **Resume offer**: when reopening the skill, offers to resume where you left off instead of starting fresh
-- **ASR compound-word fix**: automatically retries split compound words when Alexa's speech recognition joins or separates words (e.g., "soulcoughing" → "soul coughing")
+### 🎵 Playback & queue
+- **Broad media support**: play songs, albums, artists, videos, TV episodes, audiobooks, podcasts, channels, and playlists — both audio (AudioPlayer) and video launching
 - **Queue management**: add to queue, play next, clear/list queue, shuffle, repeat, start over
-- **Radio mode**: radio station based on your library with on/off toggle
+- **Radio mode**: a radio station based on your library, with on/off toggle
+- **Sleep timer**: stop playback after a specified duration
+- **Music delivery choice** (per-user): on Echo Show, choose the seek-bar VideoApp view or plain instant AudioPlayer playback
+
+### 🔍 Search & discovery
+- **Search your library**: search, get recommendations, browse by category, play random media
+- **Conversational song search**: multi-turn "find a song" dialog — guide the skill with artist name and keywords, then pick from disambiguated results
+- **Library browsing**: browse movies, series, albums, genres; see in-progress media; continue watching
 - **Favorites**: play your favorites, add/remove favorites by voice
 - **Genre & mood**: play by genre, by decade, or by mood (happy, sad, relaxing, workout, etc.)
-- **Library browsing**: browse movies, series, albums, genres; see in-progress media; continue watching
 - **Media info**: ask what's playing — song name, artist, album, duration, genre, year
-- **Sleep timer**: stop playback after a specified duration
+
+### 🧠 Smart matching
+- **Per-user fuzzy matching**: configurable match behavior (confirm/auto-play) and threshold
+- **Phonetic artist matching**: Double Metaphone pre-filter improves matching for non-English names (e.g., "soul coughing" matches even with heavy accent distortion)
+- **Phonetic song search**: when an exact title match fails, a phonetic fallback matches misspelled titles (e.g., "rapsodi" finds "Rhapsody", "fotograf" finds "Photograph"); feature-flagged so native speakers can opt out
+- **ASR compound-word fix**: retries split compound words when Alexa's speech recognition joins or separates them (e.g., "soulcoughing" → "soul coughing")
+- **Fast/Thorough search mode**: per-user choice between fast single-query auto-play or thorough multi-tier fallback with disambiguation
+
+### ▶️ Resume & continuity
+- **Resume offer**: when reopening the skill, offers to resume where you left off instead of starting fresh
+- **Robust resume**: three-tier position fallback (Alexa context → Jellyfin session → device queue) ensures playback resumes correctly even after session state is cleared
+- **PostPlay AutoPlay**: when a single song ends and the queue is empty, automatically enqueues similar tracks from your library (configurable per-user or globally)
+
+### 📺 Echo Show & visuals
+- **Audiobook seek bar**: multi-chapter audiobooks on Echo Show get a full-book seek bar via HLS concat streaming, with accurate seeking across chapters
+- **APL visual carousel**: browse/search results displayed as tappable image cards on Echo Show devices, with album art and media thumbnails
+- **APL NowPlaying screen**: progress bar with elapsed/total time display on Echo Show devices during audio playback, plus an enriched companion app card showing song, artist, album, and track number
+
+### 👥 Multi-user, voice & config
+- **Multi-user**: each Jellyfin user gets their own skill with individual settings
+- **Per-user settings**: library access, content-type access, fuzzy matching, search mode, PostPlay, and music delivery — all configurable per user or globally
 - **Voice profiles**: "Learn my voice" and "Who am I" for multi-user voice recognition
 - **Follow me**: transfer playback between Alexa devices
-- **Multi-user**: each Jellyfin user gets their own skill with individual settings
-- **Per-user fuzzy matching**: configurable match behavior (confirm/auto-play) and threshold
 - **Custom interaction models**: deploy your own interaction model via URL for any locale
-- **Multi-language**: 17 locales across 11 languages with 58 intents each
-- **Audio and video**: supports both audio playback (AudioPlayer) and video launching
-- **Audiobook seek bar**: multi-chapter audiobooks on Echo Show get a full-book seek bar via HLS concat streaming, with accurate seeking across chapters
-- **Robust resume**: three-tier position fallback (Alexa context → Jellyfin session → device queue) ensures playback resumes correctly even after session state is cleared
-- **Fast/Thorough search mode**: per-user choice between fast single-query auto-play or thorough multi-tier fallback with disambiguation
-- **PostPlay AutoPlay**: when a single song ends and the queue is empty, automatically enqueues similar tracks from your library (configurable per-user or globally)
-- **Phonetic matching**: Double Metaphone pre-filter improves fuzzy matching for non-English artist names (e.g., "soul coughing" matches even with heavy accent distortion)
-- **Phonetic song search**: When an exact title match fails, a phonetic fallback matches misspelled song titles (e.g., "rapsodi" finds "Rhapsody", "fotograf" finds "Photograph"). Protected by a feature flag so native speakers can opt out
+
+### 🌍 Languages
+- **17 locales across 11 languages** (58 intents each): English (5 variants), Spanish (3), French (2), German, Italian, Portuguese, Arabic, Dutch, Hindi, and Japanese
 
 ## Prerequisites
 
