@@ -271,6 +271,14 @@
                 "changelog": "Audiobook seek bar on Echo Show via HLS concat streaming (JF-292): multi-chapter books get a full-book timeline with accurate seeking. Per-category native controls (NativeControlsForBooks) with audiobook position tracking and resume from last position. Resume offer extended to VideoApp (movies/episodes), tracked per-device. VideoAudio cache with per-item locking and background faststart remux for instant first-play. Phonetic song search fallback (JF-285) and O(1) bigram index for fast song title lookup (JF-246). Fixes: 'mostra libri' showing Audiobooks root folder (JF-266), Folder items crashing on APL carousel tap (JF-152), VideoApp ShouldEndSession breaking audiobook/video playback (JF-288), stale resume item with NativeControlsForAudio.",
                 "targetAbi": "10.11.0.0",
                 "timestamp": "2026-06-15 20:21:40"
+            },
+            {
+                "version": "0.8.0.0",
+                "checksum": "placeholder",
+                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.8.0.0/AlexaSkill_0.8.0.0.zip",
+                "changelog": "Per-user music delivery setting: choose VideoApp (Echo Show seek bar) or plain AudioPlayer (raw stream, zero transcoding, instant playback) per user. Echo Show music latency fixed: cache-miss songs start in ~2s instead of ~20s (force a video keyframe every 1s so HLS segments form at 4s boundaries; previously the missing keyframe interval produced ~4-minute segments). Single-item video-audio stream-copies MP3/AAC audio (no transcode). Progressive 'searching...' response is now fire-and-forget across all handlers, reducing latency. Fixes: multi-word song titles that miss no longer fuzzy-match an unrelated artist; Alexa slot values/synonyms longer than 140 characters (e.g. musical cast-list artist names) \u2014 which crashed every skill request with InvalidResponse \u2014 are now truncated (#6, contributed by @DestroyCom).",
+                "targetAbi": "10.11.0.0",
+                "timestamp": "2026-06-17 00:00:00"
             }
         ]
     }
