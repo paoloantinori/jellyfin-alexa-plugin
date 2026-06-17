@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="Jellyfin.Plugin.AlexaSkill/icon.jpg" alt="Jellyfin Alexa Plugin" width="128" />
+<img src="Jellyfin.Plugin.AlexaSkill/icon.jpg" alt="Jellyfin Alexa Plugin" width="256" />
 
 # Jellyfin Alexa Plugin
 
