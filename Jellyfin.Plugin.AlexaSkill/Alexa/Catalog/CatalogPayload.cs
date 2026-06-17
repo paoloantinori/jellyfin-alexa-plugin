@@ -2,7 +2,9 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json.Serialization;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 
@@ -48,8 +50,8 @@ public class CatalogPayload
                 Id = CatalogValue.FormatId(type, id),
                 Name = new CatalogValueName
                 {
-                    Value = name,
-                    Synonyms = synonyms.Count > 0 ? synonyms : null
+                    Value = SlotValueHelper.Truncate(name),
+                    Synonyms = synonyms.Count > 0 ? synonyms.Select(SlotValueHelper.Truncate).ToList() : null
                 }
             };
 
