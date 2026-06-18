@@ -63,18 +63,13 @@ public class PlaybackStartedEventHandler : BaseHandler
 
         await SessionManager.OnPlaybackStart(playbackStartInfo).ConfigureAwait(false);
 
-        // Keep the session open (shouldEndSession=false) so that AMAZON.StopIntent
-        // is routed to the skill. The Alexa platform auto-routes Pause/Resume/Next/
-        // Previous to AudioPlayer skills regardless of session state, but StopIntent
-        // is NOT auto-routed — it requires an active session. Without an open session,
-        // "Alexa, stop" / "Alexa, ferma" is silently swallowed by the platform.
-        return new SkillResponse
-        {
-            Version = "1.0",
-            Response = new ResponseBody
-            {
-                ShouldEndSession = false
-            }
-        };
+        // JF-299: return a keep-alive ack (shouldEndSession=null). Amazon REJECTS
+        // shouldEndSession=false on AudioPlayer event responses ("Response may not
+        // have shouldEndSession set to false"), which raised InvalidResponse (and
+        // "Qualcosa è andato storto") on every playback since commit 122d1fb. Audio
+        // control intents (Pause/Resume/Next/Previous/Stop) are auto-routed by the
+        // platform while audio plays, independent of this ack — see CLAUDE.md
+        // "AudioPlayer event restrictions" and the feedback_should_end_session note.
+        return BuildKeepAliveResponse();
     }
 }

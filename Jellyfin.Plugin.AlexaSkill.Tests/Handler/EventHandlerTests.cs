@@ -97,6 +97,23 @@ public class EventHandlerTests : PluginTestBase
     }
 
     [Fact]
+    public async Task PlaybackStarted_Handle_DoesNotSetShouldEndSessionFalse()
+    {
+        // JF-299: AudioPlayer.PlaybackStarted responses must NOT set shouldEndSession=false.
+        // Amazon rejects it (InvalidResponse "Response may not have shouldEndSession set to
+        // false") on every playback. The value must be null (keep-alive) or true. Regression
+        // guard for the invalid shouldEndSession=false previously returned here.
+        var handler = new PlaybackStartedEventHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+        var request = CreateAudioPlayerRequest("AudioPlayer.PlaybackStarted", offset: 5000);
+
+        var response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotNull(response.Response);
+        Assert.True(response.Response.ShouldEndSession != false, "PlaybackStarted must not return shouldEndSession=false (Amazon rejects it on AudioPlayer events)");
+    }
+
+    [Fact]
     public void PlaybackFinished_CanHandle_ReturnsTrueForPlaybackFinished()
     {
         var handler = new PlaybackFinishedEventHandler(_sessionManagerMock.Object, _config, _loggerFactory);
