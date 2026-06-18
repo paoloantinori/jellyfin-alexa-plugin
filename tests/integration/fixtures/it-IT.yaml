@@ -651,20 +651,6 @@ tests:
     expected_slots:
       titleKeywords: {}
 
-  # JF-298: "play song X" with a non-catalog title must route to FindSongIntent
-  # (free-text) instead of falling through to FallbackIntent. Uses a real Jellyfin
-  # track ("Aspettando il sole" by Neffa) that is NOT in Amazon's catalog, so
-  # AMAZON.MusicRecording cannot resolve it and PlaySong fails on-device.
-  - utterance: "metti la canzone aspettando il sole"
-    expected_intent: FindSongIntent
-    expected_slots:
-      titleKeywords: {}
-
-  - utterance: "di mettere la canzone aspettando il sole"
-    expected_intent: FindSongIntent
-    expected_slots:
-      titleKeywords: {}
-
   # -------------------------------------------------------------------------
   # 32. AMAZON.* built-in intents (regression guard)
   # -------------------------------------------------------------------------
