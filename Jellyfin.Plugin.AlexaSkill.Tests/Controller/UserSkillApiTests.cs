@@ -503,6 +503,26 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
     }
 
     [Fact]
+    public async Task UpdateUserSkill_EmptyInvocationName_AcceptedAsDefault()
+    {
+        // JF-300: an empty invocation name is valid — it means "use locale defaults"
+        // (it-IT -> "mia collezione", others -> "jellyfin player"). Must NOT return 400.
+        var id = Guid.NewGuid();
+        AddUserDirect(id, "old name");
+
+        var json = JsonConvert.SerializeObject(new
+        {
+            InvocationName = string.Empty
+        });
+
+        var result = await _controller.UpdateUserSkill(id.ToString(), json);
+
+        var jsonResult = Assert.IsType<JsonResult>(result);
+        Assert.Null(jsonResult.StatusCode); // 200 — accepted
+        Assert.Equal(string.Empty, _config.Users[0].UserSkill!.InvocationName);
+    }
+
+    [Fact]
     public async Task UpdateUserSkill_UserWithoutSkill_InvocationName_Returns404()
     {
         var id = Guid.NewGuid();

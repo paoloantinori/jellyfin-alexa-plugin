@@ -834,10 +834,21 @@ public class ConfigurationController : ControllerBase
     }
 
     /// <summary>
-    /// Validates that an invocation name meets Amazon's requirements (at least 2 words).
+    /// Validates the invocation name. An empty/whitespace value is valid — it means
+    /// "use locale defaults" (it-IT → "mia collezione", other locales → "jellyfin player";
+    /// the effective name deployed to Amazon is always a valid 2+ word default). A
+    /// non-empty value must still be at least two words (Amazon's requirement).
     /// </summary>
-    private static bool IsValidInvocationName(string name) =>
-        name.Length > 0 && name.Contains(' ', StringComparison.Ordinal);
+    private static bool IsValidInvocationName(string name)
+    {
+        string trimmed = (name ?? string.Empty).Trim();
+        if (trimmed.Length == 0)
+        {
+            return true;
+        }
+
+        return trimmed.Contains(' ', StringComparison.Ordinal);
+    }
 
     /// <summary>
     /// Resolves userId to a plugin user with valid SMAPI credentials and skill ID.
