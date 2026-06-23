@@ -83,6 +83,9 @@ public class Registrator : IPluginServiceRegistrator
         // Custom model deployment
         serviceCollection.AddSingleton<ModelDeploymentManager>();
 
+        // Interaction-model redeploy (invocation-name changes via settings, manual rebuild)
+        serviceCollection.AddSingleton<IInteractionModelRedeployer, InteractionModelRedeployer>();
+
         // Proactive events
         serviceCollection.AddSingleton<ProactiveEventClient>();
         serviceCollection.AddSingleton<ProactiveEventRateLimiter>();

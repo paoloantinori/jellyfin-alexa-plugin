@@ -1078,6 +1078,10 @@
                         contentType: "application/json"
                     }).then(function () {
 
+                        // Collect each row's save promise so the loading indicator covers the
+                        // full save — including the interaction-model redeploy that a changed
+                        // invocation name now triggers (JF-297), which can take ~15-30s.
+                        var perRowPromises = [];
                         for (let row of document.querySelector("#userTableBody").rows) {
                             const userId = row.getAttribute("data-id");
                             const invocationInput = row.cells[2].querySelector("input");
@@ -1097,20 +1101,20 @@
                                     "InvocationName": row.cells[2].firstChild.value,
                                 };
 
-                                ApiClient.ajax({
+                                perRowPromises.push(ApiClient.ajax({
                                     type: "POST",
                                     url: ApiClient.getUrl("alexaskill/api/user-skills"),
                                     data: JSON.stringify(user),
                                     contentType: "application/json"
                                 }).then(function (res) {
-                                    res.json().then(function (user) {
-                                        ApiClient.getPluginConfiguration(Config.pluginUniqueId).then(function(freshConfig) {
+                                    return res.json().then(function (user) {
+                                        return ApiClient.getPluginConfiguration(Config.pluginUniqueId).then(function(freshConfig) {
                                             refreshUserRow(row, user, freshConfig);
                                         });
                                     });
                                 }, function (res) {
                                     showAjaxError(res, "create");
-                                });
+                                }));
                             } else {
                                 // update current user skill config
                                 var fmBehavior = row.cells[4].querySelector('[data-field="FuzzyMatchBehavior"]');
@@ -1137,22 +1141,33 @@
                                     "VideoAppForAudio": vaaValue
                                 };
 
-                                ApiClient.ajax({
+                                perRowPromises.push(ApiClient.ajax({
                                     type: "PATCH",
                                     url: ApiClient.getUrl("alexaskill/api/user-skills/" + userId),
                                     data: JSON.stringify(data),
                                     contentType: "application/json"
                                 }).then(function (res) {
-                                    res.json().then(function (user) {
-                                        ApiClient.getPluginConfiguration(Config.pluginUniqueId).then(function(freshConfig) {
-                                            refreshUserRow(row, user, freshConfig);
+                                    return res.json().then(function (payload) {
+                                        return ApiClient.getPluginConfiguration(Config.pluginUniqueId).then(function(freshConfig) {
+                                            refreshUserRow(row, payload.user, freshConfig);
+                                            // JF-297: a changed invocation name triggers an Amazon-side
+                                            // redeploy. Surface the outcome so the change does not appear
+                                            // to silently succeed (the original bug) or silently fail.
+                                            if (payload.redeploy) {
+                                                if (payload.redeploy.success) {
+                                                    Dashboard.alert("Invocation name deployed to Alexa (" + payload.redeploy.succeededCount + "/" + payload.redeploy.localeCount + " locales). It may take a moment to take effect.");
+                                                } else {
+                                                    Dashboard.alert("Invocation name saved, but the Alexa redeploy did not fully succeed (" + (payload.redeploy.error || payload.redeploy.status) + "). Check the custom model status.");
+                                                }
+                                            }
                                         });
                                     });
                                 }, function (res) {
                                     showAjaxError(res, "update");
-                                });
+                                }));
                             }
                         }
+                        return Promise.all(perRowPromises);
                     }).catch(function () {
                         Dashboard.alert("Failed to save configuration");
                     }).finally(function () {

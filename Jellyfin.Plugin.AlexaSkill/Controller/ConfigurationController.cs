@@ -38,6 +38,7 @@ public class ConfigurationController : ControllerBase
     private readonly IUserManager _userManager;
     private readonly ILogger<ConfigurationController> _logger;
     private readonly ModelDeploymentManager _modelDeploymentManager;
+    private readonly IInteractionModelRedeployer _redeployer;
     private LwaAuthorizationRequestHandler lwaAuthorizationRequestHandler;
 
     /// <summary>
@@ -48,16 +49,19 @@ public class ConfigurationController : ControllerBase
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILogger{RequestController}"/> interface.</param>
     /// <param name="modelDeploymentManager">Instance of the <see cref="ModelDeploymentManager"/> class.</param>
+    /// <param name="redeployer">Redeploys interaction models to Amazon when a published-skill setting changes.</param>
     public ConfigurationController(
         IUserManager userManager,
         ISessionManager sessionManager,
         ILibraryManager libraryManager,
         ILoggerFactory loggerFactory,
-        ModelDeploymentManager modelDeploymentManager)
+        ModelDeploymentManager modelDeploymentManager,
+        IInteractionModelRedeployer redeployer)
     {
         _userManager = userManager;
         _logger = loggerFactory.CreateLogger<ConfigurationController>();
         _modelDeploymentManager = modelDeploymentManager;
+        _redeployer = redeployer;
 
         lwaAuthorizationRequestHandler = Plugin.Instance!.LwaAuthorizationRequestHandler;
     }
@@ -70,7 +74,7 @@ public class ConfigurationController : ControllerBase
     /// <returns>A <see cref="ActionResult"/>.</returns>
     [HttpPatch("user-skills/{userId}")]
     [Authorize(Policy = "RequiresElevation")]
-    public ActionResult UpdateUserSkill([FromRoute] string userId, [FromBody] dynamic json)
+    public async Task<ActionResult> UpdateUserSkill([FromRoute] string userId, [FromBody] dynamic json)
     {
         if (!TryResolvePluginUser(userId, out var pluginUser, out var error, autoProvision: true))
         {
@@ -79,6 +83,7 @@ public class ConfigurationController : ControllerBase
 
         JObject req = JObject.Parse(json.ToString());
         bool updated = false;
+        bool invocationNameChanged = false;
 
         // Handle InvocationName (requires UserSkill to exist)
         if (req.TryGetValue("InvocationName", out var invocationToken)
@@ -95,6 +100,8 @@ public class ConfigurationController : ControllerBase
                 return new JsonResult(new { error = "User has no skill" }) { StatusCode = 404 };
             }
 
+            invocationNameChanged = !string.Equals(
+                pluginUser.UserSkill.InvocationName, invocationName, StringComparison.Ordinal);
             pluginUser.UserSkill.InvocationName = invocationName;
             updated = true;
         }
@@ -211,7 +218,46 @@ public class ConfigurationController : ControllerBase
         }
 
         Plugin.Instance!.SaveConfiguration();
-        return new JsonResult(pluginUser);
+
+        // JF-297: an invocation-name change must reach Amazon. Rebuild and redeploy the
+        // interaction models for the user's existing skill. Skipped when the name did not
+        // actually change or when the user has no live skill yet (nothing to deploy).
+        object? redeployInfo = null;
+        if (invocationNameChanged
+            && !string.IsNullOrEmpty(pluginUser!.UserSkill?.SkillId)
+            && pluginUser.SmapiDeviceToken != null)
+        {
+            try
+            {
+                ModelRedeployResult redeployResult = await _redeployer.RedeployAsync(
+                    pluginUser,
+                    pluginUser.UserSkill!.InvocationName,
+                    CancellationToken.None).ConfigureAwait(false);
+
+                var config = Plugin.Instance!.Configuration;
+                config.LastModelDeployTime = DateTime.UtcNow;
+                config.LastModelDeployStatus = redeployResult.Status;
+                Plugin.Instance!.SaveConfiguration();
+
+                redeployInfo = new
+                {
+                    success = redeployResult.Success,
+                    status = redeployResult.Status,
+                    localeCount = redeployResult.LocaleCount,
+                    succeededCount = redeployResult.SucceededCount,
+                    failedCount = redeployResult.Locales.Count(r => !r.Value.Success)
+                };
+            }
+            catch (Exception ex)
+            {
+                // The local invocation name was already updated and saved; do not fail the
+                // whole request if the Amazon-side redeploy errors. The change can be retried.
+                _logger.LogError(ex, "Failed to redeploy interaction models after invocation-name change for user {UserId}", userId);
+                redeployInfo = new { success = false, status = "error", error = ex.Message };
+            }
+        }
+
+        return new JsonResult(new { user = pluginUser, redeploy = redeployInfo });
     }
 
     /// <summary>
@@ -732,29 +778,25 @@ public class ConfigurationController : ControllerBase
             return new JsonResult(new { error = "Plugin manifest not loaded. Restart Jellyfin first." }) { StatusCode = 503 };
         }
 
-        var config = Plugin.Instance.Configuration;
-        string invocationName = pluginUser!.UserSkill!.InvocationName;
-
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
-            var interactionModels = Plugin.Instance.BuildSkillInteractionModels(invocationName);
+            var result = await _redeployer.RedeployAsync(
+                pluginUser!,
+                pluginUser!.UserSkill!.InvocationName,
+                cts.Token).ConfigureAwait(false);
 
-            var failedLocales = await AlexaUtil.CallAsync(pluginUser, () => pluginUser.SmapiManagement!.UpdateSkillAsync(skillId!, Plugin.Instance!.ManifestSkill!, interactionModels)).ConfigureAwait(false);
-
-            // Poll until all locale model builds leave IN_PROGRESS
-            var localeResults = await PollLocaleBuildStatusAsync(pluginUser, skillId!, cts.Token).ConfigureAwait(false);
-
+            var config = Plugin.Instance.Configuration;
             config.LastModelDeployTime = DateTime.UtcNow;
-            config.LastModelDeployStatus = localeResults.All(r => r.Value.Success) && failedLocales.Count == 0 ? "rebuilt" : "rebuilt_with_errors";
+            config.LastModelDeployStatus = result.Status;
             Plugin.Instance!.SaveConfiguration();
 
             return new JsonResult(new
             {
-                success = localeResults.All(r => r.Value.Success) && failedLocales.Count == 0,
-                message = $"Rebuilt {interactionModels.Count} models — {localeResults.Count(r => r.Value.Success)} succeeded, {localeResults.Count(r => !r.Value.Success)} failed",
-                locales = localeResults.ToDictionary(r => r.Key, r => new { success = r.Value.Success, status = r.Value.Status, error = r.Value.Error }),
-                updateFailures = failedLocales
+                success = result.Success,
+                message = $"Rebuilt {result.LocaleCount} models — {result.SucceededCount} succeeded, {result.Locales.Count(r => !r.Value.Success)} failed",
+                locales = result.Locales.ToDictionary(r => r.Key, r => new { success = r.Value.Success, status = r.Value.Status, error = r.Value.Error }),
+                updateFailures = result.UpdateFailures
             });
         }
         catch (Exception ex)
@@ -796,56 +838,6 @@ public class ConfigurationController : ControllerBase
     /// </summary>
     private static bool IsValidInvocationName(string name) =>
         name.Length > 0 && name.Contains(' ', StringComparison.Ordinal);
-
-    /// <summary>
-    /// Polls SMAPI until all locale model builds leave IN_PROGRESS.
-    /// Returns per-locale success/failure status.
-    /// </summary>
-    private async Task<Dictionary<string, (bool Success, string Status, string? Error)>> PollLocaleBuildStatusAsync(
-        Entities.User pluginUser, string skillId, CancellationToken cancellationToken)
-    {
-        const int maxPolls = 60;
-        var results = new Dictionary<string, (bool Success, string Status, string? Error)>(StringComparer.Ordinal);
-
-        for (int i = 0; i < maxPolls; i++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var status = await AlexaUtil.CallAsync(pluginUser, () => pluginUser.SmapiManagement!.GetSkillStatusAsync(skillId)).ConfigureAwait(false);
-
-            bool allDone = true;
-            foreach (var kvp in status.InteractionModel)
-            {
-                string locale = kvp.Key;
-                var localeStatus = kvp.Value;
-                string state = localeStatus.LastModified.Status.ToString();
-
-                if (state == "IN_PROGRESS")
-                {
-                    allDone = false;
-                    continue;
-                }
-
-                if (!results.ContainsKey(locale))
-                {
-                    string? error = localeStatus.Errors is { Length: > 0 }
-                        ? string.Join("; ", localeStatus.Errors.Select(e => $"{e.Code}: {e.Message}"))
-                        : null;
-
-                    results[locale] = (state == "SUCCEEDED", state, error);
-                }
-            }
-
-            if (allDone && results.Count >= status.InteractionModel.Count)
-            {
-                break;
-            }
-
-            await Task.Delay(2000, cancellationToken).ConfigureAwait(false);
-        }
-
-        return results;
-    }
 
     /// <summary>
     /// Resolves userId to a plugin user with valid SMAPI credentials and skill ID.

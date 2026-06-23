@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.Alexa.ModelDeployment;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -29,12 +30,14 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
     private readonly PluginConfiguration _config;
     private readonly ILoggerFactory _loggerFactory;
     private readonly Mock<IUserManager> _userManagerMock;
+    private readonly Mock<IInteractionModelRedeployer> _redeployerMock;
     private readonly ConfigurationController _controller;
 
     public UserSkillApiTests()
     {
         _loggerFactory = LoggerFactory.Create(b => { });
         _userManagerMock = new Mock<IUserManager>();
+        _redeployerMock = new Mock<IInteractionModelRedeployer>();
 
         var sessionManagerMock = new Mock<ISessionManager>();
 
@@ -56,7 +59,8 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
             _loggerFactory,
             new ModelDeploymentManager(
                 Mock.Of<IHttpClientFactory>(),
-                _loggerFactory.CreateLogger<ModelDeploymentManager>()));
+                _loggerFactory.CreateLogger<ModelDeploymentManager>()),
+            _redeployerMock.Object);
     }
 
     public void Dispose()
@@ -312,7 +316,7 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
     // ===================================================================
 
     [Fact]
-    public void UpdateUserSkill_InvocationName_UpdatesInPlace()
+    public async Task UpdateUserSkill_InvocationName_UpdatesInPlace()
     {
         var id = Guid.NewGuid();
         AddUserDirect(id, "alice");
@@ -322,7 +326,7 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
             InvocationName = "updated skill"
         });
 
-        var result = _controller.UpdateUserSkill(id.ToString(), json);
+        var result = await _controller.UpdateUserSkill(id.ToString(), json);
 
         var jsonResult = Assert.IsType<JsonResult>(result);
         Assert.Null(jsonResult.StatusCode); // 200 by default
@@ -331,7 +335,7 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
     }
 
     [Fact]
-    public void UpdateUserSkill_AllowedLibraryIds_UpdatesInPlace()
+    public async Task UpdateUserSkill_AllowedLibraryIds_UpdatesInPlace()
     {
         var id = Guid.NewGuid();
         AddUserDirect(id, "alice");
@@ -341,14 +345,14 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
             AllowedLibraryIds = new List<string> { "lib1", "lib2" }
         });
 
-        _controller.UpdateUserSkill(id.ToString(), json);
+        await _controller.UpdateUserSkill(id.ToString(), json);
 
         Assert.Single(_config.Users);
         Assert.Equal(new List<string> { "lib1", "lib2" }, _config.Users[0].AllowedLibraryIds);
     }
 
     [Fact]
-    public void UpdateUserSkill_AllowedLibraryIds_EmptyArray_ClearsToNull()
+    public async Task UpdateUserSkill_AllowedLibraryIds_EmptyArray_ClearsToNull()
     {
         var id = Guid.NewGuid();
         AddUserDirect(id, "alice");
@@ -359,13 +363,13 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
             AllowedLibraryIds = new List<string>()
         });
 
-        _controller.UpdateUserSkill(id.ToString(), json);
+        await _controller.UpdateUserSkill(id.ToString(), json);
 
         Assert.Null(_config.Users[0].AllowedLibraryIds);
     }
 
     [Fact]
-    public void UpdateUserSkill_FuzzyMatchBehavior_UpdatesInPlace()
+    public async Task UpdateUserSkill_FuzzyMatchBehavior_UpdatesInPlace()
     {
         var id = Guid.NewGuid();
         AddUserDirect(id, "alice");
@@ -376,14 +380,14 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
             FuzzyMatchBehavior = "AutoPlay"
         });
 
-        _controller.UpdateUserSkill(id.ToString(), json);
+        await _controller.UpdateUserSkill(id.ToString(), json);
 
         Assert.Single(_config.Users);
         Assert.Equal(FuzzyMatchBehavior.AutoPlay, _config.Users[0].FuzzyMatchBehavior);
     }
 
     [Fact]
-    public void UpdateUserSkill_FuzzyMatchThreshold_UpdatesInPlace()
+    public async Task UpdateUserSkill_FuzzyMatchThreshold_UpdatesInPlace()
     {
         var id = Guid.NewGuid();
         AddUserDirect(id, "alice");
@@ -393,14 +397,14 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
             FuzzyMatchThreshold = 85
         });
 
-        _controller.UpdateUserSkill(id.ToString(), json);
+        await _controller.UpdateUserSkill(id.ToString(), json);
 
         Assert.Single(_config.Users);
         Assert.Equal(85, _config.Users[0].FuzzyMatchThreshold);
     }
 
     [Fact]
-    public void UpdateUserSkill_FuzzyMatchThreshold_OutOfRange_Returns400()
+    public async Task UpdateUserSkill_FuzzyMatchThreshold_OutOfRange_Returns400()
     {
         var id = Guid.NewGuid();
         AddUserDirect(id, "alice");
@@ -411,7 +415,7 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
             FuzzyMatchThreshold = 150
         });
 
-        var result = _controller.UpdateUserSkill(id.ToString(), json);
+        var result = await _controller.UpdateUserSkill(id.ToString(), json);
 
         var jsonResult = Assert.IsType<JsonResult>(result);
         Assert.Equal(400, jsonResult.StatusCode);
@@ -419,7 +423,7 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
     }
 
     [Fact]
-    public void UpdateUserSkill_FuzzySuggestionThreshold_OutOfRange_Returns400()
+    public async Task UpdateUserSkill_FuzzySuggestionThreshold_OutOfRange_Returns400()
     {
         var id = Guid.NewGuid();
         AddUserDirect(id, "alice");
@@ -429,42 +433,42 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
             FuzzySuggestionThreshold = -5
         });
 
-        var result = _controller.UpdateUserSkill(id.ToString(), json);
+        var result = await _controller.UpdateUserSkill(id.ToString(), json);
 
         var jsonResult = Assert.IsType<JsonResult>(result);
         Assert.Equal(400, jsonResult.StatusCode);
     }
 
     [Fact]
-    public void UpdateUserSkill_NonExistentUser_Returns404()
+    public async Task UpdateUserSkill_NonExistentUser_Returns404()
     {
         var json = JsonConvert.SerializeObject(new
         {
             InvocationName = "updated skill"
         });
 
-        var result = _controller.UpdateUserSkill(Guid.NewGuid().ToString(), json);
+        var result = await _controller.UpdateUserSkill(Guid.NewGuid().ToString(), json);
 
         var jsonResult = Assert.IsType<JsonResult>(result);
         Assert.Equal(404, jsonResult.StatusCode);
     }
 
     [Fact]
-    public void UpdateUserSkill_InvalidGuidFormat_Returns400()
+    public async Task UpdateUserSkill_InvalidGuidFormat_Returns400()
     {
         var json = JsonConvert.SerializeObject(new
         {
             InvocationName = "updated skill"
         });
 
-        var result = _controller.UpdateUserSkill("not-a-guid", json);
+        var result = await _controller.UpdateUserSkill("not-a-guid", json);
 
         var jsonResult = Assert.IsType<JsonResult>(result);
         Assert.Equal(400, jsonResult.StatusCode);
     }
 
     [Fact]
-    public void UpdateUserSkill_NoValidFields_Returns400()
+    public async Task UpdateUserSkill_NoValidFields_Returns400()
     {
         var id = Guid.NewGuid();
         AddUserDirect(id, "alice");
@@ -474,7 +478,7 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
             UnknownField = "value"
         });
 
-        var result = _controller.UpdateUserSkill(id.ToString(), json);
+        var result = await _controller.UpdateUserSkill(id.ToString(), json);
 
         var jsonResult = Assert.IsType<JsonResult>(result);
         Assert.Equal(400, jsonResult.StatusCode);
@@ -482,7 +486,7 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
     }
 
     [Fact]
-    public void UpdateUserSkill_InvalidInvocationName_Returns400()
+    public async Task UpdateUserSkill_InvalidInvocationName_Returns400()
     {
         var id = Guid.NewGuid();
         AddUserDirect(id, "alice");
@@ -492,14 +496,14 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
             InvocationName = "oneword"
         });
 
-        var result = _controller.UpdateUserSkill(id.ToString(), json);
+        var result = await _controller.UpdateUserSkill(id.ToString(), json);
 
         var jsonResult = Assert.IsType<JsonResult>(result);
         Assert.Equal(400, jsonResult.StatusCode);
     }
 
     [Fact]
-    public void UpdateUserSkill_UserWithoutSkill_InvocationName_Returns404()
+    public async Task UpdateUserSkill_UserWithoutSkill_InvocationName_Returns404()
     {
         var id = Guid.NewGuid();
         // Add user with null UserSkill
@@ -510,14 +514,14 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
             InvocationName = "updated skill"
         });
 
-        var result = _controller.UpdateUserSkill(id.ToString(), json);
+        var result = await _controller.UpdateUserSkill(id.ToString(), json);
 
         var jsonResult = Assert.IsType<JsonResult>(result);
         Assert.Equal(404, jsonResult.StatusCode);
     }
 
     [Fact]
-    public void UpdateUserSkill_MultipleFields_UpdatesAllInPlace()
+    public async Task UpdateUserSkill_MultipleFields_UpdatesAllInPlace()
     {
         var id = Guid.NewGuid();
         AddUserDirect(id, "alice");
@@ -530,7 +534,7 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
             AllowedLibraryIds = new List<string> { "libA" }
         });
 
-        _controller.UpdateUserSkill(id.ToString(), json);
+        await _controller.UpdateUserSkill(id.ToString(), json);
 
         Assert.Single(_config.Users);
         Assert.Equal("new name", _config.Users[0].UserSkill!.InvocationName);
@@ -545,7 +549,7 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
     // ===================================================================
 
     [Fact]
-    public void UpdateUserSkill_ValidJellyfinUser_NoPluginEntry_AutoProvisions()
+    public async Task UpdateUserSkill_ValidJellyfinUser_NoPluginEntry_AutoProvisions()
     {
         // A valid Jellyfin user that has no plugin config entry
         var jellyfinUserId = Guid.NewGuid();
@@ -558,7 +562,7 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
             SearchResponseMode = "Fast"
         });
 
-        var result = _controller.UpdateUserSkill(jellyfinUserId.ToString(), json);
+        var result = await _controller.UpdateUserSkill(jellyfinUserId.ToString(), json);
 
         var jsonResult = Assert.IsType<JsonResult>(result);
         Assert.Null(jsonResult.StatusCode); // 200
@@ -569,7 +573,7 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
     }
 
     [Fact]
-    public void UpdateUserSkill_ValidJellyfinUser_NoPluginEntry_MultipleFields()
+    public async Task UpdateUserSkill_ValidJellyfinUser_NoPluginEntry_MultipleFields()
     {
         var jellyfinUserId = Guid.NewGuid();
         SetupJellyfinUser("bob", jellyfinUserId);
@@ -581,7 +585,7 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
             FuzzyMatchThreshold = 75
         });
 
-        var result = _controller.UpdateUserSkill(jellyfinUserId.ToString(), json);
+        var result = await _controller.UpdateUserSkill(jellyfinUserId.ToString(), json);
 
         var jsonResult = Assert.IsType<JsonResult>(result);
         Assert.Null(jsonResult.StatusCode); // 200
@@ -595,7 +599,7 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
     }
 
     [Fact]
-    public void UpdateUserSkill_InvalidJellyfinUserId_Returns404()
+    public async Task UpdateUserSkill_InvalidJellyfinUserId_Returns404()
     {
         // A GUID that does not correspond to any Jellyfin user
         var unknownGuid = Guid.NewGuid();
@@ -606,7 +610,7 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
             SearchResponseMode = "Fast"
         });
 
-        var result = _controller.UpdateUserSkill(unknownGuid.ToString(), json);
+        var result = await _controller.UpdateUserSkill(unknownGuid.ToString(), json);
 
         var jsonResult = Assert.IsType<JsonResult>(result);
         Assert.Equal(404, jsonResult.StatusCode);
@@ -614,7 +618,7 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
     }
 
     [Fact]
-    public void UpdateUserSkill_AutoProvisionedUser_NullFields_HaveDefaults()
+    public async Task UpdateUserSkill_AutoProvisionedUser_NullFields_HaveDefaults()
     {
         var jellyfinUserId = Guid.NewGuid();
         SetupJellyfinUser("charlie", jellyfinUserId);
@@ -624,7 +628,7 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
             FuzzyMatchThreshold = 90
         });
 
-        _controller.UpdateUserSkill(jellyfinUserId.ToString(), json);
+        await _controller.UpdateUserSkill(jellyfinUserId.ToString(), json);
 
         Assert.Single(_config.Users);
         var user = _config.Users[0];
@@ -663,7 +667,7 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
     }
 
     [Fact]
-    public void UpdateUserSkill_ExistingPluginUser_DoesNotReProvision()
+    public async Task UpdateUserSkill_ExistingPluginUser_DoesNotReProvision()
     {
         // When user already exists in plugin config, no new entry is created
         var jellyfinUserId = Guid.NewGuid();
@@ -675,7 +679,7 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
             SearchResponseMode = "Thorough"
         });
 
-        _controller.UpdateUserSkill(jellyfinUserId.ToString(), json);
+        await _controller.UpdateUserSkill(jellyfinUserId.ToString(), json);
 
         Assert.Single(_config.Users); // still just one
         Assert.Equal(Configuration.SearchResponseMode.Thorough, _config.Users[0].SearchResponseMode);
@@ -936,6 +940,101 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
 
         Assert.Single(deserialized!.Users);
         Assert.Equal("refresh-token-should-not-be-lost", deserialized.Users[0].SmapiRefreshToken);
+    }
+
+    // ===================================================================
+    // Invocation-name change must redeploy interaction models (JF-297)
+    // ===================================================================
+
+    [Fact]
+    public async Task UpdateUserSkill_InvocationNameChanged_WithExistingSkill_RedeploysWithNewName()
+    {
+        var id = Guid.NewGuid();
+        AddUserDirect(id, "jellyfin player");
+
+        // Give the user a LIVE skill + SMAPI token so a redeploy is applicable.
+        _config.Users[0].UserSkill!.SkillId = "amzn1.ask.skill.test";
+        _config.Users[0].UserSkill!.UserSkillStatus = UserSkillStatus.Ready;
+        _config.Users[0].SmapiDeviceToken = CreateTestDeviceToken();
+
+        _redeployerMock
+            .Setup(r => r.RedeployAsync(It.IsAny<User>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ModelRedeployResult(
+                true,
+                "rebuilt",
+                17,
+                17,
+                new Dictionary<string, string>(),
+                new Dictionary<string, ModelLocaleBuildResult>()));
+
+        var json = JsonConvert.SerializeObject(new { InvocationName = "media player" });
+
+        var result = await _controller.UpdateUserSkill(id.ToString(), json);
+
+        Assert.IsType<JsonResult>(result);
+        Assert.Equal("media player", _config.Users[0].UserSkill!.InvocationName);
+
+        // The redeploy must fire exactly once, carrying the NEW invocation name.
+        _redeployerMock.Verify(
+            r => r.RedeployAsync(It.IsAny<User>(), "media player", It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateUserSkill_InvocationNameUnchanged_WithExistingSkill_DoesNotRedeploy()
+    {
+        var id = Guid.NewGuid();
+        AddUserDirect(id, "media player");
+        _config.Users[0].UserSkill!.InvocationName = "media player"; // same as the PATCH below
+        _config.Users[0].UserSkill!.SkillId = "amzn1.ask.skill.test";
+        _config.Users[0].SmapiDeviceToken = CreateTestDeviceToken();
+
+        var json = JsonConvert.SerializeObject(new { InvocationName = "media player" });
+
+        var result = await _controller.UpdateUserSkill(id.ToString(), json);
+
+        Assert.IsType<JsonResult>(result);
+        _redeployerMock.Verify(
+            r => r.RedeployAsync(It.IsAny<User>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateUserSkill_InvocationNameChanged_NoSkillId_DoesNotRedeploy()
+    {
+        var id = Guid.NewGuid();
+        AddUserDirect(id, "jellyfin player");
+        // No SkillId / no token yet — user has not created a skill. Name must still save locally.
+        Assert.True(string.IsNullOrEmpty(_config.Users[0].UserSkill!.SkillId));
+
+        var json = JsonConvert.SerializeObject(new { InvocationName = "media player" });
+
+        var result = await _controller.UpdateUserSkill(id.ToString(), json);
+
+        Assert.IsType<JsonResult>(result);
+        Assert.Equal("media player", _config.Users[0].UserSkill!.InvocationName);
+        _redeployerMock.Verify(
+            r => r.RedeployAsync(It.IsAny<User>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateUserSkill_InvocationNameInvalid_WithExistingSkill_DoesNotRedeploy()
+    {
+        var id = Guid.NewGuid();
+        AddUserDirect(id, "jellyfin player");
+        _config.Users[0].UserSkill!.SkillId = "amzn1.ask.skill.test";
+        _config.Users[0].SmapiDeviceToken = CreateTestDeviceToken();
+
+        var json = JsonConvert.SerializeObject(new { InvocationName = "oneword" });
+
+        var result = await _controller.UpdateUserSkill(id.ToString(), json);
+
+        var jsonResult = Assert.IsType<JsonResult>(result);
+        Assert.Equal(400, jsonResult.StatusCode);
+        _redeployerMock.Verify(
+            r => r.RedeployAsync(It.IsAny<User>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     // ===================================================================
