@@ -214,7 +214,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     ///
     /// The string comparison against the literal default lives ONLY here.
     /// </summary>
-    private static void MigrateDefaultInvocationNames(Configuration.PluginConfiguration configuration)
+    internal static void MigrateDefaultInvocationNames(Configuration.PluginConfiguration configuration)
     {
         bool changed = false;
         foreach (var user in configuration.Users)

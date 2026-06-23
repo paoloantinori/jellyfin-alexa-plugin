@@ -115,7 +115,7 @@ public class InvocationNameDefaultsTests : PluginTestBase
     [Fact]
     public void Migration_UserWithStoredDefault_ClearsInvocationName()
     {
-        // Simulate a pre-JF-300 user whose stored InvocationName is the global default.
+        // Pre-JF-300 user whose stored InvocationName is the global default.
         var config = new PluginConfiguration();
         var user = new User
         {
@@ -124,20 +124,10 @@ public class InvocationNameDefaultsTests : PluginTestBase
         };
         config.Users.Add(user);
 
-        // Run the migration path by constructing a Plugin: the ctor migrates the
-        // current Configuration. We inject the populated config via the XML
-        // serializer mock that BasePlugin uses to load Configuration.
-        var plugin = EnsurePluginInstance(config);
+        // Call the migration directly (it's internal; InternalsVisibleTo is set).
+        Plugin.MigrateDefaultInvocationNames(config);
 
-        // The plugin's loaded config should reflect the migrated user.
-        var loadedUser = plugin.Configuration.Users.FirstOrDefault(u => u.Id == user.Id);
-        // Note: depending on mock wiring the user may not propagate; assert against
-        // the in-memory config object directly when the plugin's Configuration is
-        // a distinct instance. Either way the migration contract is: a user whose
-        // InvocationName equals the default is normalized to empty.
-        Assert.True(
-            loadedUser == null || loadedUser.UserSkill?.InvocationName == string.Empty,
-            "Migrated user must have an empty InvocationName so locale defaults apply.");
+        Assert.Equal(string.Empty, user.UserSkill!.InvocationName);
     }
 
     [Fact]
@@ -145,17 +135,16 @@ public class InvocationNameDefaultsTests : PluginTestBase
     {
         const string custom = "my custom skill";
         var config = new PluginConfiguration();
-        config.Users.Add(new User
+        var user = new User
         {
             Id = Guid.NewGuid(),
             UserSkill = new UserSkill { InvocationName = custom }
-        });
+        };
+        config.Users.Add(user);
 
-        var plugin = EnsurePluginInstance(config);
-        var loadedUser = plugin.Configuration.Users.FirstOrDefault();
-        Assert.True(
-            loadedUser == null || loadedUser.UserSkill?.InvocationName == custom,
-            "A genuinely custom invocation name must be preserved by the migration.");
+        Plugin.MigrateDefaultInvocationNames(config);
+
+        Assert.Equal(custom, user.UserSkill!.InvocationName);
     }
 
     [Fact]
