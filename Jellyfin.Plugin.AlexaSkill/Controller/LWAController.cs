@@ -133,7 +133,9 @@ public class LWAController : ControllerBase
         user.SmapiRefreshToken = deviceToken.RefreshToken;
         if (user.UserSkill == null)
         {
-            user.UserSkill = new UserSkill { InvocationName = Config.InvocationName };
+            // JF-300: empty InvocationName means "use locale defaults"
+            // (it-IT → "mia collezione", all other locales → Config.InvocationName).
+            user.UserSkill = new UserSkill { InvocationName = string.Empty };
         }
 
         Plugin.Instance!.SaveConfiguration();

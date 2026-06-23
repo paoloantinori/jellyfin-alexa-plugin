@@ -471,7 +471,12 @@
             });
 
             function isValidInvocationName(value) {
-                return value.length > 0 && value.includes(" ");
+                // JF-300: empty is valid — it means "use locale defaults"
+                // (it-IT → "mia collezione", other locales → "jellyfin player").
+                // A non-empty value must still have at least 2 words.
+                var trimmed = (value || "").trim();
+                if (trimmed.length === 0) return true;
+                return trimmed.includes(" ");
             }
 
             function validateInvocationName(input) {
@@ -484,6 +489,13 @@
                     errMsg.style.display = "none";
                     input.style.borderColor = "";
                 }
+            }
+
+            // JF-300: Reset the invocation-name field to empty (= use locale defaults).
+            function resetInvocationName(input) {
+                input.value = "";
+                validateInvocationName(input);
+                input.focus();
             }
 
             var _cachedLibraries = null;
@@ -605,7 +617,7 @@
                     cell.setAttribute("data-id", user.Id);
                 }
                 row.cells[1].innerHTML = user.UserSkill ? (user.UserSkill.SkillId || "") : "";
-                row.cells[2].firstChild.value = user.UserSkill ? user.UserSkill.InvocationName : "";
+                row.cells[2].firstChild.value = user.UserSkill ? (user.UserSkill.InvocationName || "") : "";
                 row.cells[6].innerHTML = user.UserSkill ? normalizeSkillStatus(user.UserSkill.UserSkillStatus) : "unsaved";
                 updateAuthorizeButton(row.cells[8].children[1], user, config);
             }
@@ -674,14 +686,26 @@
                 input.type = "text";
                 input.is = "emby-input";
                 input.classList.add("emby-input")
-                input.value = (user.UserSkill)? user.UserSkill.InvocationName : "jellyfin player";
+                // JF-300: empty value means "use locale defaults".
+                input.value = (user.UserSkill && user.UserSkill.InvocationName) ? user.UserSkill.InvocationName : "";
+                input.placeholder = "Defaults: 'mia collezione' (it-IT), 'jellyfin player' elsewhere. A custom name applies to all locales.";
                 input.addEventListener("input", function() { validateInvocationName(this); });
                 input.addEventListener("blur", function() { validateInvocationName(this); });
                 td.appendChild(input);
+                // JF-300: Reset button clears the field back to locale defaults.
+                let resetBtn = document.createElement("button");
+                resetBtn.type = "button";
+                resetBtn.classList.add("emby-button");
+                resetBtn.title = "Reset to locale defaults";
+                resetBtn.textContent = "Reset";
+                resetBtn.style.marginLeft = "0.4em";
+                resetBtn.style.fontSize = "0.85em";
+                resetBtn.addEventListener("click", function() { resetInvocationName(input); });
+                td.appendChild(resetBtn);
                 let desc = document.createElement("div");
                 desc.classList.add("fieldDescription");
                 desc.style.marginTop = "0.25em";
-                desc.textContent = 'Two or more words (e.g. "jellyfin player"). This is what you say to invoke the skill.';
+                desc.textContent = 'Empty = use locale defaults. Otherwise two or more words (e.g. "jellyfin player"). A custom name applies to ALL locales.';
                 td.appendChild(desc);
                 let errMsg = document.createElement("div");
                 errMsg.classList.add("invocation-name-error");
@@ -1247,7 +1271,7 @@
                 ApiClient.getPluginConfiguration(Config.pluginUniqueId).then(function (config) {
                     var newUserRow = createUserRow({
                         "Username": username.trim(),
-                        "InvocationName": "jellyfin player",
+                        "InvocationName": "",
                         "SkillStatus": "unsaved"
                     }, config);
 

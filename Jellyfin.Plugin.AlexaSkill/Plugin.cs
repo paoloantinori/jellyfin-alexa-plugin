@@ -62,6 +62,11 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         {
             RequestConverter.RequestConverters.Add(new AplUserEventRequestConverter());
         }
+
+        // JF-300: normalize legacy users whose stored InvocationName is the global
+        // default so they get locale defaults (it-IT → "mia collezione") instead of
+        // a "customized" name that would clobber the it-IT locale.
+        MigrateDefaultInvocationNames(Configuration);
     }
 
     /// <inheritdoc />
@@ -178,21 +183,61 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     /// Builds the skill interaction model collection for a given invocation name.
     /// Each user gets their own skill with their own invocation name, which replaces
     /// the template's default in all locale models.
+    ///
+    /// Resolution (JF-300): an empty/whitespace <paramref name="invocationName"/>
+    /// means "use locale defaults" — <see cref="Config.LocaleInvocationNames"/>
+    /// (e.g. it-IT → "mia collezione"), falling back to <see cref="Config.InvocationName"/>
+    /// ("jellyfin player") for all other locales. A non-empty custom name applies to
+    /// <strong>all 17 locales</strong>, including it-IT.
     /// </summary>
-    /// <param name="invocationName">The invocation name for the skill.</param>
+    /// <param name="invocationName">The per-user invocation name, or empty/whitespace for locale defaults.</param>
     /// <returns>A collection of skill interaction models.</returns>
     public Collection<SkillInteractionModel> BuildSkillInteractionModels(string invocationName)
     {
         Collection<SkillInteractionModel> models = new Collection<SkillInteractionModel>();
         foreach (Tuple<string, string> model in InteractionModels)
         {
-            string localeInvocation = Config.LocaleInvocationNames.TryGetValue(model.Item1, out string? localeName)
-                ? localeName
-                : invocationName;
+            string localeInvocation = Config.EffectiveInvocationName(model.Item1, invocationName);
             models.Add(new SkillInteractionModel(model.Item1, model.Item2, localeInvocation));
         }
 
         return models;
+    }
+
+    /// <summary>
+    /// One-time migration (JF-300): clears each user's stored
+    /// <see cref="Entities.UserSkill.InvocationName"/> when it equals the global
+    /// default (<see cref="Config.InvocationName"/>). Pre-JF-300 every user had
+    /// "jellyfin player" persisted, which — under the new empty=default rule —
+    /// would be treated as a custom name and overwrite it-IT's "mia collezione"
+    /// (a regression). Clearing it makes those users fall back to locale defaults.
+    ///
+    /// The string comparison against the literal default lives ONLY here.
+    /// </summary>
+    private static void MigrateDefaultInvocationNames(Configuration.PluginConfiguration configuration)
+    {
+        bool changed = false;
+        foreach (var user in configuration.Users)
+        {
+            if (user.UserSkill != null && Config.IsStoredGlobalDefault(user.UserSkill.InvocationName))
+            {
+                user.UserSkill.InvocationName = string.Empty;
+                changed = true;
+            }
+        }
+
+        if (changed && Instance != null)
+        {
+            // Persist the normalized config so the migration does not repeat every load.
+            try
+            {
+                Instance.SaveConfiguration();
+            }
+            catch (Exception)
+            {
+                // Persistence is best-effort during load; the in-memory fix is still effective.
+            }
+        }
     }
 
     /// <inheritdoc />

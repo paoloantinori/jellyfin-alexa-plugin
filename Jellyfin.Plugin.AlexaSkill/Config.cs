@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace Jellyfin.Plugin.AlexaSkill;
@@ -20,15 +21,48 @@ public static class Config
     public const string InvocationName = "jellyfin player";
 
     /// <summary>
-    /// Per-locale invocation name overrides. When a locale is present here,
-    /// this value takes precedence over <see cref="InvocationName"/>.
-    /// This prevents the global default from overwriting locale-specific
-    /// invocation names already baked into the interaction model templates.
+    /// Per-locale invocation name overrides. When a user has not set a custom
+    /// invocation name (empty/null), the locale entry here takes precedence over
+    /// <see cref="InvocationName"/>. This lets each locale fall back to its own
+    /// natural-language default already baked into the interaction model templates.
     /// </summary>
     public static readonly IReadOnlyDictionary<string, string> LocaleInvocationNames = new Dictionary<string, string>()
     {
         ["it-IT"] = "mia collezione",
     };
+
+    /// <summary>
+    /// Resolves the effective invocation name for a locale given a user's
+    /// per-user value. An empty/null <paramref name="userInvocationName"/> means
+    /// "use locale defaults": the <see cref="LocaleInvocationNames"/> entry when
+    /// present, otherwise the global <see cref="InvocationName"/>. A non-empty
+    /// custom name applies to <strong>all</strong> locales (including it-IT).
+    /// </summary>
+    /// <param name="locale">The locale code (e.g. "it-IT", "en-US").</param>
+    /// <param name="userInvocationName">The user's per-user invocation name, or empty/null for defaults.</param>
+    /// <returns>The invocation name to bake into the locale's interaction model.</returns>
+    public static string EffectiveInvocationName(string locale, string? userInvocationName)
+    {
+        if (!string.IsNullOrWhiteSpace(userInvocationName))
+        {
+            return userInvocationName;
+        }
+
+        return LocaleInvocationNames.TryGetValue(locale, out string? localeName)
+            ? localeName
+            : InvocationName;
+    }
+
+    /// <summary>
+    /// Returns true when <paramref name="value"/> is the stored form of the
+    /// global default invocation name (<see cref="InvocationName"/>). Used only
+    /// by the one-time config migration to detect users whose pre-JF-300 stored
+    /// name should be cleared so they get locale defaults. Do NOT use this for
+    /// runtime equality — only the migration compares against the literal default.
+    /// </summary>
+    public static bool IsStoredGlobalDefault(string? value)
+        => !string.IsNullOrWhiteSpace(value)
+           && string.Equals(value, InvocationName, StringComparison.Ordinal);
 
     /// <summary>
     /// Length of the CSRF token.
