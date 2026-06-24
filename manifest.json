@@ -282,11 +282,11 @@
             },
             {
                 "version": "0.9.0.0",
-                "checksum": "placeholder",
+                "checksum": "6362ce767f1da4524cdf70f105ab8c2b",
                 "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.9.0.0/AlexaSkill_0.9.0.0.zip",
-                "changelog": "Custom invocation names now auto-redeploy to Amazon: changing the skill's wake word in settings triggers a rebuild + redeploy of all 17 locale interaction models (~15-30s) — no Alexa Console edit or re-authorization needed (JF-297). Invocation-name semantics fixed: an empty name means 'use locale defaults' (it-IT 'mia collezione', other locales 'jellyfin player'); a custom name now applies to all 17 locales including it-IT (JF-300). Fixed 'Something went wrong' / 'Qualcosa è andato storto' playing on every track — AudioPlayer event handlers no longer return shouldEndSession=false, which Amazon rejects (JF-299).",
+                "changelog": "Custom invocation names now auto-redeploy to Amazon: changing the skill's wake word in settings triggers a rebuild + redeploy of all 17 locale interaction models (~15-30s) \u2014 no Alexa Console edit or re-authorization needed (JF-297). Invocation-name semantics fixed: an empty name means 'use locale defaults' (it-IT 'mia collezione', other locales 'jellyfin player'); a custom name now applies to all 17 locales including it-IT (JF-300). Fixed 'Something went wrong' / 'Qualcosa \u00e8 andato storto' playing on every track \u2014 AudioPlayer event handlers no longer return shouldEndSession=false, which Amazon rejects (JF-299).",
                 "targetAbi": "10.11.0.0",
-                "timestamp": "2026-06-24 08:00:00"
+                "timestamp": "2026-06-24 11:16:00"
             }
         ]
     }
