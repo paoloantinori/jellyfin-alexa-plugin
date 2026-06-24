@@ -248,7 +248,7 @@ The plugin uses **Login with Amazon (LWA)** to create and manage your Alexa skil
 1. In the plugin configuration, you'll see a table of users
 2. Click **Add** to create a new skill for a Jellyfin user
 3. Select the Jellyfin user from the dropdown
-4. Optionally customize the **invocation name** (default: "Jellyfin Player", Italian: "Mia Collezione")
+4. Optionally customize the **invocation name**. Leave it **empty** for locale defaults (Italian: "Mia Collezione"; all other locales: "Jellyfin Player"), or enter a custom name (two or more words) that applies to **all** locales. Saving redeploys the new name to Amazon automatically (~15–30s) — no need to edit the Alexa Developer Console. Use **Reset** to return to locale defaults.
 
 Per-user settings include **fuzzy match behavior** (Confirm or Auto-Play), **fuzzy match threshold** (0–100), **allowed libraries** (restrict to specific top-level folders), **content type access** (music, videos, audiobooks, books), **search response mode** (Fast or Thorough), and **PostPlay behavior** (Stop or AutoPlay). Fast mode skips fallback tiers and auto-plays the first match; Thorough runs the full fallback chain with disambiguation. AutoPlay continues with similar tracks when a song ends and the queue is empty.
 
@@ -379,6 +379,8 @@ Choosing an invocation name is trickier than it seems. Two common pitfalls:
 2. **Keywords that collide with built-in Alexa features**: Words like "video", "music", "radio", "tv", or "book" are heavily used by Amazon's own skills and services. An invocation name containing these words can cause Alexa to route your request to a built-in skill instead of yours, or leave the intent unresolved. Avoid these keywords entirely.
 
 If you're unsure whether a name will work, test it in the [Alexa Developer Console](https://developer.amazon.com/alexa/console/ask) simulator before committing (see the [Testing section](#using-the-alexa-simulator)).
+
+You can also change the invocation name from the plugin configuration: saving redeploys it to Amazon automatically (~15–30s while the models rebuild). Leave the field empty to use the locale defaults (Italian: "Mia Collezione"; other locales: "Jellyfin Player"), or set a custom name that applies to every locale — no need to edit the Alexa Developer Console manually.
 
 ### How do I verify that my utterances route to the correct intent?
 
