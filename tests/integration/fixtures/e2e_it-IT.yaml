@@ -215,6 +215,25 @@ tests:
       album: {}
     expected_response_type: any
 
+  # --- Play by playlist (issue #10 regression coverage) ---
+  # Playlist members are linked children, not ParentId-owned rows; the handler must
+  # resolve them via Playlist.GetManageableItems() or the playlist reports empty.
+  # Requires these playlists in the linked Jellyfin library:
+  #   "mad season" (≥1 audio track) — proves a real playlist plays (not "vuota")
+  #   "pearl jam soft" (0 tracks) — proves a genuinely-empty playlist still reports empty
+  - utterance: "riproduci la playlist mad season"
+    expected_intent: PlayPlaylistIntent
+    expected_slots:
+      playlist: {}
+    expected_response_type: directive
+    expected_directive_type: AudioPlayer.Play
+
+  - utterance: "riproduci la playlist pearl jam soft"
+    expected_intent: PlayPlaylistIntent
+    expected_slots:
+      playlist: {}
+    expected_response_type: speech
+
   # --- Italian mood: literal samples in it-IT model ---
   # These match static (non-slotted) samples in the model. The handler receives
   # an empty mood slot and responds with "DidNotCatchMood" which lists Italian
