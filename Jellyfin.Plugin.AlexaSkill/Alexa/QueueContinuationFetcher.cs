@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Playlists;
 using MediaBrowser.Model.Querying;
 using Microsoft.Extensions.Logging;
 using SortOrder = Jellyfin.Database.Implementations.Enums.SortOrder;
@@ -129,25 +131,23 @@ internal static class QueueContinuationFetcher
         }
 
         BaseItem? playlist = libraryManager.GetItemById(continuation.PlaylistId.Value);
-        if (playlist is not Folder folder)
+        if (playlist is not Playlist playlistEntity)
         {
             return Array.Empty<BaseItem>();
         }
 
-        // Playlist items use GetItemList with StartIndex/Limit
-        var query = new InternalItemsQuery
-        {
-            User = jellyfinUser,
-            Recursive = true,
-            ParentId = playlist.Id,
-            MediaTypes = new[] { MediaType.Audio },
-            DtoOptions = new DtoOptions(true),
-            StartIndex = continuation.StartIndex,
-            Limit = continuation.BatchSize
-        };
+        // Playlist members are linked children, NOT ParentId-owned rows: querying
+        // ILibraryManager with ParentId=playlist.Id always returns 0 (issue #10). Resolve via
+        // the same PlaylistTrackResolver the handler uses, so the initial page and continuation
+        // batches iterate in identical order (otherwise pagination skips/duplicates tracks).
+        IReadOnlyList<BaseItem> allTracks = PlaylistTrackResolver.GetAudioTracks(playlistEntity, jellyfinUser);
 
-        QueryResult<BaseItem> result = libraryManager.GetItemsResult(query);
-        continuation.StartIndex += result.Items.Count;
-        return result.Items;
+        var batch = allTracks
+            .Skip(continuation.StartIndex)
+            .Take(continuation.BatchSize)
+            .ToList();
+
+        continuation.StartIndex += batch.Count;
+        return batch;
     }
 }

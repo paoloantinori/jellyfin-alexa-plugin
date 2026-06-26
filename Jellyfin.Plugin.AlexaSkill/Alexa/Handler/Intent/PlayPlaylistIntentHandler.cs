@@ -16,6 +16,7 @@ using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Playlists;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
@@ -158,25 +159,20 @@ public class PlayPlaylistIntentHandler : BaseHandler
         BaseItem playlist = playlistMatch!;
         Logger.LogDebug("PlayPlaylist: matched playlist='{PlaylistName}' (id={PlaylistId})", playlist.Name, playlist.Id);
 
-        // Get playlist items using the library manager for consistent pagination.
-        // Fetch the first page for fast time-to-audio; rest is fetched on demand.
-        Logger.LogDebug("PlayPlaylist: querying tracks for playlist='{PlaylistName}'", playlist.Name);
-        QueryResult<BaseItem> playlistResult = SafeGetItemsResult(_libraryManager, new InternalItemsQuery
-        {
-            User = jellyfinUser,
-            Recursive = true,
-            ParentId = playlist.Id,
-            MediaTypes = new[] { MediaType.Audio },
-            DtoOptions = new DtoOptions(true),
-            Limit = ProgressiveQueueConstants.GetInitialFetchSize()
-        });
+        // Playlist members are linked children in the Playlists join table, NOT ParentId-owned
+        // rows — querying ILibraryManager with ParentId=playlist.Id always returns 0 (issue #10).
+        // Use Playlist.GetManageableItems(), the same API the Jellyfin web UI uses.
+        Logger.LogDebug("PlayPlaylist: resolving tracks for playlist='{PlaylistName}'", playlist.Name);
+        IReadOnlyList<BaseItem> allTracks = PlaylistTrackResolver.GetAudioTracks(playlist as Playlist, jellyfinUser);
+        Logger.LogDebug("PlayPlaylist: resolved {TrackCount} audio tracks for playlist='{PlaylistName}'", allTracks.Count, playlist.Name);
 
-        if (playlistResult.TotalRecordCount == 0)
+        if (allTracks.Count == 0)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("PlaylistEmpty", locale));
         }
 
-        IReadOnlyList<BaseItem> playlistItems = playlistResult.Items;
+        int totalCount = allTracks.Count;
+        List<BaseItem> playlistItems = allTracks.Take(ProgressiveQueueConstants.GetInitialFetchSize()).ToList();
 
         List<QueueItem> queueItems = new List<QueueItem>();
         for (int i = 0; i < playlistItems.Count; i++)
@@ -209,7 +205,7 @@ public class PlayPlaylistIntentHandler : BaseHandler
         session.FullNowPlayingItem = firstItem;
 
         // Store continuation info so PlaybackNearlyFinished can fetch the rest
-        if (playlistResult.TotalRecordCount > playlistItems.Count)
+        if (totalCount > playlistItems.Count)
         {
             QueueContinuationStore.Set(
                 session.UserId,
@@ -220,7 +216,7 @@ public class PlayPlaylistIntentHandler : BaseHandler
                     ParentId = playlist.Id,
                     PlaylistId = playlist.Id,
                     StartIndex = playlistItems.Count,
-                    TotalCount = playlistResult.TotalRecordCount,
+                    TotalCount = totalCount,
                     UserId = jellyfinUser!.Id
                 });
         }
