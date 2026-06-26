@@ -386,6 +386,17 @@ You can also change the invocation name from the plugin configuration: saving re
 
 Use the **Alexa Developer Console** simulator. Go to your skill → **test** → enable **Development** mode → type or speak an utterance. The simulator shows which intent Alexa resolved, the extracted slot values, and the full request JSON. This is the fastest way to confirm that a new utterance or invocation name works before trying it on a real device.
 
+### Why does "play a different playlist" go to Amazon Music while my playlist is playing?
+
+While music is playing from the skill, Alexa only routes the standard playback commands back to it automatically — **pause, resume, next, previous, stop**. A request to play something *new* (a different playlist, album, artist, or song) is treated as a fresh music search, so Alexa sends it to your **default music service** (Amazon Music, Spotify, …) instead of the skill. The skill never receives that request.
+
+To switch to different content while something is playing, include the skill's name in the request:
+
+- English: *"Alexa, ask **Jellyfin Player** to play the playlist **Rock**"*
+- Italian: *"Alexa, chiedi a **Mia Collezione** di riprodurre la playlist **Rock**"*
+
+This is an inherent limitation of custom Alexa skills: they cannot register as the device's default music player, so follow-on "play X" requests need the explicit invocation. It is not a bug in the plugin and behaves the same on every custom Jellyfin/Alexa skill.
+
 ## Troubleshooting
 
 ### "There was a problem with the requested skill's response"
