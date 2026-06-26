@@ -1,7 +1,7 @@
 ---
 name: Alexa Skill
 guid: c5df7de0-8777-4b3c-a70d-5c3dae359c9e
-version: 0.9.0.0
+version: 0.9.1.0
 targetAbi: 10.11.0.0
 framework: net9.0
 overview: Alexa skill plugin for Jellyfin
@@ -20,4 +20,4 @@ artifacts:
   - Amazon.Lambda.Serialization.Json.dll
   - Jellyfin.Plugin.AlexaSkill.dll
   - Refit.dll
-changelog: "Custom invocation names now auto-redeploy to Amazon: changing the skill's wake word in settings triggers a rebuild + redeploy of all 17 locale interaction models (~15-30s) — no Alexa Console edit or re-authorization needed (JF-297). Invocation-name semantics fixed: an empty name means 'use locale defaults' (it-IT 'mia collezione', other locales 'jellyfin player'); a custom name now applies to all 17 locales including it-IT (JF-300). Fixed 'Something went wrong' / 'Qualcosa è andato storto' playing on every track — AudioPlayer event handlers no longer return shouldEndSession=false, which Amazon rejects (JF-299)."
+changelog: "Fixed: asking Alexa to play a playlist always reported it as empty, even when the playlist contained tracks that played fine from the Jellyfin web UI (issue #10). Playlist members are now read through Jellyfin's own playlist API (the same one the web UI uses) instead of the album/children query, which returned nothing because playlists store their tracks as linked members rather than as parent-owned items. Affects every locale, not just es-MX. Large playlists also no longer re-scan the whole track list on each continuation batch."
