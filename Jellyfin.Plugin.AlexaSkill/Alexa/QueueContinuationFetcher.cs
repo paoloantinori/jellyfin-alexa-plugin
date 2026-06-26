@@ -125,6 +125,26 @@ internal static class QueueContinuationFetcher
         ILibraryManager libraryManager,
         Jellyfin.Database.Implementations.Entities.User? jellyfinUser)
     {
+        // Cached path (issue #10 efficiency): the handler already resolved the full audio
+        // track list at first-play. Slice it here instead of re-resolving every linked child
+        // via GetManageableItems() on each PlaybackNearlyFinished (which is O(playlist size)
+        // per batch). Order is stable because both the handler and this slice operate on the
+        // same cached list.
+        if (continuation.CachedTracks is { Count: > 0 } cached)
+        {
+            var batch = cached
+                .Skip(continuation.StartIndex)
+                .Take(continuation.BatchSize)
+                .ToList();
+
+            continuation.StartIndex += batch.Count;
+            return batch;
+        }
+
+        // Fallback (no cache): resolve on demand. Only reached for a Playlist continuation
+        // created without CachedTracks. Playlist members are linked children, NOT
+        // ParentId-owned rows — querying ILibraryManager with ParentId=playlist.Id always
+        // returns 0 (issue #10) — so resolve via PlaylistTrackResolver.
         if (continuation.PlaylistId == null)
         {
             return Array.Empty<BaseItem>();
@@ -136,18 +156,14 @@ internal static class QueueContinuationFetcher
             return Array.Empty<BaseItem>();
         }
 
-        // Playlist members are linked children, NOT ParentId-owned rows: querying
-        // ILibraryManager with ParentId=playlist.Id always returns 0 (issue #10). Resolve via
-        // the same PlaylistTrackResolver the handler uses, so the initial page and continuation
-        // batches iterate in identical order (otherwise pagination skips/duplicates tracks).
         IReadOnlyList<BaseItem> allTracks = PlaylistTrackResolver.GetAudioTracks(playlistEntity, jellyfinUser);
 
-        var batch = allTracks
+        var fallback = allTracks
             .Skip(continuation.StartIndex)
             .Take(continuation.BatchSize)
             .ToList();
 
-        continuation.StartIndex += batch.Count;
-        return batch;
+        continuation.StartIndex += fallback.Count;
+        return fallback;
     }
 }

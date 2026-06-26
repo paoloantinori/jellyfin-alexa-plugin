@@ -897,4 +897,64 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
 
         QueueContinuationStore.Remove(userId, deviceId);
     }
+
+    // =====================================================================
+    // Playlist continuation caching (issue #10 efficiency follow-up)
+    // =====================================================================
+
+    [Fact]
+    public void PlaylistContinuation_CachedTracks_SlicesAcrossBatches_WithoutReResolving()
+    {
+        // The handler caches the fully-resolved track list at first-play; the fetcher must
+        // slice that cache per batch (NOT re-resolve via GetManageableItems), advancing
+        // StartIndex, and return empty once StartIndex reaches TotalCount.
+        SetupUserMock();
+
+        List<BaseItem> tracks = Enumerable.Range(0, 10)
+            .Select(i => (BaseItem)new Audio { Id = Guid.NewGuid(), Name = $"Track {i}" })
+            .ToList();
+        List<Guid> ids = tracks.Select(t => t.Id).ToList();
+
+        var continuation = new QueueContinuation
+        {
+            SourceType = "Playlist",
+            PlaylistId = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+            StartIndex = 0,
+            TotalCount = tracks.Count,
+            BatchSize = 4, // override the default for a clean 4/4/2 split
+            CachedTracks = tracks
+        };
+
+        ILogger logger = _loggerFactory.CreateLogger("PlaylistContinuationTest");
+
+        // Batch 1: first 4
+        IReadOnlyList<BaseItem> batch1 = QueueContinuationFetcher.FetchNextBatch(
+            continuation, _libraryManagerMock.Object, _userManagerMock.Object, logger);
+        Assert.Equal(ids.GetRange(0, 4), batch1.Select(b => b.Id).ToList());
+        Assert.Equal(4, continuation.StartIndex);
+
+        // Batch 2: next 4
+        IReadOnlyList<BaseItem> batch2 = QueueContinuationFetcher.FetchNextBatch(
+            continuation, _libraryManagerMock.Object, _userManagerMock.Object, logger);
+        Assert.Equal(ids.GetRange(4, 4), batch2.Select(b => b.Id).ToList());
+        Assert.Equal(8, continuation.StartIndex);
+
+        // Batch 3: remaining 2
+        IReadOnlyList<BaseItem> batch3 = QueueContinuationFetcher.FetchNextBatch(
+            continuation, _libraryManagerMock.Object, _userManagerMock.Object, logger);
+        Assert.Equal(ids.GetRange(8, 2), batch3.Select(b => b.Id).ToList());
+        Assert.Equal(10, continuation.StartIndex);
+
+        // Batch 4: exhausted -> empty (StartIndex >= TotalCount short-circuit)
+        IReadOnlyList<BaseItem> batch4 = QueueContinuationFetcher.FetchNextBatch(
+            continuation, _libraryManagerMock.Object, _userManagerMock.Object, logger);
+        Assert.Empty(batch4);
+
+        // The cached path must NOT touch the library manager at all (no re-resolution).
+        _libraryManagerMock.Verify(
+            lm => lm.GetItemById(It.IsAny<Guid>()),
+            Times.Never,
+            "cached playlist continuation must not re-resolve via the library manager");
+    }
 }

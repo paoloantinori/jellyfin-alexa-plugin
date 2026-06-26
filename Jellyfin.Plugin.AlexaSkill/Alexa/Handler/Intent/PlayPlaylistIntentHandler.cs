@@ -217,7 +217,10 @@ public class PlayPlaylistIntentHandler : BaseHandler
                     PlaylistId = playlist.Id,
                     StartIndex = playlistItems.Count,
                     TotalCount = totalCount,
-                    UserId = jellyfinUser!.Id
+                    UserId = jellyfinUser!.Id,
+                    // Cache the resolved tracks so continuation batches slice this list
+                    // instead of re-resolving every linked child on each PlaybackNearlyFinished.
+                    CachedTracks = allTracks
                 });
         }
 

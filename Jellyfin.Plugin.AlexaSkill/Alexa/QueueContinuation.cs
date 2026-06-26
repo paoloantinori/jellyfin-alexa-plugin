@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using Jellyfin.Data.Enums;
+using MediaBrowser.Controller.Entities;
 using SortOrder = Jellyfin.Database.Implementations.Enums.SortOrder;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa;
@@ -61,4 +63,14 @@ public class QueueContinuation
     /// before being appended to the queue.
     /// </summary>
     public bool Shuffle { get; init; }
+
+    /// <summary>
+    /// Gets the fully-resolved playlist tracks (audio + visible, in stable playlist order),
+    /// cached at first-play so continuation batches can slice this list instead of
+    /// re-resolving every linked child via <c>Playlist.GetManageableItems()</c> on each
+    /// <c>PlaybackNearlyFinished</c>. Null for Album/Artist sources, which use DB-level
+    /// pagination. Holds references to Jellyfin-cached <see cref="BaseItem"/>s — no extra
+    /// object allocation — and lives only for the duration of playback (removed on stop).
+    /// </summary>
+    public IReadOnlyList<BaseItem>? CachedTracks { get; init; }
 }
