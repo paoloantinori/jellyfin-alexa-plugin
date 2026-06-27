@@ -69,8 +69,12 @@ public class QueueContinuation
     /// cached at first-play so continuation batches can slice this list instead of
     /// re-resolving every linked child via <c>Playlist.GetManageableItems()</c> on each
     /// <c>PlaybackNearlyFinished</c>. Null for Album/Artist sources, which use DB-level
-    /// pagination. Holds references to Jellyfin-cached <see cref="BaseItem"/>s — no extra
-    /// object allocation — and lives only for the duration of playback (removed on stop).
+    /// pagination. Holds references to Jellyfin-cached <see cref="BaseItem"/>s, so holding
+    /// the list allocates no new objects (the items already live in the LibraryManager cache).
+    /// The store is keyed by user+device and overwritten on each new play, so at most one
+    /// continuation per device; it is removed when the queue exhausts (PlaybackNearlyFinished)
+    /// — NOT on PlaybackStopped, so a stopped-but-not-exhausted playlist lingers until the
+    /// next playback overwrites it. Bounded and negligible memory.
     /// </summary>
     public IReadOnlyList<BaseItem>? CachedTracks { get; init; }
 }
