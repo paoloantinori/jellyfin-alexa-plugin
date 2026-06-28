@@ -125,6 +125,8 @@ public class AlexaSkillController : ControllerBase
             return new BadRequestResult();
         }
 
+        LogAccountLinkingRegion(redirectUri, "page requested");
+
         var assembly = typeof(Util).Assembly;
         Stream? resource = assembly.GetManifestResourceStream("Jellyfin.Plugin.AlexaSkill.Controller.Pages.account_linking.html");
 
@@ -238,9 +240,45 @@ public class AlexaSkillController : ControllerBase
         user.TryTransitionToReady();
         Plugin.Instance!.SaveConfiguration();
 
-        string urlParams = $"access_token={user.Id.ToString()}&state={state}&token_type=token";
+        // Implicit grant: the access token is returned in the URL fragment per the Alexa
+        // implicit-grant flow. token_type MUST be "Bearer" (OAuth2 / Amazon spec), not "token".
+        // Fragment values are application/x-www-form-urlencoded (RFC 6749 §4.2.2): percent-encode
+        // them so an opaque Amazon `state` containing reserved chars (#, &, +, =) can't corrupt
+        // the fragment or break the CSRF round-trip. Escaping is a no-op for the common (safe) case.
+        string urlParams = $"access_token={Uri.EscapeDataString(user.Id.ToString())}&state={Uri.EscapeDataString(state)}&token_type=Bearer";
 
-        return RedirectPermanent(redirectUri + "#" + urlParams);
+        // Use a temporary (302) redirect, NOT a permanent (301) one. RedirectPermanent (301) is
+        // cacheable by the Alexa in-app webview and can cause account-linking loops on retry; 302
+        // is the OAuth-standard redirect status and is never cached. (GitHub issue #11)
+        LogAccountLinkingRegion(redirectUri, "completed via implicit grant");
+
+        return Redirect(redirectUri + "#" + urlParams);
+    }
+
+    /// <summary>
+    /// Logs the Amazon region (host) of an account-linking redirect_uri. The host is chosen by
+    /// Amazon based on the user's account marketplace — not the skill locale — and is the decisive
+    /// signal when a region looks wrong (e.g. an es-MX skill bouncing to alexa.amazon.co.jp means
+    /// the Amazon account is JP-marketplace). Logged at Information so it shows in default logs
+    /// without enabling Debug. Region only — the bearer token (== user id) is deliberately omitted.
+    /// (GitHub issue #11)
+    /// </summary>
+    /// <param name="redirectUri">The redirect_uri Amazon provided.</param>
+    /// <param name="action">Short phrase describing the linking stage (e.g. "page requested", "completed via implicit grant").</param>
+    private void LogAccountLinkingRegion(string redirectUri, string action)
+    {
+        string amazonRegion = "unknown";
+        try
+        {
+            amazonRegion = new Uri(redirectUri).Host;
+        }
+        catch (UriFormatException)
+        {
+            // redirect_uri is validated as a prefix of a known Amazon URL, so it should always
+            // parse; fall back to "unknown" defensively.
+        }
+
+        _logger.LogInformation("Account linking {Action}; Amazon region {AmazonRegion}", action, amazonRegion);
     }
 
     /// <summary>
