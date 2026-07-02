@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,6 +11,7 @@ using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Library;
@@ -528,6 +530,121 @@ public class GaplessPlaybackTests : PluginTestBase, IDisposable
         // Token should be one of the queue items
         var allIds = new HashSet<string> { track1Id.ToString(), track2Id.ToString(), track3Id.ToString(), track4Id.ToString(), track5Id.ToString() };
         Assert.Contains(directive.AudioItem.Stream.Token, allIds);
+    }
+
+    [Fact]
+    public async Task Shuffle_DeviceQueueOrderOverrides_SessionPlayState()
+    {
+        // Device queue says Default; session.PlayState says Shuffle. The resolver
+        // must honor the device queue (Default → sequential next = track2), proving
+        // the authoritative per-device store wins over the indirect PlayState flag.
+        string tempDir = Path.Combine(Path.GetTempPath(), $"gapless-dq-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var queueManager = new DeviceQueueManager(tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+            var track1Id = Guid.NewGuid();
+            var track2Id = Guid.NewGuid();
+            var track3Id = Guid.NewGuid();
+            var track4Id = Guid.NewGuid();
+            var track5Id = Guid.NewGuid();
+            queueManager.SetQueue(
+                "test-device",
+                new List<string> { track1Id.ToString(), track2Id.ToString(), track3Id.ToString(), track4Id.ToString(), track5Id.ToString() },
+                currentIndex: 0);
+            // Device queue PlaybackOrder stays "Default" (the SetQueue default).
+
+            var handler = new PlaybackNearlyFinishedEventHandler(
+                _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory, queueManager);
+
+            var session = CreateSession();
+            session.FullNowPlayingItem = new Audio { Id = track1Id, Name = "Track 1" };
+            session.NowPlayingQueue = new List<QueueItem>
+            {
+                new() { Id = track1Id },
+                new() { Id = track2Id },
+                new() { Id = track3Id },
+                new() { Id = track4Id },
+                new() { Id = track5Id }
+            };
+            session.PlayState.PlaybackOrder = PlaybackOrder.Shuffle; // must be IGNORED in favor of device queue
+
+            _libraryManagerMock.Setup(l => l.GetItemById(It.IsAny<Guid>()))
+                .Returns<Guid>(id => new Audio { Id = id, Name = $"Track {id}" });
+
+            var response = await handler.HandleAsync(
+                CreateNearlyFinishedRequest(track1Id.ToString()),
+                CreateContext(track1Id.ToString()),
+                TestHelpers.CreateTestUser(),
+                session,
+                CancellationToken.None);
+
+            var directive = response.Response.Directives.OfType<AudioPlayerPlayDirective>().FirstOrDefault();
+            Assert.NotNull(directive);
+            // Sequential next of track1 is track2 — only happens if device queue (Default) won.
+            Assert.Equal(track2Id.ToString(), directive.AudioItem.Stream.Token);
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task Shuffle_ReshuffledQueue_AdvancesSequentiallyThroughShuffledOrder()
+    {
+        // After ShuffleOn the device queue is physically reshuffled (OriginalItemIds != null).
+        // The resolver must honor that order via sequential advance, NOT random-pick
+        // (which would discard the reshuffle and repeat/skip tracks).
+        string tempDir = Path.Combine(Path.GetTempPath(), $"gapless-rs-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var queueManager = new DeviceQueueManager(tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+            var t1 = Guid.NewGuid();
+            var t2 = Guid.NewGuid();
+            var t3 = Guid.NewGuid();
+            var t4 = Guid.NewGuid();
+            var t5 = Guid.NewGuid();
+            queueManager.SetQueue(
+                "test-device",
+                new List<string> { t1.ToString(), t2.ToString(), t3.ToString(), t4.ToString(), t5.ToString() },
+                currentIndex: 0);
+
+            // Simulate the post-ShuffleOn reshuffled state: order [t1, t3, t2, t5, t4].
+            DeviceQueue dq = queueManager.GetQueue("test-device")!;
+            Guid[] reshuffled = { t1, t3, t2, t5, t4 };
+            dq.ItemIds = reshuffled.Select(g => g.ToString()).ToList();
+            dq.OriginalItemIds = new List<string>(new[] { t1, t2, t3, t4, t5 }.Select(g => g.ToString()));
+            dq.PlaybackOrder = "Shuffle";
+
+            var handler = new PlaybackNearlyFinishedEventHandler(
+                _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory, queueManager);
+
+            var session = CreateSession();
+            session.FullNowPlayingItem = new Audio { Id = t1, Name = "Track 1" };
+            session.NowPlayingQueue = reshuffled.Select(g => new QueueItem { Id = g }).ToList();
+
+            _libraryManagerMock.Setup(l => l.GetItemById(It.IsAny<Guid>()))
+                .Returns<Guid>(id => new Audio { Id = id, Name = $"Track {id}" });
+
+            var response = await handler.HandleAsync(
+                CreateNearlyFinishedRequest(t1.ToString()),
+                CreateContext(t1.ToString()),
+                TestHelpers.CreateTestUser(),
+                session,
+                CancellationToken.None);
+
+            var directive = response.Response.Directives.OfType<AudioPlayerPlayDirective>().FirstOrDefault();
+            Assert.NotNull(directive);
+            // Sequential next of t1 in [t1,t3,t2,t5,t4] is t3. A random pick would
+            // almost never land on exactly t3.
+            Assert.Equal(t3.ToString(), directive.AudioItem.Stream.Token);
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, true); } catch { }
+        }
     }
 
     [Fact]

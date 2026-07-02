@@ -459,4 +459,44 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
             b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Guid[]>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
+
+    [Theory]
+    [InlineData("AMAZON.ShuffleOnIntent")]
+    [InlineData("AMAZON.ShuffleOffIntent")]
+    [InlineData("AMAZON.NextIntent")]
+    [InlineData("AMAZON.PreviousIntent")]
+    [InlineData("AMAZON.PauseIntent")]
+    public async Task ProcessAsync_PlaybackControlIntent_NeverInjectsEvenOnNewSession(string intentName)
+    {
+        // Regression for issue #10 follow-up: ShuffleOn arrived on a fresh session
+        // and the new-session path injected whole-library entities. Built-in
+        // playback-control intents carry no slot to resolve, so they must always skip.
+        var userId = Guid.NewGuid();
+        _builderMock
+            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Guid[]>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .Returns(new DynamicEntitiesDirective());
+
+        var interceptor = CreateInterceptor();
+        var request = new IntentRequest
+        {
+            Type = "IntentRequest",
+            Intent = new Intent { Name = intentName }
+        };
+        var alexaContext = new Context
+        {
+            System = new global::Alexa.NET.Request.AlexaSystem
+            {
+                User = new global::Alexa.NET.Request.User { AccessToken = userId.ToString() },
+                Device = new Device { DeviceID = "test-device" }
+            }
+        };
+        var session = new AlexaSession { New = true }; // would normally trigger injection
+
+        var ctx = CreateContext(request, alexaContext, session);
+        await interceptor.ProcessAsync(ctx, CancellationToken.None);
+
+        _builderMock.Verify(
+            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Guid[]>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
 }

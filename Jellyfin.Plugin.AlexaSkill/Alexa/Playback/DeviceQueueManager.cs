@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using Microsoft.Extensions.Logging;
@@ -52,6 +53,19 @@ public sealed class DeviceQueueManager : IDisposable
     public DeviceQueue GetOrCreateQueue(string deviceId)
     {
         return _queues.GetOrAdd(deviceId, _ => new DeviceQueue());
+    }
+
+    /// <summary>
+    /// Gets the queue for a device WITHOUT creating one. Returns null if the
+    /// device has no registered queue. Use this for read-only lookups (e.g.
+    /// resolving the next item) to avoid synthesizing empty queue entries on
+    /// every playback tick for devices that never registered a queue.
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    /// <returns>The device's queue, or null if none exists.</returns>
+    public DeviceQueue? GetQueue(string deviceId)
+    {
+        return _queues.TryGetValue(deviceId, out DeviceQueue? queue) ? queue : null;
     }
 
     /// <summary>
@@ -245,6 +259,84 @@ public sealed class DeviceQueueManager : IDisposable
         queue.PlaybackOrder = playbackOrder;
         queue.LastModifiedUtc = DateTime.UtcNow;
         SchedulePersistInternal(deviceId);
+    }
+
+    /// <summary>
+    /// Shuffles the queue items after the currently-playing item, keeping the
+    /// current item first. Snapshots the original order into
+    /// <see cref="DeviceQueue.OriginalItemIds"/> so <see cref="RestoreOrder"/> can
+    /// revert. No-op for queues with fewer than three items or when the current
+    /// item is already at (or within one of) the end. Used by
+    /// <c>ShuffleOnIntentHandler</c> so sequential queue advancement plays a
+    /// shuffled order regardless of the indirect Jellyfin PlayState flag.
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    /// <param name="currentItemId">The currently-playing item ID (kept first).</param>
+    public void ShuffleRemaining(string deviceId, string currentItemId)
+    {
+        if (!_queues.TryGetValue(deviceId, out DeviceQueue? queue))
+        {
+            _logger.LogDebug("ShuffleRemaining: no queue for device {DeviceId}", deviceId);
+            return;
+        }
+
+        if (queue.ItemIds.Count < 3)
+        {
+            return;
+        }
+
+        int current = queue.ItemIds.IndexOf(currentItemId);
+        if (current < 0 || current >= queue.ItemIds.Count - 2)
+        {
+            // Current not found, or too close to the end to shuffle meaningfully.
+            return;
+        }
+
+        // Snapshot original order only on first shuffle — don't clobber an
+        // existing snapshot if shuffle is toggled repeatedly mid-playback.
+        queue.OriginalItemIds ??= new List<string>(queue.ItemIds);
+
+        List<string> head = queue.ItemIds.Take(current + 1).ToList();
+        List<string> tail = queue.ItemIds.Skip(current + 1).ToList();
+
+        // Fisher–Yates shuffle on the tail. Uses the process-global Random.Shared
+        // (do not seed it — it is shared across callers).
+        for (int i = tail.Count - 1; i > 0; i--)
+        {
+            int j = Random.Shared.Next(i + 1);
+            (tail[i], tail[j]) = (tail[j], tail[i]);
+        }
+
+        queue.ItemIds = head.Concat(tail).ToList();
+        queue.PlaybackOrder = "Shuffle";
+        queue.LastModifiedUtc = DateTime.UtcNow;
+        SchedulePersistInternal(deviceId);
+
+        _logger.LogDebug(
+            "ShuffleRemaining: shuffled tail ({Count} items) for device {DeviceId} after index {Index}",
+            tail.Count, deviceId, current);
+    }
+
+    /// <summary>
+    /// Restores the queue to its pre-shuffle order. No-op if the queue is not
+    /// currently shuffled (<see cref="DeviceQueue.OriginalItemIds"/> is null).
+    /// Used by <c>ShuffleOffIntentHandler</c>.
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    public void RestoreOrder(string deviceId)
+    {
+        if (!_queues.TryGetValue(deviceId, out DeviceQueue? queue) || queue.OriginalItemIds == null)
+        {
+            return;
+        }
+
+        queue.ItemIds = new List<string>(queue.OriginalItemIds);
+        queue.OriginalItemIds = null;
+        queue.PlaybackOrder = "Default";
+        queue.LastModifiedUtc = DateTime.UtcNow;
+        SchedulePersistInternal(deviceId);
+
+        _logger.LogDebug("RestoreOrder: restored original order for device {DeviceId}", deviceId);
     }
 
     /// <summary>

@@ -59,6 +59,75 @@ public class DeviceQueueManagerTests : IDisposable
         Assert.Equal(-1, queue.CurrentIndex);
     }
 
+    // =====================================================================
+    // ShuffleRemaining / RestoreOrder (issue #10 follow-up: playlist shuffle)
+    // =====================================================================
+
+    [Fact]
+    public void ShuffleRemaining_KeepsCurrentFirst_RandomizesTail_StoresOriginal()
+    {
+        List<string> ids = Enumerable.Range(0, 20).Select(i => i.ToString()).ToList();
+        _manager.SetQueue("dev", ids, currentIndex: 0);
+        _manager.ShuffleRemaining("dev", currentItemId: "0");
+        DeviceQueue q = _manager.GetOrCreateQueue("dev");
+
+        Assert.Equal("Shuffle", q.PlaybackOrder);
+        Assert.NotNull(q.OriginalItemIds);
+        Assert.Equal(ids, q.OriginalItemIds);       // original preserved for un-shuffle
+        Assert.Equal("0", q.ItemIds[0]);            // currently-playing stays first
+        Assert.Equal(ids.Count, q.ItemIds.Count);   // no items lost or duplicated
+        Assert.NotEqual(ids, q.ItemIds);            // tail was reordered
+    }
+
+    [Fact]
+    public void ShuffleRemaining_NoOp_WhenQueueTooShort()
+    {
+        _manager.SetQueue("dev", new List<string> { "a", "b" }, 0);
+        _manager.ShuffleRemaining("dev", "a");
+        DeviceQueue q = _manager.GetOrCreateQueue("dev");
+
+        Assert.Null(q.OriginalItemIds);             // not shuffled
+        Assert.Equal("Default", q.PlaybackOrder);
+    }
+
+    [Fact]
+    public void ShuffleRemaining_NoOp_WhenCurrentItemIsLast()
+    {
+        List<string> ids = Enumerable.Range(0, 5).Select(i => i.ToString()).ToList();
+        _manager.SetQueue("dev", ids, currentIndex: 4);
+        _manager.ShuffleRemaining("dev", "4");
+        DeviceQueue q = _manager.GetOrCreateQueue("dev");
+
+        Assert.Null(q.OriginalItemIds);             // nothing after current to shuffle
+    }
+
+    [Fact]
+    public void RestoreOrder_RevertsToOriginal_WhenShuffled()
+    {
+        List<string> ids = Enumerable.Range(0, 20).Select(i => i.ToString()).ToList();
+        _manager.SetQueue("dev", ids, 0);
+        _manager.ShuffleRemaining("dev", "0");
+        _manager.RestoreOrder("dev");
+        DeviceQueue q = _manager.GetOrCreateQueue("dev");
+
+        Assert.Equal("Default", q.PlaybackOrder);
+        Assert.Null(q.OriginalItemIds);
+        Assert.Equal(ids, q.ItemIds);               // back to original sequence
+    }
+
+    [Fact]
+    public void RestoreOrder_NoOp_WhenNotShuffled()
+    {
+        List<string> ids = Enumerable.Range(0, 5).Select(i => i.ToString()).ToList();
+        _manager.SetQueue("dev", ids, 0);
+        _manager.RestoreOrder("dev");
+        DeviceQueue q = _manager.GetOrCreateQueue("dev");
+
+        Assert.Equal(ids, q.ItemIds);
+        Assert.Equal("Default", q.PlaybackOrder);
+    }
+
+
     [Fact]
     public void GetOrCreateQueue_ReturnsSameInstanceForSameDevice()
     {

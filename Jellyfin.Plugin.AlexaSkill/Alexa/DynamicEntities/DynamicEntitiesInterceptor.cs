@@ -62,6 +62,15 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
 
         string intentName = context.IntentName;
 
+        // Built-in playback-control intents carry no slot to resolve and must never
+        // trigger a whole-library dynamic-entity refresh (issue #10 follow-up:
+        // ShuffleOn arrived on a fresh session and the new-session path leaked the
+        // entire catalog — artists/songs not in the playing playlist).
+        if (IsPlaybackControlIntent(intentName))
+        {
+            return;
+        }
+
         // Determine if we should inject conditional entities
         bool includeSeries = false;
         bool includeAudiobooks = false;
@@ -128,4 +137,28 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
         _logger.LogDebug("Could not resolve Jellyfin user ID for dynamic entities");
         return (Guid.Empty, null);
     }
+
+    /// <summary>
+    /// Built-in playback-control intents. These carry no slot to resolve and must
+    /// never trigger a whole-library dynamic-entity refresh.
+    /// </summary>
+    private static readonly HashSet<string> PlaybackControlIntents = new(StringComparer.Ordinal)
+    {
+        "AMAZON.ShuffleOnIntent",
+        "AMAZON.ShuffleOffIntent",
+        "AMAZON.NextIntent",
+        "AMAZON.PreviousIntent",
+        "AMAZON.LoopOnIntent",
+        "AMAZON.LoopOffIntent",
+        "AMAZON.RepeatOnIntent",
+        "AMAZON.RepeatOffIntent",
+        "AMAZON.PauseIntent",
+        "AMAZON.ResumeIntent",
+        "AMAZON.StopIntent",
+        "AMAZON.CancelIntent",
+        "AMAZON.StartOverIntent"
+    };
+
+    private static bool IsPlaybackControlIntent(string? intentName) =>
+        intentName != null && PlaybackControlIntents.Contains(intentName);
 }

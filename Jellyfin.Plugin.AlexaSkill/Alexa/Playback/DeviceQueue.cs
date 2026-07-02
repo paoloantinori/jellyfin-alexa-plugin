@@ -33,6 +33,14 @@ public sealed class DeviceQueue
     public string PlaybackOrder { get; set; } = "Default";
 
     /// <summary>
+    /// Gets or sets the original (pre-shuffle) order of <see cref="ItemIds"/>.
+    /// Populated by <see cref="DeviceQueueManager.ShuffleRemaining"/> so that
+    /// <see cref="DeviceQueueManager.RestoreOrder"/> can revert to the original
+    /// sequence on shuffle-off. Null when the queue is not currently shuffled.
+    /// </summary>
+    public List<string>? OriginalItemIds { get; set; }
+
+    /// <summary>
     /// Gets or sets the UTC timestamp of when this queue was last modified.
     /// </summary>
     public DateTime LastModifiedUtc { get; set; } = DateTime.UtcNow;

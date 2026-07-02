@@ -1363,6 +1363,84 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// Rebuilds <paramref name="session"/>'s <c>NowPlayingQueue</c> from a
+    /// <see cref="Playback.DeviceQueue"/>'s current (possibly reshuffled) item
+    /// order, preserving <c>PlaylistItemId</c> and other metadata on items that
+    /// already exist. Used by the shuffle handlers so that
+    /// <c>PlaybackNearlyFinishedEventHandler.ResolveNextItemId</c> advances
+    /// through the shuffled order rather than the original one.
+    /// </summary>
+    /// <param name="queue">The device queue whose item order to mirror.</param>
+    /// <param name="session">The Jellyfin session whose NowPlayingQueue to rebuild.</param>
+    protected static void MirrorQueueToSession(Playback.DeviceQueue queue, SessionInfo session)
+    {
+        if (queue.ItemIds.Count == 0)
+        {
+            return;
+        }
+
+        // Index existing queue items by Id (first occurrence wins) so metadata
+        // (e.g. PlaylistItemId) is retained. Playlists may contain duplicate
+        // tracks, so ToDictionary would throw — use TryAdd instead.
+        var existing = new Dictionary<Guid, QueueItem>();
+        foreach (QueueItem q in session.NowPlayingQueue)
+        {
+            existing.TryAdd(q.Id, q);
+        }
+
+        var deviceIds = new HashSet<Guid>();
+        var rebuilt = new List<QueueItem>(queue.ItemIds.Count);
+        foreach (string id in queue.ItemIds)
+        {
+            if (Guid.TryParse(id, out Guid guid))
+            {
+                deviceIds.Add(guid);
+                rebuilt.Add(existing.TryGetValue(guid, out QueueItem? qi)
+                    ? qi
+                    : new QueueItem { Id = guid });
+            }
+        }
+
+        // Preserve any session items not represented in the device queue (e.g.
+        // progressive-continuation tracks) so the playable queue never shrinks.
+        foreach (QueueItem qi in session.NowPlayingQueue)
+        {
+            if (!deviceIds.Contains(qi.Id))
+            {
+                rebuilt.Add(qi);
+            }
+        }
+
+        session.NowPlayingQueue = rebuilt;
+    }
+
+    /// <summary>
+    /// Reports playback progress to Jellyfin so the session PlayState (and the
+    /// dashboard UI) stays in sync with the plugin's view. Shared by the shuffle
+    /// handlers, which differ only in the <paramref name="order"/> they report.
+    /// </summary>
+    /// <param name="session">The Jellyfin session to report on.</param>
+    /// <param name="itemId">The currently-playing item ID.</param>
+    /// <param name="offsetMs">The current playback offset in milliseconds.</param>
+    /// <param name="order">The playback order to report (Shuffle or Default).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A task representing the async progress report.</returns>
+    protected async Task ReportPlaybackProgress(SessionInfo session, Guid itemId, long offsetMs, PlaybackOrder order, CancellationToken cancellationToken)
+    {
+        long positionTicks = TimeSpan.FromMilliseconds(offsetMs).Ticks;
+        PlaybackProgressInfo info = new PlaybackProgressInfo
+        {
+            SessionId = session.Id,
+            ItemId = itemId,
+            RepeatMode = session.PlayState?.RepeatMode ?? RepeatMode.RepeatNone,
+            PositionTicks = positionTicks,
+            PlaybackOrder = order,
+        };
+
+        await SessionManager.OnPlaybackProgress(info, true).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Find tracks with genres matching the given audio item.
     /// Returns deduplicated results excluding the current item.
     /// </summary>

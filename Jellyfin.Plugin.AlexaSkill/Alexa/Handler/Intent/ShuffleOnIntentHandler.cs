@@ -16,11 +16,15 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
 public class ShuffleOnIntentHandler : BaseHandler
 {
+    private readonly Playback.DeviceQueueManager? _queueManager;
+
     public ShuffleOnIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
+        ILoggerFactory loggerFactory,
+        Playback.DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
+        _queueManager = queueManager;
     }
 
     /// <inheritdoc/>
@@ -31,7 +35,11 @@ public class ShuffleOnIntentHandler : BaseHandler
     }
 
     /// <summary>
-    /// Set the currently started media as playing.
+    /// Enable shuffle for the current device queue. Sets the authoritative
+    /// per-device <see cref="Playback.DeviceQueue.PlaybackOrder"/> (the state
+    /// <c>ResolveNextItemId</c> reads) AND physically reshuffles the remaining
+    /// queue so sequential advancement plays a shuffled order. Also mirrors the
+    /// new order into <c>session.NowPlayingQueue</c>.
     /// </summary>
     /// <param name="request">The skill request which should be handled.</param>
     /// <param name="context">The context of the skill intent request.</param>
@@ -42,20 +50,31 @@ public class ShuffleOnIntentHandler : BaseHandler
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         PlaybackState requestState = context.AudioPlayer;
+        string deviceId = context.System.Device.DeviceID;
+        string? currentToken = requestState.Token;
+        Guid currentId = Guid.Empty;
+        bool tokenValid = currentToken != null && Guid.TryParse(currentToken, out currentId);
 
-        Logger.LogDebug("ShuffleOn: entered, token={Token}, offset={OffsetMs}ms", requestState.Token, requestState.OffsetInMilliseconds);
+        Logger.LogDebug("ShuffleOn: entered, token={Token}, offset={OffsetMs}ms", currentToken, requestState.OffsetInMilliseconds);
 
-        long positionTicks = TimeSpan.FromMilliseconds(requestState.OffsetInMilliseconds).Ticks;
-        PlaybackProgressInfo info = new PlaybackProgressInfo
+        // Keep Jellyfin's session PlayState in sync (shown in the dashboard UI).
+        if (tokenValid)
         {
-            SessionId = session.Id,
-            ItemId = new Guid(requestState.Token),
-            RepeatMode = session.PlayState.RepeatMode,
-            PositionTicks = positionTicks,
-            PlaybackOrder = PlaybackOrder.Shuffle,
-        };
+            await ReportPlaybackProgress(session, currentId, requestState.OffsetInMilliseconds, PlaybackOrder.Shuffle, cancellationToken).ConfigureAwait(false);
+        }
 
-        await SessionManager.OnPlaybackProgress(info, true).ConfigureAwait(false);
+        // Authoritative plugin-side state: persisted per-device, read by the resolver.
+        // Set even for short queues (where ShuffleRemaining is a no-op) so the flag
+        // always reflects the user's intent.
+        _queueManager?.SetPlaybackOrder(deviceId, "Shuffle");
+
+        // Physically reorder the remaining queue (current item stays first) so the
+        // effect does not depend on the indirect Jellyfin PlayState flag being read.
+        if (_queueManager != null && tokenValid)
+        {
+            _queueManager.ShuffleRemaining(deviceId, currentToken!);
+            MirrorQueueToSession(_queueManager.GetOrCreateQueue(deviceId), session);
+        }
 
         return ResponseBuilder.Empty();
     }

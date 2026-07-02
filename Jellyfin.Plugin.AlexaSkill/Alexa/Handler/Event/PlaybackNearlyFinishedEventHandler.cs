@@ -98,12 +98,14 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         TryFetchContinuationBatch(session, context);
 
         Guid? nextItemId = ResolveNextItemId(session, context);
+        var (resolvedOrder, resolvedReshuffled) = ResolvePlaybackOrder(session, context);
 
         Logger.LogDebug(
-            "PlaybackNearlyFinished: resolved next item={NextItemId}, loop={LoopMode}, shuffle={Shuffle}",
+            "PlaybackNearlyFinished: resolved next item={NextItemId}, loop={LoopMode}, shuffle={Shuffle} (reshuffledQueue={Reshuffled})",
             nextItemId,
             session.PlayState?.RepeatMode ?? RepeatMode.RepeatNone,
-            session.PlayState?.PlaybackOrder ?? PlaybackOrder.Default);
+            resolvedOrder,
+            resolvedReshuffled);
 
         // If no next item and radio mode is on, auto-populate similar tracks
         if (nextItemId == null && RadioModeState.IsEnabled(session.UserId, context.System.Device.DeviceID))
@@ -178,11 +180,12 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         string audioUrl = GetStreamUrl(itemId, user);
 
         Logger.LogInformation(
-            "Pre-fetching next track for gapless playback: {ItemName} ({ItemId}), loop={LoopMode}, shuffle={Shuffle}",
+            "Pre-fetching next track for gapless playback: {ItemName} ({ItemId}), loop={LoopMode}, shuffle={Shuffle} (reshuffledQueue={Reshuffled})",
             item.Name,
             itemId,
             session.PlayState?.RepeatMode ?? RepeatMode.RepeatNone,
-            session.PlayState?.PlaybackOrder ?? PlaybackOrder.Default);
+            resolvedOrder,
+            resolvedReshuffled);
 
         return BuildAudioPlayerResponse(PlayBehavior.Enqueue, audioUrl, itemId, item, user, context);
     }
@@ -278,6 +281,31 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     }
 
     /// <summary>
+    /// Resolves the effective playback order and whether the queue was physically
+    /// reshuffled by <c>ShuffleOnIntentHandler</c>. The authoritative source is the
+    /// persisted per-device queue (written by the shuffle handlers); the Jellyfin
+    /// session PlayState is only used as a fallback when no device queue exists.
+    /// Shared by <see cref="ResolveNextItemId"/> (decision) and the debug/Info log
+    /// lines (so they report the value actually used, not the secondary PlayState).
+    /// </summary>
+    /// <param name="session">The current Jellyfin session (fallback source).</param>
+    /// <param name="context">The Alexa context for device identification.</param>
+    /// <returns>The resolved playback order and whether the queue was reshuffled.</returns>
+    private (PlaybackOrder Order, bool Reshuffled) ResolvePlaybackOrder(SessionInfo session, Context context)
+    {
+        Playback.DeviceQueue? deviceQueue = _queueManager?.GetQueue(context.System.Device.DeviceID);
+        if (deviceQueue == null)
+        {
+            return (session.PlayState?.PlaybackOrder ?? PlaybackOrder.Default, false);
+        }
+
+        PlaybackOrder order = string.Equals(deviceQueue.PlaybackOrder, "Shuffle", StringComparison.Ordinal)
+            ? PlaybackOrder.Shuffle
+            : PlaybackOrder.Default;
+        return (order, deviceQueue.OriginalItemIds != null);
+    }
+
+    /// <summary>
     /// Resolve the next item ID based on the current position in the queue,
     /// taking loop and shuffle modes into account.
     /// </summary>
@@ -287,7 +315,13 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     private Guid? ResolveNextItemId(SessionInfo session, Context context)
     {
         RepeatMode repeatMode = session.PlayState?.RepeatMode ?? RepeatMode.RepeatNone;
-        PlaybackOrder playbackOrder = session.PlayState?.PlaybackOrder ?? PlaybackOrder.Default;
+
+        // playbackOrder + reshuffledQueue come from the authoritative per-device
+        // queue (see ResolvePlaybackOrder). When reshuffledQueue is true the queue
+        // order IS the shuffle order, so we advance sequentially (each track once);
+        // the random-pick fallback below only runs for shuffle requested WITHOUT a
+        // physical reshuffle.
+        var (playbackOrder, reshuffledQueue) = ResolvePlaybackOrder(session, context);
 
         if (session.NowPlayingQueue.Count == 0)
         {
@@ -328,8 +362,11 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             return session.NowPlayingQueue[currentIndex].Id;
         }
 
-        // Shuffle mode: pick a random next track from the queue (avoiding immediate repeat if possible)
-        if (playbackOrder == PlaybackOrder.Shuffle && session.NowPlayingQueue.Count > 1)
+        // Shuffle mode (only when the queue was NOT physically reshuffled): pick a
+        // random next track from the queue, avoiding immediate repeat. A reshuffled
+        // queue falls through to sequential advance so its carefully shuffled order
+        // is honored (each track once) rather than re-randomized every step.
+        if (playbackOrder == PlaybackOrder.Shuffle && !reshuffledQueue && session.NowPlayingQueue.Count > 1)
         {
             int nextIndex;
             if (session.NowPlayingQueue.Count == 2)
