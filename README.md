@@ -289,6 +289,8 @@ The final step links your Jellyfin account to the Alexa skill:
 
 ## Testing
 
+> 🎨 **[Voice Command Explorer](https://paoloantinori.github.io/jellyfin-alexa-plugin/)** — browse every voice command and how it routes between intents, interactively, in all 17 locales (utterance transition graphs).
+
 ### Automated NLU Tests
 
 Validate that Alexa's NLU resolves utterances to the correct intents using the SMAPI `profile-nlu` endpoint:
@@ -396,6 +398,17 @@ To switch to different content while something is playing, include the skill's n
 - Italian: *"Alexa, chiedi a **Mia Collezione** di riprodurre la playlist **Rock**"*
 
 This is an inherent limitation of custom Alexa skills: they cannot register as the device's default music player, so follow-on "play X" requests need the explicit invocation. It is not a bug in the plugin and behaves the same on every custom Jellyfin/Alexa skill.
+
+### Why doesn't "stop" or "next" work while music is playing?
+
+During playback, Alexa reliably routes **pause** and **resume** back to the skill (it's the active audio player), but generic music commands like **"stop"**, **"next"**, and **"previous"** are frequently claimed by your **default music service** (Amazon Music, Spotify, …). The skill never receives them, so nothing happens. You can confirm this in the Alexa simulator's debug output, where the utterance resolves to `<IntentForDifferentSkill>`.
+
+This is the same platform limitation as the "play different content" case above — custom skills can't own the device's music slot — not a plugin bug.
+
+Workarounds:
+
+- Use **"Alexa, pause"** (Italian: *"Alexa, pausa"*) — pause always routes to the active player and stops the audio.
+- Force the skill with its invocation name: English *"Alexa, ask Jellyfin Player to stop"*, Italian *"Alexa, chiedi a Mia Collezione ferma"* (use the imperative **ferma**/**stop**, not the infinitive "fermare").
 
 ## Troubleshooting
 
