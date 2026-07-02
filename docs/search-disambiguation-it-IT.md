@@ -52,6 +52,21 @@ graph TD
     Start --> Recommend["RecommendIntent<br/>Consiglia {media_type}"]
     Recommend --> Disambig
 
+
+    Start --> FindSong["FindSongIntent<br/>song search by title keywords"]
+    FindSong --> SongChain{"3-stage search chain"}
+    SongChain -->|"Stage 1: NgramIndex.Search"| Ngram["bigram / token lookup"]
+    Ngram --> ChainHit{"hit?"}
+    ChainHit -->|"miss"| Phonetic["Stage 2: SearchPhonetic<br/>(Double Metaphone)"]
+    Phonetic --> ChainHit2{"hit?"}
+    ChainHit2 -->|"miss"| DbFallback["Stage 3: DB fallback<br/>(NameContains + KeywordMatcher)"]
+    ChainHit -->|"hit"| ScoreCheck
+    ChainHit2 -->|"hit"| ScoreCheck
+    DbFallback --> ScoreCheck
+    FindSong -->|"no titleKeywords"| ElicitSong["Dialog.ElicitSlot<br/>TitleKeywords"]
+    ElicitSong --> FindSong
+    style FindSong fill:#009688,color:#fff
+
     style AutoPlay fill:#4CAF50,color:#fff
     style AutoPlayNear fill:#8BC34A,color:#fff
     style Carousel fill:#9C27B0,color:#fff

@@ -1,4 +1,4 @@
-# Search & Disambiguation (en-US)
+# Search & Disambiguation (en-CA)
 
 ```mermaid
 graph TD

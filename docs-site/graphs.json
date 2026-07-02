@@ -24176,6 +24176,40 @@
           {
             "id": "Recommend",
             "label": "RecommendIntent\nأوصني بشيء"
+          },
+          {
+            "id": "FindSong",
+            "label": "FindSongIntent\nsong search by title keywords",
+            "fill": "#009688",
+            "textColor": "#fff"
+          },
+          {
+            "id": "SongChain",
+            "label": "SongChain"
+          },
+          {
+            "id": "Ngram",
+            "label": "bigram / token lookup"
+          },
+          {
+            "id": "ChainHit",
+            "label": "ChainHit"
+          },
+          {
+            "id": "Phonetic",
+            "label": "Stage 2: SearchPhonetic\n(Double Metaphone)"
+          },
+          {
+            "id": "ChainHit2",
+            "label": "ChainHit2"
+          },
+          {
+            "id": "DbFallback",
+            "label": "Stage 3: DB fallback\n(NameContains + KeywordMatcher)"
+          },
+          {
+            "id": "ElicitSong",
+            "label": "Dialog.ElicitSlot\nTitleKeywords"
           }
         ],
         "edges": [
@@ -24394,6 +24428,78 @@
             "target": "Disambig",
             "label": "",
             "style": "solid"
+          },
+          {
+            "source": "Start",
+            "target": "FindSong",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "SongChain",
+            "target": "Ngram",
+            "label": "Stage 1: NgramIndex.Search",
+            "style": "solid"
+          },
+          {
+            "source": "Ngram",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "Phonetic",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "Phonetic",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "DbFallback",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "DbFallback",
+            "target": "ScoreCheck",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": "ElicitSong",
+            "label": "no titleKeywords",
+            "style": "solid"
+          },
+          {
+            "source": "ElicitSong",
+            "target": "FindSong",
+            "label": "",
+            "style": "solid"
           }
         ]
       },
@@ -24519,6 +24625,40 @@
           {
             "id": "Recommend",
             "label": "RecommendIntent\nempfehle etwas"
+          },
+          {
+            "id": "FindSong",
+            "label": "FindSongIntent\nsong search by title keywords",
+            "fill": "#009688",
+            "textColor": "#fff"
+          },
+          {
+            "id": "SongChain",
+            "label": "SongChain"
+          },
+          {
+            "id": "Ngram",
+            "label": "bigram / token lookup"
+          },
+          {
+            "id": "ChainHit",
+            "label": "ChainHit"
+          },
+          {
+            "id": "Phonetic",
+            "label": "Stage 2: SearchPhonetic\n(Double Metaphone)"
+          },
+          {
+            "id": "ChainHit2",
+            "label": "ChainHit2"
+          },
+          {
+            "id": "DbFallback",
+            "label": "Stage 3: DB fallback\n(NameContains + KeywordMatcher)"
+          },
+          {
+            "id": "ElicitSong",
+            "label": "Dialog.ElicitSlot\nTitleKeywords"
           }
         ],
         "edges": [
@@ -24737,6 +24877,78 @@
             "target": "Disambig",
             "label": "",
             "style": "solid"
+          },
+          {
+            "source": "Start",
+            "target": "FindSong",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "SongChain",
+            "target": "Ngram",
+            "label": "Stage 1: NgramIndex.Search",
+            "style": "solid"
+          },
+          {
+            "source": "Ngram",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "Phonetic",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "Phonetic",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "DbFallback",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "DbFallback",
+            "target": "ScoreCheck",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": "ElicitSong",
+            "label": "no titleKeywords",
+            "style": "solid"
+          },
+          {
+            "source": "ElicitSong",
+            "target": "FindSong",
+            "label": "",
+            "style": "solid"
           }
         ]
       },
@@ -24862,6 +25074,40 @@
           {
             "id": "Recommend",
             "label": "RecommendIntent\nrecommend {media_type}"
+          },
+          {
+            "id": "FindSong",
+            "label": "FindSongIntent\nsong search by title keywords",
+            "fill": "#009688",
+            "textColor": "#fff"
+          },
+          {
+            "id": "SongChain",
+            "label": "SongChain"
+          },
+          {
+            "id": "Ngram",
+            "label": "bigram / token lookup"
+          },
+          {
+            "id": "ChainHit",
+            "label": "ChainHit"
+          },
+          {
+            "id": "Phonetic",
+            "label": "Stage 2: SearchPhonetic\n(Double Metaphone)"
+          },
+          {
+            "id": "ChainHit2",
+            "label": "ChainHit2"
+          },
+          {
+            "id": "DbFallback",
+            "label": "Stage 3: DB fallback\n(NameContains + KeywordMatcher)"
+          },
+          {
+            "id": "ElicitSong",
+            "label": "Dialog.ElicitSlot\nTitleKeywords"
           }
         ],
         "edges": [
@@ -25078,6 +25324,78 @@
           {
             "source": "Recommend",
             "target": "Disambig",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "Start",
+            "target": "FindSong",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "SongChain",
+            "target": "Ngram",
+            "label": "Stage 1: NgramIndex.Search",
+            "style": "solid"
+          },
+          {
+            "source": "Ngram",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "Phonetic",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "Phonetic",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "DbFallback",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "DbFallback",
+            "target": "ScoreCheck",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": "ElicitSong",
+            "label": "no titleKeywords",
+            "style": "solid"
+          },
+          {
+            "source": "ElicitSong",
+            "target": "FindSong",
             "label": "",
             "style": "solid"
           }
@@ -25205,6 +25523,40 @@
           {
             "id": "Recommend",
             "label": "RecommendIntent\nrecommend {media_type}"
+          },
+          {
+            "id": "FindSong",
+            "label": "FindSongIntent\nsong search by title keywords",
+            "fill": "#009688",
+            "textColor": "#fff"
+          },
+          {
+            "id": "SongChain",
+            "label": "SongChain"
+          },
+          {
+            "id": "Ngram",
+            "label": "bigram / token lookup"
+          },
+          {
+            "id": "ChainHit",
+            "label": "ChainHit"
+          },
+          {
+            "id": "Phonetic",
+            "label": "Stage 2: SearchPhonetic\n(Double Metaphone)"
+          },
+          {
+            "id": "ChainHit2",
+            "label": "ChainHit2"
+          },
+          {
+            "id": "DbFallback",
+            "label": "Stage 3: DB fallback\n(NameContains + KeywordMatcher)"
+          },
+          {
+            "id": "ElicitSong",
+            "label": "Dialog.ElicitSlot\nTitleKeywords"
           }
         ],
         "edges": [
@@ -25421,6 +25773,78 @@
           {
             "source": "Recommend",
             "target": "Disambig",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "Start",
+            "target": "FindSong",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "SongChain",
+            "target": "Ngram",
+            "label": "Stage 1: NgramIndex.Search",
+            "style": "solid"
+          },
+          {
+            "source": "Ngram",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "Phonetic",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "Phonetic",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "DbFallback",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "DbFallback",
+            "target": "ScoreCheck",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": "ElicitSong",
+            "label": "no titleKeywords",
+            "style": "solid"
+          },
+          {
+            "source": "ElicitSong",
+            "target": "FindSong",
             "label": "",
             "style": "solid"
           }
@@ -25548,6 +25972,40 @@
           {
             "id": "Recommend",
             "label": "RecommendIntent\nrecommend {media_type}"
+          },
+          {
+            "id": "FindSong",
+            "label": "FindSongIntent\nsong search by title keywords",
+            "fill": "#009688",
+            "textColor": "#fff"
+          },
+          {
+            "id": "SongChain",
+            "label": "SongChain"
+          },
+          {
+            "id": "Ngram",
+            "label": "bigram / token lookup"
+          },
+          {
+            "id": "ChainHit",
+            "label": "ChainHit"
+          },
+          {
+            "id": "Phonetic",
+            "label": "Stage 2: SearchPhonetic\n(Double Metaphone)"
+          },
+          {
+            "id": "ChainHit2",
+            "label": "ChainHit2"
+          },
+          {
+            "id": "DbFallback",
+            "label": "Stage 3: DB fallback\n(NameContains + KeywordMatcher)"
+          },
+          {
+            "id": "ElicitSong",
+            "label": "Dialog.ElicitSlot\nTitleKeywords"
           }
         ],
         "edges": [
@@ -25764,6 +26222,78 @@
           {
             "source": "Recommend",
             "target": "Disambig",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "Start",
+            "target": "FindSong",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "SongChain",
+            "target": "Ngram",
+            "label": "Stage 1: NgramIndex.Search",
+            "style": "solid"
+          },
+          {
+            "source": "Ngram",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "Phonetic",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "Phonetic",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "DbFallback",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "DbFallback",
+            "target": "ScoreCheck",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": "ElicitSong",
+            "label": "no titleKeywords",
+            "style": "solid"
+          },
+          {
+            "source": "ElicitSong",
+            "target": "FindSong",
             "label": "",
             "style": "solid"
           }
@@ -25891,6 +26421,40 @@
           {
             "id": "Recommend",
             "label": "RecommendIntent\nrecommend {media_type}"
+          },
+          {
+            "id": "FindSong",
+            "label": "FindSongIntent\nsong search by title keywords",
+            "fill": "#009688",
+            "textColor": "#fff"
+          },
+          {
+            "id": "SongChain",
+            "label": "SongChain"
+          },
+          {
+            "id": "Ngram",
+            "label": "bigram / token lookup"
+          },
+          {
+            "id": "ChainHit",
+            "label": "ChainHit"
+          },
+          {
+            "id": "Phonetic",
+            "label": "Stage 2: SearchPhonetic\n(Double Metaphone)"
+          },
+          {
+            "id": "ChainHit2",
+            "label": "ChainHit2"
+          },
+          {
+            "id": "DbFallback",
+            "label": "Stage 3: DB fallback\n(NameContains + KeywordMatcher)"
+          },
+          {
+            "id": "ElicitSong",
+            "label": "Dialog.ElicitSlot\nTitleKeywords"
           }
         ],
         "edges": [
@@ -26107,6 +26671,78 @@
           {
             "source": "Recommend",
             "target": "Disambig",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "Start",
+            "target": "FindSong",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "SongChain",
+            "target": "Ngram",
+            "label": "Stage 1: NgramIndex.Search",
+            "style": "solid"
+          },
+          {
+            "source": "Ngram",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "Phonetic",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "Phonetic",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "DbFallback",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "DbFallback",
+            "target": "ScoreCheck",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": "ElicitSong",
+            "label": "no titleKeywords",
+            "style": "solid"
+          },
+          {
+            "source": "ElicitSong",
+            "target": "FindSong",
             "label": "",
             "style": "solid"
           }
@@ -26234,6 +26870,40 @@
           {
             "id": "Recommend",
             "label": "RecommendIntent\nrecommend {media_type}"
+          },
+          {
+            "id": "FindSong",
+            "label": "FindSongIntent\nsong search by title keywords",
+            "fill": "#009688",
+            "textColor": "#fff"
+          },
+          {
+            "id": "SongChain",
+            "label": "SongChain"
+          },
+          {
+            "id": "Ngram",
+            "label": "bigram / token lookup"
+          },
+          {
+            "id": "ChainHit",
+            "label": "ChainHit"
+          },
+          {
+            "id": "Phonetic",
+            "label": "Stage 2: SearchPhonetic\n(Double Metaphone)"
+          },
+          {
+            "id": "ChainHit2",
+            "label": "ChainHit2"
+          },
+          {
+            "id": "DbFallback",
+            "label": "Stage 3: DB fallback\n(NameContains + KeywordMatcher)"
+          },
+          {
+            "id": "ElicitSong",
+            "label": "Dialog.ElicitSlot\nTitleKeywords"
           }
         ],
         "edges": [
@@ -26452,6 +27122,78 @@
             "target": "Disambig",
             "label": "",
             "style": "solid"
+          },
+          {
+            "source": "Start",
+            "target": "FindSong",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "SongChain",
+            "target": "Ngram",
+            "label": "Stage 1: NgramIndex.Search",
+            "style": "solid"
+          },
+          {
+            "source": "Ngram",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "Phonetic",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "Phonetic",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "DbFallback",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "DbFallback",
+            "target": "ScoreCheck",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": "ElicitSong",
+            "label": "no titleKeywords",
+            "style": "solid"
+          },
+          {
+            "source": "ElicitSong",
+            "target": "FindSong",
+            "label": "",
+            "style": "solid"
           }
         ]
       },
@@ -26577,6 +27319,40 @@
           {
             "id": "Recommend",
             "label": "RecommendIntent\nrecomienda algo"
+          },
+          {
+            "id": "FindSong",
+            "label": "FindSongIntent\nsong search by title keywords",
+            "fill": "#009688",
+            "textColor": "#fff"
+          },
+          {
+            "id": "SongChain",
+            "label": "SongChain"
+          },
+          {
+            "id": "Ngram",
+            "label": "bigram / token lookup"
+          },
+          {
+            "id": "ChainHit",
+            "label": "ChainHit"
+          },
+          {
+            "id": "Phonetic",
+            "label": "Stage 2: SearchPhonetic\n(Double Metaphone)"
+          },
+          {
+            "id": "ChainHit2",
+            "label": "ChainHit2"
+          },
+          {
+            "id": "DbFallback",
+            "label": "Stage 3: DB fallback\n(NameContains + KeywordMatcher)"
+          },
+          {
+            "id": "ElicitSong",
+            "label": "Dialog.ElicitSlot\nTitleKeywords"
           }
         ],
         "edges": [
@@ -26787,6 +27563,78 @@
           {
             "source": "Recommend",
             "target": "Disambig",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "Start",
+            "target": "FindSong",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "SongChain",
+            "target": "Ngram",
+            "label": "Stage 1: NgramIndex.Search",
+            "style": "solid"
+          },
+          {
+            "source": "Ngram",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "Phonetic",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "Phonetic",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "DbFallback",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "DbFallback",
+            "target": "ScoreCheck",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": "ElicitSong",
+            "label": "no titleKeywords",
+            "style": "solid"
+          },
+          {
+            "source": "ElicitSong",
+            "target": "FindSong",
             "label": "",
             "style": "solid"
           }
@@ -26914,6 +27762,40 @@
           {
             "id": "Recommend",
             "label": "RecommendIntent\nrecomienda algo"
+          },
+          {
+            "id": "FindSong",
+            "label": "FindSongIntent\nsong search by title keywords",
+            "fill": "#009688",
+            "textColor": "#fff"
+          },
+          {
+            "id": "SongChain",
+            "label": "SongChain"
+          },
+          {
+            "id": "Ngram",
+            "label": "bigram / token lookup"
+          },
+          {
+            "id": "ChainHit",
+            "label": "ChainHit"
+          },
+          {
+            "id": "Phonetic",
+            "label": "Stage 2: SearchPhonetic\n(Double Metaphone)"
+          },
+          {
+            "id": "ChainHit2",
+            "label": "ChainHit2"
+          },
+          {
+            "id": "DbFallback",
+            "label": "Stage 3: DB fallback\n(NameContains + KeywordMatcher)"
+          },
+          {
+            "id": "ElicitSong",
+            "label": "Dialog.ElicitSlot\nTitleKeywords"
           }
         ],
         "edges": [
@@ -27124,6 +28006,78 @@
           {
             "source": "Recommend",
             "target": "Disambig",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "Start",
+            "target": "FindSong",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "SongChain",
+            "target": "Ngram",
+            "label": "Stage 1: NgramIndex.Search",
+            "style": "solid"
+          },
+          {
+            "source": "Ngram",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "Phonetic",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "Phonetic",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "DbFallback",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "DbFallback",
+            "target": "ScoreCheck",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": "ElicitSong",
+            "label": "no titleKeywords",
+            "style": "solid"
+          },
+          {
+            "source": "ElicitSong",
+            "target": "FindSong",
             "label": "",
             "style": "solid"
           }
@@ -27251,6 +28205,40 @@
           {
             "id": "Recommend",
             "label": "RecommendIntent\nrecomienda algo"
+          },
+          {
+            "id": "FindSong",
+            "label": "FindSongIntent\nsong search by title keywords",
+            "fill": "#009688",
+            "textColor": "#fff"
+          },
+          {
+            "id": "SongChain",
+            "label": "SongChain"
+          },
+          {
+            "id": "Ngram",
+            "label": "bigram / token lookup"
+          },
+          {
+            "id": "ChainHit",
+            "label": "ChainHit"
+          },
+          {
+            "id": "Phonetic",
+            "label": "Stage 2: SearchPhonetic\n(Double Metaphone)"
+          },
+          {
+            "id": "ChainHit2",
+            "label": "ChainHit2"
+          },
+          {
+            "id": "DbFallback",
+            "label": "Stage 3: DB fallback\n(NameContains + KeywordMatcher)"
+          },
+          {
+            "id": "ElicitSong",
+            "label": "Dialog.ElicitSlot\nTitleKeywords"
           }
         ],
         "edges": [
@@ -27463,6 +28451,78 @@
             "target": "Disambig",
             "label": "",
             "style": "solid"
+          },
+          {
+            "source": "Start",
+            "target": "FindSong",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "SongChain",
+            "target": "Ngram",
+            "label": "Stage 1: NgramIndex.Search",
+            "style": "solid"
+          },
+          {
+            "source": "Ngram",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "Phonetic",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "Phonetic",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "DbFallback",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "DbFallback",
+            "target": "ScoreCheck",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": "ElicitSong",
+            "label": "no titleKeywords",
+            "style": "solid"
+          },
+          {
+            "source": "ElicitSong",
+            "target": "FindSong",
+            "label": "",
+            "style": "solid"
           }
         ]
       },
@@ -27588,6 +28648,40 @@
           {
             "id": "Recommend",
             "label": "RecommendIntent\nrecommande quelque chose"
+          },
+          {
+            "id": "FindSong",
+            "label": "FindSongIntent\nsong search by title keywords",
+            "fill": "#009688",
+            "textColor": "#fff"
+          },
+          {
+            "id": "SongChain",
+            "label": "SongChain"
+          },
+          {
+            "id": "Ngram",
+            "label": "bigram / token lookup"
+          },
+          {
+            "id": "ChainHit",
+            "label": "ChainHit"
+          },
+          {
+            "id": "Phonetic",
+            "label": "Stage 2: SearchPhonetic\n(Double Metaphone)"
+          },
+          {
+            "id": "ChainHit2",
+            "label": "ChainHit2"
+          },
+          {
+            "id": "DbFallback",
+            "label": "Stage 3: DB fallback\n(NameContains + KeywordMatcher)"
+          },
+          {
+            "id": "ElicitSong",
+            "label": "Dialog.ElicitSlot\nTitleKeywords"
           }
         ],
         "edges": [
@@ -27804,6 +28898,78 @@
           {
             "source": "Recommend",
             "target": "Disambig",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "Start",
+            "target": "FindSong",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "SongChain",
+            "target": "Ngram",
+            "label": "Stage 1: NgramIndex.Search",
+            "style": "solid"
+          },
+          {
+            "source": "Ngram",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "Phonetic",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "Phonetic",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "DbFallback",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "DbFallback",
+            "target": "ScoreCheck",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": "ElicitSong",
+            "label": "no titleKeywords",
+            "style": "solid"
+          },
+          {
+            "source": "ElicitSong",
+            "target": "FindSong",
             "label": "",
             "style": "solid"
           }
@@ -27931,6 +29097,40 @@
           {
             "id": "Recommend",
             "label": "RecommendIntent\nrecommande quelque chose"
+          },
+          {
+            "id": "FindSong",
+            "label": "FindSongIntent\nsong search by title keywords",
+            "fill": "#009688",
+            "textColor": "#fff"
+          },
+          {
+            "id": "SongChain",
+            "label": "SongChain"
+          },
+          {
+            "id": "Ngram",
+            "label": "bigram / token lookup"
+          },
+          {
+            "id": "ChainHit",
+            "label": "ChainHit"
+          },
+          {
+            "id": "Phonetic",
+            "label": "Stage 2: SearchPhonetic\n(Double Metaphone)"
+          },
+          {
+            "id": "ChainHit2",
+            "label": "ChainHit2"
+          },
+          {
+            "id": "DbFallback",
+            "label": "Stage 3: DB fallback\n(NameContains + KeywordMatcher)"
+          },
+          {
+            "id": "ElicitSong",
+            "label": "Dialog.ElicitSlot\nTitleKeywords"
           }
         ],
         "edges": [
@@ -28149,6 +29349,78 @@
             "target": "Disambig",
             "label": "",
             "style": "solid"
+          },
+          {
+            "source": "Start",
+            "target": "FindSong",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "SongChain",
+            "target": "Ngram",
+            "label": "Stage 1: NgramIndex.Search",
+            "style": "solid"
+          },
+          {
+            "source": "Ngram",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "Phonetic",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "Phonetic",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "DbFallback",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "DbFallback",
+            "target": "ScoreCheck",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": "ElicitSong",
+            "label": "no titleKeywords",
+            "style": "solid"
+          },
+          {
+            "source": "ElicitSong",
+            "target": "FindSong",
+            "label": "",
+            "style": "solid"
           }
         ]
       },
@@ -28274,6 +29546,40 @@
           {
             "id": "Recommend",
             "label": "RecommendIntent\nकुछ सुझाव दो"
+          },
+          {
+            "id": "FindSong",
+            "label": "FindSongIntent\nsong search by title keywords",
+            "fill": "#009688",
+            "textColor": "#fff"
+          },
+          {
+            "id": "SongChain",
+            "label": "SongChain"
+          },
+          {
+            "id": "Ngram",
+            "label": "bigram / token lookup"
+          },
+          {
+            "id": "ChainHit",
+            "label": "ChainHit"
+          },
+          {
+            "id": "Phonetic",
+            "label": "Stage 2: SearchPhonetic\n(Double Metaphone)"
+          },
+          {
+            "id": "ChainHit2",
+            "label": "ChainHit2"
+          },
+          {
+            "id": "DbFallback",
+            "label": "Stage 3: DB fallback\n(NameContains + KeywordMatcher)"
+          },
+          {
+            "id": "ElicitSong",
+            "label": "Dialog.ElicitSlot\nTitleKeywords"
           }
         ],
         "edges": [
@@ -28492,6 +29798,78 @@
             "target": "Disambig",
             "label": "",
             "style": "solid"
+          },
+          {
+            "source": "Start",
+            "target": "FindSong",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "SongChain",
+            "target": "Ngram",
+            "label": "Stage 1: NgramIndex.Search",
+            "style": "solid"
+          },
+          {
+            "source": "Ngram",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "Phonetic",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "Phonetic",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "DbFallback",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "DbFallback",
+            "target": "ScoreCheck",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": "ElicitSong",
+            "label": "no titleKeywords",
+            "style": "solid"
+          },
+          {
+            "source": "ElicitSong",
+            "target": "FindSong",
+            "label": "",
+            "style": "solid"
           }
         ]
       },
@@ -28617,6 +29995,40 @@
           {
             "id": "Recommend",
             "label": "RecommendIntent\nConsiglia {media_type}"
+          },
+          {
+            "id": "FindSong",
+            "label": "FindSongIntent\nsong search by title keywords",
+            "fill": "#009688",
+            "textColor": "#fff"
+          },
+          {
+            "id": "SongChain",
+            "label": "SongChain"
+          },
+          {
+            "id": "Ngram",
+            "label": "bigram / token lookup"
+          },
+          {
+            "id": "ChainHit",
+            "label": "ChainHit"
+          },
+          {
+            "id": "Phonetic",
+            "label": "Stage 2: SearchPhonetic\n(Double Metaphone)"
+          },
+          {
+            "id": "ChainHit2",
+            "label": "ChainHit2"
+          },
+          {
+            "id": "DbFallback",
+            "label": "Stage 3: DB fallback\n(NameContains + KeywordMatcher)"
+          },
+          {
+            "id": "ElicitSong",
+            "label": "Dialog.ElicitSlot\nTitleKeywords"
           }
         ],
         "edges": [
@@ -28829,6 +30241,78 @@
             "target": "Disambig",
             "label": "",
             "style": "solid"
+          },
+          {
+            "source": "Start",
+            "target": "FindSong",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "SongChain",
+            "target": "Ngram",
+            "label": "Stage 1: NgramIndex.Search",
+            "style": "solid"
+          },
+          {
+            "source": "Ngram",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "Phonetic",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "Phonetic",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "DbFallback",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "DbFallback",
+            "target": "ScoreCheck",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": "ElicitSong",
+            "label": "no titleKeywords",
+            "style": "solid"
+          },
+          {
+            "source": "ElicitSong",
+            "target": "FindSong",
+            "label": "",
+            "style": "solid"
           }
         ]
       },
@@ -28954,6 +30438,40 @@
           {
             "id": "Recommend",
             "label": "RecommendIntent\n何かおすすめは？"
+          },
+          {
+            "id": "FindSong",
+            "label": "FindSongIntent\nsong search by title keywords",
+            "fill": "#009688",
+            "textColor": "#fff"
+          },
+          {
+            "id": "SongChain",
+            "label": "SongChain"
+          },
+          {
+            "id": "Ngram",
+            "label": "bigram / token lookup"
+          },
+          {
+            "id": "ChainHit",
+            "label": "ChainHit"
+          },
+          {
+            "id": "Phonetic",
+            "label": "Stage 2: SearchPhonetic\n(Double Metaphone)"
+          },
+          {
+            "id": "ChainHit2",
+            "label": "ChainHit2"
+          },
+          {
+            "id": "DbFallback",
+            "label": "Stage 3: DB fallback\n(NameContains + KeywordMatcher)"
+          },
+          {
+            "id": "ElicitSong",
+            "label": "Dialog.ElicitSlot\nTitleKeywords"
           }
         ],
         "edges": [
@@ -29172,6 +30690,78 @@
             "target": "Disambig",
             "label": "",
             "style": "solid"
+          },
+          {
+            "source": "Start",
+            "target": "FindSong",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "SongChain",
+            "target": "Ngram",
+            "label": "Stage 1: NgramIndex.Search",
+            "style": "solid"
+          },
+          {
+            "source": "Ngram",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "Phonetic",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "Phonetic",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "DbFallback",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "DbFallback",
+            "target": "ScoreCheck",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": "ElicitSong",
+            "label": "no titleKeywords",
+            "style": "solid"
+          },
+          {
+            "source": "ElicitSong",
+            "target": "FindSong",
+            "label": "",
+            "style": "solid"
           }
         ]
       },
@@ -29297,6 +30887,40 @@
           {
             "id": "Recommend",
             "label": "RecommendIntent\nbeveel iets aan"
+          },
+          {
+            "id": "FindSong",
+            "label": "FindSongIntent\nsong search by title keywords",
+            "fill": "#009688",
+            "textColor": "#fff"
+          },
+          {
+            "id": "SongChain",
+            "label": "SongChain"
+          },
+          {
+            "id": "Ngram",
+            "label": "bigram / token lookup"
+          },
+          {
+            "id": "ChainHit",
+            "label": "ChainHit"
+          },
+          {
+            "id": "Phonetic",
+            "label": "Stage 2: SearchPhonetic\n(Double Metaphone)"
+          },
+          {
+            "id": "ChainHit2",
+            "label": "ChainHit2"
+          },
+          {
+            "id": "DbFallback",
+            "label": "Stage 3: DB fallback\n(NameContains + KeywordMatcher)"
+          },
+          {
+            "id": "ElicitSong",
+            "label": "Dialog.ElicitSlot\nTitleKeywords"
           }
         ],
         "edges": [
@@ -29515,6 +31139,78 @@
             "target": "Disambig",
             "label": "",
             "style": "solid"
+          },
+          {
+            "source": "Start",
+            "target": "FindSong",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "SongChain",
+            "target": "Ngram",
+            "label": "Stage 1: NgramIndex.Search",
+            "style": "solid"
+          },
+          {
+            "source": "Ngram",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "Phonetic",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "Phonetic",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "DbFallback",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "DbFallback",
+            "target": "ScoreCheck",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": "ElicitSong",
+            "label": "no titleKeywords",
+            "style": "solid"
+          },
+          {
+            "source": "ElicitSong",
+            "target": "FindSong",
+            "label": "",
+            "style": "solid"
           }
         ]
       },
@@ -29640,6 +31336,40 @@
           {
             "id": "Recommend",
             "label": "RecommendIntent\nrecomendar algo"
+          },
+          {
+            "id": "FindSong",
+            "label": "FindSongIntent\nsong search by title keywords",
+            "fill": "#009688",
+            "textColor": "#fff"
+          },
+          {
+            "id": "SongChain",
+            "label": "SongChain"
+          },
+          {
+            "id": "Ngram",
+            "label": "bigram / token lookup"
+          },
+          {
+            "id": "ChainHit",
+            "label": "ChainHit"
+          },
+          {
+            "id": "Phonetic",
+            "label": "Stage 2: SearchPhonetic\n(Double Metaphone)"
+          },
+          {
+            "id": "ChainHit2",
+            "label": "ChainHit2"
+          },
+          {
+            "id": "DbFallback",
+            "label": "Stage 3: DB fallback\n(NameContains + KeywordMatcher)"
+          },
+          {
+            "id": "ElicitSong",
+            "label": "Dialog.ElicitSlot\nTitleKeywords"
           }
         ],
         "edges": [
@@ -29856,6 +31586,78 @@
           {
             "source": "Recommend",
             "target": "Disambig",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "Start",
+            "target": "FindSong",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "SongChain",
+            "target": "Ngram",
+            "label": "Stage 1: NgramIndex.Search",
+            "style": "solid"
+          },
+          {
+            "source": "Ngram",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "Phonetic",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "Phonetic",
+            "target": null,
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "DbFallback",
+            "label": "miss",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "ChainHit2",
+            "target": "ScoreCheck",
+            "label": "hit",
+            "style": "solid"
+          },
+          {
+            "source": "DbFallback",
+            "target": "ScoreCheck",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "FindSong",
+            "target": "ElicitSong",
+            "label": "no titleKeywords",
+            "style": "solid"
+          },
+          {
+            "source": "ElicitSong",
+            "target": "FindSong",
             "label": "",
             "style": "solid"
           }
