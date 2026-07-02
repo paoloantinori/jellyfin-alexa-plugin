@@ -295,6 +295,14 @@
                 "changelog": "Fixed: asking Alexa to play a playlist always reported it as empty, even when the playlist contained tracks that played fine from the Jellyfin web UI (issue #10). Playlist members are now read through Jellyfin's own playlist API (the same one the web UI uses) instead of the album/children query, which returned nothing because playlists store their tracks as linked members rather than as parent-owned items. Affects every locale, not just es-MX. Large playlists also no longer re-scan the whole track list on each continuation batch.",
                 "targetAbi": "10.11.0.0",
                 "timestamp": "2026-06-27 08:56:46"
+            },
+            {
+                "version": "0.9.2.0",
+                "checksum": "placeholder",
+                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.9.2.0/AlexaSkill_0.9.2.0.zip",
+                "changelog": "placeholder",
+                "targetAbi": "10.11.0.0",
+                "timestamp": "2026-07-02 19:35:33"
             }
         ]
     }
