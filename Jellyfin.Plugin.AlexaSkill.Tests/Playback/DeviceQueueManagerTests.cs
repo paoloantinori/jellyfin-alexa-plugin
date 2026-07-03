@@ -441,4 +441,71 @@ public class DeviceQueueManagerTests : IDisposable
     {
         Assert.Equal(0, _manager.ActiveQueueCount);
     }
+
+    // =====================================================================
+    // SetShuffledQueue (JF-305: shuffle-at-start playlist qualifier)
+    // =====================================================================
+
+    [Fact]
+    public void SetShuffledQueue_ShufflesAllItems_StoresOriginal_SetsShuffleState()
+    {
+        List<string> ids = Enumerable.Range(0, 20).Select(i => i.ToString()).ToList();
+        _manager.SetShuffledQueue("dev", ids, new Random(42));
+
+        DeviceQueue q = _manager.GetOrCreateQueue("dev");
+
+        Assert.Equal("Shuffle", q.PlaybackOrder);
+        Assert.Equal(0, q.CurrentIndex);
+        Assert.NotNull(q.OriginalItemIds);
+        Assert.Equal(ids, q.OriginalItemIds);                                   // pre-shuffle order preserved
+        Assert.Equal(ids.Count, q.ItemIds.Count);                              // no loss/duplication
+        Assert.Equal(new HashSet<string>(ids), new HashSet<string>(q.ItemIds));    // same set of ids
+        Assert.NotEqual(ids, q.ItemIds);                                       // order changed (full list, incl pos 0)
+    }
+
+    [Fact]
+    public void SetShuffledQueue_MatchesSeededFisherYates()
+    {
+        List<string> ids = Enumerable.Range(0, 20).Select(i => i.ToString()).ToList();
+        List<string> expected = new(ids);
+        var rngExpected = new Random(42);
+        for (int i = expected.Count - 1; i > 0; i--)
+        {
+            int j = rngExpected.Next(i + 1);
+            (expected[i], expected[j]) = (expected[j], expected[i]);
+        }
+
+        _manager.SetShuffledQueue("dev", ids, new Random(42));
+        DeviceQueue q = _manager.GetOrCreateQueue("dev");
+
+        Assert.Equal(expected, q.ItemIds);
+        Assert.Equal(ids, q.OriginalItemIds);
+        Assert.NotEqual(ids[0], q.ItemIds[0]);   // position 0 changed — the FR's core requirement
+    }
+
+    [Fact]
+    public void SetShuffledQueue_SmallQueue_StillSetsState_PreservesItems()
+    {
+        var ids = new List<string> { "a", "b" };
+        _manager.SetShuffledQueue("dev", ids, new Random(1));
+
+        DeviceQueue q = _manager.GetOrCreateQueue("dev");
+
+        Assert.Equal("Shuffle", q.PlaybackOrder);
+        Assert.NotNull(q.OriginalItemIds);
+        Assert.Equal(ids, q.OriginalItemIds);
+        Assert.Equal(2, q.ItemIds.Count);
+    }
+
+    [Fact]
+    public void SetShuffledQueue_PreservesItemPositionStateAcrossReset()
+    {
+        _manager.SetQueue("dev", new List<string> { "a", "b", "c" }, 0);
+        _manager.GetOrCreateQueue("dev").ItemPositionState["a"] = 1234L;
+
+        _manager.SetShuffledQueue("dev", new List<string> { "a", "b", "c" }, new Random(9));
+
+        DeviceQueue q = _manager.GetOrCreateQueue("dev");
+        Assert.Equal(1234L, q.ItemPositionState["a"]);
+    }
 }

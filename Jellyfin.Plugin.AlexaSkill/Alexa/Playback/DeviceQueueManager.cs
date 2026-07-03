@@ -146,6 +146,62 @@ public sealed class DeviceQueueManager : IDisposable
     }
 
     /// <summary>
+    /// Sets a freshly-shuffled queue for a device. Snapshots the original order into
+    /// <see cref="DeviceQueue.OriginalItemIds"/>, Fisher–Yates shuffles ALL items
+    /// (including position 0, so the first-played track is random), and sets
+    /// PlaybackOrder=Shuffle + CurrentIndex=0. Used by <c>ShufflePlayIntentHandler</c>
+    /// to start a playlist already shuffled. <paramref name="rng"/> is injectable for
+    /// deterministic unit tests; defaults to the process-global Random.Shared.
+    /// ADDITIVE: does not alter SetQueue/ShuffleRemaining/RestoreOrder (JF-301 path).
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    /// <param name="itemIds">The list of media item IDs to shuffle and store.</param>
+    /// <param name="rng">Optional injectable random source (defaults to Random.Shared).</param>
+    public void SetShuffledQueue(string deviceId, List<string> itemIds, Random? rng = null)
+    {
+        Random random = rng ?? Random.Shared;
+
+        Dictionary<string, long>? existingPositions = null;
+        if (_queues.TryGetValue(deviceId, out DeviceQueue? oldQueue))
+        {
+            existingPositions = oldQueue.ItemPositionState;
+        }
+
+        List<string> original = new List<string>(itemIds);
+        List<string> shuffled = new List<string>(itemIds);
+        FisherYates(shuffled, random);
+
+        var queue = new DeviceQueue
+        {
+            ItemIds = shuffled,
+            OriginalItemIds = original,
+            CurrentIndex = 0,
+            RepeatMode = "None",
+            PlaybackOrder = "Shuffle",
+            LastModifiedUtc = DateTime.UtcNow,
+            ItemPositionState = existingPositions ?? new Dictionary<string, long>()
+        };
+
+        _queues[deviceId] = queue;
+        SchedulePersistInternal(deviceId);
+
+        _logger.LogDebug(
+            "Shuffled queue set for device {DeviceId}: {Count} items, order=Shuffle",
+            deviceId, shuffled.Count);
+    }
+
+    /// <summary>Fisher–Yates shuffle, in place. Used by SetShuffledQueue.
+    /// (ShuffleRemaining keeps its own inline loop unchanged — spec non-goal.)</summary>
+    private static void FisherYates(List<string> list, Random rng)
+    {
+        for (int i = list.Count - 1; i > 0; i--)
+        {
+            int j = rng.Next(i + 1);
+            (list[i], list[j]) = (list[j], list[i]);
+        }
+    }
+
+    /// <summary>
     /// Advances the current index to the next item in the queue.
     /// Handles RepeatOne (stay on same), RepeatAll (wrap around), and sequential modes.
     /// </summary>
