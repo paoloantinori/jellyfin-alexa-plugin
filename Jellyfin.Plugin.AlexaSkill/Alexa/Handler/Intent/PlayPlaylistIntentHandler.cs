@@ -64,7 +64,8 @@ public class PlayPlaylistIntentHandler : BaseHandler
     }
 
     /// <summary>
-    /// Play a playlist by its name.
+    /// Play a playlist by its name. Delegates the shared playlist-play flow to
+    /// <see cref="BaseHandler.BuildPlaylistPlayResponseAsync"/> (shuffle disabled).
     /// </summary>
     /// <param name="request">The skill request which should be handled.</param>
     /// <param name="context">The context of the skill intent request.</param>
@@ -72,163 +73,14 @@ public class PlayPlaylistIntentHandler : BaseHandler
     /// <param name="session">The session instance.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>Play directive of the playlist.</returns>
-    public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
+    public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
-
         string? playlistName = intentRequest.Intent.Slots?.TryGetValue("playlist", out var playlistSlot) == true ? playlistSlot.Value : null;
-
-        Logger.LogDebug("PlayPlaylist: entered, locale={Locale}", locale);
-
-        if (string.IsNullOrWhiteSpace(playlistName))
-        {
-            return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchPlaylistName", locale));
-        }
-
-        Logger.LogDebug("Play playlist: {0}", playlistName);
-
-        var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
-        if (userError != null)
-        {
-            return userError;
-        }
-
-        InternalItemsQuery query = new InternalItemsQuery()
-        {
-            User = jellyfinUser,
-            SearchTerm = playlistName,
-            IncludeItemTypes = new[] { BaseItemKind.Playlist },
-            DtoOptions = new DtoOptions(true),
-        };
-        ApplyLibraryFilter(query, user, _libraryManager);
-
-        Logger.LogDebug("PlayPlaylist: querying Jellyfin with searchTerm='{PlaylistName}', types=Playlist", playlistName);
-        QueryResult<BaseItem> playlists = await RetryAsync(() => SafeGetItemsResult(_libraryManager, query), "GetPlaylists", cancellationToken).ConfigureAwait(false);
-        Logger.LogDebug("PlayPlaylist: Jellyfin returned {ResultCount} playlists", playlists.TotalRecordCount);
-
-        if (playlists.TotalRecordCount == 0)
-        {
-            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundPlaylist", locale, playlistName));
-        }
-
-        BaseItem? playlistMatch = null;
-        if (playlists.TotalRecordCount > 1)
-        {
-            Logger.LogDebug("PlayPlaylist: {Count} playlists matched, running disambiguation", playlists.TotalRecordCount);
-            BaseItem? topMatch = FuzzyMatch(playlistName, playlists.Items, p => p.Name, user);
-            if (topMatch != null)
-            {
-                playlistMatch = topMatch;
-            }
-            else
-            {
-                var (missOutcome, missResponse) = HandleFuzzyMiss(
-                    playlistName,
-                    playlists.Items,
-                    p => p.Name,
-                    best => new List<(Guid, string)> { (best.Id, best.Name) },
-                    DisambiguationHelper.MediaTypePlaylist,
-                    locale,
-                    best =>
-                    {
-                        playlistMatch = best;
-                        return null!;
-                    },
-                    user: user);
-
-                if (missOutcome != FuzzyMissOutcome.NotFound)
-                {
-                    if (missResponse != null)
-                    {
-                        return missResponse;
-                    }
-                }
-                else
-                {
-                    var matches = playlists.Items.Take(3).Select(p => (p.Id, p.Name, (string?)GetImageUrl(p.Id.ToString("N"), user))).ToList();
-                    return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypePlaylist, locale, context);
-                }
-            }
-        }
-        else
-        {
-            playlistMatch = playlists.Items[0];
-        }
-
-        BaseItem playlist = playlistMatch!;
-        Logger.LogDebug("PlayPlaylist: matched playlist='{PlaylistName}' (id={PlaylistId})", playlist.Name, playlist.Id);
-
-        // Playlist members are linked children in the Playlists join table, NOT ParentId-owned
-        // rows — querying ILibraryManager with ParentId=playlist.Id always returns 0 (issue #10).
-        // Use Playlist.GetManageableItems(), the same API the Jellyfin web UI uses.
-        Logger.LogDebug("PlayPlaylist: resolving tracks for playlist='{PlaylistName}'", playlist.Name);
-        IReadOnlyList<BaseItem> allTracks = PlaylistTrackResolver.GetAudioTracks(playlist as Playlist, jellyfinUser);
-        Logger.LogDebug("PlayPlaylist: resolved {TrackCount} audio tracks for playlist='{PlaylistName}'", allTracks.Count, playlist.Name);
-
-        if (allTracks.Count == 0)
-        {
-            return ResponseBuilder.Tell(ResponseStrings.Get("PlaylistEmpty", locale));
-        }
-
-        int totalCount = allTracks.Count;
-        List<BaseItem> playlistItems = allTracks.Take(ProgressiveQueueConstants.GetInitialFetchSize()).ToList();
-
-        List<QueueItem> queueItems = new List<QueueItem>();
-        for (int i = 0; i < playlistItems.Count; i++)
-        {
-            BaseItem item = playlistItems[i];
-            queueItems.Add(new QueueItem
-            {
-                Id = item.Id,
-                PlaylistItemId = playlist.Id.ToString(),
-            });
-        }
-
-        session.NowPlayingQueue = queueItems;
-
-        BaseItem? firstItem = _libraryManager.GetItemById(queueItems[0].Id);
-
-        // Persist queue to device storage for crash recovery
-        if (firstItem != null)
-        {
-            _queueManager?.SetQueue(
-                context.System.Device.DeviceID,
-                playlistItems.Select(i => i.Id.ToString()).ToList(),
-                0);
-        }
-        if (firstItem == null)
-        {
-            return ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale));
-        }
-
-        session.FullNowPlayingItem = firstItem;
-
-        // Store continuation info so PlaybackNearlyFinished can fetch the rest
-        if (totalCount > playlistItems.Count)
-        {
-            QueueContinuationStore.Set(
-                session.UserId,
-                context.System.Device.DeviceID,
-                new QueueContinuation
-                {
-                    SourceType = "Playlist",
-                    ParentId = playlist.Id,
-                    PlaylistId = playlist.Id,
-                    StartIndex = playlistItems.Count,
-                    TotalCount = totalCount,
-                    UserId = jellyfinUser!.Id,
-                    // Cache the resolved tracks so continuation batches slice this list
-                    // instead of re-resolving every linked child on each PlaybackNearlyFinished.
-                    CachedTracks = allTracks
-                });
-        }
-
-        string item_id = firstItem.Id.ToString();
-
-        Logger.LogDebug(
-            "PlayPlaylist: returning AudioPlayer, itemId={ItemId}, playlist='{PlaylistName}', queueSize={QueueSize}",
-            item_id, playlist.Name, queueItems.Count);
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, firstItem, user, context);
+        return BuildPlaylistPlayResponseAsync(
+            _libraryManager, _userManager, _queueManager,
+            playlistName ?? string.Empty, intentRequest, context, user, session, locale,
+            shuffle: false, rng: null, cancellationToken);
     }
 }

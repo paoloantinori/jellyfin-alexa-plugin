@@ -19,6 +19,7 @@ using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Playlists;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
@@ -2063,5 +2064,201 @@ public abstract class BaseHandler
         }
 
         return response;
+    }
+
+    /// <summary>
+    /// Shared playlist-play flow used by <c>PlayPlaylistIntentHandler</c>
+    /// (shuffle=false) and the shuffle-play handler (shuffle=true). Resolves the playlist,
+    /// builds the initial queue, optionally shuffles it via
+    /// <see cref="Playback.DeviceQueueManager.SetShuffledQueue"/>, persists the queue for
+    /// crash recovery, stores progressive-continuation state, and returns an
+    /// <c>AudioPlayer.Play</c> response for the first track.
+    /// </summary>
+    /// <param name="libraryManager">Library manager for querying playlists and items.</param>
+    /// <param name="userManager">User manager for resolving the Jellyfin user.</param>
+    /// <param name="queueManager">Optional per-device queue manager for crash recovery and shuffle.</param>
+    /// <param name="playlistName">The playlist name to search for.</param>
+    /// <param name="intentRequest">The Alexa intent request (reserved for future slot/data use).</param>
+    /// <param name="context">The Alexa context.</param>
+    /// <param name="user">The plugin user.</param>
+    /// <param name="session">The Jellyfin session.</param>
+    /// <param name="locale">The locale for response strings.</param>
+    /// <param name="shuffle">When true and <paramref name="queueManager"/> is non-null, shuffles the queue via <see cref="Playback.DeviceQueueManager.SetShuffledQueue"/>.</param>
+    /// <param name="rng">Optional injectable random source for deterministic shuffle (tests); null uses <see cref="Random.Shared"/>.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A skill response with an AudioPlayer directive, or a localized error tell.</returns>
+    protected async Task<SkillResponse> BuildPlaylistPlayResponseAsync(
+        ILibraryManager libraryManager,
+        IUserManager userManager,
+        Playback.DeviceQueueManager? queueManager,
+        string playlistName,
+        IntentRequest intentRequest,
+        Context context,
+        Entities.User user,
+        SessionInfo session,
+        string locale,
+        bool shuffle,
+        Random? rng,
+        CancellationToken cancellationToken)
+    {
+        Logger.LogDebug("PlayPlaylist: entered, locale={Locale}", locale);
+
+        if (string.IsNullOrWhiteSpace(playlistName))
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchPlaylistName", locale));
+        }
+
+        Logger.LogDebug("Play playlist: {0}", playlistName);
+
+        var (jellyfinUser, userError) = ResolveJellyfinUser(userManager, session.UserId, locale);
+        if (userError != null)
+        {
+            return userError;
+        }
+
+        InternalItemsQuery query = new InternalItemsQuery()
+        {
+            User = jellyfinUser,
+            SearchTerm = playlistName,
+            IncludeItemTypes = new[] { BaseItemKind.Playlist },
+            DtoOptions = new DtoOptions(true),
+        };
+        ApplyLibraryFilter(query, user, libraryManager);
+
+        Logger.LogDebug("PlayPlaylist: querying Jellyfin with searchTerm='{PlaylistName}', types=Playlist", playlistName);
+        QueryResult<BaseItem> playlists = await RetryAsync(() => SafeGetItemsResult(libraryManager, query), "GetPlaylists", cancellationToken).ConfigureAwait(false);
+        Logger.LogDebug("PlayPlaylist: Jellyfin returned {ResultCount} playlists", playlists.TotalRecordCount);
+
+        if (playlists.TotalRecordCount == 0)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundPlaylist", locale, playlistName));
+        }
+
+        BaseItem? playlistMatch = null;
+        if (playlists.TotalRecordCount > 1)
+        {
+            Logger.LogDebug("PlayPlaylist: {Count} playlists matched, running disambiguation", playlists.TotalRecordCount);
+            BaseItem? topMatch = FuzzyMatch(playlistName, playlists.Items, p => p.Name, user);
+            if (topMatch != null)
+            {
+                playlistMatch = topMatch;
+            }
+            else
+            {
+                var (missOutcome, missResponse) = HandleFuzzyMiss(
+                    playlistName,
+                    playlists.Items,
+                    p => p.Name,
+                    best => new List<(Guid, string)> { (best.Id, best.Name) },
+                    DisambiguationHelper.MediaTypePlaylist,
+                    locale,
+                    best =>
+                    {
+                        playlistMatch = best;
+                        return null!;
+                    },
+                    user: user);
+
+                if (missOutcome != FuzzyMissOutcome.NotFound)
+                {
+                    if (missResponse != null)
+                    {
+                        return missResponse;
+                    }
+                }
+                else
+                {
+                    var matches = playlists.Items.Take(3).Select(p => (p.Id, p.Name, (string?)GetImageUrl(p.Id.ToString("N"), user))).ToList();
+                    return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypePlaylist, locale, context);
+                }
+            }
+        }
+        else
+        {
+            playlistMatch = playlists.Items[0];
+        }
+
+        BaseItem playlist = playlistMatch!;
+        Logger.LogDebug("PlayPlaylist: matched playlist='{PlaylistName}' (id={PlaylistId})", playlist.Name, playlist.Id);
+
+        // Playlist members are linked children in the Playlists join table, NOT ParentId-owned
+        // rows — querying ILibraryManager with ParentId=playlist.Id always returns 0 (issue #10).
+        // Use Playlist.GetManageableItems(), the same API the Jellyfin web UI uses.
+        Logger.LogDebug("PlayPlaylist: resolving tracks for playlist='{PlaylistName}'", playlist.Name);
+        IReadOnlyList<BaseItem> allTracks = PlaylistTrackResolver.GetAudioTracks(playlist as Playlist, jellyfinUser);
+        Logger.LogDebug("PlayPlaylist: resolved {TrackCount} audio tracks for playlist='{PlaylistName}'", allTracks.Count, playlist.Name);
+
+        if (allTracks.Count == 0)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("PlaylistEmpty", locale));
+        }
+
+        int totalCount = allTracks.Count;
+        List<BaseItem> playlistItems = allTracks.Take(ProgressiveQueueConstants.GetInitialFetchSize()).ToList();
+
+        List<QueueItem> queueItems = new List<QueueItem>();
+        for (int i = 0; i < playlistItems.Count; i++)
+        {
+            BaseItem item = playlistItems[i];
+            queueItems.Add(new QueueItem
+            {
+                Id = item.Id,
+                PlaylistItemId = playlist.Id.ToString(),
+            });
+        }
+
+        session.NowPlayingQueue = queueItems;  // ordered, so MirrorQueueToSession can read track metadata
+
+        string deviceId = context.System.Device.DeviceID;
+        List<string> idList = playlistItems.Select(i => i.Id.ToString()).ToList();
+        BaseItem? firstItem;
+
+        if (shuffle && queueManager != null)
+        {
+            queueManager.SetShuffledQueue(deviceId, idList, rng);
+            // Mirror the shuffled DeviceQueue order back into the session queue (metadata preserved).
+            MirrorQueueToSession(queueManager.GetOrCreateQueue(deviceId), session);
+            string firstShuffledId = queueManager.GetOrCreateQueue(deviceId).ItemIds[0];
+            firstItem = libraryManager.GetItemById(Guid.Parse(firstShuffledId));
+        }
+        else
+        {
+            queueManager?.SetQueue(deviceId, idList, 0);
+            firstItem = libraryManager.GetItemById(queueItems[0].Id);
+        }
+
+        if (firstItem == null)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale));
+        }
+
+        session.FullNowPlayingItem = firstItem;
+
+        // Store continuation info so PlaybackNearlyFinished can fetch the rest
+        if (totalCount > playlistItems.Count)
+        {
+            QueueContinuationStore.Set(
+                session.UserId,
+                context.System.Device.DeviceID,
+                new QueueContinuation
+                {
+                    SourceType = "Playlist",
+                    ParentId = playlist.Id,
+                    PlaylistId = playlist.Id,
+                    StartIndex = playlistItems.Count,
+                    TotalCount = totalCount,
+                    UserId = jellyfinUser!.Id,
+                    // Cache the resolved tracks so continuation batches slice this list
+                    // instead of re-resolving every linked child on each PlaybackNearlyFinished.
+                    CachedTracks = allTracks
+                });
+        }
+
+        string item_id = firstItem.Id.ToString();
+
+        Logger.LogDebug(
+            "PlayPlaylist: returning AudioPlayer, itemId={ItemId}, playlist='{PlaylistName}', queueSize={QueueSize}",
+            item_id, playlist.Name, queueItems.Count);
+        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, firstItem, user, context);
     }
 }
