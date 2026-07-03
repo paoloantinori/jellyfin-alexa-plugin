@@ -4,15 +4,21 @@
 
 **Goal:** Let users start a playlist already shuffled ("shuffle the playlist X" / "play the playlist X in shuffle mode") so the first track is random, via a new `ShufflePlayIntent`, reusing JF-301's authoritative `DeviceQueueManager` shuffle state.
 
-**Architecture:** A new additive `DeviceQueueManager.SetShuffledQueue(deviceId, itemIds, Random?)` shuffles the *whole* queue (position 0 included) and snapshots `OriginalItemIds`. A new DI service `PlaylistPlayBuilder` holds the shared playlist-resolution flow (extracted from `PlayPlaylistIntentHandler`) with a `shuffle` branch; both `PlayPlaylistIntentHandler` (refactored, `shuffle:false`) and the new `ShufflePlayIntentHandler` (`shuffle:true`) call it. A new `ShufflePlayIntent` (single `AMAZON.SearchQuery` `playlist` slot) is added to all 17 locales (it-IT via YAML `explicit_intents`) + `dialog.intents`.
+**Architecture:** A new additive `DeviceQueueManager.SetShuffledQueue(deviceId, itemIds, Random?)` shuffles the *whole* queue (position 0 included) and snapshots `OriginalItemIds`. The shared playlist-resolution flow lives as a new **`protected` method `BaseHandler.BuildPlaylistPlayResponseAsync(...)`** (deps `ILibraryManager`/`IUserManager`/`DeviceQueueManager` passed as parameters — `BaseHandler`'s ctor doesn't hold them, but being on `BaseHandler` gives natural access to all the `protected` helpers like `FuzzyMatch`/`HandleFuzzyMiss`/`MirrorQueueToSession`). Both `PlayPlaylistIntentHandler` (refactored, `shuffle:false`) and the new `ShufflePlayIntentHandler` (`shuffle:true`) call it. A new `ShufflePlayIntent` (single `AMAZON.SearchQuery` `playlist` slot) is added to all 17 locales (it-IT via YAML `explicit_intents`) + `dialog.intents`.
 
 **Tech Stack:** C# net9.0, xUnit, Alexa.NET, Jellyfin 10.11+ APIs. Python for model generation/validation + pytest NLU/E2E.
 
 **Spec:** `docs/superpowers/specs/2026-07-03-shuffle-play-qualifier-design.md`
 
-**Refinement vs spec (flagged):** The spec placed the shared method on `BaseHandler`, but `BaseHandler`'s ctor is `(sessionManager, config, loggerFactory)` only — it lacks `ILibraryManager`/`IUserManager`/`DeviceQueueManager`. So the shared flow lives in a new DI service `PlaylistPlayBuilder` (Chunk 2) instead. Concept unchanged.
+**Refinement vs spec (flagged, review-driven):** The spec placed the shared method on `BaseHandler`; an earlier plan draft moved it to a `PlaylistPlayBuilder` service, but that **cannot compile** — `FuzzyMatch`/`HandleFuzzyMiss`/`SafeGetItemsResult`/`RetryAsync` (protected instance) and `MirrorQueueToSession`/`GetLocale`/`ResolveJellyfinUser`/`ApplyLibraryFilter` (protected static) are inaccessible from a non-subclass (CS0122). So the shared flow returns to a `protected` method **on `BaseHandler`** (`BuildPlaylistPlayResponseAsync`), with the 3 extra deps as method parameters. No new class, no DI change, no access-modifier promotions. Concept unchanged.
 
 **Conventions (from CLAUDE.md):** `Nullable enable`; `TreatWarningsAsErrors=true` so build with `-warnaserror`; `async/await` + `ConfigureAwait(false)`; NEVER use `dotnet test --no-build` after code changes; it-IT model is generated from YAML (edit template, regenerate); new intent → `dialog.intents` registration in all 17 locales.
+
+**Verified code facts (plan-reviewer, 2026-07-03):**
+- `DeviceQueueManager` is `sealed : IDisposable`; fields `_queues`, `_logger`; helper `SchedulePersistInternal(deviceId)`; `SetQueue` ends ~line 146; `ShuffleRemaining` FY loop at lines 304–308. `DeviceQueue` has `ItemIds`, `OriginalItemIds`, `CurrentIndex`, `RepeatMode`, `PlaybackOrder`, `LastModifiedUtc`, `ItemPositionState`.
+- `BaseHandler` ctor is `(ISessionManager, PluginConfiguration, ILoggerFactory)` only. Helpers: `FuzzyMatch` (protected instance, :1156), `HandleFuzzyMiss` (:1245), `SafeGetItemsResult` (:1049), `RetryAsync` (:1037), `MirrorQueueToSession` (protected static, :1375), `GetLocale` (static, :861), `ResolveJellyfinUser` (static, :1739), `ApplyLibraryFilter` (static, :962), `GetStreamUrl` (public, :374), `BuildAudioPlayerResponse` (public, :486/502). All reachable from a `protected` method ON `BaseHandler`.
+- Registrar: `Jellyfin.Plugin.AlexaSkill/EntryPoints/Regulator.cs` (project root, NOT under `Alexa/`). `DeviceQueueManager` registered `AddSingleton` with factory at `:36-41`; `BaseHandler` reflection scan at `:100-119` (`AddSingleton(typeof(BaseHandler), handlerType)`) → MS DI resolves ctor params, so a handler adding `ILibraryManager`/`IUserManager`/`DeviceQueueManager?` params auto-resolves.
+- Scripts exist: `scripts/generate_interaction_model.py` (arg = locale), `validate_interaction_models.py`, `validate_locales.py`, `validate_versions.py`, `run_nlu_tests.sh`, `run_e2e_tests.sh`.
 
 **Shared context — build/test env (memory):** Redirect NuGet caches to /tmp before building in the sandbox:
 ```bash
@@ -24,7 +30,7 @@ export NUGET_PACKAGES=/tmp/nuget_pkgs NUGET_HTTP_CACHE_PATH=/tmp/nuget_http
 ## Chunk 1: `DeviceQueueManager.SetShuffledQueue` (additive)
 
 **Files:**
-- Modify: `Jellyfin.Plugin.AlexaSkill/Alexa/Playback/DeviceQueueManager.cs` (add `SetShuffledQueue` + `FisherYates`; refactor `ShuffleRemaining` tail loop to call `FisherYates`)
+- Modify: `Jellyfin.Plugin.AlexaSkill/Alexa/Playback/DeviceQueueManager.cs` (add `SetShuffledQueue` + private `FisherYates`; do NOT modify `ShuffleRemaining` — honors the spec non-goal literally)
 - Test: `Jellyfin.Plugin.AlexaSkill.Tests/Playback/DeviceQueueManagerTests.cs`
 
 ### Task 1.1: Failing tests for `SetShuffledQueue`
@@ -109,7 +115,7 @@ dotnet test Jellyfin.Plugin.AlexaSkill.Tests/Jellyfin.Plugin.AlexaSkill.Tests.cs
 ```
 Expected: compile FAIL (`DeviceQueueManager does not contain a definition for SetShuffledQueue`).
 
-### Task 1.2: Implement `SetShuffledQueue` + `FisherYates`
+### Task 1.2: Implement `SetShuffledQueue` + private `FisherYates`
 
 - [ ] **Step 3: Add the method + helper** — in `DeviceQueueManager.cs`, immediately after `SetQueue` (after line ~146), add:
 
@@ -160,8 +166,8 @@ public void SetShuffledQueue(string deviceId, List<string> itemIds, Random? rng 
         deviceId, shuffled.Count);
 }
 
-/// <summary>Fisher–Yates shuffle, in place. Shared by SetShuffledQueue (full list)
-/// and ShuffleRemaining (tail) so there is one shuffle implementation.</summary>
+/// <summary>Fisher–Yates shuffle, in place. Used by SetShuffledQueue.
+/// (ShuffleRemaining keeps its own inline loop unchanged — spec non-goal.)</summary>
 private static void FisherYates(List<string> list, Random rng)
 {
     for (int i = list.Count - 1; i > 0; i--)
@@ -172,23 +178,21 @@ private static void FisherYates(List<string> list, Random rng)
 }
 ```
 
-- [ ] **Step 4: Refactor `ShuffleRemaining` to use `FisherYates` (behavior-preserving)** — replace its inline loop (`DeviceQueueManager.cs:304-308`) with `FisherYates(tail, Random.Shared);`. Delete the old `for` loop. (Tail + `Random.Shared` unchanged → observable behavior identical.)
-
-- [ ] **Step 5: Run the new tests — verify pass**
+- [ ] **Step 4: Run the new tests — verify pass**
 
 ```bash
 dotnet test Jellyfin.Plugin.AlexaSkill.Tests/Jellyfin.Plugin.AlexaSkill.Tests.csproj --filter "FullyQualifiedName~SetShuffledQueue"
 ```
 Expected: 4 passed.
 
-- [ ] **Step 6: Run the JF-301 shuffle regression tests — verify still green**
+- [ ] **Step 5: Run the JF-301 shuffle regression tests — verify untouched**
 
 ```bash
 dotnet test Jellyfin.Plugin.AlexaSkill.Tests/Jellyfin.Plugin.AlexaSkill.Tests.csproj --filter "FullyQualifiedName~ShuffleRemaining|FullyQualifiedName~RestoreOrder"
 ```
-Expected: all pass (the `FisherYates` refactor is behavior-preserving).
+Expected: all pass (ShuffleRemaining was not modified).
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add Jellyfin.Plugin.AlexaSkill/Alexa/Playback/DeviceQueueManager.cs Jellyfin.Plugin.AlexaSkill.Tests/Playback/DeviceQueueManagerTests.cs
@@ -197,24 +201,30 @@ git commit -m "feat(playback): add DeviceQueueManager.SetShuffledQueue (JF-305)"
 
 ---
 
-## Chunk 2: `PlaylistPlayBuilder` service — extract shared flow
+## Chunk 2: Shared `BaseHandler.BuildPlaylistPlayResponseAsync` (extract flow)
 
 **Files:**
-- Create: `Jellyfin.Plugin.AlexaSkill/Alexa/Playback/PlaylistPlayBuilder.cs`
+- Modify: `Jellyfin.Plugin.AlexaSkill/Alexa/Handler/BaseHandler.cs` (add `protected` method)
 - Modify: `Jellyfin.Plugin.AlexaSkill/Alexa/Handler/Intent/PlayPlaylistIntentHandler.cs` (becomes a thin caller)
-- Modify: `Jellyfin.Plugin.AlexaSkill/Alexa/EntryPoints/` plugin service registrar (register `PlaylistPlayBuilder`)
-- Test: `Jellyfin.Plugin.AlexaSkill.Tests/Playback/PlaylistPlayBuilderTests.cs` (new) + keep `PlayPlaylistIntentHandlerTests` green
+- Test: keep `Jelly.Plugin.AlexaSkill.Tests/Handler/Intent/PlayPlaylistIntentHandlerTests.cs` green (regression sentinel)
 
-**Context:** The body of `PlayPlaylistIntentHandler.HandleAsync` (lines 77–232: slot → resolve user → query playlists → `FuzzyMatch`/`HandleFuzzyMiss` disambiguation → `PlaylistTrackResolver.GetAudioTracks` → build `queueItems` → queue state → `QueueContinuation` → `BuildAudioPlayerResponse`) is the shared flow. Move it into `PlaylistPlayBuilder.BuildResponseAsync(...)` with a `bool shuffle, Random? rng` branch at the queue-state step.
+**Why a method on `BaseHandler`, not a service:** `BaseHandler`'s ctor is `(ISessionManager, PluginConfiguration, ILoggerFactory)` — it doesn't hold `ILibraryManager`/`IUserManager`/`DeviceQueueManager`. But the flow needs many `protected` helpers (`FuzzyMatch`, `HandleFuzzyMiss`, `SafeGetItemsResult`, `RetryAsync`, `MirrorQueueToSession`, `GetLocale`, `ResolveJellyfinUser`, `ApplyLibraryFilter`) that only a `BaseHandler` subclass (or a method ON `BaseHandler`) can reach. So: put the shared flow as a `protected` method on `BaseHandler`, pass the 3 extra deps as parameters. No ctor change, no DI change, no access-modifier promotions.
 
-### Task 2.1: Create `PlaylistPlayBuilder` with the shared flow
+### Task 2.1: Add the shared method to `BaseHandler`
 
-- [ ] **Step 1: Create the service** — `Alexa/Playback/PlaylistPlayBuilder.cs`. Constructor takes the same deps `PlayPlaylistIntentHandler` uses: `ISessionManager`, `PluginConfiguration`, `ILibraryManager`, `IUserManager`, `ILoggerFactory`, `DeviceQueueManager?`. It does NOT inherit `BaseHandler` (BaseHandler lacks these deps) — instead inject `BaseHandler`-equivalent helpers it needs, or duplicate the few used (`ResolveJellyfinUser`, `FuzzyMatch`, `HandleFuzzyMiss`, `ApplyLibraryFilter`, `GetStreamUrl`, `MirrorQueueToSession`, `BuildAudioPlayerResponse`, `RetryAsync`, `SafeGetItemsResult`). **Simplest correct approach:** make `PlaylistPlayBuilder` an `internal` collaborator that holds the deps and exposes one method; have the two handlers pass themselves (`BaseHandler` instance) in, OR make the builder hold a reference to the calling `BaseHandler` for the helper methods.
-
-  **Recommended shape** (minimal surface): `PlaylistPlayBuilder` is constructed by each handler with its already-injected deps; the build method takes the calling handler's helper surface via a small interface. To avoid over-engineering, give `PlaylistPlayBuilder` a public method:
+- [ ] **Step 1: Add `BuildPlaylistPlayResponseAsync` to `BaseHandler.cs`** — a `protected async Task<SkillResponse>` method. Move the existing body of `PlayPlaylistIntentHandler.HandleAsync` (current lines 77–232) into it. Signature:
 
 ```csharp
-public async Task<SkillResponse> BuildResponseAsync(
+/// <summary>
+/// Shared playlist-play flow used by PlayPlaylistIntent (shuffle=false) and
+/// ShufflePlayIntent (shuffle=true). Resolves the playlist, builds the queue,
+/// and — when shuffle is true — shuffles the whole queue at build time via
+/// DeviceQueueManager.SetShuffledQueue so the first track is random.
+/// </summary>
+protected async Task<SkillResponse> BuildPlaylistPlayResponseAsync(
+    ILibraryManager libraryManager,
+    IUserManager userManager,
+    Playback.DeviceQueueManager? queueManager,
     string playlistName,
     IntentRequest intentRequest,
     Context context,
@@ -226,7 +236,7 @@ public async Task<SkillResponse> BuildResponseAsync(
     CancellationToken cancellationToken)
 ```
 
-  Move the existing `PlayPlaylistIntentHandler.HandleAsync` body (77–232) into this method. At the queue-state step (current lines 188–205), replace with the **shuffle branch**:
+  Body = the existing `PlayPlaylistIntentHandler.HandleAsync` flow, with **one change** at the queue-state step (current lines 188–205). Replace those lines with:
 
 ```csharp
 session.NowPlayingQueue = queueItems;  // ordered, so MirrorQueueToSession can read track metadata
@@ -235,18 +245,18 @@ string deviceId = context.System.Device.DeviceID;
 List<string> idList = playlistItems.Select(i => i.Id.ToString()).ToList();
 BaseItem firstItem;
 
-if (shuffle && _queueManager != null)
+if (shuffle && queueManager != null)
 {
-    _queueManager.SetShuffledQueue(deviceId, idList, rng);
+    queueManager.SetShuffledQueue(deviceId, idList, rng);
     // Mirror the shuffled DeviceQueue order back into the session queue (metadata preserved).
-    MirrorQueueToSession(_queueManager.GetOrCreateQueue(deviceId), session);
-    string firstShuffledId = _queueManager.GetOrCreateQueue(deviceId).ItemIds[0];
-    firstItem = _libraryManager.GetItemById(Guid.Parse(firstShuffledId));
+    MirrorQueueToSession(queueManager.GetOrCreateQueue(deviceId), session);
+    string firstShuffledId = queueManager.GetOrCreateQueue(deviceId).ItemIds[0];
+    firstItem = libraryManager.GetItemById(Guid.Parse(firstShuffledId));
 }
 else
 {
-    _queueManager?.SetQueue(deviceId, idList, 0);
-    firstItem = _libraryManager.GetItemById(queueItems[0].Id);
+    queueManager?.SetQueue(deviceId, idList, 0);
+    firstItem = libraryManager.GetItemById(queueItems[0].Id);
 }
 
 if (firstItem == null)
@@ -255,22 +265,28 @@ if (firstItem == null)
 }
 
 session.FullNowPlayingItem = firstItem;
-
-// Continuation uses the ordered full list (inherited limitation: progressive
-// batches arrive in original order — only the initial-fetch batch is shuffled).
-// ... (existing QueueContinuationStore.Set block, unchanged) ...
-
-string item_id = firstItem.Id.ToString();
-return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, firstItem, user, context);
 ```
 
-  **Helpers needed by the builder** (`ResolveJellyfinUser`, `FuzzyMatch`, `HandleFuzzyMiss`, `ApplyLibraryFilter`, `SafeGetItemsResult`, `RetryAsync`, `GetStreamUrl`, `MirrorQueueToSession`, `BuildAudioPlayerResponse`, `Logger`): these live on `BaseHandler`. **Cleanest:** make `PlaylistPlayBuilder` extend `BaseHandler` is NOT possible (ctor). Instead, pass the calling `BaseHandler` handler into the build method as the helper source, OR re-home these as `internal static`/`protected` methods reachable by the builder. **Decision for implementer:** the least-risk path is to keep these helpers on `BaseHandler` (where they are) and have `PlaylistPlayBuilder` accept a `BaseHandler handler` parameter in `BuildResponseAsync`, calling `handler.FuzzyMatch(...)`, etc. Promote the needed helpers from `private` to `internal` on `BaseHandler` if not already accessible. This keeps `PlayPlaylistIntentHandler`'s observable behavior identical.
+  The rest of the flow (the `QueueContinuationStore.Set` block and the final `return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, firstItem, user, context);`) is unchanged. Inside the method, replace the handler's field refs (`_libraryManager`→`libraryManager`, `_userManager`→`userManager`, `_queueManager`→`queueManager`); `ResolveJellyfinUser`, `ApplyLibraryFilter`, `SafeGetItemsResult`, `RetryAsync`, `FuzzyMatch`, `HandleFuzzyMiss`, `GetStreamUrl`, `BuildAudioPlayerResponse`, `MirrorQueueToSession`, `GetLocale`, `Logger`, `SessionManager` are all reachable because this method is on `BaseHandler`. Add `using MediaBrowser.Controller.Playlists;` if not already present (for `PlaylistTrackResolver`).
 
-### Task 2.2: Regression — refactor `PlayPlaylistIntentHandler` to call the builder
+  The required `using` directives are the same set already at the top of `PlayPlaylistIntentHandler.cs` (copy them into `BaseHandler.cs` if missing — `Jellyfin.Data.Enums`, `MediaBrowser.Controller.Dto`, `MediaBrowser.Model.Entities`, `MediaBrowser.Model.Querying`, `MediaBrowser.Controller.Playlists`).
 
-- [ ] **Step 2: Write/keep a regression test** — ensure an existing or new `PlayPlaylistIntentHandlerTests` test asserts: given a matching playlist, the response plays `queueItems[0]` (original order), `DeviceQueue.PlaybackOrder == "Default"`, `OriginalItemIds == null`. (If no such test exists, add one mirroring the shuffle test in Chunk 3 but with `shuffle:false` expectations.)
+### Task 2.2: Regression — refactor `PlayPlaylistIntentHandler` to call the shared method
 
-- [ ] **Step 3: Refactor `PlayPlaylistIntentHandler.HandleAsync`** to:
+- [ ] **Step 2: Verify/seed the regression test.** Open `Jellyfin.Plugin.AlexaSkill.Tests/Handler/Intent/PlayPlaylistIntentHandlerTests.cs`. If a test asserts "given a matching playlist, the response plays the first track in original order with `DeviceQueue.PlaybackOrder == Default`," keep it. If none exists, add one:
+
+```csharp
+[Fact]
+public async Task HandleAsync_NonShuffle_PlaysFirstTrack_Ordered()
+{
+    // ... existing harness setup (matching playlist, mocked ILibraryManager returns tracks) ...
+    var response = await _handler.HandleAsync(_request, _context, _user, _session, default);
+    // Assert: first streamed item is the playlist's first track (ordered),
+    // and (if queueManager is observable) DeviceQueue.PlaybackOrder == "Default".
+}
+```
+
+- [ ] **Step 3: Refactor `PlayPlaylistIntentHandler.HandleAsync`** to a thin caller:
 
 ```csharp
 public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
@@ -278,33 +294,31 @@ public override Task<SkillResponse> HandleAsync(Request request, Context context
     string locale = GetLocale(request);
     IntentRequest intentRequest = (IntentRequest)request;
     string? playlistName = intentRequest.Intent.Slots?.TryGetValue("playlist", out var slot) == true ? slot.Value : null;
-    return _playlistPlayBuilder.BuildResponseAsync(
+    return BuildPlaylistPlayResponseAsync(
+        _libraryManager, _userManager, _queueManager,
         playlistName ?? string.Empty, intentRequest, context, user, session, locale,
         shuffle: false, rng: null, cancellationToken);
 }
 ```
 
-  Inject `PlaylistPlayBuilder _playlistPlayBuilder` via the handler's ctor (add to its DI params; auto-wired by the reflection registrar since it's a registered service — see Step 5).
+  (`_libraryManager`, `_userManager`, `_queueManager` already exist on `PlayPlaylistIntentHandler`. The `using static`/`IntentRequest`/`Context`/`Entities.User`/`SessionInfo` namespaces are already imported.)
 
-- [ ] **Step 4: Register `PlaylistPlayBuilder` in DI** — in the plugin's service registrar (`Alexa/EntryPoints/`, the file that registers `DeviceQueueManager`), add `services.AddSingleton<PlaylistPlayBuilder>();` (match however `DeviceQueueManager` is registered — it's a singleton). Verify its deps resolve.
-
-- [ ] **Step 5: Build + run full test suite (no `--no-build`)**
+- [ ] **Step 4: Build + run full test suite (no `--no-build`)**
 
 ```bash
 export NUGET_PACKAGES=/tmp/nuget_pkgs NUGET_HTTP_CACHE_PATH=/tmp/nuget_http
 dotnet build Jellyfin.Plugin.AlexaSkill.sln -warnaserror
 dotnet test Jellyfin.Plugin.AlexaSkill.Tests/Jellyfin.Plugin.AlexaSkill.Tests.csproj
 ```
-Expected: 0 build warnings; all tests pass (including existing `PlayPlaylistIntentHandler`/shuffle regression tests — this is the sentinel that the refactor is behavior-preserving).
+Expected: 0 build warnings; all tests pass — the existing `PlayPlaylistIntentHandler` tests are the sentinel that the refactor is behavior-preserving (the `shuffle:false` branch is identical to the old code).
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add Jellyfin.Plugin.AlexaSkill/Alexa/Playback/PlaylistPlayBuilder.cs \
+git add Jellyfin.Plugin.AlexaSkill/Alexa/Handler/BaseHandler.cs \
         Jellyfin.Plugin.AlexaSkill/Alexa/Handler/Intent/PlayPlaylistIntentHandler.cs \
-        Jellyfin.Plugin.AlexaSkill/Alexa/EntryPoints/ \
-        Jellyfin.Plugin.AlexaSkill.Tests/Playback/PlaylistPlayBuilderTests.cs
-git commit -m "refactor(playback): extract PlaylistPlayBuilder shared flow (JF-305)"
+        Jellyfin.Plugin.AlexaSkill.Tests/Handler/Intent/PlayPlaylistIntentHandlerTests.cs
+git commit -m "refactor(handler): extract BuildPlaylistPlayResponseAsync onto BaseHandler (JF-305)"
 ```
 
 ---
@@ -318,7 +332,7 @@ git commit -m "refactor(playback): extract PlaylistPlayBuilder shared flow (JF-3
 
 ### Task 3.1: Register the intent name
 
-- [ ] **Step 1: Add constant** in `IntentNames.cs` near the play intents:
+- [ ] **Step 1: Add constant** in `IntentNames.cs` near the play intents (after `PlayPlaylist`):
 
 ```csharp
 public const string ShufflePlay = "ShufflePlayIntent";
@@ -326,13 +340,13 @@ public const string ShufflePlay = "ShufflePlayIntent";
 
 ### Task 3.2: Failing handler test
 
-- [ ] **Step 3: Write failing test** — `ShufflePlayIntentHandlerTests.cs`. Assert: handler `CanHandle` an `IntentRequest` named `ShufflePlayIntent`; and (with a mocked `PlaylistPlayBuilder` + seeded rng) `HandleAsync` delegates to the builder with `shuffle:true` and the resulting `DeviceQueue` is shuffled with `OriginalItemIds != null`. Follow the existing handler-test pattern in `Jelly.Plugin.AlexaSkill.Tests/Handler/Intent/` (mock `ISessionManager`, `PluginConfiguration`, `ILoggerFactory`; instantiate the handler directly).
+- [ ] **Step 2: Write failing test** — `ShufflePlayIntentHandlerTests.cs`. Mirror the existing handler-test pattern in `Jellyfin.Plugin.AlexaSkill.Tests/Handler/Intent/` (mock `ISessionManager`, `PluginConfiguration`, `ILoggerFactory`; instantiate the handler directly with real `ILibraryManager`/`IUserManager`/`DeviceQueueManager?` stubs or mocks). Assert delegation to the shared method with `shuffle:true`:
 
 ```csharp
 [Fact]
 public void CanHandle_ShufflePlayIntent()
 {
-    var handler = new ShufflePlayIntentHandler(_sessionManager, _config, _playlistPlayBuilder, _loggerFactory);
+    var handler = new ShufflePlayIntentHandler(_sessionManager, _config, _libraryManager, _userManager, _queueManager, _loggerFactory);
     var req = new IntentRequest { Intent = new Intent { Name = IntentNames.ShufflePlay } };
     Assert.True(handler.CanHandle(req));
 }
@@ -340,32 +354,60 @@ public void CanHandle_ShufflePlayIntent()
 [Fact]
 public async Task HandleAsync_DelegatesToBuilder_WithShuffleTrue()
 {
-    // _playlistPlayBuilder is a mock/stub that captures the shuffle arg and returns a canned response
-    var handler = new ShufflePlayIntentHandler(_sessionManager, _config, _playlistPlayBuilder, _loggerFactory);
+    // With a matching playlist stubbed in ILibraryManager and a seeded DeviceQueueManager,
+    // the response must reflect a shuffled queue (PlaybackOrder=Shuffle, OriginalItemIds set,
+    // first item != playlist's first track for a multi-track fixture).
+    var handler = new ShufflePlayIntentHandler(_sessionManager, _config, _libraryManager, _userManager, _queueManager, _loggerFactory);
     var response = await handler.HandleAsync(_request, _context, _user, _session, default);
-    Assert.True(_playlistPlayBuilder.LastShuffleFlag);   // builder was told to shuffle
-    Assert.NotNull(response);
+    DeviceQueue q = _queueManager.GetOrCreateQueue(_deviceId);
+    Assert.Equal("Shuffle", q.PlaybackOrder);
+    Assert.NotNull(q.OriginalItemIds);
 }
 ```
 
-- [ ] **Step 4: Run — verify fail** (`ShufflePlayIntentHandler` doesn't exist yet).
+  (The exact harness setup — mock `ILibraryManager.GetItemsResult`, `IUserManager.GetUserById`, a `TempDir`-backed `DeviceQueueManager` — mirrors `PlayPlaylistIntentHandlerTests`. If that harness isn't easily reusable, a thinner test asserting only `CanHandle` + that `HandleAsync` calls the shared path via a spy is acceptable; the end-to-end shuffle behavior is covered by the `DeviceQueueManager.SetShuffledQueue` unit tests in Chunk 1 and the E2E in Chunk 5.)
+
+- [ ] **Step 3: Run — verify fail** (`ShufflePlayIntentHandler` doesn't exist yet).
 
 ### Task 3.3: Implement the handler
 
-- [ ] **Step 5: Create `ShufflePlayIntentHandler.cs`** — mirror `PlayPlaylistIntentHandler`'s structure but delegate to the builder with `shuffle:true`:
+- [ ] **Step 4: Create `ShufflePlayIntentHandler.cs`** — mirror `PlayPlaylistIntentHandler`'s ctor (same deps: `sessionManager, config, libraryManager, userManager, loggerFactory, queueManager`) but delegate with `shuffle:true`:
 
 ```csharp
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using Alexa.NET.Request;
+using Alexa.NET.Request.Type;
+using Alexa.NET.Response;
+using Jellyfin.Plugin.AlexaSkill.Configuration;
+using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Session;
+using Microsoft.Extensions.Logging;
+
+namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+
+/// <summary>
+/// Handler for ShufflePlayIntent — play a playlist already shuffled
+/// (first track random). Shares the playlist-play flow with PlayPlaylistIntent.
+/// </summary>
 public class ShufflePlayIntentHandler : BaseHandler
 {
-    private readonly PlaylistPlayBuilder _playlistPlayBuilder;
+    private readonly ILibraryManager _libraryManager;
+    private readonly IUserManager _userManager;
+    private readonly Playback.DeviceQueueManager? _queueManager;
 
     public ShufflePlayIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
-        PlaylistPlayBuilder playlistPlayBuilder,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
+        ILibraryManager libraryManager,
+        IUserManager userManager,
+        ILoggerFactory loggerFactory,
+        Playback.DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
-        _playlistPlayBuilder = playlistPlayBuilder;
+        _libraryManager = libraryManager;
+        _userManager = userManager;
+        _queueManager = queueManager;
     }
 
     public override bool CanHandle(Request request)
@@ -380,16 +422,17 @@ public class ShufflePlayIntentHandler : BaseHandler
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
         string? playlistName = intentRequest.Intent.Slots?.TryGetValue("playlist", out var slot) == true ? slot.Value : null;
-        return _playlistPlayBuilder.BuildResponseAsync(
+        return BuildPlaylistPlayResponseAsync(
+            _libraryManager, _userManager, _queueManager,
             playlistName ?? string.Empty, intentRequest, context, user, session, locale,
             shuffle: true, rng: null, cancellationToken);
     }
 }
 ```
 
-  (Auto-DI-registered by the `BaseHandler` reflection scan — no manual registration. Verify in build.)
+  Auto-DI-registered by the `BaseHandler` reflection scan at `EntryPoints/Regulator.cs:100-119`; MS DI resolves the ctor params (incl. `DeviceQueueManager?` singleton). No manual registration.
 
-- [ ] **Step 6: Build + test**
+- [ ] **Step 5: Build + test**
 
 ```bash
 dotnet build Jellyfin.Plugin.AlexaSkill.sln -warnaserror
@@ -397,7 +440,7 @@ dotnet test Jellyfin.Plugin.AlexaSkill.Tests/Jellyfin.Plugin.AlexaSkill.Tests.cs
 ```
 Expected: pass.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add Jellyfin.Plugin.AlexaSkill/Alexa/IntentNames.cs \
@@ -450,17 +493,35 @@ git commit -m "feat(alexa): add ShufflePlayIntentHandler (JF-305)"
 
 ```bash
 python3 scripts/generate_interaction_model.py it-IT
-python3 scripts/validate_interaction_models.py     # all 17 must pass (JSON, slots, drift)
+python3 scripts/validate_interaction_models.py
 python3 scripts/validate_locales.py
 ```
 Expected: 0 errors. Confirm `ShufflePlayIntent` present in `model_it-IT.json` `languageModel.intents` AND `dialog.intents`.
 
-### Task 4.2: Other 16 locales (direct JSON edit)
+### Task 4.2: Other 16 locales (direct JSON edit, with translation table)
 
-- [ ] **Step 4: For each of `en-US en-AU en-CA en-GB en-IN es-ES es-MX es-US fr-CA fr-FR de-DE hi-IN ja-JP nl-NL pt-BR`** — add a `ShufflePlayIntent` to `languageModel.intents` (localized samples + the single `AMAZON.SearchQuery` `playlist` slot) AND a matching `dialog.intents` entry.
+- [ ] **Step 4: For each locale below, add a `ShufflePlayIntent`** to its `model_<locale>.json` `languageModel.intents` (localized samples + single `AMAZON.SearchQuery` `playlist` slot) AND a matching `dialog.intents` entry (same shape as Task 4.1 Step 2). Use these concrete samples (slot name `playlist`, type `AMAZON.SearchQuery` in every locale; **flagged for native review** — `*` marks lower-confidence phrasings):
 
-  **en-US samples** (mirror the user's request): `shuffle the playlist {playlist}`, `play the playlist {playlist} in shuffle mode`, `play the playlist {playlist} on shuffle`, `play {playlist} shuffled`.
-  Other locales: translate the qualifier ("en modo aleatorio"/es, "en mode aléatoire"/fr, "im Zufallsmodus"/de, etc.). Use the slot name `playlist` with type `AMAZON.SearchQuery` consistently.
+| Locale | Samples |
+|---|---|
+| en-US, en-AU, en-CA, en-GB, en-IN | `shuffle the playlist {playlist}` · `play the playlist {playlist} in shuffle mode` · `play the playlist {playlist} on shuffle` · `play {playlist} shuffled` |
+| es-MX, es-ES, es-US | `reproduce la lista {playlist} en modo aleatorio` · `mezcla la lista {playlist}` · `reproduce la lista de reproducción {playlist} en modo aleatorio` |
+| fr-FR, fr-CA | `lis la playlist {playlist} en mode aléatoire` · `mélange la playlist {playlist}` · `mets la playlist {playlist} en mode aléatoire` |
+| de-DE | `spiele die Playlist {playlist} in zufälliger Reihenfolge` · `mische die Playlist {playlist}` · `spiele die Playlist {playlist} im Zufallsmodus` |
+| pt-BR | `toque a playlist {playlist} em modo aleatório` · `embaralhe a playlist {playlist}` |
+| nl-NL | `speel de playlist {playlist} in willekeurige volgorde` * · `shuffle de playlist {playlist}` * |
+| hi-IN | `प्लेलिस्ट {playlist} शफल में चलाओ` * · `प्लेलिस्ट {playlist} शफल करो` * |
+| ja-JP | `プレイリスト {playlist} をシャッフルで再生して` · `シャッフルでプレイリスト {playlist} を再生して` |
+
+  For each locale, the JSON intent object shape:
+```json
+{
+  "name": "ShufflePlayIntent",
+  "samples": [ "..." ],
+  "slots": [ { "name": "playlist", "type": "AMAZON.SearchQuery" } ]
+}
+```
+  Locale response strings: none added (reuses existing `NotFoundPlaylist`/`PlaylistEmpty`/`DidNotCatchPlaylistName`/`MediaNotFound`). If a native speaker reviews the `*` locales, update before release.
 
 - [ ] **Step 5: Validate cross-locale consistency**
 
@@ -482,12 +543,12 @@ git commit -m "feat(models): add ShufflePlayIntent to all 17 locales (JF-305)"
 ## Chunk 5: NLU fixtures + integration/E2E + profile-nlu gate
 
 **Files:**
-- Modify: `tests/integration/fixtures/<locale>.yaml` (NLU fixtures; en-US + it-IT minimum, ideally all 17)
+- Modify: `tests/integration/fixtures/<locale>.yaml` (NLU fixtures; it-IT + en-US minimum)
 - Modify: `tests/integration/fixtures/e2e_it-IT.yaml` (E2E)
 
 ### Task 5.1: NLU fixtures
 
-- [ ] **Step 1: Add fixtures** to `tests/integration/fixtures/it-IT.yaml` and `en-US.yaml` (and others if present):
+- [ ] **Step 1: Add fixtures** to `tests/integration/fixtures/it-IT.yaml` and `en-US.yaml`:
 
 ```yaml
 - id: "mescola la playlist variado"
@@ -509,9 +570,9 @@ git commit -m "feat(models): add ShufflePlayIntent to all 17 locales (JF-305)"
 ```
 Expected: fixtures parse cleanly.
 
-### Task 5.2: Deploy candidate + profile-nlu gate (anti-pattern #3 verification)
+### Task 5.2: Deploy candidate + profile-nlu gate (anti-pattern #3)
 
-- [ ] **Step 3: Deploy the updated it-IT model** (per CLAUDE.md — discover the current skill ID fresh, do NOT trust cached IDs):
+- [ ] **Step 1: Deploy the updated it-IT model** (per CLAUDE.md — discover the current skill ID fresh, do NOT trust cached IDs):
 
 ```bash
 ASK_SKILL_ID=$(ask smapi list-skills-for-vendor | python3 -c "import json,sys; print(next(s['skillSummary']['skillId'] for s in json.load(sys.stdin)['skills'] if (s['skillSummary'].get('nameByLocale',{}).get('en-US') or s['skillSummary'].get('name',''))=='Jellyfin'))")
@@ -520,7 +581,7 @@ ask smapi set-interaction-model --skill-id "$ASK_SKILL_ID" --stage development -
 ask smapi get-skill-status --skill-id "$ASK_SKILL_ID"   # wait for SUCCEEDED
 ```
 
-- [ ] **Step 4: profile-nlu the routing gate**
+- [ ] **Step 2: profile-nlu the routing gate**
 
 ```bash
 for u in "riproduci la playlist variado" "mescola la playlist variado" "riproduci la playlist variado in modalità casuale"; do
@@ -531,7 +592,7 @@ done
 ```
 Expected: plain → `PlayPlaylistIntent`; `mescola …` and `… in modalità casuale` → `ShufflePlayIntent`. If the qualified phrase still routes to `PlayPlaylistIntent` (qualifier leaking into the slot), add more discriminator samples / refine phrasings and re-test. If a non-qualified phrase is stolen, tighten `ShufflePlayIntent` samples.
 
-- [ ] **Step 5: Run live NLU tests** (needs ask CLI auth)
+- [ ] **Step 3: Run live NLU tests** (needs ask CLI auth)
 
 ```bash
 ./scripts/run_nlu_tests.sh -k "shuffle or mescola or casuale or playlist"
@@ -540,28 +601,28 @@ Expected: pass.
 
 ### Task 5.3: E2E (simulate-skill, it-IT)
 
-- [ ] **Step 4: Add E2E case** to `tests/integration/fixtures/e2e_it-IT.yaml` (per CLAUDE.md, it-IT is the reliable simulate-skill locale; en-US competes with built-ins). Requires a deployed skill + live Jellyfin (deploy the DLL per `.claude.local.md` deploy checklist first).
+- [ ] **Step 1: Deploy the DLL** per the `.claude.local.md` deploy checklist (backup config, build Release, hot-swap, verify active DLL, restore config). Then add an E2E case to `tests/integration/fixtures/e2e_it-IT.yaml` and run (it-IT is the reliable simulate-skill locale per CLAUDE.md):
 
 ```bash
 ./scripts/run_e2e_tests.sh -k "mescola or casuale" \
   --jellyfin-url "$JELLYFIN_URL" --jellyfin-api-key "$JELLYFIN_API_KEY" --jellyfin-user "$JELLYFIN_USER" -v
 ```
-Expected: skill receives `ShufflePlayIntent` and serves a shuffled queue (verify first-streamed item differs from the playlist's first track; check persisted `DeviceQueue` state via logs: `PlaybackOrder=Shuffle`, `OriginalItemIds` set).
+Expected: skill receives `ShufflePlayIntent` and serves a shuffled queue (first-streamed item differs from the playlist's first track; persisted `DeviceQueue` shows `PlaybackOrder=Shuffle`, `OriginalItemIds` set — verify via `podman logs jellyfin`).
 
 ### Task 5.4: Full validation + finalize
 
-- [ ] **Step 5: Full build + test (no `--no-build`)**
+- [ ] **Step 1: Full build + test (no `--no-build`)**
 
 ```bash
 export NUGET_PACKAGES=/tmp/nuget_pkgs NUGET_HTTP_CACHE_PATH=/tmp/nuget_http
 dotnet build Jellyfin.Plugin.AlexaSkill.sln -warnaserror
 dotnet test Jellyfin.Plugin.AlexaSkill.Tests/Jellyfin.Plugin.AlexaSkill.Tests.csproj
 ```
-Expected: 0 warnings; all tests pass (target is the full suite, ~2300+).
+Expected: 0 warnings; all tests pass (full suite, ~2300+).
 
-- [ ] **Step 6: Update JF-305 acceptance criteria** — check off AC#1–#7 in the backlog task via `task_edit` (acceptanceCriteriaCheck), record the profile-nlu verdict + on-device/E2E result in notes.
+- [ ] **Step 2: Update JF-305 acceptance criteria** — check off AC#1–#7 in the backlog task via `task_edit` (`acceptanceCriteriaCheck [1,2,3,4,5,6,7]`), record the profile-nlu verdict + on-device/E2E result in notes.
 
-- [ ] **Step 7: Commit fixtures/tests**
+- [ ] **Step 3: Commit fixtures/tests**
 
 ```bash
 git add tests/integration/fixtures/
@@ -577,12 +638,13 @@ git commit -m "test(nlu/e2e): ShufflePlayIntent fixtures + profile-nlu gate (JF-
 - [ ] `validate_interaction_models.py` + `validate_locales.py` + `validate_versions.py` pass.
 - [ ] profile-nlu confirms plain → `PlayPlaylistIntent`, qualifier/verb → `ShufflePlayIntent` (it-IT; spot-check en-US).
 - [ ] E2E (it-IT simulate-skill) shows a shuffled first track + `DeviceQueue` in `Shuffle` with `OriginalItemIds`.
-- [ ] JF-301 `ShuffleOn/Off` regression tests still green (additive change only).
+- [ ] JF-301 `ShuffleOn/Off` regression tests still green (additive change only — `ShuffleRemaining` untouched).
 - [ ] No new response strings (reuses `NotFoundPlaylist`/`PlaylistEmpty`/`DidNotCatchPlaylistName`/`MediaNotFound`).
 
 ## Risks (carried from spec)
 
 - **NLU competition (#3):** `ShufflePlayIntent` and `PlayPlaylistIntent` share "play the playlist …" surface — gated by the profile-nlu step (Chunk 5).
-- **Extraction refactor:** `PlaylistPlayBuilder` extraction must preserve `PlayPlaylistIntent` behavior — existing tests are the sentinel; promote only the needed `BaseHandler` helpers to `internal`.
+- **Extraction refactor:** `BuildPlaylistPlayResponseAsync` must preserve `PlayPlaylistIntent` behavior — existing tests are the sentinel; the `shuffle:false` branch is line-identical to the old code.
 - **SearchQuery qualifier leak:** ensure `ShufflePlayIntent` samples place static qualifier words outside `{playlist}` so the slot captures only the name (verify via profile-nlu slot inspection).
 - **Inherited limitation:** large playlists (> initial fetch) only shuffle the first batch — documented, out of scope.
+- **Locale translations:** the `*`-marked samples (nl-NL, hi-IN) are best-effort — have a native speaker review before release.
