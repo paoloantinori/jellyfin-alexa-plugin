@@ -660,3 +660,27 @@ tests:
   - utterance: "previous"
     expected_intent: AMAZON.PreviousIntent
     expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 37. ShufflePlayIntent (playlist, shuffle-at-start) — JF-305
+  # -------------------------------------------------------------------------
+  - utterance: "shuffle the playlist road trip"
+    expected_intent: ShufflePlayIntent
+    expected_slots:
+      playlist: {}
+
+  - utterance: "play the playlist road trip in shuffle mode"
+    expected_intent: ShufflePlayIntent
+    expected_slots:
+      playlist: {}
+
+  - utterance: "play the playlist road trip on shuffle"
+    expected_intent: ShufflePlayIntent
+    expected_slots:
+      playlist: {}
+
+  # Regression sentinel — plain play must stay PlayPlaylistIntent (not stolen by ShufflePlayIntent)
+  - utterance: "play the playlist road trip"
+    expected_intent: PlayPlaylistIntent
+    expected_slots:
+      playlist: {}

@@ -673,3 +673,27 @@ tests:
   - utterance: "indietro"
     expected_intent: AMAZON.PreviousIntent
     expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 33. ShufflePlayIntent (playlist, shuffle-at-start) — JF-305
+  # -------------------------------------------------------------------------
+  - utterance: "Mescola la playlist rock classico"
+    expected_intent: ShufflePlayIntent
+    expected_slots:
+      playlist: {}
+
+  - utterance: "Riproduci la playlist rock classico in modalità casuale"
+    expected_intent: ShufflePlayIntent
+    expected_slots:
+      playlist: {}
+
+  - utterance: "Riproduci la playlist rock classico a caso"
+    expected_intent: ShufflePlayIntent
+    expected_slots:
+      playlist: {}
+
+  # Regression sentinel — plain play must stay PlayPlaylistIntent (not stolen by ShufflePlayIntent)
+  - utterance: "Riproduci la playlist rock classico"
+    expected_intent: PlayPlaylistIntent
+    expected_slots:
+      playlist: {}
