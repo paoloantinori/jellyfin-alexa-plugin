@@ -2078,7 +2078,6 @@ public abstract class BaseHandler
     /// <param name="userManager">User manager for resolving the Jellyfin user.</param>
     /// <param name="queueManager">Optional per-device queue manager for crash recovery and shuffle.</param>
     /// <param name="playlistName">The playlist name to search for.</param>
-    /// <param name="intentRequest">The Alexa intent request (reserved for future slot/data use).</param>
     /// <param name="context">The Alexa context.</param>
     /// <param name="user">The plugin user.</param>
     /// <param name="session">The Jellyfin session.</param>
@@ -2092,7 +2091,6 @@ public abstract class BaseHandler
         IUserManager userManager,
         Playback.DeviceQueueManager? queueManager,
         string playlistName,
-        IntentRequest intentRequest,
         Context context,
         Entities.User user,
         SessionInfo session,
@@ -2217,14 +2215,17 @@ public abstract class BaseHandler
         {
             queueManager.SetShuffledQueue(deviceId, idList, rng);
             // Mirror the shuffled DeviceQueue order back into the session queue (metadata preserved).
-            MirrorQueueToSession(queueManager.GetOrCreateQueue(deviceId), session);
-            string firstShuffledId = queueManager.GetOrCreateQueue(deviceId).ItemIds[0];
-            firstItem = libraryManager.GetItemById(Guid.Parse(firstShuffledId));
+            Playback.DeviceQueue deviceQueue = queueManager.GetOrCreateQueue(deviceId);
+            MirrorQueueToSession(deviceQueue, session);
+            firstItem = libraryManager.GetItemById(Guid.Parse(deviceQueue.ItemIds[0]));
         }
         else
         {
-            queueManager?.SetQueue(deviceId, idList, 0);
             firstItem = libraryManager.GetItemById(queueItems[0].Id);
+            if (firstItem != null)
+            {
+                queueManager?.SetQueue(deviceId, idList, 0);
+            }
         }
 
         if (firstItem == null)

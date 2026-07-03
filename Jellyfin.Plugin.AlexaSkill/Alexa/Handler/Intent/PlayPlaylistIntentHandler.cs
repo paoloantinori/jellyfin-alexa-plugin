@@ -80,7 +80,7 @@ public class PlayPlaylistIntentHandler : BaseHandler
         string? playlistName = intentRequest.Intent.Slots?.TryGetValue("playlist", out var playlistSlot) == true ? playlistSlot.Value : null;
         return BuildPlaylistPlayResponseAsync(
             _libraryManager, _userManager, _queueManager,
-            playlistName ?? string.Empty, intentRequest, context, user, session, locale,
+            playlistName ?? string.Empty, context, user, session, locale,
             shuffle: false, rng: null, cancellationToken);
     }
 }

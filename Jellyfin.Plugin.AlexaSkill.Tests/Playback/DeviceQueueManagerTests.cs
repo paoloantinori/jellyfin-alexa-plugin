@@ -446,6 +446,47 @@ public class DeviceQueueManagerTests : IDisposable
     // SetShuffledQueue (JF-305: shuffle-at-start playlist qualifier)
     // =====================================================================
 
+    /// <summary>
+    /// Non-shuffle playlist-play baseline (JF-305 Chunk 2 regression).
+    /// This is the counterpart to <see cref="SetShuffledQueue_ShufflesAllItems_StoresOriginal_SetsShuffleState"/>:
+    /// the non-shuffle arm of <c>BaseHandler.BuildPlaylistPlayResponseAsync</c>
+    /// (shuffle: false) persists the queue via <see cref="DeviceQueueManager.SetQueue"/>
+    /// and serves the first ordered track. The persisted <see cref="DeviceQueue"/> MUST
+    /// be in <c>Default</c> order with no stored original (pre-shuffle) id list — the
+    /// distinguishable state that makes Chunk 3's <c>shuffle:true</c> caller safe to add.
+    /// </summary>
+    /// <remarks>
+    /// The full handler path (<c>PlayPlaylistIntentHandler → BuildPlaylistPlayResponseAsync</c>)
+    /// cannot be exercised here: <c>Playlist.GetManageableItems()</c> is non-virtual and
+    /// delegates to <c>BaseItem.GetLinkedChildrenInfos()</c>, which requires the static
+    /// <c>BaseItem.LibraryManager</c> set up during server startup (DB-coupled, returns
+    /// empty in a unit-test host). The persistence contract — the part of the non-shuffle
+    /// arm whose state could silently regress — is therefore asserted at the
+    /// <see cref="DeviceQueueManager"/> level, mirroring the exact call the arm makes
+    /// (<c>SetQueue(deviceId, idList, 0)</c>).
+    /// </remarks>
+    [Fact]
+    public void NonShufflePlaylistPlay_SetQueue_YieldsOrderedFirst_DefaultOrder_NoOriginal()
+    {
+        // Ordered playlist track ids, as BuildPlaylistPlayResponseAsync builds them from
+        // PlaylistTrackResolver.GetAudioTracks(...).Take(initialFetchSize) — the ordering
+        // contract PlaylistTrackResolverTests.Preserves_order guards upstream.
+        List<string> playlistTrackIds = new() { "track-A", "track-B", "track-C", "track-D" };
+
+        // Mirrors the non-shuffle arm exactly: queueManager?.SetQueue(deviceId, idList, 0)
+        _manager.SetQueue("device-playlist", playlistTrackIds, currentIndex: 0);
+
+        DeviceQueue q = _manager.GetOrCreateQueue("device-playlist");
+
+        // (a) ordered-first: the served/persisted first item is the playlist's first track
+        Assert.Equal("track-A", q.ItemIds[0]);
+        Assert.Equal(playlistTrackIds, q.ItemIds);          // full original order preserved
+
+        // (b) non-shuffled state: Default order, no stored original id list
+        Assert.Equal("Default", q.PlaybackOrder);
+        Assert.Null(q.OriginalItemIds);
+    }
+
     [Fact]
     public void SetShuffledQueue_ShufflesAllItems_StoresOriginal_SetsShuffleState()
     {
