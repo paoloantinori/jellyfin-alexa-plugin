@@ -241,6 +241,16 @@ tests:
       playlist: {}
     expected_response_type: any
 
+  # --- ShufflePlayIntent (JF-305): shuffle-at-start playlist ---
+  # "mad season" is a real, searchable playlist (≥1 audio track) — same target as
+  # the PlayPlaylist case above. Verifies NLU routes to ShufflePlayIntent and the
+  # skill serves playback (shuffled first track) without hard-erroring.
+  - utterance: "mescola la playlist mad season"
+    expected_intent: ShufflePlayIntent
+    expected_slots:
+      playlist: {}
+    expected_response_type: any
+
   # --- Italian mood: literal samples in it-IT model ---
   # These match static (non-slotted) samples in the model. The handler receives
   # an empty mood slot and responds with "DidNotCatchMood" which lists Italian
