@@ -206,7 +206,7 @@ git commit -m "feat(playback): add DeviceQueueManager.SetShuffledQueue (JF-305)"
 **Files:**
 - Modify: `Jellyfin.Plugin.AlexaSkill/Alexa/Handler/BaseHandler.cs` (add `protected` method)
 - Modify: `Jellyfin.Plugin.AlexaSkill/Alexa/Handler/Intent/PlayPlaylistIntentHandler.cs` (becomes a thin caller)
-- Test: keep `Jelly.Plugin.AlexaSkill.Tests/Handler/Intent/PlayPlaylistIntentHandlerTests.cs` green (regression sentinel)
+- Test: keep `Jellyfin.Plugin.AlexaSkill.Tests/Handler/Intent/PlayPlaylistIntentHandlerTests.cs` green (regression sentinel)
 
 **Why a method on `BaseHandler`, not a service:** `BaseHandler`'s ctor is `(ISessionManager, PluginConfiguration, ILoggerFactory)` — it doesn't hold `ILibraryManager`/`IUserManager`/`DeviceQueueManager`. But the flow needs many `protected` helpers (`FuzzyMatch`, `HandleFuzzyMiss`, `SafeGetItemsResult`, `RetryAsync`, `MirrorQueueToSession`, `GetLocale`, `ResolveJellyfinUser`, `ApplyLibraryFilter`) that only a `BaseHandler` subclass (or a method ON `BaseHandler`) can reach. So: put the shared flow as a `protected` method on `BaseHandler`, pass the 3 extra deps as parameters. No ctor change, no DI change, no access-modifier promotions.
 
@@ -352,7 +352,7 @@ public void CanHandle_ShufflePlayIntent()
 }
 
 [Fact]
-public async Task HandleAsync_DelegatesToBuilder_WithShuffleTrue()
+public async Task HandleAsync_DelegatesToSharedFlow_WithShuffleTrue()
 {
     // With a matching playlist stubbed in ILibraryManager and a seeded DeviceQueueManager,
     // the response must reflect a shuffled queue (PlaybackOrder=Shuffle, OriginalItemIds set,
