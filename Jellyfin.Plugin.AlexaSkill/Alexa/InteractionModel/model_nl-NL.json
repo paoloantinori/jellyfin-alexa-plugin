@@ -812,6 +812,19 @@
             "type": "AMAZON.Musician"
           }
         ]
+      },
+      {
+        "name": "ShufflePlayIntent",
+        "samples": [
+          "speel de playlist {playlist} in willekeurige volgorde",
+          "shuffle de playlist {playlist}"
+        ],
+        "slots": [
+          {
+            "name": "playlist",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
       }
     ],
     "types": [
@@ -1347,6 +1360,18 @@
           {
             "name": "musician",
             "type": "AMAZON.Musician",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "ShufflePlayIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "playlist",
+            "type": "AMAZON.SearchQuery",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

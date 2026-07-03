@@ -182,6 +182,22 @@
         ]
       },
       {
+        "name": "ShufflePlayIntent",
+        "samples": [
+          "Mescola la playlist {playlist}",
+          "Mescola playlist {playlist}",
+          "Riproduci la playlist {playlist} in modalità casuale",
+          "Riproduci la playlist {playlist} a caso",
+          "Suona la playlist {playlist} in modalità casuale"
+        ],
+        "slots": [
+          {
+            "name": "playlist",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
         "name": "GoToChapterIntent",
         "samples": [
           "Vai al capitolo {chapter_number}",
@@ -2120,6 +2136,18 @@
           {
             "name": "musician",
             "type": "AMAZON.Musician",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "ShufflePlayIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "playlist",
+            "type": "AMAZON.SearchQuery",
             "confirmationRequired": false,
             "elicitationRequired": false
           }
