@@ -2099,7 +2099,10 @@ public abstract class BaseHandler
         Random? rng,
         CancellationToken cancellationToken)
     {
-        Logger.LogDebug("PlayPlaylist: entered, locale={Locale}", locale);
+        // Shared by PlayPlaylist (shuffle=false) and ShufflePlay (shuffle=true); the
+        // shuffle flag distinguishes the calling path (follow-on logs keep the
+        // "PlayPlaylist:" prefix as the shared method body is identical).
+        Logger.LogDebug("BuildPlaylistPlayResponseAsync: entered, locale={Locale}, shuffle={Shuffle}", locale, shuffle);
 
         if (string.IsNullOrWhiteSpace(playlistName))
         {
