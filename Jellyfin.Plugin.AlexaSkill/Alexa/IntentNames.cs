@@ -15,6 +15,7 @@ internal static class IntentNames
     public const string Play = "PlayIntent";
     public const string PlayLastAdded = "PlayLastAddedIntent";
     public const string PlayPlaylist = "PlayPlaylistIntent";
+    public const string ShufflePlay = "ShufflePlayIntent";
     public const string PlaySong = "PlaySongIntent";
     public const string PlayVideo = "PlayVideoIntent";
     public const string PlayRandom = "PlayRandomIntent";
