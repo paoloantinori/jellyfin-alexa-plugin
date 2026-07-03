@@ -1,7 +1,7 @@
 ---
 name: Alexa Skill
 guid: c5df7de0-8777-4b3c-a70d-5c3dae359c9e
-version: 0.9.2.0
+version: 0.9.3.0
 targetAbi: 10.11.0.0
 framework: net9.0
 overview: Alexa skill plugin for Jellyfin
@@ -20,4 +20,4 @@ artifacts:
   - Amazon.Lambda.Serialization.Json.dll
   - Jellyfin.Plugin.AlexaSkill.dll
   - Refit.dll
-changelog: "Fixed: shuffle mode (AMAZON.ShuffleOn/Off) now actually changes playback order during playlists/queues — it had been setting a flag that the next-track logic never read, so playback stayed in the original order. Shuffle state now lives in one authoritative store and the queue is physically reshuffled (each track once); shuffle-off restores the original order; the shuffle-on response no longer leaks whole-library dynamic entities (issue #10 follow-up, JF-301). Also hardened the account-linking implicit-grant redirect (#11)."
+changelog: "New: shuffle-at-start for playlists — request shuffle directly in the initial play command (\"shuffle the playlist X\", \"play the playlist X in shuffle mode\", \"reproduce la lista de reproducción X en modo aleatorio\") so the queue is shuffled before playback begins and the first track is random too. Builds on the 0.9.2.0 shuffle fix, reusing the authoritative per-device shuffle state at queue-build time. Supported across all skill locales (issue #10, JF-305)."
