@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -68,7 +69,7 @@ public class LiveTvFeatureFlagTests : PluginTestBase, IDisposable
 
         var handler = new PlayChannelIntentHandler(
             _sessionManagerMock.Object, _config,
-            _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+            _libraryManagerMock.Object, _userManagerMock.Object, Mock.Of<ILiveTvStreamResolver>(), _loggerFactory);
 
         var response = await handler.HandleAsync(
             CreateChannelRequest("CNN"),
@@ -83,7 +84,7 @@ public class LiveTvFeatureFlagTests : PluginTestBase, IDisposable
     {
         var handler = new PlayChannelIntentHandler(
             _sessionManagerMock.Object, _config,
-            _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+            _libraryManagerMock.Object, _userManagerMock.Object, Mock.Of<ILiveTvStreamResolver>(), _loggerFactory);
 
         // No channels in library — handler returns "couldn't find any channel"
         _libraryManagerMock

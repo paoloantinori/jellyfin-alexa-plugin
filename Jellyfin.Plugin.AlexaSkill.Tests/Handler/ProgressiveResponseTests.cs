@@ -9,6 +9,7 @@ using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Dto;
@@ -402,7 +403,7 @@ public class ProgressiveResponseIntegrationTests : PluginTestBase
             .Returns(new List<BaseItem>());
 
         var handler = new PlayChannelIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, Mock.Of<ILiveTvStreamResolver>(), _loggerFactory);
 
         var request = new IntentRequest
         {

@@ -6,9 +6,10 @@ using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
-using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -21,22 +22,26 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
 /// <summary>
 /// Handler for PlayChannelIntent — searches for live TV channels by name
-/// and starts playback via the Alexa AudioPlayer interface.
+/// and launches playback via the Alexa VideoApp interface (VideoApp.Launch),
+/// like movies and episodes, so channels actually play on Echo Show.
 /// </summary>
 public class PlayChannelIntentHandler : BaseHandler
 {
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
+    private readonly ILiveTvStreamResolver _streamResolver;
 
     public PlayChannelIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
+        ILiveTvStreamResolver streamResolver,
         ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
+        _streamResolver = streamResolver;
     }
 
     /// <inheritdoc/>
@@ -92,7 +97,6 @@ public class PlayChannelIntentHandler : BaseHandler
         }
 
         BaseItem channel = channels[0];
-        string itemId = channel.Id.ToString();
 
         List<QueueItem> queueItems = new List<QueueItem>
         {
@@ -101,6 +105,46 @@ public class PlayChannelIntentHandler : BaseHandler
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = channel;
 
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, channel, user, context);
+        // Live TV must launch via VideoApp.Launch (like movies/episodes) so it plays on
+        // Echo Show. The AudioPlayer static stream URL used previously 500s for a live
+        // source. The resolver picks the correct URL via Jellyfin's PlaybackInfo.
+        LiveTvStream? stream = await _streamResolver.ResolveAsync(channel, user, cancellationToken).ConfigureAwait(false);
+        if (stream is null)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaTypeNotAvailable", locale));
+        }
+
+        // Record the last-played channel for this device (the resume / continue-watching signal).
+        // Mirrors the chokepoint in BaseHandler.BuildAudioPlayerResponse; needed here because the
+        // direct-remote stream URL has no /Videos/ segment for LastPlayedResponseInterceptor to parse.
+        string? deviceId = context?.System?.Device?.DeviceID;
+        if (!string.IsNullOrEmpty(deviceId))
+        {
+            Plugin.Instance?.DeviceQueueManager?.RecordLastPlayed(deviceId, channel.Id.ToString());
+        }
+
+        return new SkillResponse
+        {
+            Version = "1.0",
+            Response = new ResponseBody
+            {
+                // VideoApp.Launch must NOT include shouldEndSession — Alexa rejects it.
+                ShouldEndSession = null,
+                Directives = new List<IDirective>
+                {
+                    new VideoAppLaunchDirective
+                    {
+                        VideoItem = new VideoItem
+                        {
+                            Source = stream.Url,
+                            Metadata = new VideoItemMetadata
+                            {
+                                Title = channel.Name
+                            }
+                        }
+                    }
+                }
+            }
+        };
     }
 }

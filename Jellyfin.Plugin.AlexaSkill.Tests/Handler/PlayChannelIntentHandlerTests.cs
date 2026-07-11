@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
@@ -7,7 +8,9 @@ using global::Alexa.NET.Request;
 using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
 using global::Alexa.NET.Response.Directive;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using Jellyfin.Database.Implementations.Entities;
@@ -25,9 +28,12 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class PlayChannelIntentHandlerTests : PluginTestBase
 {
+    private static readonly LiveTvStream DefaultStream = new("https://remote.example/playlist.m3u8");
+
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly Mock<ILibraryManager> _libraryManagerMock;
     private readonly Mock<IUserManager> _userManagerMock;
+    private readonly Mock<ILiveTvStreamResolver> _resolverMock;
     private readonly PluginConfiguration _config;
     private readonly ILoggerFactory _loggerFactory;
 
@@ -39,6 +45,12 @@ public class PlayChannelIntentHandlerTests : PluginTestBase
         _userManagerMock
             .Setup(um => um.GetUserById(It.IsAny<Guid>()))
             .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+        // By default the resolver returns a direct-remote stream so found-channel tests
+        // reach the VideoApp.Launch path. Individual tests override this as needed.
+        _resolverMock = new Mock<ILiveTvStreamResolver>();
+        _resolverMock
+            .Setup(r => r.ResolveAsync(It.IsAny<BaseItem>(), It.IsAny<Entities.User>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(DefaultStream);
         _config = new PluginConfiguration();
         TestHelpers.SetServerAddress(_config, "http://localhost:8096");
         _loggerFactory = LoggerFactory.Create(b => { });
@@ -51,6 +63,7 @@ public class PlayChannelIntentHandlerTests : PluginTestBase
             _config,
             _libraryManagerMock.Object,
             _userManagerMock.Object,
+            _resolverMock.Object,
             _loggerFactory);
     }
 
@@ -168,7 +181,7 @@ public class PlayChannelIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
-    public async Task Handle_FoundChannel_ReturnsAudioPlayerDirective()
+    public async Task Handle_FoundChannel_ReturnsVideoAppDirective()
     {
         var channelId = Guid.NewGuid();
         var channel = CreateTestChannel("CNN", channelId);
@@ -184,10 +197,42 @@ public class PlayChannelIntentHandlerTests : PluginTestBase
             TestHelpers.CreateTestUser(),
             CreateSession(), CancellationToken.None);
 
+        // Live TV channels launch via VideoApp.Launch (not AudioPlayer.Play) so they
+        // actually play on Echo Show. The source is whatever URL the resolver picked.
         Assert.Null(response.Response.OutputSpeech);
-        var directive = response.HasDirective<AudioPlayerPlayDirective>();
-        Assert.Contains(channelId.ToString(), directive.AudioItem.Stream.Url);
-        Assert.Contains("Audio", directive.AudioItem.Stream.Url);
+        var directive = response.HasDirective<VideoAppLaunchDirective>();
+        Assert.Equal(DefaultStream.Url, directive.VideoItem.Source);
+        Assert.Equal("CNN", directive.VideoItem.Metadata?.Title);
+        // VideoApp.Launch must NOT include shouldEndSession — Alexa rejects it.
+        Assert.Null(response.Response.ShouldEndSession);
+    }
+
+    [Fact]
+    public async Task Handle_ResolverReturnsNull_ReturnsErrorTell()
+    {
+        var channel = CreateTestChannel("CNN");
+
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { channel });
+
+        _resolverMock
+            .Setup(r => r.ResolveAsync(It.IsAny<BaseItem>(), It.IsAny<Entities.User>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((LiveTvStream?)null);
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreatePlayChannelRequest("CNN"),
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            CreateSession(), CancellationToken.None);
+
+        // When the stream cannot be resolved, the skill speaks an error instead of
+        // launching a broken player.
+        Assert.NotNull(response.Response.OutputSpeech);
+        bool hasVideoApp = response.Response.Directives is not null
+            && response.Response.Directives.Any(d => d is VideoAppLaunchDirective);
+        Assert.False(hasVideoApp);
     }
 
     [Fact]
@@ -226,6 +271,6 @@ public class PlayChannelIntentHandlerTests : PluginTestBase
             TestHelpers.CreateTestUser(),
             CreateSession(), CancellationToken.None);
 
-        response.HasDirective<AudioPlayerPlayDirective>();
+        response.HasDirective<VideoAppLaunchDirective>();
     }
 }

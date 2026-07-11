@@ -11,6 +11,7 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.ModelDeployment;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Diagnostics;
 using Jellyfin.Plugin.AlexaSkill.ProactiveEvents;
@@ -96,6 +97,9 @@ public class Registrator : IPluginServiceRegistrator
 
         // HttpClient for LWA and progressive responses
         serviceCollection.AddHttpClient("AlexaSkill");
+
+        // Live TV stream resolver (PlaybackInfo -> direct-remote vs dynamic HLS master)
+        serviceCollection.AddSingleton<ILiveTvStreamResolver, LiveTvStreamResolver>();
 
         // Intent / event / error handlers — auto-discovered from this assembly
         Type[] allTypes;
