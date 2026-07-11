@@ -425,6 +425,7 @@ git push origin main --tags
 3. Verify manifest.json was committed with correct checksum (not "placeholder")
 4. Verify the zip contains all expected DLLs + icon.png: download and `unzip -l`
 5. **Set curated GitHub release notes (MANDATORY — never skip, recurring mistake).** `release-build.yml` uses `generate_release_notes: true`, which only lists PR titles — but this repo commits directly to `main` with no PRs, so the auto body is a bare ~100-byte `compare/...` link. The `build.yaml` changelog flows into `manifest.json` but NOT onto the GitHub release page. Write curated markdown (Features/Fixes/Internals + Known limitations, sourced from `build.yaml`'s changelog) to a file and apply:
+   Write **user-facing** curated markdown — plain language describing what the user can now do / what changed for them, plus anything they need to know (limitations, device support). **No code symbols, no class/handler/API names, no internal mechanisms** — keep the technical root-cause and internals in the GitHub issue, NOT the release notes. Write in English (the catalog/changelog lingua franca), source the gist from `build.yaml`'s changelog, save to a file and apply:
    ```bash
    gh release edit <tag> --notes-file /tmp/release_notes_<tag>.md
    gh release view <tag> --json body -q '.body' | wc -c   # must be hundreds+ of bytes, NOT ~100
