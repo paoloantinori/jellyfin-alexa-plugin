@@ -30,43 +30,45 @@ GitHub Actions runs the validation/build pipeline on **PRs to main** and via man
 
 ## Project Layout
 
-- `Alexa/Handler/Intent/` — 60 intent handlers (one per intent, inherit `BaseHandler`)
-- `Alexa/Handler/BaseHandler.cs` — shared utilities: `FuzzyMatch`, `HandleFuzzyMiss`, `RetryAsync`, stream URLs, library filters
-- `Alexa/InteractionModel/` — 17 per-locale interaction model JSONs (`model_*.json`), generated from templates in `Alexa/InteractionModel/templates/`
-- `Alexa/Locale/` — Response strings: keys in `ResponseStrings.cs`, values in 17 `<locale>.json` files
-- `Alexa/SmapiManagement.cs` — SMAPI wrapper (skill CRUD, account linking, status polling)
-- `Alexa/ModelDeployment/` — Custom interaction model validation, fetch, deploy, restore via SMAPI; `IInteractionModelRedeployer` rebuilds + redeploys all locale models (used by the invocation-name save path and the rebuild endpoint)
-- `Alexa/Manifest/` — Skill manifest generation
-- `Alexa/Apl/` — APL visual template generation (carousel, NowPlaying screen)
-- `Alexa/Cache/` — In-memory cache layer for artist/item lookups
-- `Alexa/Catalog/` — Music catalog browsing (browse categories, recently added, recommendations)
-- `Alexa/Directive/` — Alexa response directives (AudioPlayer, APL, template rendering)
-- `Alexa/DynamicEntities/` — Dynamic entity slot updates via SMAPI
-- `Alexa/Interface/` — Alexa interface capability detection (APL support, etc.)
-- `Alexa/Music/` — Music-specific data models and helpers
-- `Alexa/Playback/` — Playback state and progressive queue management
-- `Alexa/Util/` — Shared utility classes
-- `Alexa/ArtistIndexService.cs` — In-memory artist index with event-driven refresh
-- `Alexa/CircuitBreaker.cs` — Circuit breaker for external API resilience
-- `Alexa/Util/ArtistSearch.cs` — 4-tier artist search fallback chain (shared by PlayArtist and FindSong)
-- `Alexa/Util/KeywordMatcher.cs` — Partial title tokenization and scoring for song search
-- `Alexa/Directive/ElicitSlotDirective.cs` — Dialog.ElicitSlot support for multi-turn conversations
-- `Alexa/ErrorClassifier.cs` — Categorizes errors for user-facing responses
-- `Alexa/CustomerProfileService.cs` — Amazon customer profile lookups
-- `Alexa/SlotMappings.cs` — Slot name → type mappings (consistency enforcement)
-- `Alexa/FuzzyMatcher.cs` — Fuzzy string matching with configurable thresholds
-- `Alexa/RetryHelper.cs` — Exponential backoff retry with timeout budget (default 6s)
-- `Alexa/Pipeline/` — Request routing pipeline
-- `Configuration/` — Plugin config DTO + Jellyfin config UI (`config.html`)
-- `Controller/` — ASP.NET API controllers (skill endpoint, config, simulator, health)
-- `Alexa/SongNgramIndexService.cs` — In-memory n-gram + phonetic index for O(1) song title lookup
-- `Alexa/ISongNgramIndex.cs` — Interface for song n-gram index (Search + SearchPhonetic)
-- `Alexa/Diagnostics/` — Diagnostic helpers for troubleshooting
-- `Alexa/Entities/` — Data transfer objects and entity types
-- `Alexa/EntryPoints/` — Plugin entry points (service registration, DI)
-- `Alexa/Exceptions/` — Custom exception types
-- `Alexa/Lwa/` — Login with Amazon (LWA) OAuth flow
-- `Alexa/ProactiveEvents/` — Proactive event notifications via Alexa
+Plugin source lives under `Jellyfin.Plugin.AlexaSkill/` (the C# project root) — all `Alexa/`, `Configuration/`, and `Controller/` paths below are relative to it. Repo-root paths (`docs/`, `tests/`, `scripts/`, `Directory.Build.props`) have no prefix.
+
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Handler/Intent/` — 60 intent handlers (one per intent, inherit `BaseHandler`)
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Handler/BaseHandler.cs` — shared utilities: `FuzzyMatch`, `HandleFuzzyMiss`, `RetryAsync`, stream URLs, library filters
+- `Jellyfin.Plugin.AlexaSkill/Alexa/InteractionModel/` — 17 per-locale interaction model JSONs (`model_*.json`), generated from templates in `Alexa/InteractionModel/templates/`
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Locale/` — Response strings: keys in `ResponseStrings.cs`, values in 17 `<locale>.json` files
+- `Jellyfin.Plugin.AlexaSkill/Alexa/SmapiManagement.cs` — SMAPI wrapper (skill CRUD, account linking, status polling)
+- `Jellyfin.Plugin.AlexaSkill/Alexa/ModelDeployment/` — Custom interaction model validation, fetch, deploy, restore via SMAPI; `IInteractionModelRedeployer` rebuilds + redeploys all locale models (used by the invocation-name save path and the rebuild endpoint)
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Manifest/` — Skill manifest generation
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Apl/` — APL visual template generation (carousel, NowPlaying screen)
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Cache/` — In-memory cache layer for artist/item lookups
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Catalog/` — Music catalog browsing (browse categories, recently added, recommendations)
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Directive/` — Alexa response directives (AudioPlayer, APL, template rendering)
+- `Jellyfin.Plugin.AlexaSkill/Alexa/DynamicEntities/` — Dynamic entity slot updates via SMAPI
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Interface/` — Alexa interface capability detection (APL support, etc.)
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Music/` — Music-specific data models and helpers
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Playback/` — Playback state and progressive queue management
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Util/` — Shared utility classes
+- `Jellyfin.Plugin.AlexaSkill/Alexa/ArtistIndexService.cs` — In-memory artist index with event-driven refresh
+- `Jellyfin.Plugin.AlexaSkill/Alexa/CircuitBreaker.cs` — Circuit breaker for external API resilience
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Util/ArtistSearch.cs` — 4-tier artist search fallback chain (shared by PlayArtist and FindSong)
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Util/KeywordMatcher.cs` — Partial title tokenization and scoring for song search
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Directive/ElicitSlotDirective.cs` — Dialog.ElicitSlot support for multi-turn conversations
+- `Jellyfin.Plugin.AlexaSkill/Alexa/ErrorClassifier.cs` — Categorizes errors for user-facing responses
+- `Jellyfin.Plugin.AlexaSkill/Alexa/CustomerProfileService.cs` — Amazon customer profile lookups
+- `Jellyfin.Plugin.AlexaSkill/Alexa/SlotMappings.cs` — Slot name → type mappings (consistency enforcement)
+- `Jellyfin.Plugin.AlexaSkill/Alexa/FuzzyMatcher.cs` — Fuzzy string matching with configurable thresholds
+- `Jellyfin.Plugin.AlexaSkill/Alexa/RetryHelper.cs` — Exponential backoff retry with timeout budget (default 6s)
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Pipeline/` — Request routing pipeline
+- `Jellyfin.Plugin.AlexaSkill/Configuration/` — Plugin config DTO + Jellyfin config UI (`config.html`)
+- `Jellyfin.Plugin.AlexaSkill/Controller/` — ASP.NET API controllers (skill endpoint, config, simulator, health)
+- `Jellyfin.Plugin.AlexaSkill/Alexa/SongNgramIndexService.cs` — In-memory n-gram + phonetic index for O(1) song title lookup
+- `Jellyfin.Plugin.AlexaSkill/Alexa/ISongNgramIndex.cs` — Interface for song n-gram index (Search + SearchPhonetic)
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Diagnostics/` — Diagnostic helpers for troubleshooting
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Entities/` — Data transfer objects and entity types
+- `Jellyfin.Plugin.AlexaSkill/Alexa/EntryPoints/` — Plugin entry points (service registration, DI)
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Exceptions/` — Custom exception types
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Lwa/` — Login with Amazon (LWA) OAuth flow
+- `Jellyfin.Plugin.AlexaSkill/Alexa/ProactiveEvents/` — Proactive event notifications via Alexa
 - `docs/` — 104 Mermaid diagrams covering 6 feature flows × 17 locales
 - `tests/integration/` — NLU + E2E test suites (Python/pytest)
 - `Directory.Build.props` — Version numbers (single source of truth)
@@ -422,6 +424,11 @@ git push origin main --tags
 2. Verify GitHub release exists: `gh release view 0.5.0.0`
 3. Verify manifest.json was committed with correct checksum (not "placeholder")
 4. Verify the zip contains all expected DLLs + icon.png: download and `unzip -l`
+5. **Set curated GitHub release notes (MANDATORY — never skip, recurring mistake).** `release-build.yml` uses `generate_release_notes: true`, which only lists PR titles — but this repo commits directly to `main` with no PRs, so the auto body is a bare ~100-byte `compare/...` link. The `build.yaml` changelog flows into `manifest.json` but NOT onto the GitHub release page. Write curated markdown (Features/Fixes/Internals + Known limitations, sourced from `build.yaml`'s changelog) to a file and apply:
+   ```bash
+   gh release edit <tag> --notes-file /tmp/release_notes_<tag>.md
+   gh release view <tag> --json body -q '.body' | wc -c   # must be hundreds+ of bytes, NOT ~100
+   ```
 
 **How the CI release works:**
 
