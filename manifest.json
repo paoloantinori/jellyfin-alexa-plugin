@@ -314,11 +314,11 @@
             },
             {
                 "version": "0.9.4.0",
-                "checksum": "placeholder",
+                "checksum": "42ed4123ad27a2531e1884b7064b6973",
                 "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.9.4.0/AlexaSkill_0.9.4.0.zip",
-                "changelog": "placeholder",
+                "changelog": "Fixed: Live TV channels now play on Echo Show \u2014 asking for a channel used to display only the channel artwork with no audio or video. Channels now launch via VideoApp.Launch (like movies and episodes) and resolve the correct live stream through Jellyfin's PlaybackInfo (direct-remote HLS for IPTV/M3U sources, dynamic HLS master for tuners), so the Echo Show plays the feed with video and audio. Affects every locale (issue #12).",
                 "targetAbi": "10.11.0.0",
-                "timestamp": "2026-07-11T00:00:00Z"
+                "timestamp": "2026-07-11 12:01:11"
             }
         ]
     }
