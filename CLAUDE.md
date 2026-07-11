@@ -6,7 +6,7 @@ C# Jellyfin plugin (net9.0) exposing an Alexa skill for media playback, search, 
 
 ```bash
 dotnet build Jellyfin.Plugin.AlexaSkill.sln
-dotnet test Jellyfin.Plugin.AlexaSkill.Tests          # ~2302 unit tests
+dotnet test Jellyfin.Plugin.AlexaSkill.Tests          # ~2476 unit tests
 python3 scripts/validate_interaction_models.py        # Check all 17 models (JSON, slots, drift)
 python3 scripts/validate_locales.py                   # Check locale key coverage (baseline-aware)
 python3 scripts/validate_versions.py                  # Check version consistency across files
@@ -121,6 +121,14 @@ The n-gram index is a background hosted service (`SongNgramIndexService`) that l
 ## Cross-Media-Type Fallback
 
 When a handler's primary search finds no results (e.g., PlaySongIntent finds no song), `BaseHandler.BuildArtistSongsResponseAsync` falls back to artist search. This is shared across PlaySong, PlayAlbum, and PlayVideo handlers via `BaseHandler`.
+
+## Live TV Channel Playback
+
+Live TV channels must launch via `VideoApp.Launch` (like movies/episodes), NOT `AudioPlayer.Play`: the static `/Audio|Videos/{id}/stream?static=true` endpoint returns HTTP 500 for a live source. `PlayChannelIntentHandler` delegates URL resolution to `ILiveTvStreamResolver` (`Alexa/Util/`), which calls `/Items/{channelId}/PlaybackInfo?AutoOpenLiveStream=true` and picks:
+- **Direct-remote** (`Protocol=="Http"` + `SupportsDirectStream` + http(s) `Path`): the remote HLS master URL (H.264/AAC) is played directly by ExoPlayer — primary IPTV/M3U path.
+- **Fallback** (tuners needing transcode): `/Videos/{id}/master.m3u8?MediaSourceId=…[&LiveStreamId=…]`.
+
+The resolver is a DI singleton with a bounded 5s HTTP timeout; `null` → handler speaks `MediaTypeNotAvailable`. Use `ShouldEndSession = null` for the VideoApp response. Hardware tuners (HDHomeRun/DVB) are less tested than IPTV.
 
 ## Search Response Mode
 
