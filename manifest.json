@@ -311,6 +311,14 @@
                 "changelog": "New: shuffle-at-start for playlists \u2014 request shuffle directly in the initial play command (\"shuffle the playlist X\", \"play the playlist X in shuffle mode\", \"reproduce la lista de reproducci\u00f3n X en modo aleatorio\") so the queue is shuffled before playback begins and the first track is random too. Builds on the 0.9.2.0 shuffle fix, reusing the authoritative per-device shuffle state at queue-build time. Supported across all skill locales (issue #10, JF-305).",
                 "targetAbi": "10.11.0.0",
                 "timestamp": "2026-07-03 20:54:58"
+            },
+            {
+                "version": "0.9.4.0",
+                "checksum": "placeholder",
+                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.9.4.0/AlexaSkill_0.9.4.0.zip",
+                "changelog": "placeholder",
+                "targetAbi": "10.11.0.0",
+                "timestamp": "2026-07-11T00:00:00Z"
             }
         ]
     }
