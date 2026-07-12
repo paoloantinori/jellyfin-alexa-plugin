@@ -586,30 +586,54 @@ public class CatalogManager
             string pollJson = await pollResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             using var pollDoc = JsonDocument.Parse(pollJson);
 
-            string? status = pollDoc.RootElement.TryGetProperty("status", out var statusEl)
-                ? statusEl.GetString()
-                : null;
+            var (status, version, errorJson) = ExtractPollStatus(pollDoc);
 
             _logger.LogDebug("{Operation} poll {Iteration}: status={Status}", operationName, i + 1, status);
 
             if (status == "SUCCEEDED")
             {
-                string? version = pollDoc.RootElement.TryGetProperty("version", out var versionEl)
-                    ? versionEl.GetString()
-                    : null;
                 return version;
             }
 
             if (status == "FAILED")
             {
-                string reason = pollDoc.RootElement.TryGetProperty("errors", out var errors)
-                    ? errors.GetRawText() : "unknown";
-                throw new InvalidOperationException($"{operationName} failed: {reason}");
+                throw new InvalidOperationException($"{operationName} failed: {errorJson ?? "unknown"}");
             }
         }
 
         _logger.LogWarning("{Operation} polling timed out at {Location}", operationName, location);
         throw new TimeoutException($"{operationName} polling timed out after 30 attempts at {location}");
+    }
+
+    /// <summary>
+    /// Extracts status/version/errors from a SMAPI updateRequest poll response.
+    /// SMAPI nests these under "lastUpdateRequest" for interactionModel catalog
+    /// and slot-type update requests — e.g. GET .../catalogs/{id}/updateRequest/{reqId}
+    /// returns {"lastUpdateRequest":{"status":"SUCCEEDED","version":"2"}}. The previous
+    /// implementation read "status"/"version" from the JSON root, which is always null
+    /// for these endpoints, causing every poll to time out (JF-332). Falls back to
+    /// root-level for any endpoint that returns status at the top level.
+    /// </summary>
+    /// <param name="pollDoc">The parsed poll response JSON document.</param>
+    /// <returns>A tuple of (status, version, errors raw JSON); any may be null.</returns>
+    internal static (string? Status, string? Version, string? ErrorJson) ExtractPollStatus(JsonDocument pollDoc)
+    {
+        JsonElement root = pollDoc.RootElement;
+        JsonElement container = root.ValueKind == JsonValueKind.Object
+            && root.TryGetProperty("lastUpdateRequest", out var lur)
+            && lur.ValueKind == JsonValueKind.Object
+                ? lur
+                : root;
+
+        if (container.ValueKind != JsonValueKind.Object)
+        {
+            return (null, null, null);
+        }
+
+        string? status = container.TryGetProperty("status", out var s) ? s.GetString() : null;
+        string? version = container.TryGetProperty("version", out var v) ? v.GetString() : null;
+        string? errorJson = container.TryGetProperty("errors", out var e) ? e.GetRawText() : null;
+        return (status, version, errorJson);
     }
 
     /// <summary>
