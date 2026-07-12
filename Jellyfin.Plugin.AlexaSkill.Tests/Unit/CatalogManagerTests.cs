@@ -125,6 +125,42 @@ public class CatalogManagerTests
     }
 
     [Fact]
+    public void InjectCatalogReferences_UpdatesDialogModelSlotTypes_ToMatchInteractionModel()
+    {
+        // JF-332: SMAPI rejects MismatchedSlotType if dialog.intents[].slots[].type
+        // doesn't match the swapped interaction-model slot type. FindSongByArtistIntent.musician
+        // stayed AMAZON.Musician after artist catalog injection, failing the model build.
+        string model = """
+        {
+          "interactionModel": {
+            "languageModel": {
+              "intents": [{"name":"FindSongByArtistIntent","slots":[{"name":"musician","type":"AMAZON.Musician"}]}],
+              "types": [{"name":"AMAZON.Musician","type":"PLAIN_TEXT","values":[]}]
+            },
+            "dialog": {
+              "intents": [{"name":"FindSongByArtistIntent","slots":[{"name":"musician","type":"AMAZON.Musician","confirmationRequired":false,"elicitationRequired":false}]}]
+            }
+          }
+        }
+        """;
+
+        string result = _manager.InjectCatalogReferences(model, "artist-cat", null, "2", null);
+
+        using var resultDoc = JsonDocument.Parse(result);
+        var im = resultDoc.RootElement.GetProperty("interactionModel");
+
+        // Interaction-model slot swapped to catalog-backed type.
+        string lmSlot = im.GetProperty("languageModel").GetProperty("intents")[0]
+            .GetProperty("slots")[0].GetProperty("type").GetString()!;
+        Assert.Equal("JellyfinArtist", lmSlot);
+
+        // Dialog-model slot ALSO swapped — this was the MismatchedSlotType bug.
+        string dlgSlot = im.GetProperty("dialog").GetProperty("intents")[0]
+            .GetProperty("slots")[0].GetProperty("type").GetString()!;
+        Assert.Equal("JellyfinArtist", dlgSlot);
+    }
+
+    [Fact]
     public void InjectCatalogReferences_DoesNotTouchAlbumIntentSlots()
     {
         string model = BuildInteractionModelJson(

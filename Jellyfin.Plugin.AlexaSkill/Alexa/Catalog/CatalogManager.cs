@@ -497,6 +497,11 @@ public class CatalogManager
             if (replacesType != null)
             {
                 UpdateIntentSlotTypes(lmNode, replacesType, slotTypeName);
+                // The dialog model also declares per-intent slot types; they MUST match
+                // the interaction model or SMAPI rejects the build with MismatchedSlotType
+                // (e.g. FindSongByArtistIntent.musician stayed AMAZON.Musician). JF-332.
+                var dialogNode = root["interactionModel"]?["dialog"] as JsonObject;
+                UpdateDialogSlotTypes(dialogNode, replacesType, slotTypeName);
             }
         }
 
@@ -504,17 +509,48 @@ public class CatalogManager
     }
 
     /// <summary>
-    /// Updates all intent slot type references from <paramref name="oldType"/> to <paramref name="newType"/>.
+    /// Updates all interaction-model intent slot type references from
+    /// <paramref name="oldType"/> to <paramref name="newType"/>.
     /// </summary>
     /// <param name="languageModel">The language model JSON object to update.</param>
     /// <param name="oldType">The old slot type name to replace.</param>
     /// <param name="newType">The new slot type name to use.</param>
     internal void UpdateIntentSlotTypes(JsonObject languageModel, string oldType, string newType)
     {
-        var intentsArray = languageModel["intents"] as JsonArray;
+        int updatedCount = UpdateSlotTypesInIntents(languageModel["intents"] as JsonArray, oldType, newType);
+        _logger.LogInformation(
+            "Updated {Count} intent slot references from {OldType} to {NewType}",
+            updatedCount,
+            oldType,
+            newType);
+    }
+
+    /// <summary>
+    /// Updates all dialog-model intent slot type references from <paramref name="oldType"/>
+    /// to <paramref name="newType"/>. The dialog model must agree with the interaction
+    /// model's slot types or SMAPI rejects the build (MismatchedSlotType). JF-332.
+    /// </summary>
+    /// <param name="dialog">The dialog model JSON object, or null if absent.</param>
+    /// <param name="oldType">The old slot type name to replace.</param>
+    /// <param name="newType">The new slot type name to use.</param>
+    internal void UpdateDialogSlotTypes(JsonObject? dialog, string oldType, string newType)
+    {
+        int updatedCount = UpdateSlotTypesInIntents(dialog?["intents"] as JsonArray, oldType, newType);
+        if (updatedCount > 0)
+        {
+            _logger.LogInformation(
+                "Updated {Count} dialog slot references from {OldType} to {NewType}",
+                updatedCount,
+                oldType,
+                newType);
+        }
+    }
+
+    private static int UpdateSlotTypesInIntents(JsonArray? intentsArray, string oldType, string newType)
+    {
         if (intentsArray == null)
         {
-            return;
+            return 0;
         }
 
         int updatedCount = 0;
@@ -537,11 +573,7 @@ public class CatalogManager
             }
         }
 
-        _logger.LogInformation(
-            "Updated {Count} intent slot references from {OldType} to {NewType}",
-            updatedCount,
-            oldType,
-            newType);
+        return updatedCount;
     }
 
     /// <summary>
