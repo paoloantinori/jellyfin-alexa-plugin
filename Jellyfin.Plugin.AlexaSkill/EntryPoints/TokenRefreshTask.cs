@@ -70,6 +70,18 @@ public class TokenRefreshTask : IScheduledTask
                 continue;
             }
 
+            // Refresh only when the access token is missing or near expiry. LWA access
+            // tokens live ~1h; the old blind refresh on a 6h interval left the token
+            // expired ~83% of the time, breaking SMAPI management ops (catalog sync,
+            // invocation-name redeploy). JF-333.
+            if (user.SmapiDeviceToken != null
+                && user.SmapiDeviceToken.ExpireTimestamp > 0
+                && DateTimeOffset.FromUnixTimeSeconds(user.SmapiDeviceToken.ExpireTimestamp) - DateTimeOffset.UtcNow
+                    > TimeSpan.FromMinutes(30))
+            {
+                continue; // still fresh (> 30 min remaining)
+            }
+
             try
             {
                 DeviceToken? tokenResult = await LwaClient.RefreshDeviceToken(
@@ -104,10 +116,14 @@ public class TokenRefreshTask : IScheduledTask
     /// <inheritdoc />
     public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
     {
+        // Interval must be shorter than the ~1h access-token lifetime or the token is
+        // expired most of the time. ExecuteAsync additionally skips users whose token
+        // still has > 30 min remaining, so we check often but only refresh when needed.
+        // JF-333 (was 6h).
         yield return new TaskTriggerInfo
         {
             Type = TaskTriggerInfoType.IntervalTrigger,
-            IntervalTicks = TimeSpan.FromHours(6).Ticks
+            IntervalTicks = TimeSpan.FromMinutes(20).Ticks
         };
     }
 }

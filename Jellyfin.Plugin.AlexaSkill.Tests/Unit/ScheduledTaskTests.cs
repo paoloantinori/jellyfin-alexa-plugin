@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.EntryPoints;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
 using Xunit;
 
@@ -197,14 +198,19 @@ public class ScheduledTaskTests : PluginTestBase
     }
 
     [Fact]
-    public void TokenRefreshTask_DefaultTrigger_IsSixHourly()
+    public void TokenRefreshTask_DefaultTrigger_IntervalShorterThanAccessTokenLifetime()
     {
+        // LWA access tokens live ~1h; the refresh interval must be shorter or the token
+        // is expired most of the time, breaking SMAPI management ops (catalog sync,
+        // invocation-name redeploy). Old value was 6h. JF-333.
         var task = new TokenRefreshTask(
             LoggerFactory.Create(b => { }).CreateLogger<TokenRefreshTask>());
 
         var triggers = task.GetDefaultTriggers().ToList();
-        Assert.Single(triggers);
-        Assert.Equal(TimeSpan.FromHours(6).Ticks, triggers[0].IntervalTicks);
+        var interval = triggers.Single(t => t.Type == TaskTriggerInfoType.IntervalTrigger);
+        Assert.True(
+            TimeSpan.FromTicks(interval.IntervalTicks ?? 0) < TimeSpan.FromHours(1),
+            $"token refresh interval must be < 1h token lifetime, got {TimeSpan.FromTicks(interval.IntervalTicks ?? 0)}");
     }
 
     [Fact]
@@ -216,6 +222,43 @@ public class ScheduledTaskTests : PluginTestBase
 
         // Should complete without throwing
         await task.ExecuteAsync(NullProgress.Instance, CancellationToken.None);
+    }
+
+    // -------------------------------------------------------------------------
+    // CatalogSyncTask
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void CatalogSyncTask_Metadata_HasCorrectProperties()
+    {
+        var task = new CatalogSyncTask(
+            LoggerFactory.Create(b => { }).CreateLogger<CatalogSyncTask>(),
+            syncService: null!,
+            userManager: null!);
+
+        Assert.Equal("Sync Alexa Skill Catalogs", task.Name);
+        Assert.Equal("AlexaSkillCatalogSync", task.Key);
+        Assert.Equal("Alexa Skill", task.Category);
+    }
+
+    [Fact]
+    public void CatalogSyncTask_DefaultTrigger_HasStartupTrigger()
+    {
+        // Plugin re-registration on each load resets the weekly IntervalTrigger's
+        // first-run baseline, so CatalogSync never auto-ran before JF-333. The
+        // StartupTrigger fires on every restart (ExecuteAsync skips users synced
+        // < 12h ago to avoid redundant SMAPI work).
+        var task = new CatalogSyncTask(
+            LoggerFactory.Create(b => { }).CreateLogger<CatalogSyncTask>(),
+            syncService: null!,
+            userManager: null!);
+
+        var triggerTypes = task.GetDefaultTriggers().Select(t => t.Type).ToList();
+        Assert.Contains(TaskTriggerInfoType.StartupTrigger, triggerTypes);
+        Assert.Contains(TaskTriggerInfoType.IntervalTrigger, triggerTypes);
+
+        var weekly = task.GetDefaultTriggers().Single(t => t.Type == TaskTriggerInfoType.IntervalTrigger);
+        Assert.Equal(TimeSpan.FromDays(7).Ticks, weekly.IntervalTicks);
     }
 
     /// <summary>

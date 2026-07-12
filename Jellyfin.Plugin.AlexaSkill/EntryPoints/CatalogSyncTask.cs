@@ -69,6 +69,24 @@ public class CatalogSyncTask : IScheduledTask
                 continue;
             }
 
+            // StartupTrigger fires on every plugin load (each Jellyfin restart). Skip
+            // users synced recently to avoid redundant SMAPI work; the weekly
+            // IntervalTrigger plus this gate keep catalogs fresh without syncing on
+            // every restart. JF-333.
+            TimeSpan sinceSync = user.LastCatalogSync.HasValue
+                ? DateTime.UtcNow - user.LastCatalogSync.Value
+                : TimeSpan.MaxValue;
+            if (sinceSync < TimeSpan.FromHours(12))
+            {
+                _logger.LogDebug(
+                    "Skipping user {UserId}: catalog synced {Hours:F1}h ago (< 12h)",
+                    user.Id,
+                    sinceSync.TotalHours);
+                processed++;
+                progress.Report((double)processed / totalUsers);
+                continue;
+            }
+
             try
             {
                 Jellyfin.Database.Implementations.Entities.User? jellyfinUser = _userManager.GetUserById(user.Id);
@@ -108,6 +126,13 @@ public class CatalogSyncTask : IScheduledTask
     /// <inheritdoc />
     public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
     {
+        // StartupTrigger: Jellyfin re-registers a plugin's IScheduledTasks on each
+        // plugin load (DLL update), which resets the weekly IntervalTrigger's first-run
+        // baseline — so on servers that update the plugin more often than weekly, the
+        // interval never elapses and the catalog (AlbumName/JellyfinArtist) never gets
+        // populated (this is why it never auto-ran before JF-333). The startup trigger
+        // fires on every restart; ExecuteAsync skips users synced < 12h ago.
+        yield return new TaskTriggerInfo { Type = TaskTriggerInfoType.StartupTrigger };
         yield return new TaskTriggerInfo
         {
             Type = TaskTriggerInfoType.IntervalTrigger,
