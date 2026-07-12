@@ -651,16 +651,15 @@ public class CatalogManager
     internal static (string? Status, string? Version, string? ErrorJson) ExtractPollStatus(JsonDocument pollDoc)
     {
         JsonElement root = pollDoc.RootElement;
-        JsonElement container = root.ValueKind == JsonValueKind.Object
-            && root.TryGetProperty("lastUpdateRequest", out var lur)
-            && lur.ValueKind == JsonValueKind.Object
-                ? lur
-                : root;
-
-        if (container.ValueKind != JsonValueKind.Object)
+        if (root.ValueKind != JsonValueKind.Object)
         {
             return (null, null, null);
         }
+
+        JsonElement container = root.TryGetProperty("lastUpdateRequest", out var lur)
+            && lur.ValueKind == JsonValueKind.Object
+                ? lur
+                : root;
 
         string? status = container.TryGetProperty("status", out var s) ? s.GetString() : null;
         string? version = container.TryGetProperty("version", out var v) ? v.GetString() : null;

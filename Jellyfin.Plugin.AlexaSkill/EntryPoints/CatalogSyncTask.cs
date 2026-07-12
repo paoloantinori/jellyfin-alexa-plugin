@@ -20,6 +20,10 @@ public class CatalogSyncTask : IScheduledTask
     private readonly LibrarySyncService _syncService;
     private readonly IUserManager _userManager;
 
+    // StartupTrigger fires on every plugin load; skip users synced within this window
+    // so frequent restarts don't trigger redundant SMAPI catalog work.
+    private const int RecentSyncThresholdHours = 12;
+
     public CatalogSyncTask(
         ILogger<CatalogSyncTask> logger,
         LibrarySyncService syncService,
@@ -76,7 +80,7 @@ public class CatalogSyncTask : IScheduledTask
             TimeSpan sinceSync = user.LastCatalogSync.HasValue
                 ? DateTime.UtcNow - user.LastCatalogSync.Value
                 : TimeSpan.MaxValue;
-            if (sinceSync < TimeSpan.FromHours(12))
+            if (sinceSync < TimeSpan.FromHours(RecentSyncThresholdHours))
             {
                 _logger.LogDebug(
                     "Skipping user {UserId}: catalog synced {Hours:F1}h ago (< 12h)",

@@ -17,6 +17,15 @@ public class TokenRefreshTask : IScheduledTask
 {
     private readonly ILogger<TokenRefreshTask> _logger;
 
+    // How often to CHECK whether a refresh is due. Must be short enough that a refresh
+    // attempt lands inside the safety window: TokenCheckInterval + TokenSafetyMargin must
+    // stay below the ~1h LWA access-token lifetime (Amazon controls expires_in).
+    private const int TokenCheckIntervalMinutes = 20;
+
+    // Refresh when the token has less than this remaining. Buffer so a delayed check
+    // still refreshes before expiry.
+    private const int TokenSafetyMarginMinutes = 30;
+
     public TokenRefreshTask(ILogger<TokenRefreshTask> logger)
     {
         _logger = logger;
@@ -74,12 +83,13 @@ public class TokenRefreshTask : IScheduledTask
             // tokens live ~1h; the old blind refresh on a 6h interval left the token
             // expired ~83% of the time, breaking SMAPI management ops (catalog sync,
             // invocation-name redeploy). JF-333.
-            if (user.SmapiDeviceToken != null
-                && user.SmapiDeviceToken.ExpireTimestamp > 0
-                && DateTimeOffset.FromUnixTimeSeconds(user.SmapiDeviceToken.ExpireTimestamp) - DateTimeOffset.UtcNow
-                    > TimeSpan.FromMinutes(30))
+            if (user.SmapiDeviceToken != null && user.SmapiDeviceToken.ExpireTimestamp > 0)
             {
-                continue; // still fresh (> 30 min remaining)
+                DateTimeOffset expiry = DateTimeOffset.FromUnixTimeSeconds(user.SmapiDeviceToken.ExpireTimestamp);
+                if (expiry - DateTimeOffset.UtcNow > TimeSpan.FromMinutes(TokenSafetyMarginMinutes))
+                {
+                    continue; // still fresh
+                }
             }
 
             try
@@ -123,7 +133,7 @@ public class TokenRefreshTask : IScheduledTask
         yield return new TaskTriggerInfo
         {
             Type = TaskTriggerInfoType.IntervalTrigger,
-            IntervalTicks = TimeSpan.FromMinutes(20).Ticks
+            IntervalTicks = TimeSpan.FromMinutes(TokenCheckIntervalMinutes).Ticks
         };
     }
 }

@@ -25,10 +25,31 @@ public class CatalogManagerPollingTests
     private static CatalogManager CreateManager(Func<HttpRequestMessage, HttpResponseMessage> respond)
     {
         var handler = new FakeSmapiHandler(respond);
-        var factory = new FuncHttpClientFactory(() => new HttpClient(handler));
+        var factory = new StubHttpClientFactory(() => new HttpClient(handler));
         var logger = LoggerFactory.Create(_ => { }).CreateLogger<CatalogManager>();
         return new CatalogManager(factory, logger);
     }
+
+    /// <summary>
+    /// Builds a CatalogManager whose SMAPI flow accepts the version POST (202 + Location)
+    /// then answers every poll GET with <paramref name="pollJson"/>.
+    /// </summary>
+    private static CatalogManager ManagerWithPollBody(string pollJson) => CreateManager(req =>
+    {
+        if (req.Method == HttpMethod.Post && req.RequestUri!.AbsoluteUri == CatalogVersionEndpoint)
+        {
+            var r = new HttpResponseMessage(HttpStatusCode.Accepted);
+            r.Headers.Location = new Uri(PollLocation);
+            return r;
+        }
+
+        return new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(pollJson, Encoding.UTF8, "application/json")
+        };
+    });
+
+    private static CatalogPayload EmptyPayload => new() { Values = new List<CatalogValue>() };
 
     private const string CatalogVersionEndpoint =
         "https://api.amazonalexa.com/v1/skills/api/custom/interactionModel/catalogs/cat-1/versions";
@@ -109,53 +130,19 @@ public class CatalogManagerPollingTests
     {
         // JF-332 regression: previously this threw TimeoutException because status
         // was read from the root (null) instead of lastUpdateRequest.
-        var manager = CreateManager(req =>
-        {
-            if (req.Method == HttpMethod.Post && req.RequestUri!.AbsoluteUri == CatalogVersionEndpoint)
-            {
-                var r = new HttpResponseMessage(HttpStatusCode.Accepted);
-                r.Headers.Location = new Uri(PollLocation);
-                return r;
-            }
-
-            var poll = new HttpResponseMessage(HttpStatusCode.OK);
-            poll.Content = new StringContent(
-                """{"lastUpdateRequest":{"status":"SUCCEEDED","version":"7"}}""",
-                Encoding.UTF8,
-                "application/json");
-            return poll;
-        });
-
-        var payload = new CatalogPayload { Values = new List<CatalogValue>() };
+        var manager = ManagerWithPollBody("""{"lastUpdateRequest":{"status":"SUCCEEDED","version":"7"}}""");
         string version = await manager.UploadCatalogValuesAsync(
-            "token", "cat-1", payload, "https://example.com/cat", CancellationToken.None);
-
+            "token", "cat-1", EmptyPayload, "https://example.com/cat", CancellationToken.None);
         Assert.Equal("7", version);
     }
 
     [Fact]
     public async Task UploadCatalogValuesAsync_NestedFailed_ThrowsWithErrors()
     {
-        var manager = CreateManager(req =>
-        {
-            if (req.Method == HttpMethod.Post && req.RequestUri!.AbsoluteUri == CatalogVersionEndpoint)
-            {
-                var r = new HttpResponseMessage(HttpStatusCode.Accepted);
-                r.Headers.Location = new Uri(PollLocation);
-                return r;
-            }
-
-            var poll = new HttpResponseMessage(HttpStatusCode.OK);
-            poll.Content = new StringContent(
-                """{"lastUpdateRequest":{"status":"FAILED","errors":[{"message":"rejected catalog"}]}}""",
-                Encoding.UTF8,
-                "application/json");
-            return poll;
-        });
-
-        var payload = new CatalogPayload { Values = new List<CatalogValue>() };
+        var manager = ManagerWithPollBody(
+            """{"lastUpdateRequest":{"status":"FAILED","errors":[{"message":"rejected catalog"}]}}""");
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            manager.UploadCatalogValuesAsync("token", "cat-1", payload, "https://example.com/cat", CancellationToken.None));
+            manager.UploadCatalogValuesAsync("token", "cat-1", EmptyPayload, "https://example.com/cat", CancellationToken.None));
         Assert.Contains("rejected catalog", ex.Message);
     }
 
@@ -163,27 +150,9 @@ public class CatalogManagerPollingTests
     public async Task UploadCatalogValuesAsync_RootLevelStatus_AlsoResolves()
     {
         // An endpoint returning root-level status (slot-type path) must still resolve.
-        var manager = CreateManager(req =>
-        {
-            if (req.Method == HttpMethod.Post && req.RequestUri!.AbsoluteUri == CatalogVersionEndpoint)
-            {
-                var r = new HttpResponseMessage(HttpStatusCode.Accepted);
-                r.Headers.Location = new Uri(PollLocation);
-                return r;
-            }
-
-            var poll = new HttpResponseMessage(HttpStatusCode.OK);
-            poll.Content = new StringContent(
-                """{"status":"SUCCEEDED","version":"3"}""",
-                Encoding.UTF8,
-                "application/json");
-            return poll;
-        });
-
-        var payload = new CatalogPayload { Values = new List<CatalogValue>() };
+        var manager = ManagerWithPollBody("""{"status":"SUCCEEDED","version":"3"}""");
         string version = await manager.UploadCatalogValuesAsync(
-            "token", "cat-1", payload, "https://example.com/cat", CancellationToken.None);
-
+            "token", "cat-1", EmptyPayload, "https://example.com/cat", CancellationToken.None);
         Assert.Equal("3", version);
     }
 
@@ -201,16 +170,4 @@ internal sealed class FakeSmapiHandler : HttpMessageHandler
 
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         => Task.FromResult(_respond(request));
-}
-
-/// <summary>
-/// IHttpClientFactory that always returns a client built from a test-supplied factory.
-/// </summary>
-internal sealed class FuncHttpClientFactory : IHttpClientFactory
-{
-    private readonly Func<HttpClient> _create;
-
-    public FuncHttpClientFactory(Func<HttpClient> create) => _create = create;
-
-    public HttpClient CreateClient(string name) => _create();
 }

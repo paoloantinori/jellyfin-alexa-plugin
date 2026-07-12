@@ -451,11 +451,16 @@ public class CatalogManagerTests
 }
 
 /// <summary>
-/// Minimal IHttpClientFactory stub — these tests don't make HTTP calls.
+/// Minimal IHttpClientFactory stub. The default constructor returns a bare client
+/// (for tests that don't make HTTP calls); the Func overload injects a handler-bound
+/// client (for SMAPI-flow tests that need per-request dispatch).
 /// </summary>
 internal sealed class StubHttpClientFactory : IHttpClientFactory
 {
-    public HttpClient CreateClient(string name) => new();
+    private readonly Func<HttpClient> _create;
+    public StubHttpClientFactory() : this(() => new HttpClient()) { }
+    public StubHttpClientFactory(Func<HttpClient> create) => _create = create;
+    public HttpClient CreateClient(string name) => _create();
 }
 
 /// <summary>
