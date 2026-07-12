@@ -474,6 +474,39 @@ tests:
     expected_slots:
       album: {}
 
+  # Article-bearing album forms — what Italian users actually say
+  # ("mettere l'album / il disco X"). Before the album_noun article fix these
+  # routed to PlaySongIntent / no-selection (jazz cafe case, 2026-07-12).
+  - utterance: "Di mettere l'album abbey road"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+
+  - utterance: "Metti il disco thriller"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+
+  - utterance: "Suona l'album dark side of the moon"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+
+  - utterance: "Di mettere il disco rumours"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+
+  - utterance: "Riproduci l'album la cura"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+
+  - utterance: "Metti il cd thriller"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+
   # Short-form album utterances are ambiguous — NLU resolves "Suona abbey road" to
   # no selectedIntent, "Metti thriller" and "Riproduci the wall" to PlaySongIntent.
   # Use explicit "album"/"disco" noun forms for reliable resolution (tested above).

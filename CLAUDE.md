@@ -404,6 +404,30 @@ python3 -c "import json; d=json.load(open('model_it-IT.json')); m=d.get('interac
 
 **Why this is so insidious**: Everything *looks* like it works — Alexa speaks the prompt, the user responds — but the response goes to Amazon Music instead of the skill. There is zero error feedback.
 
+### 10. Replacing Catalog-Backed Custom Slot Types With AMAZON Built-Ins (1 incident — reverted 2026-07-12)
+
+**NEVER replace a catalog-backed custom slot type (`AlbumName`, `SeriesName`, `AudiobookTitle`, `JellyfinArtist`) with an AMAZON built-in (`AMAZON.MusicRecording`, `AMAZON.Album`, etc.) to "fix" one-shot routing for arbitrary library items.** These custom types are a deliberate architecture (JF-96.2): they are populated from the user's Jellyfin library by `CatalogSyncTask` (a weekly `IScheduledTask`) with **Italian phonetic synonyms for English names**, which is exactly how the skill stays robust when an Italian user speaks English/foreign titles. Built-in AMAZON types are English-biased and discard that phonetic matching — the cross-language limitation this project explicitly moved away from (see commit `7de7e24`, "Fix AMAZON.Series/MusicGroup slot types").
+
+```
+# ❌ WRONG — fixes "jazz cafe" one-shot but abandons the catalog/phonetic architecture
+PlayAlbumIntent.album type: AlbumName  →  AMAZON.MusicRecording
+#    - loses Italian phonetic synonyms for English album names
+#    - blocks the catalog-sync path (CatalogSyncTypeNames writes to AlbumName, now unused)
+#    - inconsistent with the other 16 locales
+
+# ✅ RIGHT — fix the catalog population, keep the architecture
+#    Investigate why CatalogSyncTask isn't filling AlbumName with the user's real
+#    albums (+ phonetic synonyms). One-shot routing for arbitrary items comes from
+#    the catalog populating the custom type, not from a built-in free-text type.
+```
+
+**Detection / memory hooks**:
+- If one-shot routing works for famous albums (in the static seed: Thriller, Abbey Road, …) but fails for arbitrary user-library albums, the custom slot type is under-populated → fix catalog sync, do NOT swap the type.
+- `CatalogSlotTypes.Names` (dynamic-entity runtime target, turn 2+) vs `CatalogSlotTypeNames` (static model slot type) must agree per entity. Album currently mismatches (`AMAZON.Album` vs `AlbumName`) — tracked in JF-332.
+- `AMAZON.MusicRecording` (used by PlaySongIntent) is free-text and captures any title regardless of catalog — that is why song routing works one-shot and looks tempting to copy. Don't.
+
+**Verified 2026-07-12**: changing `PlayAlbumIntent.album` from `AlbumName` to `AMAZON.MusicRecording` did make "jazz cafe" route one-shot (profile-nlu confirmed), but it was the wrong direction — reverted. The `album_noun` article fix (adding `"l'album"`, `"il disco"` forms to the it-IT vocabulary) is correct and kept; it fixes routing for in-catalog albums on all article forms.
+
 ## Release
 
 The CI workflow (`release-build.yml`) handles building, testing, zipping, creating the GitHub release, computing the manifest checksum, and committing the updated manifest back to main. It triggers on tag push.

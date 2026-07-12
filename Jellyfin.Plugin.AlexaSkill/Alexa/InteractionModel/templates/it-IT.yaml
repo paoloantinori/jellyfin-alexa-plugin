@@ -12,8 +12,12 @@ vocabulary:
   imperative: [Riproduci, Suona, Metti, Pleia, Ascolta]
   infinitive: [Di riprodurre, Di suonare, Di mettere, Di pleiare, Di ascoltare]
 
+  # Nouns MUST include the definite article Italians actually speak ("l'album",
+  # "il disco", "il brano", ...). Bare nouns produce ungrammatical samples
+  # ("mettere album X") that never match real speech, so the utterance falls
+  # through to a competing intent. Keep article + bare forms together.
   song_noun: [il brano, la canzone, il pezzo, la traccia]
-  album_noun: [album, disco]
+  album_noun: ["l'album", "il disco", album, disco, "il cd", "la raccolta", "il vinile"]
   artist_article: [di, dei, degli, delle]
   artist_carrier: [la band, il gruppo, il cantante, la cantante]
   media_noun: [brani, canzoni, musica, un brano, una canzone, un pezzo, una traccia]
@@ -783,6 +787,9 @@ templates:
       - "Fai suonare l'album {album}"
       - "Fai suonare il disco {album}"
     slots:
+      # DO NOT change to AMAZON.MusicRecording / AMAZON.Album to fix one-shot
+      # routing. AlbumName is catalog-sync-backed (JF-96.2) with Italian phonetic
+      # synonyms for cross-language matching. See CLAUDE.md anti-pattern #10.
       - name: album
         type: AlbumName
       - name: musician
