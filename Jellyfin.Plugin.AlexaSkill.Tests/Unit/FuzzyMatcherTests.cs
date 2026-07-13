@@ -517,5 +517,28 @@ public class FuzzyMatcherTests
             $"Phonetic fuzzy match on 10K artists took {sw.ElapsedMilliseconds}ms, expected < 200ms");
     }
 
+    [Fact]
+    public void FindBestMatchWithScore_AsrAccentAndSpelling_MatchesPhonetically_JF336()
+    {
+        // JF-336: the Echo's Italian ASR transcribes "jazz cafe" as "jazz caffè"
+        // (double-f + grave accent); the library album is "Jazz Cafe" (English,
+        // single-f, no accent). Jellyfin search returns 0, so PlayAlbum's phonetic
+        // fallback must bridge it via FuzzyMatcher (Double Metaphone folds both to "KF").
+        var albums = new List<TestItem>
+        {
+            new("Jazz Cafe"),
+            new("Thriller"),
+            new("Abbey Road"),
+            new("Back in Black")
+        };
+
+        (TestItem Item, int Score)? result = FuzzyMatcher.FindBestMatchWithScore("jazz caffè", albums, i => i.Name);
+
+        Assert.NotNull(result);
+        Assert.Equal("Jazz Cafe", result!.Value.Item.Name);
+        Assert.True(result.Value.Score >= FuzzyMatcher.DefaultThreshold,
+            $"expected 'jazz caffè' to phonetic-match 'Jazz Cafe' at >= {FuzzyMatcher.DefaultThreshold}, got {result.Value.Score}");
+    }
+
     private record TestItemWithId(string Name, Guid Id);
 }

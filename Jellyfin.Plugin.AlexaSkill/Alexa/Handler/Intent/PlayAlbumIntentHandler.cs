@@ -146,11 +146,42 @@ public class PlayAlbumIntentHandler : BaseHandler
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByNameAndArtist", locale, album, matchedArtistName!));
         }
-        else if (albums.Count == 0)
+
+        if (albums.Count == 0)
         {
-            // Cross-media-type fallback: no albums found and no musician slot.
-            // The NLU may have routed an artist name to PlayAlbumIntent by mistake.
-            // Try searching for an artist with the same query.
+            // Phonetic fallback: ASR may transcribe the album name with accents or
+            // Italian-vs-English spelling that Jellyfin's search index doesn't normalize
+            // (e.g. "caffè" vs "Cafe"). Fuzzy-match against the user's albums via Double
+            // Metaphone before giving up. JF-336.
+            Logger.LogDebug("PlayAlbum: exact search miss, trying phonetic fallback for '{Query}'", album);
+            var phoneticAlbumQuery = new InternalItemsQuery
+            {
+                User = jellyfinUser,
+                Recursive = true,
+                IncludeItemTypes = new[] { BaseItemKind.MusicAlbum },
+                DtoOptions = new DtoOptions(true)
+            };
+            ApplyLibraryFilter(phoneticAlbumQuery, user, _libraryManager);
+            IReadOnlyList<BaseItem> allAlbums = await RetryAsync(
+                () => _libraryManager.GetItemList(phoneticAlbumQuery),
+                "GetAlbumsPhonetic",
+                cancellationToken).ConfigureAwait(false);
+            var phoneticMatch = FuzzyMatcher.FindBestMatchWithScore(album, allAlbums, a => a.Name);
+            if (phoneticMatch.HasValue && phoneticMatch.Value.Score >= FuzzyMatcher.GetDefaultThreshold(user))
+            {
+                Logger.LogInformation(
+                    "PlayAlbum: phonetic fallback matched album '{Name}' score={Score} for query='{Query}'",
+                    phoneticMatch.Value.Item.Name, phoneticMatch.Value.Score, album);
+                albums = new List<BaseItem> { phoneticMatch.Value.Item };
+            }
+        }
+
+        if (albums.Count == 0)
+        {
+            // Cross-media artist fallback: the NLU may have routed an artist name to
+            // PlayAlbumIntent. Only fire on a HIGH-confidence artist match — a weak match
+            // (e.g. "jazz caffè"→"Uazz" @75) must NOT play the wrong artist; report the
+            // album as not found instead. JF-336 (was GetDefaultThreshold=60).
             Logger.LogDebug("PlayAlbum: no albums found, trying artist fallback with query='{Query}'", album);
             IReadOnlyList<BaseItem> fallbackArtists = await Util.ArtistSearch.SearchAsync(
                 album, user, _libraryManager, _artistIndex, Logger,
@@ -160,7 +191,7 @@ public class PlayAlbumIntentHandler : BaseHandler
             if (fallbackArtists.Count > 0)
             {
                 var bestMatch = FuzzyMatcher.FindBestMatchWithScore(album, fallbackArtists, a => a.Name);
-                if (bestMatch.HasValue && bestMatch.Value.Score >= FuzzyMatcher.GetDefaultThreshold(user))
+                if (bestMatch.HasValue && bestMatch.Value.Score >= FuzzyMatcher.ContainmentScore)
                 {
                     BaseItem artist = bestMatch.Value.Item;
                     Logger.LogInformation(
