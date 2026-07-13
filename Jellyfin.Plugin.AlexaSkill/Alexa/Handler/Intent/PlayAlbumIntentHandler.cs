@@ -259,6 +259,29 @@ public class PlayAlbumIntentHandler : BaseHandler
         Logger.LogDebug("PlayAlbum: Jellyfin returned {TrackCount} tracks (total={TotalCount})", albumResult.Items.Count, albumResult.TotalRecordCount);
         if (albumResult.TotalRecordCount == 0)
         {
+            // Tolerant fallback: for split / multi-disc / malformed-folder albums, the
+            // folder-based ParentId query can return 0 even when the tracks exist (the
+            // track's Album metadata still links them). Query by album membership, which
+            // ignores folder structure. Verified on the malformed "Jazz Cafe" album:
+            // ParentId+Recursive returns 0, AlbumIds returns all tracks. JF-338.
+            Logger.LogDebug("PlayAlbum: folder-based track query returned 0, retrying by AlbumIds for '{Name}'", albums[0].Name);
+            albumResult = await RetryAsync(
+                () => SafeGetItemsResult(_libraryManager, new InternalItemsQuery()
+                {
+                    User = jellyfinUser,
+                    Recursive = true,
+                    AlbumIds = new[] { albums[0].Id },
+                    IncludeItemTypes = new[] { BaseItemKind.Audio },
+                    DtoOptions = new DtoOptions(true),
+                    Limit = ProgressiveQueueConstants.GetInitialFetchSize()
+                }),
+                "GetAlbumTracksByAlbumIds",
+                cancellationToken).ConfigureAwait(false);
+            Logger.LogDebug("PlayAlbum: AlbumIds fallback returned {TrackCount} tracks (total={TotalCount})", albumResult.Items.Count, albumResult.TotalRecordCount);
+        }
+
+        if (albumResult.TotalRecordCount == 0)
+        {
             return ResponseBuilder.Tell(ResponseStrings.Get("NoSongsInAlbum", locale, album));
         }
 
