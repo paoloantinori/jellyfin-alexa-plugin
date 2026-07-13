@@ -111,7 +111,7 @@ public class PlayBookIntentHandler : BaseHandler
 
         if (books.Count == 0)
         {
-            var fuzzy = await SearchItemsPhoneticAsync(book, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.AudioBook }, cancellationToken, "PlayBookFuzzyFallback").ConfigureAwait(false);
+            var fuzzy = await SearchItemsFuzzyAsync(book, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.AudioBook }, cancellationToken, "PlayBookFuzzyFallback").ConfigureAwait(false);
             if (fuzzy != null)
             {
                 books = new List<BaseItem> { fuzzy.Value.Item };

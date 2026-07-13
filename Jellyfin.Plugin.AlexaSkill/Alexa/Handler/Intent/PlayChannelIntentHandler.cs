@@ -93,7 +93,7 @@ public class PlayChannelIntentHandler : BaseHandler
 
         if (channels.Count == 0)
         {
-            var fuzzy = await SearchItemsPhoneticAsync(channelQuery, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.LiveTvChannel }, cancellationToken, "PlayChannelFuzzyFallback").ConfigureAwait(false);
+            var fuzzy = await SearchItemsFuzzyAsync(channelQuery, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.LiveTvChannel }, cancellationToken, "PlayChannelFuzzyFallback").ConfigureAwait(false);
             if (fuzzy != null)
             {
                 channels = new List<BaseItem> { fuzzy.Value.Item };

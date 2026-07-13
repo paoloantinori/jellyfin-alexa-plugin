@@ -1180,16 +1180,18 @@ public abstract class BaseHandler
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <param name="operationLabel">Label for logging.</param>
     /// <returns>The best match + score, or null if nothing above threshold.</returns>
-    protected async Task<(BaseItem Item, int Score)?> SearchItemsPhoneticAsync(
+    protected async Task<(BaseItem Item, int Score)?> SearchItemsFuzzyAsync(
         string query,
         Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
         Entities.User user,
         ILibraryManager libraryManager,
         BaseItemKind[] itemTypes,
         CancellationToken cancellationToken,
-        string operationLabel = "PhoneticFallback")
+        string operationLabel = "FuzzyFallback",
+        Guid[]? artistIds = null,
+        int minQueryLength = 3)
     {
-        if (string.IsNullOrWhiteSpace(query))
+        if (string.IsNullOrWhiteSpace(query) || query.Length < minQueryLength)
         {
             return null;
         }
@@ -1201,6 +1203,10 @@ public abstract class BaseHandler
             IncludeItemTypes = itemTypes,
             DtoOptions = new DtoOptions(true)
         };
+        if (artistIds is { Length: > 0 })
+        {
+            fallbackQuery.ArtistIds = artistIds;
+        }
         ApplyLibraryFilter(fallbackQuery, user, libraryManager, Logger);
 
         IReadOnlyList<BaseItem> allItems = await RetryAsync(
@@ -2193,7 +2199,7 @@ public abstract class BaseHandler
 
         if (playlists.TotalRecordCount == 0)
         {
-            var fuzzy = await SearchItemsPhoneticAsync(playlistName, jellyfinUser, user, libraryManager, new[] { BaseItemKind.Playlist }, cancellationToken, "PlayPlaylistFuzzyFallback").ConfigureAwait(false);
+            var fuzzy = await SearchItemsFuzzyAsync(playlistName, jellyfinUser, user, libraryManager, new[] { BaseItemKind.Playlist }, cancellationToken, "PlayPlaylistFuzzyFallback").ConfigureAwait(false);
             if (fuzzy != null)
             {
                 playlists = new QueryResult<BaseItem> { Items = new List<BaseItem> { fuzzy.Value.Item }, TotalRecordCount = 1 };

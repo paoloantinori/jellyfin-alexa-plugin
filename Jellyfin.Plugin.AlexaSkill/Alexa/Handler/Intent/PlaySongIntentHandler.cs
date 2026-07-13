@@ -225,7 +225,7 @@ public class PlaySongIntentHandler : BaseHandler
         // exact search misses (ASR accent/spelling variants). JF-337.
         if (songs.Count == 0)
         {
-            var fuzzy = await SearchItemsPhoneticAsync(songQuery, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.Audio }, cancellationToken, "PlaySongFuzzyFallback").ConfigureAwait(false);
+            var fuzzy = await SearchItemsFuzzyAsync(songQuery, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.Audio }, cancellationToken, "PlaySongFuzzyFallback", artistsIds.Count > 0 ? artistsIds.ToArray() : null).ConfigureAwait(false);
             if (fuzzy != null)
             {
                 songs = new List<BaseItem> { fuzzy.Value.Item };

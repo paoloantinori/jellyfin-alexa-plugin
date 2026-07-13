@@ -92,7 +92,7 @@ public class PlayVideoIntentHandler : BaseHandler
 
         if (videos.Count == 0)
         {
-            var fuzzy = await SearchItemsPhoneticAsync(titleQuery, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.Movie, BaseItemKind.Episode }, cancellationToken, "PlayVideoFuzzyFallback").ConfigureAwait(false);
+            var fuzzy = await SearchItemsFuzzyAsync(titleQuery, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.Movie, BaseItemKind.Episode }, cancellationToken, "PlayVideoFuzzyFallback").ConfigureAwait(false);
             if (fuzzy != null)
             {
                 videos = new List<BaseItem> { fuzzy.Value.Item };

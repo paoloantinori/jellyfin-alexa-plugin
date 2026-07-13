@@ -101,7 +101,7 @@ public class PlayEpisodeIntentHandler : BaseHandler
 
         if (seriesList.Count == 0)
         {
-            var fuzzy = await SearchItemsPhoneticAsync(seriesName, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.Series }, cancellationToken, "PlayEpisodeFuzzyFallback").ConfigureAwait(false);
+            var fuzzy = await SearchItemsFuzzyAsync(seriesName, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.Series }, cancellationToken, "PlayEpisodeFuzzyFallback").ConfigureAwait(false);
             if (fuzzy != null)
             {
                 seriesList = new List<BaseItem> { fuzzy.Value.Item };
