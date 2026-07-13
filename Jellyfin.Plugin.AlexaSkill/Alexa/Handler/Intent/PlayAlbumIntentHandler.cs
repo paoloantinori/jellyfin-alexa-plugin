@@ -160,17 +160,19 @@ public class PlayAlbumIntentHandler : BaseHandler
                 "GetAlbumsPhonetic",
                 cancellationToken).ConfigureAwait(false);
 
-            // RankMatches returns ALL albums above threshold so a multi-match (e.g.
-            // several "Greatest Hits") flows into the disambiguation block below instead
-            // of silently picking the first — the previous FindBestMatchWithScore collapsed
-            // to one and skipped disambiguation. JF-336.
-            List<BaseItem> rankedAlbums = FuzzyMatcher.RankMatches(album, allAlbums, a => a.Name, FuzzyMatcher.GetDefaultThreshold(user));
-            if (rankedAlbums.Count > 0)
+            // FindBestMatchWithScore (single best). NOTE: a multi-match here currently
+            // auto-plays the best via HandleFuzzyMiss (which re-scores + auto-accepts at
+            // >= GetDefaultThreshold); real disambiguation for different-name collisions
+            // (e.g. several "Greatest Hits" by different artists) needs a HandleFuzzyMiss
+            // bypass — tracked in JF-341. RankMatches was tried (b12cf5c) but is inert
+            // here for that reason.
+            var fuzzyMatch = FuzzyMatcher.FindBestMatchWithScore(album, allAlbums, a => a.Name);
+            if (fuzzyMatch.HasValue && fuzzyMatch.Value.Score >= FuzzyMatcher.GetDefaultThreshold(user))
             {
                 Logger.LogInformation(
-                    "PlayAlbum: fuzzy fallback matched {Count} album(s) for query='{Query}' (top='{Top}')",
-                    rankedAlbums.Count, album, rankedAlbums[0].Name);
-                albums = rankedAlbums;
+                    "PlayAlbum: fuzzy fallback matched album '{Name}' score={Score} for query='{Query}'",
+                    fuzzyMatch.Value.Item.Name, fuzzyMatch.Value.Score, album);
+                albums = new List<BaseItem> { fuzzyMatch.Value.Item };
             }
         }
 
