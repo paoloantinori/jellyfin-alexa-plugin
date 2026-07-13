@@ -139,8 +139,16 @@ public class BrowseLibraryIntentHandler : BaseHandler
 
         if (items.Count == 0)
         {
-            Logger.LogDebug("BrowseLibrary: no results for {Category}, returning Tell", browseCategory);
-            return ResponseBuilder.Tell(ResponseStrings.Get("NoBrowseResults", locale, browseCategory));
+            var fuzzy = await SearchItemsFuzzyAsync(filter ?? string.Empty, resolvedUser, user, _libraryManager, new[] { itemKind.Value }, cancellationToken, "BrowseLibraryFuzzyFallback").ConfigureAwait(false);
+            if (fuzzy != null)
+            {
+                items = new List<BaseItem> { fuzzy.Value.Item };
+            }
+            else
+            {
+                Logger.LogDebug("BrowseLibrary: no results for {Category}, returning Tell", browseCategory);
+                return ResponseBuilder.Tell(ResponseStrings.Get("NoBrowseResults", locale, browseCategory));
+            }
         }
 
         Logger.LogDebug("BrowseLibrary: found {ItemCount} items, building list response", items.Count);

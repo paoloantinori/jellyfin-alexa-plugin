@@ -97,7 +97,15 @@ public class PlayPodcastIntentHandler : BaseHandler
 
         if (podcasts.Count == 0)
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundPodcast", locale, podcastName));
+            var fuzzy = await SearchItemsFuzzyAsync(podcastName, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.Series }, cancellationToken, "PlayPodcastFuzzyFallback", mediaTypes: new[] { MediaType.Audio }).ConfigureAwait(false);
+            if (fuzzy != null)
+            {
+                podcasts = new List<BaseItem> { fuzzy.Value.Item };
+            }
+            else
+            {
+                return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundPodcast", locale, podcastName));
+            }
         }
 
         if (podcasts.Count > 1)

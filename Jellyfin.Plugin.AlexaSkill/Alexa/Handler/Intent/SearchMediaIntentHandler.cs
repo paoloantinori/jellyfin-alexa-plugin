@@ -130,8 +130,16 @@ public class SearchMediaIntentHandler : BaseHandler
 
         if (results.Count == 0)
         {
-            Logger.LogInformation("Search for '{Query}' returned no results", query);
-            return ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale));
+            var fuzzy = await SearchItemsFuzzyAsync(query, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.Audio, BaseItemKind.MusicAlbum, BaseItemKind.Movie, BaseItemKind.Episode, BaseItemKind.Series, BaseItemKind.Playlist, BaseItemKind.AudioBook }, cancellationToken, "SearchMediaFuzzyFallback").ConfigureAwait(false);
+            if (fuzzy != null)
+            {
+                results = new List<BaseItem> { fuzzy.Value.Item };
+            }
+            else
+            {
+                Logger.LogInformation("Search for '{Query}' returned no results", query);
+                return ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale));
+            }
         }
 
         var deduped = results.GroupBy(i => i.Id).Select(g => g.First()).ToList();

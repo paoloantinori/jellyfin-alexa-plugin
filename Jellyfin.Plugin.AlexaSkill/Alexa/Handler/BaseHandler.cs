@@ -1189,7 +1189,8 @@ public abstract class BaseHandler
         CancellationToken cancellationToken,
         string operationLabel = "FuzzyFallback",
         Guid[]? artistIds = null,
-        int minQueryLength = 3)
+        int minQueryLength = 3,
+        MediaType[]? mediaTypes = null)
     {
         if (string.IsNullOrWhiteSpace(query) || query.Length < minQueryLength)
         {
@@ -1206,6 +1207,11 @@ public abstract class BaseHandler
         if (artistIds is { Length: > 0 })
         {
             fallbackQuery.ArtistIds = artistIds;
+        }
+
+        if (mediaTypes is { Length: > 0 })
+        {
+            fallbackQuery.MediaTypes = mediaTypes;
         }
         ApplyLibraryFilter(fallbackQuery, user, libraryManager, Logger);
 

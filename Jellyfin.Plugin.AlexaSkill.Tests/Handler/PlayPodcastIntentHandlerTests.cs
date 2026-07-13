@@ -352,8 +352,9 @@ public class PlayPodcastIntentHandlerTests : PluginTestBase
         SetupUserMock();
 
         InternalItemsQuery? capturedSeriesQuery = null;
+        int captureCount = 0;
         _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Series))))
-            .Callback<InternalItemsQuery>(q => capturedSeriesQuery = q)
+            .Callback<InternalItemsQuery>(q => { if (captureCount++ == 0) capturedSeriesQuery = q; })
             .Returns(new List<BaseItem>());
 
         await handler.HandleAsync(request, context, user, session, CancellationToken.None);
