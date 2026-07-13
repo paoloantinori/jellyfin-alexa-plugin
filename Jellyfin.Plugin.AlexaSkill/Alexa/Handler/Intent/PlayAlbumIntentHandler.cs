@@ -125,16 +125,7 @@ public class PlayAlbumIntentHandler : BaseHandler
             }
         }
 
-        var albumSearchQuery = new InternalItemsQuery()
-        {
-            User = jellyfinUser,
-            Recursive = true,
-            SearchTerm = album,
-            ArtistIds = artistsIds.ToArray(),
-            IncludeItemTypes = new[] { BaseItemKind.MusicAlbum },
-            DtoOptions = new DtoOptions(true)
-        };
-        ApplyLibraryFilter(albumSearchQuery, user, _libraryManager);
+        var albumSearchQuery = BuildAlbumQuery(jellyfinUser, user, album, artistsIds.ToArray());
 
         Logger.LogDebug("PlayAlbum: querying Jellyfin with searchTerm='{Album}', artistIds={ArtistIdsCount}, types=MusicAlbum", album, artistsIds.Count);
         IReadOnlyList<BaseItem> albums = await RetryAsync(
@@ -149,19 +140,14 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         if (albums.Count == 0)
         {
-            // Phonetic fallback: ASR may transcribe the album name with accents or
+            // Fuzzy fallback: ASR may transcribe the album name with accents or
             // Italian-vs-English spelling that Jellyfin's search index doesn't normalize
-            // (e.g. "caffè" vs "Cafe"). Fuzzy-match against the user's albums via Double
-            // Metaphone before giving up. JF-336.
-            Logger.LogDebug("PlayAlbum: exact search miss, trying phonetic fallback for '{Query}'", album);
-            var phoneticAlbumQuery = new InternalItemsQuery
-            {
-                User = jellyfinUser,
-                Recursive = true,
-                IncludeItemTypes = new[] { BaseItemKind.MusicAlbum },
-                DtoOptions = new DtoOptions(true)
-            };
-            ApplyLibraryFilter(phoneticAlbumQuery, user, _libraryManager);
+            // (e.g. "caffè" vs "Cafe"). Match against the user's albums via FuzzyMatcher
+            // partial-ratio (FindBestMatchWithScore — Levenshtein, NOT Double Metaphone;
+            // true phonetic matching would need a precomputed album index, cf.
+            // ArtistIndexService). JF-336.
+            Logger.LogDebug("PlayAlbum: exact search miss, trying fuzzy fallback for '{Query}'", album);
+            var phoneticAlbumQuery = BuildAlbumQuery(jellyfinUser, user, searchTerm: null, artistIds: null);
             IReadOnlyList<BaseItem> allAlbums = await RetryAsync(
                 () => _libraryManager.GetItemList(phoneticAlbumQuery),
                 "GetAlbumsPhonetic",
@@ -337,6 +323,33 @@ public class PlayAlbumIntentHandler : BaseHandler
             "PlayAlbum: returning AudioPlayer, itemId={ItemId}, album='{AlbumName}', startIndex={StartIndex}, queueSize={QueueSize}",
             item_id, albums[0].Name, startIndex, queueItems.Count);
         return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, albumItems[startIndex], user, context);
+    }
+
+    /// <summary>
+    /// Builds a MusicAlbum query scoped to the user's libraries (with library filtering).
+    /// Pass a search term for the exact lookup, or null for the broad fuzzy-fallback scan.
+    /// </summary>
+    private InternalItemsQuery BuildAlbumQuery(Jellyfin.Database.Implementations.Entities.User? jellyfinUser, Jellyfin.Plugin.AlexaSkill.Entities.User user, string? searchTerm, Guid[]? artistIds)
+    {
+        var q = new InternalItemsQuery
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            IncludeItemTypes = new[] { BaseItemKind.MusicAlbum },
+            DtoOptions = new DtoOptions(true)
+        };
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            q.SearchTerm = searchTerm;
+        }
+
+        if (artistIds is { Length: > 0 })
+        {
+            q.ArtistIds = artistIds;
+        }
+
+        ApplyLibraryFilter(q, user, _libraryManager);
+        return q;
     }
 
     /// <summary>
