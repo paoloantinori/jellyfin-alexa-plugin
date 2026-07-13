@@ -77,6 +77,26 @@ internal static class QueueContinuationFetcher
         };
 
         QueryResult<BaseItem> result = libraryManager.GetItemsResult(query);
+
+        // Tolerant fallback: for split / multi-disc / malformed-folder albums the
+        // folder-based ParentId query returns 0 (PlayAlbumIntentHandler's initial fetch
+        // retries by AlbumIds for the same reason — JF-338). Mirror that here or
+        // progressive continuation truncates the album to the initial page.
+        if (result.TotalRecordCount == 0 && continuation.ParentId.HasValue)
+        {
+            var albumIdsQuery = new InternalItemsQuery
+            {
+                User = jellyfinUser,
+                Recursive = true,
+                AlbumIds = new[] { continuation.ParentId.Value },
+                IncludeItemTypes = new[] { BaseItemKind.Audio },
+                DtoOptions = new DtoOptions(true),
+                StartIndex = continuation.StartIndex,
+                Limit = continuation.BatchSize
+            };
+            result = libraryManager.GetItemsResult(albumIdsQuery);
+        }
+
         continuation.StartIndex += result.Items.Count;
         return result.Items;
     }

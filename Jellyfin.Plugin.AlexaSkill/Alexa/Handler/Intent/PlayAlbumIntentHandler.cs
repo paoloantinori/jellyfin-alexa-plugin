@@ -138,27 +138,33 @@ public class PlayAlbumIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByNameAndArtist", locale, album, matchedArtistName!));
         }
 
-        if (albums.Count == 0)
+        if (albums.Count == 0 && album.Length >= MinFuzzyAlbumQueryLength)
         {
             // Fuzzy fallback: ASR may transcribe the album name with accents or
             // Italian-vs-English spelling that Jellyfin's search index doesn't normalize
             // (e.g. "caffè" vs "Cafe"). Match against the user's albums via FuzzyMatcher
-            // partial-ratio (FindBestMatchWithScore — Levenshtein, NOT Double Metaphone;
-            // true phonetic matching would need a precomputed album index, cf.
-            // ArtistIndexService). JF-336.
+            // partial-ratio (Levenshtein, NOT Double Metaphone — true phonetic matching
+            // would need a precomputed album index, cf. ArtistIndexService). JF-336.
+            // Min-length guard: very short queries produce too many substring false
+            // positives across a full-catalog scan (e.g. "red", "aria") — skip them.
             Logger.LogDebug("PlayAlbum: exact search miss, trying fuzzy fallback for '{Query}'", album);
             var phoneticAlbumQuery = BuildAlbumQuery(jellyfinUser, user, searchTerm: null, artistIds: null);
             IReadOnlyList<BaseItem> allAlbums = await RetryAsync(
                 () => _libraryManager.GetItemList(phoneticAlbumQuery),
                 "GetAlbumsPhonetic",
                 cancellationToken).ConfigureAwait(false);
-            var phoneticMatch = FuzzyMatcher.FindBestMatchWithScore(album, allAlbums, a => a.Name);
-            if (phoneticMatch.HasValue && phoneticMatch.Value.Score >= FuzzyMatcher.GetDefaultThreshold(user))
+
+            // RankMatches returns ALL albums above threshold so a multi-match (e.g.
+            // several "Greatest Hits") flows into the disambiguation block below instead
+            // of silently picking the first — the previous FindBestMatchWithScore collapsed
+            // to one and skipped disambiguation. JF-336.
+            List<BaseItem> rankedAlbums = FuzzyMatcher.RankMatches(album, allAlbums, a => a.Name, FuzzyMatcher.GetDefaultThreshold(user));
+            if (rankedAlbums.Count > 0)
             {
                 Logger.LogInformation(
-                    "PlayAlbum: phonetic fallback matched album '{Name}' score={Score} for query='{Query}'",
-                    phoneticMatch.Value.Item.Name, phoneticMatch.Value.Score, album);
-                albums = new List<BaseItem> { phoneticMatch.Value.Item };
+                    "PlayAlbum: fuzzy fallback matched {Count} album(s) for query='{Query}' (top='{Top}')",
+                    rankedAlbums.Count, album, rankedAlbums[0].Name);
+                albums = rankedAlbums;
             }
         }
 
@@ -324,6 +330,12 @@ public class PlayAlbumIntentHandler : BaseHandler
             item_id, albums[0].Name, startIndex, queueItems.Count);
         return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, albumItems[startIndex], user, context);
     }
+
+    /// <summary>
+    /// Minimum album-query length to attempt the full-catalog fuzzy fallback. Shorter
+    /// queries (e.g. "red", "aria") produce too many substring false positives.
+    /// </summary>
+    private const int MinFuzzyAlbumQueryLength = 4;
 
     /// <summary>
     /// Builds a MusicAlbum query scoped to the user's libraries (with library filtering).

@@ -522,8 +522,10 @@ public class FuzzyMatcherTests
     {
         // JF-336: the Echo's Italian ASR transcribes "jazz cafe" as "jazz caffè"
         // (double-f + grave accent); the library album is "Jazz Cafe" (English,
-        // single-f, no accent). Jellyfin search returns 0, so PlayAlbum's phonetic
-        // fallback must bridge it via FuzzyMatcher (Double Metaphone folds both to "KF").
+        // single-f, no accent). Jellyfin search returns 0, so PlayAlbum's fuzzy
+        // fallback must bridge it via FuzzyMatcher partial-ratio (Levenshtein —
+        // "jazz caffè" vs "Jazz Cafe" scores ~88; NOT Double Metaphone, which would
+        // need a precomputed album index).
         var albums = new List<TestItem>
         {
             new("Jazz Cafe"),
