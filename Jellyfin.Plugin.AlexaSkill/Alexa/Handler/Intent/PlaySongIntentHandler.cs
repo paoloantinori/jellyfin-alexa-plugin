@@ -220,6 +220,18 @@ public class PlaySongIntentHandler : BaseHandler
                 return RetryAsync(() => _libraryManager.GetItemList(q), "GetSongs", cancellationToken);
             }).ConfigureAwait(false);
         Logger.LogDebug("PlaySong: Jellyfin returned {SongCount} songs for query='{SongQuery}'", songs.Count, songQuery);
+
+        // Fuzzy fallback: try matching the song title against all Audio items when the
+        // exact search misses (ASR accent/spelling variants). JF-337.
+        if (songs.Count == 0)
+        {
+            var fuzzy = await SearchItemsPhoneticAsync(songQuery, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.Audio }, cancellationToken, "PlaySongFuzzyFallback").ConfigureAwait(false);
+            if (fuzzy != null)
+            {
+                songs = new List<BaseItem> { fuzzy.Value.Item };
+            }
+        }
+
         if (songs.Count == 0 && !string.IsNullOrWhiteSpace(musicianQuery) && artistsIds.Count > 0)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByNameAndArtist", locale, songQuery, matchedArtistName!));

@@ -101,7 +101,15 @@ public class PlayEpisodeIntentHandler : BaseHandler
 
         if (seriesList.Count == 0)
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSeries", locale, seriesName));
+            var fuzzy = await SearchItemsPhoneticAsync(seriesName, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.Series }, cancellationToken, "PlayEpisodeFuzzyFallback").ConfigureAwait(false);
+            if (fuzzy != null)
+            {
+                seriesList = new List<BaseItem> { fuzzy.Value.Item };
+            }
+            else
+            {
+                return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSeries", locale, seriesName));
+            }
         }
 
         BaseItem series = seriesList[0];

@@ -1165,6 +1165,67 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// Fuzzy fallback for handlers whose exact Jellyfin searchTerm query returned 0.
+    /// Fetches all items of the given types from the user's library and fuzzy-matches
+    /// the query against their names via FuzzyMatcher partial-ratio (Levenshtein).
+    /// Bridges ASR accent/transcription variants (e.g. "caffè" vs "Cafe") that
+    /// Jellyfin's search index doesn't normalize. Cold path only (exact miss).
+    /// JF-337.
+    /// </summary>
+    /// <param name="query">The user-spoken name (slot value).</param>
+    /// <param name="jellyfinUser">The Jellyfin user (for query scoping).</param>
+    /// <param name="user">The plugin user (for threshold + library filter).</param>
+    /// <param name="libraryManager">The library manager.</param>
+    /// <param name="itemTypes">The item types to search (e.g. Audio, MusicAlbum).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="operationLabel">Label for logging.</param>
+    /// <returns>The best match + score, or null if nothing above threshold.</returns>
+    protected async Task<(BaseItem Item, int Score)?> SearchItemsPhoneticAsync(
+        string query,
+        Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
+        Entities.User user,
+        ILibraryManager libraryManager,
+        BaseItemKind[] itemTypes,
+        CancellationToken cancellationToken,
+        string operationLabel = "PhoneticFallback")
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return null;
+        }
+
+        var fallbackQuery = new InternalItemsQuery
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            IncludeItemTypes = itemTypes,
+            DtoOptions = new DtoOptions(true)
+        };
+        ApplyLibraryFilter(fallbackQuery, user, libraryManager, Logger);
+
+        IReadOnlyList<BaseItem> allItems = await RetryAsync(
+            () => libraryManager.GetItemList(fallbackQuery),
+            operationLabel,
+            cancellationToken).ConfigureAwait(false);
+
+        if (allItems.Count == 0)
+        {
+            return null;
+        }
+
+        var match = FuzzyMatcher.FindBestMatchWithScore(query, allItems, item => item.Name);
+        if (match.HasValue && match.Value.Score >= FuzzyMatcher.GetDefaultThreshold(user))
+        {
+            Logger.LogInformation(
+                "{Op}: fuzzy fallback matched '{Name}' score={Score} for query='{Query}'",
+                operationLabel, match.Value.Item.Name, match.Value.Score, query);
+            return match;
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Gets the effective search response mode for a user, falling back to the global default.
     /// Per-user setting (when explicitly set, i.e. non-null) takes precedence.
     /// </summary>
@@ -2132,7 +2193,15 @@ public abstract class BaseHandler
 
         if (playlists.TotalRecordCount == 0)
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundPlaylist", locale, playlistName));
+            var fuzzy = await SearchItemsPhoneticAsync(playlistName, jellyfinUser, user, libraryManager, new[] { BaseItemKind.Playlist }, cancellationToken, "PlayPlaylistFuzzyFallback").ConfigureAwait(false);
+            if (fuzzy != null)
+            {
+                playlists = new QueryResult<BaseItem> { Items = new List<BaseItem> { fuzzy.Value.Item }, TotalRecordCount = 1 };
+            }
+            else
+            {
+                return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundPlaylist", locale, playlistName));
+            }
         }
 
         BaseItem? playlistMatch = null;

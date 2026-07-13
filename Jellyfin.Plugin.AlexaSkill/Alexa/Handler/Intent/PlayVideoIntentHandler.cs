@@ -92,7 +92,15 @@ public class PlayVideoIntentHandler : BaseHandler
 
         if (videos.Count == 0)
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundVideo", locale, titleQuery));
+            var fuzzy = await SearchItemsPhoneticAsync(titleQuery, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.Movie, BaseItemKind.Episode }, cancellationToken, "PlayVideoFuzzyFallback").ConfigureAwait(false);
+            if (fuzzy != null)
+            {
+                videos = new List<BaseItem> { fuzzy.Value.Item };
+            }
+            else
+            {
+                return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundVideo", locale, titleQuery));
+            }
         }
 
         if (videos.Count > 1)

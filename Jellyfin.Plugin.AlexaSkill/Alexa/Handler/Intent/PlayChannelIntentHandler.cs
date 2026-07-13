@@ -93,7 +93,15 @@ public class PlayChannelIntentHandler : BaseHandler
 
         if (channels.Count == 0)
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundChannel", locale, channelQuery));
+            var fuzzy = await SearchItemsPhoneticAsync(channelQuery, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.LiveTvChannel }, cancellationToken, "PlayChannelFuzzyFallback").ConfigureAwait(false);
+            if (fuzzy != null)
+            {
+                channels = new List<BaseItem> { fuzzy.Value.Item };
+            }
+            else
+            {
+                return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundChannel", locale, channelQuery));
+            }
         }
 
         BaseItem channel = channels[0];
