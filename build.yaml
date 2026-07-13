@@ -1,7 +1,7 @@
 ---
 name: Alexa Skill
 guid: c5df7de0-8777-4b3c-a70d-5c3dae359c9e
-version: 0.9.4.0
+version: 0.9.5.0
 targetAbi: 10.11.0.0
 framework: net9.0
 overview: Alexa skill plugin for Jellyfin
@@ -20,4 +20,4 @@ artifacts:
   - Amazon.Lambda.Serialization.Json.dll
   - Jellyfin.Plugin.AlexaSkill.dll
   - Refit.dll
-changelog: "Fixed: Live TV channels now play on Echo Show — asking for a channel used to display only the channel artwork with no audio or video. Channels now launch via VideoApp.Launch (like movies and episodes) and resolve the correct live stream through Jellyfin's PlaybackInfo (direct-remote HLS for IPTV/M3U sources, dynamic HLS master for tuners), so the Echo Show plays the feed with video and audio. Affects every locale (issue #12)."
+changelog: "Fixed: Album playback by voice now works reliably for Italian users. Album names with accents or different spellings (e.g. asking for 'Jazz Cafe' by saying 'jazz caffè') are now found via fuzzy matching. Albums with non-standard folder structures (split discs, special characters) now play completely instead of stopping after a few tracks. The library catalog sync with Alexa now works correctly (was silently failing since the feature was introduced — your albums and artists now populate Alexa's recognition). The skill's authentication token stays fresh automatically, improving reliability of background operations. Italian album commands now understand natural forms like 'metti l'album X' and 'metti il disco X' that previously weren't recognized."

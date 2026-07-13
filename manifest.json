@@ -1,325 +1,333 @@
 [
-    {
-        "category": "General",
-        "guid": "c5df7de0-8777-4b3c-a70d-5c3dae359c9e",
-        "name": "AlexaSkill",
-        "description": "Alexa skill plugin for Jellyfin, based on work by infinityofspace",
-        "owner": "Paolo Antinori",
-        "overview": "Alexa skill plugin for Jellyfin",
-        "imageUrl": "https://raw.githubusercontent.com/paoloantinori/jellyfin-alexa-plugin/main/Jellyfin.Plugin.AlexaSkill/icon.jpg",
-        "versions": [
-            {
-                "version": "0.1.0.0",
-                "checksum": "38441f0d50590e95abd756e2b005cc71",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.1.0.0/AlexaSkill_0.1.0.0.zip",
-                "changelog": "See for more details: https://github.com/paoloantinori/jellyfin-alexa-plugin/releases",
-                "targetAbi": "10.8.0.0",
-                "timestamp": "2025-05-09T15:57:09Z"
-            },
-            {
-                "version": "0.1.0.1",
-                "checksum": "6f6a72a332561cea395732066b23d529",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.1.0.1/AlexaSkill_0.1.0.1.zip",
-                "changelog": "See for more details: https://github.com/paoloantinori/jellyfin-alexa-plugin/releases",
-                "targetAbi": "10.8.0.0",
-                "timestamp": "2025-05-10T14:06:11Z"
-            },
-            {
-                "version": "0.2.0.0",
-                "checksum": "1ed7c52a00384f87fdbff05f203c8357",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.0/AlexaSkill_0.2.0.0.zip",
-                "changelog": "Migrated to Jellyfin 10.11.x (net9.0). Added PlayVideo, PlayChannel, and MediaInfo intent handlers. Fixed IUserDataRepository migration, namespace changes, CsrfTokenHandler bugs. Added test project with 118+ tests. Implemented cloud skill deletion on last user removal.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-04-29T00:00:00Z"
-            },
-            {
-                "version": "0.2.0.1",
-                "checksum": "15999e2c4c81f46c293c591a5c1c54fe",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.1/AlexaSkill_0.2.0.1.zip",
-                "changelog": "Replace broken LWA device auth with authorization code flow. Add persisted refresh token for restart recovery.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-02T16:49:00Z"
-            },
-            {
-                "version": "0.2.0.2",
-                "checksum": "41ecf604e0a1bb172c83ea2a8a5a9036",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.2/AlexaSkill_0.2.0.2.zip",
-                "changelog": "Add comprehensive README tutorial. Expand Italian voice command utterances. Fix ProgressiveResponse HttpClient reuse bug. Update manifest author attribution.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-03 08:01:19"
-            },
-            {
-                "version": "0.2.0.4",
-                "checksum": "9e33526d95872d482495f784ce164d48",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.4/AlexaSkill_0.2.0.4.zip",
-                "changelog": "Add comprehensive README tutorial. Expand Italian voice command utterances. Fix ProgressiveResponse HttpClient reuse bug. Update manifest author attribution.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-03 13:01:54"
-            },
-            {
-                "version": "0.2.0.5",
-                "checksum": "39bfe857f7cbeeef8b893aa6a28c0cbb",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.5/AlexaSkill_0.2.0.5.zip",
-                "changelog": "Per-intent diagnostics metrics. Voice-based user identification. APL visual templates. Utterance template generator. Dialog delegation. Queue management. Radio mode. SSML natural speech.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-04T05:07:03Z"
-            },
-            {
-                "version": "0.2.0.6",
-                "checksum": "bae15ea945b18ef3ff871ee5a61338e8",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.6/AlexaSkill_0.2.0.6.zip",
-                "changelog": "Add comprehensive README tutorial. Expand Italian voice command utterances. Fix ProgressiveResponse HttpClient reuse bug. Update manifest author attribution.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-04 09:46:02"
-            },
-            {
-                "version": "0.2.0.7",
-                "checksum": "0fd0647dd25fa0f720441b667891f845",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.7/AlexaSkill_0.2.0.7.zip",
-                "changelog": "Add QueryArtistLibraryIntent for listing tracks/albums by artist. Add comprehensive localized voice command examples to README. Fix it-IT interaction model validation errors. Fix cross-locale AMAZON.SearchQuery slot conflicts.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-04 10:16:00"
-            },
-            {
-                "version": "0.2.0.8",
-                "checksum": "7c433681fa88b36c86e6d3e302d411d1",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.8/AlexaSkill_0.2.0.8.zip",
-                "changelog": "Add QueryArtistLibraryIntent for listing tracks/albums by artist. Add comprehensive localized voice command examples to README. Fix it-IT interaction model validation errors. Fix cross-locale AMAZON.SearchQuery slot conflicts.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-04 12:29:42"
-            },
-            {
-                "version": "0.2.0.9",
-                "checksum": "0046f7cab8a22be5c38d739366a5bb9d",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.9/AlexaSkill_0.2.0.9.zip",
-                "changelog": "Add QueryArtistLibraryIntent for listing tracks/albums by artist. Add comprehensive localized voice command examples to README. Fix it-IT interaction model validation errors. Fix cross-locale AMAZON.SearchQuery slot conflicts.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-04 17:11:30"
-            },
-            {
-                "version": "0.2.0.10",
-                "checksum": "9acd17c5d48cc555d4eb4eaf33d170be",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.10/AlexaSkill_0.2.0.10.zip",
-                "changelog": "Add SearchMediaIntent for unified search, PlayPodcastIntent, PlayByDecadeIntent, time-of-day mood playlists. Add artist metadata and rich now-playing follow-ups to MediaInfoIntent. Add time-period filtering to PlayLastAddedIntent. Enhance MarkFavoriteIntent with natural utterances. Show artist name in AudioPlayer subtitle. Fix ENQUEUE directive missing ExpectedPreviousToken. Add NLU and E2E integration test suites.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-06 08:01:47"
-            },
-            {
-                "version": "0.2.0.11",
-                "checksum": "cdafcde7ae33e3e9ef83d4c2ef7142f8",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.11/AlexaSkill_0.2.0.11.zip",
-                "changelog": "Add circuit breaker, correlation ID tracing, retry jitter, error categorization, cache metrics, response body logging. Refactor handler registration to DI auto-discovery. Add Jellyfin connectivity ping. Update APL to v1.9. Add Proactive Events API, Reminders API, Customer Profile API, and Skill Connections. Fix test isolation for parallel execution.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-07 06:42:45"
-            },
-            {
-                "version": "0.2.0.12",
-                "checksum": "1b64271b47e491c5dbda6346e1f04250",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.12/AlexaSkill_0.2.0.12.zip",
-                "changelog": "Add hot config propagation via ConfigurationChanged event. Add scheduled tasks for LWA token refresh (6h) and cache cleanup (1h). Fix missing Alexa.NET.Reminders, ProactiveEvents, and Profile DLLs in release package.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-07 14:13:12"
-            },
-            {
-                "version": "0.2.0.13",
-                "checksum": "38b65dd4d819cbe9e25d5a457650245d",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.13/AlexaSkill_0.2.0.13.zip",
-                "changelog": "Fix fatal Jellyfin startup crash when Alexa manifest contains unknown EventName enum values (e.g. AMAZON.MediaContent.Available). Gracefully fall back to local manifest when cloud deserialization fails. Add safety net around SkillStartup to prevent Kestrel crash.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-07 14:29:02"
-            },
-            {
-                "version": "0.2.0.14",
-                "checksum": "0dbd89cfd6fbd2c4582bc5834aa12d51",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.14/AlexaSkill_0.2.0.14.zip",
-                "changelog": "Fix fatal startup crash caused by AMAZON.MediaContent.Available in local manifest.json. Make DeserializeFromFile tolerant of unknown enum values. Add try-catch around ManifestSkill construction in SkillStartup.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-07 14:58:46"
-            },
-            {
-                "version": "0.2.0.15",
-                "checksum": "0e4055b5a71d6270cc7f1ff2b8e0005a",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.15/AlexaSkill_0.2.0.15.zip",
-                "changelog": "Fix missing Alexa.NET.Reminders, ProactiveEvents, Profile DLLs in release package. Fix fatal startup crash from local manifest EventName enum.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-07 15:16:33"
-            },
-            {
-                "version": "0.2.0.16",
-                "checksum": "1f4e98c8eafb18ceacdd33e818bc481f",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.16/AlexaSkill_0.2.0.16.zip",
-                "changelog": "Fix missing Alexa.NET.Reminders, ProactiveEvents, Profile DLLs in release package. Fix fatal startup crash from local manifest EventName enum.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-07 20:44:34"
-            },
-            {
-                "version": "0.2.0.17",
-                "checksum": "ab28f4c4b22e7dc3304ce22ed7a91a6f",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.17/AlexaSkill_0.2.0.17.zip",
-                "changelog": "Fix missing Alexa.NET.Reminders, ProactiveEvents, Profile DLLs in release package. Fix fatal startup crash from local manifest EventName enum.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-08 05:24:25"
-            },
-            {
-                "version": "0.2.0.18",
-                "checksum": "a1ccce8b8569878f3414855235917daa",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.18/AlexaSkill_0.2.0.18.zip",
-                "changelog": "Fix missing Alexa.NET.Reminders, ProactiveEvents, Profile DLLs in release package. Fix fatal startup crash from local manifest EventName enum.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-11 18:20:01"
-            },
-            {
-                "version": "0.3.0",
-                "checksum": "29710d112a24014081b49b790ff1bc8d",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.3.0/AlexaSkill_0.3.0.zip",
-                "changelog": "Fix missing Alexa.NET.Reminders, ProactiveEvents, Profile DLLs in release package. Fix fatal startup crash from local manifest EventName enum.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-14 14:38:18"
-            },
-            {
-                "version": "0.3.0.1",
-                "checksum": "5b11b88f44926bd2459af00eef3df1e7",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.3.0.1/AlexaSkill_0.3.0.1.zip",
-                "changelog": "Fix duplicate user config entries and deletion data loss (JF-152). Fix accordion UI layout (JF-153). Add skill icon URL support. Fix stale config reference in LWA callback. Redact leaked API keys from skill files.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-15 15:12:43"
-            },
-            {
-                "version": "0.3.0.2",
-                "checksum": "18f3d82ad822ee8740845eb3f11b2d13",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.3.0.2/AlexaSkill_0.3.0.2.zip",
-                "changelog": "Fix APL visuals not showing after skill recreation. Fix config Save wiping user data. Add dedicated PATCH config endpoint. Remove broken SMAPI icon upload. Replace reflection-based config setting with explicit typed assignments.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-15 22:40:00"
-            },
-            {
-                "version": "0.3.0.4",
-                "checksum": "727bd48bccc09497f8d9eb83eaedee07",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.3.0.4/AlexaSkill_0.3.0.4.zip",
-                "changelog": "Fix APL visuals not showing after skill recreation. Fix config Save wiping user data. Add dedicated PATCH config endpoint. Remove broken SMAPI icon upload. Replace reflection-based config setting with explicit typed assignments.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-15 22:09:56"
-            },
-            {
-                "version": "0.3.0.5",
-                "checksum": "b68fd32543a7ad096d585d78689e0eb9",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.3.0.5/AlexaSkill_0.3.0.5.zip",
-                "changelog": "Fix APL visuals not showing after skill recreation. Fix config Save wiping user data. Add dedicated PATCH config endpoint. Remove broken SMAPI icon upload. Replace reflection-based config setting with explicit typed assignments.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-16 07:14:32"
-            },
-            {
-                "version": "0.3.1.0",
-                "checksum": "10157534c6e364838317b3aee85cf591",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.3.1.0/AlexaSkill_0.3.1.0.zip",
-                "changelog": "Fix APL visuals not showing after skill recreation. Fix config Save wiping user data. Add dedicated PATCH config endpoint. Remove broken SMAPI icon upload. Replace reflection-based config setting with explicit typed assignments.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-16 10:29:41"
-            },
-            {
-                "version": "0.3.2.0",
-                "checksum": "697bc7136d190216d25084c86b010f0b",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.3.2.0/AlexaSkill_0.3.2.0.zip",
-                "changelog": "Unreleased",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-20 00:00:00"
-            },
-            {
-                "version": "0.4.0.0",
-                "checksum": "fff28fc0e13ff9a5436f2aaba359e494",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.4.0.0/AlexaSkill_0.4.0.0.zip",
-                "changelog": "BrowseLibrary question-style utterances across all locales. Beef up PlayVideoIntent for 6 thin locales with video-specific verbs. APL carousel docs.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-05-24 00:00:00"
-            },
-            {
-                "version": "0.5.0.0",
-                "checksum": "9115da2b54d47c15274fbd312c1014e8",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.5.0.0/AlexaSkill_0.5.0.0.zip",
-                "changelog": "PostPlay AutoPlay: automatically enqueue similar tracks when queue exhausts. Fast/Thorough search mode: per-user speed/recall trade-off. Double Metaphone phonetic matching for non-English artist names. Cross-media-type fallback (song to artist songs). On-the-fly MP4 video generation with album art for Echo Show. APL progress bar with elapsed/total time. Enriched NowPlaying card with artist, album, track number. ShuffleArtistSongs config option. Fix stop/pause routing (ShouldEndSession=true). Fix BrowseLibrary entity resolution for Italian articles. Italian invocation name changed to 'mia collezione'. LWA credential sanitization. 2084 unit tests. 17-locale Mermaid documentation.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-06-02 18:58:19"
-            },
-            {
-                "version": "0.5.0.1",
-                "checksum": "a6b8a0786af8ae6dff017ac2cfaf4f90",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.5.0.1/AlexaSkill_0.5.0.1.zip",
-                "changelog": "Config page clarity: remove jargon, reorganize sections, split user table columns. Italian phonetic synonym unit tests (2131 total).",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-06-02T19:50:00Z"
-            },
-            {
-                "version": "0.6.0.0",
-                "checksum": "c3f9271d9414ea12e5a4b1feeaffd2e7",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.6.0.0/AlexaSkill_0.6.0.0.zip",
-                "changelog": "FindSong: multi-turn conversational song search with partial-title keyword matching. Localized mood-to-genre mappings (de-DE, es-ES, fr-FR, pt-BR). Auto-provision plugin users on config PATCH. NLU routing fixes across all 17 locales. BrowseLibrary and PlayAlbum slot resolution fixes. Session management improvements for list handlers.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-06-07 21:04:05"
-            },
-            {
-                "version": "0.6.0.1",
-                "checksum": "4dcde44dee82512088c8f7e684e0fa88",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.6.0.1/AlexaSkill_0.6.0.1.zip",
-                "changelog": "Security fix: replace ProcessStartInfo.Arguments with ArgumentList in VideoAudioController (CodeQL #143, CWE-78/CWE-88). Fix black frame ffmpeg -framerate positioning.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-06-08 06:04:45"
-            },
-            {
-                "version": "0.7.0.0",
-                "checksum": "722c2a4e7e03016375a8c93a79f997df",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.7.0.0/AlexaSkill_0.7.0.0.zip",
-                "changelog": "Audiobook seek bar on Echo Show via HLS concat streaming (JF-292): multi-chapter books get a full-book timeline with accurate seeking. Per-category native controls (NativeControlsForBooks) with audiobook position tracking and resume from last position. Resume offer extended to VideoApp (movies/episodes), tracked per-device. VideoAudio cache with per-item locking and background faststart remux for instant first-play. Phonetic song search fallback (JF-285) and O(1) bigram index for fast song title lookup (JF-246). Fixes: 'mostra libri' showing Audiobooks root folder (JF-266), Folder items crashing on APL carousel tap (JF-152), VideoApp ShouldEndSession breaking audiobook/video playback (JF-288), stale resume item with NativeControlsForAudio.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-06-15 20:21:40"
-            },
-            {
-                "version": "0.8.0.0",
-                "checksum": "6211bfc1c0fdcb634c9d879dea5a669d",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.8.0.0/AlexaSkill_0.8.0.0.zip",
-                "changelog": "Per-user music delivery setting: choose VideoApp (Echo Show seek bar) or plain AudioPlayer (raw stream, zero transcoding, instant playback) per user. Echo Show music latency fixed: cache-miss songs start in ~2s instead of ~20s (force a video keyframe every 1s so HLS segments form at 4s boundaries; previously the missing keyframe interval produced ~4-minute segments). Single-item video-audio stream-copies MP3/AAC audio (no transcode). Progressive 'searching...' response is now fire-and-forget across all handlers, reducing latency. Fixes: multi-word song titles that miss no longer fuzzy-match an unrelated artist; Alexa slot values/synonyms longer than 140 characters (e.g. musical cast-list artist names) \u2014 which crashed every skill request with InvalidResponse \u2014 are now truncated (#6, contributed by @DestroyCom).",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-06-17 08:04:24"
-            },
-            {
-                "version": "0.9.0.0",
-                "checksum": "6362ce767f1da4524cdf70f105ab8c2b",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.9.0.0/AlexaSkill_0.9.0.0.zip",
-                "changelog": "Custom invocation names now auto-redeploy to Amazon: changing the skill's wake word in settings triggers a rebuild + redeploy of all 17 locale interaction models (~15-30s) \u2014 no Alexa Console edit or re-authorization needed (JF-297). Invocation-name semantics fixed: an empty name means 'use locale defaults' (it-IT 'mia collezione', other locales 'jellyfin player'); a custom name now applies to all 17 locales including it-IT (JF-300). Fixed 'Something went wrong' / 'Qualcosa \u00e8 andato storto' playing on every track \u2014 AudioPlayer event handlers no longer return shouldEndSession=false, which Amazon rejects (JF-299).",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-06-24 11:16:00"
-            },
-            {
-                "version": "0.9.1.0",
-                "checksum": "e99b9d2da823e279b2a870887e03809d",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.9.1.0/AlexaSkill_0.9.1.0.zip",
-                "changelog": "Fixed: asking Alexa to play a playlist always reported it as empty, even when the playlist contained tracks that played fine from the Jellyfin web UI (issue #10). Playlist members are now read through Jellyfin's own playlist API (the same one the web UI uses) instead of the album/children query, which returned nothing because playlists store their tracks as linked members rather than as parent-owned items. Affects every locale, not just es-MX. Large playlists also no longer re-scan the whole track list on each continuation batch.",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-06-27 08:56:46"
-            },
-            {
-                "version": "0.9.2.0",
-                "checksum": "eaec778a11301a60782961d9b7283be3",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.9.2.0/AlexaSkill_0.9.2.0.zip",
-                "changelog": "Fixed: shuffle mode (AMAZON.ShuffleOn/Off) now actually changes playback order during playlists/queues \u2014 it had been setting a flag that the next-track logic never read, so playback stayed in the original order. Shuffle state now lives in one authoritative store and the queue is physically reshuffled (each track once); shuffle-off restores the original order; the shuffle-on response no longer leaks whole-library dynamic entities (issue #10 follow-up, JF-301). Also hardened the account-linking implicit-grant redirect (#11).",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-07-02 19:43:00"
-            },
-            {
-                "version": "0.9.3.0",
-                "checksum": "f707ba93ba5633aa2bd62f1023a8da5e",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.9.3.0/AlexaSkill_0.9.3.0.zip",
-                "changelog": "New: shuffle-at-start for playlists \u2014 request shuffle directly in the initial play command (\"shuffle the playlist X\", \"play the playlist X in shuffle mode\", \"reproduce la lista de reproducci\u00f3n X en modo aleatorio\") so the queue is shuffled before playback begins and the first track is random too. Builds on the 0.9.2.0 shuffle fix, reusing the authoritative per-device shuffle state at queue-build time. Supported across all skill locales (issue #10, JF-305).",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-07-03 20:54:58"
-            },
-            {
-                "version": "0.9.4.0",
-                "checksum": "42ed4123ad27a2531e1884b7064b6973",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.9.4.0/AlexaSkill_0.9.4.0.zip",
-                "changelog": "Fixed: Live TV channels now play on Echo Show \u2014 asking for a channel used to display only the channel artwork with no audio or video. Channels now launch via VideoApp.Launch (like movies and episodes) and resolve the correct live stream through Jellyfin's PlaybackInfo (direct-remote HLS for IPTV/M3U sources, dynamic HLS master for tuners), so the Echo Show plays the feed with video and audio. Affects every locale (issue #12).",
-                "targetAbi": "10.11.0.0",
-                "timestamp": "2026-07-11 12:01:11"
-            }
-        ]
-    }
+  {
+    "category": "General",
+    "guid": "c5df7de0-8777-4b3c-a70d-5c3dae359c9e",
+    "name": "AlexaSkill",
+    "description": "Alexa skill plugin for Jellyfin, based on work by infinityofspace",
+    "owner": "Paolo Antinori",
+    "overview": "Alexa skill plugin for Jellyfin",
+    "imageUrl": "https://raw.githubusercontent.com/paoloantinori/jellyfin-alexa-plugin/main/Jellyfin.Plugin.AlexaSkill/icon.jpg",
+    "versions": [
+      {
+        "version": "0.1.0.0",
+        "checksum": "38441f0d50590e95abd756e2b005cc71",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.1.0.0/AlexaSkill_0.1.0.0.zip",
+        "changelog": "See for more details: https://github.com/paoloantinori/jellyfin-alexa-plugin/releases",
+        "targetAbi": "10.8.0.0",
+        "timestamp": "2025-05-09T15:57:09Z"
+      },
+      {
+        "version": "0.1.0.1",
+        "checksum": "6f6a72a332561cea395732066b23d529",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.1.0.1/AlexaSkill_0.1.0.1.zip",
+        "changelog": "See for more details: https://github.com/paoloantinori/jellyfin-alexa-plugin/releases",
+        "targetAbi": "10.8.0.0",
+        "timestamp": "2025-05-10T14:06:11Z"
+      },
+      {
+        "version": "0.2.0.0",
+        "checksum": "1ed7c52a00384f87fdbff05f203c8357",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.0/AlexaSkill_0.2.0.0.zip",
+        "changelog": "Migrated to Jellyfin 10.11.x (net9.0). Added PlayVideo, PlayChannel, and MediaInfo intent handlers. Fixed IUserDataRepository migration, namespace changes, CsrfTokenHandler bugs. Added test project with 118+ tests. Implemented cloud skill deletion on last user removal.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-04-29T00:00:00Z"
+      },
+      {
+        "version": "0.2.0.1",
+        "checksum": "15999e2c4c81f46c293c591a5c1c54fe",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.1/AlexaSkill_0.2.0.1.zip",
+        "changelog": "Replace broken LWA device auth with authorization code flow. Add persisted refresh token for restart recovery.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-05-02T16:49:00Z"
+      },
+      {
+        "version": "0.2.0.2",
+        "checksum": "41ecf604e0a1bb172c83ea2a8a5a9036",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.2/AlexaSkill_0.2.0.2.zip",
+        "changelog": "Add comprehensive README tutorial. Expand Italian voice command utterances. Fix ProgressiveResponse HttpClient reuse bug. Update manifest author attribution.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-05-03 08:01:19"
+      },
+      {
+        "version": "0.2.0.4",
+        "checksum": "9e33526d95872d482495f784ce164d48",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.4/AlexaSkill_0.2.0.4.zip",
+        "changelog": "Add comprehensive README tutorial. Expand Italian voice command utterances. Fix ProgressiveResponse HttpClient reuse bug. Update manifest author attribution.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-05-03 13:01:54"
+      },
+      {
+        "version": "0.2.0.5",
+        "checksum": "39bfe857f7cbeeef8b893aa6a28c0cbb",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.5/AlexaSkill_0.2.0.5.zip",
+        "changelog": "Per-intent diagnostics metrics. Voice-based user identification. APL visual templates. Utterance template generator. Dialog delegation. Queue management. Radio mode. SSML natural speech.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-05-04T05:07:03Z"
+      },
+      {
+        "version": "0.2.0.6",
+        "checksum": "bae15ea945b18ef3ff871ee5a61338e8",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.6/AlexaSkill_0.2.0.6.zip",
+        "changelog": "Add comprehensive README tutorial. Expand Italian voice command utterances. Fix ProgressiveResponse HttpClient reuse bug. Update manifest author attribution.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-05-04 09:46:02"
+      },
+      {
+        "version": "0.2.0.7",
+        "checksum": "0fd0647dd25fa0f720441b667891f845",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.7/AlexaSkill_0.2.0.7.zip",
+        "changelog": "Add QueryArtistLibraryIntent for listing tracks/albums by artist. Add comprehensive localized voice command examples to README. Fix it-IT interaction model validation errors. Fix cross-locale AMAZON.SearchQuery slot conflicts.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-05-04 10:16:00"
+      },
+      {
+        "version": "0.2.0.8",
+        "checksum": "7c433681fa88b36c86e6d3e302d411d1",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.8/AlexaSkill_0.2.0.8.zip",
+        "changelog": "Add QueryArtistLibraryIntent for listing tracks/albums by artist. Add comprehensive localized voice command examples to README. Fix it-IT interaction model validation errors. Fix cross-locale AMAZON.SearchQuery slot conflicts.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-05-04 12:29:42"
+      },
+      {
+        "version": "0.2.0.9",
+        "checksum": "0046f7cab8a22be5c38d739366a5bb9d",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.9/AlexaSkill_0.2.0.9.zip",
+        "changelog": "Add QueryArtistLibraryIntent for listing tracks/albums by artist. Add comprehensive localized voice command examples to README. Fix it-IT interaction model validation errors. Fix cross-locale AMAZON.SearchQuery slot conflicts.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-05-04 17:11:30"
+      },
+      {
+        "version": "0.2.0.10",
+        "checksum": "9acd17c5d48cc555d4eb4eaf33d170be",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.10/AlexaSkill_0.2.0.10.zip",
+        "changelog": "Add SearchMediaIntent for unified search, PlayPodcastIntent, PlayByDecadeIntent, time-of-day mood playlists. Add artist metadata and rich now-playing follow-ups to MediaInfoIntent. Add time-period filtering to PlayLastAddedIntent. Enhance MarkFavoriteIntent with natural utterances. Show artist name in AudioPlayer subtitle. Fix ENQUEUE directive missing ExpectedPreviousToken. Add NLU and E2E integration test suites.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-05-06 08:01:47"
+      },
+      {
+        "version": "0.2.0.11",
+        "checksum": "cdafcde7ae33e3e9ef83d4c2ef7142f8",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.11/AlexaSkill_0.2.0.11.zip",
+        "changelog": "Add circuit breaker, correlation ID tracing, retry jitter, error categorization, cache metrics, response body logging. Refactor handler registration to DI auto-discovery. Add Jellyfin connectivity ping. Update APL to v1.9. Add Proactive Events API, Reminders API, Customer Profile API, and Skill Connections. Fix test isolation for parallel execution.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-05-07 06:42:45"
+      },
+      {
+        "version": "0.2.0.12",
+        "checksum": "1b64271b47e491c5dbda6346e1f04250",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.12/AlexaSkill_0.2.0.12.zip",
+        "changelog": "Add hot config propagation via ConfigurationChanged event. Add scheduled tasks for LWA token refresh (6h) and cache cleanup (1h). Fix missing Alexa.NET.Reminders, ProactiveEvents, and Profile DLLs in release package.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-05-07 14:13:12"
+      },
+      {
+        "version": "0.2.0.13",
+        "checksum": "38b65dd4d819cbe9e25d5a457650245d",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.13/AlexaSkill_0.2.0.13.zip",
+        "changelog": "Fix fatal Jellyfin startup crash when Alexa manifest contains unknown EventName enum values (e.g. AMAZON.MediaContent.Available). Gracefully fall back to local manifest when cloud deserialization fails. Add safety net around SkillStartup to prevent Kestrel crash.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-05-07 14:29:02"
+      },
+      {
+        "version": "0.2.0.14",
+        "checksum": "0dbd89cfd6fbd2c4582bc5834aa12d51",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.14/AlexaSkill_0.2.0.14.zip",
+        "changelog": "Fix fatal startup crash caused by AMAZON.MediaContent.Available in local manifest.json. Make DeserializeFromFile tolerant of unknown enum values. Add try-catch around ManifestSkill construction in SkillStartup.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-05-07 14:58:46"
+      },
+      {
+        "version": "0.2.0.15",
+        "checksum": "0e4055b5a71d6270cc7f1ff2b8e0005a",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.15/AlexaSkill_0.2.0.15.zip",
+        "changelog": "Fix missing Alexa.NET.Reminders, ProactiveEvents, Profile DLLs in release package. Fix fatal startup crash from local manifest EventName enum.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-05-07 15:16:33"
+      },
+      {
+        "version": "0.2.0.16",
+        "checksum": "1f4e98c8eafb18ceacdd33e818bc481f",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.16/AlexaSkill_0.2.0.16.zip",
+        "changelog": "Fix missing Alexa.NET.Reminders, ProactiveEvents, Profile DLLs in release package. Fix fatal startup crash from local manifest EventName enum.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-05-07 20:44:34"
+      },
+      {
+        "version": "0.2.0.17",
+        "checksum": "ab28f4c4b22e7dc3304ce22ed7a91a6f",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.17/AlexaSkill_0.2.0.17.zip",
+        "changelog": "Fix missing Alexa.NET.Reminders, ProactiveEvents, Profile DLLs in release package. Fix fatal startup crash from local manifest EventName enum.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-05-08 05:24:25"
+      },
+      {
+        "version": "0.2.0.18",
+        "checksum": "a1ccce8b8569878f3414855235917daa",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.2.0.18/AlexaSkill_0.2.0.18.zip",
+        "changelog": "Fix missing Alexa.NET.Reminders, ProactiveEvents, Profile DLLs in release package. Fix fatal startup crash from local manifest EventName enum.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-05-11 18:20:01"
+      },
+      {
+        "version": "0.3.0",
+        "checksum": "29710d112a24014081b49b790ff1bc8d",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.3.0/AlexaSkill_0.3.0.zip",
+        "changelog": "Fix missing Alexa.NET.Reminders, ProactiveEvents, Profile DLLs in release package. Fix fatal startup crash from local manifest EventName enum.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-05-14 14:38:18"
+      },
+      {
+        "version": "0.3.0.1",
+        "checksum": "5b11b88f44926bd2459af00eef3df1e7",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.3.0.1/AlexaSkill_0.3.0.1.zip",
+        "changelog": "Fix duplicate user config entries and deletion data loss (JF-152). Fix accordion UI layout (JF-153). Add skill icon URL support. Fix stale config reference in LWA callback. Redact leaked API keys from skill files.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-05-15 15:12:43"
+      },
+      {
+        "version": "0.3.0.2",
+        "checksum": "18f3d82ad822ee8740845eb3f11b2d13",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.3.0.2/AlexaSkill_0.3.0.2.zip",
+        "changelog": "Fix APL visuals not showing after skill recreation. Fix config Save wiping user data. Add dedicated PATCH config endpoint. Remove broken SMAPI icon upload. Replace reflection-based config setting with explicit typed assignments.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-05-15 22:40:00"
+      },
+      {
+        "version": "0.3.0.4",
+        "checksum": "727bd48bccc09497f8d9eb83eaedee07",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.3.0.4/AlexaSkill_0.3.0.4.zip",
+        "changelog": "Fix APL visuals not showing after skill recreation. Fix config Save wiping user data. Add dedicated PATCH config endpoint. Remove broken SMAPI icon upload. Replace reflection-based config setting with explicit typed assignments.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-05-15 22:09:56"
+      },
+      {
+        "version": "0.3.0.5",
+        "checksum": "b68fd32543a7ad096d585d78689e0eb9",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.3.0.5/AlexaSkill_0.3.0.5.zip",
+        "changelog": "Fix APL visuals not showing after skill recreation. Fix config Save wiping user data. Add dedicated PATCH config endpoint. Remove broken SMAPI icon upload. Replace reflection-based config setting with explicit typed assignments.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-05-16 07:14:32"
+      },
+      {
+        "version": "0.3.1.0",
+        "checksum": "10157534c6e364838317b3aee85cf591",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.3.1.0/AlexaSkill_0.3.1.0.zip",
+        "changelog": "Fix APL visuals not showing after skill recreation. Fix config Save wiping user data. Add dedicated PATCH config endpoint. Remove broken SMAPI icon upload. Replace reflection-based config setting with explicit typed assignments.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-05-16 10:29:41"
+      },
+      {
+        "version": "0.3.2.0",
+        "checksum": "697bc7136d190216d25084c86b010f0b",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.3.2.0/AlexaSkill_0.3.2.0.zip",
+        "changelog": "Unreleased",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-05-20 00:00:00"
+      },
+      {
+        "version": "0.4.0.0",
+        "checksum": "fff28fc0e13ff9a5436f2aaba359e494",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.4.0.0/AlexaSkill_0.4.0.0.zip",
+        "changelog": "BrowseLibrary question-style utterances across all locales. Beef up PlayVideoIntent for 6 thin locales with video-specific verbs. APL carousel docs.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-05-24 00:00:00"
+      },
+      {
+        "version": "0.5.0.0",
+        "checksum": "9115da2b54d47c15274fbd312c1014e8",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.5.0.0/AlexaSkill_0.5.0.0.zip",
+        "changelog": "PostPlay AutoPlay: automatically enqueue similar tracks when queue exhausts. Fast/Thorough search mode: per-user speed/recall trade-off. Double Metaphone phonetic matching for non-English artist names. Cross-media-type fallback (song to artist songs). On-the-fly MP4 video generation with album art for Echo Show. APL progress bar with elapsed/total time. Enriched NowPlaying card with artist, album, track number. ShuffleArtistSongs config option. Fix stop/pause routing (ShouldEndSession=true). Fix BrowseLibrary entity resolution for Italian articles. Italian invocation name changed to 'mia collezione'. LWA credential sanitization. 2084 unit tests. 17-locale Mermaid documentation.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-06-02 18:58:19"
+      },
+      {
+        "version": "0.5.0.1",
+        "checksum": "a6b8a0786af8ae6dff017ac2cfaf4f90",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.5.0.1/AlexaSkill_0.5.0.1.zip",
+        "changelog": "Config page clarity: remove jargon, reorganize sections, split user table columns. Italian phonetic synonym unit tests (2131 total).",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-06-02T19:50:00Z"
+      },
+      {
+        "version": "0.6.0.0",
+        "checksum": "c3f9271d9414ea12e5a4b1feeaffd2e7",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.6.0.0/AlexaSkill_0.6.0.0.zip",
+        "changelog": "FindSong: multi-turn conversational song search with partial-title keyword matching. Localized mood-to-genre mappings (de-DE, es-ES, fr-FR, pt-BR). Auto-provision plugin users on config PATCH. NLU routing fixes across all 17 locales. BrowseLibrary and PlayAlbum slot resolution fixes. Session management improvements for list handlers.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-06-07 21:04:05"
+      },
+      {
+        "version": "0.6.0.1",
+        "checksum": "4dcde44dee82512088c8f7e684e0fa88",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.6.0.1/AlexaSkill_0.6.0.1.zip",
+        "changelog": "Security fix: replace ProcessStartInfo.Arguments with ArgumentList in VideoAudioController (CodeQL #143, CWE-78/CWE-88). Fix black frame ffmpeg -framerate positioning.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-06-08 06:04:45"
+      },
+      {
+        "version": "0.7.0.0",
+        "checksum": "722c2a4e7e03016375a8c93a79f997df",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.7.0.0/AlexaSkill_0.7.0.0.zip",
+        "changelog": "Audiobook seek bar on Echo Show via HLS concat streaming (JF-292): multi-chapter books get a full-book timeline with accurate seeking. Per-category native controls (NativeControlsForBooks) with audiobook position tracking and resume from last position. Resume offer extended to VideoApp (movies/episodes), tracked per-device. VideoAudio cache with per-item locking and background faststart remux for instant first-play. Phonetic song search fallback (JF-285) and O(1) bigram index for fast song title lookup (JF-246). Fixes: 'mostra libri' showing Audiobooks root folder (JF-266), Folder items crashing on APL carousel tap (JF-152), VideoApp ShouldEndSession breaking audiobook/video playback (JF-288), stale resume item with NativeControlsForAudio.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-06-15 20:21:40"
+      },
+      {
+        "version": "0.8.0.0",
+        "checksum": "6211bfc1c0fdcb634c9d879dea5a669d",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.8.0.0/AlexaSkill_0.8.0.0.zip",
+        "changelog": "Per-user music delivery setting: choose VideoApp (Echo Show seek bar) or plain AudioPlayer (raw stream, zero transcoding, instant playback) per user. Echo Show music latency fixed: cache-miss songs start in ~2s instead of ~20s (force a video keyframe every 1s so HLS segments form at 4s boundaries; previously the missing keyframe interval produced ~4-minute segments). Single-item video-audio stream-copies MP3/AAC audio (no transcode). Progressive 'searching...' response is now fire-and-forget across all handlers, reducing latency. Fixes: multi-word song titles that miss no longer fuzzy-match an unrelated artist; Alexa slot values/synonyms longer than 140 characters (e.g. musical cast-list artist names) \u2014 which crashed every skill request with InvalidResponse \u2014 are now truncated (#6, contributed by @DestroyCom).",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-06-17 08:04:24"
+      },
+      {
+        "version": "0.9.0.0",
+        "checksum": "6362ce767f1da4524cdf70f105ab8c2b",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.9.0.0/AlexaSkill_0.9.0.0.zip",
+        "changelog": "Custom invocation names now auto-redeploy to Amazon: changing the skill's wake word in settings triggers a rebuild + redeploy of all 17 locale interaction models (~15-30s) \u2014 no Alexa Console edit or re-authorization needed (JF-297). Invocation-name semantics fixed: an empty name means 'use locale defaults' (it-IT 'mia collezione', other locales 'jellyfin player'); a custom name now applies to all 17 locales including it-IT (JF-300). Fixed 'Something went wrong' / 'Qualcosa \u00e8 andato storto' playing on every track \u2014 AudioPlayer event handlers no longer return shouldEndSession=false, which Amazon rejects (JF-299).",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-06-24 11:16:00"
+      },
+      {
+        "version": "0.9.1.0",
+        "checksum": "e99b9d2da823e279b2a870887e03809d",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.9.1.0/AlexaSkill_0.9.1.0.zip",
+        "changelog": "Fixed: asking Alexa to play a playlist always reported it as empty, even when the playlist contained tracks that played fine from the Jellyfin web UI (issue #10). Playlist members are now read through Jellyfin's own playlist API (the same one the web UI uses) instead of the album/children query, which returned nothing because playlists store their tracks as linked members rather than as parent-owned items. Affects every locale, not just es-MX. Large playlists also no longer re-scan the whole track list on each continuation batch.",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-06-27 08:56:46"
+      },
+      {
+        "version": "0.9.2.0",
+        "checksum": "eaec778a11301a60782961d9b7283be3",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.9.2.0/AlexaSkill_0.9.2.0.zip",
+        "changelog": "Fixed: shuffle mode (AMAZON.ShuffleOn/Off) now actually changes playback order during playlists/queues \u2014 it had been setting a flag that the next-track logic never read, so playback stayed in the original order. Shuffle state now lives in one authoritative store and the queue is physically reshuffled (each track once); shuffle-off restores the original order; the shuffle-on response no longer leaks whole-library dynamic entities (issue #10 follow-up, JF-301). Also hardened the account-linking implicit-grant redirect (#11).",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-07-02 19:43:00"
+      },
+      {
+        "version": "0.9.3.0",
+        "checksum": "f707ba93ba5633aa2bd62f1023a8da5e",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.9.3.0/AlexaSkill_0.9.3.0.zip",
+        "changelog": "New: shuffle-at-start for playlists \u2014 request shuffle directly in the initial play command (\"shuffle the playlist X\", \"play the playlist X in shuffle mode\", \"reproduce la lista de reproducci\u00f3n X en modo aleatorio\") so the queue is shuffled before playback begins and the first track is random too. Builds on the 0.9.2.0 shuffle fix, reusing the authoritative per-device shuffle state at queue-build time. Supported across all skill locales (issue #10, JF-305).",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-07-03 20:54:58"
+      },
+      {
+        "version": "0.9.4.0",
+        "checksum": "42ed4123ad27a2531e1884b7064b6973",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.9.4.0/AlexaSkill_0.9.4.0.zip",
+        "changelog": "Fixed: Live TV channels now play on Echo Show \u2014 asking for a channel used to display only the channel artwork with no audio or video. Channels now launch via VideoApp.Launch (like movies and episodes) and resolve the correct live stream through Jellyfin's PlaybackInfo (direct-remote HLS for IPTV/M3U sources, dynamic HLS master for tuners), so the Echo Show plays the feed with video and audio. Affects every locale (issue #12).",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-07-11 12:01:11"
+      },
+      {
+        "version": "0.9.5.0",
+        "checksum": "placeholder",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.9.5.0/AlexaSkill_0.9.5.0.zip",
+        "changelog": "placeholder",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "0001-01-01 00:00:00"
+      }
+    ]
+  }
 ]
