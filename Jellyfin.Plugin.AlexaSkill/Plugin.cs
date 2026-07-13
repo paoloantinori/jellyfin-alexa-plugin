@@ -118,11 +118,6 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public ILoggerFactory LoggerFactory { get; private set; }
 
     /// <summary>
-    /// Gets the dictionary of device ids to session tokens.
-    /// </summary>
-    public Dictionary<string, string> SessionTokens { get; } = new Dictionary<string, string>();
-
-    /// <summary>
     /// Gets the LWA authorization request handler.
     /// </summary>
     public LwaAuthorizationRequestHandler LwaAuthorizationRequestHandler { get; } =
@@ -257,7 +252,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     /// Handle configuration changes by propagating them to active services.
     /// Only resets caches when ServerAddress actually changes.
     /// </summary>
-    private void OnConfigurationChanged(object? sender, BasePluginConfiguration e)
+    private async void OnConfigurationChanged(object? sender, BasePluginConfiguration e)
     {
         var config = (PluginConfiguration)e;
         var logger = LoggerFactory.CreateLogger<Plugin>();
@@ -270,7 +265,11 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         _lastKnownServerAddress = config.ServerAddress;
         logger.LogInformation("ServerAddress changed — propagating to active services");
 
-        ConnectivityChecker?.InvalidateCache();
+        if (ConnectivityChecker != null)
+        {
+            await ConnectivityChecker.InvalidateCacheAsync().ConfigureAwait(false);
+        }
+
         CircuitBreaker.Reset();
         SearchCache.Clear();
     }

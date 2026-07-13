@@ -43,18 +43,18 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
     }
 
     /// <inheritdoc/>
-    public async Task ProcessAsync(RequestContext context, CancellationToken cancellationToken)
+    public Task ProcessAsync(RequestContext context, CancellationToken cancellationToken)
     {
         if (context.Response?.Response == null)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         // AudioPlayer directives carry their own dialog state — skip DynamicEntities.
         if (context.Response.Response.Directives?.Any(d =>
             d is AudioPlayerPlayDirective or StopDirective or ClearQueueDirective) == true)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         bool isNewSession = context.SkillRequest is LaunchRequest
@@ -68,7 +68,7 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
         // entire catalog — artists/songs not in the playing playlist).
         if (IsPlaybackControlIntent(intentName))
         {
-            return;
+            return Task.CompletedTask;
         }
 
         // Determine if we should inject conditional entities
@@ -83,25 +83,23 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
 
             if (!includeSeries && !includeAudiobooks)
             {
-                return;
+                return Task.CompletedTask;
             }
         }
 
         var (jellyfinUserId, allowedLibraryIds) = ResolveUserWithLibraries(context);
         if (jellyfinUserId == Guid.Empty)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         try
         {
-            DynamicEntitiesDirective? directive = await Task.Run(
-                () => _builder.Build(jellyfinUserId, context.Locale, allowedLibraryIds, includeSeries, includeAudiobooks, cancellationToken),
-                cancellationToken).ConfigureAwait(false);
+            DynamicEntitiesDirective? directive = _builder.Build(jellyfinUserId, context.Locale, allowedLibraryIds, includeSeries, includeAudiobooks, cancellationToken);
 
             if (directive == null)
             {
-                return;
+                return Task.CompletedTask;
             }
 
             context.Response.Response.Directives ??= new List<global::Alexa.NET.Response.IDirective>();
@@ -111,6 +109,8 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
         {
             _logger.LogWarning(ex, "Failed to build dynamic entities for user {UserId}", jellyfinUserId);
         }
+
+        return Task.CompletedTask;
     }
 
     private (Guid UserId, Guid[]? AllowedLibraryIds) ResolveUserWithLibraries(RequestContext context)

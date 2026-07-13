@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Diagnostics;
@@ -25,47 +26,47 @@ public class ConfigurationPropagationTests : PluginTestBase
     }
 
     // -------------------------------------------------------------------------
-    // JellyfinConnectivityChecker.InvalidateCache()
+    // JellyfinConnectivityChecker.InvalidateCacheAsync()
     // -------------------------------------------------------------------------
 
     [Fact]
-    public void InvalidateCache_CanBeCalled_WithoutError()
+    public async Task InvalidateCache_CanBeCalled_WithoutError()
     {
         var checker = new JellyfinConnectivityChecker(
             LoggerFactory.Create(b => { }).CreateLogger<JellyfinConnectivityChecker>());
 
         // Should not throw even though no check has been performed
-        var exception = Record.Exception(() => checker.InvalidateCache());
+        var exception = await Record.ExceptionAsync(() => checker.InvalidateCacheAsync());
         Assert.Null(exception);
     }
 
     [Fact]
-    public void InvalidateCache_CalledMultipleTimes_DoesNotThrow()
+    public async Task InvalidateCache_CalledMultipleTimes_DoesNotThrow()
     {
         var checker = new JellyfinConnectivityChecker(
             LoggerFactory.Create(b => { }).CreateLogger<JellyfinConnectivityChecker>());
 
-        var exception = Record.Exception(() =>
+        var exception = await Record.ExceptionAsync(async () =>
         {
-            checker.InvalidateCache();
-            checker.InvalidateCache();
-            checker.InvalidateCache();
+            await checker.InvalidateCacheAsync();
+            await checker.InvalidateCacheAsync();
+            await checker.InvalidateCacheAsync();
         });
 
         Assert.Null(exception);
     }
 
     [Fact]
-    public void InvalidateCache_AfterInvalidate_CanBeCalledAgain()
+    public async Task InvalidateCache_AfterInvalidate_CanBeCalledAgain()
     {
         var checker = new JellyfinConnectivityChecker(
             LoggerFactory.Create(b => { }).CreateLogger<JellyfinConnectivityChecker>());
 
         // First invalidation
-        checker.InvalidateCache();
+        await checker.InvalidateCacheAsync();
 
         // Second invalidation should also succeed
-        var exception = Record.Exception(() => checker.InvalidateCache());
+        var exception = await Record.ExceptionAsync(() => checker.InvalidateCacheAsync());
         Assert.Null(exception);
     }
 
@@ -261,7 +262,7 @@ public class ConfigurationPropagationTests : PluginTestBase
     // -------------------------------------------------------------------------
 
     [Fact]
-    public void AllServices_ResetTogether_ConfigurationChangeScenario()
+    public async Task AllServices_ResetTogether_ConfigurationChangeScenario()
     {
         // Simulate what happens when configuration changes:
         // all three services should be resettable without error
@@ -280,9 +281,9 @@ public class ConfigurationPropagationTests : PluginTestBase
         Assert.Equal(CircuitStatus.Open, cb.GetStatus("http://test:8096"));
 
         // Reset all as configuration change handler would
-        var exception = Record.Exception(() =>
+        var exception = await Record.ExceptionAsync(async () =>
         {
-            checker.InvalidateCache();
+            await checker.InvalidateCacheAsync();
             cache.Clear();
             cb.Reset();
         });

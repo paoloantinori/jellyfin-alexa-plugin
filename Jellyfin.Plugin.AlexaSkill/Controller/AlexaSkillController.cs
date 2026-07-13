@@ -141,7 +141,7 @@ public class AlexaSkillController : ControllerBase
 
         if (error != null)
         {
-            page = page.Replace("{{ error }}", error, StringComparison.Ordinal);
+            page = page.Replace("{{ error }}", System.Net.WebUtility.HtmlEncode(error), StringComparison.Ordinal);
         }
         else
         {
@@ -307,6 +307,13 @@ public class AlexaSkillController : ControllerBase
             }
 
             SkillRequest? req = JsonConvert.DeserializeObject<SkillRequest>(body);
+
+            // JF-311: Reject requests outside the 150-second timestamp window (replay protection).
+            if (req?.Request?.Timestamp is DateTime ts && Math.Abs((DateTime.UtcNow - ts).TotalSeconds) > 150)
+            {
+                _logger.LogWarning("Rejected stale Alexa request (timestamp={Timestamp}, age={Age:F0}s)", ts, (DateTime.UtcNow - ts).TotalSeconds);
+                return SkillResponseContent(ResponseBuilder.Empty());
+            }
             if (req?.Context?.System?.User?.AccessToken == null
                 && string.IsNullOrEmpty(req?.Context?.System?.Person?.PersonId))
             {

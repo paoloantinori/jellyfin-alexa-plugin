@@ -72,9 +72,10 @@ public class JellyfinConnectivityChecker : IDisposable
     /// <summary>
     /// Invalidate the cached connectivity result, forcing a fresh check on the next <see cref="CheckAsync"/> call.
     /// </summary>
-    public void InvalidateCache()
+    /// <returns>A <see cref="Task"/> representing the asynchronous invalidate operation.</returns>
+    public async Task InvalidateCacheAsync()
     {
-        _semaphore.Wait();
+        await _semaphore.WaitAsync().ConfigureAwait(false);
         try
         {
             _cachedAt = DateTimeOffset.MinValue;

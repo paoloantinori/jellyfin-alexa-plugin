@@ -986,12 +986,12 @@ public abstract class BaseHandler
         Logger.LogDebug("SendProgressiveResponse: sending message={Message}", message);
         try
         {
-            using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
+            // JF-314: reuse the shared HttpClient (avoids socket exhaustion under load)
             var progressiveResponse = new ProgressiveResponse(
                 context.System.ApiAccessToken,
                 request.RequestId,
                 context.System?.ApiEndpoint ?? "https://api.amazonalexa.com",
-                httpClient);
+                Plugin.HttpClient);
             await progressiveResponse.SendSpeech(message).ConfigureAwait(false);
         }
         catch (Exception ex)
