@@ -283,10 +283,22 @@ internal static class FuzzyMatcher
 
         string normalizedQuery = Normalize(query);
 
+        // Prune length-mismatched candidates before the (expensive) PartialRatio call —
+        // mirrors FindBestMatchWithScore. Pure pre-filter: doesn't affect ranking, prunes
+        // only candidates too dissimilar in length to score well (mostly substring false
+        // positives like a short query against a much-longer album name).
+        int maxLenDiff = Math.Max(normalizedQuery.Length * 2, 15);
+
         var scored = new List<(T Item, int Score)>();
         foreach (T candidate in candidates)
         {
-            int score = PartialRatio(normalizedQuery, Normalize(selector(candidate)));
+            string candidateText = Normalize(selector(candidate));
+            if (Math.Abs(candidateText.Length - normalizedQuery.Length) > maxLenDiff)
+            {
+                continue;
+            }
+
+            int score = PartialRatio(normalizedQuery, candidateText);
             if (score >= threshold)
             {
                 scored.Add((candidate, score));

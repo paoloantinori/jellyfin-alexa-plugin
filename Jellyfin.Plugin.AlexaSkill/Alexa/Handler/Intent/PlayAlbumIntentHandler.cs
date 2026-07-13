@@ -35,6 +35,12 @@ public class PlayAlbumIntentHandler : BaseHandler
     private readonly IArtistIndex? _artistIndex;
 
     /// <summary>
+    /// Minimum album-query length to attempt the full-catalog fuzzy fallback. Shorter
+    /// queries (e.g. "red", "aria") produce too many substring false positives.
+    /// </summary>
+    private const int MinFuzzyAlbumQueryLength = 4;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="PlayAlbumIntentHandler"/> class.
     /// </summary>
     /// <param name="sessionManager">Instance of the <see cref="ISessionManager"/> interface.</param>
@@ -182,6 +188,9 @@ public class PlayAlbumIntentHandler : BaseHandler
 
             if (fallbackArtists.Count > 0)
             {
+                // Single best match (FindBestMatchWithScore), NOT RankMatches: this is a
+                // cross-media guess (album not found → play an artist instead), so only one
+                // strong match should fire — disambiguating among artist guesses is wrong UX.
                 var bestMatch = FuzzyMatcher.FindBestMatchWithScore(album, fallbackArtists, a => a.Name);
                 if (bestMatch.HasValue && bestMatch.Value.Score >= FuzzyMatcher.ContainmentScore)
                 {
@@ -330,12 +339,6 @@ public class PlayAlbumIntentHandler : BaseHandler
             item_id, albums[0].Name, startIndex, queueItems.Count);
         return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, albumItems[startIndex], user, context);
     }
-
-    /// <summary>
-    /// Minimum album-query length to attempt the full-catalog fuzzy fallback. Shorter
-    /// queries (e.g. "red", "aria") produce too many substring false positives.
-    /// </summary>
-    private const int MinFuzzyAlbumQueryLength = 4;
 
     /// <summary>
     /// Builds a MusicAlbum query scoped to the user's libraries (with library filtering).
