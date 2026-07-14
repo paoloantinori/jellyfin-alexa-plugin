@@ -50,6 +50,18 @@ public abstract class BaseHandler
     };
 
     /// <summary>
+    /// Minimum fuzzy-match score required for a cross-media-type artist fallback
+    /// (album/song not found → play an artist instead). Higher than the normal
+    /// default threshold because a wrong-artist false positive is worse than a
+    /// clean "not found" — the observed false positives ("la ballata del genesio"
+    /// → "Lamb", "disco jazz caffè" → "Uazz") both scored 75. Apply via
+    /// <c>Math.Max(FuzzyMatcher.GetDefaultThreshold(user), CrossMediaArtistThreshold)</c>
+    /// so a user who raised FuzzyMatchThreshold is still respected. Shared by the
+    /// PlayAlbum and PlaySong cross-media fallbacks (JF-339).
+    /// </summary>
+    protected const int CrossMediaArtistThreshold = 85;
+
+    /// <summary>
     /// Reorder items so favorites appear first, then by personal rating descending
     /// within each group (favorites, non-favorites). Items without a rating keep
     /// their original relative order (stable sort).

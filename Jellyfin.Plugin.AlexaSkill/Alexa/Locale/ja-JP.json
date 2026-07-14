@@ -225,6 +225,7 @@
   "ShowMoreLastPage": "{0} 最初の{1}件を表示します: {2}。",
   "QueryRecentlyAddedPartial": "{0} 最初の{1}件を表示します: {2}。",
   "FoundArtistInstead": "アーティスト{0}を見つけました。{0}の音楽を再生します。",
+  "FoundAlbumInstead": "アルバム {0} が見つかりました。",
   "FindSongPromptKeywords": "What words do you remember from the title?",
   "FindSongPromptArtist": "Who is the artist?",
   "FindSongNoMatch": "I couldn't find a match. Try different words.",

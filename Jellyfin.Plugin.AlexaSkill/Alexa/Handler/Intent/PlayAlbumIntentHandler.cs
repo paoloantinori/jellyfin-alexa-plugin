@@ -144,6 +144,7 @@ public class PlayAlbumIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByNameAndArtist", locale, album, matchedArtistName!));
         }
 
+        string? fuzzyAlbumAnnouncement = null;
         if (albums.Count == 0 && album.Length >= MinFuzzyAlbumQueryLength)
         {
             // Fuzzy fallback: ASR may transcribe the album name with accents or
@@ -173,6 +174,10 @@ public class PlayAlbumIntentHandler : BaseHandler
                     "PlayAlbum: fuzzy fallback matched album '{Name}' score={Score} for query='{Query}'",
                     fuzzyMatch.Value.Item.Name, fuzzyMatch.Value.Score, album);
                 albums = new List<BaseItem> { fuzzyMatch.Value.Item };
+                // The exact search missed, so the matched album name may differ from
+                // what the user said (accents, spelling). Announce it so voice-only
+                // devices know which album is playing (JF-339).
+                fuzzyAlbumAnnouncement = ResponseStrings.Get("FoundAlbumInstead", locale, fuzzyMatch.Value.Item.Name);
             }
         }
 
@@ -194,7 +199,8 @@ public class PlayAlbumIntentHandler : BaseHandler
                 // cross-media guess (album not found → play an artist instead), so only one
                 // strong match should fire — disambiguating among artist guesses is wrong UX.
                 var bestMatch = FuzzyMatcher.FindBestMatchWithScore(album, fallbackArtists, a => a.Name);
-                if (bestMatch.HasValue && bestMatch.Value.Score >= FuzzyMatcher.ContainmentScore)
+                int crossMediaThreshold = Math.Max(FuzzyMatcher.GetDefaultThreshold(user), CrossMediaArtistThreshold);
+                if (bestMatch.HasValue && bestMatch.Value.Score >= crossMediaThreshold)
                 {
                     BaseItem artist = bestMatch.Value.Item;
                     Logger.LogInformation(
@@ -253,7 +259,7 @@ public class PlayAlbumIntentHandler : BaseHandler
                 User = jellyfinUser,
                 Recursive = true,
                 ParentId = albums[0].Id,
-                MediaTypes = new[] { MediaType.Audio },
+                IncludeItemTypes = new[] { BaseItemKind.Audio },
                 DtoOptions = new DtoOptions(true),
                 Limit = ProgressiveQueueConstants.GetInitialFetchSize()
             }),
@@ -339,7 +345,17 @@ public class PlayAlbumIntentHandler : BaseHandler
         Logger.LogDebug(
             "PlayAlbum: returning AudioPlayer, itemId={ItemId}, album='{AlbumName}', startIndex={StartIndex}, queueSize={QueueSize}",
             item_id, albums[0].Name, startIndex, queueItems.Count);
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, albumItems[startIndex], user, context);
+        SkillResponse albumResponse = BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, albumItems[startIndex], user, context);
+
+        // If the album came from the fuzzy fallback (exact search missed), speak the
+        // matched name so the user knows what's playing — same mechanism as the
+        // artist fallback's announcement in BuildArtistSongsResponseAsync (JF-339).
+        if (!string.IsNullOrWhiteSpace(fuzzyAlbumAnnouncement))
+        {
+            albumResponse.Response.OutputSpeech = new PlainTextOutputSpeech { Text = fuzzyAlbumAnnouncement };
+        }
+
+        return albumResponse;
     }
 
     /// <summary>

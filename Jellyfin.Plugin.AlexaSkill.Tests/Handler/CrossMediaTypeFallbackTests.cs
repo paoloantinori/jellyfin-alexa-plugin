@@ -565,4 +565,64 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         string speech = TestHelpers.GetSpeechText(response);
         Assert.Contains("unknown album", speech, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public async Task PlayAlbum_ExactMiss_FuzzyAlbumMatch_PlaysAndAnnouncesAlbumName()
+    {
+        // JF-339: when the exact album search misses but the fuzzy fallback matches a
+        // library album (e.g. ASR "jazz caffè" → "Jazz Cafe"), the handler plays it
+        // AND speaks the matched album name so voice-only devices know what's playing.
+        var albumId = Guid.NewGuid();
+        var trackId = Guid.NewGuid();
+        SetupUserMock();
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                bool isAlbumQuery = q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum);
+
+                // Exact album search (SearchTerm set): miss
+                if (isAlbumQuery && !string.IsNullOrEmpty(q.SearchTerm))
+                {
+                    return new List<BaseItem>();
+                }
+
+                // Fuzzy album scan (no SearchTerm): the candidate album
+                if (isAlbumQuery)
+                {
+                    return new List<BaseItem> { new MusicAlbum { Name = "Jazz Cafe", Id = albumId } };
+                }
+
+                // Album tracks via ParentId (defensive — SafeGetItemsResult may use GetItemList)
+                if (q.ParentId == albumId)
+                {
+                    return new List<BaseItem> { new Audio { Name = "Deep in It", Id = trackId } };
+                }
+
+                return new List<BaseItem>();
+            });
+
+        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>(
+                new List<BaseItem> { new Audio { Name = "Deep in It", Id = trackId } }));
+
+        var handler = CreateAlbumHandler();
+        var request = CreateAlbumIntent("jazz caffè"); // accent variant → exact miss, fuzzy hit
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // Plays the matched album
+        Assert.NotNull(response.Response?.Directives);
+        Assert.NotEmpty(response.Response.Directives);
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Single(session.NowPlayingQueue);
+
+        // Announces the matched album name (JF-339)
+        Assert.NotNull(response.Response.OutputSpeech);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Jazz Cafe", speech);
+    }
 }

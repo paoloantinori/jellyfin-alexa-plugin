@@ -70,7 +70,7 @@ internal static class QueueContinuationFetcher
             User = jellyfinUser,
             Recursive = true,
             ParentId = continuation.ParentId ?? Guid.Empty,
-            MediaTypes = new[] { MediaType.Audio },
+            IncludeItemTypes = new[] { BaseItemKind.Audio },
             DtoOptions = new DtoOptions(true),
             StartIndex = continuation.StartIndex,
             Limit = continuation.BatchSize

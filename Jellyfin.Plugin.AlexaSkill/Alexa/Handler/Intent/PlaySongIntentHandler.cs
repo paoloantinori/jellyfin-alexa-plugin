@@ -53,14 +53,6 @@ public class PlaySongIntentHandler : BaseHandler
     };
 
     /// <summary>
-    /// Minimum fuzzy-match score required for the cross-media-type artist fallback
-    /// (no musician slot, song not found). Higher than the normal default threshold
-    /// because a wrong-artist false positive is worse than a clean "song not found".
-    /// Observed bug: "la ballata del genesio" matched artist "Lamb" at score 75.
-    /// </summary>
-    private const int CrossMediaArtistThreshold = 85;
-
-    /// <summary>
     /// Maximum number of words in the song query for the cross-media-type artist
     /// fallback to even be attempted. The fallback exists to catch NLU misroutes of
     /// SHORT artist names into the song slot (e.g. "strokes" → "The Strokes"). A

@@ -225,6 +225,7 @@
   "ShowMoreLastPage": "{0} Aqui estão os primeiros {1}: {2}.",
   "QueryRecentlyAddedPartial": "{0} Aqui estão os primeiros {1}: {2}.",
   "FoundArtistInstead": "Encontrei o artista {0}. Aqui está a música de {0}.",
+  "FoundAlbumInstead": "Encontrei o álbum {0}.",
   "FindSongPromptKeywords": "What words do you remember from the title?",
   "FindSongPromptArtist": "Who is the artist?",
   "FindSongNoMatch": "I couldn't find a match. Try different words.",
