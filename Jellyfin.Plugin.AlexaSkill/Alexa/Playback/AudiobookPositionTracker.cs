@@ -138,6 +138,7 @@ public sealed class AudiobookPositionTracker : IDisposable
 
     private void PersistToDisk()
     {
+        string tempPath = _dataFilePath + ".tmp";
         try
         {
             string? dir = Path.GetDirectoryName(_dataFilePath);
@@ -147,16 +148,24 @@ public sealed class AudiobookPositionTracker : IDisposable
             }
 
             string json = JsonSerializer.Serialize(_positions, JsonOptions);
-            File.WriteAllText(_dataFilePath, json);
+            File.WriteAllText(tempPath, json);
+            File.Move(tempPath, _dataFilePath, overwrite: true);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to persist audiobook positions to {Path}", _dataFilePath);
         }
+        finally
+        {
+            try { File.Delete(tempPath); } catch { }
+        }
     }
 
     private void LoadFromDisk()
     {
+        // Best-effort cleanup of a stale .tmp from a prior interrupted write
+        try { File.Delete(_dataFilePath + ".tmp"); } catch { }
+
         try
         {
             if (!File.Exists(_dataFilePath))

@@ -90,4 +90,49 @@ public class AudiobookPositionTrackerTests : IDisposable
         _tracker.RecordSegment("book1", -1);
         Assert.Equal(0, _tracker.GetPositionTicks("book1"));
     }
+
+    [Fact]
+    public void Dispose_WritesValidJson_NoTmpRemains()
+    {
+        _tracker.RecordSegment("book1", 5);
+        _tracker.RecordSegment("book2", 3);
+        _tracker.Dispose();
+
+        string dataFile = Path.Combine(_tempDir, "audiobook-positions.json");
+        Assert.True(File.Exists(dataFile));
+
+        // Reload from a fresh tracker — positions must round-trip
+        var reloaded = new AudiobookPositionTracker(_tempDir, LoggerFactory.Create(b => { }).CreateLogger<AudiobookPositionTracker>());
+        try
+        {
+            Assert.Equal(4 * TicksPerSegment, reloaded.GetPositionTicks("book1"));
+            Assert.Equal(2 * TicksPerSegment, reloaded.GetPositionTicks("book2"));
+        }
+        finally
+        {
+            reloaded.Dispose();
+        }
+
+        // No stale .tmp must remain after Dispose
+        Assert.False(File.Exists(dataFile + ".tmp"));
+    }
+
+    [Fact]
+    public void LoadFromDisk_CleansStaleTmpFile()
+    {
+        // Create a stale .tmp before construction
+        string tmpFile = Path.Combine(_tempDir, "audiobook-positions.json.tmp");
+        File.WriteAllText(tmpFile, "{}");
+
+        // Constructor calls LoadFromDisk, which should clean the .tmp
+        var freshTracker = new AudiobookPositionTracker(_tempDir, LoggerFactory.Create(b => { }).CreateLogger<AudiobookPositionTracker>());
+        try
+        {
+            Assert.False(File.Exists(tmpFile));
+        }
+        finally
+        {
+            freshTracker.Dispose();
+        }
+    }
 }
