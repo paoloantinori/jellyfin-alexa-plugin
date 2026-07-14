@@ -1202,7 +1202,8 @@ public abstract class BaseHandler
             User = jellyfinUser,
             Recursive = true,
             IncludeItemTypes = itemTypes,
-            DtoOptions = new DtoOptions(true)
+            DtoOptions = new DtoOptions(true),
+            Limit = 500
         };
         if (artistIds is { Length: > 0 })
         {

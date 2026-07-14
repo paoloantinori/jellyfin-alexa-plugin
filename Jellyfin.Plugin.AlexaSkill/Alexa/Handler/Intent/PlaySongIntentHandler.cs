@@ -221,16 +221,11 @@ public class PlaySongIntentHandler : BaseHandler
             }).ConfigureAwait(false);
         Logger.LogDebug("PlaySong: Jellyfin returned {SongCount} songs for query='{SongQuery}'", songs.Count, songQuery);
 
-        // Fuzzy fallback: try matching the song title against all Audio items when the
-        // exact search misses (ASR accent/spelling variants). JF-337.
-        if (songs.Count == 0)
-        {
-            var fuzzy = await SearchItemsFuzzyAsync(songQuery, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.Audio }, cancellationToken, "PlaySongFuzzyFallback", artistsIds.Count > 0 ? artistsIds.ToArray() : null).ConfigureAwait(false);
-            if (fuzzy != null)
-            {
-                songs = new List<BaseItem> { fuzzy.Value.Item };
-            }
-        }
+        // NOTE: PlaySong does NOT use SearchItemsFuzzyAsync — the Audio catalog is too large
+        // (thousands of tracks → 11s scan → exceeds Alexa's 8s timeout → InvalidResponse).
+        // Song search is handled by the n-gram index (SongNgramIndexService via FindSongIntent)
+        // + SearchWithAsrFallbackAsync above. The generic fuzzy helper is safe for smaller
+        // catalogs (albums, videos, books, channels, playlists) but NOT for Audio.
 
         if (songs.Count == 0 && !string.IsNullOrWhiteSpace(musicianQuery) && artistsIds.Count > 0)
         {
