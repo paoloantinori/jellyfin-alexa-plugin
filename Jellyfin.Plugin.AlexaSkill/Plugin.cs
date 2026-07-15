@@ -208,11 +208,17 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     /// </summary>
     /// <param name="invocationName">The per-user invocation name, or empty/whitespace for locale defaults.</param>
     /// <returns>A collection of skill interaction models.</returns>
-    public Collection<SkillInteractionModel> BuildSkillInteractionModels(string invocationName)
+    public Collection<SkillInteractionModel> BuildSkillInteractionModels(string invocationName, string? localeFilter = null)
     {
         Collection<SkillInteractionModel> models = new Collection<SkillInteractionModel>();
         foreach (Tuple<string, string> model in InteractionModels)
         {
+            if (!string.IsNullOrWhiteSpace(localeFilter)
+                && !string.Equals(model.Item1, localeFilter, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
             string localeInvocation = Config.EffectiveInvocationName(model.Item1, invocationName);
             models.Add(new SkillInteractionModel(model.Item1, model.Item2, localeInvocation));
         }

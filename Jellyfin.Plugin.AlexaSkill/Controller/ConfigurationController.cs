@@ -232,7 +232,8 @@ public class ConfigurationController : ControllerBase
                 ModelRedeployResult redeployResult = await _redeployer.RedeployAsync(
                     pluginUser,
                     pluginUser.UserSkill!.InvocationName,
-                    CancellationToken.None).ConfigureAwait(false);
+                    CancellationToken.None,
+                    Plugin.Instance!.Configuration.CustomModelLocale).ConfigureAwait(false);
 
                 var config = Plugin.Instance!.Configuration;
                 config.LastModelDeployTime = DateTime.UtcNow;
@@ -778,13 +779,16 @@ public class ConfigurationController : ControllerBase
             return new JsonResult(new { error = "Plugin manifest not loaded. Restart Jellyfin first." }) { StatusCode = 503 };
         }
 
+        string? localeFilter = Plugin.Instance!.Configuration.CustomModelLocale;
+
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
             var result = await _redeployer.RedeployAsync(
                 pluginUser!,
                 pluginUser!.UserSkill!.InvocationName,
-                cts.Token).ConfigureAwait(false);
+                cts.Token,
+                localeFilter).ConfigureAwait(false);
 
             var config = Plugin.Instance.Configuration;
             config.LastModelDeployTime = DateTime.UtcNow;

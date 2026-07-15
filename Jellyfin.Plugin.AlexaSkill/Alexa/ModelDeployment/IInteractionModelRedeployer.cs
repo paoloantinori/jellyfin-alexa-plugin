@@ -25,7 +25,7 @@ public interface IInteractionModelRedeployer
     /// <param name="invocationName">The invocation name to apply to every locale model.</param>
     /// <param name="cancellationToken">Token to cancel the build-status poll.</param>
     /// <returns>The redeploy outcome, including per-locale build results.</returns>
-    Task<ModelRedeployResult> RedeployAsync(User user, string invocationName, CancellationToken cancellationToken);
+    Task<ModelRedeployResult> RedeployAsync(User user, string invocationName, CancellationToken cancellationToken, string? localeFilter = null);
 }
 
 /// <summary>
