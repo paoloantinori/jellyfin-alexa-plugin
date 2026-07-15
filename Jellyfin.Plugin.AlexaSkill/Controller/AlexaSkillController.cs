@@ -11,6 +11,7 @@ using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
+using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
@@ -309,9 +310,10 @@ public class AlexaSkillController : ControllerBase
             SkillRequest? req = JsonConvert.DeserializeObject<SkillRequest>(body);
 
             // JF-311: Reject requests outside the 150-second timestamp window (replay protection).
-            if (req?.Request?.Timestamp is DateTime ts && Math.Abs((DateTime.UtcNow - ts).TotalSeconds) > 150)
+            DateTime now = DateTime.UtcNow;
+            if (req?.Request?.Timestamp is DateTime ts && !AlexaRequestTimestampPolicy.IsWithinWindow(ts, now))
             {
-                _logger.LogWarning("Rejected stale Alexa request (timestamp={Timestamp}, age={Age:F0}s)", ts, (DateTime.UtcNow - ts).TotalSeconds);
+                _logger.LogWarning("Rejected stale Alexa request (timestamp={Timestamp}, age={Age:F0}s)", ts, (now - ts).TotalSeconds);
                 return SkillResponseContent(ResponseBuilder.Empty());
             }
             if (req?.Context?.System?.User?.AccessToken == null

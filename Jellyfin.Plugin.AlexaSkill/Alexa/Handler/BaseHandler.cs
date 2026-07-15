@@ -978,8 +978,9 @@ public abstract class BaseHandler
     /// <summary>
     /// Send a progressive response to keep the Alexa session alive during long operations.
     /// Resets the 8-second timeout. Only works with IntentRequest/LaunchRequest.
-    /// A fresh HttpClient is created per call because ProgressiveResponse sets BaseAddress
-    /// internally, which cannot be modified on an HttpClient that has already sent a request.
+    /// Uses the dedicated HttpClientProgressive (factory-backed, fresh per call with a 2s
+    /// timeout) because ProgressiveResponse sets BaseAddress internally, which cannot be
+    /// modified on an HttpClient that has already sent a request.
     /// </summary>
     /// <remarks>
     /// This call is best-effort and non-critical: it is invoked FIRE-AND-FORGET from
@@ -998,12 +999,12 @@ public abstract class BaseHandler
         Logger.LogDebug("SendProgressiveResponse: sending message={Message}", message);
         try
         {
-            // JF-314: reuse the shared HttpClient (avoids socket exhaustion under load)
+            // JF-314: use the dedicated progressive client (factory-backed, fresh per call, 2s timeout)
             var progressiveResponse = new ProgressiveResponse(
                 context.System.ApiAccessToken,
                 request.RequestId,
                 context.System?.ApiEndpoint ?? "https://api.amazonalexa.com",
-                Plugin.HttpClient);
+                Plugin.HttpClientProgressive);
             await progressiveResponse.SendSpeech(message).ConfigureAwait(false);
         }
         catch (Exception ex)

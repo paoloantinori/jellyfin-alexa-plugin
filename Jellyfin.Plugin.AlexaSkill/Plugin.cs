@@ -103,6 +103,27 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     }
 
     /// <summary>
+    /// Gets an HttpClient for Alexa progressive responses: factory-backed (fresh per call,
+    /// so ProgressiveResponse's BaseAddress assignment is safe) with a 2-second timeout.
+    /// Falls back to a fresh per-call client with a 2s timeout when DI is unavailable — a
+    /// per-call allocation is required here (not a static client) because ProgressiveResponse
+    /// sets BaseAddress, which throws if the client has already been used. This fallback is a
+    /// non-production escape hatch; the factory path is always used in a hosted Jellyfin instance.
+    /// </summary>
+    public static HttpClient HttpClientProgressive
+    {
+        get
+        {
+            if (Instance?._httpClientFactory != null)
+            {
+                return Instance._httpClientFactory.CreateClient("AlexaSkillProgressive");
+            }
+
+            return new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
+        }
+    }
+
+    /// <summary>
     /// Gets or sets the skill manifest.
     /// </summary>
     public ManifestSkill? ManifestSkill { get; set; }

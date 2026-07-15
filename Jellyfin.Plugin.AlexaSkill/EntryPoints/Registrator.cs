@@ -98,6 +98,12 @@ public class Registrator : IPluginServiceRegistrator
         // HttpClient for LWA and progressive responses
         serviceCollection.AddHttpClient("AlexaSkill");
 
+        // Dedicated client for Alexa progressive responses: fresh per call (ProgressiveResponse
+        // sets BaseAddress internally, which is only safe on a never-used client) and capped at 2s
+        // so a stalled Alexa API call cannot linger. (JF-314)
+        serviceCollection.AddHttpClient("AlexaSkillProgressive")
+            .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(2));
+
         // Live TV stream resolver (PlaybackInfo -> direct-remote vs dynamic HLS master)
         serviceCollection.AddSingleton<ILiveTvStreamResolver, LiveTvStreamResolver>();
 
