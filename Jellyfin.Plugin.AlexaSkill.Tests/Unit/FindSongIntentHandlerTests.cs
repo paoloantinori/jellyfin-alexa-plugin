@@ -7,6 +7,7 @@ using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
+using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
@@ -34,6 +35,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly Mock<ILibraryManager> _libraryManagerMock;
     private readonly Mock<IUserManager> _userManagerMock;
+    private readonly Mock<IUserDataManager> _userDataManagerMock;
     private readonly PluginConfiguration _config;
     private readonly ILoggerFactory _loggerFactory;
     private readonly FindSongIntentHandler _handler;
@@ -44,11 +46,12 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         _sessionManagerMock = new Mock<ISessionManager>();
         _libraryManagerMock = new Mock<ILibraryManager>();
         _userManagerMock = new Mock<IUserManager>();
+        _userDataManagerMock = new Mock<IUserDataManager>();
         _config = new PluginConfiguration { AsrCompoundWordFixEnabled = false };
         _loggerFactory = LoggerFactory.Create(b => { });
         _handler = new FindSongIntentHandler(
             _sessionManagerMock.Object, _config,
-            _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory);
         TestHelpers.EnsurePluginInstance(_config, _loggerFactory, cfg => { }, "findsong-test");
     }
 
@@ -351,6 +354,53 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         Assert.False(response.Response.ShouldEndSession);
         string speech = TestHelpers.GetSpeechText(response);
         Assert.Contains("couldn't find a match", speech);
+    }
+
+    [Fact]
+    public async Task Search_NoArtistNoMatch_KeywordsMatchArtist_FallsBackToArtist()
+    {
+        // "Neither provided -> AwaitingKeywords" entry: no artist specified. Keywords that
+        // find no song but match an artist should cross-media fall back to playing that
+        // artist (mirrors PlaySong's "no musician slot" fallback), not re-prompt.
+        var artistId = Guid.NewGuid();
+        var artist = new MusicArtist();
+        typeof(BaseItem).GetProperty("Id")!.SetValue(artist, artistId);
+        typeof(BaseItem).GetProperty("Name")!.SetValue(artist, "Miles Davis");
+        var song = CreateAudioItem(Guid.NewGuid(), "So What");
+
+        SetupJellyfinUser();
+        _libraryManagerMock.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                bool isArtist = q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist);
+                bool hasArtistIds = q.ArtistIds != null && q.ArtistIds.Length > 0;
+                bool isAudioMedia = q.MediaTypes != null && q.MediaTypes.Any(t => t == MediaType.Audio);
+                if (isArtist)
+                {
+                    return new List<BaseItem> { artist }.AsReadOnly();
+                }
+
+                if (hasArtistIds && isAudioMedia)
+                {
+                    return new List<BaseItem> { song }.AsReadOnly();
+                }
+
+                return new List<BaseItem>().AsReadOnly(); // FindSong song search -> miss
+            });
+
+        var user = CreateTestUser();
+        var session = CreateSession();
+        var existingData = new FindSongSessionData { State = FindSongState.AwaitingKeywords };
+        var sessionAttrs = BuildSessionAttributes(existingData);
+        var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
+        {
+            ["titleKeywords"] = "miles davis"
+        });
+
+        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+
+        // Cross-media fallback played the artist, not a re-prompt.
+        Assert.True(response.Response?.Directives?.Any(d => d.Type == "AudioPlayer.Play") == true);
     }
 
     [Fact]

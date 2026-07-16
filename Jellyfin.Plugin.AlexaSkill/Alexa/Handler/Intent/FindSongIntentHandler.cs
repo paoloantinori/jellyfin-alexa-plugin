@@ -13,6 +13,7 @@ using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
@@ -42,8 +43,10 @@ public class FindSongIntentHandler : BaseHandler
 
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
+    private readonly IUserDataManager _userDataManager;
     private readonly IArtistIndex? _artistIndex;
     private readonly ISongNgramIndex? _songNgramIndex;
+    private readonly DeviceQueueManager? _queueManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="FindSongIntentHandler"/> class.
@@ -52,22 +55,28 @@ public class FindSongIntentHandler : BaseHandler
     /// <param name="config">The plugin configuration.</param>
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
+    /// <param name="userDataManager">Instance of the <see cref="IUserDataManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
     /// <param name="artistIndex">Optional in-memory artist index for fast search.</param>
     /// <param name="songNgramIndex">Optional in-memory song n-gram index for fast partial-title lookup.</param>
+    /// <param name="queueManager">Optional per-device queue manager for crash recovery.</param>
     public FindSongIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
+        IUserDataManager userDataManager,
         ILoggerFactory loggerFactory,
         IArtistIndex? artistIndex = null,
-        ISongNgramIndex? songNgramIndex = null) : base(sessionManager, config, loggerFactory)
+        ISongNgramIndex? songNgramIndex = null,
+        DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
+        _userDataManager = userDataManager;
         _artistIndex = artistIndex;
         _songNgramIndex = songNgramIndex;
+        _queueManager = queueManager;
     }
 
     /// <inheritdoc/>
@@ -464,6 +473,21 @@ public class FindSongIntentHandler : BaseHandler
         // No matches
         if (songs.Count == 0)
         {
+            // Cross-media fallback: if no artist was specified, the keywords may be a
+            // misrouted artist name (mirrors PlaySong's "no musician slot" cross-media
+            // fallback). Try the keywords as an artist before re-prompting for the title.
+            if (string.IsNullOrWhiteSpace(sessionData.ArtistName))
+            {
+                SkillResponse? artistFallback = await TryEntityFallbackAsync(
+                    sessionData.Keywords ?? string.Empty, jellyfinUser!, user, session, context, locale,
+                    _libraryManager, _userDataManager, _queueManager, _artistIndex,
+                    "FindSong artist fallback", cancellationToken).ConfigureAwait(false);
+                if (artistFallback != null)
+                {
+                    return artistFallback;
+                }
+            }
+
             string noMatchMsg = ResponseStrings.Get("FindSongNoMatch", locale);
             return ElicitTitleKeywords(noMatchMsg,
                 sessionData);
