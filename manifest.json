@@ -327,6 +327,14 @@
                 "changelog": "Fixed: Album playback by voice now works reliably for Italian users. Album names with accents or different spellings (e.g. asking for 'Jazz Cafe' by saying 'jazz caff\u00e8') are now found via fuzzy matching. Albums with non-standard folder structures (split discs, special characters) now play completely instead of stopping after a few tracks. The library catalog sync with Alexa now works correctly (was silently failing since the feature was introduced \u2014 your albums and artists now populate Alexa's recognition). The skill's authentication token stays fresh automatically, improving reliability of background operations. Italian album commands now understand natural forms like 'metti l'album X' and 'metti il disco X' that previously weren't recognized.",
                 "targetAbi": "10.11.0.0",
                 "timestamp": "2026-07-13 19:33:23"
+            },
+            {
+                "version": "0.10.0.0",
+                "checksum": "placeholder",
+                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.10.0.0/AlexaSkill_0.10.0.0.zip",
+                "changelog": "Major matching improvements: if you ask for music by an artist and Alexa mishears it as a mood or search request, the skill now plays the right artist instead of saying 'not found' - in every supported language. Fuzzy and phonetic matching now covers all media types, so accented or slightly misspoken names are found. Reliability: audiobook resume positions survive a crash mid-save, and the 'searching...' hint no longer stalls. Security: hardened request validation and the account-linking login page.",
+                "targetAbi": "10.11.0.0",
+                "timestamp": "2026-07-16 17:31:17"
             }
         ]
     }
