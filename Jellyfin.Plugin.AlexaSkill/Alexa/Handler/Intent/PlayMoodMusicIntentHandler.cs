@@ -11,6 +11,7 @@ using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -252,6 +253,9 @@ public class PlayMoodMusicIntentHandler : BaseHandler
 
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
+    private readonly IUserDataManager _userDataManager;
+    private readonly IArtistIndex? _artistIndex;
+    private readonly DeviceQueueManager? _queueManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PlayMoodMusicIntentHandler"/> class.
@@ -260,16 +264,25 @@ public class PlayMoodMusicIntentHandler : BaseHandler
     /// <param name="config">The plugin configuration.</param>
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
+    /// <param name="userDataManager">Instance of the <see cref="IUserDataManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
+    /// <param name="artistIndex">Optional in-memory artist index for fast search.</param>
+    /// <param name="queueManager">Optional per-device queue manager for crash recovery.</param>
     public PlayMoodMusicIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
+        IUserDataManager userDataManager,
+        ILoggerFactory loggerFactory,
+        IArtistIndex? artistIndex = null,
+        DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
+        _userDataManager = userDataManager;
+        _artistIndex = artistIndex;
+        _queueManager = queueManager;
     }
 
     /// <inheritdoc/>
@@ -348,6 +361,15 @@ public class PlayMoodMusicIntentHandler : BaseHandler
 
         if (foundItems.Count == 0)
         {
+            SkillResponse? artistFallback = await TryEntityFallbackAsync(
+                mood, jellyfinUser!, user, session, context, locale,
+                _libraryManager, _userDataManager, _queueManager, _artistIndex,
+                "PlayMoodMusic artist fallback", cancellationToken).ConfigureAwait(false);
+            if (artistFallback != null)
+            {
+                return artistFallback;
+            }
+
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundMood", locale, mood));
         }
 

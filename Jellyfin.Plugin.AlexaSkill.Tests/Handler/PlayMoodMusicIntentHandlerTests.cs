@@ -29,6 +29,7 @@ public class PlayMoodMusicIntentHandlerTests : PluginTestBase
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly Mock<ILibraryManager> _libraryManagerMock;
     private readonly Mock<IUserManager> _userManagerMock;
+    private readonly Mock<IUserDataManager> _userDataManagerMock;
     private readonly PluginConfiguration _config;
     private readonly ILoggerFactory _loggerFactory;
 
@@ -37,6 +38,7 @@ public class PlayMoodMusicIntentHandlerTests : PluginTestBase
         _sessionManagerMock = new Mock<ISessionManager>();
         _libraryManagerMock = new Mock<ILibraryManager>();
         _userManagerMock = new Mock<IUserManager>();
+        _userDataManagerMock = new Mock<IUserDataManager>();
         _config = new PluginConfiguration();
         TestHelpers.SetServerAddress(_config, "https://test.example.com");
         _loggerFactory = LoggerFactory.Create(b => { });
@@ -49,6 +51,7 @@ public class PlayMoodMusicIntentHandlerTests : PluginTestBase
             _config,
             _libraryManagerMock.Object,
             _userManagerMock.Object,
+            _userDataManagerMock.Object,
             _loggerFactory);
     }
 
@@ -628,5 +631,98 @@ public class PlayMoodMusicIntentHandlerTests : PluginTestBase
 
         Assert.NotNull(response);
         Assert.NotEmpty(response.Response.Directives);
+    }
+
+    [Fact]
+    public async Task HandleAsync_MoodMissWithArtistName_FallsBackToArtist()
+    {
+        var artistId = Guid.NewGuid();
+        var song1 = new Audio { Name = "So What", Id = Guid.NewGuid() };
+        var song2 = new Audio { Name = "Blue in Green", Id = Guid.NewGuid() };
+
+        var handler = CreateHandler();
+        var intent = new Intent { Name = IntentNames.PlayMoodMusic };
+        intent.Slots = new Dictionary<string, global::Alexa.NET.Request.Slot>
+        {
+            ["mood"] = new global::Alexa.NET.Request.Slot { Name = "mood", Value = "di miles davis" }
+        };
+        var request = new IntentRequest { Intent = intent, Locale = "it-IT", RequestId = "test-req" };
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                bool isArtistQuery = q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist);
+                bool isAudioQuery = q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio);
+                bool hasGenres = q.Genres != null && q.Genres.Count > 0;
+
+                // Genre track search → empty
+                if (hasGenres && isAudioQuery)
+                {
+                    return new List<BaseItem>();
+                }
+
+                // Artist-genre search → empty
+                if (hasGenres && isArtistQuery)
+                {
+                    return new List<BaseItem>();
+                }
+
+                // Entity fallback: artist search via SearchTerm (no Genres)
+                if (q.SearchTerm != null && isArtistQuery && !hasGenres)
+                {
+                    return new List<BaseItem> { new MusicArtist { Name = "Miles Davis", Id = artistId } };
+                }
+
+                // Artist songs fallback (ArtistIds + MediaTypes Audio)
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0 && q.MediaTypes != null && q.MediaTypes.Any(t => t == MediaType.Audio))
+                {
+                    return new List<BaseItem> { song1, song2 };
+                }
+
+                return new List<BaseItem>();
+            });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // Should return audio player directive (artist songs playback), not NotFoundMood
+        Assert.NotNull(response.Response?.Directives);
+        Assert.NotEmpty(response.Response.Directives);
+
+        // Queue should have the artist's songs
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Equal(2, session.NowPlayingQueue.Count);
+
+        // Should include FoundArtistInstead announcement
+        Assert.NotNull(response.Response.OutputSpeech);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Miles Davis", speech);
+    }
+
+    [Fact]
+    public async Task HandleAsync_MoodMissNoArtist_ReturnsNotFoundMood()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(mood: "relaxing");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        // All searches return empty — no genre tracks, no artist-genre, no artist fallback
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // Should return NotFoundMood tell
+        Assert.True(response.Response?.Directives == null || response.Response.Directives.Count == 0);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("relaxing", speech, StringComparison.OrdinalIgnoreCase);
     }
 }

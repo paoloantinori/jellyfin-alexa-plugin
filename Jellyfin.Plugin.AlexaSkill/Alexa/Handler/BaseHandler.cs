@@ -2154,6 +2154,71 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// Language-agnostic entity fallback for greedy <c>AMAZON.SearchQuery</c> intents.
+    /// Strips locale stop-words via <see cref="KeywordMatcher.Tokenize"/>, then reuses the
+    /// phonetic artist search pipeline. Returns null when no confident match is found so
+    /// the caller falls through to its own not-found response.
+    /// </summary>
+    protected async Task<SkillResponse?> TryEntityFallbackAsync(
+        string slotText,
+        JellyfinUser jellyfinUser,
+        Entities.User user,
+        SessionInfo session,
+        Context context,
+        string locale,
+        ILibraryManager libraryManager,
+        IUserDataManager userDataManager,
+        Playback.DeviceQueueManager? queueManager,
+        IArtistIndex? artistIndex,
+        string logLabel,
+        CancellationToken cancellationToken)
+    {
+        var tokens = KeywordMatcher.Tokenize(slotText, locale);
+        if (tokens.Length == 0)
+        {
+            return null;
+        }
+
+        string cleaned = string.Join(' ', tokens);
+
+        IReadOnlyList<BaseItem> artists = await ArtistSearch.SearchAsync(
+            cleaned, user, libraryManager, artistIndex, Logger,
+            (q, ct) => RetryAsync(() => libraryManager.GetItemList(q), logLabel + ":GetArtistsFallback", ct),
+            cancellationToken).ConfigureAwait(false);
+
+        if (artists.Count == 0)
+        {
+            return null;
+        }
+
+        var best = FuzzyMatcher.FindBestMatchWithScore(cleaned, artists, a => a.Name);
+        int threshold = Math.Max(FuzzyMatcher.GetDefaultThreshold(user), CrossMediaArtistThreshold);
+
+        if (!best.HasValue || best.Value.Item == null || best.Value.Score < threshold)
+        {
+            Logger.LogDebug(
+                "{Label}: entity fallback artist score={Score} below threshold={Threshold}, query='{Query}'",
+                logLabel, best.HasValue ? best.Value.Score : 0, threshold, cleaned);
+            return null;
+        }
+
+        return await BuildArtistSongsResponseAsync(
+            best.Value.Item.Id,
+            best.Value.Item.Name,
+            jellyfinUser,
+            user,
+            session,
+            context,
+            locale,
+            libraryManager,
+            userDataManager,
+            queueManager,
+            logLabel,
+            announcement: ResponseStrings.Get("FoundArtistInstead", locale, best.Value.Item.Name),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Shared playlist-play flow used by <c>PlayPlaylistIntentHandler</c>
     /// (shuffle=false) and the shuffle-play handler (shuffle=true). Resolves the playlist,
     /// builds the initial queue, optionally shuffles it via
