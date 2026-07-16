@@ -330,11 +330,11 @@
             },
             {
                 "version": "0.10.0.0",
-                "checksum": "placeholder",
+                "checksum": "7c90098c9e9e5bf4aa2c9ed36e91a05d",
                 "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.10.0.0/AlexaSkill_0.10.0.0.zip",
-                "changelog": "Major matching improvements: if you ask for music by an artist and Alexa mishears it as a mood or search request, the skill now plays the right artist instead of saying 'not found' - in every supported language. Fuzzy and phonetic matching now covers all media types, so accented or slightly misspoken names are found. Reliability: audiobook resume positions survive a crash mid-save, and the 'searching...' hint no longer stalls. Security: hardened request validation and the account-linking login page.",
+                "changelog": "Major matching improvements: if you ask for music by an artist and Alexa mishears it as a mood or search request, the skill now plays the right artist instead of saying 'not found' \u2014 in every supported language. Fuzzy and phonetic matching now covers all media types (songs, albums, artists, videos, books, playlists, podcasts, channels), so accented or slightly misspoken names are found. Reliability: audiobook resume positions survive a crash mid-save, and the 'searching\u2026' hint no longer stalls. Security: hardened request validation and the account-linking login page.",
                 "targetAbi": "10.11.0.0",
-                "timestamp": "2026-07-16 17:31:17"
+                "timestamp": "2026-07-16 15:56:14"
             }
         ]
     }
