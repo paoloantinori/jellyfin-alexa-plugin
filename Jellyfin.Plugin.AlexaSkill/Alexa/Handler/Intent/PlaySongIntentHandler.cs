@@ -52,15 +52,6 @@ public class PlaySongIntentHandler : BaseHandler
         "a música ", "a faixa ", "música ",
     };
 
-    /// <summary>
-    /// Maximum number of words in the song query for the cross-media-type artist
-    /// fallback to even be attempted. The fallback exists to catch NLU misroutes of
-    /// SHORT artist names into the song slot (e.g. "strokes" → "The Strokes"). A
-    /// multi-word song title is a poor artist query, so a clean not-found is better
-    /// than risking a wrong-artist match.
-    /// </summary>
-    private const int CrossMediaArtistMaxWords = 2;
-
     private static readonly char[] WhitespaceChars = new[] { ' ', '\t', '\n', '\r' };
 
     // Generic words meaning "music/songs" across supported locales.

@@ -62,6 +62,14 @@ public abstract class BaseHandler
     protected const int CrossMediaArtistThreshold = 85;
 
     /// <summary>
+    /// Maximum word count for a cross-media artist fallback query. A long query is a
+    /// poor artist query and a wrong-artist false positive is worse than a clean
+    /// "not found" (observed: "la ballata del genesio" → "Lamb"). Shared by the PlaySong
+    /// cross-media fallback and the greedy-intent TryEntityFallbackAsync.
+    /// </summary>
+    protected const int CrossMediaArtistMaxWords = 2;
+
+    /// <summary>
     /// Reorder items so favorites appear first, then by personal rating descending
     /// within each group (favorites, non-favorites). Items without a rating keep
     /// their original relative order (stable sort).
@@ -2154,10 +2162,13 @@ public abstract class BaseHandler
     }
 
     /// <summary>
-    /// Language-agnostic entity fallback for greedy <c>AMAZON.SearchQuery</c> intents.
-    /// Strips locale stop-words via <see cref="KeywordMatcher.Tokenize"/>, then reuses the
-    /// phonetic artist search pipeline. Returns null when no confident match is found so
-    /// the caller falls through to its own not-found response.
+    /// Entity fallback for greedy <c>AMAZON.SearchQuery</c> intents that misroute an
+    /// artist query (e.g. it-IT "di miles davis" captured as a mood). Strips locale
+    /// stop-words via <see cref="KeywordMatcher.Tokenize"/> (covers the Latin-script
+    /// locales en/it/de/fr/es/pt; other locales split without stop-word removal), reuses
+    /// the phonetic artist search pipeline, and respects the cross-media word-count guard
+    /// (<see cref="CrossMediaArtistMaxWords"/>) and threshold. Returns null when no
+    /// confident match is found so the caller falls through to its own not-found response.
     /// </summary>
     protected async Task<SkillResponse?> TryEntityFallbackAsync(
         string slotText,
@@ -2180,6 +2191,16 @@ public abstract class BaseHandler
         }
 
         string cleaned = string.Join(' ', tokens);
+
+        // A long slot is a poor artist query and a wrong-artist false positive is worse
+        // than a clean not-found — same guard + constant as PlaySong's cross-media fallback.
+        if (tokens.Length > CrossMediaArtistMaxWords)
+        {
+            Logger.LogDebug(
+                "{Label}: skipping artist fallback for {WordCount}-word query '{Query}' (max {Max})",
+                logLabel, tokens.Length, cleaned, CrossMediaArtistMaxWords);
+            return null;
+        }
 
         IReadOnlyList<BaseItem> artists = await ArtistSearch.SearchAsync(
             cleaned, user, libraryManager, artistIndex, Logger,

@@ -216,4 +216,74 @@ public class EntityFallbackTests : PluginTestBase
         string speech = TestHelpers.GetSpeechText(response);
         Assert.Contains("relaxing", speech, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public async Task SpanishMood_DeMilesDavis_PlaysArtist()
+    {
+        var artistId = Guid.NewGuid();
+        var song = new Audio { Name = "So What", Id = Guid.NewGuid() };
+
+        SetupUserMock();
+        SetupArtistFallback(artistId, "Miles Davis", song);
+
+        var handler = CreateHandler();
+        var request = CreateMoodIntent("de miles davis", "es-ES");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response.Response?.Directives);
+        Assert.NotEmpty(response.Response.Directives);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Miles Davis", speech);
+    }
+
+    [Fact]
+    public async Task PortugueseMood_DoMilesDavis_PlaysArtist()
+    {
+        var artistId = Guid.NewGuid();
+        var song = new Audio { Name = "So What", Id = Guid.NewGuid() };
+
+        SetupUserMock();
+        SetupArtistFallback(artistId, "Miles Davis", song);
+
+        var handler = CreateHandler();
+        var request = CreateMoodIntent("do miles davis", "pt-BR");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response.Response?.Directives);
+        Assert.NotEmpty(response.Response.Directives);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Miles Davis", speech);
+    }
+
+    [Fact]
+    public async Task MaxWordsGuard_LongMood_DoesNotFallbackToArtist()
+    {
+        // An artist IS available, but a >CrossMediaArtistMaxWords-word slot is a poor artist
+        // query — the guard must skip the fallback (a wrong-artist false positive is worse
+        // than a clean not-found). Same guard PlaySong's cross-media fallback uses.
+        var artistId = Guid.NewGuid();
+        var song = new Audio { Name = "So What", Id = Guid.NewGuid() };
+
+        SetupUserMock();
+        SetupArtistFallback(artistId, "Miles Davis", song);
+
+        var handler = CreateHandler();
+        var request = CreateMoodIntent("miles davis john coltrane quartet", "en-US");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // No AudioPlayer.Play — the guard prevented the artist fallback despite the artist being available.
+        Assert.True(response.Response?.Directives == null || response.Response.Directives.Count == 0);
+    }
 }
