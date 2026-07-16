@@ -122,6 +122,8 @@ The n-gram index is a background hosted service (`SongNgramIndexService`) that l
 
 When a handler's primary search finds no results (e.g., PlaySongIntent finds no song), `BaseHandler.BuildArtistSongsResponseAsync` falls back to artist search. This is shared across PlaySong, PlayAlbum, and PlayVideo handlers via `BaseHandler`.
 
+`BaseHandler.TryEntityFallbackAsync` extends this to **greedy `AMAZON.SearchQuery` intents that misroute an artist query** (PlayMoodMusic's `mood` slot captures "di miles davis"; FindSong's `titleKeywords` when no artist was given). On a confirmed miss it strips locale stop-words (`KeywordMatcher.Tokenize` — covers en/it/de/fr/es/pt), runs the phonetic `ArtistSearch`, gates on `Math.Max(FuzzyMatcher.GetDefaultThreshold(user), CrossMediaArtistThreshold)` **and** the word-count guard `CrossMediaArtistMaxWords` (=2, shared in BaseHandler — a >2-word slot is a poor artist query), then plays via `BuildArtistSongsResponseAsync` with a `FoundArtistInstead` announcement. Returns null when no confident match so the caller falls through to its own not-found. Known tradeoff: a real single-word mood that coincidentally matches an artist name (>=85) substitutes it — announced, so the user knows. Do NOT remove the word-count guard (a PlaySong lesson: long queries match wrong short artists).
+
 ## Live TV Channel Playback
 
 Live TV channels must launch via `VideoApp.Launch` (like movies/episodes), NOT `AudioPlayer.Play`: the static `/Audio|Videos/{id}/stream?static=true` endpoint returns HTTP 500 for a live source. `PlayChannelIntentHandler` delegates URL resolution to `ILiveTvStreamResolver` (`Alexa/Util/`), which calls `/Items/{channelId}/PlaybackInfo?AutoOpenLiveStream=true` and picks:
@@ -330,6 +332,8 @@ grep -rn '"[A-Z][a-z].*"' model_*.json | grep -v '{' | grep samples
 ```
 
 **Detection**: Run NLU test suite after ANY model change. Watch for intent misclassification.
+
+**Concrete instance (2026-07):** an intent with a greedy `AMAZON.SearchQuery` slot + a generic carrier — PlayMoodMusic's `"musica {mood}"` / `"play {mood} music"` — captures "music by X" and routes it to the mood intent (`mood="di miles davis"`) instead of PlayArtistSongs, in ALL 17 locales (every locale's mood slot is SearchQuery). On-device NLU does this even when the model has the exact `"musica di {musician}"` sample (profile-nlu vs on-device divergence). This is NOT fixable at the model layer alone — the recovery is handler-side: `TryEntityFallbackAsync` (see Cross-Media-Type Fallback) plays the artist on a mood-miss. When you see "X found nothing but a sibling entity query works," check whether a greedy SearchQuery slot stole it before assuming a search bug.
 
 ### 4. Cross-Locale Drift (8+ incidents)
 
