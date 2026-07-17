@@ -245,8 +245,12 @@ public class YesIntentHandler : BaseHandler
             User = jellyfinUser,
             Recursive = true,
             ParentId = album.Id,
+            // MediaTypes (not IncludeItemTypes=Audio): PlayBook disambiguation reuses the
+            // MediaTypeAlbum label, so this path also receives AudioBook items whose chapter
+            // children are BaseItemKind.AudioBook — IncludeItemTypes=Audio would drop them.
             MediaTypes = new[] { MediaType.Audio },
             DtoOptions = new DtoOptions(true),
+            OrderBy = QueueContinuationFetcher.AlbumTrackOrder,
         });
 
         if (albumItems.Count == 0)

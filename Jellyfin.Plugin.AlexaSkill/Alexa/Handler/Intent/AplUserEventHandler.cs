@@ -217,13 +217,18 @@ public class AplUserEventHandler : BaseHandler
         // which fails because Folders don't have media sources.
         if (item is Folder folder)
         {
+            // Multi-disc albums play disc-then-track (JF-339 AC#3); other folders
+            // (audiobook/artist folders) keep SortName.
+            bool isAlbum = folder is MediaBrowser.Controller.Entities.Audio.MusicAlbum;
             var childQuery = new InternalItemsQuery
             {
                 ParentId = folder.Id,
                 MediaTypes = new[] { MediaType.Audio },
                 Recursive = true,
                 Limit = 500,
-                OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) }
+                OrderBy = isAlbum
+                    ? QueueContinuationFetcher.AlbumTrackOrder
+                    : new[] { (ItemSortBy.SortName, SortOrder.Ascending) }
             };
 
             var children = _libraryManager.GetItemList(childQuery);

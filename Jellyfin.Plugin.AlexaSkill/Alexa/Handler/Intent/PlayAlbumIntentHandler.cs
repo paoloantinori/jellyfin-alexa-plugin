@@ -261,6 +261,7 @@ public class PlayAlbumIntentHandler : BaseHandler
                 ParentId = albums[0].Id,
                 IncludeItemTypes = new[] { BaseItemKind.Audio },
                 DtoOptions = new DtoOptions(true),
+                OrderBy = QueueContinuationFetcher.AlbumTrackOrder,
                 Limit = ProgressiveQueueConstants.GetInitialFetchSize()
             }),
             "GetAlbumTracks",
@@ -282,6 +283,7 @@ public class PlayAlbumIntentHandler : BaseHandler
                     AlbumIds = new[] { albums[0].Id },
                     IncludeItemTypes = new[] { BaseItemKind.Audio },
                     DtoOptions = new DtoOptions(true),
+                    OrderBy = QueueContinuationFetcher.AlbumTrackOrder,
                     Limit = ProgressiveQueueConstants.GetInitialFetchSize()
                 }),
                 "GetAlbumTracksByAlbumIds",

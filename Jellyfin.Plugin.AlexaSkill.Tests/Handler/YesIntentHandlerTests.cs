@@ -341,4 +341,41 @@ public class YesIntentHandlerTests : PluginTestBase
         Assert.NotNull(directive.VideoItem.Metadata);
         Assert.Equal("The Matrix", directive.VideoItem.Metadata.Title);
     }
+
+    [Fact]
+    public async Task HandleAsync_AlbumType_AudioBookItem_UsesMediaTypesForChapters()
+    {
+        // Regression guard (JF-339 /code-review): PlayBook disambiguation reuses the "album"
+        // type for audiobooks, so PlayAlbum receives an AudioBook. It must filter by
+        // MediaTypes=Audio (covers AudioBook chapters); IncludeItemTypes=Audio would drop them
+        // (chapters are BaseItemKind.AudioBook) and speak NoSongsInAlbum.
+        var bookId = Guid.NewGuid();
+        var chapter = new Audio { Name = "Chapter 1", Id = Guid.NewGuid() };
+        var book = new AudioBook { Name = "Test Audiobook", Id = bookId };
+
+        _libraryManagerMock.Setup(lm => lm.GetItemById(bookId)).Returns(book);
+
+        InternalItemsQuery? captured = null;
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.Is<InternalItemsQuery>(q => q.MediaTypes != null)))
+            .Callback<InternalItemsQuery>(q => captured = q)
+            .Returns(new List<BaseItem> { chapter });
+
+        var matchInfo = new DisambiguationHelper.MatchInfo { Id = bookId.ToString(), Name = "Test Audiobook" };
+        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreateYesIntentRequest(),
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            attrs,
+            CancellationToken.None);
+
+        Assert.NotNull(captured);
+        Assert.True(captured!.IncludeItemTypes == null || captured.IncludeItemTypes.Length == 0,
+            "PlayAlbum must use MediaTypes=Audio for the album/audiobook path, not IncludeItemTypes — AudioBook chapters are BaseItemKind.AudioBook and would be dropped.");
+        response.HasDirective<AudioPlayerPlayDirective>();
+    }
 }
