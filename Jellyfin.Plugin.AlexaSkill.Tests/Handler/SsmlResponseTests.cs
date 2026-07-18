@@ -90,4 +90,23 @@ public class SsmlResponseTests
         Assert.NotNull(result);
         Assert.Contains("Test", result);
     }
+
+    [Fact]
+    public void EscapeXml_AllReservedChars_Escaped()
+    {
+        Assert.Equal("a&amp;b&lt;c&gt;d&quot;e&apos;f", BaseHandler.EscapeXml("a&b<c>d\"e'f"));
+    }
+
+    [Fact]
+    public void GetSsml_ReservedCharsInName_AreEscapedForValidSsml()
+    {
+        // JF-323: a name with SSML-reserved chars must be escaped before interpolation into
+        // <speak>, else invalid SSML -> InvalidResponse. Call sites wrap names in EscapeXml.
+        string name = "Rock & Roll <Live>";
+        string? ssml = BaseHandler.GetSsml("NowPlayingSsml", "en-US", BaseHandler.EscapeXml(name));
+
+        Assert.NotNull(ssml);
+        Assert.Contains("Rock &amp; Roll &lt;Live&gt;", ssml);
+        Assert.DoesNotContain("Rock & Roll <Live>", ssml);
+    }
 }

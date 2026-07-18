@@ -1395,7 +1395,7 @@ public abstract class BaseHandler
                 return (FuzzyMissOutcome.SuggestionHandled, playResponse);
             }
 
-            string? ssml = GetSsml("FuzzyAutoPlayAnnouncementSsml", locale, selector(best), query);
+            string? ssml = GetSsml("FuzzyAutoPlayAnnouncementSsml", locale, EscapeXml(selector(best)), EscapeXml(query));
             playResponse.Response.OutputSpeech = ssml != null
                 ? new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" }
                 : new PlainTextOutputSpeech { Text = ResponseStrings.Get("FuzzyAutoPlayAnnouncement", locale, selector(best), query) };
@@ -1406,7 +1406,7 @@ public abstract class BaseHandler
         Logger.LogDebug("HandleFuzzyMiss: query={Query}, best={BestMatch}, score={Score}, candidates={CandidateCount} — disambiguating",
             query, selector(best), score, candidates.Count);
         var matches = matchExtractor(best) ?? new List<(Guid, string)>();
-        string? promptSsml = GetSsml("FuzzySuggestionPromptSsml", locale, query, selector(best));
+        string? promptSsml = GetSsml("FuzzySuggestionPromptSsml", locale, EscapeXml(query), EscapeXml(selector(best)));
 
         SkillResponse response;
         if (promptSsml != null)
