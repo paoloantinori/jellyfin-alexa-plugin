@@ -410,6 +410,21 @@ Workarounds:
 - Use **"Alexa, pause"** (Italian: *"Alexa, pausa"*) — pause always routes to the active player and stops the audio.
 - Force the skill with its invocation name: English *"Alexa, ask Jellyfin Player to stop"*, Italian *"Alexa, chiedi a Mia Collezione ferma"* (use the imperative **ferma**/**stop**, not the infinitive "fermare").
 
+### Why do some Live TV / IPTV channels show a black screen or fail to play?
+
+Live TV channels launch through the Echo's video player (`VideoApp.Launch`) — the same interface used for movies and episodes. That player decodes only a fixed set of formats. Per Amazon's [VideoApp Interface Reference](https://developer.amazon.com/en-US/docs/alexa/custom-skills/videoapp-interface-reference.html):
+
+| Streaming format | Supported audio |
+|------------------|-----------------|
+| **HLS**, MPEG-TS | **AAC only** |
+| SmoothStreaming, MP4, M4A | AAC, Dolby, Dolby Digital Plus |
+
+with video restricted to **H.264** (or MPEG-4), a maximum resolution of **1280×720**, and the stream delivered over **HTTPS**.
+
+IPTV and Live TV channels are HLS streams, so they play reliably only when the channel is **H.264 video + AAC audio**. Channels that use other codecs — **H.265/HEVC** video, or **AC-3 / E-AC-3 / Dolby** audio — exceed what the Echo's player can decode, so they show a black screen or never start. This is an Echo Show codec limitation, not a plugin bug: the plugin hands the channel's stream directly to the device, which either can or cannot decode it.
+
+There is no plugin-side transcoding for this today. The plugin plays IPTV/M3U channels directly (no re-encode), and hardware tuners that need transcoding (HDHomeRun/DVB) are served through Jellyfin's dynamic HLS, which also targets H.264/AAC. If a channel won't play, the practical fix is to use an H.264 + AAC source, or transcode the feed upstream of Jellyfin.
+
 ## Troubleshooting
 
 ### "There was a problem with the requested skill's response"
