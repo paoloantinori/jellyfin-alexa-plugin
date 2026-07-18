@@ -106,7 +106,7 @@ public class PlayRadioIntentHandler : BaseHandler
 
         var response = BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(currentAudio.Id.ToString(), user), currentAudio.Id.ToString(), currentAudio, user, context);
         response.Response.OutputSpeech = nowPlayingSsml != null
-            ? (IOutputSpeech)new SsmlOutputSpeech { Ssml = $"<speak>{nowPlayingSsml}. {radioMsg}</speak>" }
+            ? (IOutputSpeech)new SsmlOutputSpeech { Ssml = $"<speak>{nowPlayingSsml}. {EscapeXml(radioMsg)}</speak>" }
             : new PlainTextOutputSpeech($"{ResponseStrings.Get("NowPlaying", locale, currentAudio.Name)}. {radioMsg}");
 
         return response;

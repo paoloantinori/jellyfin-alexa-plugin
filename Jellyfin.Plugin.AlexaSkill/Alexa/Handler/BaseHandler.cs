@@ -1815,9 +1815,9 @@ public abstract class BaseHandler
     /// </summary>
     /// <param name="text">The text to escape.</param>
     /// <returns>The XML-escaped text.</returns>
-    internal static string EscapeXml(string text)
+    internal static string EscapeXml(string? text)
     {
-        return text
+        return (text ?? string.Empty)
             .Replace("&", "&amp;", StringComparison.Ordinal)
             .Replace("<", "&lt;", StringComparison.Ordinal)
             .Replace(">", "&gt;", StringComparison.Ordinal)

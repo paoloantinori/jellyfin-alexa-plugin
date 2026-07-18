@@ -393,7 +393,7 @@ public class MediaInfoIntentHandler : BaseHandler
 
         string enriched = trackDescription + ". " + artistInfo;
         string? enrichedSsml = trackSsml != null
-            ? trackSsml + "<break time=\"300ms\"/>" + artistInfo
+            ? trackSsml + "<break time=\"300ms\"/>" + EscapeXml(artistInfo)
             : null;
 
         return (enriched, enrichedSsml);
