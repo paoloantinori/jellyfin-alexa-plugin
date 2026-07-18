@@ -166,6 +166,7 @@ public class PlayRandomIntentHandler : BaseHandler
                 {
                     // VideoApp.Launch must NOT include shouldEndSession
                     ShouldEndSession = null,
+                    OutputSpeech = outputSpeech,
                     Directives = new List<IDirective>
                     {
                         new Directive.VideoAppLaunchDirective
