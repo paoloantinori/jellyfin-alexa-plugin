@@ -127,6 +127,7 @@ internal static class FuzzyMatcher
             }
 
             int score = PartialRatio(normalizedQuery, candidateText);
+            score = ApplyLengthPenalty(normalizedQuery, candidateText, score);
 
             if (score > bestScore)
             {
@@ -187,6 +188,7 @@ internal static class FuzzyMatcher
             }
 
             int score = PartialRatio(normalizedQuery, candidateText);
+            score = ApplyLengthPenalty(normalizedQuery, candidateText, score);
 
             // Apply phonetic bonus: if the candidate's pre-computed phonetic codes match
             // the query's phonetic codes, boost the score
@@ -286,7 +288,9 @@ internal static class FuzzyMatcher
         var scored = new List<(T Item, int Score)>();
         foreach (T candidate in candidates)
         {
-            int score = PartialRatio(normalizedQuery, Normalize(selector(candidate)));
+            string candidateText = Normalize(selector(candidate));
+            int score = PartialRatio(normalizedQuery, candidateText);
+            score = ApplyLengthPenalty(normalizedQuery, candidateText, score);
             if (score >= threshold)
             {
                 scored.Add((candidate, score));
@@ -350,6 +354,38 @@ internal static class FuzzyMatcher
         }
 
         return bestScore;
+    }
+
+    /// <summary>
+    /// Penalize a short candidate that coincidentally substrings into a longer query (JF-342).
+    /// <see cref="PartialRatio"/> slides a window the size of the shorter string across the
+    /// longer one, so a short candidate can align with an unrelated substring — e.g. query
+    /// "disco jazz caffè" matches "Uazz" via the "jazz" window (Levenshtein score 75), a
+    /// false positive. This scales the score by the candidate/query length ratio when the
+    /// candidate is the shorter side, under half the query length, and NOT contained in the
+    /// query. Legitimate matches are unaffected: ASR-truncation matches have the candidate
+    /// LONGER than the query (this branch does not apply), and a candidate genuinely
+    /// contained in the query is exempt (a real near-exact match).
+    /// </summary>
+    private static int ApplyLengthPenalty(string query, string candidate, int score)
+    {
+        if (candidate.Length >= query.Length)
+        {
+            return score;
+        }
+
+        double ratio = (double)candidate.Length / query.Length;
+        if (ratio >= 0.5)
+        {
+            return score;
+        }
+
+        if (query.Contains(candidate, StringComparison.OrdinalIgnoreCase))
+        {
+            return score;
+        }
+
+        return (int)(score * ratio);
     }
 
     /// <summary>
