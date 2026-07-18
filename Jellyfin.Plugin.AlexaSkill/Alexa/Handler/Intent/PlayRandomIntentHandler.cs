@@ -154,10 +154,8 @@ public class PlayRandomIntentHandler : BaseHandler
         if (firstItem is MediaBrowser.Controller.Entities.Movies.Movie
             or MediaBrowser.Controller.Entities.TV.Episode)
         {
-            string? npSsml = GetSsml("NowPlayingSsml", locale, EscapeXml(firstItem.Name));
-            var outputSpeech = npSsml != null
-                ? (IOutputSpeech)new SsmlOutputSpeech { Ssml = $"<speak>{npSsml}</speak>" }
-                : new PlainTextOutputSpeech(ResponseStrings.Get("NowPlaying", locale, firstItem.Name));
+            // Now-playing announce shared with PlayVideo/PlayEpisode via BuildOutputSpeech (JF-349).
+            var outputSpeech = BuildOutputSpeech("NowPlayingSsml", "NowPlaying", locale, firstItem.Name);
 
             return new SkillResponse
             {

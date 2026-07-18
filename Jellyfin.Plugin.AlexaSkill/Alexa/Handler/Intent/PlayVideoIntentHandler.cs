@@ -182,6 +182,12 @@ public class PlayVideoIntentHandler : BaseHandler
                 ResponseStrings.Get("ResumingVideo", locale, video.Name, FormatPosition(resumeTicks)));
             Logger.LogInformation("PlayVideo: resuming {Title} from {Position}", video.Name, FormatPosition(resumeTicks));
         }
+        else
+        {
+            // Fresh launch (no resume position): announce the title so the launch isn't silent.
+            // Matches PlayRandom/PlayEpisode video launches + aids voice-only devices (JF-349).
+            response.Response.OutputSpeech = BuildOutputSpeech("NowPlayingSsml", "NowPlaying", locale, video.Name);
+        }
 
         return response;
     }

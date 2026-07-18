@@ -154,6 +154,8 @@ public class PlayEpisodeIntentHandler : BaseHandler
             {
                 // VideoApp.Launch must NOT include shouldEndSession
                 ShouldEndSession = null,
+                // Announce the title on launch for consistency with PlayRandom/PlayVideo (JF-349).
+                OutputSpeech = BuildOutputSpeech("NowPlayingSsml", "NowPlaying", locale, episode.Name),
                 Directives = new List<IDirective>
                 {
                     new VideoAppLaunchDirective
