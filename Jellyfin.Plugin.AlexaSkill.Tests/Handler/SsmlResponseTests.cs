@@ -1,4 +1,5 @@
 using System;
+using System.Xml.Linq;
 using Alexa.NET.Assertions;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
@@ -108,5 +109,30 @@ public class SsmlResponseTests
         Assert.NotNull(ssml);
         Assert.Contains("Rock &amp; Roll &lt;Live&gt;", ssml);
         Assert.DoesNotContain("Rock & Roll <Live>", ssml);
+    }
+
+    [Fact]
+    public void BuildOutputSpeech_SsmlPath_EscapesReservedChars()
+    {
+        // JF-350: the SSML path escapes reserved chars inside BuildOutputSpeech now
+        // (callers pass raw names). Output must be well-formed SSML with "&amp;".
+        var speech = BaseHandler.BuildOutputSpeech("NowPlayingSsml", "NowPlaying", "en-US", "Rock & Roll");
+
+        var ssml = Assert.IsType<SsmlOutputSpeech>(speech);
+        Assert.Contains("Rock &amp; Roll", ssml.Ssml);
+        Assert.DoesNotContain("Rock & Roll", ssml.Ssml);
+        XDocument.Parse(ssml.Ssml); // throws if the <speak> SSML is not well-formed XML
+    }
+
+    [Fact]
+    public void BuildOutputSpeech_PlainFallback_KeepsRawAmpersand()
+    {
+        // JF-350: when the SSML key is missing, the plain-text fallback must keep the RAW
+        // arg — the user must hear "&", not the SSML-escaped "&amp;".
+        var speech = BaseHandler.BuildOutputSpeech("NonExistentSsmlKey12345", "NowPlaying", "en-US", "Tom & Jerry");
+
+        var plain = Assert.IsType<PlainTextOutputSpeech>(speech);
+        Assert.Contains("Tom & Jerry", plain.Text);
+        Assert.DoesNotContain("&amp;", plain.Text);
     }
 }

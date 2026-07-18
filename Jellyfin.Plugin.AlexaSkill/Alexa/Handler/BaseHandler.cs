@@ -849,7 +849,9 @@ public abstract class BaseHandler
     /// </summary>
     /// <param name="key">The SSML key (e.g. "NowPlayingSsml").</param>
     /// <param name="locale">The locale identifier.</param>
-    /// <param name="args">Optional format arguments.</param>
+    /// <param name="args">Optional format arguments. String values are interpolated into
+    /// SSML as-is, so callers MUST pre-escape reserved XML chars with EscapeXml (unlike
+    /// BuildOutputSpeech, which escapes internally).</param>
     /// <returns>The formatted SSML string, or null if the key doesn't exist.</returns>
     public static string? GetSsml(string key, string locale, params object[] args)
     {
@@ -863,15 +865,41 @@ public abstract class BaseHandler
     }
 
     /// <summary>
-    /// Build an OutputSpeech using SSML with plaintext fallback.
-    /// Tries the SSML key first; falls back to the plain key if SSML is unavailable.
+    /// Build an OutputSpeech using SSML with plaintext fallback. Tries the SSML key
+    /// first; falls back to the plain key if SSML is unavailable. Callers pass RAW
+    /// (unescaped) args: the SSML path escapes reserved XML chars here, while the
+    /// plain-text fallback keeps them raw, so an ampersand in a title is spoken as
+    /// a real ampersand rather than the escaped SSML entity.
     /// </summary>
-    protected static IOutputSpeech BuildOutputSpeech(string ssmlKey, string plainKey, string locale, params object[] args)
+    public static IOutputSpeech BuildOutputSpeech(string ssmlKey, string plainKey, string locale, params object[] args)
     {
-        string? ssml = GetSsml(ssmlKey, locale, args);
-        return ssml != null
-            ? new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" }
-            : new PlainTextOutputSpeech { Text = ResponseStrings.Get(plainKey, locale, args) };
+        string? ssml = GetSsml(ssmlKey, locale, EscapeStringArgs(args));
+        if (ssml != null)
+        {
+            return new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" };
+        }
+
+        return new PlainTextOutputSpeech { Text = ResponseStrings.Get(plainKey, locale, args) };
+    }
+
+    /// <summary>
+    /// Escape SSML-reserved chars in string args for safe interpolation into &lt;speak&gt;.
+    /// Non-string args (counts, etc.) pass through unchanged.
+    /// </summary>
+    private static object[] EscapeStringArgs(object[] args)
+    {
+        if (args.Length == 0)
+        {
+            return args;
+        }
+
+        var escaped = new object[args.Length];
+        for (int i = 0; i < args.Length; i++)
+        {
+            escaped[i] = args[i] is string s ? EscapeXml(s) : args[i];
+        }
+
+        return escaped;
     }
 
     /// <summary>

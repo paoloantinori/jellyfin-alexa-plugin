@@ -201,7 +201,7 @@ public class YesIntentHandler : BaseHandler
 
             SkillResponse response = BuildAudiobookResumeResponse(item, startTicks);
             response.Response.OutputSpeech = _config.ResumeAnnounceTitle
-                ? BuildOutputSpeech("ResumingSsml", "Resuming", locale, EscapeXml(item.Name ?? ResponseStrings.Get("UnknownMedia", locale)))
+                ? BuildOutputSpeech("ResumingSsml", "Resuming", locale, item.Name ?? ResponseStrings.Get("UnknownMedia", locale))
                 : BuildOutputSpeech("ResumeBriefSsml", "ResumeBrief", locale);
             return Task.FromResult(response);
         }
@@ -220,7 +220,7 @@ public class YesIntentHandler : BaseHandler
         if (_config.ResumeAnnounceTitle)
         {
             string title = item.Name ?? ResponseStrings.Get("UnknownMedia", locale);
-            standardResponse.Response.OutputSpeech = BuildOutputSpeech("ResumingSsml", "Resuming", locale, EscapeXml(title));
+            standardResponse.Response.OutputSpeech = BuildOutputSpeech("ResumingSsml", "Resuming", locale, title);
         }
         else
         {
