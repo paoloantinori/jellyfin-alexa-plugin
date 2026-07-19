@@ -564,7 +564,7 @@ public abstract class BaseHandler
         }
 
         Logger.LogDebug("BuildAudioPlayerResponse: itemId={ItemId}, behavior={Behavior}, offsetMs={OffsetMs}, title={Title}, streamUrl={StreamUrl}",
-            itemId, playBehavior, offsetInMilliseconds, item?.Name, streamUrl);
+            itemId, playBehavior, offsetInMilliseconds, item?.Name, RequestLogRedactor.RedactUrl(streamUrl));
         string imageUrl = item != null ? GetImageUrl(itemId, user) : string.Empty;
         var imageSources = new AudioItemSources
         {

@@ -44,15 +44,13 @@ public class CsrfTokenHandler
             return false;
         }
 
-        if (!csrfTokens.TryGetValue(token, out CsrfToken? csrfToken))
+        if (!csrfTokens.TryRemove(token, out CsrfToken? csrfToken))
         {
             return false;
         }
 
-        // Single-use: consume the token so it cannot be replayed.
-        csrfTokens.TryRemove(token, out _);
-
-        // Valid only if not expired.
+        // Single-use: TryRemove atomically consumes the token, so a concurrent validation
+        // of the same token (e.g. a double-clicked submit) cannot also succeed.
         return DateTime.Compare(DateTime.UtcNow, csrfToken.Expiration) < 0;
     }
 
