@@ -3,10 +3,11 @@ id: JF-341
 title: >-
   PlayAlbum multi-match disambiguation is inert (HandleFuzzyMiss auto-accepts) —
   real disambiguation needs distinct-name check + AskFirstMatch
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - claude
 created_date: '2026-07-13 18:20'
-updated_date: '2026-07-13 20:16'
+updated_date: '2026-07-19 09:03'
 labels:
   - album
   - disambiguation
@@ -34,12 +35,18 @@ Related: JF-336/338 (PlayAlbum fuzzy + tolerant work), JF-339 (PlayAlbum refinem
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 When PlayAlbum resolves multiple albums (exact or fuzzy match) that have DIFFERENT names (e.g. 'Greatest Hits' by Queen vs ABBA), prompt the user to disambiguate (DisambiguationHelper.AskFirstMatch) instead of silently auto-playing the best-scoring one.
-- [ ] #2 When the multiple albums share the SAME name (e.g. two 'Jazz Cafe' discs), do NOT prompt (the prompt would be useless) — auto-play the best, as today.
-- [ ] #3 The fix: the current HandleFuzzyMiss auto-accepts the best match at score >= GetDefaultThreshold, which is correct for single-match but suppresses disambiguation for multi-match. Either bypass HandleFuzzyMiss for multi-match (go straight to AskFirstMatch) or add a 'disambiguate-if-multiple-distinct-names' mode to HandleFuzzyMiss.
-- [ ] #4 Add a unit/integration test: multi-match different-name albums → disambiguation prompt; multi-match same-name albums → auto-play.
-- [ ] #5 No regression: single-match albums still auto-play; the JF-336 accent case (jazz caffè → Jazz Cafe) still works.
+- [x] #1 When PlayAlbum resolves multiple albums (exact or fuzzy match) that have DIFFERENT names (e.g. 'Greatest Hits' by Queen vs ABBA), prompt the user to disambiguate (DisambiguationHelper.AskFirstMatch) instead of silently auto-playing the best-scoring one.
+- [x] #2 When the multiple albums share the SAME name (e.g. two 'Jazz Cafe' discs), do NOT prompt (the prompt would be useless) — auto-play the best, as today.
+- [x] #3 The fix: the current HandleFuzzyMiss auto-accepts the best match at score >= GetDefaultThreshold, which is correct for single-match but suppresses disambiguation for multi-match. Either bypass HandleFuzzyMiss for multi-match (go straight to AskFirstMatch) or add a 'disambiguate-if-multiple-distinct-names' mode to HandleFuzzyMiss.
+- [x] #4 Add a unit/integration test: multi-match different-name albums → disambiguation prompt; multi-match same-name albums → auto-play.
+- [x] #5 No regression: single-match albums still auto-play; the JF-336 accent case (jazz caffè → Jazz Cafe) still works.
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+PlayAlbum multi-match now disambiguates by name. Distinct-name collisions (e.g. "Greatest Hits" vs "Biggest Hits") prompt via AskFirstMatch; same-name duplicates (e.g. two "Jazz Cafe" discs) auto-play the first. The previous HandleFuzzyMiss-based path (which auto-accepted the best at >= GetDefaultThreshold, making AskFirstMatch unreachable) is bypassed for multi-match. New PlayAlbumIntentHandlerTests cover all three cases (distinct -> prompt, same-name -> auto-play, single -> auto-play). Full suite 2533/2533.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

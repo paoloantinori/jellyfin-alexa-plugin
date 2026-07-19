@@ -3,9 +3,10 @@ id: JF-342
 title: >-
   Tolerate on-device NLU misroutes without wrong-artist false positives
   (language-agnostic fuzzy length guard)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-14 16:03'
+updated_date: '2026-07-18 20:27'
 labels:
   - bug
   - artist-search
@@ -47,12 +48,12 @@ Full plan (with exact helper code, file paths, and verification commands): /home
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 ContainsMediaNounCarrier method and its call site are removed from PlayArtistSongsIntentHandler; no Italian content-word blacklist remains in any handler.
-- [ ] #2 FuzzyMatcher.FindBestMatchWithScore applies a length-disproportion penalty (candidate shorter than query, ratio<0.5, not contained → score scaled by ratio) in BOTH overloads, before the phonetic bonus.
-- [ ] #3 New regression tests prove "disco jazz caffè" no longer matches "Uazz" (FindBestMatch returns null, FindBestMatchWithScore score < DefaultThreshold) and "la ballata del genesio" no longer matches "Lamb".
-- [ ] #4 Existing ASR-truncation matches still pass: "zepln"→Led Zeppelin, "beetles"→The Beatles, "led zep"→Led Zeppelin, "Beatls"→The Beatles, and contained short candidates still score at containment.
-- [ ] #5 dotnet test (NO --no-build) passes with zero regressions; CI-matching container preflight (podman run ... dotnet test -c Release) also passes.
-- [ ] #6 Simulator on minix: PlayArtistSongsIntent musician="disco jazz caffè" → NotFoundArtist speech (logs show tier-4 matched=false); PlayArtistSongsIntent musician="pink floyd" still plays Pink Floyd; PlayAlbumIntent album="jazz caffè" still plays Jazz Cafe (score 88).
+- [x] #1 ContainsMediaNounCarrier method and its call site are removed from PlayArtistSongsIntentHandler; no Italian content-word blacklist remains in any handler.
+- [x] #2 FuzzyMatcher.FindBestMatchWithScore applies a length-disproportion penalty (candidate shorter than query, ratio<0.5, not contained → score scaled by ratio) in BOTH overloads, before the phonetic bonus.
+- [x] #3 New regression tests prove "disco jazz caffè" no longer matches "Uazz" (FindBestMatch returns null, FindBestMatchWithScore score < DefaultThreshold) and "la ballata del genesio" no longer matches "Lamb".
+- [x] #4 Existing ASR-truncation matches still pass: "zepln"→Led Zeppelin, "beetles"→The Beatles, "led zep"→Led Zeppelin, "Beatls"→The Beatles, and contained short candidates still score at containment.
+- [x] #5 dotnet test (NO --no-build) passes with zero regressions; CI-matching container preflight (podman run ... dotnet test -c Release) also passes.
+- [x] #6 Simulator on minix: PlayArtistSongsIntent musician="disco jazz caffè" → NotFoundArtist speech (logs show tier-4 matched=false); PlayArtistSongsIntent musician="pink floyd" still plays Pink Floyd; PlayAlbumIntent album="jazz caffè" still plays Jazz Cafe (score 88).
 <!-- AC:END -->
 
 ## Definition of Done
@@ -68,3 +69,23 @@ Full plan (with exact helper code, file paths, and verification commands): /home
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining, or findings applied/tracked)
 <!-- DOD:END -->
+
+## Comments
+
+<!-- COMMENTS:BEGIN -->
+created: 2026-07-18 08:15
+---
+2026-07-18 (autonomous): implemented on branch jf-342-fuzzy-length-guard — added ApplyLengthPenalty (candidate shorter than half the query, not contained → score scaled by length ratio) to both FindBestMatchWithScore overloads (before the phonetic bonus) AND RankMatches. AC#1 already satisfied (ContainsMediaNounCarrier blacklist was never committed). TDD red→green: 3 rejection tests (Uazz, Lamb, score-below-threshold) failed before the fix, pass after; 2 preservation tests (ASR-truncation, contained) hold. Full suite 2522 pass, Release 0-warning. Adversarial code-review (opus): sound, safe to merge — proved penalty+phonetic can't resurrect a false positive (max 54 < 60), legitimate/ASR/contained matches preserved. PR #16 opened (validators pass, build-and-test/CodeQL pending). RESIDUAL: AC#6 (on-device simulator on minix) needs the user — cannot run autonomously; also a latent accent-variant edge (short accented names) with no live trigger today.
+---
+
+created: 2026-07-18 20:27
+---
+AC#6 ON-DEVICE VERIFIED (2026-07-18): deployed commit 796bf55 to minix (AlexaSkill_0.10.0.0 hot-swap, same AssemblyVersion so no config migration; config survived, JellyfinToken healthy — stream URL api_key present). Built-in Simulator (it-IT): (1) PlayArtistSongsIntent musician='disco jazz caffè' -> NotFoundArtist speech ('Spiacente, non ho trovato nessun artista...'), NO AudioPlayer.Play -> the 'Uazz' false-positive no longer auto-plays (the original incident is fixed); (2) PlayArtistSongsIntent 'pink floyd' -> AudioPlayer.Play with stream .../Audio/<id>/stream?static=true&api_key=da5a12a4... (legitimate match preserved + token healthy); (3) PlayAlbumIntent album='jazz caffè' -> AudioPlayer.Play (album plays). All 6 ACs met; task complete.
+---
+<!-- COMMENTS:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fuzzy length-disproportion penalty (FuzzyMatcher.ApplyLengthPenalty — candidate shorter than half the query and not contained => score scaled by length ratio) deployed and verified on-device. The original incident is fixed: PlayArtistSongsIntent 'disco jazz caffè' no longer auto-plays the wrong short artist 'Uazz' (returns NotFoundArtist), while legitimate matches ('pink floyd') and album routing ('jazz caffè') still play. Delivered via PR #16 (796bf55); unit tests (5: 3 rejection + 2 preservation) + adversarial opus review passed at merge; AC#6 on-device simulator check confirmed on minix after deploy.
+<!-- SECTION:FINAL_SUMMARY:END -->
