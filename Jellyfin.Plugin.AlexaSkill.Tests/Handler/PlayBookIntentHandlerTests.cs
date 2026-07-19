@@ -232,6 +232,45 @@ public class PlayBookIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
+    public async Task HandleAsync_SingleBookFound_NativeControls_FreshStart_AnnouncesTitle()
+    {
+        // F2: a fresh-start audiobook via VideoApp (NativeControlsForBooks, no resume position)
+        // must announce the book title instead of launching silently.
+        _config.NativeControlsForBooks = true;
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(bookName: "The Hobbit");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var bookItem = new Audio { Name = "The Hobbit", Id = Guid.NewGuid() };
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(new List<BaseItem> { bookItem });
+
+        var trackItem = new Audio { Name = "Chapter 1", Id = Guid.NewGuid() };
+        _libraryManagerMock.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q =>
+                q.ParentId == bookItem.Id)))
+            .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+            {
+                Items = new[] { trackItem },
+                TotalRecordCount = 1
+            });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotNull(response.Response.Directives?.FirstOrDefault(d => d.GetType().Name.Contains("VideoApp")));
+        Assert.NotNull(response.Response.OutputSpeech);
+        string announceText = response.Response.OutputSpeech is SsmlOutputSpeech ss
+            ? ss.Ssml
+            : Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech).Text;
+        Assert.Contains("The Hobbit", announceText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task HandleAsync_BookWithNoTracks_ReturnsNoContentMessage()
     {
         var handler = CreateHandler();
