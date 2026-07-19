@@ -134,10 +134,22 @@ public class VideoAudioCache
     public async Task<IDisposable> LockItemAsync(string itemId, long artModifiedTicks)
     {
         string key = GetCacheFilePath(itemId, artModifiedTicks);
-        var rc = _itemLocks.GetOrAdd(key, _ => new RefCountedLock());
-        Interlocked.Increment(ref rc.RefCount);
-        await rc.Semaphore.WaitAsync().ConfigureAwait(false);
-        return new Releaser(key, this);
+        while (true)
+        {
+            var rc = _itemLocks.GetOrAdd(key, _ => new RefCountedLock());
+            Interlocked.Increment(ref rc.RefCount);
+            try
+            {
+                await rc.Semaphore.WaitAsync().ConfigureAwait(false);
+                return new Releaser(key, this);
+            }
+            catch (ObjectDisposedException)
+            {
+                // Raced with a ReleaseLock that decremented this entry to 0 and disposed its
+                // semaphore between our GetOrAdd and WaitAsync. Loop to acquire a fresh entry (JF-320).
+                continue;
+            }
+        }
     }
 
     /// <summary>
