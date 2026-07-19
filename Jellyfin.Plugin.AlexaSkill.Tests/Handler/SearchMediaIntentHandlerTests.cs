@@ -31,6 +31,7 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly Mock<ILibraryManager> _libraryManagerMock;
     private readonly Mock<IUserManager> _userManagerMock;
+    private readonly Mock<IUserDataManager> _userDataManagerMock;
     private readonly PluginConfiguration _config;
     private readonly ILoggerFactory _loggerFactory;
 
@@ -39,6 +40,7 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
         _sessionManagerMock = new Mock<ISessionManager>();
         _libraryManagerMock = new Mock<ILibraryManager>();
         _userManagerMock = new Mock<IUserManager>();
+        _userDataManagerMock = new Mock<IUserDataManager>();
         _config = new PluginConfiguration();
         _config.AsrCompoundWordFixEnabled = false;
         TestHelpers.SetServerAddress(_config, "https://test.example.com");
@@ -52,6 +54,7 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
             _config,
             _libraryManagerMock.Object,
             _userManagerMock.Object,
+            _userDataManagerMock.Object,
             _loggerFactory);
     }
 
@@ -219,6 +222,38 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
         Assert.Contains("Inception", announceText, StringComparison.Ordinal);
         Assert.NotNull(session.FullNowPlayingItem);
         Assert.Equal(movie, session.FullNowPlayingItem);
+    }
+
+    [Fact]
+    public async Task HandleAsync_SingleVideoResult_WithProgress_AnnouncesResumePosition()
+    {
+        // C4: a half-watched movie found via search announces "Resuming X from Y"
+        // (matching PlayVideo), not "Now playing".
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(query: "Inception");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+        SetupUserMock();
+
+        var movie = new global::MediaBrowser.Controller.Entities.Movies.Movie
+        {
+            Name = "Inception",
+            Id = Guid.NewGuid()
+        };
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { movie });
+        _userDataManagerMock.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
+            .Returns(new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = TimeSpan.FromMinutes(45).Ticks });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotNull(response.Response.OutputSpeech);
+        string announceText = response.Response.OutputSpeech is SsmlOutputSpeech ss
+            ? ss.Ssml
+            : Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech).Text;
+        Assert.Contains("Resuming", announceText, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

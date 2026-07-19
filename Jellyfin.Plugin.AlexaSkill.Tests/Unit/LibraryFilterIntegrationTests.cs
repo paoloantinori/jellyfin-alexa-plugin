@@ -188,7 +188,7 @@ public class LibraryFilterIntegrationTests : PluginTestBase, IDisposable
 
         var handler = new SearchMediaIntentHandler(
             _sessionManagerMock.Object, _config,
-            _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+            _libraryManagerMock.Object, _userManagerMock.Object, Mock.Of<MediaBrowser.Controller.Library.IUserDataManager>(), _loggerFactory);
 
         await handler.HandleAsync(
             new IntentRequest
@@ -325,7 +325,7 @@ public class LibraryFilterIntegrationTests : PluginTestBase, IDisposable
 
         var handler = new SearchMediaIntentHandler(
             _sessionManagerMock.Object, _config,
-            _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+            _libraryManagerMock.Object, _userManagerMock.Object, Mock.Of<MediaBrowser.Controller.Library.IUserDataManager>(), _loggerFactory);
 
         await handler.HandleAsync(
             new IntentRequest
@@ -413,7 +413,7 @@ public class LibraryFilterIntegrationTests : PluginTestBase, IDisposable
 
         var handler = new SearchMediaIntentHandler(
             _sessionManagerMock.Object, _config,
-            _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+            _libraryManagerMock.Object, _userManagerMock.Object, Mock.Of<MediaBrowser.Controller.Library.IUserDataManager>(), _loggerFactory);
 
         await handler.HandleAsync(
             new IntentRequest

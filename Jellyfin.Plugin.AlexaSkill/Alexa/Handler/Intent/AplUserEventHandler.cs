@@ -191,6 +191,7 @@ public class AplUserEventHandler : BaseHandler
             session.FullNowPlayingItem = item;
 
             string locale = GetLocale(request);
+            var (jellyfinUser, _) = ResolveJellyfinUser(_userManager, session.UserId, locale);
             return Task.FromResult(new SkillResponse
             {
                 Version = "1.0",
@@ -198,7 +199,7 @@ public class AplUserEventHandler : BaseHandler
                 {
                     // VideoApp.Launch must NOT include shouldEndSession
                     ShouldEndSession = null,
-                    OutputSpeech = BuildNowPlayingSpeech(item.Name, locale),
+                    OutputSpeech = BuildVideoLaunchSpeech(item, locale, _userDataManager, jellyfinUser),
                     Directives = new List<IDirective>
                     {
                         new VideoAppLaunchDirective

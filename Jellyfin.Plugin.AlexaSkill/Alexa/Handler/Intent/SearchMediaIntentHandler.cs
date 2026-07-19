@@ -45,6 +45,7 @@ public class SearchMediaIntentHandler : BaseHandler
 
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
+    private readonly IUserDataManager _userDataManager;
     private readonly IArtistIndex? _artistIndex;
 
     public SearchMediaIntentHandler(
@@ -52,11 +53,13 @@ public class SearchMediaIntentHandler : BaseHandler
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
+        IUserDataManager userDataManager,
         ILoggerFactory loggerFactory,
         IArtistIndex? artistIndex = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
+        _userDataManager = userDataManager;
         _artistIndex = artistIndex;
     }
 
@@ -148,7 +151,7 @@ public class SearchMediaIntentHandler : BaseHandler
         if (deduped.Count == 1)
         {
             Logger.LogInformation("Single result — auto-playing '{Item}'", deduped[0].Name);
-            return PlayItem(deduped[0], user, session, context, locale);
+            return PlayItem(deduped[0], user, session, context, locale, jellyfinUser);
         }
 
         // Disambiguation uses MediaTypeSong; YesIntentHandler will play matches as audio.
@@ -157,7 +160,7 @@ public class SearchMediaIntentHandler : BaseHandler
         if (topMatch != null)
         {
             Logger.LogInformation("Fuzzy match hit '{Item}' — auto-playing", topMatch.Name);
-            return PlayItem(topMatch, user, session, context, locale);
+            return PlayItem(topMatch, user, session, context, locale, jellyfinUser);
         }
 
         var (missOutcome, missResponse) = HandleFuzzyMiss(
@@ -167,7 +170,7 @@ public class SearchMediaIntentHandler : BaseHandler
             best => new List<(Guid, string)> { (best.Id, FormatWithTypeLabel(best)) },
             DisambiguationHelper.MediaTypeSong,
             locale,
-            best => PlayItem(best, user, session, context, locale),
+            best => PlayItem(best, user, session, context, locale, jellyfinUser),
             user: user);
 
         if (missOutcome != FuzzyMissOutcome.NotFound)
@@ -221,7 +224,7 @@ public class SearchMediaIntentHandler : BaseHandler
     }
 
     private SkillResponse PlayItem(
-        BaseItem item, Entities.User user, SessionInfo session, Context context, string locale)
+        BaseItem item, Entities.User user, SessionInfo session, Context context, string locale, Jellyfin.Database.Implementations.Entities.User? jellyfinUser)
     {
         string itemId = item.Id.ToString();
 
@@ -241,7 +244,7 @@ public class SearchMediaIntentHandler : BaseHandler
                 {
                     // VideoApp.Launch must NOT include shouldEndSession
                     ShouldEndSession = null,
-                    OutputSpeech = BuildNowPlayingSpeech(item.Name, locale),
+                    OutputSpeech = BuildVideoLaunchSpeech(item, locale, _userDataManager, jellyfinUser),
                     Directives = new List<IDirective>
                     {
                         new VideoAppLaunchDirective

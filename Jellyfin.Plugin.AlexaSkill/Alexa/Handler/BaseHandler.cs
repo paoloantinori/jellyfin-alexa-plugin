@@ -910,6 +910,27 @@ public abstract class BaseHandler
         => BuildOutputSpeech("NowPlayingSsml", "NowPlaying", locale, name);
 
     /// <summary>
+    /// Resume-aware video-launch announce: "Resuming X from Y" when the user has playback
+    /// progress, else the now-playing announce. VideoApp.Launch cannot honor the offset, so
+    /// this only informs the user where they left off (playback still starts from the beginning).
+    /// </summary>
+    protected static IOutputSpeech BuildVideoLaunchSpeech(BaseItem item, string locale, IUserDataManager? userDataManager, Jellyfin.Database.Implementations.Entities.User? jellyfinUser)
+    {
+        if (userDataManager is null || jellyfinUser is null)
+        {
+            return BuildNowPlayingSpeech(item.Name, locale);
+        }
+
+        long resumeTicks = userDataManager.GetUserData(jellyfinUser, item)?.PlaybackPositionTicks ?? 0;
+        if (resumeTicks > 0)
+        {
+            return new PlainTextOutputSpeech(ResponseStrings.Get("ResumingVideo", locale, item.Name, FormatPosition(resumeTicks)));
+        }
+
+        return BuildNowPlayingSpeech(item.Name, locale);
+    }
+
+    /// <summary>
     /// Extract the locale from the request, defaulting to en-US if not available.
     /// </summary>
     /// <param name="request">The incoming request.</param>
