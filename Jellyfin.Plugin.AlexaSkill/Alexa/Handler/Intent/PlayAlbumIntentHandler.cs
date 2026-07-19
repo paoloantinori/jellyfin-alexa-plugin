@@ -218,36 +218,19 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         if (albums.Count > 1)
         {
-            Logger.LogDebug("PlayAlbum: {Count} albums matched, running disambiguation", albums.Count);
-            BaseItem? albumMatch = null;
-            var (missOutcome, missResponse) = HandleFuzzyMiss(
-                album,
-                albums,
-                a => a.Name,
-                best => new List<(Guid, string)> { (best.Id, best.Name) },
-                DisambiguationHelper.MediaTypeAlbum,
-                locale,
-                best =>
-                {
-                    albumMatch = best;
-                    return null!;
-                },
-                user: user);
-
-            if (missOutcome != FuzzyMissOutcome.NotFound)
+            // JF-341: disambiguate only when the matched albums have DIFFERENT names. Same-name duplicates
+            // (e.g. two "Jazz Cafe" disc-albums) auto-play the first -- a "Jazz Cafe or Jazz Cafe?" prompt is useless. The previous HandleFuzzyMiss path auto-accepted the best at >= GetDefaultThreshold, which suppressed disambiguation entirely.
+            bool distinctNames = albums.Select(a => a.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1;
+            if (distinctNames)
             {
-                if (missResponse != null)
-                {
-                    return missResponse;
-                }
-
-                albums = new List<BaseItem> { albumMatch! };
-            }
-            else
-            {
+                Logger.LogDebug("PlayAlbum: {Count} distinct-name albums matched, prompting disambiguation", albums.Count);
                 var matches = albums.Take(3).Select(a => (a.Id, a.Name, (string?)GetImageUrl(a.Id.ToString("N"), user))).ToList();
                 return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeAlbum, locale, context);
             }
+
+            // Same-name duplicates: auto-play the first (no useless prompt).
+            Logger.LogDebug("PlayAlbum: {Count} same-name album duplicates, auto-playing the first", albums.Count);
+            albums = new List<BaseItem> { albums[0] };
         }
 
         // Get the first page of album tracks for fast time-to-audio.
