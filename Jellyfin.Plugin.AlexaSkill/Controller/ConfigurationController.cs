@@ -212,6 +212,21 @@ public class ConfigurationController : ControllerBase
             }
         }
 
+        // Handle AnnounceNowPlaying (boolean, or null to inherit the global DefaultAnnounceNowPlaying)
+        if (req.TryGetValue("AnnounceNowPlaying", out var anpToken))
+        {
+            if (anpToken.Type == JTokenType.Boolean)
+            {
+                pluginUser!.AnnounceNowPlaying = anpToken.Value<bool>();
+                updated = true;
+            }
+            else if (anpToken.Type == JTokenType.Null)
+            {
+                pluginUser!.AnnounceNowPlaying = null;
+                updated = true;
+            }
+        }
+
         if (!updated)
         {
             return new JsonResult(new { error = "No valid fields to update" }) { StatusCode = 400 };

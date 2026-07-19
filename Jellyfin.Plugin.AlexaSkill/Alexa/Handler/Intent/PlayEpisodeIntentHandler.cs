@@ -154,7 +154,7 @@ public class PlayEpisodeIntentHandler : BaseHandler
             {
                 // VideoApp.Launch must NOT include shouldEndSession
                 ShouldEndSession = null,
-                OutputSpeech = BuildNowPlayingSpeech(episode.Name, locale),
+                OutputSpeech = BuildNowPlayingSpeech(episode.Name, locale, GetAnnounceNowPlaying(user)),
                 Directives = new List<IDirective>
                 {
                     new VideoAppLaunchDirective

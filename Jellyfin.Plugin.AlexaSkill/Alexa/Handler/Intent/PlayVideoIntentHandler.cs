@@ -182,7 +182,7 @@ public class PlayVideoIntentHandler : BaseHandler
 
         // Alexa VideoApp does not support seek/offset natively (the video starts from the
         // beginning); the announce only informs the user where they left off.
-        response.Response.OutputSpeech = BuildVideoLaunchSpeech(video, locale, resumeTicks);
+        response.Response.OutputSpeech = BuildVideoLaunchSpeech(video, locale, resumeTicks, GetAnnounceNowPlaying(user));
 
         return response;
     }

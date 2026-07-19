@@ -297,7 +297,7 @@ public class PlayBookIntentHandler : BaseHandler
             else
             {
                 // Fresh-start audiobook via VideoApp: announce the book title.
-                response.Response.OutputSpeech = BuildNowPlayingSpeech(books[0].Name, locale);
+                response.Response.OutputSpeech = BuildNowPlayingSpeech(books[0].Name, locale, GetAnnounceNowPlaying(user));
             }
 
             return response;

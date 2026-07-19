@@ -216,7 +216,7 @@ public class RecommendIntentHandler : BaseHandler
         // For audio, add NowPlaying speech before the audio directive
         string? nowPlayingSsml = GetSsml("NowPlayingSsml", locale, EscapeXml(item.Name));
         var audioResponse = BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, item, user, context);
-        if (nowPlayingSsml != null)
+        if (nowPlayingSsml != null && GetAnnounceNowPlaying(user))
         {
             audioResponse.Response.OutputSpeech = new SsmlOutputSpeech { Ssml = $"<speak>{nowPlayingSsml}</speak>" };
         }

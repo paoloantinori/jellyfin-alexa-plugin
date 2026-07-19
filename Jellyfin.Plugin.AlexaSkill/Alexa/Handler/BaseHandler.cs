@@ -906,37 +906,36 @@ public abstract class BaseHandler
     /// The now-playing announce shared by every video-launch handler. Wraps
     /// BuildOutputSpeech with the NowPlaying SSML/plain keys; the title is escaped for SSML.
     /// </summary>
-    public static IOutputSpeech BuildNowPlayingSpeech(string name, string locale)
-        => BuildOutputSpeech("NowPlayingSsml", "NowPlaying", locale, name);
+    public static IOutputSpeech? BuildNowPlayingSpeech(string name, string locale, bool announceOn = true)
+        => announceOn ? BuildOutputSpeech("NowPlayingSsml", "NowPlaying", locale, name) : null;
 
     /// <summary>
     /// Resume-aware video-launch announce: "Resuming X from Y" when the user has playback
     /// progress, else the now-playing announce. VideoApp.Launch cannot honor the offset, so
     /// this only informs the user where they left off (playback still starts from the beginning).
+    /// The fresh-play announce (resumeTicks == 0) is suppressed when announceOn is false; the
+    /// resume announce is always spoken (position info, not the now-playing readout).
     /// </summary>
-    protected static IOutputSpeech BuildVideoLaunchSpeech(BaseItem item, string locale, long resumeTicks)
+    protected static IOutputSpeech? BuildVideoLaunchSpeech(BaseItem item, string locale, long resumeTicks, bool announceOn = true)
     {
         if (resumeTicks > 0)
         {
             return new PlainTextOutputSpeech(ResponseStrings.Get("ResumingVideo", locale, item.Name, FormatPosition(resumeTicks)));
         }
 
-        return BuildNowPlayingSpeech(item.Name, locale);
+        return BuildNowPlayingSpeech(item.Name, locale, announceOn);
     }
 
     /// <summary>
     /// Resume-aware video-launch announce that fetches the playback position itself. Falls back
-    /// to the now-playing announce if the deps are unavailable.
+    /// to the (gated) now-playing announce if the deps are unavailable.
     /// </summary>
-    protected static IOutputSpeech BuildVideoLaunchSpeech(BaseItem item, string locale, IUserDataManager? userDataManager, Jellyfin.Database.Implementations.Entities.User? jellyfinUser)
+    protected static IOutputSpeech? BuildVideoLaunchSpeech(BaseItem item, string locale, IUserDataManager? userDataManager, Jellyfin.Database.Implementations.Entities.User? jellyfinUser, bool announceOn = true)
     {
-        if (userDataManager is null || jellyfinUser is null)
-        {
-            return BuildNowPlayingSpeech(item.Name, locale);
-        }
-
-        long resumeTicks = userDataManager.GetUserData(jellyfinUser, item)?.PlaybackPositionTicks ?? 0;
-        return BuildVideoLaunchSpeech(item, locale, resumeTicks);
+        long resumeTicks = (userDataManager is not null && jellyfinUser is not null)
+            ? (userDataManager.GetUserData(jellyfinUser, item)?.PlaybackPositionTicks ?? 0)
+            : 0;
+        return BuildVideoLaunchSpeech(item, locale, resumeTicks, announceOn);
     }
 
     /// <summary>
@@ -1354,6 +1353,22 @@ public abstract class BaseHandler
 
         Logger.LogDebug("PostPlayBehavior: user={UserId} mode={Mode} source=GlobalDefault", user?.Id, _config.DefaultPostPlayBehavior);
         return _config.DefaultPostPlayBehavior;
+    }
+
+    /// <summary>
+    /// Gets the effective "speak the now-playing announce on launch" preference for a user,
+    /// falling back to the global default. Per-user setting (when explicitly set) takes precedence.
+    /// </summary>
+    protected bool GetAnnounceNowPlaying(Entities.User? user)
+    {
+        if (user?.AnnounceNowPlaying is { } userPref)
+        {
+            Logger.LogDebug("AnnounceNowPlaying: user={UserId} on={On} source=PerUser", user.Id, userPref);
+            return userPref;
+        }
+
+        Logger.LogDebug("AnnounceNowPlaying: user={UserId} on={On} source=GlobalDefault", user?.Id, _config.DefaultAnnounceNowPlaying);
+        return _config.DefaultAnnounceNowPlaying;
     }
 
     /// <summary>

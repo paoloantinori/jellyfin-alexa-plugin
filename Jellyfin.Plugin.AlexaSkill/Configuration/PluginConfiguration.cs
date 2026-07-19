@@ -105,6 +105,13 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool VideoPlaybackEnabled { get; set; } = true;
     public bool ResumeOfferEnabled { get; set; } = true;
     public bool ResumeAnnounceTitle { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the global default for whether the now-playing announce ("Now playing X")
+    /// is spoken when content is launched. Per-user AnnounceNowPlaying overrides this. Default
+    /// true (preserve historical behavior). Resume/restart announces are not governed by this setting.
+    /// </summary>
+    public bool DefaultAnnounceNowPlaying { get; set; } = true;
     public bool AsrCompoundWordFixEnabled { get; set; } = true;
 
     /// <summary>

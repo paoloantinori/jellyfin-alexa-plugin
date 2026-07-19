@@ -154,7 +154,7 @@ public class PlayRandomIntentHandler : BaseHandler
         if (firstItem is MediaBrowser.Controller.Entities.Movies.Movie
             or MediaBrowser.Controller.Entities.TV.Episode)
         {
-            var outputSpeech = BuildNowPlayingSpeech(firstItem.Name, locale);
+            var outputSpeech = BuildNowPlayingSpeech(firstItem.Name, locale, GetAnnounceNowPlaying(user));
 
             return new SkillResponse
             {

@@ -204,7 +204,7 @@ public class AplUserEventHandler : BaseHandler
                 {
                     // VideoApp.Launch must NOT include shouldEndSession
                     ShouldEndSession = null,
-                    OutputSpeech = BuildVideoLaunchSpeech(item, locale, _userDataManager, jellyfinUser),
+                    OutputSpeech = BuildVideoLaunchSpeech(item, locale, _userDataManager, jellyfinUser, GetAnnounceNowPlaying(user)),
                     Directives = new List<IDirective>
                     {
                         new VideoAppLaunchDirective

@@ -304,7 +304,7 @@ public class YesIntentHandler : BaseHandler
             {
                 // VideoApp.Launch must NOT include shouldEndSession
                 ShouldEndSession = null,
-                OutputSpeech = BuildNowPlayingSpeech(video.Name, locale),
+                OutputSpeech = BuildNowPlayingSpeech(video.Name, locale, GetAnnounceNowPlaying(user)),
                 Directives = new List<IDirective>
                 {
                     new VideoAppDirective.VideoAppLaunchDirective
