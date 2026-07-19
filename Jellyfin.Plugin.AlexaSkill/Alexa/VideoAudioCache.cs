@@ -34,6 +34,23 @@ public class VideoAudioCache
     private readonly ConcurrentDictionary<string, RefCountedLock> _itemLocks = new();
 
     /// <summary>
+    /// In-memory last-served timestamps keyed by cache entry path, so LRU eviction reflects real
+    /// recency of use independent of filesystem mount options (relatime/noatime suppress atime).
+    /// Falls back to filesystem atime for entries with no recorded serve (e.g. created before this
+    /// process started).
+    /// </summary>
+    private readonly ConcurrentDictionary<string, DateTime> _lastAccessUtc = new();
+
+    /// <summary>Record that a cache entry was served, for in-memory LRU eviction (JF-320 part 2).</summary>
+    private void RecordAccess(string? path)
+    {
+        if (!string.IsNullOrEmpty(path))
+        {
+            _lastAccessUtc[path] = DateTime.UtcNow;
+        }
+    }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="VideoAudioCache"/> class.
     /// </summary>
     /// <param name="appPaths">Jellyfin application paths for locating the cache directory.</param>
@@ -75,6 +92,7 @@ public class VideoAudioCache
         if (fsFi.Exists && fsFi.Length >= MinValidFileSize)
         {
             _logger.LogDebug("VideoAudio cache hit (faststart): {Path} ({Size} bytes)", fsPath, fsFi.Length);
+            RecordAccess(fsFi.FullName);
             return Task.FromResult<FileInfo?>(fsFi);
         }
 
@@ -87,6 +105,7 @@ public class VideoAudioCache
         if (fi.Exists && fi.Length >= MinValidFileSize)
         {
             _logger.LogDebug("VideoAudio cache hit (fragmented): {Path} ({Size} bytes)", path, fi.Length);
+            RecordAccess(fi.FullName);
             return Task.FromResult<FileInfo?>(fi);
         }
 
@@ -256,10 +275,11 @@ public class VideoAudioCache
             // Collect flat MP4 files (legacy cache entries)
             foreach (var file in cacheDirInfo.GetFiles("*.mp4", SearchOption.TopDirectoryOnly))
             {
+                DateTime mp4Access = _lastAccessUtc.TryGetValue(file.FullName, out var mp4Served) ? mp4Served : file.LastAccessTimeUtc;
                 entries.Add(new CacheEntry(
                     file.FullName,
                     file.Length,
-                    file.LastAccessTimeUtc,
+                    mp4Access,
                     isDirectory: false));
             }
 
@@ -295,10 +315,11 @@ public class VideoAudioCache
 
                 if (dirSize > 0)
                 {
+                    DateTime dirAccess = _lastAccessUtc.TryGetValue(dir.FullName, out var dirServed) ? dirServed : lastAccess;
                     entries.Add(new CacheEntry(
                         dir.FullName,
                         dirSize,
-                        lastAccess,
+                        dirAccess,
                         isDirectory: true));
                 }
             }
@@ -354,6 +375,7 @@ public class VideoAudioCache
                 }
 
                 totalSize -= entry.Size;
+                _lastAccessUtc.TryRemove(entry.Path, out _);
             }
             catch (IOException ex)
             {
@@ -485,6 +507,7 @@ public class VideoAudioCache
         if (fi.Exists && fi.Length > 0)
         {
             _logger.LogDebug("VideoAudio HLS cache hit: {Path} ({Size} bytes)", path, fi.Length);
+            RecordAccess(GetHlsDirectoryPath(itemId, artModifiedTicks));
             return Task.FromResult<FileInfo?>(fi);
         }
 
@@ -551,7 +574,13 @@ public class VideoAudioCache
         {
             string segmentPath = Path.Combine(cachedDir, segmentName);
 #pragma warning disable CA3003
-            return File.Exists(segmentPath) ? segmentPath : null;
+            if (File.Exists(segmentPath))
+            {
+                RecordAccess(cachedDir);
+                return segmentPath;
+            }
+
+            return null;
 #pragma warning restore CA3003 // cachedDir from GUID-validated itemId paths
         }
 
@@ -567,7 +596,13 @@ public class VideoAudioCache
 
         string path = Path.Combine(hlsDir, segmentName);
 #pragma warning disable CA3003
-        return File.Exists(path) ? path : null;
+        if (File.Exists(path))
+        {
+            RecordAccess(hlsDir);
+            return path;
+        }
+
+        return null;
 #pragma warning restore CA3003
     }
 
