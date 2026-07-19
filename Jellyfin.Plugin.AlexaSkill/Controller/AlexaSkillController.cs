@@ -16,6 +16,7 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Controller.Handler;
 using Jellyfin.Plugin.AlexaSkill.Diagnostics;
 using Jellyfin.Plugin.AlexaSkill.Entities;
@@ -344,7 +345,7 @@ public class AlexaSkillController : ControllerBase
             }))
             {
                 _logger.LogInformation("Processing Alexa request of type: {RequestType}", requestType);
-                _logger.LogDebug("Request body: {RequestBody}", body);
+                _logger.LogDebug("Request body: {RequestBody}", RequestLogRedactor.Redact(body));
 
                 Entities.User? user = Plugin.Instance!.Configuration.GetUserById(userId);
 

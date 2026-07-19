@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 
 namespace Jellyfin.Plugin.AlexaSkill.Controller.Handler;
@@ -8,7 +9,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Controller.Handler;
 /// </summary>
 public class CsrfTokenHandler
 {
-    private Dictionary<string, CsrfToken> csrfTokens = new Dictionary<string, CsrfToken>();
+    private readonly ConcurrentDictionary<string, CsrfToken> csrfTokens = new();
 
     /// <summary>
     /// Remove all expired CSRF tokens.
@@ -26,15 +27,16 @@ public class CsrfTokenHandler
 
         foreach (string key in expiredKeys)
         {
-            csrfTokens.Remove(key);
+            csrfTokens.TryRemove(key, out _);
         }
     }
 
     /// <summary>
-    /// Validate a CSRF token and remove it if it is expired.
+    /// Validate a CSRF token. The token is single-use: it is consumed (removed) on validation,
+    /// whether valid or expired, so it cannot be replayed.
     /// </summary>
     /// <param name="token">The token to validate.</param>
-    /// <returns>True if the token is valid, false otherwise.</returns>
+    /// <returns>True if the token was valid (present and not expired), false otherwise.</returns>
     public bool ValidateCsrfToken(string? token)
     {
         if (string.IsNullOrEmpty(token))
@@ -42,23 +44,16 @@ public class CsrfTokenHandler
             return false;
         }
 
-        CsrfToken? csfrToken;
-        if (!csrfTokens.TryGetValue(token, out csfrToken))
+        if (!csrfTokens.TryGetValue(token, out CsrfToken? csrfToken))
         {
             return false;
         }
 
-        // validate expiration
-        if (DateTime.Compare(DateTime.UtcNow, csfrToken.Expiration) < 0)
-        {
-            return true;
-        }
-        else
-        {
-            csrfTokens.Remove(token);
+        // Single-use: consume the token so it cannot be replayed.
+        csrfTokens.TryRemove(token, out _);
 
-            return false;
-        }
+        // Valid only if not expired.
+        return DateTime.Compare(DateTime.UtcNow, csrfToken.Expiration) < 0;
     }
 
     /// <summary>

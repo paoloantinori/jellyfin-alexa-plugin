@@ -425,6 +425,16 @@ IPTV and Live TV channels are HLS streams, so they play reliably only when the c
 
 There is no plugin-side transcoding for this today. The plugin plays IPTV/M3U channels directly (no re-encode), and hardware tuners that need transcoding (HDHomeRun/DVB) are served through Jellyfin's dynamic HLS, which also targets H.264/AAC. If a channel won't play, the practical fix is to use an H.264 + AAC source, or transcode the feed upstream of Jellyfin.
 
+### How are my Amazon and Jellyfin tokens stored? (security)
+
+The plugin stores Amazon (Login with Amazon / SMAPI) and Jellyfin authentication tokens in the Jellyfin plugin configuration file (`plugins/configurations/Jellyfin.Plugin.AlexaSkill.xml` in your Jellyfin data directory) in plaintext. This is standard for Jellyfin plugins — the configuration is admin-only — but because these are long-lived credentials:
+
+- Anyone with read access to the config file, or a Jellyfin backup that includes it, can extract the tokens and impersonate the linked accounts.
+- Restrict filesystem access to the Jellyfin data directory, and treat backups as sensitive.
+- Debug logging of Alexa request bodies redacts the access token, apiAccessToken, and Amazon userId, though enabling debug logging for triage may still surface other identifiers in log lines.
+
+Encryption of tokens at rest is not currently implemented.
+
 ## Troubleshooting
 
 ### "There was a problem with the requested skill's response"
