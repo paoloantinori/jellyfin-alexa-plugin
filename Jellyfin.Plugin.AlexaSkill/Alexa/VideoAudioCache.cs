@@ -375,12 +375,16 @@ public class VideoAudioCache
                 }
 
                 totalSize -= entry.Size;
-                _lastAccessUtc.TryRemove(entry.Path, out _);
             }
             catch (IOException ex)
             {
                 _logger.LogDebug(ex, "Failed to evict cache entry: {Path}", entry.Path);
             }
+
+            // Drop the in-memory access record whether or not the delete succeeded -- if the
+            // delete failed the file is re-enumerated next round (atime fallback), and this
+            // avoids orphaning the entry if the file is later removed out-of-band.
+            _lastAccessUtc.TryRemove(entry.Path, out _);
         }
 
         return Task.CompletedTask;
@@ -428,6 +432,7 @@ public class VideoAudioCache
                 try
                 {
                     System.IO.File.Delete(file);
+                    _lastAccessUtc.TryRemove(file, out _);
                     deleted++;
                 }
                 catch (IOException ex)
@@ -442,6 +447,7 @@ public class VideoAudioCache
                 try
                 {
                     Directory.Delete(dir, recursive: true);
+                    _lastAccessUtc.TryRemove(dir, out _);
                     deleted++;
                 }
                 catch (IOException ex)
