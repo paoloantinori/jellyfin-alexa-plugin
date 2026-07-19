@@ -148,7 +148,7 @@ public class SearchMediaIntentHandler : BaseHandler
         if (deduped.Count == 1)
         {
             Logger.LogInformation("Single result — auto-playing '{Item}'", deduped[0].Name);
-            return PlayItem(deduped[0], user, session, context);
+            return PlayItem(deduped[0], user, session, context, locale);
         }
 
         // Disambiguation uses MediaTypeSong; YesIntentHandler will play matches as audio.
@@ -157,7 +157,7 @@ public class SearchMediaIntentHandler : BaseHandler
         if (topMatch != null)
         {
             Logger.LogInformation("Fuzzy match hit '{Item}' — auto-playing", topMatch.Name);
-            return PlayItem(topMatch, user, session, context);
+            return PlayItem(topMatch, user, session, context, locale);
         }
 
         var (missOutcome, missResponse) = HandleFuzzyMiss(
@@ -167,7 +167,7 @@ public class SearchMediaIntentHandler : BaseHandler
             best => new List<(Guid, string)> { (best.Id, FormatWithTypeLabel(best)) },
             DisambiguationHelper.MediaTypeSong,
             locale,
-            best => PlayItem(best, user, session, context),
+            best => PlayItem(best, user, session, context, locale),
             user: user);
 
         if (missOutcome != FuzzyMissOutcome.NotFound)
@@ -221,7 +221,7 @@ public class SearchMediaIntentHandler : BaseHandler
     }
 
     private SkillResponse PlayItem(
-        BaseItem item, Entities.User user, SessionInfo session, Context context)
+        BaseItem item, Entities.User user, SessionInfo session, Context context, string locale)
     {
         string itemId = item.Id.ToString();
 
@@ -241,6 +241,8 @@ public class SearchMediaIntentHandler : BaseHandler
                 {
                     // VideoApp.Launch must NOT include shouldEndSession
                     ShouldEndSession = null,
+                    // Announce the title on launch for consistency with other video launches (JF-349).
+                    OutputSpeech = BuildOutputSpeech("NowPlayingSsml", "NowPlaying", locale, item.Name),
                     Directives = new List<IDirective>
                     {
                         new VideoAppLaunchDirective

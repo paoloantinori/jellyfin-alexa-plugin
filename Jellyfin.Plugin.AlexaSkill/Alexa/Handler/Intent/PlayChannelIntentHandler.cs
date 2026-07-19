@@ -138,6 +138,8 @@ public class PlayChannelIntentHandler : BaseHandler
             {
                 // VideoApp.Launch must NOT include shouldEndSession — Alexa rejects it.
                 ShouldEndSession = null,
+                // Announce the channel on launch for consistency with other video launches (JF-349).
+                OutputSpeech = BuildOutputSpeech("NowPlayingSsml", "NowPlaying", locale, channel.Name),
                 Directives = new List<IDirective>
                 {
                     new VideoAppLaunchDirective

@@ -211,6 +211,12 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
         // VideoApp.Launch must NOT include shouldEndSession
         Assert.Null(response.Response.ShouldEndSession);
         Assert.NotEmpty(response.Response.Directives);
+        // JF-349: video launch now announces the title (was silent).
+        Assert.NotNull(response.Response.OutputSpeech);
+        string announceText = response.Response.OutputSpeech is SsmlOutputSpeech ss
+            ? ss.Ssml
+            : Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech).Text;
+        Assert.Contains("Inception", announceText, StringComparison.Ordinal);
         Assert.NotNull(session.FullNowPlayingItem);
         Assert.Equal(movie, session.FullNowPlayingItem);
     }

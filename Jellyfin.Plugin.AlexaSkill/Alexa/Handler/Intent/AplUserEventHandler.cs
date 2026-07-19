@@ -190,6 +190,7 @@ public class AplUserEventHandler : BaseHandler
             session.NowPlayingQueue = new List<QueueItem> { new() { Id = item.Id } };
             session.FullNowPlayingItem = item;
 
+            string locale = GetLocale(request);
             return Task.FromResult(new SkillResponse
             {
                 Version = "1.0",
@@ -197,6 +198,8 @@ public class AplUserEventHandler : BaseHandler
                 {
                     // VideoApp.Launch must NOT include shouldEndSession
                     ShouldEndSession = null,
+                    // Announce the title on launch for consistency with other video launches (JF-349).
+                    OutputSpeech = BuildOutputSpeech("NowPlayingSsml", "NowPlaying", locale, item.Name),
                     Directives = new List<IDirective>
                     {
                         new VideoAppLaunchDirective

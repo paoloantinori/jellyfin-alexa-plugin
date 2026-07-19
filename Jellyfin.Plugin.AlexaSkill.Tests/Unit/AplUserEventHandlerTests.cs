@@ -281,6 +281,8 @@ public class AplUserEventHandlerTests : PluginTestBase
 
         var videoDirective = response.Response.Directives.FirstOrDefault(d => d.GetType().Name.Contains("VideoApp"));
         Assert.NotNull(videoDirective);
+        // JF-349: video launch now announces the title (was silent).
+        Assert.NotNull(response.Response.OutputSpeech);
     }
 
     [Fact]
@@ -343,6 +345,8 @@ public class AplUserEventHandlerTests : PluginTestBase
 
         var videoDirective = response.Response.Directives.FirstOrDefault(d => d.GetType().Name.Contains("VideoApp"));
         Assert.NotNull(videoDirective);
+        // JF-349: video launch now announces the title (was silent).
+        Assert.NotNull(response.Response.OutputSpeech);
     }
 
     [Fact]
