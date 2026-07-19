@@ -18,7 +18,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public class PreviousIntentHandler : BaseHandler
 {
-    private ILibraryManager _libraryManager;
+    private readonly ILibraryManager _libraryManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PreviousIntentHandler"/> class.

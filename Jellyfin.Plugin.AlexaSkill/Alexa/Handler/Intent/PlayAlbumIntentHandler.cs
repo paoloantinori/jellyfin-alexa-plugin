@@ -28,8 +28,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public class PlayAlbumIntentHandler : BaseHandler
 {
-    private ILibraryManager _libraryManager;
-    private IUserManager _userManager;
+    private readonly ILibraryManager _libraryManager;
+    private readonly IUserManager _userManager;
     private readonly IUserDataManager _userDataManager;
     private readonly DeviceQueueManager? _queueManager;
     private readonly IArtistIndex? _artistIndex;

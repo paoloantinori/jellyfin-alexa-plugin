@@ -75,8 +75,8 @@ public class PlaySongIntentHandler : BaseHandler
         "canções", "cancoes", "músicas", "musicas", "faixa", "faixas",
     };
 
-    private ILibraryManager _libraryManager;
-    private IUserManager _userManager;
+    private readonly ILibraryManager _libraryManager;
+    private readonly IUserManager _userManager;
     private readonly IUserDataManager _userDataManager;
     private readonly IArtistIndex? _artistIndex;
     private readonly DeviceQueueManager? _queueManager;

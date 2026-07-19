@@ -30,8 +30,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public class PlayPlaylistIntentHandler : BaseHandler
 {
-    private ILibraryManager _libraryManager;
-    private IUserManager _userManager;
+    private readonly ILibraryManager _libraryManager;
+    private readonly IUserManager _userManager;
     private readonly DeviceQueueManager? _queueManager;
 
     /// <summary>

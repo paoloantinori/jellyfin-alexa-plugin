@@ -33,6 +33,12 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// <summary>
 /// Base handler class to handle skill requests.
 /// </summary>
+/// <remarks>
+/// Handlers are registered as DI singletons (Registrator registers each handler type as
+/// BaseHandler), so they MUST be stateless: no per-request mutable instance fields, or
+/// concurrent Alexa requests will race on them. Injected dependencies should be readonly.
+/// Per-request state belongs in the session/request parameters, not handler fields.
+/// </remarks>
 public abstract class BaseHandler
 {
     /// <summary>
