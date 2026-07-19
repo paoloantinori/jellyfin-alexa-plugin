@@ -123,6 +123,31 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
+    public async Task HandleAsync_MultipleDistinctNameAlbums_AutoPlayUser_AutoPlaysFirst()
+    {
+        // JF-341 review: an AutoPlay user (opted out of disambiguation prompts) auto-plays
+        // even for distinct-name collisions.
+        var user = TestHelpers.CreateTestUser();
+        user.FuzzyMatchBehavior = FuzzyMatchBehavior.AutoPlay;
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(album: "hits");
+        SetupUserMock();
+
+        var album1 = new MusicAlbum { Name = "Greatest Hits", Id = Guid.NewGuid() };
+        var album2 = new MusicAlbum { Name = "Biggest Hits", Id = Guid.NewGuid() };
+        var track = new Audio { Name = "Track 1", Id = Guid.NewGuid() };
+        SetupAlbumsAndTracks(
+            new List<BaseItem> { album1, album2 },
+            new QueryResult<BaseItem> { Items = new[] { track }, TotalRecordCount = 1 });
+
+        SkillResponse response = await handler.HandleAsync(request, CreateContext(), user, CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.NotNull(playDirective);
+    }
+
+    [Fact]
     public async Task HandleAsync_MultipleSameNameAlbums_AutoPlaysFirst()
     {
         // JF-341: same-name duplicates (e.g. two "Jazz Cafe" disc-albums) auto-play the first

@@ -218,18 +218,18 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         if (albums.Count > 1)
         {
-            // JF-341: disambiguate only when the matched albums have DIFFERENT names. Same-name duplicates
-            // (e.g. two "Jazz Cafe" disc-albums) auto-play the first -- a "Jazz Cafe or Jazz Cafe?" prompt is useless. The previous HandleFuzzyMiss path auto-accepted the best at >= GetDefaultThreshold, which suppressed disambiguation entirely.
+            // Disambiguate distinct-name collisions only for Confirm users (AutoPlay users opted
+            // out of prompts). Same-name duplicates always auto-play (a "X or X?" prompt is useless).
+            albums = albums.OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ToList();
             bool distinctNames = albums.Select(a => a.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1;
-            if (distinctNames)
+            if (distinctNames && user.FuzzyMatchBehavior != FuzzyMatchBehavior.AutoPlay)
             {
-                Logger.LogDebug("PlayAlbum: {Count} distinct-name albums matched, prompting disambiguation", albums.Count);
+                Logger.LogDebug("PlayAlbum: {Count} distinct-name albums, prompting disambiguation", albums.Count);
                 var matches = albums.Take(3).Select(a => (a.Id, a.Name, (string?)GetImageUrl(a.Id.ToString("N"), user))).ToList();
                 return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeAlbum, locale, context);
             }
 
-            // Same-name duplicates: auto-play the first (no useless prompt).
-            Logger.LogDebug("PlayAlbum: {Count} same-name album duplicates, auto-playing the first", albums.Count);
+            Logger.LogDebug("PlayAlbum: {Count} albums, auto-playing the first", albums.Count);
             albums = new List<BaseItem> { albums[0] };
         }
 

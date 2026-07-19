@@ -175,17 +175,14 @@ public class PlayVideoIntentHandler : BaseHandler
         // will start from the beginning, but we inform the user where they left off.
         UserItemData? userData = _userDataManager.GetUserData(jellyfinUser!, video);
         long resumeTicks = userData?.PlaybackPositionTicks ?? 0;
-
         if (resumeTicks > 0)
         {
-            response.Response.OutputSpeech = new PlainTextOutputSpeech(
-                ResponseStrings.Get("ResumingVideo", locale, video.Name, FormatPosition(resumeTicks)));
             Logger.LogInformation("PlayVideo: resuming {Title} from {Position}", video.Name, FormatPosition(resumeTicks));
         }
-        else
-        {
-            response.Response.OutputSpeech = BuildNowPlayingSpeech(video.Name, locale);
-        }
+
+        // Alexa VideoApp does not support seek/offset natively (the video starts from the
+        // beginning); the announce only informs the user where they left off.
+        response.Response.OutputSpeech = BuildVideoLaunchSpeech(video, locale, resumeTicks);
 
         return response;
     }

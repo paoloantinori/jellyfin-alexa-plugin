@@ -914,6 +914,20 @@ public abstract class BaseHandler
     /// progress, else the now-playing announce. VideoApp.Launch cannot honor the offset, so
     /// this only informs the user where they left off (playback still starts from the beginning).
     /// </summary>
+    protected static IOutputSpeech BuildVideoLaunchSpeech(BaseItem item, string locale, long resumeTicks)
+    {
+        if (resumeTicks > 0)
+        {
+            return new PlainTextOutputSpeech(ResponseStrings.Get("ResumingVideo", locale, item.Name, FormatPosition(resumeTicks)));
+        }
+
+        return BuildNowPlayingSpeech(item.Name, locale);
+    }
+
+    /// <summary>
+    /// Resume-aware video-launch announce that fetches the playback position itself. Falls back
+    /// to the now-playing announce if the deps are unavailable.
+    /// </summary>
     protected static IOutputSpeech BuildVideoLaunchSpeech(BaseItem item, string locale, IUserDataManager? userDataManager, Jellyfin.Database.Implementations.Entities.User? jellyfinUser)
     {
         if (userDataManager is null || jellyfinUser is null)
@@ -922,12 +936,7 @@ public abstract class BaseHandler
         }
 
         long resumeTicks = userDataManager.GetUserData(jellyfinUser, item)?.PlaybackPositionTicks ?? 0;
-        if (resumeTicks > 0)
-        {
-            return new PlainTextOutputSpeech(ResponseStrings.Get("ResumingVideo", locale, item.Name, FormatPosition(resumeTicks)));
-        }
-
-        return BuildNowPlayingSpeech(item.Name, locale);
+        return BuildVideoLaunchSpeech(item, locale, resumeTicks);
     }
 
     /// <summary>

@@ -272,6 +272,7 @@ public class AplUserEventHandlerTests : PluginTestBase
 
         var movie = new MediaBrowser.Controller.Entities.Movies.Movie { Name = "Test Movie", Id = itemId };
         _libraryManager.Setup(l => l.GetItemById(itemId)).Returns(movie);
+        _userManager.Setup(u => u.GetUserById(session.UserId)).Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
 
         var response = await _handler.HandleAsync(request, _context, _user, session, CancellationToken.None);
 
@@ -336,6 +337,7 @@ public class AplUserEventHandlerTests : PluginTestBase
 
         var movie = new MediaBrowser.Controller.Entities.Movies.Movie { Name = "Carousel Movie", Id = itemId };
         _libraryManager.Setup(l => l.GetItemById(itemId)).Returns(movie);
+        _userManager.Setup(u => u.GetUserById(session.UserId)).Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
 
         var response = await _handler.HandleAsync(request, _context, _user, session, CancellationToken.None);
 
@@ -745,6 +747,7 @@ public class AplUserEventHandlerTests : PluginTestBase
 
         var movie = new MediaBrowser.Controller.Entities.Movies.Movie { Name = "Test Movie", Id = itemId };
         _libraryManager.Setup(l => l.GetItemById(itemId)).Returns(movie);
+        _userManager.Setup(u => u.GetUserById(session.UserId)).Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
 
         var response = await _handler.HandleAsync(request, aplContext, _user, session, CancellationToken.None);
 

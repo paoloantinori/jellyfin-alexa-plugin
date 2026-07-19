@@ -191,7 +191,12 @@ public class AplUserEventHandler : BaseHandler
             session.FullNowPlayingItem = item;
 
             string locale = GetLocale(request);
-            var (jellyfinUser, _) = ResolveJellyfinUser(_userManager, session.UserId, locale);
+            var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
+            if (userError != null)
+            {
+                return Task.FromResult(userError);
+            }
+
             return Task.FromResult(new SkillResponse
             {
                 Version = "1.0",
