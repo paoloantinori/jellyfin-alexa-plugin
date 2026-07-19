@@ -108,8 +108,8 @@ public class PluginConfiguration : BasePluginConfiguration
 
     /// <summary>
     /// Gets or sets the global default for whether the now-playing announce ("Now playing X")
-    /// is spoken when content is launched. Per-user AnnounceNowPlaying overrides this. Default
-    /// true (preserve historical behavior). Resume/restart announces are not governed by this setting.
+    /// is spoken when content is launched. Per-user AnnounceNowPlaying overrides this. Resume/restart
+    /// announces are not governed by this setting.
     /// </summary>
     public bool DefaultAnnounceNowPlaying { get; set; } = true;
     public bool AsrCompoundWordFixEnabled { get; set; } = true;

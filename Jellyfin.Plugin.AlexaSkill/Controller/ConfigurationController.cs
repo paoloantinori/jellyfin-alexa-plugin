@@ -497,6 +497,9 @@ public class ConfigurationController : ControllerBase
         if (req.TryGetValue("ResumeAnnounceTitle", out var resumeAnnounceToken) && resumeAnnounceToken.Type == JTokenType.Boolean)
         { config.ResumeAnnounceTitle = resumeAnnounceToken.Value<bool>(); updated = true; }
 
+        if (req.TryGetValue("DefaultAnnounceNowPlaying", out var defaultAnnounceToken) && defaultAnnounceToken.Type == JTokenType.Boolean)
+        { config.DefaultAnnounceNowPlaying = defaultAnnounceToken.Value<bool>(); updated = true; }
+
         if (req.TryGetValue("AsrCompoundWordFixEnabled", out var asrToken) && asrToken.Type == JTokenType.Boolean)
         { config.AsrCompoundWordFixEnabled = asrToken.Value<bool>(); updated = true; }
 

@@ -145,8 +145,8 @@ public class SsmlResponseTests
     [Fact]
     public void BuildNowPlayingSpeech_AnnounceOff_ReturnsNull()
     {
-        // JF-353: when the per-user/global announce setting is off, the helper suppresses the
-        // now-playing announce (returns null -> no OutputSpeech on the launch response).
+        // When the announce setting is off, the helper suppresses the now-playing announce
+        // (returns null -> no OutputSpeech on the launch response).
         Assert.Null(BaseHandler.BuildNowPlayingSpeech("Test Song", "en-US", announceOn: false));
     }
 }
