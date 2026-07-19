@@ -187,6 +187,12 @@ public class YesIntentHandlerTests : PluginTestBase
         response.HasDirective<Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>();
         // VideoApp.Launch must NOT include shouldEndSession
         Assert.Null(response.Response.ShouldEndSession);
+        // JF-349: the disambiguation-confirmed video launch now announces the title (was silent).
+        Assert.NotNull(response.Response.OutputSpeech);
+        string announceText = response.Response.OutputSpeech is SsmlOutputSpeech ss
+            ? ss.Ssml
+            : Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech).Text;
+        Assert.Contains("Test Movie", announceText, StringComparison.Ordinal);
     }
 
     [Fact]

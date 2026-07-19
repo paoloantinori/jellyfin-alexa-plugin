@@ -142,7 +142,7 @@ public class YesIntentHandler : BaseHandler
             DisambiguationHelper.MediaTypeSong => PlaySong(item, user, session),
             DisambiguationHelper.MediaTypeAlbum => PlayAlbum(item, jellyfinUser!, user, session, locale),
             DisambiguationHelper.MediaTypeArtist => PlayArtist(item, jellyfinUser!, user, session, locale),
-            DisambiguationHelper.MediaTypeVideo => PlayVideo(item, user, session),
+            DisambiguationHelper.MediaTypeVideo => PlayVideo(item, user, session, locale),
             DisambiguationHelper.MediaTypePlaylist => PlayPlaylist(item, jellyfinUser!, user, session, locale),
             _ => ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale))
         };
@@ -291,7 +291,7 @@ public class YesIntentHandler : BaseHandler
         return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, artistItems[0], user);
     }
 
-    private SkillResponse PlayVideo(BaseItem video, Entities.User user, SessionInfo session)
+    private SkillResponse PlayVideo(BaseItem video, Entities.User user, SessionInfo session, string locale)
     {
         string itemId = video.Id.ToString();
         session.NowPlayingQueue = new List<QueueItem> { new() { Id = video.Id } };
@@ -304,6 +304,7 @@ public class YesIntentHandler : BaseHandler
             {
                 // VideoApp.Launch must NOT include shouldEndSession
                 ShouldEndSession = null,
+                OutputSpeech = BuildNowPlayingSpeech(video.Name, locale),
                 Directives = new List<IDirective>
                 {
                     new VideoAppDirective.VideoAppLaunchDirective

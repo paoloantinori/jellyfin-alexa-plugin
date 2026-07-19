@@ -154,8 +154,7 @@ public class PlayRandomIntentHandler : BaseHandler
         if (firstItem is MediaBrowser.Controller.Entities.Movies.Movie
             or MediaBrowser.Controller.Entities.TV.Episode)
         {
-            // Now-playing announce shared with PlayVideo/PlayEpisode via BuildOutputSpeech (JF-349).
-            var outputSpeech = BuildOutputSpeech("NowPlayingSsml", "NowPlaying", locale, firstItem.Name);
+            var outputSpeech = BuildNowPlayingSpeech(firstItem.Name, locale);
 
             return new SkillResponse
             {

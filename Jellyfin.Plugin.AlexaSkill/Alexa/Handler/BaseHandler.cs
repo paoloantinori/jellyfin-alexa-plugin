@@ -903,6 +903,13 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// The now-playing announce shared by every video-launch handler. Wraps
+    /// BuildOutputSpeech with the NowPlaying SSML/plain keys; the title is escaped for SSML.
+    /// </summary>
+    public static IOutputSpeech BuildNowPlayingSpeech(string name, string locale)
+        => BuildOutputSpeech("NowPlayingSsml", "NowPlaying", locale, name);
+
+    /// <summary>
     /// Extract the locale from the request, defaulting to en-US if not available.
     /// </summary>
     /// <param name="request">The incoming request.</param>

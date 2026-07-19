@@ -184,9 +184,7 @@ public class PlayVideoIntentHandler : BaseHandler
         }
         else
         {
-            // Fresh launch (no resume position): announce the title so the launch isn't silent.
-            // Matches PlayRandom/PlayEpisode video launches + aids voice-only devices (JF-349).
-            response.Response.OutputSpeech = BuildOutputSpeech("NowPlayingSsml", "NowPlaying", locale, video.Name);
+            response.Response.OutputSpeech = BuildNowPlayingSpeech(video.Name, locale);
         }
 
         return response;

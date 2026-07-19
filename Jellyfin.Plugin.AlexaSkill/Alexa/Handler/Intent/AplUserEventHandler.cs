@@ -198,8 +198,7 @@ public class AplUserEventHandler : BaseHandler
                 {
                     // VideoApp.Launch must NOT include shouldEndSession
                     ShouldEndSession = null,
-                    // Announce the title on launch for consistency with other video launches (JF-349).
-                    OutputSpeech = BuildOutputSpeech("NowPlayingSsml", "NowPlaying", locale, item.Name),
+                    OutputSpeech = BuildNowPlayingSpeech(item.Name, locale),
                     Directives = new List<IDirective>
                     {
                         new VideoAppLaunchDirective
