@@ -36,6 +36,7 @@ public class PlayMoodMusicIntentHandler : BaseHandler
         ["upbeat"] = new[] { "pop", "rock", "dance", "electronic" },
         ["energetic"] = new[] { "rock", "electronic", "metal", "punk" },
         ["focus"] = new[] { "classical", "ambient", "instrumental" },
+        ["sleep"] = new[] { "ambient", "new age", "chillout", "acoustic" },
         ["romantic"] = new[] { "r&b", "jazz", "soul", "pop" },
         ["happy"] = new[] { "pop", "dance", "reggae" },
         ["sad"] = new[] { "blues", "indie", "folk", "alternative" },
@@ -61,6 +62,16 @@ public class PlayMoodMusicIntentHandler : BaseHandler
         ["abend"] = "evening",
         ["abends"] = "evening",
         ["abendessen"] = "dinner",
+
+        // Sleep — Spotify "Sleep" mood (JF-355).
+        // "dormire" is the it-IT infinitive only; es-ES/fr-FR/pt-BR say "dormir"
+        // (added per-locale in JF-356). de-DE/fr-FR/es-ES variants below.
+        ["dormire"] = "sleep",
+        ["per dormire"] = "sleep",
+        ["schlafen"] = "sleep",
+        ["einschlafen"] = "sleep",
+        ["sueño"] = "sleep",
+        ["sommeil"] = "sleep",
 
         // de-DE
         ["beruhigend"] = "chill",
@@ -122,6 +133,10 @@ public class PlayMoodMusicIntentHandler : BaseHandler
         // es-ES
         ["enérgica"] = "energetic",
         ["enérgico"] = "energetic",
+
+        // it-IT (unaccented; distinct from the es-ES accented forms above)
+        ["energica"] = "energetic",
+        ["energico"] = "energetic",
         ["entrenamiento"] = "workout",
 
         // fr-FR
@@ -315,7 +330,7 @@ public class PlayMoodMusicIntentHandler : BaseHandler
             mood = moodSlot.Value;
         }
 
-        if (string.IsNullOrEmpty(mood))
+        if (string.IsNullOrWhiteSpace(mood))
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchMood", locale));
         }

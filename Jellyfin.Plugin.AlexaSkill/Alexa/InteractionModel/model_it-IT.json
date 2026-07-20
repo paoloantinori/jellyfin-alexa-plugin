@@ -1730,12 +1730,28 @@
           },
           {
             "name": {
+              "value": "dormire",
+              "synonyms": [
+                "per dormire"
+              ]
+            }
+          },
+          {
+            "name": {
               "value": "allegra"
             }
           },
           {
             "name": {
               "value": "allegramente"
+            }
+          },
+          {
+            "name": {
+              "value": "energica",
+              "synonyms": [
+                "energico"
+              ]
             }
           },
           {

@@ -584,8 +584,13 @@ types:
       - rilassante
       - relaxante
       - calma
+      - value: dormire
+        synonyms: [per dormire]
       - allegra
       - allegramente
+      - value: energica
+        synonyms: [energico]
+
       - triste
       - tristezza
       - romantica

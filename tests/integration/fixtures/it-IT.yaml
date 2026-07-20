@@ -342,6 +342,17 @@ tests:
     expected_intent: PlayMoodMusicIntent
     expected_slots: {}
 
+  # JF-355: new Spotify-aligned Mood slot values (sleep, energetic)
+  - utterance: "Musica per dormire"
+    expected_intent: PlayMoodMusicIntent
+    expected_slots:
+      mood: {}
+
+  - utterance: "Musica energica"
+    expected_intent: PlayMoodMusicIntent
+    expected_slots:
+      mood: {}
+
   # -------------------------------------------------------------------------
   # 18. PlayRandomIntent (media_type)
   # -------------------------------------------------------------------------
