@@ -177,7 +177,17 @@ Handlers call `GetPostPlayBehavior(user)` to resolve per-user override → globa
 - Template: `Alexa/InteractionModel/templates/it-IT.yaml`
 - Output: `Alexa/InteractionModel/model_it-IT.json`
 - To add new slot values, samples, or vocabulary: edit the YAML template, then regenerate.
-- Other locales: edit JSON directly (only it-IT has the generator).
+
+**Mood slot generator** (other 16 locales): `python3 scripts/generate_mood_slot.py`
+- Table-driven: populates the custom `Mood` slot type + narrows PlayMoodMusic samples for the 16 non-it-IT locales from a per-locale mood-word table (`LOCALE_MOODS`).
+- Output: `Alexa/InteractionModel/model_<locale>.json` (the Mood type block only).
+- To add a mood or a locale's vocabulary: edit the `LOCALE_MOODS` table, then regenerate. Idempotent (re-running produces no diff vs committed JSONs).
+
+**Mood feature architecture (JF-354/355/356):**
+- The `mood` slot is a **custom `Mood` type** in ALL 17 locales (NOT `AMAZON.SearchQuery` — that caused the "music by X" misroute; see anti-pattern #3). Custom values restrict matching to mood words so artist queries route to PlayArtistSongs.
+- The handler reads `moodSlot.Value` (raw spoken text, NOT entity-resolved canonical), so **every slot value AND synonym must independently exist in `LocalizedMoodMap`** (or be an English `MoodGenreMap` key) to resolve to genres.
+- `MoodGenreMap` (English mood→genres, incl. Spotify-aligned `sleep`) + `LocalizedMoodMap` (localized word→English key) live in `PlayMoodMusicIntentHandler.cs`.
+- Admin overrides: `PluginConfiguration.MoodGenreOverrides` (`Collection<MoodGenreOverride>`) merges into `ResolveGenres` at resolve time; on "Rebuild models" the words are injected into the Mood slot type via `SkillInteractionModel.InjectMoodSlotValues`. XmlSerializer-safe (Collection, not Dictionary).
 
 After editing:
 1. Wrap in `{"interactionModel": <model>}` for SMAPI
@@ -333,7 +343,7 @@ grep -rn '"[A-Z][a-z].*"' model_*.json | grep -v '{' | grep samples
 
 **Detection**: Run NLU test suite after ANY model change. Watch for intent misclassification.
 
-**Concrete instance (2026-07):** an intent with a greedy `AMAZON.SearchQuery` slot + a generic carrier — PlayMoodMusic's `"musica {mood}"` / `"play {mood} music"` — captures "music by X" and routes it to the mood intent (`mood="di miles davis"`) instead of PlayArtistSongs, in ALL 17 locales (every locale's mood slot is SearchQuery). On-device NLU does this even when the model has the exact `"musica di {musician}"` sample (profile-nlu vs on-device divergence). This is NOT fixable at the model layer alone — the recovery is handler-side: `TryEntityFallbackAsync` (see Cross-Media-Type Fallback) plays the artist on a mood-miss. When you see "X found nothing but a sibling entity query works," check whether a greedy SearchQuery slot stole it before assuming a search bug.
+**Concrete instance (2026-07):** an intent with a greedy `AMAZON.SearchQuery` slot + a generic carrier — PlayMoodMusic's `"musica {mood}"` / `"play {mood} music"` — captured "music by X" and routed it to the mood intent (`mood="di miles davis"`) instead of PlayArtistSongs, in ALL 17 locales. **FIXED in JF-354/356:** the `mood` slot is now a custom `Mood` slot type (populated with locale mood vocabulary) in all 17 locales, so non-mood phrases no longer match it. The fix IS at the model layer — do NOT revert `mood` to `AMAZON.SearchQuery` (that reintroduces the misroute in every locale). To add/change Mood values: it-IT via the YAML template (`scripts/generate_interaction_model.py it-IT`); the other 16 via `scripts/generate_mood_slot.py` (table-driven). `TryEntityFallbackAsync` (see Cross-Media-Type Fallback) remains as the handler-side recovery for any residual mood-miss. When you see "X found nothing but a sibling entity query works," check whether a greedy SearchQuery slot on *some other* intent stole it before assuming a search bug.
 
 ### 4. Cross-Locale Drift (8+ incidents)
 

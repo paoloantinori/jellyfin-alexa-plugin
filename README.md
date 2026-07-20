@@ -105,7 +105,7 @@ A Jellyfin plugin that creates a personal Alexa skill to play and control media 
 - **Conversational song search**: multi-turn "find a song" dialog — guide the skill with artist name and keywords, then pick from disambiguated results
 - **Library browsing**: browse movies, series, albums, genres; see in-progress media; continue watching
 - **Favorites**: play your favorites, add/remove favorites by voice
-- **Genre & mood**: play by genre, by decade, or by mood (happy, sad, relaxing, workout, etc.)
+- **Genre & mood**: play by genre, by decade, or by mood (relaxing, chill, happy, sad, focus, workout, party, sleep, dinner, and more — aligned to the moods users recognize from Spotify)
 - **Media info**: ask what's playing — song name, artist, album, duration, genre, year
 
 ### 🧠 Smart matching
