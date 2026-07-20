@@ -431,26 +431,30 @@
         "name": "PlayMoodMusicIntent",
         "samples": [
           "Musica {mood}",
+          "Musica per {mood}",
           "Riproduci musica {mood}",
+          "Riproduci musica per {mood}",
           "Suona musica {mood}",
+          "Suona musica per {mood}",
           "Metti musica {mood}",
+          "Metti musica per {mood}",
           "Suonare musica {mood}",
+          "Suonare musica per {mood}",
           "Ascoltare musica {mood}",
+          "Ascoltare musica per {mood}",
           "Riprodurre musica {mood}",
+          "Riprodurre musica per {mood}",
           "Mettere musica {mood}",
+          "Mettere musica per {mood}",
           "Di suonare musica {mood}",
+          "Di suonare musica per {mood}",
           "Di riprodurre musica {mood}",
-          "Musica mattutina",
-          "Musica serale",
-          "Musica per cena",
-          "Musica per allenamento",
-          "Musica per concentrarmi",
-          "Musica per festa"
+          "Di riprodurre musica per {mood}"
         ],
         "slots": [
           {
             "name": "mood",
-            "type": "AMAZON.SearchQuery"
+            "type": "Mood"
           }
         ]
       },
@@ -1232,6 +1236,34 @@
       {
         "name": "PlayArtistSongsIntent",
         "samples": [
+          "brani di {musician}",
+          "brani dei {musician}",
+          "brani degli {musician}",
+          "brani delle {musician}",
+          "canzoni di {musician}",
+          "canzoni dei {musician}",
+          "canzoni degli {musician}",
+          "canzoni delle {musician}",
+          "musica di {musician}",
+          "musica dei {musician}",
+          "musica degli {musician}",
+          "musica delle {musician}",
+          "un brano di {musician}",
+          "un brano dei {musician}",
+          "un brano degli {musician}",
+          "un brano delle {musician}",
+          "una canzone di {musician}",
+          "una canzone dei {musician}",
+          "una canzone degli {musician}",
+          "una canzone delle {musician}",
+          "un pezzo di {musician}",
+          "un pezzo dei {musician}",
+          "un pezzo degli {musician}",
+          "un pezzo delle {musician}",
+          "una traccia di {musician}",
+          "una traccia dei {musician}",
+          "una traccia degli {musician}",
+          "una traccia delle {musician}",
           "Riproduci brani di {musician}",
           "Riproduci brani dei {musician}",
           "Riproduci brani degli {musician}",
@@ -1678,6 +1710,99 @@
       }
     ],
     "types": [
+      {
+        "name": "Mood",
+        "values": [
+          {
+            "name": {
+              "value": "rilassante"
+            }
+          },
+          {
+            "name": {
+              "value": "relaxante"
+            }
+          },
+          {
+            "name": {
+              "value": "calma"
+            }
+          },
+          {
+            "name": {
+              "value": "allegra"
+            }
+          },
+          {
+            "name": {
+              "value": "allegramente"
+            }
+          },
+          {
+            "name": {
+              "value": "triste"
+            }
+          },
+          {
+            "name": {
+              "value": "tristezza"
+            }
+          },
+          {
+            "name": {
+              "value": "romantica"
+            }
+          },
+          {
+            "name": {
+              "value": "romantico"
+            }
+          },
+          {
+            "name": {
+              "value": "mattutina"
+            }
+          },
+          {
+            "name": {
+              "value": "serale"
+            }
+          },
+          {
+            "name": {
+              "value": "cena",
+              "synonyms": [
+                "da cena"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "allenamento",
+              "synonyms": [
+                "da allenamento",
+                "allenarmi"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "concentrazione",
+              "synonyms": [
+                "concentrarmi"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "festa",
+              "synonyms": [
+                "da festa"
+              ]
+            }
+          }
+        ]
+      },
       {
         "name": "Decade",
         "values": [
