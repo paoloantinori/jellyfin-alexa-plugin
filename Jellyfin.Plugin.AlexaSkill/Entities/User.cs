@@ -107,8 +107,17 @@ public class User
     /// ("Now playing X") when content is launched. When null (not explicitly set), the global
     /// <see cref="Configuration.PluginConfiguration.DefaultAnnounceNowPlaying"/> default is used.
     /// Resume/restart announces (position/restart info) are not governed by this setting.
+    /// Governs video-launch and audiobook fresh-start announces only.
     /// </summary>
     public bool? AnnounceNowPlaying { get; set; }
+
+    /// <summary>
+    /// Gets or sets a per-user override for whether the skill speaks the now-playing announce on
+    /// MUSIC plays (PlaySong/PlayAlbum/PlayArtistSongs). When null (not explicitly set), the
+    /// global <see cref="Configuration.PluginConfiguration.AnnounceAudioPlays"/> default (false)
+    /// is used.
+    /// </summary>
+    public bool? AnnounceAudioPlays { get; set; }
 
     /// <summary>
     /// Gets or sets a per-user override for whether music (Audio items) plays via VideoApp

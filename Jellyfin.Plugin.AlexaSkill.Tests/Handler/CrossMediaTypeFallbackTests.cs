@@ -334,11 +334,16 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
-        // Should play the song directly (no fallback, no announcement)
+        // Should play the song directly (no fallback). The now-playing announce may speak
+        // (JF-353), but the cross-media "FoundArtistInstead" text must never appear for a
+        // direct song match.
         Assert.NotNull(response.Response?.Directives);
         Assert.NotEmpty(response.Response.Directives);
-        // No announcement for direct match
-        Assert.Null(response.Response.OutputSpeech);
+        string? speech = response.Response.OutputSpeech == null
+            ? null
+            : Jellyfin.Plugin.AlexaSkill.Tests.Unit.TestHelpers.GetSpeechText(response);
+        Assert.DoesNotContain("FoundArtistInstead", speech ?? string.Empty);
+        Assert.DoesNotContain("instead", (speech ?? string.Empty), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -527,8 +532,14 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
-        // Response should be audio playback with no artist fallback announcement
-        Assert.Null(response.Response.OutputSpeech);
+        // Response should be audio playback with no artist fallback announcement. The now-playing
+        // announce may speak (JF-353), but it must never carry the "FoundArtistInstead" text that
+        // only the cross-media fallback path sets.
+        string? speech = response.Response.OutputSpeech == null
+            ? null
+            : Jellyfin.Plugin.AlexaSkill.Tests.Unit.TestHelpers.GetSpeechText(response);
+        Assert.DoesNotContain("FoundArtistInstead", speech ?? string.Empty);
+        Assert.DoesNotContain("instead", (speech ?? string.Empty), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

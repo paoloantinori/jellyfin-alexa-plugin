@@ -330,7 +330,7 @@ public class PlayAlbumIntentHandler : BaseHandler
         Logger.LogDebug(
             "PlayAlbum: returning AudioPlayer, itemId={ItemId}, album='{AlbumName}', startIndex={StartIndex}, queueSize={QueueSize}",
             item_id, albums[0].Name, startIndex, queueItems.Count);
-        SkillResponse albumResponse = BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, albumItems[startIndex], user, context);
+        SkillResponse albumResponse = BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, albumItems[startIndex], user, context, announceLocale: locale);
 
         // If the album came from the fuzzy fallback (exact search missed), speak the
         // matched name so the user knows what's playing — same mechanism as the

@@ -190,4 +190,80 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
         Assert.NotNull(playDirective);
     }
+
+    [Fact]
+    public async Task HandleAsync_SingleAlbum_AnnounceAudioPlaysOffByDefault_SilentLaunch()
+    {
+        // JF-353 AC#4 / JF-352.4: audio plays are silent by default. Even with the video-launch
+        // toggle (DefaultAnnounceNowPlaying) on, a music play must stay silent unless the separate
+        // AnnounceAudioPlays flag is opted in. This guards "no behavior change for existing users"
+        // on the most frequent play paths.
+        _config.DefaultAnnounceNowPlaying = true; // video/book toggle on
+        _config.AnnounceAudioPlays = false; // audio opt-in default
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(album: "the album");
+        SetupUserMock();
+
+        var album = new MusicAlbum { Name = "The Album", Id = Guid.NewGuid() };
+        var track = new Audio { Name = "Track 1", Id = Guid.NewGuid() };
+        SetupAlbumsAndTracks(
+            new List<BaseItem> { album },
+            new QueryResult<BaseItem> { Items = new[] { track }, TotalRecordCount = 1 });
+
+        SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.Null(response.Response.OutputSpeech);
+        var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.NotNull(playDirective);
+    }
+
+    [Fact]
+    public async Task HandleAsync_SingleAlbum_AnnounceAudioPlaysOn_SpeaksNowPlaying()
+    {
+        // When the user opts into audio announces (AnnounceAudioPlays = true), a successful
+        // album play attaches the now-playing announce to OutputSpeech.
+        _config.AnnounceAudioPlays = true;
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(album: "the album");
+        SetupUserMock();
+
+        var album = new MusicAlbum { Name = "The Album", Id = Guid.NewGuid() };
+        var track = new Audio { Name = "Track 1", Id = Guid.NewGuid() };
+        SetupAlbumsAndTracks(
+            new List<BaseItem> { album },
+            new QueryResult<BaseItem> { Items = new[] { track }, TotalRecordCount = 1 });
+
+        SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotNull(response.Response.OutputSpeech);
+        // The now-playing announce speaks the track that starts playing ("Track 1"), since the
+        // AudioPlayer token is the first track of the album, not the album container itself.
+        Assert.Contains("Track 1", TestHelpers.GetSpeechText(response));
+    }
+
+    [Fact]
+    public async Task HandleAsync_SingleAlbum_AnnounceAudioPlaysOff_SilentLaunch()
+    {
+        // With AnnounceAudioPlays explicitly off, the launch is silent (no OutputSpeech)
+        // but playback still starts (AudioPlayer.Play directive present).
+        _config.AnnounceAudioPlays = false;
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(album: "the album");
+        SetupUserMock();
+
+        var album = new MusicAlbum { Name = "The Album", Id = Guid.NewGuid() };
+        var track = new Audio { Name = "Track 1", Id = Guid.NewGuid() };
+        SetupAlbumsAndTracks(
+            new List<BaseItem> { album },
+            new QueryResult<BaseItem> { Items = new[] { track }, TotalRecordCount = 1 });
+
+        SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.Null(response.Response.OutputSpeech);
+        var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.NotNull(playDirective);
+    }
 }

@@ -109,9 +109,21 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>
     /// Gets or sets the global default for whether the now-playing announce ("Now playing X")
     /// is spoken when content is launched. Per-user AnnounceNowPlaying overrides this. Resume/restart
-    /// announces are not governed by this setting.
+    /// announces are not governed by this setting. This gates VIDEO-LAUNCH and audiobook
+    /// fresh-start announces only (JF-353). Music plays (PlaySong/PlayAlbum/PlayArtistSongs) are
+    /// gated separately by <see cref="AnnounceAudioPlays"/> (JF-352.4 — audio plays stay silent
+    /// by default; opt in there).
     /// </summary>
     public bool DefaultAnnounceNowPlaying { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the global opt-in for whether the now-playing announce is spoken on MUSIC
+    /// plays (PlaySong/PlayAlbum/PlayArtistSongs). Per-user AnnounceAudioPlays overrides this.
+    /// Default false: audio plays are silent by default (JF-352.4 — music is frequent, so the
+    /// expected UX is a fast silent start). Video/book launches are unaffected (gated by
+    /// <see cref="DefaultAnnounceNowPlaying"/>).
+    /// </summary>
+    public bool AnnounceAudioPlays { get; set; } = false;
     public bool AsrCompoundWordFixEnabled { get; set; } = true;
 
     /// <summary>

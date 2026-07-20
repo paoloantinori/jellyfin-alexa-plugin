@@ -292,7 +292,7 @@ public class PlaySongIntentHandler : BaseHandler
                             best.Name, fuzzOffset);
                     }
 
-                    return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(iid, user), iid, best, user, context, fuzzOffset);
+                    return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(iid, user), iid, best, user, context, fuzzOffset, announceLocale: locale);
                 },
                 user: user);
 
@@ -325,7 +325,7 @@ public class PlaySongIntentHandler : BaseHandler
         Logger.LogDebug(
             "PlaySong: returning AudioPlayer, itemId={ItemId}, song='{SongName}', offsetMs={OffsetMs}",
             item_id, songs[0].Name, offsetMs);
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, songs[0], user, context, offsetMs);
+        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, songs[0], user, context, offsetMs, announceLocale: locale);
     }
 
     // Alexa's NLU can misalign slot boundaries, causing carrier phrases like

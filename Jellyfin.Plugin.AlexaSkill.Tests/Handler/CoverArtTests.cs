@@ -567,6 +567,65 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
     }
 
     [Fact]
+    public void BuildAudioPlayerResponse_NativeControlsOn_AnnounceOn_SpeaksOnVideoAppPath()
+    {
+        // JF-353 altitude: when music routes through VideoApp (NativeControlsForAudio on), the
+        // announce must still attach — the early-return into BuildVideoAppAudioResponse must not
+        // bypass AttachAnnounceIfEnabled. Music announce is gated by AnnounceAudioPlays (opt-in).
+        _config.AnnounceAudioPlays = true;
+        var handler = CreateHandler();
+        var song = CreateSong("My Song");
+        var user = CreateUser();
+        string itemId = song.Id.ToString();
+
+        var response = handler.BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, handler.GetStreamUrl(itemId, user), itemId, song, user, context: null, announceLocale: "en-US");
+
+        Assert.IsType<VideoAppLaunchDirective>(Assert.Single(response.Response.Directives));
+        Assert.NotNull(response.Response.OutputSpeech);
+        Assert.Contains("My Song", TestHelpers.GetSpeechText(response));
+    }
+
+    [Fact]
+    public void BuildAudioPlayerResponse_NativeControlsOn_AnnounceOff_SilentOnVideoAppPath()
+    {
+        _config.AnnounceAudioPlays = false;
+        var handler = CreateHandler();
+        var song = CreateSong("My Song");
+        var user = CreateUser();
+        string itemId = song.Id.ToString();
+
+        var response = handler.BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, handler.GetStreamUrl(itemId, user), itemId, song, user, context: null, announceLocale: "en-US");
+
+        Assert.IsType<VideoAppLaunchDirective>(Assert.Single(response.Response.Directives));
+        Assert.Null(response.Response.OutputSpeech);
+    }
+
+    [Fact]
+    public void BuildAudioPlayerResponse_AudioPath_ResumeOffset_SpeaksResumingNotNowPlaying()
+    {
+        // When a music play resumes mid-track (offsetInMilliseconds > 0) and the audio-announce
+        // opt-in is on, the announce must say "Resuming X", not "Now playing X" — matching the
+        // resume-aware video-launch announce.
+        _config.AnnounceAudioPlays = true;
+        _config.NativeControlsForAudio = false; // force the AudioPlayer branch
+        var handler = CreateHandler();
+        var song = CreateSong("My Song");
+        var user = CreateUser();
+        string itemId = song.Id.ToString();
+
+        var response = handler.BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, handler.GetStreamUrl(itemId, user), itemId, song, user, context: null, offsetInMilliseconds: 45000, announceLocale: "en-US");
+
+        Assert.NotNull(response.Response.OutputSpeech);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Resuming", speech, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("now playing", speech, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("My Song", speech);
+    }
+
+    [Fact]
     public void BuildAudioPlayerResponse_NativeControlsOn_SourceUsesVideoAudioEndpoint()
     {
         var handler = CreateHandler();

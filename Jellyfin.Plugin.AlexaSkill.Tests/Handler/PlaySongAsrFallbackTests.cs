@@ -43,6 +43,7 @@ public class PlaySongAsrFallbackTests : PluginTestBase
         _userManagerMock = new Mock<IUserManager>();
         _userDataManagerMock = new Mock<IUserDataManager>();
         _config = new PluginConfiguration();
+        _config.AnnounceAudioPlays = true; // opt in: this class tests PlaySong announce behavior
         TestHelpers.SetServerAddress(_config, "https://test.example.com");
         _loggerFactory = LoggerFactory.Create(b => { });
     }
@@ -117,6 +118,32 @@ public class PlaySongAsrFallbackTests : PluginTestBase
             $"Expected at least 2 search calls, got {searchTerms.Count}: {string.Join(", ", searchTerms)}");
         Assert.Equal("lazy bones", searchTerms[0]);
         Assert.Equal("lazybones", searchTerms[1]);
+
+        // When the user opts into audio announces (AnnounceAudioPlays = true), a successful
+        // song play speaks the now-playing title.
+        Assert.NotNull(response.Response.OutputSpeech);
+        Assert.Contains("Lazybones", TestHelpers.GetSpeechText(response));
+    }
+
+    [Fact]
+    public async Task PlaySong_AnnounceOff_SilentLaunch()
+    {
+        // With AnnounceAudioPlays off (the default), a successful song play is silent
+        // (no OutputSpeech) while playback still starts.
+        var song = new Audio { Name = "Lazybones", Id = Guid.NewGuid() };
+        SetupUserMock();
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { song });
+
+        _config.AnnounceAudioPlays = false;
+
+        var handler = CreateHandler();
+        var request = CreateSongIntentRequest("lazybones");
+        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response.Response?.Directives);
+        Assert.NotEmpty(response.Response.Directives);
+        Assert.Null(response.Response.OutputSpeech);
     }
 
     [Fact]

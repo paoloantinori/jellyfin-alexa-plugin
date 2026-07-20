@@ -137,6 +137,10 @@
                                 <div class="fieldDescription checkboxFieldDescription">Speak the content title ("Now playing X") when content is launched. Disable for silent launches. Per-user overrides take precedence.</div>
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="AnnounceAudioPlays" /> <span>Announce Music Plays (opt-in)</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">Also speak "Now playing X" when music starts (songs/albums/artists). Off by default for fast, silent music starts; turn on if you want every track announced. Per-user overrides take precedence.</div>
+                            </div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="SeekEnabled" /> <span>Seek Controls</span></label>
                                 <div class="fieldDescription checkboxFieldDescription">Enable skip forward/back and jump-to-position voice commands. Also adds progress display when asking what's playing.</div>
                             </div>
@@ -441,7 +445,7 @@
                     // Feature flags
                     ["RadioModeEnabled", "PodcastsEnabled", "LiveTvEnabled", "SleepTimerEnabled",
                      "QueueManagementEnabled", "BrowseLibraryEnabled", "RecommendationsEnabled",
-                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "DefaultAnnounceNowPlaying","AsrCompoundWordFixEnabled", "SeekEnabled", "PauseAnnouncePosition",
+                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "DefaultAnnounceNowPlaying","AnnounceAudioPlays","AsrCompoundWordFixEnabled", "SeekEnabled", "PauseAnnouncePosition",
                      "ShuffleArtistSongs", "NativeControlsForAudio", "NativeControlsForBooks"].forEach(function(f) {
                         document.querySelector("#" + f).checked = config[f] !== false;
                     });
@@ -937,6 +941,33 @@
                 });
                 pbWrap.appendChild(anpSel);
 
+                // Music announce opt-in: speak the title on music plays, or inherit the global default
+                let aapLabel = document.createElement("label");
+                aapLabel.style.cssText = "font-size:0.8em;color:#aaa;margin-top:0.4em;";
+                aapLabel.textContent = "Announce music:";
+                pbWrap.appendChild(aapLabel);
+                let aapSel = document.createElement("select");
+                aapSel.setAttribute("data-field", "AnnounceAudioPlays");
+                aapSel.style.minWidth = "140px";
+                aapSel.style.padding = "0.2em 0.4em";
+                aapSel.style.borderRadius = "3px";
+                aapSel.style.backgroundColor = "#222";
+                aapSel.style.color = "#ccc";
+                aapSel.style.border = "1px solid #555";
+                aapSel.style.fontSize = "0.85em";
+                let aapVal = user.AnnounceAudioPlays == null ? "inherit" : (user.AnnounceAudioPlays === true ? "true" : "false");
+                [
+                    {v:"inherit", t:"Use default (global)"},
+                    {v:"true", t:"Announce music"},
+                    {v:"false", t:"Silent music"}
+                ].forEach(function(o){
+                    let opt = document.createElement("option");
+                    opt.value = o.v; opt.textContent = o.t;
+                    if (o.v === aapVal) opt.selected = true;
+                    aapSel.appendChild(opt);
+                });
+                pbWrap.appendChild(aapSel);
+
                 td.appendChild(pbWrap);
                 tr.appendChild(td);
 
@@ -1062,7 +1093,7 @@
 
                     ["RadioModeEnabled", "PodcastsEnabled", "LiveTvEnabled", "SleepTimerEnabled",
                      "QueueManagementEnabled", "BrowseLibraryEnabled", "RecommendationsEnabled",
-                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "DefaultAnnounceNowPlaying","AsrCompoundWordFixEnabled", "SeekEnabled", "PauseAnnouncePosition",
+                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "DefaultAnnounceNowPlaying","AnnounceAudioPlays","AsrCompoundWordFixEnabled", "SeekEnabled", "PauseAnnouncePosition",
                      "ShuffleArtistSongs", "NativeControlsForAudio", "NativeControlsForBooks"].forEach(function(f) {
                         config[f] = document.querySelector("#" + f).checked;
                     });
@@ -1133,6 +1164,7 @@
                         ResumeOfferEnabled: config.ResumeOfferEnabled,
                         ResumeAnnounceTitle: config.ResumeAnnounceTitle,
                         DefaultAnnounceNowPlaying: config.DefaultAnnounceNowPlaying,
+                        AnnounceAudioPlays: config.AnnounceAudioPlays,
                         AsrCompoundWordFixEnabled: config.AsrCompoundWordFixEnabled,
                         SeekEnabled: config.SeekEnabled,
                         PauseAnnouncePosition: config.PauseAnnouncePosition,
@@ -1221,6 +1253,12 @@
                                     if (anpSel.value === "true") anpValue = true;
                                     else if (anpSel.value === "false") anpValue = false;
                                 }
+                                var aapSel = row.cells[5].querySelector('[data-field="AnnounceAudioPlays"]');
+                                var aapValue = null;
+                                if (aapSel) {
+                                    if (aapSel.value === "true") aapValue = true;
+                                    else if (aapSel.value === "false") aapValue = false;
+                                }
                                 let data = {
                                     "InvocationName": row.cells[2].firstChild.value,
                                     "AllowedLibraryIds": selectedLibs,
@@ -1231,7 +1269,8 @@
                                     "PostPlayBehavior": postPlayMode ? postPlayMode.value : "Stop",
                                     "AnnouncePositionOnResume": row.cells[5].querySelector('[data-field="AnnouncePositionOnResume"]')?.checked || false,
                                     "VideoAppForAudio": vaaValue,
-                                    "AnnounceNowPlaying": anpValue
+                                    "AnnounceNowPlaying": anpValue,
+                                    "AnnounceAudioPlays": aapValue
                                 };
 
                                 perRowPromises.push(ApiClient.ajax({

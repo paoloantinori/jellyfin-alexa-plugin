@@ -453,7 +453,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         Logger.LogDebug(
             "PlayArtistSongs: returning AudioPlayer, itemId={ItemId}, startIndex={StartIndex}, queueSize={QueueSize}, offset=0",
             itemId, startIndex, queueItems.Count);
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, artistsItems[0], user, context);
+        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, artistsItems[0], user, context, announceLocale: locale);
     }
 
     /// <summary>

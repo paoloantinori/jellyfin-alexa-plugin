@@ -228,6 +228,21 @@ public class ConfigurationController : ControllerBase
             }
         }
 
+        // Handle AnnounceAudioPlays (music-play announce opt-in; boolean or null to inherit)
+        if (req.TryGetValue("AnnounceAudioPlays", out var aapToken))
+        {
+            if (aapToken.Type == JTokenType.Boolean)
+            {
+                pluginUser!.AnnounceAudioPlays = aapToken.Value<bool>();
+                updated = true;
+            }
+            else if (aapToken.Type == JTokenType.Null)
+            {
+                pluginUser!.AnnounceAudioPlays = null;
+                updated = true;
+            }
+        }
+
         if (!updated)
         {
             return new JsonResult(new { error = "No valid fields to update" }) { StatusCode = 400 };
@@ -500,6 +515,9 @@ public class ConfigurationController : ControllerBase
 
         if (req.TryGetValue("DefaultAnnounceNowPlaying", out var defaultAnnounceToken) && defaultAnnounceToken.Type == JTokenType.Boolean)
         { config.DefaultAnnounceNowPlaying = defaultAnnounceToken.Value<bool>(); updated = true; }
+
+        if (req.TryGetValue("AnnounceAudioPlays", out var announceAudioToken) && announceAudioToken.Type == JTokenType.Boolean)
+        { config.AnnounceAudioPlays = announceAudioToken.Value<bool>(); updated = true; }
 
         if (req.TryGetValue("AsrCompoundWordFixEnabled", out var asrToken) && asrToken.Type == JTokenType.Boolean)
         { config.AsrCompoundWordFixEnabled = asrToken.Value<bool>(); updated = true; }

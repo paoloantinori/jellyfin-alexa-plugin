@@ -512,7 +512,7 @@ public abstract class BaseHandler
     /// <returns>A SkillResponse containing the AudioPlayer directive with metadata.</returns>
     public SkillResponse BuildAudioPlayerResponse(PlayBehavior playBehavior, string streamUrl, string itemId, MediaBrowser.Controller.Entities.BaseItem? item, Entities.User user, int offsetInMilliseconds = 0)
     {
-        return BuildAudioPlayerResponse(playBehavior, streamUrl, itemId, item, user, null, offsetInMilliseconds);
+        return BuildAudioPlayerResponse(playBehavior, streamUrl, itemId, item, user, null, offsetInMilliseconds, announceLocale: null);
     }
 
     /// <summary>
@@ -526,7 +526,7 @@ public abstract class BaseHandler
     /// <param name="context">Optional Alexa context for enqueue previous-token tracking.</param>
     /// <param name="offsetInMilliseconds">Resume offset in milliseconds (default 0).</param>
     /// <returns>A SkillResponse containing the AudioPlayer directive.</returns>
-    public SkillResponse BuildAudioPlayerResponse(PlayBehavior playBehavior, string streamUrl, string itemId, MediaBrowser.Controller.Entities.BaseItem? item, Entities.User user, Context? context, int offsetInMilliseconds = 0)
+    public SkillResponse BuildAudioPlayerResponse(PlayBehavior playBehavior, string streamUrl, string itemId, MediaBrowser.Controller.Entities.BaseItem? item, Entities.User user, Context? context, int offsetInMilliseconds = 0, string? announceLocale = null)
     {
         // Record the last user-initiated play for this device (ReplaceAll = a new item starts).
         // This is the universal chokepoint: every play path flows through here, including APL
@@ -565,7 +565,7 @@ public abstract class BaseHandler
 
             if (wantsNativeControls)
             {
-                return BuildVideoAppAudioResponse(itemId, item, user);
+                return BuildVideoAppAudioResponse(itemId, item, user, announceLocale);
             }
         }
 
@@ -671,6 +671,7 @@ public abstract class BaseHandler
             };
         }
 
+        AttachAnnounceIfEnabled(response, item, user, announceLocale, offsetInMilliseconds);
         return response;
     }
 
@@ -681,7 +682,7 @@ public abstract class BaseHandler
     /// For AudioBook items, uses a special concat HLS endpoint that joins all chapters
     /// into one continuous stream so the seek bar shows the full book duration.
     /// </summary>
-    public SkillResponse BuildVideoAppAudioResponse(string itemId, BaseItem? item, Entities.User user)
+    public SkillResponse BuildVideoAppAudioResponse(string itemId, BaseItem? item, Entities.User user, string? announceLocale = null)
     {
         bool isAudioBook = item != null && item.GetType().Name.Equals("AudioBook", StringComparison.Ordinal);
 
@@ -700,7 +701,7 @@ public abstract class BaseHandler
             Logger.LogDebug("BuildVideoAppAudioResponse: itemId={ItemId}, title={Title}, url={Url}", itemId, item?.Name, videoAudioUrl);
         }
 
-        return new SkillResponse
+        var response = new SkillResponse
         {
             Version = "1.0",
             Response = new ResponseBody
@@ -725,6 +726,9 @@ public abstract class BaseHandler
                 }
             }
         };
+
+        AttachAnnounceIfEnabled(response, item, user, announceLocale);
+        return response;
     }
 
     /// <summary>
@@ -914,6 +918,32 @@ public abstract class BaseHandler
     /// </summary>
     public static IOutputSpeech? BuildNowPlayingSpeech(string name, string locale, bool announceOn = true)
         => announceOn ? BuildOutputSpeech("NowPlayingSsml", "NowPlaying", locale, name) : null;
+
+    /// <summary>
+    /// Attach the gated now-playing announce to a MUSIC play response when the caller passes a
+    /// locale and the audio-announce toggle is on. Only music handlers pass announceLocale, so the
+    /// gate is <see cref="GetAnnounceAudioPlays"/> (opt-in, default false per JF-352.4) — NOT the
+    /// video/book <see cref="GetAnnounceNowPlaying"/> toggle. When offsetMs &gt; 0 the announce is a
+    /// resume ("Resuming X") rather than a fresh "Now playing X". The OutputSpeech-occupied guard
+    /// is idempotency only: callers that set a more specific announcement (e.g. FoundAlbumInstead)
+    /// do so AFTER this call and overwrite it themselves.
+    /// </summary>
+    protected void AttachAnnounceIfEnabled(SkillResponse response, MediaBrowser.Controller.Entities.BaseItem? item, Entities.User? user, string? announceLocale, int offsetInMilliseconds = 0)
+    {
+        if (string.IsNullOrEmpty(announceLocale) || item is null || response.Response.OutputSpeech is not null)
+        {
+            return;
+        }
+
+        if (!GetAnnounceAudioPlays(user))
+        {
+            return;
+        }
+
+        response.Response.OutputSpeech = offsetInMilliseconds > 0
+            ? BuildOutputSpeech("ResumingSsml", "Resuming", announceLocale, item.Name)
+            : BuildNowPlayingSpeech(item.Name, announceLocale, announceOn: true);
+    }
 
     /// <summary>
     /// Resume-aware video-launch announce: "Resuming X from Y" when the user has playback
@@ -1375,6 +1405,24 @@ public abstract class BaseHandler
 
         Logger.LogDebug("AnnounceNowPlaying: user={UserId} on={On} source=GlobalDefault", user?.Id, _config.DefaultAnnounceNowPlaying);
         return _config.DefaultAnnounceNowPlaying;
+    }
+
+    /// <summary>
+    /// Gets the effective "speak the now-playing announce on MUSIC plays" preference for a user,
+    /// falling back to the global <see cref="Configuration.PluginConfiguration.AnnounceAudioPlays"/>
+    /// default (false — audio plays are silent by default, JF-352.4). Per-user setting takes
+    /// precedence. Video/book launches use <see cref="GetAnnounceNowPlaying"/> instead.
+    /// </summary>
+    protected bool GetAnnounceAudioPlays(Entities.User? user)
+    {
+        if (user?.AnnounceAudioPlays is { } userPref)
+        {
+            Logger.LogDebug("AnnounceAudioPlays: user={UserId} on={On} source=PerUser", user.Id, userPref);
+            return userPref;
+        }
+
+        Logger.LogDebug("AnnounceAudioPlays: user={UserId} on={On} source=GlobalDefault", user?.Id, _config.AnnounceAudioPlays);
+        return _config.AnnounceAudioPlays;
     }
 
     /// <summary>
@@ -2237,7 +2285,7 @@ public abstract class BaseHandler
         Logger.LogDebug(
             "{Label}: returning AudioPlayer, itemId={ItemId}, startIndex={StartIndex}, queueSize={QueueSize}",
             logLabel, itemId, startIndex, queueItems.Count);
-        SkillResponse response = BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, sortedItems[startIndex], user, context);
+        SkillResponse response = BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, sortedItems[startIndex], user, context, announceLocale: locale);
 
         if (!string.IsNullOrWhiteSpace(announcement))
         {
