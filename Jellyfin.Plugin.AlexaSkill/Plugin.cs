@@ -210,11 +210,23 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     /// <returns>A collection of skill interaction models.</returns>
     public Collection<SkillInteractionModel> BuildSkillInteractionModels(string invocationName)
     {
+        // Admin mood overrides (JF-355): inject custom mood words into the Mood slot
+        // type of every locale model that HAS a Mood slot type so the NLU fills the
+        // slot one-shot. Today only it-IT has the custom Mood type; the other 16 locales
+        // gain it via JF-356 (InjectMoodSlotValues no-ops where no Mood type exists).
+        // The handler resolves overrides regardless of locale via MoodGenreMap merge.
+        // InjectMoodSlotValues trims/dedupes/filters, so pass the raw mood strings.
+        IEnumerable<string> moodOverrideWords = (Configuration.MoodGenreOverrides ?? Enumerable.Empty<MoodGenreOverride>())
+            .Where(o => o != null)
+            .Select(o => o.Mood);
+
         Collection<SkillInteractionModel> models = new Collection<SkillInteractionModel>();
         foreach (Tuple<string, string> model in InteractionModels)
         {
             string localeInvocation = Config.EffectiveInvocationName(model.Item1, invocationName);
-            models.Add(new SkillInteractionModel(model.Item1, model.Item2, localeInvocation));
+            var skillModel = new SkillInteractionModel(model.Item1, model.Item2, localeInvocation);
+            skillModel.InjectMoodSlotValues(moodOverrideWords);
+            models.Add(skillModel);
         }
 
         return models;

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Net.Http;
 using System.Threading;
@@ -560,6 +561,36 @@ public class ConfigurationController : ControllerBase
         if (req.TryGetValue("CustomModelLocale", out var customLocaleToken) && customLocaleToken.Type == JTokenType.String)
         {
             config.CustomModelLocale = customLocaleToken.Value<string>() ?? "en-US";
+            updated = true;
+        }
+
+        // JF-355: admin mood→genre overrides. Array of {mood, genres}. A subsequent
+        // "Rebuild models" pushes the mood words into the Mood slot type so the NLU
+        // fills the slot one-shot. The handler resolves them regardless of redeploy.
+        if (req.TryGetValue("MoodGenreOverrides", out var overridesToken) && overridesToken.Type == JTokenType.Array)
+        {
+            var parsed = new Collection<MoodGenreOverride>();
+            foreach (JToken entry in overridesToken)
+            {
+                // Skip non-object elements (scalar/array tokens) — Value<string>(key)
+                // would throw on them and 500 the whole config save.
+                if (entry.Type != JTokenType.Object)
+                {
+                    continue;
+                }
+
+                string mood = entry.Value<string>("Mood")?.Trim() ?? string.Empty;
+                string genres = entry.Value<string>("Genres")?.Trim() ?? string.Empty;
+                if (mood.Length == 0 || mood.Length > SlotValueHelper.MaxSlotValueLength)
+                {
+                    // Skip blank or over-limit moods (Alexa slot-value hard limit).
+                    continue;
+                }
+
+                parsed.Add(new MoodGenreOverride(mood, genres));
+            }
+
+            config.MoodGenreOverrides = parsed;
             updated = true;
         }
 

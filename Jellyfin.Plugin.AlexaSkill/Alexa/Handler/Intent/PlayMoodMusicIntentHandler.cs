@@ -343,7 +343,8 @@ public class PlayMoodMusicIntentHandler : BaseHandler
             return userError;
         }
 
-        string[] genres = ResolveGenres(mood, DateTime.Now.Hour);
+        IReadOnlyDictionary<string, string[]> moodOverrides = BuildMoodGenreOverrides(_config);
+        string[] genres = ResolveGenres(mood, DateTime.Now.Hour, moodOverrides);
         Logger.LogDebug("PlayMoodMusic: mood='{Mood}', resolved genres=[{Genres}]", mood, string.Join(", ", genres));
 
         List<BaseItem> foundItems = new();
@@ -410,16 +411,26 @@ public class PlayMoodMusicIntentHandler : BaseHandler
     /// Resolves a mood string to an array of genre names.
     /// Tries an exact match first, then a contains match, then falls back to
     /// using the mood word itself as a genre. Reorders genres based on time of day.
+    /// Admin overrides (from plugin config) are checked before the built-in maps,
+    /// so an admin can add a mood ("coding" → electronic,ambient) or override a
+    /// built-in one. Pass null/empty to use only the built-in behavior.
     /// </summary>
     /// <param name="mood">The mood keyword from the user.</param>
     /// <param name="hour">Current hour (0-23) for time-of-day bias.</param>
+    /// <param name="overrides">Optional admin mood→genres overrides (case-insensitive keys).</param>
     /// <returns>An array of genre names to search for.</returns>
-    internal static string[] ResolveGenres(string mood, int hour = -1)
+    internal static string[] ResolveGenres(string mood, int hour = -1, IReadOnlyDictionary<string, string[]>? overrides = null)
     {
         string[]? genres = null;
 
+        // 0. Admin overrides take precedence (exact match)
+        if (overrides != null && overrides.TryGetValue(mood, out string[]? overridden) && overridden.Length > 0)
+        {
+            genres = overridden;
+        }
+
         // 1. Exact match against English mood keys
-        if (MoodGenreMap.TryGetValue(mood, out string[]? mapped))
+        if (genres == null && MoodGenreMap.TryGetValue(mood, out string[]? mapped))
         {
             genres = mapped;
         }
@@ -479,6 +490,39 @@ public class PlayMoodMusicIntentHandler : BaseHandler
             .OrderByDescending(g => preferred.Contains(g, StringComparer.OrdinalIgnoreCase))
             .ThenBy(_ => Random.Shared.Next())
             .ToArray();
+    }
+
+    /// <summary>
+    /// Builds the admin mood→genres override dictionary from plugin config.
+    /// Skips entries with a blank mood or no genres. Keys are case-insensitive.
+    /// Returns an empty dict (not null) when there are no overrides.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, string[]> BuildMoodGenreOverrides(PluginConfiguration config)
+    {
+        var overrides = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+        if (config?.MoodGenreOverrides == null)
+        {
+            return overrides;
+        }
+
+        foreach (MoodGenreOverride entry in config.MoodGenreOverrides)
+        {
+            if (entry == null || string.IsNullOrWhiteSpace(entry.Mood))
+            {
+                continue;
+            }
+
+            string[] genres = entry.GenreArray();
+            if (genres.Length == 0)
+            {
+                continue;
+            }
+
+            // Last entry wins on duplicate mood keys.
+            overrides[entry.Mood.Trim()] = genres;
+        }
+
+        return overrides;
     }
 
     /// <summary>

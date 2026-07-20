@@ -213,6 +213,18 @@ public class PluginConfiguration : BasePluginConfiguration
 #pragma warning restore CA2227
 
     /// <summary>
+    /// Gets or sets admin-defined custom mood → genre overrides that augment the
+    /// built-in MoodGenreMap at resolve time. Each entry adds (or replaces) a mood
+    /// word mapping to a comma-separated genre list. On save, custom mood words are
+    /// also injected into the Mood slot type of every locale's interaction model
+    /// (via the redeploy path) so the NLU can fill the slot one-shot. Stored as a
+    /// list because XmlSerializer cannot serialize Dictionary.
+    /// </summary>
+#pragma warning disable CA2227
+    public Collection<MoodGenreOverride> MoodGenreOverrides { get; set; } = new();
+#pragma warning restore CA2227
+
+    /// <summary>
     /// Gets locale model status by locale code.
     /// </summary>
     public LocaleModelStatus? GetLocaleModelStatus(string locale)
@@ -516,4 +528,33 @@ public class LocaleModelStatusEntry
         Error = Error,
         Source = Source,
     };
+}
+
+/// <summary>
+/// XML-serializable admin override mapping a mood word to a comma-separated
+/// genre list. Merged into the mood handler's MoodGenreMap at resolve time, and
+/// (when the model is redeployed) the <see cref="Mood"/> word is injected into
+/// each locale's Mood slot type so the NLU fills the slot one-shot.
+/// </summary>
+public class MoodGenreOverride
+{
+    public MoodGenreOverride()
+    {
+    }
+
+    public MoodGenreOverride(string mood, string genres)
+    {
+        Mood = mood;
+        Genres = genres;
+    }
+
+    /// <summary>The mood word the user speaks (e.g. "coding"). Case-insensitive.</summary>
+    public string Mood { get; set; } = string.Empty;
+
+    /// <summary>Comma-separated Jellyfin genre names (e.g. "electronic,ambient").</summary>
+    public string Genres { get; set; } = string.Empty;
+
+    /// <summary>Parses Genres into a trimmed, non-empty array.</summary>
+    public string[] GenreArray() =>
+        Genres.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 }

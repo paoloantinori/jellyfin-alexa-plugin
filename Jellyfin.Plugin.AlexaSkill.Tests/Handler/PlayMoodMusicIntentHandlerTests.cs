@@ -725,4 +725,69 @@ public class PlayMoodMusicIntentHandlerTests : PluginTestBase
         string speech = TestHelpers.GetSpeechText(response);
         Assert.Contains("relaxing", speech, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void ResolveGenres_AdminOverride_AddsNewMood()
+    {
+        // JF-355: a custom admin mood resolves to its override genres.
+        var overrides = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["coding"] = new[] { "electronic", "ambient" }
+        };
+
+        string[] genres = PlayMoodMusicIntentHandler.ResolveGenres("coding", hour: -1, overrides);
+
+        Assert.Equal(2, genres.Length);
+        Assert.Contains("electronic", genres);
+        Assert.Contains("ambient", genres);
+    }
+
+    [Fact]
+    public void ResolveGenres_AdminOverride_WinsOverBuiltin()
+    {
+        // An override for a built-in mood key replaces the built-in genre list.
+        var overrides = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["happy"] = new[] { "polka" }
+        };
+
+        string[] genres = PlayMoodMusicIntentHandler.ResolveGenres("happy", hour: -1, overrides);
+
+        Assert.Single(genres);
+        Assert.Equal("polka", genres[0]);
+    }
+
+    [Fact]
+    public void ResolveGenres_NullOverrides_UsesBuiltinOnly()
+    {
+        // Backward-compat: null overrides must behave exactly like the pre-JF-355 path.
+        string[] genres = PlayMoodMusicIntentHandler.ResolveGenres("sleep", hour: -1, null);
+        Assert.Contains("ambient", genres);
+    }
+
+    [Fact]
+    public void BuildMoodGenreOverrides_ParsesValidAndSkipsJunk()
+    {
+        var config = new PluginConfiguration();
+        config.MoodGenreOverrides.Add(new MoodGenreOverride("coding", "electronic, ambient"));
+        config.MoodGenreOverrides.Add(new MoodGenreOverride("  study  ", "classical")); // trimmed
+        config.MoodGenreOverrides.Add(new MoodGenreOverride("   ", "junk")); // blank mood skipped
+        config.MoodGenreOverrides.Add(new MoodGenreOverride("empty", "")); // no genres skipped
+        config.MoodGenreOverrides.Add(new MoodGenreOverride("dup", "rock"));
+        config.MoodGenreOverrides.Add(new MoodGenreOverride("dup", "pop")); // last wins
+
+        var overrides = PlayMoodMusicIntentHandler.BuildMoodGenreOverrides(config);
+
+        Assert.Equal(3, overrides.Count);
+        Assert.Equal(new[] { "electronic", "ambient" }, overrides["coding"]);
+        Assert.Equal(new[] { "classical" }, overrides["study"]);
+        Assert.Equal(new[] { "pop" }, overrides["dup"]);
+    }
+
+    [Fact]
+    public void BuildMoodGenreOverrides_NullConfig_ReturnsEmpty()
+    {
+        var overrides = PlayMoodMusicIntentHandler.BuildMoodGenreOverrides(null!);
+        Assert.Empty(overrides);
+    }
 }

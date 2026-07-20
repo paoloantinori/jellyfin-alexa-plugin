@@ -308,6 +308,16 @@
                             <div class="fieldDescription" style="color:#888;">This replaces the interaction model for the selected locale. Model builds take 15-30 seconds.</div>
                     </details>
 
+                    <details>
+                        <summary><span class="accordion-title">Mood Overrides</span></summary>
+                            <div class="fieldDescription">Add custom moods that map to Jellyfin genres. One per line as <code>mood: genre1, genre2</code> (e.g. <code>coding: electronic, ambient</code>). The handler resolves these immediately; run "Rebuild models" (Custom Interaction Model above) afterwards so Alexa recognizes the new mood words one-shot.</div>
+                            <div class="inputContainer">
+                                <label class="inputLabel inputLabelUnfocused" for="MoodGenreOverrides">Custom moods</label>
+                                <textarea id="MoodGenreOverrides" is="emby-textarea" rows="5" style="width:100%;font-family:monospace;" placeholder="coding: electronic, ambient&#10;study: classical, instrumental"></textarea>
+                                <div class="fieldDescription">Leave a line's genres empty to skip it. Mood words over 140 characters are ignored (Alexa slot-value limit). Avoid mood words that match artist or genre names (e.g. "jazz", "nirvana") — Alexa may route those queries to mood music instead of the artist.</div>
+                            </div>
+                    </details>
+
                     </form>
 
                     <!-- Restore Default Model Confirmation Modal -->
@@ -456,6 +466,13 @@
 
                     // Cache settings
                     document.querySelector("#VideoAudioCacheSizeMB").value = config.VideoAudioCacheSizeMB != null ? config.VideoAudioCacheSizeMB : 2048;
+
+                    // Mood overrides (JF-355) — render array of {Mood, Genres} as "mood: genres" lines
+                    var moodTA = document.querySelector("#MoodGenreOverrides");
+                    if (moodTA) {
+                        var ov = Array.isArray(config.MoodGenreOverrides) ? config.MoodGenreOverrides : [];
+                        moodTA.value = ov.map(function (e) { return (e.Mood || "") + ": " + (e.Genres || ""); }).join("\n");
+                    }
 
                     var tbody = document.querySelector("#userTableBody");
                     tbody.innerHTML = "";
@@ -1084,6 +1101,17 @@
                     config.CustomModelUrl = document.querySelector("#CustomModelUrl").value.trim();
                     config.CustomModelLocale = document.querySelector("#CustomModelLocale").value;
 
+                    // Mood overrides (JF-355) — parse "mood: genre1, genre2" lines into the array
+                    var moodLines = (document.querySelector("#MoodGenreOverrides").value || "").split("\n");
+                    config.MoodGenreOverrides = moodLines.map(function (line) {
+                        var idx = line.indexOf(":");
+                        if (idx < 0) { return null; }
+                        var mood = line.slice(0, idx).trim();
+                        var genres = line.slice(idx + 1).trim();
+                        if (mood.length === 0) { return null; }
+                        return { Mood: mood, Genres: genres };
+                    }).filter(function (e) { return e !== null; });
+
                     // Save general config via dedicated endpoint that preserves
                     // the Users collection and [JsonIgnore] properties (SmapiDeviceToken, JellyfinToken).
                     // Do NOT use updatePluginConfiguration — it replaces the entire config object,
@@ -1125,6 +1153,7 @@
                         CustomModelEnabled: config.CustomModelEnabled,
                         CustomModelUrl: config.CustomModelUrl,
                         CustomModelLocale: config.CustomModelLocale,
+                        MoodGenreOverrides: config.MoodGenreOverrides,
                         DefaultSearchResponseMode: config.DefaultSearchResponseMode,
                         DefaultPostPlayBehavior: config.DefaultPostPlayBehavior
                     };
