@@ -374,7 +374,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
             {
                 bool isArtist = q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist);
                 bool hasArtistIds = q.ArtistIds != null && q.ArtistIds.Length > 0;
-                bool isAudioMedia = q.MediaTypes != null && q.MediaTypes.Any(t => t == MediaType.Audio);
+                bool isAudioMedia = q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio);
                 if (isArtist)
                 {
                     return new List<BaseItem> { artist }.AsReadOnly();

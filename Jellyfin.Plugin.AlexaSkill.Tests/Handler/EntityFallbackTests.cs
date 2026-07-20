@@ -113,7 +113,7 @@ public class EntityFallbackTests : PluginTestBase
                 }
 
                 // Artist songs (ArtistIds + MediaTypes Audio)
-                if (q.ArtistIds != null && q.ArtistIds.Length > 0 && q.MediaTypes != null && q.MediaTypes.Any(t => t == MediaType.Audio))
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0 && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))
                 {
                     return (IReadOnlyList<BaseItem>)new List<BaseItem>(songs);
                 }

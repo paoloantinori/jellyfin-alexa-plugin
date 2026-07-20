@@ -39,3 +39,7 @@ test_media
 .claude/worktrees/
 __pycache__/
 tmp/
+
+# Local Claude/playwright caches (never commit)
+.claude/pw-cache-xdg/
+.claude/ms-playwright-mcp/

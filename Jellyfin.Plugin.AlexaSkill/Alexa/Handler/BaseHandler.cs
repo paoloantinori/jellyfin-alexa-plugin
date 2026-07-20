@@ -2218,7 +2218,8 @@ public abstract class BaseHandler
         {
             User = jellyfinUser,
             Recursive = true,
-            MediaTypes = new[] { MediaType.Audio },
+            // JF-358: IncludeItemTypes=Audio, not MediaTypes=Audio (see PlayArtistSongsIntentHandler).
+            IncludeItemTypes = new[] { BaseItemKind.Audio },
             OrderBy = PopularitySort,
             DtoOptions = new DtoOptions(true),
             ArtistIds = new[] { artistId },
