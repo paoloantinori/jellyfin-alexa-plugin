@@ -423,18 +423,22 @@ tests:
     expected_slots:
       mood: {}
 
-  # Literal samples — mood slot not captured
+  # JF-356: custom Mood slot type now captures these (was empty under the old
+  # greedy AMAZON.SearchQuery design).
   - utterance: "play morning music"
     expected_intent: PlayMoodMusicIntent
-    expected_slots: {}
+    expected_slots:
+      mood: {}
 
   - utterance: "play workout music"
     expected_intent: PlayMoodMusicIntent
-    expected_slots: {}
+    expected_slots:
+      mood: {}
 
   - utterance: "play dinner music"
     expected_intent: PlayMoodMusicIntent
-    expected_slots: {}
+    expected_slots:
+      mood: {}
 
   # -------------------------------------------------------------------------
   # 23. AddToQueueIntent (song, musician)
