@@ -519,7 +519,7 @@
         "slots": [
           {
             "name": "mood",
-            "type": "AMAZON.SearchQuery"
+            "type": "Mood"
           }
         ],
         "samples": [
@@ -878,6 +878,81 @@
       }
     ],
     "types": [
+      {
+        "name": "Mood",
+        "values": [
+          {
+            "name": {
+              "value": "relaxing"
+            }
+          },
+          {
+            "name": {
+              "value": "chill"
+            }
+          },
+          {
+            "name": {
+              "value": "upbeat"
+            }
+          },
+          {
+            "name": {
+              "value": "energetic"
+            }
+          },
+          {
+            "name": {
+              "value": "focus"
+            }
+          },
+          {
+            "name": {
+              "value": "romantic"
+            }
+          },
+          {
+            "name": {
+              "value": "happy"
+            }
+          },
+          {
+            "name": {
+              "value": "sad"
+            }
+          },
+          {
+            "name": {
+              "value": "party"
+            }
+          },
+          {
+            "name": {
+              "value": "workout"
+            }
+          },
+          {
+            "name": {
+              "value": "morning"
+            }
+          },
+          {
+            "name": {
+              "value": "evening"
+            }
+          },
+          {
+            "name": {
+              "value": "dinner"
+            }
+          },
+          {
+            "name": {
+              "value": "sleep"
+            }
+          }
+        ]
+      },
       {
         "name": "MediaType",
         "values": [

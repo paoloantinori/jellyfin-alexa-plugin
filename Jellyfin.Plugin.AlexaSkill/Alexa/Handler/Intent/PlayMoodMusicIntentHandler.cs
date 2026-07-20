@@ -266,7 +266,81 @@ public class PlayMoodMusicIntentHandler : BaseHandler
         ["triste"] = "sad",
 
         // it-IT
-        ["tristezza"] = "sad"
+        ["tristezza"] = "sad",
+
+        // JF-356: gaps for locales already partly covered (sleep/party variants).
+        // es-ES/MX/US
+        ["dormir"] = "sleep",
+        // fr-FR/CA
+        ["fête"] = "party",
+        // pt-BR
+        ["sono"] = "sleep",
+
+        // JF-356: nl-NL (no prior coverage)
+        ["ontspannend"] = "relaxing",
+        ["rustgevend"] = "chill",
+        ["vrolijk"] = "upbeat",
+        ["energiek"] = "energetic",
+        ["concentratie"] = "focus",
+        ["blij"] = "happy",
+        ["gelukkig"] = "happy",
+        ["verdrietig"] = "sad",
+        ["feest"] = "party",
+        ["ochtend"] = "morning",
+        ["avond"] = "evening",
+        ["diner"] = "dinner",
+        ["slapen"] = "sleep",
+        ["slaap"] = "sleep",
+
+        // JF-356: ja-JP (loanwords, the Alexa-JP convention for music moods)
+        ["リラックス"] = "relaxing",
+        ["チル"] = "chill",
+        ["アップビート"] = "upbeat",
+        ["エネルギッシュ"] = "energetic",
+        ["集中"] = "focus",
+        ["ロマンチック"] = "romantic",
+        ["ハッピー"] = "happy",
+        ["サッド"] = "sad",
+        ["パーティー"] = "party",
+        ["ワークアウト"] = "workout",
+        ["モーニング"] = "morning",
+        ["イブニング"] = "evening",
+        ["ディナー"] = "dinner",
+        ["スリープ"] = "sleep",
+
+        // JF-356: hi-IN
+        ["आराम"] = "relaxing",
+        ["शांत"] = "chill",
+        ["उत्साही"] = "upbeat",
+        ["ऊर्जावान"] = "energetic",
+        ["ध्यान"] = "focus",
+        ["रोमांटिक"] = "romantic",
+        ["खुशी"] = "happy",
+        ["खुश"] = "happy",
+        ["उदास"] = "sad",
+        ["पार्टी"] = "party",
+        ["वर्कआउट"] = "workout",
+        ["सुबह"] = "morning",
+        ["शाम"] = "evening",
+        ["डिनर"] = "dinner",
+        ["नींद"] = "sleep",
+        ["स्लीप"] = "sleep",
+
+        // JF-356: ar-SA
+        ["استرخاء"] = "relaxing",
+        ["هادئ"] = "chill",
+        ["مبهج"] = "upbeat",
+        ["حيوي"] = "energetic",
+        ["تركيز"] = "focus",
+        ["رومانسي"] = "romantic",
+        ["سعيد"] = "happy",
+        ["حزين"] = "sad",
+        ["حفلة"] = "party",
+        ["تمرين"] = "workout",
+        ["صباح"] = "morning",
+        ["مساء"] = "evening",
+        ["عشاء"] = "dinner",
+        ["نوم"] = "sleep"
     };
 
     private readonly ILibraryManager _libraryManager;

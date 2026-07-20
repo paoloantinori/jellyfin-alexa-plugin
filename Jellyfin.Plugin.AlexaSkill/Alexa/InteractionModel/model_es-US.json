@@ -504,7 +504,7 @@
         "slots": [
           {
             "name": "mood",
-            "type": "AMAZON.SearchQuery"
+            "type": "Mood"
           }
         ],
         "samples": [
@@ -848,6 +848,99 @@
       }
     ],
     "types": [
+      {
+        "name": "Mood",
+        "values": [
+          {
+            "name": {
+              "value": "relajante"
+            }
+          },
+          {
+            "name": {
+              "value": "relajado"
+            }
+          },
+          {
+            "name": {
+              "value": "animada",
+              "synonyms": [
+                "animado"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "enérgica",
+              "synonyms": [
+                "enérgico"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "concentración"
+            }
+          },
+          {
+            "name": {
+              "value": "romántica",
+              "synonyms": [
+                "romántico"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "alegre",
+              "synonyms": [
+                "feliz"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "triste"
+            }
+          },
+          {
+            "name": {
+              "value": "fiesta"
+            }
+          },
+          {
+            "name": {
+              "value": "entrenamiento"
+            }
+          },
+          {
+            "name": {
+              "value": "matutino"
+            }
+          },
+          {
+            "name": {
+              "value": "nocturna",
+              "synonyms": [
+                "nocturno"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "cena"
+            }
+          },
+          {
+            "name": {
+              "value": "dormir",
+              "synonyms": [
+                "sueño"
+              ]
+            }
+          }
+        ]
+      },
       {
         "name": "MediaType",
         "values": [

@@ -746,7 +746,7 @@
         "slots": [
           {
             "name": "mood",
-            "type": "AMAZON.SearchQuery"
+            "type": "Mood"
           }
         ],
         "samples": [
@@ -754,15 +754,7 @@
           "play something {mood}",
           "play {mood} songs",
           "i want {mood} music",
-          "play me something {mood}",
-          "play morning music",
-          "play evening music",
-          "play dinner music",
-          "play workout music",
-          "play focus music",
-          "play party music",
-          "play relaxing music",
-          "i want something chill"
+          "play me something {mood}"
         ]
       },
       {
@@ -1035,6 +1027,81 @@
       }
     ],
     "types": [
+      {
+        "name": "Mood",
+        "values": [
+          {
+            "name": {
+              "value": "relaxing"
+            }
+          },
+          {
+            "name": {
+              "value": "chill"
+            }
+          },
+          {
+            "name": {
+              "value": "upbeat"
+            }
+          },
+          {
+            "name": {
+              "value": "energetic"
+            }
+          },
+          {
+            "name": {
+              "value": "focus"
+            }
+          },
+          {
+            "name": {
+              "value": "romantic"
+            }
+          },
+          {
+            "name": {
+              "value": "happy"
+            }
+          },
+          {
+            "name": {
+              "value": "sad"
+            }
+          },
+          {
+            "name": {
+              "value": "party"
+            }
+          },
+          {
+            "name": {
+              "value": "workout"
+            }
+          },
+          {
+            "name": {
+              "value": "morning"
+            }
+          },
+          {
+            "name": {
+              "value": "evening"
+            }
+          },
+          {
+            "name": {
+              "value": "dinner"
+            }
+          },
+          {
+            "name": {
+              "value": "sleep"
+            }
+          }
+        ]
+      },
       {
         "name": "SeekDirection",
         "values": [
