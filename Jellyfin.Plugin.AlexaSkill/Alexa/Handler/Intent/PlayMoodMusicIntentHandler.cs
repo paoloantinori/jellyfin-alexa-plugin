@@ -68,6 +68,9 @@ public class PlayMoodMusicIntentHandler : BaseHandler
 
         // it-IT
         ["allenamento"] = "workout",
+        ["allenarmi"] = "workout",
+        ["concentrarmi"] = "focus",
+        ["rilassarmi"] = "relaxing",
         ["allegra"] = "happy",
         ["allegramente"] = "happy",
 
