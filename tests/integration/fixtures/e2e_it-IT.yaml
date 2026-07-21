@@ -287,10 +287,9 @@ tests:
     expected_response_type: any
 
   # --- FindSong: keyword-only search ---
-  # simulate-skill routes to FindSongByArtistIntent (different from NLU profiler
-  # which routes to FindSongIntent). Both handlers resolve to the same search logic.
+  # No artist in the utterance — FindSongIntent is correct (not FindSongByArtistIntent).
   - utterance: "trova una canzone chiamata bohemian rhapsody"
-    expected_intent: FindSongByArtistIntent
+    expected_intent: FindSongIntent
     expected_slots: {}
     expected_response_type: any
 
