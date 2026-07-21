@@ -500,10 +500,8 @@ explicit_intents:
       - ripeti per sempre questo brano
   PlayBookIntent:
     samples:
-      - riproduci {book}
       - riproduci il libro {book}
       - riproduci l'audiolibro {book}
-      - ascolta {book}
       - ascolta il libro {book}
       - ascolta l'audiolibro {book}
       - suona il libro {book}

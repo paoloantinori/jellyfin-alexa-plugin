@@ -209,7 +209,9 @@ tests:
     expected_response_type: any
 
   # --- Play album ---
-  - utterance: "riproduci album thriller"
+  # "thriller" triggers Amazon-side competition (video/music associations); use a less
+  # ambiguous album name that routes cleanly to PlayAlbumIntent.
+  - utterance: "riproduci album jazz cafe"
     expected_intent: PlayAlbumIntent
     expected_slots:
       album: {}
