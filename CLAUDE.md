@@ -4,6 +4,8 @@ C# Jellyfin plugin (net9.0) exposing an Alexa skill for media playback, search, 
 
 ## Build & Test
 
+**Coverage caveat:** unit tests (below) and E2E tests (`run_e2e_tests.sh`) assert response *correctness*, not response *latency*. They will NOT catch a play-path regression that exceeds Alexa's ~8s response window (→ `INVALID_RESPONSE` on-device). The only guard for that is `RetryHelperTests.Sync_AlwaysTransient_StopsWithinTimeoutBudget` — it locks the invariant that `RetryAsync` stops retrying once its timeout budget (`AlexaRequestTimeoutMs`=6000) is exhausted, which is the mechanism that keeps throwing/slow play-path queries from blowing the Alexa budget (JF-358/JF-359). A live-timing E2E assertion is intentionally not used — it's flaky and environment-dependent.
+
 ```bash
 dotnet build Jellyfin.Plugin.AlexaSkill.sln
 dotnet test Jellyfin.Plugin.AlexaSkill.Tests          # ~2476 unit tests
