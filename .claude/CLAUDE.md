@@ -14,7 +14,7 @@ That file has the full mandatory checklist. Key rules that keep getting violated
 ## E2E Tests (SMAPI simulate-skill)
 
 Skill ID: DISCOVER DYNAMICALLY via `ask smapi list-skills-for-vendor` — see .claude.local.md Step 2
-Jellyfin API key: `69088d9a2bd74af5945b3d5683a087d3` (works for both plugin endpoints and /Sessions)
+Jellyfin API key: `$JELLYFIN_API_KEY` (works for both plugin endpoints and /Sessions)
 
 ### Run all E2E tests
 ```bash
@@ -57,7 +57,7 @@ For quick handler-level testing without SMAPI/NLU. Runs on minix localhost:
 ```bash
 SSH_OPTS="-F /dev/null -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa"
 ssh $SSH_OPTS pantinor@minix "curl -sf -X POST 'http://localhost:8096/Plugins/AlexaSkill/Simulator/Intent' \
-  -H 'X-Emby-Token: 69088d9a2bd74af5945b3d5683a087d3' \
+  -H 'X-Emby-Token: $JELLYFIN_API_KEY' \
   -H 'Content-Type: application/json' \
   -d '{\"intentName\":\"QueryArtistLibraryIntent\",\"slots\":{\"musician\":\"soul coughing\"},\"locale\":\"it-IT\"}'"
 ```

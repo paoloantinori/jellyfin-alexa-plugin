@@ -24,7 +24,7 @@ Steps to fix:
 3. Verify `curl -sf 'https://jellyfin.casanande.mywire.org/Sessions' -H 'X-Emby-Token: NEW_KEY'` returns session data
 4. Run a few E2E tests to confirm
 
-Note: The plugin config API key (69088d9a2bd74af5945b3d5683a087d3) works for plugin endpoints but may differ from the general Jellyfin API key needed for /Sessions.
+Note: The plugin config API key ($JELLYFIN_API_KEY) works for plugin endpoints but may differ from the general Jellyfin API key needed for /Sessions.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done

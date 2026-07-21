@@ -21,7 +21,7 @@ Build the release DLL, hot-swap it into the running Jellyfin container, verify c
 ```bash
 SSH_OPTS="-F /dev/null -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa"
 ssh $SSH_OPTS pantinor@minix "curl -sf 'http://localhost:8096/Plugins/c5df7de087774b3ca70d5c3dae359c9e/Configuration' \
-  -H 'X-Emby-Token: 69088d9a2bd74af5945b3d5683a087d3'" > /tmp/alexa_plugin_config_backup.json
+  -H 'X-Emby-Token: $JELLYFIN_API_KEY'" > /tmp/alexa_plugin_config_backup.json
 python3 -c "import json; cfg=json.load(open('/tmp/alexa_plugin_config_backup.json')); print(f'Users: {len(cfg.get(\"Users\",[]))}, Simulator: {cfg.get(\"SimulatorEnabled\")}')"
 ```
 
@@ -60,7 +60,7 @@ Poll the **server** (`/System/Info`) until Jellyfin is responsive (up to ~60 sec
 ```bash
 SSH_OPTS="-F /dev/null -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa"
 for i in $(seq 1 20); do
-  if ssh $SSH_OPTS pantinor@minix "curl -sf 'http://localhost:8096/System/Info' -H 'X-Emby-Token: 69088d9a2bd74af5945b3d5683a087d3'" > /dev/null 2>&1; then
+  if ssh $SSH_OPTS pantinor@minix "curl -sf 'http://localhost:8096/System/Info' -H 'X-Emby-Token: $JELLYFIN_API_KEY'" > /dev/null 2>&1; then
     echo "Jellyfin is up (attempt $i)"
     break
   fi
@@ -79,14 +79,14 @@ ssh $SSH_OPTS pantinor@minix "podman logs jellyfin --tail 400" 2>&1 | grep -viE 
 ```bash
 SSH_OPTS="-F /dev/null -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa"
 ssh $SSH_OPTS pantinor@minix "curl -sf 'http://localhost:8096/Plugins/c5df7de087774b3ca70d5c3dae359c9e/Configuration' \
-  -H 'X-Emby-Token: 69088d9a2bd74af5945b3d5683a087d3'" | python3 -c "import json, sys; cfg=json.load(sys.stdin); print(f'Users after deploy: {len(cfg.get(\"Users\",[]))}')"
+  -H 'X-Emby-Token: $JELLYFIN_API_KEY'" | python3 -c "import json, sys; cfg=json.load(sys.stdin); print(f'Users after deploy: {len(cfg.get(\"Users\",[]))}')"
 ```
 
 **If 0 users** — restore from backup:
 ```bash
 cat /tmp/alexa_plugin_config_backup.json | ssh $SSH_OPTS pantinor@minix "curl -sf -X POST \
   'http://localhost:8096/Plugins/c5df7de087774b3ca70d5c3dae359c9e/Configuration' \
-  -H 'X-Emby-Token: 69088d9a2bd74af5945b3d5683a087d3' -H 'Content-Type: application/json' -d @-"
+  -H 'X-Emby-Token: $JELLYFIN_API_KEY' -H 'Content-Type: application/json' -d @-"
 ```
 
 ### 6. Rebuild Interaction Models (if models changed)
@@ -97,9 +97,9 @@ rebuild all models so Alexa's NLU picks up the changes without requiring a versi
 ```bash
 SSH_OPTS="-F /dev/null -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa"
 USER_ID=$(ssh $SSH_OPTS pantinor@minix "curl -sf 'http://localhost:8096/Plugins/c5df7de087774b3ca70d5c3dae359c9e/Configuration' \
-  -H 'X-Emby-Token: 69088d9a2bd74af5945b3d5683a087d3'" | python3 -c "import json,sys; print(json.load(sys.stdin)['Users'][0]['Id'])")
+  -H 'X-Emby-Token: $JELLYFIN_API_KEY'" | python3 -c "import json,sys; print(json.load(sys.stdin)['Users'][0]['Id'])")
 ssh $SSH_OPTS pantinor@minix "curl -s -X POST 'http://localhost:8096/alexaskill/api/custom-model/rebuild' \
-  -H 'X-Emby-Token: 69088d9a2bd74af5945b3d5683a087d3' -H 'Content-Type: application/json' \
+  -H 'X-Emby-Token: $JELLYFIN_API_KEY' -H 'Content-Type: application/json' \
   -d '{\"userId\":\"$USER_ID\"}'"
 ```
 
