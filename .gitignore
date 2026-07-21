@@ -43,3 +43,6 @@ tmp/
 # Local Claude/playwright caches (never commit)
 .claude/pw-cache-xdg/
 .claude/ms-playwright-mcp/
+
+# Playwright MCP artifacts (never commit)
+.playwright-mcp/
