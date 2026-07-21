@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Security.Cryptography;
 using Alexa.NET.Management;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Manifest;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
@@ -27,6 +28,7 @@ public class PluginConfiguration : BasePluginConfiguration
 
         serverAddress = string.Empty;
         AccountLinkingClientId = Guid.NewGuid().ToString();
+        StreamTokenSecret = Guid.NewGuid().ToString("N") + Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
     }
 
     /// <summary>
@@ -86,6 +88,13 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Gets or sets the account linking client id.
     /// </summary>
     public string AccountLinkingClientId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the server-side HMAC secret for signing item-scoped stream tokens (JF-309).
+    /// Auto-generated on first construction; persisted transparently. Rotating it invalidates all
+    /// outstanding stream tokens (forces a one-time playback restart).
+    /// </summary>
+    public string StreamTokenSecret { get; set; } = string.Empty;
 
     /// <summary>
     /// Gets or sets a value indicating whether the intent simulator endpoint is enabled.

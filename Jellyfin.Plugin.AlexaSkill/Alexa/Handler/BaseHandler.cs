@@ -418,7 +418,7 @@ public abstract class BaseHandler
     /// <param name="itemId">Id of the audio item.</param>
     /// <returns>URL to the HLS video-audio endpoint.</returns>
     public string GetVideoAudioUrl(string itemId)
-        => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/{itemId}/stream.m3u8").ToString();
+        => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/{itemId}/stream.m3u8?token={StreamTokenHelper.Mint(itemId, _config.StreamTokenSecret)}").ToString();
 
     /// <summary>
     /// Get a video-audio URL for an audiobook that concatenates all chapters into
@@ -429,7 +429,7 @@ public abstract class BaseHandler
     /// <param name="parentId">Id of the audiobook parent folder.</param>
     /// <returns>URL to the audiobook HLS concat endpoint.</returns>
     public string GetAudiobookVideoAudioUrl(string parentId)
-        => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/audiobook/{parentId}/stream.m3u8").ToString();
+        => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/audiobook/{parentId}/stream.m3u8?token={StreamTokenHelper.Mint(parentId, _config.StreamTokenSecret)}").ToString();
 
     /// <summary>
     /// Get a resume-aware audiobook HLS URL with a start-position hint. The endpoint reads
@@ -440,7 +440,7 @@ public abstract class BaseHandler
     /// <param name="startTicks">Resume position in .NET ticks.</param>
     /// <returns>URL to the resume-aware audiobook HLS endpoint.</returns>
     public string GetAudiobookResumeUrl(string parentId, long startTicks)
-        => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/audiobook/{parentId}/stream.m3u8?start={startTicks}").ToString();
+        => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/audiobook/{parentId}/stream.m3u8?start={startTicks}&token={StreamTokenHelper.Mint(parentId, _config.StreamTokenSecret)}").ToString();
 
     private string BuildStreamUrl(string pathSegment, string itemId, Entities.User user)
         => new Uri(new Uri(_config.ServerAddress), $"{pathSegment}{itemId}/stream?static=true&api_key={user.JellyfinToken}").ToString();

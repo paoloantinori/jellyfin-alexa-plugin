@@ -761,7 +761,8 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
 
         string url = handler.TestGetVideoAudioUrl(itemId);
 
-        Assert.Equal("http://localhost:8096/alexaskill/api/video-audio/33333333-3333-3333-3333-333333333333/stream.m3u8", url);
+        // JF-309: URL now carries a signed ?token= query parameter (item-scoped, dynamic).
+        Assert.StartsWith("http://localhost:8096/alexaskill/api/video-audio/33333333-3333-3333-3333-333333333333/stream.m3u8?token=", url);
     }
 
     [Fact]
