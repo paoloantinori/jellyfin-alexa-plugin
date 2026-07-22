@@ -151,7 +151,7 @@ public static class PortuguesePhoneticSynonyms
             }
         }
 
-        return w;
+        return PhoneticSynonymGenerator.ApplyRomanceTailRules(w);
     }
 
     private static string TransformW(string word)

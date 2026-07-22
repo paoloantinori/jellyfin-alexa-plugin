@@ -145,7 +145,7 @@ public static class SpanishPhoneticSynonyms
             }
         }
 
-        return w;
+        return PhoneticSynonymGenerator.ApplyRomanceTailRules(w);
     }
 
     private static string TransformW(string word)

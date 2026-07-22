@@ -255,4 +255,88 @@ public class PhoneticSynonymGeneratorTests
         var result = PhoneticSynonymGenerator.GenerateSynonyms("Pink Floyd", "");
         Assert.Empty(result);
     }
+
+    // --- JF-362: Romance L1 pronunciation of English ---
+    // Italian/Spanish/French/Portuguese L1 speakers all lack the velar nasal /ŋ/ as a
+    // phoneme, so they realize English "-ing" as /in/. (German and Dutch are Germanic and
+    // DO have /ŋ/, so they are excluded — see the de-DE test below.) On-device ASR captured
+    // an Italian saying "Soul Coughing" as "sol coffin"; the catalog slot must emit that
+    // spoken form. See claudedocs/research_jf362-italian-phonetic-synonyms_2026-07-22.md.
+
+    private static readonly string[] NgAbsentLocales_JF362 = { "it-IT", "es-ES", "fr-FR", "pt-BR" };
+
+    [Theory]
+    [MemberData(nameof(NgAbsentLocalesTheoryData_JF362))]
+    public void GenerateSynonyms_IngEnding_TransformsToIn_AcrossNgAbsentLocales_JF362(string locale)
+    {
+        // it/es/fr/pt L1 lacks /ŋ/ -> "-ing" surfaces as a dropped-g form. The exact
+        // spelling depends on whether the locale also has ough->of: it-IT chains to
+        // "Cofin" (pinned separately), the others give "Coughin".
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Coughing", locale);
+        Assert.NotEmpty(result);
+        Assert.Contains(result, s => s.Contains("Cofin", StringComparison.OrdinalIgnoreCase)
+                                  || s.Contains("Coughin", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void GenerateSynonyms_IngEnding_ItalianChainsOughToOf_ThenIngToIn_JF362()
+    {
+        // it-IT is the only one of the four with an ough->of rule, so the chain is
+        // Coughing -> Cofing -> Cofin. Lock this locale-specific difference explicitly
+        // (the other three produce "Coughin" — covered by the theory above).
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Coughing", "it-IT");
+        Assert.Contains(result, s => s.Contains("Cofin", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
+    [MemberData(nameof(NgAbsentLocalesTheoryData_JF362))]
+    public void GenerateSynonyms_SoulCoughing_ProducesSpokenForm_AcrossNgAbsentLocales_JF362(string locale)
+    {
+        // The on-device repro: an Italian says "sol coffin". Each /ŋ/-absent locale must
+        // emit a spoken-form synonym: "soul" -> "sol" (the override) AND the second word's
+        // terminal -ing dropped to -in.
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Soul Coughing", locale);
+        Assert.NotEmpty(result);
+        Assert.Contains(result, s => s.Contains("sol", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result, s => s.Contains("Cofin", StringComparison.OrdinalIgnoreCase)
+                                  || s.Contains("Coughin", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("nl-NL")]
+    public void GenerateSynonyms_IngEnding_GermanicLocales_DoNotDropIng_JF362(string locale)
+    {
+        // Guard: German and Dutch have /ŋ/ natively (Ding, singen, zingen), so they must
+        // NOT apply the -ing->-in Romance rule. A dropped-g synonym would be a spurious
+        // wrong-pronunciation variant. Lock the exclusion so it isn't re-added.
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Coughing", locale);
+        Assert.All(result, s => Assert.DoesNotContain("Cofin", s, StringComparison.OrdinalIgnoreCase));
+        Assert.All(result, s => Assert.DoesNotContain("Coughin", s, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void GenerateSynonyms_BareIng_NotTransformed_LengthGuard_JF362()
+    {
+        // The word.Length > 3 guard excludes the bare word "ing" (length 3) — it must not
+        // become "in". (The generator may return empty for it, which also satisfies this.)
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("ing", "it-IT");
+        Assert.All(result, s => Assert.DoesNotContain(" in", s, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
+    [InlineData("Sting")]
+    [InlineData("King")]
+    public void GenerateSynonyms_FourLetterIngWord_Transforms_AcceptedBroadBehavior_JF362(string word)
+    {
+        // Known over-broad approximation (accepted): 4-letter words ending in "-ing" pass
+        // the Length>3 guard even though the -ing is the root, not a suffix. This is
+        // linguistically correct for /ŋ/-absent L1 speakers — an Italian genuinely says
+        // "Stin"/"Kin". Pinned so a future change to the guard is caught deliberately.
+        var result = PhoneticSynonymGenerator.GenerateSynonyms(word, "it-IT");
+        Assert.Contains(result, s => s.Contains(word[..^3], StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static TheoryData<string> NgAbsentLocalesTheoryData_JF362 =>
+        new() { "it-IT", "es-ES", "fr-FR", "pt-BR" };
 }

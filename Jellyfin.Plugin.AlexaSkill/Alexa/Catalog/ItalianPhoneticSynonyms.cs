@@ -185,7 +185,7 @@ public static class ItalianPhoneticSynonyms
             w = CollapseDoubledConsonants(w);
         }
 
-        return w;
+        return PhoneticSynonymGenerator.ApplyRomanceTailRules(w);
     }
 
     private static string TransformWByVowel(string word)

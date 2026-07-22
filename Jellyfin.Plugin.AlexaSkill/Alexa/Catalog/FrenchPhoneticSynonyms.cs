@@ -141,7 +141,7 @@ public static class FrenchPhoneticSynonyms
             w = w.Substring(1);
         }
 
-        return w;
+        return PhoneticSynonymGenerator.ApplyRomanceTailRules(w);
     }
 
     private static string TransformW(string word)
