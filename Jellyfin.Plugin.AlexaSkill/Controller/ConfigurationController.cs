@@ -519,6 +519,9 @@ public class ConfigurationController : ControllerBase
         if (req.TryGetValue("AnnounceAudioPlays", out var announceAudioToken) && announceAudioToken.Type == JTokenType.Boolean)
         { config.AnnounceAudioPlays = announceAudioToken.Value<bool>(); updated = true; }
 
+        if (req.TryGetValue("CatalogSyncLocales", out var catalogSyncToken) && catalogSyncToken.Type == JTokenType.String)
+        { config.CatalogSyncLocales = catalogSyncToken.Value<string>() ?? string.Empty; updated = true; }
+
         if (req.TryGetValue("AsrCompoundWordFixEnabled", out var asrToken) && asrToken.Type == JTokenType.Boolean)
         { config.AsrCompoundWordFixEnabled = asrToken.Value<bool>(); updated = true; }
 

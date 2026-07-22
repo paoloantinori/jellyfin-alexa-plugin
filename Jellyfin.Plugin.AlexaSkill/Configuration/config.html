@@ -140,6 +140,11 @@
                                 <label><input type="checkbox" is="emby-checkbox" id="AnnounceAudioPlays" /> <span>Announce Music Plays (opt-in)</span></label>
                                 <div class="fieldDescription checkboxFieldDescription">Also speak "Now playing X" when music starts (songs/albums/artists). Off by default for fast, silent music starts; turn on if you want every track announced. Per-user overrides take precedence.</div>
                             </div>
+                            <div class="inputContainer">
+                                <label class="inputLabel" for="CatalogSyncLocales">Catalog Sync: Additional Locales</label>
+                                <input type="text" id="CatalogSyncLocales" class="emby-input" placeholder="e.g. de-DE,en-US (empty = it-IT only, * = all)" />
+                                <div class="fieldDescription">Comma-separated locale codes for catalog sync beyond it-IT (always synced). Adds phonetic synonyms for non-English names in supported languages (de/es/fr/pt/ja/nl). Use * for all active locales. Each locale adds ~7s to sync time.</div>
+                            </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="SeekEnabled" /> <span>Seek Controls</span></label>
                                 <div class="fieldDescription checkboxFieldDescription">Enable skip forward/back and jump-to-position voice commands. Also adds progress display when asking what's playing.</div>
@@ -445,7 +450,7 @@
                     // Feature flags
                     ["RadioModeEnabled", "PodcastsEnabled", "LiveTvEnabled", "SleepTimerEnabled",
                      "QueueManagementEnabled", "BrowseLibraryEnabled", "RecommendationsEnabled",
-                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "DefaultAnnounceNowPlaying","AnnounceAudioPlays","AsrCompoundWordFixEnabled", "SeekEnabled", "PauseAnnouncePosition",
+                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "DefaultAnnounceNowPlaying","AnnounceAudioPlays","CatalogSyncLocales","AsrCompoundWordFixEnabled", "SeekEnabled", "PauseAnnouncePosition",
                      "ShuffleArtistSongs", "NativeControlsForAudio", "NativeControlsForBooks"].forEach(function(f) {
                         document.querySelector("#" + f).checked = config[f] !== false;
                     });
@@ -1093,7 +1098,7 @@
 
                     ["RadioModeEnabled", "PodcastsEnabled", "LiveTvEnabled", "SleepTimerEnabled",
                      "QueueManagementEnabled", "BrowseLibraryEnabled", "RecommendationsEnabled",
-                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "DefaultAnnounceNowPlaying","AnnounceAudioPlays","AsrCompoundWordFixEnabled", "SeekEnabled", "PauseAnnouncePosition",
+                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "DefaultAnnounceNowPlaying","AnnounceAudioPlays","CatalogSyncLocales","AsrCompoundWordFixEnabled", "SeekEnabled", "PauseAnnouncePosition",
                      "ShuffleArtistSongs", "NativeControlsForAudio", "NativeControlsForBooks"].forEach(function(f) {
                         config[f] = document.querySelector("#" + f).checked;
                     });
@@ -1165,6 +1170,7 @@
                         ResumeAnnounceTitle: config.ResumeAnnounceTitle,
                         DefaultAnnounceNowPlaying: config.DefaultAnnounceNowPlaying,
                         AnnounceAudioPlays: config.AnnounceAudioPlays,
+                        CatalogSyncLocales: config.CatalogSyncLocales,
                         AsrCompoundWordFixEnabled: config.AsrCompoundWordFixEnabled,
                         SeekEnabled: config.SeekEnabled,
                         PauseAnnouncePosition: config.PauseAnnouncePosition,

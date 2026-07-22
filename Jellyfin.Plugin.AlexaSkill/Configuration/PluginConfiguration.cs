@@ -97,6 +97,14 @@ public class PluginConfiguration : BasePluginConfiguration
     public string StreamTokenSecret { get; set; } = string.Empty;
 
     /// <summary>
+    /// Gets or sets the additional locales (beyond it-IT) to include in catalog sync, as a
+    /// comma-separated string of locale codes (e.g. "de-DE,en-US"). it-IT is always synced.
+    /// Only locales with phonetic synonym generators (de/es/fr/pt/ja/nl) get phonetic variants;
+    /// others get raw names. Empty = it-IT only (default). Use "*" to sync all active locales.
+    /// </summary>
+    public string CatalogSyncLocales { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets or sets a value indicating whether the intent simulator endpoint is enabled.
     /// When disabled, all simulator endpoints return 404. Defaults to false for production safety.
     /// </summary>

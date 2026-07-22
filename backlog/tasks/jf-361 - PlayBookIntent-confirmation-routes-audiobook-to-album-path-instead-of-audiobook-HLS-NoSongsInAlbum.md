@@ -3,9 +3,10 @@ id: JF-361
 title: >-
   PlayBookIntent confirmation routes audiobook to album path instead of
   audiobook HLS (NoSongsInAlbum)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-22 12:16'
+updated_date: '2026-07-22 13:32'
 labels:
   - bug
   - playback
@@ -52,3 +53,9 @@ Acceptance criteria:
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining, or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fixed: YesIntentHandler now routes confirmed AudioBook items (from PlayBook disambiguation) to a new PlayBook() method that mirrors PlayBookIntentHandler's single-match logic — resolves tracks, checks NativeControlsForBooks, and plays via VideoApp HLS (seek bar) or AudioPlayer fallback. The root cause was that PlayBook disambiguation uses MediaTypeAlbum, so YesIntentHandler always routed to PlayAlbum(), which treated AudioBooks as music albums. Verified on-device: audiobook plays after disambiguation confirmation. 2575 tests pass. Committed fabc8c8.
+<!-- SECTION:FINAL_SUMMARY:END -->
