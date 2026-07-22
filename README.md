@@ -99,6 +99,7 @@ A Jellyfin plugin that creates a personal Alexa skill to play and control media 
 - **Radio mode**: a radio station based on your library, with on/off toggle
 - **Sleep timer**: stop playback after a specified duration
 - **Music delivery choice** (per-user): on Echo Show, choose the seek-bar VideoApp view or plain instant AudioPlayer playback
+- **Now-playing announce**: optional spoken announcement ("Now playing X") when content launches. Separate toggles for video/book launches (default on) and music plays (opt-in)
 
 ### 🔍 Search & discovery
 - **Search your library**: search, get recommendations, browse by category, play random media
@@ -134,6 +135,9 @@ A Jellyfin plugin that creates a personal Alexa skill to play and control media 
 
 ### 🌍 Languages
 - **17 locales across 11 languages** (58 intents each): English (5 variants), Spanish (3), French (2), German, Italian, Portuguese, Arabic, Dutch, Hindi, and Japanese
+
+### 🔒 Security
+- **Signed stream tokens**: the video-audio streaming endpoints (used for audiobook HLS, single-song VideoApp, and seek-bar playback) are gated by signed, item-scoped HMAC tokens. Anyone who learns a Jellyfin item GUID cannot stream it without a valid token minted by the skill. Tokens expire after 10 hours.
 
 ## Prerequisites
 
@@ -434,6 +438,8 @@ The plugin stores Amazon (Login with Amazon / SMAPI) and Jellyfin authentication
 - Debug logging of Alexa request bodies redacts the access token, apiAccessToken, and Amazon userId, though enabling debug logging for triage may still surface other identifiers in log lines.
 
 Encryption of tokens at rest is not currently implemented.
+
+The video-audio streaming endpoints (audiobook HLS, VideoApp seek-bar playback) are additionally protected by **signed item-scoped stream tokens** (HMAC-SHA256, 10-hour TTL). These tokens are auto-generated per server instance and embedded in stream URLs by the skill. A bare item GUID without a valid token returns HTTP 401, preventing unauthorized streaming even if a GUID is leaked.
 
 ## Troubleshooting
 
