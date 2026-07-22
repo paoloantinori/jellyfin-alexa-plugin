@@ -43,6 +43,8 @@ public class YesIntentHandlerTests : PluginTestBase
         _config = new PluginConfiguration();
         TestHelpers.SetServerAddress(_config, "http://localhost:8096");
         _loggerFactory = LoggerFactory.Create(b => { });
+
+        TestHelpers.EnsurePluginInstance(_config, _loggerFactory, c => { }, "yes-intent-tests");
     }
 
     private YesIntentHandler CreateHandler()
@@ -227,6 +229,47 @@ public class YesIntentHandlerTests : PluginTestBase
         // Must produce an AudioPlayer.Play (the item is playable audio), not a "NoSongsInAlbum" tell.
         Assert.NotNull(response.Response.Directives);
         Assert.True(response.Response.Directives.Count > 0 && response.Response.Directives[0] is AudioPlayerPlayDirective);
+    }
+
+    [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_AudioBookItem_NativeControlsForBooks_UsesVideoAppLaunch()
+    {
+        // JF-361: when NativeControlsForBooks is on, the PlayBook path in YesIntentHandler must
+        // route to VideoApp.Launch (seek bar), not AudioPlayer.Play.
+        var bookId = Guid.NewGuid();
+        var parentId = Guid.NewGuid();
+        var book = new AudioBook { Name = "Test Book", Id = bookId, ParentId = parentId };
+
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemById(bookId))
+            .Returns(book);
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { book });
+
+        // Enable NativeControlsForBooks (Plugin.Instance is set by EnsurePluginInstance in ctor)
+        Plugin.Instance!.Configuration.NativeControlsForBooks = true;
+        Plugin.Instance.Configuration.ServerAddress = "http://localhost:8096";
+
+        var matchInfo = new DisambiguationHelper.MatchInfo { Id = bookId.ToString(), Name = "Test Book" };
+        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreateYesIntentRequest(),
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            attrs,
+            CancellationToken.None);
+
+        // Restore defaults
+        Plugin.Instance.Configuration.NativeControlsForBooks = false;
+
+        Assert.NotNull(response.Response?.Directives);
+        Assert.True(response.Response.Directives.Count > 0, $"Expected directives, got {response.Response.Directives?.Count ?? -1}. OutputSpeech: {response.Response.OutputSpeech}");
+        Assert.IsType<Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>(
+            response.Response.Directives[0]);
     }
 
     [Fact]

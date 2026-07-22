@@ -273,7 +273,7 @@ public class LibrarySyncService
     /// - "*": all active locales (from SMAPI manifest).
     /// - "de-DE,en-US,...": it-IT + the listed locales.
     /// </summary>
-    private async Task<IReadOnlyList<string>> ResolveSyncLocalesAsync(
+    internal async Task<IReadOnlyList<string>> ResolveSyncLocalesAsync(
         string syncLocalesConfig,
         string accessToken,
         string skillId,
