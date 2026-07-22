@@ -137,15 +137,26 @@ public class YesIntentHandler : BaseHandler
             return Task.FromResult<SkillResponse>(userError);
         }
 
-        SkillResponse response = mediaType switch
+        // JF-361: AudioBook items arrive with MediaTypeAlbum label (PlayBook disambiguation reuses
+        // it). Route to the audiobook playback path instead of PlayAlbum.
+        SkillResponse response;
+        if (mediaType == DisambiguationHelper.MediaTypeAlbum && item is AudioBook)
         {
-            DisambiguationHelper.MediaTypeSong => PlaySong(item, user, session),
-            DisambiguationHelper.MediaTypeAlbum => PlayAlbum(item, jellyfinUser!, user, session, locale),
-            DisambiguationHelper.MediaTypeArtist => PlayArtist(item, jellyfinUser!, user, session, locale),
-            DisambiguationHelper.MediaTypeVideo => PlayVideo(item, user, session, locale),
-            DisambiguationHelper.MediaTypePlaylist => PlayPlaylist(item, jellyfinUser!, user, session, locale),
-            _ => ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale))
-        };
+            Logger.LogDebug("Yes: routing AudioBook item {ItemId} to audiobook playback", itemId);
+            response = PlayBook(item, jellyfinUser!, user, session, locale, context);
+        }
+        else
+        {
+            response = mediaType switch
+            {
+                DisambiguationHelper.MediaTypeSong => PlaySong(item, user, session),
+                DisambiguationHelper.MediaTypeAlbum => PlayAlbum(item, jellyfinUser!, user, session, locale),
+                DisambiguationHelper.MediaTypeArtist => PlayArtist(item, jellyfinUser!, user, session, locale),
+                DisambiguationHelper.MediaTypeVideo => PlayVideo(item, user, session, locale),
+                DisambiguationHelper.MediaTypePlaylist => PlayPlaylist(item, jellyfinUser!, user, session, locale),
+                _ => ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale))
+            };
+        }
 
         return Task.FromResult(response);
     }
@@ -253,6 +264,16 @@ public class YesIntentHandler : BaseHandler
             OrderBy = QueueContinuationFetcher.AlbumTrackOrder,
         });
 
+        // JF-361: single-file audiobooks (AudioBook items that ARE the audio track, with no
+        // child chapters) arrive here via PlayBook disambiguation's MediaTypeAlbum label.
+        // PlayAlbum finds no children and would say "NoSongsInAlbum" — but the item itself is
+        // playable audio. Fall back to treating the item as its own single track, matching
+        // PlayBookIntentHandler's single-file logic.
+        if (albumItems.Count == 0 && album is MediaBrowser.Controller.Entities.IHasMediaSources)
+        {
+            albumItems = new List<BaseItem> { album };
+        }
+
         if (albumItems.Count == 0)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NoSongsInAlbum", locale, album.Name));
@@ -263,6 +284,60 @@ public class YesIntentHandler : BaseHandler
         session.FullNowPlayingItem = albumItems[0];
         string itemId = albumItems[0].Id.ToString();
         return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, albumItems[0], user);
+    }
+
+    /// <summary>
+    /// Play an AudioBook item after disambiguation confirmation. Mirrors PlayBookIntentHandler's
+    /// single-match logic: resolve tracks, check resume, route to VideoApp (NativeControlsForBooks)
+    /// or AudioPlayer.
+    /// </summary>
+    private SkillResponse PlayBook(BaseItem book, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale, Context context)
+    {
+        // Resolve tracks (same logic as PlayBookIntentHandler)
+        // Resolve tracks (same logic as PlayBookIntentHandler). Use GetItemList (not GetItemsResult)
+        // to avoid the EF Core Count() NRE on certain query combinations.
+        IReadOnlyList<BaseItem> bookTrackList = _libraryManager.GetItemList(new InternalItemsQuery
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            ParentId = book.Id,
+            MediaTypes = new[] { MediaType.Audio },
+            DtoOptions = new DtoOptions(true),
+            Limit = ProgressiveQueueConstants.GetInitialFetchSize()
+        });
+
+        List<BaseItem> trackItems;
+        if (bookTrackList.Count == 0)
+        {
+            if (book.MediaType == MediaType.Audio)
+            {
+                trackItems = new List<BaseItem> { book };
+            }
+            else
+            {
+                return ResponseBuilder.Tell(ResponseStrings.Get("NoContentInBook", locale, book.Name));
+            }
+        }
+        else
+        {
+            trackItems = bookTrackList.ToList();
+        }
+
+        session.NowPlayingQueue = trackItems.Select(t => new QueueItem { Id = t.Id }).ToList();
+        session.FullNowPlayingItem = trackItems[0];
+
+        string itemId = trackItems[0].Id.ToString();
+
+        // NativeControlsForBooks → VideoApp HLS concat (seek bar)
+        if (Plugin.Instance?.Configuration?.NativeControlsForBooks == true)
+        {
+            SkillResponse response = BuildVideoAppAudioResponse(itemId, trackItems[0], user);
+            // Fresh-start audiobook via VideoApp: announce the book title.
+            response.Response.OutputSpeech = BuildNowPlayingSpeech(book.Name, locale, GetAnnounceNowPlaying(user));
+            return response;
+        }
+
+        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, trackItems[0], user, context);
     }
 
     private SkillResponse PlayArtist(BaseItem artist, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale)

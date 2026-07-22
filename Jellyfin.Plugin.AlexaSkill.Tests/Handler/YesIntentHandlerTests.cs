@@ -196,6 +196,40 @@ public class YesIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_AudioBookItem_DoesNotReturnNoSongsInAlbum()
+    {
+        // JF-361: PlayBook disambiguation uses MediaTypeAlbum label for audiobooks. When the user
+        // confirms, YesIntentHandler routes to PlayAlbum. A single-file AudioBook (no children)
+        // must be treated as its own single track, not return "Non ci sono canzoni nell'album".
+        var bookId = Guid.NewGuid();
+        var book = new AudioBook { Name = "Test Book", Id = bookId };
+
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemById(bookId))
+            .Returns(book);
+        // Single-file audiobook: no child tracks, item itself is the audio.
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var matchInfo = new DisambiguationHelper.MatchInfo { Id = bookId.ToString(), Name = "Test Book" };
+        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreateYesIntentRequest(),
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            attrs,
+            CancellationToken.None);
+
+        // Must produce an AudioPlayer.Play (the item is playable audio), not a "NoSongsInAlbum" tell.
+        Assert.NotNull(response.Response.Directives);
+        Assert.True(response.Response.Directives.Count > 0 && response.Response.Directives[0] is AudioPlayerPlayDirective);
+    }
+
+    [Fact]
     public async Task HandleAsync_WithDisambiguationState_AlbumType_ReturnsAudioPlay()
     {
         var albumId = Guid.NewGuid();

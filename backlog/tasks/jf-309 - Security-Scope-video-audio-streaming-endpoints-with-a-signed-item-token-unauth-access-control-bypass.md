@@ -3,10 +3,10 @@ id: JF-309
 title: >-
   Security: Scope video-audio streaming endpoints with a signed item token
   (unauth access-control bypass)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-12 14:57'
-updated_date: '2026-07-13 20:16'
+updated_date: '2026-07-21 16:09'
 labels:
   - security
   - access-control
@@ -36,6 +36,12 @@ Note: this touches the same controller as the audiobook HLS resume logic — pre
 - [ ] #5 Audiobook resume (?start=) and segment fetching still work end-to-end
 - [ ] #6 Unit tests cover token accept/reject paths
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented signed item-scoped stream tokens (HMAC-SHA256, 10h TTL) gating all 4 video-audio endpoints. StreamTokenHelper (Mint/Validate with constant-time compare) + StreamTokenSecret auto-gen in PluginConfiguration. Token minted in 3 URL builders, validated in all 4 endpoints (401 on missing/expired/wrong-item/tampered). Threaded into playlists (ffmpeg-written via RewritePlaylistWithToken, audiobook via WriteAudiobookPlaylist + ServeAudiobookPlaylistAsync rewrite). Single-chapter audiobook re-mints chapter-scoped token (overrideToken). Log redaction (token= masked alongside api_key=). 2574 tests pass. /simplify + /code-review high passed (code review caught 2 CRITICAL bugs: RewritePlaylistWithToken predicate matched zero real segment lines + single-chapter token mismatch — both fixed). Deployed to minix, verified live: bare-GUID → 401 on all endpoints, valid token → 200. E2e test (test_stream_security.py) added.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
