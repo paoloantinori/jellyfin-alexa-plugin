@@ -83,10 +83,13 @@ public class PhoneticSynonymGeneratorTests
     }
 
     [Fact]
-    public void GenerateSynonyms_ReturnsMaxThreeSynonyms()
+    public void GenerateSynonyms_ReturnsMaxFiveSynonyms()
     {
-        var result = PhoneticSynonymGenerator.GenerateSynonyms("The Backstreet Boys", "it-IT");
-        Assert.True(result.Count <= 3);
+        // JF-362 raised the per-name synonym cap from 3 to 5 to offer more ASR-coverage
+        // variants. Use an input that actually exercises the cap (multiple transformable
+        // features -> 5 variants).
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Motion Orchestra", "it-IT");
+        Assert.True(result.Count <= 5, $"Expected <= 5 synonyms, got {result.Count}");
     }
 
     [Fact]
@@ -339,4 +342,68 @@ public class PhoneticSynonymGeneratorTests
 
     public static TheoryData<string> NgAbsentLocalesTheoryData_JF362 =>
         new() { "it-IT", "es-ES", "fr-FR", "pt-BR" };
+
+    // --- JF-362 (device capture): coverage, not precision ---
+    // The goal is to offer ALTERNATIVE spoken-form variants so that whichever way Alexa's
+    // ASR transcribes an Italian pronunciation, at least one synonym matches (entity
+    // resolution only needs one hit; extra near-misses are harmless). On-device ASR
+    // captured "Soul Coughing" as both "sol coffin" and "soul coffin" — single AND double
+    // 'f', sol AND soul. The synonym set must cover {sol,soul} × {cofin,coffin}.
+    // See claudedocs/research_jf362-italian-gemination-doubling_2026-07-23.md.
+
+    [Theory]
+    [MemberData(nameof(NgAbsentLocalesTheoryData_JF362))]
+    public void GenerateSynonyms_SoulCoughing_CoversDeviceCaptures_AcrossNgAbsentLocales_JF362(string locale)
+    {
+        // Device ASR produced "soul coffin" (corr be57f36f) and "sol coffin" (corr 32a6617e).
+        // The doubler covers whatever single intervocalic consonant each locale's transform
+        // produces. it-IT runs ough->of first, so "Cofin" -> doubled "Coffin" (the device
+        // capture). es/fr/pt have no ough->of rule, so they keep "Coughin" (no intervocalic f
+        // to double) — that is locally correct, not a gap.
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Soul Coughing", locale);
+
+        // The dropped-g form (Cofin for it-IT, Coughin for es/fr/pt) must be present.
+        Assert.Contains(result, s => s.Contains("Cofin", StringComparison.OrdinalIgnoreCase)
+                                  || s.Contains("Coughin", StringComparison.OrdinalIgnoreCase));
+
+        if (locale == "it-IT")
+        {
+            // The device-capture doubled-f form is reachable only via the Italian ough->of chain.
+            Assert.Contains(result, s => s.Contains("Coffin", StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    [Fact]
+    public void GenerateSynonyms_DoubleConsonantVariant_EmittedForIntervocalicConsonant_JF362()
+    {
+        // A word with a single intervocalic consonant that ASR may double should emit a
+        // doubled-consonant variant as an additional synonym (coverage). "Coughing" -> the
+        // -ing->-in path yields "Cofin"; a doubled-f variant "Coffin" should also appear.
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Coughing", "it-IT");
+        Assert.Contains(result, s => s.Contains("Coffin", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void GenerateSynonyms_SoulCoughing_CoversBothSolAndSoulDeviceCaptures_JF362()
+    {
+        // Device ASR captured BOTH "sol coffin" (corr 32a6617e) and "soul coffin" (corr
+        // be57f36f). ASR is inconsistent about the override vowel — sometimes keeps "soul".
+        // The synonym set must cover the doubled-f form with BOTH vowels (coverage).
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Soul Coughing", "it-IT");
+        Assert.Contains(result, s => s.Contains("Sol Coffin", StringComparison.OrdinalIgnoreCase)
+                                  || s.Contains("sol coffin", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result, s => s.Contains("Soul Coffin", StringComparison.OrdinalIgnoreCase)
+                                  || s.Contains("soul coffin", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void GenerateSynonyms_MultiWordOverrideName_KeepsDeviceCaptureUnderCap_JF362()
+    {
+        // Regression guard (code-review MUST-FIX 1): when an override word ("Soul") and
+        // other transformable words co-occur, the synonym list can exceed the Take(5) cap.
+        // The device-captured "Soul Coffin" form must survive (added before lower-priority
+        // alternates), not be truncated. "Motion Soul Coughing" has tion + override + ough.
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Motion Soul Coughing", "it-IT");
+        Assert.Contains(result, s => s.Contains("Soul Coffin", StringComparison.OrdinalIgnoreCase));
+    }
 }
