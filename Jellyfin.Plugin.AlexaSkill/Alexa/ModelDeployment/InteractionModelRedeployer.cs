@@ -33,7 +33,7 @@ public class InteractionModelRedeployer : IInteractionModelRedeployer
     }
 
     /// <inheritdoc />
-    public async Task<ModelRedeployResult> RedeployAsync(User user, string invocationName, CancellationToken cancellationToken)
+    public async Task<ModelRedeployResult> RedeployAsync(User user, string invocationName, CancellationToken cancellationToken, string? localeFilter = null)
     {
         if (Plugin.Instance?.ManifestSkill == null)
         {
@@ -46,7 +46,7 @@ public class InteractionModelRedeployer : IInteractionModelRedeployer
             throw new ArgumentException("User has no skill ID. Complete skill creation first.", nameof(user));
         }
 
-        var interactionModels = Plugin.Instance.BuildSkillInteractionModels(invocationName);
+        var interactionModels = Plugin.Instance.BuildSkillInteractionModels(invocationName, localeFilter);
 
         var updateFailures = await AlexaUtil.CallAsync(
             user,
