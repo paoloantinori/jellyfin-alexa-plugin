@@ -252,16 +252,21 @@ public class LibrarySyncService
         }
 
         string payloadJson = JsonSerializer.Serialize(payload, CatalogManager.JsonOptions);
-        string cacheKey = CatalogController.StorePayload(payloadJson);
-
         string serverAddress = Plugin.Instance!.Configuration.ServerAddress.TrimEnd('/');
-        string catalogUrl = $"{serverAddress}/alexaskill/catalog/{cacheKey}";
+
+        // URL factory: re-store the payload on each call so a retry (after a transient
+        // SMAPI fetch failure) gets a fresh, unconsumed source URL.
+        Func<string> catalogUrlFactory = () =>
+        {
+            string cacheKey = CatalogController.StorePayload(payloadJson);
+            return $"{serverAddress}/alexaskill/catalog/{cacheKey}";
+        };
 
         string catalogVersion = await _catalogManager.UploadCatalogValuesAsync(
             accessToken,
             catalogId,
             payload,
-            catalogUrl,
+            catalogUrlFactory,
             cancellationToken).ConfigureAwait(false);
 
         return (payload.Values.Count, catalogVersion);

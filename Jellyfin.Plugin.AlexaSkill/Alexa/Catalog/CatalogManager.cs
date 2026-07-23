@@ -94,62 +94,111 @@ public class CatalogManager
     }
 
     /// <summary>
+    /// Maximum number of attempts when a catalog version build fails with a transient
+    /// GATEWAY_ERROR (SMAPI could not fetch the source URL, e.g. the reverse proxy was
+    /// still warming up after a Jellyfin restart). Each retry re-stores the payload (fresh
+    /// source URL, since SMAPI consumes the URL on fetch) and re-creates the version.
+    /// </summary>
+    private const int TransientFetchMaxAttempts = 3;
+
+    /// <summary>
     /// Creates a catalog version by providing a hosted URL for SMAPI to pull.
     /// SMAPI flow: store payload in cache -> create version with source URL -> poll status.
+    /// On a transient GATEWAY_ERROR (SMAPI could not fetch the source URL), retries with a
+    /// fresh URL from <paramref name="catalogUrlFactory"/> up to <see cref="TransientFetchMaxAttempts"/>
+    /// times. Non-transient failures (real validation errors) throw immediately.
     /// </summary>
     /// <param name="accessToken">The SMAPI access token.</param>
     /// <param name="catalogId">The target catalog ID.</param>
     /// <param name="payload">The catalog values payload to upload.</param>
-    /// <param name="catalogUrl">The public URL where SMAPI can fetch the catalog JSON.</param>
+    /// <param name="catalogUrlFactory">Returns a fresh public URL where SMAPI can fetch the catalog JSON. Called once per attempt so each retry gets an unconsumed URL.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The committed version string.</returns>
     public async Task<string> UploadCatalogValuesAsync(
         string accessToken,
         string catalogId,
         CatalogPayload payload,
-        string catalogUrl,
+        Func<string> catalogUrlFactory,
         CancellationToken cancellationToken)
     {
-        _logger.LogInformation(
-            "Creating catalog version for {CatalogId} with {ValueCount} values from {Url}",
-            catalogId,
-            payload.Values.Count,
-            catalogUrl);
-
         var client = _httpClientFactory.CreateClient("AlexaSkill");
 
-        var versionBody = new
+        Exception? lastFailure = null;
+        for (int attempt = 1; attempt <= TransientFetchMaxAttempts; attempt++)
         {
-            source = new
+            string catalogUrl = catalogUrlFactory();
+            _logger.LogInformation(
+                "Creating catalog version for {CatalogId} with {ValueCount} values from {Url} (attempt {Attempt}/{Max})",
+                catalogId,
+                payload.Values.Count,
+                catalogUrl,
+                attempt,
+                TransientFetchMaxAttempts);
+
+            var versionBody = new
             {
-                type = "URL",
-                url = catalogUrl
-            },
-            description = $"Library sync {DateTime.UtcNow:O}"
-        };
+                source = new
+                {
+                    type = "URL",
+                    url = catalogUrl
+                },
+                description = $"Library sync {DateTime.UtcNow:O}"
+            };
 
-        using var versionRequest = new HttpRequestMessage(HttpMethod.Post, $"{SmapiEndpoint}/v1/skills/api/custom/interactionModel/catalogs/{catalogId}/versions");
-        versionRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        versionRequest.Content = JsonContent.Create(versionBody, options: JsonOptions);
+            using var versionRequest = new HttpRequestMessage(HttpMethod.Post, $"{SmapiEndpoint}/v1/skills/api/custom/interactionModel/catalogs/{catalogId}/versions");
+            versionRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            versionRequest.Content = JsonContent.Create(versionBody, options: JsonOptions);
 
-        using var versionResponse = await client.SendAsync(versionRequest, cancellationToken).ConfigureAwait(false);
-        await EnsureSuccessAsync(versionResponse, cancellationToken).ConfigureAwait(false);
+            using var versionResponse = await client.SendAsync(versionRequest, cancellationToken).ConfigureAwait(false);
+            await EnsureSuccessAsync(versionResponse, cancellationToken).ConfigureAwait(false);
 
-        // 202 Accepted with Location header for polling
-        Uri? locationUri = versionResponse.Headers.Location;
-        if (locationUri == null)
-        {
-            _logger.LogWarning("Catalog version creation returned no Location header");
-            return "1";
+            // 202 Accepted with Location header for polling
+            Uri? locationUri = versionResponse.Headers.Location;
+            if (locationUri == null)
+            {
+                _logger.LogWarning("Catalog version creation returned no Location header");
+                return "1";
+            }
+
+            locationUri = ResolveLocationUri(locationUri);
+
+            try
+            {
+                string? version = await PollSmapiOperationAsync(
+                    accessToken, client, locationUri, "Catalog version", cancellationToken).ConfigureAwait(false);
+
+                _logger.LogInformation("Catalog {CatalogId} version {Version} created successfully", catalogId, version);
+                return version ?? "1";
+            }
+            catch (InvalidOperationException ex) when (attempt < TransientFetchMaxAttempts && IsTransientFetchFailure(ex))
+            {
+                // SMAPI could not fetch the source URL (503/GATEWAY_ERROR). The URL is
+                // consumed, so retry with a fresh one. Brief delay to let the proxy recover.
+                lastFailure = ex;
+                _logger.LogWarning(
+                    "Catalog version for {CatalogId} failed with a transient fetch error (attempt {Attempt}/{Max}); retrying with a fresh source URL. Error: {Error}",
+                    catalogId, attempt, TransientFetchMaxAttempts, ex.Message);
+                await Task.Delay(2000, cancellationToken).ConfigureAwait(false);
+            }
         }
 
-        locationUri = ResolveLocationUri(locationUri);
+        // Exhausted retries (or the loop exited with a non-transient failure preserved below).
+        throw lastFailure ?? new InvalidOperationException($"Catalog version creation exhausted {TransientFetchMaxAttempts} attempts for {catalogId}");
+    }
 
-        string? version = await PollSmapiOperationAsync(
-            accessToken, client, locationUri, "Catalog version", cancellationToken).ConfigureAwait(false);
-
-        _logger.LogInformation("Catalog {CatalogId} version {Version} created successfully", catalogId, version);
-        return version ?? "1";
+    /// <summary>
+    /// True when a FAILED poll's error indicates SMAPI could not fetch the catalog source
+    /// URL (a transient, retryable condition): a GATEWAY_ERROR code, or a 502/503/504
+    /// status mentioned in the error text. Real validation errors ("rejected catalog
+    /// value") are NOT transient and must surface immediately.
+    /// </summary>
+    private static bool IsTransientFetchFailure(InvalidOperationException ex)
+    {
+        string msg = ex.Message;
+        return msg.Contains("GATEWAY_ERROR", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("502", StringComparison.Ordinal)
+            || msg.Contains("503", StringComparison.Ordinal)
+            || msg.Contains("504", StringComparison.Ordinal);
     }
 
     /// <summary>
