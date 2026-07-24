@@ -346,8 +346,8 @@
                                 <button id="restoreModelButton" is="emby-button" type="button" class="raised button-alt emby-button">
                                     <span>Restore Default</span>
                                 </button>
-                                <button id="rebuildModelsButton" is="emby-button" type="button" class="raised button-alt emby-button">
-                                    <span>Rebuild All Models</span>
+                                <button id="rebuildModelsButton" is="emby-button" type="button" class="raised button-alt emby-button" title="Rebuild the model for the locale selected above">
+                                    <span>Rebuild Selected Locale</span>
                                 </button>
                             </div>
 
@@ -1792,8 +1792,8 @@
             document.querySelector("#rebuildModelsButton").addEventListener("click", function() {
                 callModelApi(
                     "alexaskill/api/custom-model/rebuild",
-                    { userId: getFirstConfiguredUserId() },
-                    "#rebuildModelsButton", "Rebuilding all models...", "All models rebuilt"
+                    { userId: getFirstConfiguredUserId(), locale: document.querySelector("#CustomModelLocale").value },
+                    "#rebuildModelsButton", "Rebuilding selected locale...", "Selected locale rebuilt"
                 );
             });
         </script>

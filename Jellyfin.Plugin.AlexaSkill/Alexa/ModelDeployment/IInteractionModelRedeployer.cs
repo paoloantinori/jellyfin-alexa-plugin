@@ -24,6 +24,7 @@ public interface IInteractionModelRedeployer
     /// <param name="user">The user whose skill to update. Must have a non-empty <see cref="UserSkill.SkillId"/> and a SMAPI device token.</param>
     /// <param name="invocationName">The invocation name to apply to every locale model.</param>
     /// <param name="cancellationToken">Token to cancel the build-status poll.</param>
+    /// <param name="localeFilter">When non-null/non-whitespace, rebuild only the matching locale (ordinal-ignore-case); null rebuilds all locales. The invocation-name change path must pass null so every locale gets the new name.</param>
     /// <returns>The redeploy outcome, including per-locale build results.</returns>
     Task<ModelRedeployResult> RedeployAsync(User user, string invocationName, CancellationToken cancellationToken, string? localeFilter = null);
 }

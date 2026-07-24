@@ -863,7 +863,14 @@ public class ConfigurationController : ControllerBase
             return new JsonResult(new { error = "Plugin manifest not loaded. Restart Jellyfin first." }) { StatusCode = 503 };
         }
 
-        string? localeFilter = Plugin.Instance!.Configuration.CustomModelLocale;
+        // Rebuild the locale currently chosen in the UI dropdown. The client sends it in
+        // the request body (matching the Deploy/Restore buttons); fall back to the saved
+        // CustomModelLocale for callers that don't send it.
+        string? localeFilter = req.Value<string>("locale");
+        if (string.IsNullOrWhiteSpace(localeFilter))
+        {
+            localeFilter = Plugin.Instance!.Configuration.CustomModelLocale;
+        }
 
         try
         {
@@ -882,7 +889,7 @@ public class ConfigurationController : ControllerBase
             return new JsonResult(new
             {
                 success = result.Success,
-                message = $"Rebuilt {result.LocaleCount} models — {result.SucceededCount} succeeded, {result.Locales.Count(r => !r.Value.Success)} failed",
+                message = $"Rebuilt {result.LocaleCount} locale(s) — {result.SucceededCount} succeeded, {result.Locales.Count(r => !r.Value.Success)} failed",
                 locales = result.Locales.ToDictionary(r => r.Key, r => new { success = r.Value.Success, status = r.Value.Status, error = r.Value.Error }),
                 updateFailures = result.UpdateFailures
             });
