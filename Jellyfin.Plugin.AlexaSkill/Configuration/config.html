@@ -94,27 +94,27 @@
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="PodcastsEnabled" /> <span>Podcasts</span></label>
-                                <div class="fieldDescription checkboxFieldDescription">Enable podcast playback</div>
+                                <div class="fieldDescription checkboxFieldDescription">Play podcasts by name. Example: "play the podcast [name]". Disable if you don't use podcasts.</div>
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="LiveTvEnabled" /> <span>Live TV</span></label>
-                                <div class="fieldDescription checkboxFieldDescription">Enable live TV channel playback</div>
+                                <div class="fieldDescription checkboxFieldDescription">Play live TV channels. Example: "play channel [name]". Disable if you don't use IPTV or live TV.</div>
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="SleepTimerEnabled" /> <span>Sleep Timer</span></label>
-                                <div class="fieldDescription checkboxFieldDescription">Enable sleep timer functionality</div>
+                                <div class="fieldDescription checkboxFieldDescription">Stop playback after a set time. Examples: "stop playing in 15 minutes", "set a sleep timer for 30 minutes".</div>
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="QueueManagementEnabled" /> <span>Queue Management</span></label>
-                                <div class="fieldDescription checkboxFieldDescription">Enable add to queue, play next, clear queue, list queue</div>
+                                <div class="fieldDescription checkboxFieldDescription">Manage the play queue. Examples: "play [song] next", "add [song] to the queue", "clear the queue".</div>
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="BrowseLibraryEnabled" /> <span>Browse Library</span></label>
-                                <div class="fieldDescription checkboxFieldDescription">Enable browsing library content by category</div>
+                                <div class="fieldDescription checkboxFieldDescription">Browse and query your library. Examples: "show artists", "which songs do we have by [artist]".</div>
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="RecommendationsEnabled" /> <span>Recommendations</span></label>
-                                <div class="fieldDescription checkboxFieldDescription">Enable media recommendations</div>
+                                <div class="fieldDescription checkboxFieldDescription">Get music suggestions from your library. Examples: "recommend something", "recommend some music".</div>
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="AplVisualsEnabled" /> <span>Screen Display</span></label>
@@ -122,7 +122,7 @@
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="VideoPlaybackEnabled" /> <span>Video Playback</span></label>
-                                <div class="fieldDescription checkboxFieldDescription">Enable video playback on supported devices</div>
+                                <div class="fieldDescription checkboxFieldDescription">Play movies and episodes on Echo Show / Fire TV. Example: "play [movie name]". Disable if you only use audio.</div>
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="ResumeOfferEnabled" /> <span>Resume Prompt</span></label>
@@ -156,15 +156,15 @@
                             <div class="fieldDescription">Control which content types appear in search results and library browsing. Disabled types are excluded from queries entirely.</div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="MusicEnabled" /> <span>Music</span></label>
-                                <div class="fieldDescription checkboxFieldDescription">Songs, albums, and artists</div>
+                                <div class="fieldDescription checkboxFieldDescription">Include songs, albums, and artists in search. Examples: "play [song]", "play artist [name]".</div>
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="VideosEnabled" /> <span>Videos</span></label>
-                                <div class="fieldDescription checkboxFieldDescription">Movies, series, and episodes</div>
+                                <div class="fieldDescription checkboxFieldDescription">Include movies, series, and episodes in search. Examples: "play [movie name]", "play [show name]".</div>
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="BooksEnabled" /> <span>Books</span></label>
-                                <div class="fieldDescription checkboxFieldDescription">Audiobooks</div>
+                                <div class="fieldDescription checkboxFieldDescription">Include audiobooks in search. Example: "play [book title]".</div>
                             </div>
                     </details>
 
@@ -173,7 +173,7 @@
                             <div class="fieldDescription">Fine-tune how audio is delivered to Alexa devices. Changes take effect on the next playback request.</div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="SeekEnabled" /> <span>Seek Controls</span></label>
-                                <div class="fieldDescription checkboxFieldDescription">Enable skip forward/back and jump-to-position voice commands. Also adds progress display when asking what's playing. Example: "skip 30 seconds", "jump to 2 minutes".</div>
+                                <div class="fieldDescription checkboxFieldDescription">Enable skip forward/back and jump-to-position voice commands. Also adds progress display when asking what's playing. Examples: "skip 30 seconds", "jump to 2 minutes".</div>
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="ShuffleArtistSongs" /> <span>Shuffle Artist Songs</span></label>
@@ -243,7 +243,7 @@
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="AsrCompoundWordFixEnabled" /> <span>Compound Word Fix</span></label>
-                                <div class="fieldDescription checkboxFieldDescription">When Alexa splits compound words (e.g. 'lazybones' → 'lazy bones'), retry search with joined variants. Disable if search is too slow on misses.</div>
+                                <div class="fieldDescription checkboxFieldDescription">When Alexa splits compound words, retry search with joined variants. Example: "lazy bones" also searches "lazybones". Disable if search is too slow on misses.</div>
                             </div>
                             <div class="fieldDescription">Control how media search behaves. Fuzzy match settings are per-user (see User table below).</div>
                             <div class="inputContainer">
@@ -273,7 +273,7 @@
 
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="CustomModelEnabled" /> <span>Enable Custom Model</span></label>
-                                <div class="fieldDescription checkboxFieldDescription">Replace the built-in voice command model with a custom one from a URL</div>
+                                <div class="fieldDescription checkboxFieldDescription">Replace the built-in voice command model with a custom one from a URL. Use this to add or change the phrases Alexa recognizes for a locale.</div>
                             </div>
 
                             <div class="inputContainer">
