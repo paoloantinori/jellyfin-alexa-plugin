@@ -55,8 +55,19 @@ public class InteractionModelRedeployer : IInteractionModelRedeployer
 
         var localeResults = await PollLocaleBuildStatusAsync(user, skillId, cancellationToken).ConfigureAwait(false);
 
-        int succeeded = localeResults.Count(r => r.Value.Success);
-        bool success = localeResults.All(r => r.Value.Success) && updateFailures.Count == 0;
+        // The poll returns status for EVERY active locale on the skill, but only the
+        // deployed locales (interactionModels) were actually rebuilt this run. Scope the
+        // reported result to them so a single-locale rebuild isn't reported as e.g.
+        // "1 locale rebuilt — 11 succeeded, 1 failed" with stale statuses from untouched
+        // locales bleeding in. (Null filter = all locales, so this is a no-op there.)
+        var deployedLocales = new HashSet<string>(
+            interactionModels.Select(m => m.Locale), StringComparer.OrdinalIgnoreCase);
+        var deployedResults = localeResults
+            .Where(r => deployedLocales.Contains(r.Key))
+            .ToDictionary(r => r.Key, r => r.Value, StringComparer.Ordinal);
+
+        int succeeded = deployedResults.Count(r => r.Value.Success);
+        bool success = deployedResults.All(r => r.Value.Success) && updateFailures.Count == 0;
         string status = success ? "rebuilt" : "rebuilt_with_errors";
 
         _logger.LogInformation(
@@ -64,7 +75,7 @@ public class InteractionModelRedeployer : IInteractionModelRedeployer
             interactionModels.Count,
             skillId,
             succeeded,
-            localeResults.Count - succeeded,
+            deployedResults.Count - succeeded,
             updateFailures.Count);
 
         return new ModelRedeployResult(
@@ -73,7 +84,7 @@ public class InteractionModelRedeployer : IInteractionModelRedeployer
             interactionModels.Count,
             succeeded,
             updateFailures,
-            localeResults);
+            deployedResults);
     }
 
     /// <summary>
