@@ -569,20 +569,14 @@
         "slots": [
           {
             "name": "mood",
-            "type": "AMAZON.SearchQuery"
+            "type": "Mood"
           }
         ],
         "samples": [
           "tocar música {mood}",
           "tocar algo {mood}",
           "tocar músicas {mood}",
-          "quero música {mood}",
-          "tocar música relaxante",
-          "tocar música de manhã",
-          "tocar música de noite",
-          "tocar música de treino",
-          "tocar música para focar",
-          "tocar música de festa"
+          "quero música {mood}"
         ]
       },
       {
@@ -833,6 +827,109 @@
       }
     ],
     "types": [
+      {
+        "name": "Mood",
+        "values": [
+          {
+            "name": {
+              "value": "relaxada",
+              "synonyms": [
+                "relaxado"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "calmo",
+              "synonyms": [
+                "calma"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "animada",
+              "synonyms": [
+                "animado"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "energética",
+              "synonyms": [
+                "energético"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "foco"
+            }
+          },
+          {
+            "name": {
+              "value": "romântica",
+              "synonyms": [
+                "romântico"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "alegre",
+              "synonyms": [
+                "feliz"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "triste"
+            }
+          },
+          {
+            "name": {
+              "value": "festa"
+            }
+          },
+          {
+            "name": {
+              "value": "treino",
+              "synonyms": [
+                "exercício"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "manhã"
+            }
+          },
+          {
+            "name": {
+              "value": "noite",
+              "synonyms": [
+                "noturna",
+                "noturno"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "jantar"
+            }
+          },
+          {
+            "name": {
+              "value": "dormir",
+              "synonyms": [
+                "sono"
+              ]
+            }
+          }
+        ]
+      },
       {
         "name": "LibraryQueryType",
         "values": [

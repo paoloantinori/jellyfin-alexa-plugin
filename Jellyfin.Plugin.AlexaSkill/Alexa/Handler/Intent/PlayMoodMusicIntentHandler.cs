@@ -11,6 +11,7 @@ using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -35,6 +36,7 @@ public class PlayMoodMusicIntentHandler : BaseHandler
         ["upbeat"] = new[] { "pop", "rock", "dance", "electronic" },
         ["energetic"] = new[] { "rock", "electronic", "metal", "punk" },
         ["focus"] = new[] { "classical", "ambient", "instrumental" },
+        ["sleep"] = new[] { "ambient", "new age", "chillout", "acoustic" },
         ["romantic"] = new[] { "r&b", "jazz", "soul", "pop" },
         ["happy"] = new[] { "pop", "dance", "reggae" },
         ["sad"] = new[] { "blues", "indie", "folk", "alternative" },
@@ -61,12 +63,25 @@ public class PlayMoodMusicIntentHandler : BaseHandler
         ["abends"] = "evening",
         ["abendessen"] = "dinner",
 
+        // Sleep — Spotify "Sleep" mood (JF-355).
+        // "dormire" is the it-IT infinitive only; es-ES/fr-FR/pt-BR say "dormir"
+        // (added per-locale in JF-356). de-DE/fr-FR/es-ES variants below.
+        ["dormire"] = "sleep",
+        ["per dormire"] = "sleep",
+        ["schlafen"] = "sleep",
+        ["einschlafen"] = "sleep",
+        ["sueño"] = "sleep",
+        ["sommeil"] = "sleep",
+
         // de-DE
         ["beruhigend"] = "chill",
         ["beschwingt"] = "upbeat",
 
         // it-IT
         ["allenamento"] = "workout",
+        ["allenarmi"] = "workout",
+        ["concentrarmi"] = "focus",
+        ["rilassarmi"] = "relaxing",
         ["allegra"] = "happy",
         ["allegramente"] = "happy",
 
@@ -118,6 +133,10 @@ public class PlayMoodMusicIntentHandler : BaseHandler
         // es-ES
         ["enérgica"] = "energetic",
         ["enérgico"] = "energetic",
+
+        // it-IT (unaccented; distinct from the es-ES accented forms above)
+        ["energica"] = "energetic",
+        ["energico"] = "energetic",
         ["entrenamiento"] = "workout",
 
         // fr-FR
@@ -247,11 +266,88 @@ public class PlayMoodMusicIntentHandler : BaseHandler
         ["triste"] = "sad",
 
         // it-IT
-        ["tristezza"] = "sad"
+        ["tristezza"] = "sad",
+
+        // JF-356: gaps for locales already partly covered (sleep/party variants).
+        // es-ES/MX/US
+        ["dormir"] = "sleep",
+        // fr-FR/CA
+        ["fête"] = "party",
+        // pt-BR
+        ["sono"] = "sleep",
+
+        // JF-356: nl-NL (no prior coverage)
+        ["ontspannend"] = "relaxing",
+        ["rustgevend"] = "chill",
+        ["vrolijk"] = "upbeat",
+        ["energiek"] = "energetic",
+        ["concentratie"] = "focus",
+        ["blij"] = "happy",
+        ["gelukkig"] = "happy",
+        ["verdrietig"] = "sad",
+        ["feest"] = "party",
+        ["ochtend"] = "morning",
+        ["avond"] = "evening",
+        ["diner"] = "dinner",
+        ["slapen"] = "sleep",
+        ["slaap"] = "sleep",
+
+        // JF-356: ja-JP (loanwords, the Alexa-JP convention for music moods)
+        ["リラックス"] = "relaxing",
+        ["チル"] = "chill",
+        ["アップビート"] = "upbeat",
+        ["エネルギッシュ"] = "energetic",
+        ["集中"] = "focus",
+        ["ロマンチック"] = "romantic",
+        ["ハッピー"] = "happy",
+        ["サッド"] = "sad",
+        ["パーティー"] = "party",
+        ["ワークアウト"] = "workout",
+        ["モーニング"] = "morning",
+        ["イブニング"] = "evening",
+        ["ディナー"] = "dinner",
+        ["スリープ"] = "sleep",
+
+        // JF-356: hi-IN
+        ["आराम"] = "relaxing",
+        ["शांत"] = "chill",
+        ["उत्साही"] = "upbeat",
+        ["ऊर्जावान"] = "energetic",
+        ["ध्यान"] = "focus",
+        ["रोमांटिक"] = "romantic",
+        ["खुशी"] = "happy",
+        ["खुश"] = "happy",
+        ["उदास"] = "sad",
+        ["पार्टी"] = "party",
+        ["वर्कआउट"] = "workout",
+        ["सुबह"] = "morning",
+        ["शाम"] = "evening",
+        ["डिनर"] = "dinner",
+        ["नींद"] = "sleep",
+        ["स्लीप"] = "sleep",
+
+        // JF-356: ar-SA
+        ["استرخاء"] = "relaxing",
+        ["هادئ"] = "chill",
+        ["مبهج"] = "upbeat",
+        ["حيوي"] = "energetic",
+        ["تركيز"] = "focus",
+        ["رومانسي"] = "romantic",
+        ["سعيد"] = "happy",
+        ["حزين"] = "sad",
+        ["حفلة"] = "party",
+        ["تمرين"] = "workout",
+        ["صباح"] = "morning",
+        ["مساء"] = "evening",
+        ["عشاء"] = "dinner",
+        ["نوم"] = "sleep"
     };
 
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
+    private readonly IUserDataManager _userDataManager;
+    private readonly IArtistIndex? _artistIndex;
+    private readonly DeviceQueueManager? _queueManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PlayMoodMusicIntentHandler"/> class.
@@ -260,16 +356,25 @@ public class PlayMoodMusicIntentHandler : BaseHandler
     /// <param name="config">The plugin configuration.</param>
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
+    /// <param name="userDataManager">Instance of the <see cref="IUserDataManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
+    /// <param name="artistIndex">Optional in-memory artist index for fast search.</param>
+    /// <param name="queueManager">Optional per-device queue manager for crash recovery.</param>
     public PlayMoodMusicIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
+        IUserDataManager userDataManager,
+        ILoggerFactory loggerFactory,
+        IArtistIndex? artistIndex = null,
+        DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
+        _userDataManager = userDataManager;
+        _artistIndex = artistIndex;
+        _queueManager = queueManager;
     }
 
     /// <inheritdoc/>
@@ -299,7 +404,7 @@ public class PlayMoodMusicIntentHandler : BaseHandler
             mood = moodSlot.Value;
         }
 
-        if (string.IsNullOrEmpty(mood))
+        if (string.IsNullOrWhiteSpace(mood))
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchMood", locale));
         }
@@ -312,7 +417,8 @@ public class PlayMoodMusicIntentHandler : BaseHandler
             return userError;
         }
 
-        string[] genres = ResolveGenres(mood, DateTime.Now.Hour);
+        IReadOnlyDictionary<string, string[]> moodOverrides = BuildMoodGenreOverrides(_config);
+        string[] genres = ResolveGenres(mood, DateTime.Now.Hour, moodOverrides);
         Logger.LogDebug("PlayMoodMusic: mood='{Mood}', resolved genres=[{Genres}]", mood, string.Join(", ", genres));
 
         List<BaseItem> foundItems = new();
@@ -348,6 +454,15 @@ public class PlayMoodMusicIntentHandler : BaseHandler
 
         if (foundItems.Count == 0)
         {
+            SkillResponse? artistFallback = await TryEntityFallbackAsync(
+                mood, jellyfinUser!, user, session, context, locale,
+                _libraryManager, _userDataManager, _queueManager, _artistIndex,
+                "PlayMoodMusic artist fallback", cancellationToken).ConfigureAwait(false);
+            if (artistFallback != null)
+            {
+                return artistFallback;
+            }
+
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundMood", locale, mood));
         }
 
@@ -370,16 +485,26 @@ public class PlayMoodMusicIntentHandler : BaseHandler
     /// Resolves a mood string to an array of genre names.
     /// Tries an exact match first, then a contains match, then falls back to
     /// using the mood word itself as a genre. Reorders genres based on time of day.
+    /// Admin overrides (from plugin config) are checked before the built-in maps,
+    /// so an admin can add a mood ("coding" → electronic,ambient) or override a
+    /// built-in one. Pass null/empty to use only the built-in behavior.
     /// </summary>
     /// <param name="mood">The mood keyword from the user.</param>
     /// <param name="hour">Current hour (0-23) for time-of-day bias.</param>
+    /// <param name="overrides">Optional admin mood→genres overrides (case-insensitive keys).</param>
     /// <returns>An array of genre names to search for.</returns>
-    internal static string[] ResolveGenres(string mood, int hour = -1)
+    internal static string[] ResolveGenres(string mood, int hour = -1, IReadOnlyDictionary<string, string[]>? overrides = null)
     {
         string[]? genres = null;
 
+        // 0. Admin overrides take precedence (exact match)
+        if (overrides != null && overrides.TryGetValue(mood, out string[]? overridden) && overridden.Length > 0)
+        {
+            genres = overridden;
+        }
+
         // 1. Exact match against English mood keys
-        if (MoodGenreMap.TryGetValue(mood, out string[]? mapped))
+        if (genres == null && MoodGenreMap.TryGetValue(mood, out string[]? mapped))
         {
             genres = mapped;
         }
@@ -439,6 +564,39 @@ public class PlayMoodMusicIntentHandler : BaseHandler
             .OrderByDescending(g => preferred.Contains(g, StringComparer.OrdinalIgnoreCase))
             .ThenBy(_ => Random.Shared.Next())
             .ToArray();
+    }
+
+    /// <summary>
+    /// Builds the admin mood→genres override dictionary from plugin config.
+    /// Skips entries with a blank mood or no genres. Keys are case-insensitive.
+    /// Returns an empty dict (not null) when there are no overrides.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, string[]> BuildMoodGenreOverrides(PluginConfiguration config)
+    {
+        var overrides = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+        if (config?.MoodGenreOverrides == null)
+        {
+            return overrides;
+        }
+
+        foreach (MoodGenreOverride entry in config.MoodGenreOverrides)
+        {
+            if (entry == null || string.IsNullOrWhiteSpace(entry.Mood))
+            {
+                continue;
+            }
+
+            string[] genres = entry.GenreArray();
+            if (genres.Length == 0)
+            {
+                continue;
+            }
+
+            // Last entry wins on duplicate mood keys.
+            overrides[entry.Mood.Trim()] = genres;
+        }
+
+        return overrides;
     }
 
     /// <summary>

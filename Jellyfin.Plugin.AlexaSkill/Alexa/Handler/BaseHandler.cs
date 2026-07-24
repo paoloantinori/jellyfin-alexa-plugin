@@ -33,6 +33,12 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// <summary>
 /// Base handler class to handle skill requests.
 /// </summary>
+/// <remarks>
+/// Handlers are registered as DI singletons (Registrator registers each handler type as
+/// BaseHandler), so they MUST be stateless: no per-request mutable instance fields, or
+/// concurrent Alexa requests will race on them. Injected dependencies should be readonly.
+/// Per-request state belongs in the session/request parameters, not handler fields.
+/// </remarks>
 public abstract class BaseHandler
 {
     /// <summary>
@@ -60,6 +66,14 @@ public abstract class BaseHandler
     /// PlayAlbum and PlaySong cross-media fallbacks (JF-339).
     /// </summary>
     protected const int CrossMediaArtistThreshold = 85;
+
+    /// <summary>
+    /// Maximum word count for a cross-media artist fallback query. A long query is a
+    /// poor artist query and a wrong-artist false positive is worse than a clean
+    /// "not found" (observed: "la ballata del genesio" → "Lamb"). Shared by the PlaySong
+    /// cross-media fallback and the greedy-intent TryEntityFallbackAsync.
+    /// </summary>
+    protected const int CrossMediaArtistMaxWords = 2;
 
     /// <summary>
     /// Reorder items so favorites appear first, then by personal rating descending
@@ -404,7 +418,7 @@ public abstract class BaseHandler
     /// <param name="itemId">Id of the audio item.</param>
     /// <returns>URL to the HLS video-audio endpoint.</returns>
     public string GetVideoAudioUrl(string itemId)
-        => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/{itemId}/stream.m3u8").ToString();
+        => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/{itemId}/stream.m3u8?token={StreamTokenHelper.Mint(itemId, _config.StreamTokenSecret)}").ToString();
 
     /// <summary>
     /// Get a video-audio URL for an audiobook that concatenates all chapters into
@@ -415,7 +429,7 @@ public abstract class BaseHandler
     /// <param name="parentId">Id of the audiobook parent folder.</param>
     /// <returns>URL to the audiobook HLS concat endpoint.</returns>
     public string GetAudiobookVideoAudioUrl(string parentId)
-        => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/audiobook/{parentId}/stream.m3u8").ToString();
+        => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/audiobook/{parentId}/stream.m3u8?token={StreamTokenHelper.Mint(parentId, _config.StreamTokenSecret)}").ToString();
 
     /// <summary>
     /// Get a resume-aware audiobook HLS URL with a start-position hint. The endpoint reads
@@ -426,7 +440,7 @@ public abstract class BaseHandler
     /// <param name="startTicks">Resume position in .NET ticks.</param>
     /// <returns>URL to the resume-aware audiobook HLS endpoint.</returns>
     public string GetAudiobookResumeUrl(string parentId, long startTicks)
-        => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/audiobook/{parentId}/stream.m3u8?start={startTicks}").ToString();
+        => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/audiobook/{parentId}/stream.m3u8?start={startTicks}&token={StreamTokenHelper.Mint(parentId, _config.StreamTokenSecret)}").ToString();
 
     private string BuildStreamUrl(string pathSegment, string itemId, Entities.User user)
         => new Uri(new Uri(_config.ServerAddress), $"{pathSegment}{itemId}/stream?static=true&api_key={user.JellyfinToken}").ToString();
@@ -498,7 +512,7 @@ public abstract class BaseHandler
     /// <returns>A SkillResponse containing the AudioPlayer directive with metadata.</returns>
     public SkillResponse BuildAudioPlayerResponse(PlayBehavior playBehavior, string streamUrl, string itemId, MediaBrowser.Controller.Entities.BaseItem? item, Entities.User user, int offsetInMilliseconds = 0)
     {
-        return BuildAudioPlayerResponse(playBehavior, streamUrl, itemId, item, user, null, offsetInMilliseconds);
+        return BuildAudioPlayerResponse(playBehavior, streamUrl, itemId, item, user, null, offsetInMilliseconds, announceLocale: null);
     }
 
     /// <summary>
@@ -512,7 +526,7 @@ public abstract class BaseHandler
     /// <param name="context">Optional Alexa context for enqueue previous-token tracking.</param>
     /// <param name="offsetInMilliseconds">Resume offset in milliseconds (default 0).</param>
     /// <returns>A SkillResponse containing the AudioPlayer directive.</returns>
-    public SkillResponse BuildAudioPlayerResponse(PlayBehavior playBehavior, string streamUrl, string itemId, MediaBrowser.Controller.Entities.BaseItem? item, Entities.User user, Context? context, int offsetInMilliseconds = 0)
+    public SkillResponse BuildAudioPlayerResponse(PlayBehavior playBehavior, string streamUrl, string itemId, MediaBrowser.Controller.Entities.BaseItem? item, Entities.User user, Context? context, int offsetInMilliseconds = 0, string? announceLocale = null)
     {
         // Record the last user-initiated play for this device (ReplaceAll = a new item starts).
         // This is the universal chokepoint: every play path flows through here, including APL
@@ -551,12 +565,12 @@ public abstract class BaseHandler
 
             if (wantsNativeControls)
             {
-                return BuildVideoAppAudioResponse(itemId, item, user);
+                return BuildVideoAppAudioResponse(itemId, item, user, announceLocale);
             }
         }
 
         Logger.LogDebug("BuildAudioPlayerResponse: itemId={ItemId}, behavior={Behavior}, offsetMs={OffsetMs}, title={Title}, streamUrl={StreamUrl}",
-            itemId, playBehavior, offsetInMilliseconds, item?.Name, streamUrl);
+            itemId, playBehavior, offsetInMilliseconds, item?.Name, RequestLogRedactor.RedactUrl(streamUrl));
         string imageUrl = item != null ? GetImageUrl(itemId, user) : string.Empty;
         var imageSources = new AudioItemSources
         {
@@ -657,6 +671,7 @@ public abstract class BaseHandler
             };
         }
 
+        AttachAnnounceIfEnabled(response, item, user, announceLocale, offsetInMilliseconds);
         return response;
     }
 
@@ -667,7 +682,7 @@ public abstract class BaseHandler
     /// For AudioBook items, uses a special concat HLS endpoint that joins all chapters
     /// into one continuous stream so the seek bar shows the full book duration.
     /// </summary>
-    public SkillResponse BuildVideoAppAudioResponse(string itemId, BaseItem? item, Entities.User user)
+    public SkillResponse BuildVideoAppAudioResponse(string itemId, BaseItem? item, Entities.User user, string? announceLocale = null)
     {
         bool isAudioBook = item != null && item.GetType().Name.Equals("AudioBook", StringComparison.Ordinal);
 
@@ -686,7 +701,7 @@ public abstract class BaseHandler
             Logger.LogDebug("BuildVideoAppAudioResponse: itemId={ItemId}, title={Title}, url={Url}", itemId, item?.Name, videoAudioUrl);
         }
 
-        return new SkillResponse
+        var response = new SkillResponse
         {
             Version = "1.0",
             Response = new ResponseBody
@@ -711,6 +726,9 @@ public abstract class BaseHandler
                 }
             }
         };
+
+        AttachAnnounceIfEnabled(response, item, user, announceLocale);
+        return response;
     }
 
     /// <summary>
@@ -841,7 +859,9 @@ public abstract class BaseHandler
     /// </summary>
     /// <param name="key">The SSML key (e.g. "NowPlayingSsml").</param>
     /// <param name="locale">The locale identifier.</param>
-    /// <param name="args">Optional format arguments.</param>
+    /// <param name="args">Optional format arguments. String values are interpolated into
+    /// SSML as-is, so callers MUST pre-escape reserved XML chars with EscapeXml (unlike
+    /// BuildOutputSpeech, which escapes internally).</param>
     /// <returns>The formatted SSML string, or null if the key doesn't exist.</returns>
     public static string? GetSsml(string key, string locale, params object[] args)
     {
@@ -855,15 +875,103 @@ public abstract class BaseHandler
     }
 
     /// <summary>
-    /// Build an OutputSpeech using SSML with plaintext fallback.
-    /// Tries the SSML key first; falls back to the plain key if SSML is unavailable.
+    /// Build an OutputSpeech using SSML with plaintext fallback. Tries the SSML key
+    /// first; falls back to the plain key if SSML is unavailable. Callers pass RAW
+    /// (unescaped) args: the SSML path escapes reserved XML chars here, while the
+    /// plain-text fallback keeps them raw, so an ampersand in a title is spoken as
+    /// a real ampersand rather than the escaped SSML entity.
     /// </summary>
-    protected static IOutputSpeech BuildOutputSpeech(string ssmlKey, string plainKey, string locale, params object[] args)
+    public static IOutputSpeech BuildOutputSpeech(string ssmlKey, string plainKey, string locale, params object[] args)
     {
-        string? ssml = GetSsml(ssmlKey, locale, args);
-        return ssml != null
-            ? new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" }
-            : new PlainTextOutputSpeech { Text = ResponseStrings.Get(plainKey, locale, args) };
+        string? ssml = GetSsml(ssmlKey, locale, EscapeStringArgs(args));
+        if (ssml != null)
+        {
+            return new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" };
+        }
+
+        return new PlainTextOutputSpeech { Text = ResponseStrings.Get(plainKey, locale, args) };
+    }
+
+    /// <summary>
+    /// Escape SSML-reserved chars in string args for safe interpolation into &lt;speak&gt;.
+    /// Non-string args (counts, etc.) pass through unchanged.
+    /// </summary>
+    private static object[] EscapeStringArgs(object[] args)
+    {
+        if (args.Length == 0)
+        {
+            return args;
+        }
+
+        var escaped = new object[args.Length];
+        for (int i = 0; i < args.Length; i++)
+        {
+            escaped[i] = args[i] is string s ? EscapeXml(s) : args[i];
+        }
+
+        return escaped;
+    }
+
+    /// <summary>
+    /// The now-playing announce shared by every video-launch handler. Wraps
+    /// BuildOutputSpeech with the NowPlaying SSML/plain keys; the title is escaped for SSML.
+    /// </summary>
+    public static IOutputSpeech? BuildNowPlayingSpeech(string name, string locale, bool announceOn = true)
+        => announceOn ? BuildOutputSpeech("NowPlayingSsml", "NowPlaying", locale, name) : null;
+
+    /// <summary>
+    /// Attach the gated now-playing announce to a MUSIC play response when the caller passes a
+    /// locale and the audio-announce toggle is on. Only music handlers pass announceLocale, so the
+    /// gate is <see cref="GetAnnounceAudioPlays"/> (opt-in, default false per JF-352.4) — NOT the
+    /// video/book <see cref="GetAnnounceNowPlaying"/> toggle. When offsetMs &gt; 0 the announce is a
+    /// resume ("Resuming X") rather than a fresh "Now playing X". The OutputSpeech-occupied guard
+    /// is idempotency only: callers that set a more specific announcement (e.g. FoundAlbumInstead)
+    /// do so AFTER this call and overwrite it themselves.
+    /// </summary>
+    protected void AttachAnnounceIfEnabled(SkillResponse response, MediaBrowser.Controller.Entities.BaseItem? item, Entities.User? user, string? announceLocale, int offsetInMilliseconds = 0)
+    {
+        if (string.IsNullOrEmpty(announceLocale) || item is null || response.Response.OutputSpeech is not null)
+        {
+            return;
+        }
+
+        if (!GetAnnounceAudioPlays(user))
+        {
+            return;
+        }
+
+        response.Response.OutputSpeech = offsetInMilliseconds > 0
+            ? BuildOutputSpeech("ResumingSsml", "Resuming", announceLocale, item.Name)
+            : BuildNowPlayingSpeech(item.Name, announceLocale, announceOn: true);
+    }
+
+    /// <summary>
+    /// Resume-aware video-launch announce: "Resuming X from Y" when the user has playback
+    /// progress, else the now-playing announce. VideoApp.Launch cannot honor the offset, so
+    /// this only informs the user where they left off (playback still starts from the beginning).
+    /// The fresh-play announce (resumeTicks == 0) is suppressed when announceOn is false; the
+    /// resume announce is always spoken (position info, not the now-playing readout).
+    /// </summary>
+    protected static IOutputSpeech? BuildVideoLaunchSpeech(BaseItem item, string locale, long resumeTicks, bool announceOn = true)
+    {
+        if (resumeTicks > 0)
+        {
+            return new PlainTextOutputSpeech(ResponseStrings.Get("ResumingVideo", locale, item.Name, FormatPosition(resumeTicks)));
+        }
+
+        return BuildNowPlayingSpeech(item.Name, locale, announceOn);
+    }
+
+    /// <summary>
+    /// Resume-aware video-launch announce that fetches the playback position itself. Falls back
+    /// to the (gated) now-playing announce if the deps are unavailable.
+    /// </summary>
+    protected static IOutputSpeech? BuildVideoLaunchSpeech(BaseItem item, string locale, IUserDataManager? userDataManager, Jellyfin.Database.Implementations.Entities.User? jellyfinUser, bool announceOn = true)
+    {
+        long resumeTicks = (userDataManager is not null && jellyfinUser is not null)
+            ? (userDataManager.GetUserData(jellyfinUser, item)?.PlaybackPositionTicks ?? 0)
+            : 0;
+        return BuildVideoLaunchSpeech(item, locale, resumeTicks, announceOn);
     }
 
     /// <summary>
@@ -1284,6 +1392,102 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// Gets the effective cross-media artist suggestion behavior for a user, falling back to
+    /// the global default. Per-user setting (when explicitly set, i.e. non-null) takes
+    /// precedence. Controls whether a sub-strict-threshold artist match (found when a
+    /// song/album wasn't) is offered for confirmation, auto-served, or ignored.
+    /// </summary>
+    protected CrossMediaArtistSuggestion GetCrossMediaArtistSuggestion(Entities.User? user)
+    {
+        if (user?.CrossMediaArtistSuggestion is { } userMode)
+        {
+            Logger.LogDebug("CrossMediaArtistSuggestion: user={UserId} mode={Mode} source=PerUser", user.Id, userMode);
+            return userMode;
+        }
+
+        Logger.LogDebug("CrossMediaArtistSuggestion: user={UserId} mode={Mode} source=GlobalDefault", user?.Id, _config.DefaultCrossMediaArtistSuggestion);
+        return _config.DefaultCrossMediaArtistSuggestion;
+    }
+
+    /// <summary>
+    /// Builds the cross-media artist OFFER response (Ask): "I didn't find a song/album
+    /// '{query}'. Did you mean the artist {artist}?". Keeps the session open carrying the
+    /// single best artist in the standard disambiguation session state, so YesIntentHandler
+    /// routes a "yes" to PlayArtist unchanged. Also stashes the original not-found query +
+    /// media type so NoIntentHandler can produce the correct clean not-found when the user
+    /// declines (otherwise "no" would say "no more matches", which is wrong here). Single
+    /// candidate only (per JF-363 design).
+    /// </summary>
+    /// <param name="query">The not-found song/album query (the raw slot value).</param>
+    /// <param name="artist">The single best artist match to offer.</param>
+    /// <param name="locale">The request locale.</param>
+    /// <param name="notFoundMediaType">The media type the user originally asked for ("song" or "album"), used to build the decline response.</param>
+    protected SkillResponse BuildCrossMediaArtistOfferAsk(string query, BaseItem artist, string locale, string notFoundMediaType)
+    {
+        string? promptSsml = GetSsml("CrossMediaArtistOfferSsml", locale, EscapeXml(query), EscapeXml(artist.Name));
+        string reprompt = ResponseStrings.Get("FuzzySuggestionReprompt", locale);
+
+        SkillResponse response = promptSsml != null
+            ? AskSsml(promptSsml, new Reprompt(reprompt))
+            : ResponseBuilder.Ask(ResponseStrings.Get("CrossMediaArtistOffer", locale, query, artist.Name), new Reprompt(reprompt));
+
+        var matchInfos = new List<DisambiguationHelper.MatchInfo>
+        {
+            new() { Id = artist.Id.ToString(), Name = artist.Name }
+        };
+
+        response.SessionAttributes = new Dictionary<string, object>
+        {
+            ["disambig_matches"] = Newtonsoft.Json.JsonConvert.SerializeObject(matchInfos),
+            ["disambig_index"] = 0,
+            ["disambig_type"] = DisambiguationHelper.MediaTypeArtist,
+            // JF-363: carry the original not-found request so NoIntentHandler can decline to
+            // the right "song/album not found" instead of the generic "no more matches".
+            ["crossmedia_notfound_query"] = query,
+            ["crossmedia_notfound_type"] = notFoundMediaType
+        };
+
+        Logger.LogDebug(
+            "CrossMediaArtistSuggestion: offering artist '{Artist}' for not-found query='{Query}' (type={Type})",
+            artist.Name, query, notFoundMediaType);
+        return response;
+    }
+
+    /// <summary>
+    /// Gets the effective "speak the now-playing announce on launch" preference for a user,
+    /// falling back to the global default. Per-user setting (when explicitly set) takes precedence.
+    /// </summary>
+    protected bool GetAnnounceNowPlaying(Entities.User? user)
+    {
+        if (user?.AnnounceNowPlaying is { } userPref)
+        {
+            Logger.LogDebug("AnnounceNowPlaying: user={UserId} on={On} source=PerUser", user.Id, userPref);
+            return userPref;
+        }
+
+        Logger.LogDebug("AnnounceNowPlaying: user={UserId} on={On} source=GlobalDefault", user?.Id, _config.DefaultAnnounceNowPlaying);
+        return _config.DefaultAnnounceNowPlaying;
+    }
+
+    /// <summary>
+    /// Gets the effective "speak the now-playing announce on MUSIC plays" preference for a user,
+    /// falling back to the global <see cref="Configuration.PluginConfiguration.AnnounceAudioPlays"/>
+    /// default (false — audio plays are silent by default, JF-352.4). Per-user setting takes
+    /// precedence. Video/book launches use <see cref="GetAnnounceNowPlaying"/> instead.
+    /// </summary>
+    protected bool GetAnnounceAudioPlays(Entities.User? user)
+    {
+        if (user?.AnnounceAudioPlays is { } userPref)
+        {
+            Logger.LogDebug("AnnounceAudioPlays: user={UserId} on={On} source=PerUser", user.Id, userPref);
+            return userPref;
+        }
+
+        Logger.LogDebug("AnnounceAudioPlays: user={UserId} on={On} source=GlobalDefault", user?.Id, _config.AnnounceAudioPlays);
+        return _config.AnnounceAudioPlays;
+    }
+
+    /// <summary>
     /// Gets the effective "play music via VideoApp" preference for a user, falling back to the
     /// global <see cref="Configuration.PluginConfiguration.NativeControlsForAudio"/> default.
     /// Per-user setting (when explicitly set, i.e. non-null) takes precedence. When true, music
@@ -1387,7 +1591,7 @@ public abstract class BaseHandler
                 return (FuzzyMissOutcome.SuggestionHandled, playResponse);
             }
 
-            string? ssml = GetSsml("FuzzyAutoPlayAnnouncementSsml", locale, selector(best), query);
+            string? ssml = GetSsml("FuzzyAutoPlayAnnouncementSsml", locale, EscapeXml(selector(best)), EscapeXml(query));
             playResponse.Response.OutputSpeech = ssml != null
                 ? new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" }
                 : new PlainTextOutputSpeech { Text = ResponseStrings.Get("FuzzyAutoPlayAnnouncement", locale, selector(best), query) };
@@ -1398,7 +1602,7 @@ public abstract class BaseHandler
         Logger.LogDebug("HandleFuzzyMiss: query={Query}, best={BestMatch}, score={Score}, candidates={CandidateCount} — disambiguating",
             query, selector(best), score, candidates.Count);
         var matches = matchExtractor(best) ?? new List<(Guid, string)>();
-        string? promptSsml = GetSsml("FuzzySuggestionPromptSsml", locale, query, selector(best));
+        string? promptSsml = GetSsml("FuzzySuggestionPromptSsml", locale, EscapeXml(query), EscapeXml(selector(best)));
 
         SkillResponse response;
         if (promptSsml != null)
@@ -1807,9 +2011,9 @@ public abstract class BaseHandler
     /// </summary>
     /// <param name="text">The text to escape.</param>
     /// <returns>The XML-escaped text.</returns>
-    internal static string EscapeXml(string text)
+    internal static string EscapeXml(string? text)
     {
-        return text
+        return (text ?? string.Empty)
             .Replace("&", "&amp;", StringComparison.Ordinal)
             .Replace("<", "&lt;", StringComparison.Ordinal)
             .Replace(">", "&gt;", StringComparison.Ordinal)
@@ -2076,7 +2280,8 @@ public abstract class BaseHandler
         {
             User = jellyfinUser,
             Recursive = true,
-            MediaTypes = new[] { MediaType.Audio },
+            // JF-358: IncludeItemTypes=Audio, not MediaTypes=Audio (see PlayArtistSongsIntentHandler).
+            IncludeItemTypes = new[] { BaseItemKind.Audio },
             OrderBy = PopularitySort,
             DtoOptions = new DtoOptions(true),
             ArtistIds = new[] { artistId },
@@ -2143,7 +2348,7 @@ public abstract class BaseHandler
         Logger.LogDebug(
             "{Label}: returning AudioPlayer, itemId={ItemId}, startIndex={StartIndex}, queueSize={QueueSize}",
             logLabel, itemId, startIndex, queueItems.Count);
-        SkillResponse response = BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, sortedItems[startIndex], user, context);
+        SkillResponse response = BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, sortedItems[startIndex], user, context, announceLocale: locale);
 
         if (!string.IsNullOrWhiteSpace(announcement))
         {
@@ -2151,6 +2356,84 @@ public abstract class BaseHandler
         }
 
         return response;
+    }
+
+    /// <summary>
+    /// Entity fallback for greedy <c>AMAZON.SearchQuery</c> intents that misroute an
+    /// artist query (e.g. it-IT "di miles davis" captured as a mood). Strips locale
+    /// stop-words via <see cref="KeywordMatcher.Tokenize"/> (covers the Latin-script
+    /// locales en/it/de/fr/es/pt; other locales split without stop-word removal), reuses
+    /// the phonetic artist search pipeline, and respects the cross-media word-count guard
+    /// (<see cref="CrossMediaArtistMaxWords"/>) and threshold. Returns null when no
+    /// confident match is found so the caller falls through to its own not-found response.
+    /// </summary>
+    protected async Task<SkillResponse?> TryEntityFallbackAsync(
+        string slotText,
+        JellyfinUser jellyfinUser,
+        Entities.User user,
+        SessionInfo session,
+        Context context,
+        string locale,
+        ILibraryManager libraryManager,
+        IUserDataManager userDataManager,
+        Playback.DeviceQueueManager? queueManager,
+        IArtistIndex? artistIndex,
+        string logLabel,
+        CancellationToken cancellationToken)
+    {
+        var tokens = KeywordMatcher.Tokenize(slotText, locale);
+        if (tokens.Length == 0)
+        {
+            return null;
+        }
+
+        string cleaned = string.Join(' ', tokens);
+
+        // A long slot is a poor artist query and a wrong-artist false positive is worse
+        // than a clean not-found — same guard + constant as PlaySong's cross-media fallback.
+        if (tokens.Length > CrossMediaArtistMaxWords)
+        {
+            Logger.LogDebug(
+                "{Label}: skipping artist fallback for {WordCount}-word query '{Query}' (max {Max})",
+                logLabel, tokens.Length, cleaned, CrossMediaArtistMaxWords);
+            return null;
+        }
+
+        IReadOnlyList<BaseItem> artists = await ArtistSearch.SearchAsync(
+            cleaned, user, libraryManager, artistIndex, Logger,
+            (q, ct) => RetryAsync(() => libraryManager.GetItemList(q), logLabel + ":GetArtistsFallback", ct),
+            cancellationToken).ConfigureAwait(false);
+
+        if (artists.Count == 0)
+        {
+            return null;
+        }
+
+        var best = FuzzyMatcher.FindBestMatchWithScore(cleaned, artists, a => a.Name);
+        int threshold = Math.Max(FuzzyMatcher.GetDefaultThreshold(user), CrossMediaArtistThreshold);
+
+        if (!best.HasValue || best.Value.Item == null || best.Value.Score < threshold)
+        {
+            Logger.LogDebug(
+                "{Label}: entity fallback artist score={Score} below threshold={Threshold}, query='{Query}'",
+                logLabel, best.HasValue ? best.Value.Score : 0, threshold, cleaned);
+            return null;
+        }
+
+        return await BuildArtistSongsResponseAsync(
+            best.Value.Item.Id,
+            best.Value.Item.Name,
+            jellyfinUser,
+            user,
+            session,
+            context,
+            locale,
+            libraryManager,
+            userDataManager,
+            queueManager,
+            logLabel,
+            announcement: ResponseStrings.Get("FoundArtistInstead", locale, best.Value.Item.Name),
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

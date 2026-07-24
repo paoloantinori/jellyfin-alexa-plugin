@@ -48,7 +48,16 @@
       "Bash(dotnet run *)",
       "Bash(gh run *)",
       "Bash(identify /tmp/skill_icon.png)",
-      "Bash(unzip -l /tmp/plugin_030.zip)"
+      "Bash(unzip -l /tmp/plugin_030.zip)",
+      "mcp__backlog__milestone_list",
+      "Skill(deep-research)",
+      "Bash(python3 -c ' *)",
+      "mcp__zread__search_doc",
+      "mcp__zread__read_file"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "playwright",
+    "backlog"
+  ]
 }

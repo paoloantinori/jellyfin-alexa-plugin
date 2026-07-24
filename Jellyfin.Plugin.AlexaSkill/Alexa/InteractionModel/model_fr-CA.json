@@ -513,7 +513,7 @@
         "slots": [
           {
             "name": "mood",
-            "type": "AMAZON.SearchQuery"
+            "type": "Mood"
           }
         ],
         "samples": [
@@ -860,6 +860,93 @@
       }
     ],
     "types": [
+      {
+        "name": "Mood",
+        "values": [
+          {
+            "name": {
+              "value": "détendant",
+              "synonyms": [
+                "détendu",
+                "détendue"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "reposant"
+            }
+          },
+          {
+            "name": {
+              "value": "dynamique"
+            }
+          },
+          {
+            "name": {
+              "value": "énergique"
+            }
+          },
+          {
+            "name": {
+              "value": "concentration"
+            }
+          },
+          {
+            "name": {
+              "value": "romantique"
+            }
+          },
+          {
+            "name": {
+              "value": "heureuse",
+              "synonyms": [
+                "heureux",
+                "joyeuse",
+                "joyeux"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "triste"
+            }
+          },
+          {
+            "name": {
+              "value": "fête"
+            }
+          },
+          {
+            "name": {
+              "value": "entraînement"
+            }
+          },
+          {
+            "name": {
+              "value": "matinal"
+            }
+          },
+          {
+            "name": {
+              "value": "soirée"
+            }
+          },
+          {
+            "name": {
+              "value": "dîner"
+            }
+          },
+          {
+            "name": {
+              "value": "sommeil",
+              "synonyms": [
+                "dormir"
+              ]
+            }
+          }
+        ]
+      },
       {
         "name": "MediaType",
         "values": [

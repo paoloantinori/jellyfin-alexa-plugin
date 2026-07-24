@@ -199,7 +199,12 @@ public class PlayChannelIntentHandlerTests : PluginTestBase
 
         // Live TV channels launch via VideoApp.Launch (not AudioPlayer.Play) so they
         // actually play on Echo Show. The source is whatever URL the resolver picked.
-        Assert.Null(response.Response.OutputSpeech);
+        // JF-349: the launch now announces the channel name (was silent).
+        Assert.NotNull(response.Response.OutputSpeech);
+        string announceText = response.Response.OutputSpeech is SsmlOutputSpeech ss
+            ? ss.Ssml
+            : Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech).Text;
+        Assert.Contains("CNN", announceText, StringComparison.Ordinal);
         var directive = response.HasDirective<VideoAppLaunchDirective>();
         Assert.Equal(DefaultStream.Url, directive.VideoItem.Source);
         Assert.Equal("CNN", directive.VideoItem.Metadata?.Title);

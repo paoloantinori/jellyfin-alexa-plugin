@@ -294,6 +294,11 @@ public class PlayBookIntentHandler : BaseHandler
                     };
                 response.Response.ShouldEndSession = true;
             }
+            else
+            {
+                // Fresh-start audiobook via VideoApp: announce the book title.
+                response.Response.OutputSpeech = BuildNowPlayingSpeech(books[0].Name, locale, GetAnnounceNowPlaying(user));
+            }
 
             return response;
         }

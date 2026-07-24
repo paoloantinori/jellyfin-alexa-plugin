@@ -53,7 +53,15 @@ public static class SpanishPhoneticSynonyms
             }
         }
 
-        return results.Distinct(StringComparer.OrdinalIgnoreCase).Take(3).ToList();
+        // JF-362 coverage: emit consonant-doubled variants (Italian-locale ASR often
+        // doubles single intervocalic consonants). Coverage, not precision. Only when a
+        // transform actually happened (a non-transformed name must still return empty).
+        if (!string.Equals(phonetic, withoutThe, StringComparison.OrdinalIgnoreCase))
+        {
+            PhoneticSynonymGenerator.AddConsonantVariants(results, phonetic);
+        }
+
+        return results.Distinct(StringComparer.OrdinalIgnoreCase).Take(5).ToList();
     }
 
     private static bool IsSpanishOrigin(string name)
@@ -145,7 +153,7 @@ public static class SpanishPhoneticSynonyms
             }
         }
 
-        return w;
+        return PhoneticSynonymGenerator.ApplyRomanceTailRules(w);
     }
 
     private static string TransformW(string word)

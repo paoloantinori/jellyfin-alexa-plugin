@@ -1,0 +1,30 @@
+{
+  "playwrightVersion": "1.61.0-alpha-1778188671000",
+  "playwrightLib": "/home/pantinor/.npm/_npx/9833c18b2d85bc59/node_modules/playwright-core",
+  "title": "claude-code (2)",
+  "browser": {
+    "guid": "browser@a22fdd38a1080d3a39147bd620ddd883",
+    "browserName": "chromium",
+    "launchOptions": {
+      "channel": "chrome",
+      "args": [
+        "--disable-blink-features=AutomationControlled"
+      ],
+      "ignoreAllDefaultArgs": false,
+      "ignoreDefaultArgs": [
+        "--disable-extensions"
+      ],
+      "handleSIGINT": false,
+      "handleSIGTERM": false,
+      "timeout": 180000,
+      "headless": true,
+      "tracesDir": "/home/pantinor/data/repo/personal/jellyfin-alexa-plugin/.playwright-mcp/traces",
+      "noDefaultViewport": true,
+      "selectorEngines": [],
+      "userDataDir": "/home/pantinor/data/repo/personal/jellyfin-alexa-plugin/.claude/pw-cache/mcp-chrome-462ae35"
+    },
+    "userDataDir": "/home/pantinor/data/repo/personal/jellyfin-alexa-plugin/.claude/pw-cache/mcp-chrome-462ae35"
+  },
+  "endpoint": "/tmp/pw-eec26a9a/browser/browser@a22fdd.sock",
+  "workspaceDir": "/home/pantinor/data/repo/personal/jellyfin-alexa-plugin"
+}

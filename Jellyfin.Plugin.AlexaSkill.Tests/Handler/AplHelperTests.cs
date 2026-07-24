@@ -329,7 +329,7 @@ public class AplHelperTests : PluginTestBase
         var loggerFactory = LoggerFactory.Create(b => { });
 
         var handler = new SearchMediaIntentHandler(
-            sessionManagerMock.Object, config, libraryManagerMock.Object, userManagerMock.Object, loggerFactory);
+            sessionManagerMock.Object, config, libraryManagerMock.Object, userManagerMock.Object, Mock.Of<IUserDataManager>(), loggerFactory);
 
         var audio1 = new Audio { Name = "Song A", Id = Guid.NewGuid() };
         audio1.Artists = new List<string> { "Artist 1" };
@@ -376,7 +376,7 @@ public class AplHelperTests : PluginTestBase
         var loggerFactory = LoggerFactory.Create(b => { });
 
         var handler = new SearchMediaIntentHandler(
-            sessionManagerMock.Object, config, libraryManagerMock.Object, userManagerMock.Object, loggerFactory);
+            sessionManagerMock.Object, config, libraryManagerMock.Object, userManagerMock.Object, Mock.Of<IUserDataManager>(), loggerFactory);
 
         var audio1 = new Audio { Name = "Song A", Id = Guid.NewGuid() };
         audio1.Artists = new List<string> { "Artist 1" };

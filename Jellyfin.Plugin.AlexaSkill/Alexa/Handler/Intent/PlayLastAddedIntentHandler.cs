@@ -23,8 +23,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public class PlayLastAddedIntentHandler : BaseHandler
 {
-    private ILibraryManager _libraryManager;
-    private IUserManager _userManager;
+    private readonly ILibraryManager _libraryManager;
+    private readonly IUserManager _userManager;
 
     private static readonly Dictionary<string, (int Days, string LocaleKey)> TimePeriodMap = new()
     {

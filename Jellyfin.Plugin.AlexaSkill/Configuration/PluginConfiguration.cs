@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Security.Cryptography;
 using Alexa.NET.Management;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Manifest;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
@@ -27,6 +28,7 @@ public class PluginConfiguration : BasePluginConfiguration
 
         serverAddress = string.Empty;
         AccountLinkingClientId = Guid.NewGuid().ToString();
+        StreamTokenSecret = Guid.NewGuid().ToString("N") + Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
     }
 
     /// <summary>
@@ -88,6 +90,21 @@ public class PluginConfiguration : BasePluginConfiguration
     public string AccountLinkingClientId { get; set; }
 
     /// <summary>
+    /// Gets or sets the server-side HMAC secret for signing item-scoped stream tokens (JF-309).
+    /// Auto-generated on first construction; persisted transparently. Rotating it invalidates all
+    /// outstanding stream tokens (forces a one-time playback restart).
+    /// </summary>
+    public string StreamTokenSecret { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the additional locales (beyond it-IT) to include in catalog sync, as a
+    /// comma-separated string of locale codes (e.g. "de-DE,en-US"). it-IT is always synced.
+    /// Only locales with phonetic synonym generators (de/es/fr/pt/ja/nl) get phonetic variants;
+    /// others get raw names. Empty = it-IT only (default). Use "*" to sync all active locales.
+    /// </summary>
+    public string CatalogSyncLocales { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets or sets a value indicating whether the intent simulator endpoint is enabled.
     /// When disabled, all simulator endpoints return 404. Defaults to false for production safety.
     /// </summary>
@@ -105,6 +122,25 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool VideoPlaybackEnabled { get; set; } = true;
     public bool ResumeOfferEnabled { get; set; } = true;
     public bool ResumeAnnounceTitle { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the global default for whether the now-playing announce ("Now playing X")
+    /// is spoken when content is launched. Per-user AnnounceNowPlaying overrides this. Resume/restart
+    /// announces are not governed by this setting. This gates VIDEO-LAUNCH and audiobook
+    /// fresh-start announces only (JF-353). Music plays (PlaySong/PlayAlbum/PlayArtistSongs) are
+    /// gated separately by <see cref="AnnounceAudioPlays"/> (JF-352.4 — audio plays stay silent
+    /// by default; opt in there).
+    /// </summary>
+    public bool DefaultAnnounceNowPlaying { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the global opt-in for whether the now-playing announce is spoken on MUSIC
+    /// plays (PlaySong/PlayAlbum/PlayArtistSongs). Per-user AnnounceAudioPlays overrides this.
+    /// Default false: audio plays are silent by default (JF-352.4 — music is frequent, so the
+    /// expected UX is a fast silent start). Video/book launches are unaffected (gated by
+    /// <see cref="DefaultAnnounceNowPlaying"/>).
+    /// </summary>
+    public bool AnnounceAudioPlays { get; set; } = false;
     public bool AsrCompoundWordFixEnabled { get; set; } = true;
 
     /// <summary>
@@ -174,6 +210,14 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public PostPlayBehavior DefaultPostPlayBehavior { get; set; } = PostPlayBehavior.Stop;
 
+    /// <summary>
+    /// Gets or sets the default cross-media artist suggestion behavior for users without an
+    /// explicit per-user setting. When a song/album is not found but a plausible artist is
+    /// (a sub-strict-threshold match), this controls whether to offer it for confirmation
+    /// (Confirm), auto-serve it (AutoServe), or do nothing (Off).
+    /// </summary>
+    public CrossMediaArtistSuggestion DefaultCrossMediaArtistSuggestion { get; set; } = CrossMediaArtistSuggestion.Confirm;
+
     // Display preferences — items sent to APL visual templates (voice reads 5 max)
     public int MaxListDisplayItems { get; set; } = 15;
     public int MaxInProgressDisplayItems { get; set; } = 10;
@@ -203,6 +247,18 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
 #pragma warning disable CA2227
     public Collection<LocaleModelStatusEntry> LocaleModelStatuses { get; set; } = new();
+#pragma warning restore CA2227
+
+    /// <summary>
+    /// Gets or sets admin-defined custom mood → genre overrides that augment the
+    /// built-in MoodGenreMap at resolve time. Each entry adds (or replaces) a mood
+    /// word mapping to a comma-separated genre list. On save, custom mood words are
+    /// also injected into the Mood slot type of every locale's interaction model
+    /// (via the redeploy path) so the NLU can fill the slot one-shot. Stored as a
+    /// list because XmlSerializer cannot serialize Dictionary.
+    /// </summary>
+#pragma warning disable CA2227
+    public Collection<MoodGenreOverride> MoodGenreOverrides { get; set; } = new();
 #pragma warning restore CA2227
 
     /// <summary>
@@ -509,4 +565,33 @@ public class LocaleModelStatusEntry
         Error = Error,
         Source = Source,
     };
+}
+
+/// <summary>
+/// XML-serializable admin override mapping a mood word to a comma-separated
+/// genre list. Merged into the mood handler's MoodGenreMap at resolve time, and
+/// (when the model is redeployed) the <see cref="Mood"/> word is injected into
+/// each locale's Mood slot type so the NLU fills the slot one-shot.
+/// </summary>
+public class MoodGenreOverride
+{
+    public MoodGenreOverride()
+    {
+    }
+
+    public MoodGenreOverride(string mood, string genres)
+    {
+        Mood = mood;
+        Genres = genres;
+    }
+
+    /// <summary>The mood word the user speaks (e.g. "coding"). Case-insensitive.</summary>
+    public string Mood { get; set; } = string.Empty;
+
+    /// <summary>Comma-separated Jellyfin genre names (e.g. "electronic,ambient").</summary>
+    public string Genres { get; set; } = string.Empty;
+
+    /// <summary>Parses Genres into a trimmed, non-empty array.</summary>
+    public string[] GenreArray() =>
+        Genres.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 }

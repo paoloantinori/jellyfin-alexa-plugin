@@ -53,7 +53,7 @@ internal static class KeywordMatcher
     {
         ["en"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "the", "a", "an", "of", "in", "on", "at", "to", "and", "or", "is", "it"
+            "the", "a", "an", "of", "in", "on", "at", "to", "by", "from", "and", "or", "is", "it"
         },
         ["it"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -69,6 +69,17 @@ internal static class KeywordMatcher
         {
             "le", "la", "les", "un", "une", "des", "de", "du",
             "en", "dans", "sur", "et", "ou"
+        },
+        ["es"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "el", "la", "los", "las", "un", "una", "unos", "unas",
+            "de", "del", "al", "en", "con", "por", "para", "y", "o"
+        },
+        ["pt"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "o", "a", "os", "as", "um", "uma", "uns", "umas",
+            "de", "do", "da", "dos", "das", "no", "na", "nos", "nas",
+            "em", "com", "por", "para", "e", "ou"
         }
     };
 

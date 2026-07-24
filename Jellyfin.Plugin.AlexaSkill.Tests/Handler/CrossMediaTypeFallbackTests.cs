@@ -135,7 +135,7 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
                     return new List<BaseItem> { new MusicArtist { Name = "The Strokes", Id = artistId } };
 
                 // Artist songs fallback: ArtistIds + MediaTypes Audio
-                if (q.ArtistIds != null && q.ArtistIds.Length > 0 && q.MediaTypes != null && q.MediaTypes.Contains(MediaType.Audio))
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0 && q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.Audio))
                     return new List<BaseItem> { song1, song2 };
 
                 return new List<BaseItem>();
@@ -287,7 +287,7 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
                     return new List<BaseItem> { new MusicArtist { Name = "The Strokes", Id = artistId } };
 
                 // Artist songs fallback
-                if (q.ArtistIds != null && q.ArtistIds.Length > 0 && q.MediaTypes != null && q.MediaTypes.Contains(MediaType.Audio))
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0 && q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.Audio))
                     return new List<BaseItem> { song1 };
 
                 return new List<BaseItem>();
@@ -334,11 +334,16 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
-        // Should play the song directly (no fallback, no announcement)
+        // Should play the song directly (no fallback). The now-playing announce may speak
+        // (JF-353), but the cross-media "FoundArtistInstead" text must never appear for a
+        // direct song match.
         Assert.NotNull(response.Response?.Directives);
         Assert.NotEmpty(response.Response.Directives);
-        // No announcement for direct match
-        Assert.Null(response.Response.OutputSpeech);
+        string? speech = response.Response.OutputSpeech == null
+            ? null
+            : Jellyfin.Plugin.AlexaSkill.Tests.Unit.TestHelpers.GetSpeechText(response);
+        Assert.DoesNotContain("FoundArtistInstead", speech ?? string.Empty);
+        Assert.DoesNotContain("instead", (speech ?? string.Empty), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -440,7 +445,7 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
                     return new List<BaseItem> { new MusicArtist { Name = "The Strokes", Id = artistId } };
 
                 // Artist songs fallback
-                if (q.ArtistIds != null && q.ArtistIds.Length > 0 && q.MediaTypes != null && q.MediaTypes.Contains(MediaType.Audio))
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0 && q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.Audio))
                     return new List<BaseItem> { song1, song2 };
 
                 return new List<BaseItem>();
@@ -527,8 +532,14 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
-        // Response should be audio playback with no artist fallback announcement
-        Assert.Null(response.Response.OutputSpeech);
+        // Response should be audio playback with no artist fallback announcement. The now-playing
+        // announce may speak (JF-353), but it must never carry the "FoundArtistInstead" text that
+        // only the cross-media fallback path sets.
+        string? speech = response.Response.OutputSpeech == null
+            ? null
+            : Jellyfin.Plugin.AlexaSkill.Tests.Unit.TestHelpers.GetSpeechText(response);
+        Assert.DoesNotContain("FoundArtistInstead", speech ?? string.Empty);
+        Assert.DoesNotContain("instead", (speech ?? string.Empty), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -625,4 +636,216 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         string speech = TestHelpers.GetSpeechText(response);
         Assert.Contains("Jazz Cafe", speech);
     }
+
+    // ============================================================
+    // JF-363: cross-media artist SUGGESTION (sub-strict band [60,85))
+    // When a song/album isn't found but an artist scores in [normalThreshold, 85),
+    // the behavior is governed by CrossMediaArtistSuggestion (Off/Confirm/AutoServe).
+    // "soul coffin" vs "Soul Coughing" is the real on-device repro (scored 63).
+    // ============================================================
+
+    /// <summary>
+    /// Mocks a song search that returns nothing and an artist search that returns one
+    /// artist whose name scores in the [60,85) band against the query.
+    /// </summary>
+    private void SetupSongMissArtistSubStrict(string query, string artistName, Guid artistId, params Audio[] artistSongs)
+    {
+        SetupUserMock();
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                // Song search: empty (no such song)
+                if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))
+                    return new List<BaseItem>();
+
+                // Artist search: the plausible-but-sub-strict artist
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                    return new List<BaseItem> { new MusicArtist { Name = artistName, Id = artistId } };
+
+                // Artist songs fallback: ArtistIds + Audio
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0)
+                    return new List<BaseItem>(artistSongs);
+
+                return new List<BaseItem>();
+            });
+    }
+
+    [Fact]
+    public async Task JF363_PlaySong_SubStrict_Confirm_OffersArtistAsk()
+    {
+        var artistId = Guid.NewGuid();
+        var song = new Audio { Name = "The Idiot Kings", Id = Guid.NewGuid() };
+        SetupSongMissArtistSubStrict("soul coffin", "Soul Coughing", artistId, song);
+
+        _config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Confirm;
+
+        var handler = CreateSongHandler();
+        var response = await handler.HandleAsync(
+            CreateSongIntent("soul coffin"), CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+
+        // Confirm mode: Ask (session stays open), no playback yet, carries the artist in disambig state.
+        Assert.True(response.Response?.ShouldEndSession != true);
+        Assert.True(response.Response?.Directives == null || response.Response.Directives.Count == 0);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Soul Coughing", speech);
+        Assert.NotNull(response.SessionAttributes);
+        Assert.True(response.SessionAttributes.ContainsKey("disambig_matches"));
+        Assert.Equal("artist", response.SessionAttributes["disambig_type"]);
+    }
+
+    [Fact]
+    public async Task JF363_PlaySong_SubStrict_AutoServe_PlaysArtist()
+    {
+        var artistId = Guid.NewGuid();
+        var song = new Audio { Name = "The Idiot Kings", Id = Guid.NewGuid() };
+        SetupSongMissArtistSubStrict("soul coffin", "Soul Coughing", artistId, song);
+
+        _config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.AutoServe;
+
+        var handler = CreateSongHandler();
+        var response = await handler.HandleAsync(
+            CreateSongIntent("soul coffin"), CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+
+        // AutoServe: plays the artist (audio directive), with FoundArtistInstead announcement.
+        Assert.NotNull(response.Response?.Directives);
+        Assert.NotEmpty(response.Response.Directives);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Soul Coughing", speech);
+    }
+
+    [Fact]
+    public async Task JF363_PlaySong_SubStrict_Off_ReturnsCleanNotFound()
+    {
+        var artistId = Guid.NewGuid();
+        var song = new Audio { Name = "The Idiot Kings", Id = Guid.NewGuid() };
+        SetupSongMissArtistSubStrict("soul coffin", "Soul Coughing", artistId, song);
+
+        _config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Off;
+
+        var handler = CreateSongHandler();
+        var response = await handler.HandleAsync(
+            CreateSongIntent("soul coffin"), CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+
+        // Off: clean not-found Tell, no offer, no play.
+        Assert.True(response.Response?.ShouldEndSession);
+        Assert.True(response.Response?.Directives == null || response.Response.Directives.Count == 0);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("soul coffin", speech, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Soul Coughing", speech);
+    }
+
+    [Fact]
+    public async Task JF363_PlayAlbum_SubStrict_Confirm_OffersArtistAsk()
+    {
+        var artistId = Guid.NewGuid();
+        var song = new Audio { Name = "The Idiot Kings", Id = Guid.NewGuid() };
+        SetupUserMock();
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                // Album search: empty
+                if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))
+                    return new List<BaseItem>();
+                // Artist search
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                    return new List<BaseItem> { new MusicArtist { Name = "Soul Coughing", Id = artistId } };
+                // Artist songs fallback
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0)
+                    return new List<BaseItem> { song };
+                return new List<BaseItem>();
+            });
+
+        _config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Confirm;
+
+        var handler = CreateAlbumHandler();
+        var response = await handler.HandleAsync(
+            CreateAlbumIntent("soul coffin"), CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+
+        Assert.True(response.Response?.ShouldEndSession != true);
+        Assert.True(response.Response?.Directives == null || response.Response.Directives.Count == 0);
+        Assert.Contains("Soul Coughing", TestHelpers.GetSpeechText(response));
+        Assert.Equal("artist", response.SessionAttributes?["disambig_type"]);
+    }
+
+    [Fact]
+    public async Task JF363_PlaySong_PerUserOverride_TakesPrecedenceOverGlobal()
+    {
+        // Global says Off, per-user says Confirm -> must offer (per-user wins).
+        var artistId = Guid.NewGuid();
+        var song = new Audio { Name = "The Idiot Kings", Id = Guid.NewGuid() };
+        SetupSongMissArtistSubStrict("soul coffin", "Soul Coughing", artistId, song);
+
+        _config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Off;
+        var user = CreateUser();
+        user.CrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Confirm;
+
+        var handler = CreateSongHandler();
+        var response = await handler.HandleAsync(
+            CreateSongIntent("soul coffin"), CreateContext(), user, CreateSession(), CancellationToken.None);
+
+        Assert.True(response.Response?.ShouldEndSession != true);
+        Assert.Contains("Soul Coughing", TestHelpers.GetSpeechText(response));
+    }
+
+    [Fact]
+    public async Task JF363_PlaySong_OfferDeclined_NoIntent_ReturnsCleanSongNotFound()
+    {
+        // MUST-FIX from code-review: a "no" to the cross-media artist offer must produce the
+        // clean song not-found, NOT the generic "no more matches" (the offer had one candidate).
+        var artistId = Guid.NewGuid();
+        var song = new Audio { Name = "The Idiot Kings", Id = Guid.NewGuid() };
+        SetupSongMissArtistSubStrict("soul coffin", "Soul Coughing", artistId, song);
+
+        _config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Confirm;
+
+        var handler = CreateSongHandler();
+        var offer = await handler.HandleAsync(
+            CreateSongIntent("soul coffin"), CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+
+        // Simulate the user's "no": feed the offer's session attributes into NoIntentHandler.
+        var noHandler = new NoIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+        var noRequest = new IntentRequest { Intent = new Intent { Name = IntentNames.AmazonNo }, Locale = "en-US", RequestId = "no-req" };
+        var noResponse = await noHandler.HandleAsync(
+            noRequest, CreateContext(), CreateUser(), CreateSession(), offer.SessionAttributes, CancellationToken.None);
+
+        // Decline must be the song not-found, ending the session, not "no more matches".
+        Assert.True(noResponse.Response?.ShouldEndSession);
+        string speech = TestHelpers.GetSpeechText(noResponse);
+        Assert.Contains("soul coffin", speech, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("more matches", speech, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Soul Coughing", speech);
+    }
+
+    [Fact]
+    public async Task JF363_PlaySong_MultiWordQuery_DoesNotOfferArtist()
+    {
+        // JF-363 code-review #3: a >2-word query must skip the artist fallback entirely
+        // (word-count gate), so no spurious offer on long song titles.
+        var artistId = Guid.NewGuid();
+        var song = new Audio { Name = "The Idiot Kings", Id = Guid.NewGuid() };
+        SetupUserMock();
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))
+                    return new List<BaseItem>();
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                    return new List<BaseItem> { new MusicArtist { Name = "Soul Coughing", Id = artistId } };
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0)
+                    return new List<BaseItem> { song };
+                return new List<BaseItem>();
+            });
+
+        _config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Confirm;
+
+        var handler = CreateSongHandler();
+        var response = await handler.HandleAsync(
+            CreateSongIntent("la ballata del genesio"), CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+
+        // 4-word query: word-count gate fires before any offer; clean not-found, no disambig state.
+        Assert.True(response.Response?.ShouldEndSession);
+        Assert.Null(response.SessionAttributes?["disambig_type"]);
+        Assert.DoesNotContain("Soul Coughing", TestHelpers.GetSpeechText(response));
+    }
 }
+

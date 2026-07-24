@@ -103,6 +103,30 @@ public class User
     public PostPlayBehavior? PostPlayBehavior { get; set; }
 
     /// <summary>
+    /// Gets or sets the cross-media artist suggestion behavior: when a song/album is not
+    /// found but a plausible artist is (sub-strict-threshold match), whether to offer it for
+    /// confirmation, auto-serve it, or do nothing. When null, the global default is used.
+    /// </summary>
+    public CrossMediaArtistSuggestion? CrossMediaArtistSuggestion { get; set; }
+
+    /// <summary>
+    /// Gets or sets a per-user override for whether the skill speaks the now-playing announce
+    /// ("Now playing X") when content is launched. When null (not explicitly set), the global
+    /// <see cref="Configuration.PluginConfiguration.DefaultAnnounceNowPlaying"/> default is used.
+    /// Resume/restart announces (position/restart info) are not governed by this setting.
+    /// Governs video-launch and audiobook fresh-start announces only.
+    /// </summary>
+    public bool? AnnounceNowPlaying { get; set; }
+
+    /// <summary>
+    /// Gets or sets a per-user override for whether the skill speaks the now-playing announce on
+    /// MUSIC plays (PlaySong/PlayAlbum/PlayArtistSongs). When null (not explicitly set), the
+    /// global <see cref="Configuration.PluginConfiguration.AnnounceAudioPlays"/> default (false)
+    /// is used.
+    /// </summary>
+    public bool? AnnounceAudioPlays { get; set; }
+
+    /// <summary>
     /// Gets or sets a per-user override for whether music (Audio items) plays via VideoApp
     /// (native seek bar, requires ffmpeg video-audio encode) or plain AudioPlayer (raw stream,
     /// zero ffmpeg, instant, no seek bar). When null (not explicitly set), the global

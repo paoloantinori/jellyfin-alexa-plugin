@@ -83,10 +83,13 @@ public class PhoneticSynonymGeneratorTests
     }
 
     [Fact]
-    public void GenerateSynonyms_ReturnsMaxThreeSynonyms()
+    public void GenerateSynonyms_ReturnsMaxFiveSynonyms()
     {
-        var result = PhoneticSynonymGenerator.GenerateSynonyms("The Backstreet Boys", "it-IT");
-        Assert.True(result.Count <= 3);
+        // JF-362 raised the per-name synonym cap from 3 to 5 to offer more ASR-coverage
+        // variants. Use an input that actually exercises the cap (multiple transformable
+        // features -> 5 variants).
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Motion Orchestra", "it-IT");
+        Assert.True(result.Count <= 5, $"Expected <= 5 synonyms, got {result.Count}");
     }
 
     [Fact]
@@ -254,5 +257,153 @@ public class PhoneticSynonymGeneratorTests
     {
         var result = PhoneticSynonymGenerator.GenerateSynonyms("Pink Floyd", "");
         Assert.Empty(result);
+    }
+
+    // --- JF-362: Romance L1 pronunciation of English ---
+    // Italian/Spanish/French/Portuguese L1 speakers all lack the velar nasal /ŋ/ as a
+    // phoneme, so they realize English "-ing" as /in/. (German and Dutch are Germanic and
+    // DO have /ŋ/, so they are excluded — see the de-DE test below.) On-device ASR captured
+    // an Italian saying "Soul Coughing" as "sol coffin"; the catalog slot must emit that
+    // spoken form. See claudedocs/research_jf362-italian-phonetic-synonyms_2026-07-22.md.
+
+    private static readonly string[] NgAbsentLocales_JF362 = { "it-IT", "es-ES", "fr-FR", "pt-BR" };
+
+    [Theory]
+    [MemberData(nameof(NgAbsentLocalesTheoryData_JF362))]
+    public void GenerateSynonyms_IngEnding_TransformsToIn_AcrossNgAbsentLocales_JF362(string locale)
+    {
+        // it/es/fr/pt L1 lacks /ŋ/ -> "-ing" surfaces as a dropped-g form. The exact
+        // spelling depends on whether the locale also has ough->of: it-IT chains to
+        // "Cofin" (pinned separately), the others give "Coughin".
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Coughing", locale);
+        Assert.NotEmpty(result);
+        Assert.Contains(result, s => s.Contains("Cofin", StringComparison.OrdinalIgnoreCase)
+                                  || s.Contains("Coughin", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void GenerateSynonyms_IngEnding_ItalianChainsOughToOf_ThenIngToIn_JF362()
+    {
+        // it-IT is the only one of the four with an ough->of rule, so the chain is
+        // Coughing -> Cofing -> Cofin. Lock this locale-specific difference explicitly
+        // (the other three produce "Coughin" — covered by the theory above).
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Coughing", "it-IT");
+        Assert.Contains(result, s => s.Contains("Cofin", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
+    [MemberData(nameof(NgAbsentLocalesTheoryData_JF362))]
+    public void GenerateSynonyms_SoulCoughing_ProducesSpokenForm_AcrossNgAbsentLocales_JF362(string locale)
+    {
+        // The on-device repro: an Italian says "sol coffin". Each /ŋ/-absent locale must
+        // emit a spoken-form synonym: "soul" -> "sol" (the override) AND the second word's
+        // terminal -ing dropped to -in.
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Soul Coughing", locale);
+        Assert.NotEmpty(result);
+        Assert.Contains(result, s => s.Contains("sol", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result, s => s.Contains("Cofin", StringComparison.OrdinalIgnoreCase)
+                                  || s.Contains("Coughin", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("nl-NL")]
+    public void GenerateSynonyms_IngEnding_GermanicLocales_DoNotDropIng_JF362(string locale)
+    {
+        // Guard: German and Dutch have /ŋ/ natively (Ding, singen, zingen), so they must
+        // NOT apply the -ing->-in Romance rule. A dropped-g synonym would be a spurious
+        // wrong-pronunciation variant. Lock the exclusion so it isn't re-added.
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Coughing", locale);
+        Assert.All(result, s => Assert.DoesNotContain("Cofin", s, StringComparison.OrdinalIgnoreCase));
+        Assert.All(result, s => Assert.DoesNotContain("Coughin", s, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void GenerateSynonyms_BareIng_NotTransformed_LengthGuard_JF362()
+    {
+        // The word.Length > 3 guard excludes the bare word "ing" (length 3) — it must not
+        // become "in". (The generator may return empty for it, which also satisfies this.)
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("ing", "it-IT");
+        Assert.All(result, s => Assert.DoesNotContain(" in", s, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
+    [InlineData("Sting")]
+    [InlineData("King")]
+    public void GenerateSynonyms_FourLetterIngWord_Transforms_AcceptedBroadBehavior_JF362(string word)
+    {
+        // Known over-broad approximation (accepted): 4-letter words ending in "-ing" pass
+        // the Length>3 guard even though the -ing is the root, not a suffix. This is
+        // linguistically correct for /ŋ/-absent L1 speakers — an Italian genuinely says
+        // "Stin"/"Kin". Pinned so a future change to the guard is caught deliberately.
+        var result = PhoneticSynonymGenerator.GenerateSynonyms(word, "it-IT");
+        Assert.Contains(result, s => s.Contains(word[..^3], StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static TheoryData<string> NgAbsentLocalesTheoryData_JF362 =>
+        new() { "it-IT", "es-ES", "fr-FR", "pt-BR" };
+
+    // --- JF-362 (device capture): coverage, not precision ---
+    // The goal is to offer ALTERNATIVE spoken-form variants so that whichever way Alexa's
+    // ASR transcribes an Italian pronunciation, at least one synonym matches (entity
+    // resolution only needs one hit; extra near-misses are harmless). On-device ASR
+    // captured "Soul Coughing" as both "sol coffin" and "soul coffin" — single AND double
+    // 'f', sol AND soul. The synonym set must cover {sol,soul} × {cofin,coffin}.
+    // See claudedocs/research_jf362-italian-gemination-doubling_2026-07-23.md.
+
+    [Theory]
+    [MemberData(nameof(NgAbsentLocalesTheoryData_JF362))]
+    public void GenerateSynonyms_SoulCoughing_CoversDeviceCaptures_AcrossNgAbsentLocales_JF362(string locale)
+    {
+        // Device ASR produced "soul coffin" (corr be57f36f) and "sol coffin" (corr 32a6617e).
+        // The doubler covers whatever single intervocalic consonant each locale's transform
+        // produces. it-IT runs ough->of first, so "Cofin" -> doubled "Coffin" (the device
+        // capture). es/fr/pt have no ough->of rule, so they keep "Coughin" (no intervocalic f
+        // to double) — that is locally correct, not a gap.
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Soul Coughing", locale);
+
+        // The dropped-g form (Cofin for it-IT, Coughin for es/fr/pt) must be present.
+        Assert.Contains(result, s => s.Contains("Cofin", StringComparison.OrdinalIgnoreCase)
+                                  || s.Contains("Coughin", StringComparison.OrdinalIgnoreCase));
+
+        if (locale == "it-IT")
+        {
+            // The device-capture doubled-f form is reachable only via the Italian ough->of chain.
+            Assert.Contains(result, s => s.Contains("Coffin", StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    [Fact]
+    public void GenerateSynonyms_DoubleConsonantVariant_EmittedForIntervocalicConsonant_JF362()
+    {
+        // A word with a single intervocalic consonant that ASR may double should emit a
+        // doubled-consonant variant as an additional synonym (coverage). "Coughing" -> the
+        // -ing->-in path yields "Cofin"; a doubled-f variant "Coffin" should also appear.
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Coughing", "it-IT");
+        Assert.Contains(result, s => s.Contains("Coffin", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void GenerateSynonyms_SoulCoughing_CoversBothSolAndSoulDeviceCaptures_JF362()
+    {
+        // Device ASR captured BOTH "sol coffin" (corr 32a6617e) and "soul coffin" (corr
+        // be57f36f). ASR is inconsistent about the override vowel — sometimes keeps "soul".
+        // The synonym set must cover the doubled-f form with BOTH vowels (coverage).
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Soul Coughing", "it-IT");
+        Assert.Contains(result, s => s.Contains("Sol Coffin", StringComparison.OrdinalIgnoreCase)
+                                  || s.Contains("sol coffin", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result, s => s.Contains("Soul Coffin", StringComparison.OrdinalIgnoreCase)
+                                  || s.Contains("soul coffin", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void GenerateSynonyms_MultiWordOverrideName_KeepsDeviceCaptureUnderCap_JF362()
+    {
+        // Regression guard (code-review MUST-FIX 1): when an override word ("Soul") and
+        // other transformable words co-occur, the synonym list can exceed the Take(5) cap.
+        // The device-captured "Soul Coffin" form must survive (added before lower-priority
+        // alternates), not be truncated. "Motion Soul Coughing" has tion + override + ough.
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Motion Soul Coughing", "it-IT");
+        Assert.Contains(result, s => s.Contains("Soul Coffin", StringComparison.OrdinalIgnoreCase));
     }
 }

@@ -176,6 +176,75 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
+    public async Task HandleAsync_ArtistSongsQuery_FiltersByIncludeItemTypesAudio()
+    {
+        // JF-358: the artist-songs query must filter with IncludeItemTypes=Audio, NOT
+        // MediaTypes=Audio. On Jellyfin 10.11.11, MediaTypes=Audio does not constrain an
+        // ArtistIds query (returns the entire audio library), which makes the sort run over
+        // thousands of items and intermittently NRE inside UserDataManager.GetUserData ->
+        // RetryAsync burns the 8s Alexa budget -> INVALID_RESPONSE. IncludeItemTypes filters
+        // correctly and returns only the artist's songs.
+        SetupUserMock();
+        var artist = new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() };
+
+        int callCount = 0;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(() =>
+            {
+                callCount++;
+                return callCount == 1
+                    ? new List<BaseItem> { artist }
+                    : new List<BaseItem> { new Audio { Name = "Yesterday", Id = Guid.NewGuid() } };
+            });
+
+        var handler = CreateHandler(artistIndex: null);
+        var request = CreateIntentRequest(musician: "Beatles");
+
+        await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+
+        // The SECOND GetItemList call is the artist-songs query (the first resolves the artist).
+        // It must request Audio via IncludeItemTypes, and must NOT rely on MediaTypes alone.
+        _libraryManagerMock.Verify(
+            l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.ArtistIds != null && q.ArtistIds.Length > 0
+                && q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(Jellyfin.Data.Enums.BaseItemKind.Audio))),
+            Times.AtLeastOnce,
+            "artist-songs query must filter via IncludeItemTypes=Audio (JF-358: MediaTypes=Audio does not filter ArtistIds queries on Jellyfin 10.11.11)");
+    }
+
+    [Fact]
+    public async Task HandleAsync_ArtistSongsQuery_DoesNotUseMediaTypesAudio()
+    {
+        // JF-358 perf invariant: the artist-songs query must NOT set MediaTypes=Audio
+        // (which returns the full library on Jellyfin 10.11.11). Only IncludeItemTypes filters.
+        SetupUserMock();
+        var artist = new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() };
+
+        int callCount = 0;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(() =>
+            {
+                callCount++;
+                return callCount == 1
+                    ? new List<BaseItem> { artist }
+                    : new List<BaseItem> { new Audio { Name = "Yesterday", Id = Guid.NewGuid() } };
+            });
+
+        var handler = CreateHandler(artistIndex: null);
+        var request = CreateIntentRequest(musician: "Beatles");
+
+        await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+
+        // The artist-songs query (2nd call) must NOT have MediaTypes=Audio set.
+        _libraryManagerMock.Verify(
+            l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.ArtistIds != null && q.ArtistIds.Length > 0
+                && (q.MediaTypes == null || q.MediaTypes.Length == 0))),
+            Times.AtLeastOnce,
+            "artist-songs query must NOT use MediaTypes=Audio (JF-358: it returns the full library on Jellyfin 10.11.11)");
+    }
+
+    [Fact]
     public async Task HandleAsync_NoArtistIndex_FallsBackToDatabase()
     {
         SetupUserMock();

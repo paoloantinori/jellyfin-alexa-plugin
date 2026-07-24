@@ -142,6 +142,11 @@ public static class GermanPhoneticSynonyms
             }
         }
 
+        // NOTE: the Romance -ing->-in / soul->sol tail rules are deliberately NOT applied
+        // here. Standard German has /ŋ/ as a phoneme (as in Ding, singen), so German L1
+        // speakers do not systematically drop final -ing the way Romance-L1 speakers do
+        // (it/de/fr/pt/es all lack phonemic /ŋ/). Applying the rule here would emit a
+        // spurious wrong-pronunciation synonym. See JF-362.
         return w;
     }
 

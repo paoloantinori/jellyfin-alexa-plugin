@@ -101,13 +101,16 @@ public class PlayRadioIntentHandler : BaseHandler
 
         Logger.LogInformation("Radio mode enabled with {Count} similar tracks for {SongName}", queue.Count - 1, currentAudio.Name);
 
-        string? nowPlayingSsml = GetSsml("NowPlayingSsml", locale, currentAudio.Name);
+        string? nowPlayingSsml = GetSsml("NowPlayingSsml", locale, EscapeXml(currentAudio.Name));
         string radioMsg = ResponseStrings.Get("RadioStarted", locale, (queue.Count - 1).ToString(System.Globalization.CultureInfo.InvariantCulture));
 
         var response = BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(currentAudio.Id.ToString(), user), currentAudio.Id.ToString(), currentAudio, user, context);
-        response.Response.OutputSpeech = nowPlayingSsml != null
-            ? (IOutputSpeech)new SsmlOutputSpeech { Ssml = $"<speak>{nowPlayingSsml}. {radioMsg}</speak>" }
-            : new PlainTextOutputSpeech($"{ResponseStrings.Get("NowPlaying", locale, currentAudio.Name)}. {radioMsg}");
+        if (GetAnnounceNowPlaying(user))
+        {
+            response.Response.OutputSpeech = nowPlayingSsml != null
+                ? (IOutputSpeech)new SsmlOutputSpeech { Ssml = $"<speak>{nowPlayingSsml}. {EscapeXml(radioMsg)}</speak>" }
+                : new PlainTextOutputSpeech($"{ResponseStrings.Get("NowPlaying", locale, currentAudio.Name)}. {radioMsg}");
+        }
 
         return response;
     }

@@ -521,7 +521,7 @@
         "slots": [
           {
             "name": "mood",
-            "type": "AMAZON.SearchQuery"
+            "type": "Mood"
           }
         ],
         "samples": [
@@ -873,6 +873,96 @@
       }
     ],
     "types": [
+      {
+        "name": "Mood",
+        "values": [
+          {
+            "name": {
+              "value": "entspannend",
+              "synonyms": [
+                "entspannt"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "beruhigend"
+            }
+          },
+          {
+            "name": {
+              "value": "beschwingt"
+            }
+          },
+          {
+            "name": {
+              "value": "energisch"
+            }
+          },
+          {
+            "name": {
+              "value": "fokus"
+            }
+          },
+          {
+            "name": {
+              "value": "romantisch"
+            }
+          },
+          {
+            "name": {
+              "value": "fröhlich",
+              "synonyms": [
+                "glücklich"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "traurig"
+            }
+          },
+          {
+            "name": {
+              "value": "feier",
+              "synonyms": [
+                "party"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "training"
+            }
+          },
+          {
+            "name": {
+              "value": "morgens"
+            }
+          },
+          {
+            "name": {
+              "value": "abend",
+              "synonyms": [
+                "abends"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "abendessen"
+            }
+          },
+          {
+            "name": {
+              "value": "schlafen",
+              "synonyms": [
+                "einschlafen"
+              ]
+            }
+          }
+        ]
+      },
       {
         "name": "MediaType",
         "values": [

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Net.Http;
 using System.Threading;
@@ -208,6 +209,36 @@ public class ConfigurationController : ControllerBase
             else if (vaaToken.Type == JTokenType.Null)
             {
                 pluginUser!.VideoAppForAudio = null;
+                updated = true;
+            }
+        }
+
+        // Handle AnnounceNowPlaying (boolean, or null to inherit the global DefaultAnnounceNowPlaying)
+        if (req.TryGetValue("AnnounceNowPlaying", out var anpToken))
+        {
+            if (anpToken.Type == JTokenType.Boolean)
+            {
+                pluginUser!.AnnounceNowPlaying = anpToken.Value<bool>();
+                updated = true;
+            }
+            else if (anpToken.Type == JTokenType.Null)
+            {
+                pluginUser!.AnnounceNowPlaying = null;
+                updated = true;
+            }
+        }
+
+        // Handle AnnounceAudioPlays (music-play announce opt-in; boolean or null to inherit)
+        if (req.TryGetValue("AnnounceAudioPlays", out var aapToken))
+        {
+            if (aapToken.Type == JTokenType.Boolean)
+            {
+                pluginUser!.AnnounceAudioPlays = aapToken.Value<bool>();
+                updated = true;
+            }
+            else if (aapToken.Type == JTokenType.Null)
+            {
+                pluginUser!.AnnounceAudioPlays = null;
                 updated = true;
             }
         }
@@ -483,6 +514,15 @@ public class ConfigurationController : ControllerBase
         if (req.TryGetValue("ResumeAnnounceTitle", out var resumeAnnounceToken) && resumeAnnounceToken.Type == JTokenType.Boolean)
         { config.ResumeAnnounceTitle = resumeAnnounceToken.Value<bool>(); updated = true; }
 
+        if (req.TryGetValue("DefaultAnnounceNowPlaying", out var defaultAnnounceToken) && defaultAnnounceToken.Type == JTokenType.Boolean)
+        { config.DefaultAnnounceNowPlaying = defaultAnnounceToken.Value<bool>(); updated = true; }
+
+        if (req.TryGetValue("AnnounceAudioPlays", out var announceAudioToken) && announceAudioToken.Type == JTokenType.Boolean)
+        { config.AnnounceAudioPlays = announceAudioToken.Value<bool>(); updated = true; }
+
+        if (req.TryGetValue("CatalogSyncLocales", out var catalogSyncToken) && catalogSyncToken.Type == JTokenType.String)
+        { config.CatalogSyncLocales = catalogSyncToken.Value<string>() ?? string.Empty; updated = true; }
+
         if (req.TryGetValue("AsrCompoundWordFixEnabled", out var asrToken) && asrToken.Type == JTokenType.Boolean)
         { config.AsrCompoundWordFixEnabled = asrToken.Value<bool>(); updated = true; }
 
@@ -546,6 +586,36 @@ public class ConfigurationController : ControllerBase
             updated = true;
         }
 
+        // JF-355: admin mood→genre overrides. Array of {mood, genres}. A subsequent
+        // "Rebuild models" pushes the mood words into the Mood slot type so the NLU
+        // fills the slot one-shot. The handler resolves them regardless of redeploy.
+        if (req.TryGetValue("MoodGenreOverrides", out var overridesToken) && overridesToken.Type == JTokenType.Array)
+        {
+            var parsed = new Collection<MoodGenreOverride>();
+            foreach (JToken entry in overridesToken)
+            {
+                // Skip non-object elements (scalar/array tokens) — Value<string>(key)
+                // would throw on them and 500 the whole config save.
+                if (entry.Type != JTokenType.Object)
+                {
+                    continue;
+                }
+
+                string mood = entry.Value<string>("Mood")?.Trim() ?? string.Empty;
+                string genres = entry.Value<string>("Genres")?.Trim() ?? string.Empty;
+                if (mood.Length == 0 || mood.Length > SlotValueHelper.MaxSlotValueLength)
+                {
+                    // Skip blank or over-limit moods (Alexa slot-value hard limit).
+                    continue;
+                }
+
+                parsed.Add(new MoodGenreOverride(mood, genres));
+            }
+
+            config.MoodGenreOverrides = parsed;
+            updated = true;
+        }
+
         // Handle DefaultSearchResponseMode (string enum: "Thorough" or "Fast")
         if (req.TryGetValue("DefaultSearchResponseMode", out var defaultModeToken)
             && defaultModeToken.Type == JTokenType.String)
@@ -553,6 +623,17 @@ public class ConfigurationController : ControllerBase
             if (Enum.TryParse<SearchResponseMode>(defaultModeToken.Value<string>(), ignoreCase: true, out var defaultMode))
             {
                 config.DefaultSearchResponseMode = defaultMode;
+                updated = true;
+            }
+        }
+
+        // Handle DefaultCrossMediaArtistSuggestion (string enum: "Off"/"Confirm"/"AutoServe")
+        if (req.TryGetValue("DefaultCrossMediaArtistSuggestion", out var crossMediaToken)
+            && crossMediaToken.Type == JTokenType.String)
+        {
+            if (Enum.TryParse<CrossMediaArtistSuggestion>(crossMediaToken.Value<string>(), ignoreCase: true, out var crossMedia))
+            {
+                config.DefaultCrossMediaArtistSuggestion = crossMedia;
                 updated = true;
             }
         }

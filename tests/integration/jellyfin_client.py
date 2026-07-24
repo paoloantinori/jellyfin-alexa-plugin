@@ -202,3 +202,25 @@ class JellyfinClient:
         raise JellyfinError(
             f"Could not resolve username '{self.user_id}' to a GUID"
         )
+
+    def get_first_audio_item_id(self, exclude: str | None = None) -> str:
+        """Return the GUID of the first Audio item in the library.
+
+        Used by stream-security tests that need a real item GUID. Optionally
+        exclude a specific item ID (to get a different item for wrong-item tests).
+        """
+        data = self._get("/Items", params={
+            "Recursive": "true",
+            "IncludeItemTypes": "Audio",
+            "Limit": "10",
+        })
+        items = data.get("Items", [])
+        if not items:
+            raise JellyfinError("No Audio items found in the library")
+
+        for item in items:
+            item_id = item.get("Id", "")
+            if item_id and item_id != exclude:
+                return item_id
+
+        raise JellyfinError("No suitable Audio item found (all excluded)")

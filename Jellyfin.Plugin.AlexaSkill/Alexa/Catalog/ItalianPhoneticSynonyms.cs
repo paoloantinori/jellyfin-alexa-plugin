@@ -59,7 +59,48 @@ public static class ItalianPhoneticSynonyms
             }
         }
 
-        return results.Distinct(StringComparer.OrdinalIgnoreCase).Take(3).ToList();
+        // JF-362 coverage: emit consonant-doubled variants (ASR often doubles single
+        // intervocalic consonants in the Italian locale, e.g. "Cofin" -> "Coffin"). Coverage,
+        // not precision — extra variants are harmless to entity resolution. Only when a
+        // transform actually happened (a name with no phonetic transform must still return
+        // empty — don't manufacture "Nirvanna").
+        bool transformed = !string.Equals(phonetic, withoutThe, StringComparison.OrdinalIgnoreCase);
+        if (transformed)
+        {
+            // Device-captured forms FIRST, so they survive the Take(5) cap. ASR captured
+            // both "sol coffin" and "soul coffin"; the override-vowel restore ("Soul
+            // Coffin") is added before the alternate transform, which is lower priority and
+            // often a near-duplicate that would otherwise push the device match past index 5.
+            PhoneticSynonymGenerator.AddConsonantVariants(results, RestoreOverrideVowels(phonetic, withoutThe));
+            PhoneticSynonymGenerator.AddConsonantVariants(results, phonetic);
+            PhoneticSynonymGenerator.AddConsonantVariants(results, phoneticAlt);
+        }
+
+        return results.Distinct(StringComparer.OrdinalIgnoreCase).Take(5).ToList();
+    }
+
+    /// <summary>
+    /// Returns a copy of <paramref name="transformed"/> where any whole words that were
+    /// changed by a Romance vowel override (e.g. soul->sol) are restored to the original
+    /// vowel spelling, so a second coverage variant can be derived from it. Words that
+    /// weren't overridden are left as-is.
+    /// </summary>
+    private static string RestoreOverrideVowels(string transformed, string original)
+    {
+        var tWords = transformed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        int originalWordCount = original.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+        if (tWords.Length != originalWordCount)
+        {
+            return transformed;
+        }
+
+        var result = new string[tWords.Length];
+        for (int i = 0; i < tWords.Length; i++)
+        {
+            result[i] = PhoneticSynonymGenerator.RestoreOverrideVowel(tWords[i]);
+        }
+
+        return string.Join(' ', result);
     }
 
     private static bool IsItalianOrigin(string name)
@@ -185,7 +226,7 @@ public static class ItalianPhoneticSynonyms
             w = CollapseDoubledConsonants(w);
         }
 
-        return w;
+        return PhoneticSynonymGenerator.ApplyRomanceTailRules(w);
     }
 
     private static string TransformWByVowel(string word)

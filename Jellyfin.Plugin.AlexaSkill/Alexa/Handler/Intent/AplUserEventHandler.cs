@@ -190,6 +190,13 @@ public class AplUserEventHandler : BaseHandler
             session.NowPlayingQueue = new List<QueueItem> { new() { Id = item.Id } };
             session.FullNowPlayingItem = item;
 
+            string locale = GetLocale(request);
+            var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
+            if (userError != null)
+            {
+                return Task.FromResult(userError);
+            }
+
             return Task.FromResult(new SkillResponse
             {
                 Version = "1.0",
@@ -197,6 +204,7 @@ public class AplUserEventHandler : BaseHandler
                 {
                     // VideoApp.Launch must NOT include shouldEndSession
                     ShouldEndSession = null,
+                    OutputSpeech = BuildVideoLaunchSpeech(item, locale, _userDataManager, jellyfinUser, GetAnnounceNowPlaying(user)),
                     Directives = new List<IDirective>
                     {
                         new VideoAppLaunchDirective
@@ -217,13 +225,18 @@ public class AplUserEventHandler : BaseHandler
         // which fails because Folders don't have media sources.
         if (item is Folder folder)
         {
+            // Multi-disc albums play disc-then-track (JF-339 AC#3); other folders
+            // (audiobook/artist folders) keep SortName.
+            bool isAlbum = folder is MediaBrowser.Controller.Entities.Audio.MusicAlbum;
             var childQuery = new InternalItemsQuery
             {
                 ParentId = folder.Id,
                 MediaTypes = new[] { MediaType.Audio },
                 Recursive = true,
                 Limit = 500,
-                OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) }
+                OrderBy = isAlbum
+                    ? QueueContinuationFetcher.AlbumTrackOrder
+                    : new[] { (ItemSortBy.SortName, SortOrder.Ascending) }
             };
 
             var children = _libraryManager.GetItemList(childQuery);

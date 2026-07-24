@@ -18,6 +18,20 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa;
 internal static class QueueContinuationFetcher
 {
     /// <summary>
+    /// Disc-then-track ordering (ParentIndexNumber = disc, IndexNumber = track) for album-track
+    /// queries (JF-339 AC#3). DB-level sort is required because the progressive queue paginates
+    /// (initial page + continuation batches) — a per-page in-memory sort cannot keep global
+    /// order, so every album-track site uses this and the pages concatenate consistently.
+    /// Known edge: a NULL disc number sorts ahead of disc 1 on SQLite/MySQL (ASC NULLS FIRST)
+    /// — cosmetic, only affects inconsistently-tagged albums, not fixable at this layer.
+    /// </summary>
+    internal static readonly (ItemSortBy, SortOrder)[] AlbumTrackOrder =
+    {
+        (ItemSortBy.ParentIndexNumber, SortOrder.Ascending),
+        (ItemSortBy.IndexNumber, SortOrder.Ascending)
+    };
+
+    /// <summary>
     /// Fetch the next batch of items based on continuation data.
     /// Updates the continuation's StartIndex after fetching.
     /// </summary>
@@ -72,6 +86,7 @@ internal static class QueueContinuationFetcher
             ParentId = continuation.ParentId ?? Guid.Empty,
             IncludeItemTypes = new[] { BaseItemKind.Audio },
             DtoOptions = new DtoOptions(true),
+            OrderBy = AlbumTrackOrder,
             StartIndex = continuation.StartIndex,
             Limit = continuation.BatchSize
         };
@@ -91,6 +106,7 @@ internal static class QueueContinuationFetcher
                 AlbumIds = new[] { continuation.ParentId.Value },
                 IncludeItemTypes = new[] { BaseItemKind.Audio },
                 DtoOptions = new DtoOptions(true),
+                OrderBy = AlbumTrackOrder,
                 StartIndex = continuation.StartIndex,
                 Limit = continuation.BatchSize
             };

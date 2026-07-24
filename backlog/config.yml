@@ -2,7 +2,7 @@ project_name: "jellyfin alexa"
 default_status: "To Do"
 statuses: ["To Do", "In Progress", "Done"]
 labels: []
-definition_of_done: ["dotnet build passes with 0 errors", "dotnet test passes", "No new compiler warnings introduced", "Session attributes use proper DTOs not raw ValueTuples for serialization", "HttpClient instances are not shared across calls that modify BaseAddress", "NLU test fixtures updated if interaction model changed", "E2E test added for new intent or handler logic", "Locale response strings added to all 17 locales"]
+definition_of_done: ["dotnet build passes with 0 errors", "dotnet test passes", "No new compiler warnings introduced", "Session attributes use proper DTOs not raw ValueTuples for serialization", "HttpClient instances are not shared across calls that modify BaseAddress", "NLU test fixtures updated if interaction model changed", "E2E test added for new intent or handler logic", "Locale response strings added to all 17 locales", "/simplify passed (no blocking cleanups remaining)", "/code-review high passed (no blocking findings remaining, or findings applied/tracked)"]
 date_format: yyyy-mm-dd
 max_column_width: 20
 default_editor: "vi"

@@ -106,7 +106,7 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
                     return new List<BaseItem>();
 
                 // Artist songs fallback: ArtistIds + MediaTypes Audio, no SearchTerm
-                if (q.ArtistIds != null && q.ArtistIds.Length > 0 && q.MediaTypes != null && q.MediaTypes.Contains(MediaType.Audio))
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0 && q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.Audio))
                     return new List<BaseItem> { song1, song2 };
 
                 return new List<BaseItem>();

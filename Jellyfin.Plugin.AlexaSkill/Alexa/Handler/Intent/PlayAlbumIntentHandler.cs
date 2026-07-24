@@ -28,8 +28,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public class PlayAlbumIntentHandler : BaseHandler
 {
-    private ILibraryManager _libraryManager;
-    private IUserManager _userManager;
+    private readonly ILibraryManager _libraryManager;
+    private readonly IUserManager _userManager;
     private readonly IUserDataManager _userDataManager;
     private readonly DeviceQueueManager? _queueManager;
     private readonly IArtistIndex? _artistIndex;
@@ -187,6 +187,19 @@ public class PlayAlbumIntentHandler : BaseHandler
             // PlayAlbumIntent. Only fire on a HIGH-confidence artist match — a weak match
             // (e.g. "jazz caffè"→"Uazz" @75) must NOT play the wrong artist; report the
             // album as not found instead. JF-336 (was GetDefaultThreshold=60).
+            // Word-count gate: a long album title is a poor artist query and a wrong-artist
+            // offer/substitution is worse than a clean not-found (same lesson as PlaySong's
+            // "la ballata del genesio"→"Lamb" @75). JF-363 widened the band to [60,85), so
+            // the guard now matters here too (previously a sub-85 long-query match was silent).
+            int wordCount = album.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
+            if (wordCount > CrossMediaArtistMaxWords)
+            {
+                Logger.LogInformation(
+                    "PlayAlbum: skipping artist fallback for {WordCount}-word query '{Query}' (max {Max})",
+                    wordCount, album, CrossMediaArtistMaxWords);
+                return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByName", locale, album));
+            }
+
             Logger.LogDebug("PlayAlbum: no albums found, trying artist fallback with query='{Query}'", album);
             IReadOnlyList<BaseItem> fallbackArtists = await Util.ArtistSearch.SearchAsync(
                 album, user, _libraryManager, _artistIndex, Logger,
@@ -211,6 +224,33 @@ public class PlayAlbumIntentHandler : BaseHandler
                         artist.Id, artist.Name, jellyfinUser!, user, session, context, locale, cancellationToken,
                         announcement: ResponseStrings.Get("FoundArtistInstead", locale, artist.Name)).ConfigureAwait(false);
                 }
+                else if (bestMatch.HasValue)
+                {
+                    // JF-363: sub-strict band [normalThreshold, crossMediaThreshold). Offer or
+                    // auto-serve the single best artist instead of a dead-end not-found. Single
+                    // candidate only (see the RankMatches comment above). Safe because Confirm
+                    // asks first and AutoServe is opt-in.
+                    int normalThreshold = FuzzyMatcher.GetDefaultThreshold(user);
+                    if (bestMatch.Value.Score >= normalThreshold)
+                    {
+                        BaseItem artist = bestMatch.Value.Item;
+                        var suggestionMode = GetCrossMediaArtistSuggestion(user);
+                        if (suggestionMode == CrossMediaArtistSuggestion.AutoServe)
+                        {
+                            Logger.LogInformation(
+                                "PlayAlbum: cross-media artist suggestion AutoServe '{Artist}' score={Score} for query='{Query}'",
+                                artist.Name, bestMatch.Value.Score, album);
+                            return await PlayArtistSongsFromAlbumFallback(
+                                artist.Id, artist.Name, jellyfinUser!, user, session, context, locale, cancellationToken,
+                                announcement: ResponseStrings.Get("FoundArtistInstead", locale, artist.Name)).ConfigureAwait(false);
+                        }
+
+                        if (suggestionMode == CrossMediaArtistSuggestion.Confirm)
+                        {
+                            return BuildCrossMediaArtistOfferAsk(album, artist, locale, "album");
+                        }
+                    }
+                }
             }
 
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByName", locale, album));
@@ -218,36 +258,19 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         if (albums.Count > 1)
         {
-            Logger.LogDebug("PlayAlbum: {Count} albums matched, running disambiguation", albums.Count);
-            BaseItem? albumMatch = null;
-            var (missOutcome, missResponse) = HandleFuzzyMiss(
-                album,
-                albums,
-                a => a.Name,
-                best => new List<(Guid, string)> { (best.Id, best.Name) },
-                DisambiguationHelper.MediaTypeAlbum,
-                locale,
-                best =>
-                {
-                    albumMatch = best;
-                    return null!;
-                },
-                user: user);
-
-            if (missOutcome != FuzzyMissOutcome.NotFound)
+            // Disambiguate distinct-name collisions only for Confirm users (AutoPlay users opted
+            // out of prompts). Same-name duplicates always auto-play (a "X or X?" prompt is useless).
+            albums = albums.OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ToList();
+            bool distinctNames = albums.Select(a => a.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1;
+            if (distinctNames && user.FuzzyMatchBehavior != FuzzyMatchBehavior.AutoPlay)
             {
-                if (missResponse != null)
-                {
-                    return missResponse;
-                }
-
-                albums = new List<BaseItem> { albumMatch! };
-            }
-            else
-            {
+                Logger.LogDebug("PlayAlbum: {Count} distinct-name albums, prompting disambiguation", albums.Count);
                 var matches = albums.Take(3).Select(a => (a.Id, a.Name, (string?)GetImageUrl(a.Id.ToString("N"), user))).ToList();
                 return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeAlbum, locale, context);
             }
+
+            Logger.LogDebug("PlayAlbum: {Count} albums, auto-playing the first", albums.Count);
+            albums = new List<BaseItem> { albums[0] };
         }
 
         // Get the first page of album tracks for fast time-to-audio.
@@ -261,6 +284,7 @@ public class PlayAlbumIntentHandler : BaseHandler
                 ParentId = albums[0].Id,
                 IncludeItemTypes = new[] { BaseItemKind.Audio },
                 DtoOptions = new DtoOptions(true),
+                OrderBy = QueueContinuationFetcher.AlbumTrackOrder,
                 Limit = ProgressiveQueueConstants.GetInitialFetchSize()
             }),
             "GetAlbumTracks",
@@ -282,6 +306,7 @@ public class PlayAlbumIntentHandler : BaseHandler
                     AlbumIds = new[] { albums[0].Id },
                     IncludeItemTypes = new[] { BaseItemKind.Audio },
                     DtoOptions = new DtoOptions(true),
+                    OrderBy = QueueContinuationFetcher.AlbumTrackOrder,
                     Limit = ProgressiveQueueConstants.GetInitialFetchSize()
                 }),
                 "GetAlbumTracksByAlbumIds",
@@ -345,7 +370,7 @@ public class PlayAlbumIntentHandler : BaseHandler
         Logger.LogDebug(
             "PlayAlbum: returning AudioPlayer, itemId={ItemId}, album='{AlbumName}', startIndex={StartIndex}, queueSize={QueueSize}",
             item_id, albums[0].Name, startIndex, queueItems.Count);
-        SkillResponse albumResponse = BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, albumItems[startIndex], user, context);
+        SkillResponse albumResponse = BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, albumItems[startIndex], user, context, announceLocale: locale);
 
         // If the album came from the fuzzy fallback (exact search missed), speak the
         // matched name so the user knows what's playing — same mechanism as the

@@ -28,9 +28,9 @@ This bypasses the version-check gate that normally only deploys models on startu
 ```bash
 SSH_OPTS="-F /dev/null -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa"
 USER_ID=$(ssh $SSH_OPTS pantinor@minix "curl -sf 'http://localhost:8096/Plugins/c5df7de087774b3ca70d5c3dae359c9e/Configuration' \
-  -H 'X-Emby-Token: 69088d9a2bd74af5945b3d5683a087d3'" | python3 -c "import json,sys; print(json.load(sys.stdin)['Users'][0]['Id'])")
+  -H 'X-Emby-Token: $JELLYFIN_API_KEY'" | python3 -c "import json,sys; print(json.load(sys.stdin)['Users'][0]['Id'])")
 ssh $SSH_OPTS pantinor@minix "curl -s -X POST 'http://localhost:8096/alexaskill/api/custom-model/rebuild' \
-  -H 'X-Emby-Token: 69088d9a2bd74af5945b3d5683a087d3' -H 'Content-Type: application/json' \
+  -H 'X-Emby-Token: $JELLYFIN_API_KEY' -H 'Content-Type: application/json' \
   -d '{\"userId\":\"$USER_ID\"}'"
 ```
 
@@ -61,7 +61,7 @@ Test that the new slot values are recognized:
 ```bash
 SSH_OPTS="-F /dev/null -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa"
 ssh $SSH_OPTS pantinor@minix "curl -sf -X POST 'http://localhost:8096/Plugins/AlexaSkill/Simulator/Intent' \
-  -H 'X-Emby-Token: 69088d9a2bd74af5945b3d5683a087d3' -H 'Content-Type: application/json' \
+  -H 'X-Emby-Token: $JELLYFIN_API_KEY' -H 'Content-Type: application/json' \
   -d '{\"intentName\":\"<IntentName>\",\"slots\":{\"<slot_name>\":\"<new_value>\"},\"locale\":\"it-IT\"}'"
 ```
 

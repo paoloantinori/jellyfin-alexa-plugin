@@ -55,7 +55,7 @@ internal static class DisambiguationHelper
         var matchList = matches.Take(3).Select(m => new MatchInfo { Id = m.Id.ToString(), Name = m.Name }).ToList();
         int index = 0;
 
-        string? promptSsml = BaseHandler.GetSsml("DisambiguatePromptSsml", locale, matchList[index].Name);
+        string? promptSsml = BaseHandler.GetSsml("DisambiguatePromptSsml", locale, BaseHandler.EscapeXml(matchList[index].Name));
         string reprompt = ResponseStrings.Get("DisambiguateReprompt", locale);
 
         SkillResponse response;
@@ -90,7 +90,7 @@ internal static class DisambiguationHelper
         var matchList = matches.Take(3).Select(m => new MatchInfo { Id = m.Id.ToString(), Name = m.Name, ArtUrl = m.ArtUrl }).ToList();
         int index = 0;
 
-        string? promptSsml = BaseHandler.GetSsml("DisambiguatePromptSsml", locale, matchList[index].Name);
+        string? promptSsml = BaseHandler.GetSsml("DisambiguatePromptSsml", locale, BaseHandler.EscapeXml(matchList[index].Name));
         string reprompt = ResponseStrings.Get("DisambiguateReprompt", locale);
 
         SkillResponse response;
@@ -141,7 +141,7 @@ internal static class DisambiguationHelper
         string mediaType,
         string locale)
     {
-        string? promptSsml = BaseHandler.GetSsml("DisambiguateNextSsml", locale, matches[nextIndex].Name);
+        string? promptSsml = BaseHandler.GetSsml("DisambiguateNextSsml", locale, BaseHandler.EscapeXml(matches[nextIndex].Name));
         string reprompt = ResponseStrings.Get("DisambiguateReprompt", locale);
 
         SkillResponse response;

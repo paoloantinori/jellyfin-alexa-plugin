@@ -43,6 +43,8 @@ public class YesIntentHandlerTests : PluginTestBase
         _config = new PluginConfiguration();
         TestHelpers.SetServerAddress(_config, "http://localhost:8096");
         _loggerFactory = LoggerFactory.Create(b => { });
+
+        TestHelpers.EnsurePluginInstance(_config, _loggerFactory, c => { }, "yes-intent-tests");
     }
 
     private YesIntentHandler CreateHandler()
@@ -187,6 +189,87 @@ public class YesIntentHandlerTests : PluginTestBase
         response.HasDirective<Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>();
         // VideoApp.Launch must NOT include shouldEndSession
         Assert.Null(response.Response.ShouldEndSession);
+        // JF-349: the disambiguation-confirmed video launch now announces the title (was silent).
+        Assert.NotNull(response.Response.OutputSpeech);
+        string announceText = response.Response.OutputSpeech is SsmlOutputSpeech ss
+            ? ss.Ssml
+            : Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech).Text;
+        Assert.Contains("Test Movie", announceText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_AudioBookItem_DoesNotReturnNoSongsInAlbum()
+    {
+        // JF-361: PlayBook disambiguation uses MediaTypeAlbum label for audiobooks. When the user
+        // confirms, YesIntentHandler routes to PlayAlbum. A single-file AudioBook (no children)
+        // must be treated as its own single track, not return "Non ci sono canzoni nell'album".
+        var bookId = Guid.NewGuid();
+        var book = new AudioBook { Name = "Test Book", Id = bookId };
+
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemById(bookId))
+            .Returns(book);
+        // Single-file audiobook: no child tracks, item itself is the audio.
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var matchInfo = new DisambiguationHelper.MatchInfo { Id = bookId.ToString(), Name = "Test Book" };
+        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreateYesIntentRequest(),
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            attrs,
+            CancellationToken.None);
+
+        // Must produce an AudioPlayer.Play (the item is playable audio), not a "NoSongsInAlbum" tell.
+        Assert.NotNull(response.Response.Directives);
+        Assert.True(response.Response.Directives.Count > 0 && response.Response.Directives[0] is AudioPlayerPlayDirective);
+    }
+
+    [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_AudioBookItem_NativeControlsForBooks_UsesVideoAppLaunch()
+    {
+        // JF-361: when NativeControlsForBooks is on, the PlayBook path in YesIntentHandler must
+        // route to VideoApp.Launch (seek bar), not AudioPlayer.Play.
+        var bookId = Guid.NewGuid();
+        var parentId = Guid.NewGuid();
+        var book = new AudioBook { Name = "Test Book", Id = bookId, ParentId = parentId };
+
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemById(bookId))
+            .Returns(book);
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { book });
+
+        // Enable NativeControlsForBooks (Plugin.Instance is set by EnsurePluginInstance in ctor)
+        Plugin.Instance!.Configuration.NativeControlsForBooks = true;
+        Plugin.Instance.Configuration.ServerAddress = "http://localhost:8096";
+
+        var matchInfo = new DisambiguationHelper.MatchInfo { Id = bookId.ToString(), Name = "Test Book" };
+        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreateYesIntentRequest(),
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            attrs,
+            CancellationToken.None);
+
+        // Restore defaults
+        Plugin.Instance.Configuration.NativeControlsForBooks = false;
+
+        Assert.NotNull(response.Response?.Directives);
+        Assert.True(response.Response.Directives.Count > 0, $"Expected directives, got {response.Response.Directives?.Count ?? -1}. OutputSpeech: {response.Response.OutputSpeech}");
+        Assert.IsType<Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>(
+            response.Response.Directives[0]);
     }
 
     [Fact]
@@ -340,5 +423,42 @@ public class YesIntentHandlerTests : PluginTestBase
         Assert.NotNull(directive.VideoItem);
         Assert.NotNull(directive.VideoItem.Metadata);
         Assert.Equal("The Matrix", directive.VideoItem.Metadata.Title);
+    }
+
+    [Fact]
+    public async Task HandleAsync_AlbumType_AudioBookItem_UsesMediaTypesForChapters()
+    {
+        // Regression guard (JF-339 /code-review): PlayBook disambiguation reuses the "album"
+        // type for audiobooks, so PlayAlbum receives an AudioBook. It must filter by
+        // MediaTypes=Audio (covers AudioBook chapters); IncludeItemTypes=Audio would drop them
+        // (chapters are BaseItemKind.AudioBook) and speak NoSongsInAlbum.
+        var bookId = Guid.NewGuid();
+        var chapter = new Audio { Name = "Chapter 1", Id = Guid.NewGuid() };
+        var book = new AudioBook { Name = "Test Audiobook", Id = bookId };
+
+        _libraryManagerMock.Setup(lm => lm.GetItemById(bookId)).Returns(book);
+
+        InternalItemsQuery? captured = null;
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.Is<InternalItemsQuery>(q => q.MediaTypes != null)))
+            .Callback<InternalItemsQuery>(q => captured = q)
+            .Returns(new List<BaseItem> { chapter });
+
+        var matchInfo = new DisambiguationHelper.MatchInfo { Id = bookId.ToString(), Name = "Test Audiobook" };
+        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreateYesIntentRequest(),
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            attrs,
+            CancellationToken.None);
+
+        Assert.NotNull(captured);
+        Assert.True(captured!.IncludeItemTypes == null || captured.IncludeItemTypes.Length == 0,
+            "PlayAlbum must use MediaTypes=Audio for the album/audiobook path, not IncludeItemTypes — AudioBook chapters are BaseItemKind.AudioBook and would be dropped.");
+        response.HasDirective<AudioPlayerPlayDirective>();
     }
 }

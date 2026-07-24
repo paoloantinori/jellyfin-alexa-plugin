@@ -164,7 +164,14 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
             TestHelpers.CreateTestUser(),
             CreateSession(), CancellationToken.None);
 
-        Assert.Null(response.Response.OutputSpeech);
+        // JF-349: a fresh video launch (no resume position) now announces the title instead of
+        // launching silently, matching PlayRandom/PlayEpisode. Resume-position launches still use
+        // the "ResumingVideo" speech (unchanged if-branch).
+        Assert.NotNull(response.Response.OutputSpeech);
+        string announceText = response.Response.OutputSpeech is SsmlOutputSpeech ss
+            ? ss.Ssml
+            : Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech).Text;
+        Assert.Contains("The Matrix", announceText, StringComparison.Ordinal);
         response.HasDirective<VideoAppLaunchDirective>();
     }
 

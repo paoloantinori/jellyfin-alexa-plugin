@@ -272,6 +272,7 @@ public class AplUserEventHandlerTests : PluginTestBase
 
         var movie = new MediaBrowser.Controller.Entities.Movies.Movie { Name = "Test Movie", Id = itemId };
         _libraryManager.Setup(l => l.GetItemById(itemId)).Returns(movie);
+        _userManager.Setup(u => u.GetUserById(session.UserId)).Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
 
         var response = await _handler.HandleAsync(request, _context, _user, session, CancellationToken.None);
 
@@ -281,6 +282,8 @@ public class AplUserEventHandlerTests : PluginTestBase
 
         var videoDirective = response.Response.Directives.FirstOrDefault(d => d.GetType().Name.Contains("VideoApp"));
         Assert.NotNull(videoDirective);
+        // JF-349: video launch now announces the title (was silent).
+        Assert.NotNull(response.Response.OutputSpeech);
     }
 
     [Fact]
@@ -334,6 +337,7 @@ public class AplUserEventHandlerTests : PluginTestBase
 
         var movie = new MediaBrowser.Controller.Entities.Movies.Movie { Name = "Carousel Movie", Id = itemId };
         _libraryManager.Setup(l => l.GetItemById(itemId)).Returns(movie);
+        _userManager.Setup(u => u.GetUserById(session.UserId)).Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
 
         var response = await _handler.HandleAsync(request, _context, _user, session, CancellationToken.None);
 
@@ -343,6 +347,8 @@ public class AplUserEventHandlerTests : PluginTestBase
 
         var videoDirective = response.Response.Directives.FirstOrDefault(d => d.GetType().Name.Contains("VideoApp"));
         Assert.NotNull(videoDirective);
+        // JF-349: video launch now announces the title (was silent).
+        Assert.NotNull(response.Response.OutputSpeech);
     }
 
     [Fact]
@@ -358,6 +364,38 @@ public class AplUserEventHandlerTests : PluginTestBase
     }
 
     // Resume offset tests
+
+    [Fact]
+    public async Task HandleAsync_SelectItem_MovieWithProgress_AnnouncesResumePosition()
+    {
+        // C4: a half-watched movie launched via a carousel/search tap announces
+        // "Resuming X from Y" (matching PlayVideo), not "Now playing".
+        var itemId = Guid.NewGuid();
+        var request = CreateAplEvent("selectItem", itemId.ToString());
+        var session = CreateSession();
+
+        var movie = new MediaBrowser.Controller.Entities.Movies.Movie { Name = "Inception", Id = itemId };
+        _libraryManager.Setup(l => l.GetItemById(itemId)).Returns(movie);
+
+        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        _userManager.Setup(u => u.GetUserById(session.UserId)).Returns(jellyfinUser);
+
+        _userDataManager.Setup(x => x.GetUserData(jellyfinUser, movie)).Returns(new UserItemData
+        {
+            Key = "test",
+            Played = false,
+            PlaybackPositionTicks = TimeSpan.FromMinutes(45).Ticks
+        });
+
+        var response = await _handler.HandleAsync(request, _context, _user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotNull(response.Response.OutputSpeech);
+        string announceText = response.Response.OutputSpeech is SsmlOutputSpeech s
+            ? s.Ssml
+            : Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech).Text;
+        Assert.Contains("Resuming", announceText, StringComparison.OrdinalIgnoreCase);
+    }
 
     [Fact]
     public async Task HandleAsync_SelectItem_WithProgress_ResumesFromSavedPosition()
@@ -709,6 +747,7 @@ public class AplUserEventHandlerTests : PluginTestBase
 
         var movie = new MediaBrowser.Controller.Entities.Movies.Movie { Name = "Test Movie", Id = itemId };
         _libraryManager.Setup(l => l.GetItemById(itemId)).Returns(movie);
+        _userManager.Setup(u => u.GetUserById(session.UserId)).Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
 
         var response = await _handler.HandleAsync(request, aplContext, _user, session, CancellationToken.None);
 

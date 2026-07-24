@@ -67,12 +67,13 @@ public class CsrfTokenHandlerTests
     }
 
     [Fact]
-    public void ValidateCsrfToken_TokenValidatesMultipleTimes()
+    public void ValidateCsrfToken_IsSingleUse_SecondValidationFails()
     {
+        // JF-312: a CSRF token is consumed on first validation and cannot be replayed.
         var handler = new CsrfTokenHandler();
         var token = handler.GetNewCsrfToken();
 
-        Assert.True(handler.ValidateCsrfToken(token.Token));
-        Assert.True(handler.ValidateCsrfToken(token.Token));
+        Assert.True(handler.ValidateCsrfToken(token.Token));   // first use: valid
+        Assert.False(handler.ValidateCsrfToken(token.Token));  // replay: rejected (consumed)
     }
 }

@@ -363,11 +363,15 @@ public class PlayArtistSongsIntentHandler : BaseHandler
 
         // Fetch the first page of artist songs for fast time-to-audio.
         // Remaining songs will be fetched on demand by PlaybackNearlyFinished.
+        // JF-358: filter via IncludeItemTypes=Audio, NOT MediaTypes=Audio. On Jellyfin 10.11.11,
+        // MediaTypes=Audio does not constrain an ArtistIds query (it returns the entire audio
+        // library), which makes PopularitySort run over thousands of items and intermittently
+        // NRE inside UserDataManager.GetUserData -> RetryAsync burns the 8s Alexa budget.
         var artistSongsQuery = new InternalItemsQuery()
         {
             User = jellyfinUser,
             Recursive = true,
-            MediaTypes = new[] { MediaType.Audio },
+            IncludeItemTypes = new[] { BaseItemKind.Audio },
             OrderBy = PopularitySort,
             DtoOptions = new DtoOptions(true),
             ArtistIds = new[] { artists[0].Id },
@@ -453,7 +457,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         Logger.LogDebug(
             "PlayArtistSongs: returning AudioPlayer, itemId={ItemId}, startIndex={StartIndex}, queueSize={QueueSize}, offset=0",
             itemId, startIndex, queueItems.Count);
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, artistsItems[0], user, context);
+        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, artistsItems[0], user, context, announceLocale: locale);
     }
 
     /// <summary>

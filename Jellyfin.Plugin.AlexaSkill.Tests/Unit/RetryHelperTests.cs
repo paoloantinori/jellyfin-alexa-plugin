@@ -503,4 +503,39 @@ public class RetryHelperTests
         Assert.Equal("ok", result);
         Assert.Equal(3, calls);
     }
+
+    // --- Timeout-budget invariant (JF-359) ---
+    // Guards the JF-358 class of failure: a play-path DB query that threw repeatedly used to burn
+    // the whole retry budget (~8-12s wall time) and exceed Alexa's ~8s response window, surfacing
+    // to the user as INVALID_RESPONSE. Every play-path Jellyfin call goes through RetryAsync, which
+    // sets timeoutMs = AlexaRequestTimeoutMs (6000). The invariant: when an operation throws
+    // transiently on every attempt, the retry loop must STOP once the timeoutMs budget is exhausted
+    // — never run past it. If someone weakens/removes IsBudgetExceeded, this test fails before a
+    // live user sees a timeout. (E2E correctness tests do not cover latency; this unit test is the
+    // deterministic guard for the budget mechanism, not a live-timing measurement.)
+
+    [Fact]
+    public async Task Sync_AlwaysTransient_StopsWithinTimeoutBudget()
+    {
+        const int budgetMs = 1500; // small budget keeps the test fast; the invariant is relative
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        // Operation always throws a transient exception (HttpRequestException is transient).
+        await Assert.ThrowsAsync<HttpRequestException>(() =>
+            RetryHelper.ExecuteWithRetryAsync(
+                (Func<int>)(() => throw new HttpRequestException("always transient")),
+                _logger,
+                "TestOp",
+                maxRetries: 100, // allow many retries so the BUDGET (not the retry cap) is the stop condition
+                initialDelayMs: 1,
+                minOperationMs: 1,
+                timeoutMs: budgetMs));
+
+        sw.Stop();
+        // Must stop within the budget (plus generous slack for scheduler/jitter, but well under
+        // unbounded). If the budget check were removed, 100 retries at growing backoff would run
+        // far longer than this bound.
+        Assert.True(sw.ElapsedMilliseconds < budgetMs + 1000,
+            $"Retry loop ran {sw.ElapsedMilliseconds}ms, exceeding the {budgetMs}ms budget — the timeout-budget guard (IsBudgetExceeded) is not stopping retries.");
+    }
 }

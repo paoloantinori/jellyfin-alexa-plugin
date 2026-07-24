@@ -72,8 +72,6 @@
         "samples": [
           "loop this song",
           "loop this song forever",
-          "Repeat the song",
-          "Repeat this song",
           "Repeat this song forever"
         ]
       },
@@ -155,27 +153,15 @@
       {
         "name": "PlayAlbumIntent",
         "samples": [
-          "play {album}",
           "play the album {album}",
           "play album {album}",
-          "play {album} by {musician}",
           "play the album {album} by {musician}",
           "play album {album} by {musician}",
-          "listen to {album}",
           "listen to the album {album}",
-          "listen to {album} by {musician}",
           "listen to the album {album} by {musician}",
-          "put on {album}",
           "put on the album {album}",
-          "I want to hear {album}",
-          "I want to hear {album} by {musician}",
-          "can you play {album}",
-          "start playing {album}",
           "play the record {album}",
-          "play the record {album} by {musician}",
-          "let's hear {album}",
-          "give me {album}",
-          "stream {album}"
+          "play the record {album} by {musician}"
         ],
         "slots": [
           {
@@ -760,7 +746,7 @@
         "slots": [
           {
             "name": "mood",
-            "type": "AMAZON.SearchQuery"
+            "type": "Mood"
           }
         ],
         "samples": [
@@ -768,15 +754,7 @@
           "play something {mood}",
           "play {mood} songs",
           "i want {mood} music",
-          "play me something {mood}",
-          "play morning music",
-          "play evening music",
-          "play dinner music",
-          "play workout music",
-          "play focus music",
-          "play party music",
-          "play relaxing music",
-          "i want something chill"
+          "play me something {mood}"
         ]
       },
       {
@@ -1050,6 +1028,81 @@
     ],
     "types": [
       {
+        "name": "Mood",
+        "values": [
+          {
+            "name": {
+              "value": "relaxing"
+            }
+          },
+          {
+            "name": {
+              "value": "chill"
+            }
+          },
+          {
+            "name": {
+              "value": "upbeat"
+            }
+          },
+          {
+            "name": {
+              "value": "energetic"
+            }
+          },
+          {
+            "name": {
+              "value": "focus"
+            }
+          },
+          {
+            "name": {
+              "value": "romantic"
+            }
+          },
+          {
+            "name": {
+              "value": "happy"
+            }
+          },
+          {
+            "name": {
+              "value": "sad"
+            }
+          },
+          {
+            "name": {
+              "value": "party"
+            }
+          },
+          {
+            "name": {
+              "value": "workout"
+            }
+          },
+          {
+            "name": {
+              "value": "morning"
+            }
+          },
+          {
+            "name": {
+              "value": "evening"
+            }
+          },
+          {
+            "name": {
+              "value": "dinner"
+            }
+          },
+          {
+            "name": {
+              "value": "sleep"
+            }
+          }
+        ]
+      },
+      {
         "name": "SeekDirection",
         "values": [
           {
@@ -1168,7 +1221,8 @@
           {
             "name": {
               "value": "artists"
-            }
+            },
+            "id": "artists"
           },
           {
             "name": {
@@ -1178,7 +1232,8 @@
                 "records",
                 "album"
               ]
-            }
+            },
+            "id": "albums"
           },
           {
             "name": {
@@ -1194,7 +1249,8 @@
                 "song",
                 "tracks"
               ]
-            }
+            },
+            "id": "songs"
           },
           {
             "name": {

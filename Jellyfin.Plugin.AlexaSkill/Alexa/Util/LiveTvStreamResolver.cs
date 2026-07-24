@@ -122,7 +122,7 @@ public class LiveTvStreamResolver : ILiveTvStreamResolver
                 fallback += $"&LiveStreamId={Uri.EscapeDataString(liveStreamId)}";
             }
 
-            _logger.LogDebug("ResolveAsync: dynamic-HLS fallback for channel {Id} -> {Url}", channelId, fallback);
+            _logger.LogDebug("ResolveAsync: dynamic-HLS fallback for channel {Id} -> {Url}", channelId, RequestLogRedactor.RedactUrl(fallback));
             return new LiveTvStream(fallback);
         }
         // If the caller cancelled (upstream abandoned the request), propagate cancellation

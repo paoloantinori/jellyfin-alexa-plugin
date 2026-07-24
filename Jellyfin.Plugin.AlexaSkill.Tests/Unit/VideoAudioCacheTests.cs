@@ -221,6 +221,37 @@ public class VideoAudioCacheTests : PluginTestBase, IDisposable
         Assert.True(File.Exists(path2), "Newest file should survive eviction");
     }
 
+    /// <summary>
+    /// A file served recently (in-memory RecordAccess via a cache hit) survives eviction even
+    /// when its filesystem atime is older than a cold file's -- the in-memory recency overrides
+    /// the stale atime that relatime/noatime mounts would otherwise freeze (JF-320 part 2).
+    /// </summary>
+    [Fact]
+    public async Task EvictIfNeeded_RecentlyServedFile_SurvivesDespiteStaleAtime()
+    {
+        Plugin.Instance!.Configuration.VideoAudioCacheSizeMB = 1;
+
+        string servedPath = _cache.GetCacheFilePath("served-item", 1);
+        string coldPath = _cache.GetCacheFilePath("cold-item", 2);
+        Directory.CreateDirectory(Path.GetDirectoryName(servedPath)!);
+
+        await File.WriteAllTextAsync(servedPath, new string('x', 100 * 1024));
+        await File.WriteAllTextAsync(coldPath, new string('y', 1536 * 1024));
+
+        // Serve the smaller file -> RecordAccess marks it recently used in memory.
+        await _cache.GetCachedFile("served-item", 1);
+
+        // Make the SERVED file's atime OLDER than the cold file's -- without the in-memory
+        // recency, atime-based eviction would evict the served file first.
+        File.SetLastAccessTimeUtc(servedPath, DateTime.UtcNow.AddHours(-5));
+        File.SetLastAccessTimeUtc(coldPath, DateTime.UtcNow.AddHours(-1));
+
+        await _cache.EvictIfNeeded();
+
+        Assert.True(File.Exists(servedPath), "Recently-served file should survive (in-memory recency overrides stale atime)");
+        Assert.False(File.Exists(coldPath), "Cold file should be evicted");
+    }
+
     [Fact]
     public async Task EvictIfNeeded_NoCacheDir_DoesNotThrow()
     {

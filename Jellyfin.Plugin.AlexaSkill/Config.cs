@@ -75,6 +75,13 @@ public static class Config
     public const int CsrfTokenExpirationMinutes = 10;
 
     /// <summary>
+    /// Time-to-live, in seconds, for the signed item-scoped stream token that gates the
+    /// video-audio endpoints (JF-309). 10 hours covers the longest legitimate single session
+    /// (a full audiobook) without refresh.
+    /// </summary>
+    public const int StreamTokenTtlSeconds = 10 * 60 * 60;
+
+    /// <summary>
     /// The path for the LWA Authorization Code callback endpoint.
     /// </summary>
     public const string LwaCallbackPath = "alexaskill/lwa/callback";

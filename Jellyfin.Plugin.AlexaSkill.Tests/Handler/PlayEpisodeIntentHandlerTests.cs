@@ -230,6 +230,14 @@ public class PlayEpisodeIntentHandlerTests : PluginTestBase
 
         Assert.NotNull(response);
         response.HasDirective<VideoAppLaunchDirective>();
+
+        // JF-349: an episode launch now announces the title instead of launching silently,
+        // matching PlayRandom/PlayVideo.
+        Assert.NotNull(response.Response.OutputSpeech);
+        string announceText = response.Response.OutputSpeech is SsmlOutputSpeech s
+            ? s.Ssml
+            : Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech).Text;
+        Assert.Contains("Fun Run", announceText, StringComparison.Ordinal);
     }
 
     [Fact]

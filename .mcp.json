@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest"],
+      "env": {
+        "PLAYWRIGHT_BROWSERS_PATH": "/home/pantinor/data/repo/personal/jellyfin-alexa-plugin/.claude/pw-cache",
+        "PLAYWRIGHT_SERVER_REGISTRY": "/home/pantinor/data/repo/personal/jellyfin-alexa-plugin/.claude/pw-server-registry",
+        "XDG_CACHE_HOME": "/home/pantinor/data/repo/personal/jellyfin-alexa-plugin/.claude/pw-cache-xdg"
+      }
+    },
+    "backlog": {
+      "command": "backlog",
+      "args": ["mcp", "start"]
+    }
+  }
+}

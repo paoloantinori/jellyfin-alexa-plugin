@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Controller;
 using MediaBrowser.Common.Configuration;
@@ -89,6 +90,72 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.NotNull(badRequest.Value);
     }
 
+    // ========== JF-309 Stream Token Security Tests ==========
+
+    /// <summary>
+    /// A bare-GUID request with no token must be rejected (401) — the core security fix.
+    /// </summary>
+    [Fact]
+    public async Task StreamVideoAudio_NoToken_Returns401()
+    {
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        var controller = CreateController(); // no itemIdForToken → no token in query
+
+        ActionResult result = await controller.StreamVideoAudio(Guid.NewGuid().ToString());
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+    }
+
+    /// <summary>
+    /// An expired token must be rejected (401).
+    /// </summary>
+    [Fact]
+    public async Task StreamVideoAudio_ExpiredToken_Returns401()
+    {
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        string itemId = Guid.NewGuid().ToString();
+
+        // Manually construct a controller with an expired token.
+        string expiredToken = StreamTokenHelper.Mint(itemId, _config.StreamTokenSecret, TimeSpan.FromHours(-1));
+        var controller = CreateController();
+        controller.ControllerContext.HttpContext.Request.Query =
+            new QueryCollection(new Dictionary<string, Microsoft.Extensions.Primitives.StringValues> { ["token"] = expiredToken });
+
+        ActionResult result = await controller.StreamVideoAudio(itemId);
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+    }
+
+    /// <summary>
+    /// A token minted for a different item must be rejected (401).
+    /// </summary>
+    [Fact]
+    public async Task StreamVideoAudio_WrongItemToken_Returns401()
+    {
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        string itemId = Guid.NewGuid().ToString();
+        string otherItemId = Guid.NewGuid().ToString();
+
+        var controller = CreateController(otherItemId); // token minted for OTHER item
+
+        ActionResult result = await controller.StreamVideoAudio(itemId);
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+    }
+
+    /// <summary>
+    /// A segment request with no token must be rejected (401).
+    /// </summary>
+    [Fact]
+    public void GetSegment_NoToken_Returns401()
+    {
+        var controller = CreateController(); // no token
+
+        ActionResult result = controller.GetSegment(Guid.NewGuid().ToString(), "seg_0000.ts");
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+    }
+
     /// <summary>
     /// Verify that the endpoint returns 404 when the item is not found.
     /// </summary>
@@ -98,11 +165,11 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
         _libraryManagerMock.Setup(m => m.GetItemById(It.IsAny<Guid>())).Returns((MediaBrowser.Controller.Entities.BaseItem?)null);
 
-        var controller = CreateController();
+        string itemId = Guid.NewGuid().ToString();
+        var controller = CreateController(itemId);
         controller.FfmpegPath = "/usr/bin/ffmpeg";
 
-        ActionResult result = await controller.StreamVideoAudio(
-            Guid.NewGuid().ToString());
+        ActionResult result = await controller.StreamVideoAudio(itemId);
 
         var notFound = Assert.IsType<NotFoundObjectResult>(result);
         Assert.NotNull(notFound.Value);
@@ -283,7 +350,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
         _libraryManagerMock.Setup(m => m.GetItemById(folder.Id)).Returns(folder);
 
-        var controller = CreateController();
+        var controller = CreateController(folder.Id.ToString());
         controller.FfmpegPath = "/usr/bin/ffmpeg";
 
         ActionResult result = await controller.StreamVideoAudio(folder.Id.ToString());
@@ -322,15 +389,17 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
 #pragma warning restore CA3003, CA1416
 
-        var controller = CreateController();
+        var controller = CreateController(audioItem.Id.ToString());
         controller.FfmpegPath = fakeFfmpegPath;
 
         // Set up HttpContext with RequestAborted so the controller can register
-        // the client-disconnect callback
+        // the client-disconnect callback. Re-apply the token query since the
+        // fresh HttpContext replaces the one CreateController populated.
         var httpContext = new DefaultHttpContext
         {
             RequestAborted = CancellationToken.None
         };
+        httpContext.Request.Query = controller.ControllerContext.HttpContext.Request.Query;
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = httpContext
@@ -365,7 +434,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
         await File.WriteAllTextAsync(cachePath, new string('x', 12 * 1024));
 
-        var controller = CreateController();
+        var controller = CreateController(audioItem.Id.ToString());
         controller.FfmpegPath = "/usr/bin/ffmpeg";
 
         ActionResult result = await controller.StreamVideoAudio(audioItem.Id.ToString());
@@ -376,13 +445,36 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.True(physicalResult.EnableRangeProcessing);
     }
 
-    private VideoAudioController CreateController()
+    private VideoAudioController CreateController(string? itemIdForToken = null)
     {
-        return new VideoAudioController(
+        var controller = new VideoAudioController(
             _libraryManagerMock.Object,
             _mediaEncoderMock.Object,
             _cache,
             _loggerFactory);
+
+        // Attach an HttpContext so ValidateStreamToken can read the query string.
+        // When itemIdForToken is provided, mint a valid token for that item so the request passes
+        // the token check. When null, no token is set (simulates a bare-GUID attack).
+        var query = new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>();
+        if (itemIdForToken != null && !string.IsNullOrEmpty(_config.StreamTokenSecret))
+        {
+            string token = StreamTokenHelper.Mint(itemIdForToken, _config.StreamTokenSecret);
+            query["token"] = token;
+        }
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                Request =
+                {
+                    Query = new QueryCollection(query)
+                }
+            }
+        };
+
+        return controller;
     }
 
     // ========== HLS Tests ==========
@@ -410,10 +502,11 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
         _libraryManagerMock.Setup(m => m.GetItemById(It.IsAny<Guid>())).Returns((MediaBrowser.Controller.Entities.BaseItem?)null);
 
-        var controller = CreateController();
+        string itemId = Guid.NewGuid().ToString();
+        var controller = CreateController(itemId);
         controller.FfmpegPath = "/usr/bin/ffmpeg";
 
-        ActionResult result = await controller.StreamHlsVideoAudio(Guid.NewGuid().ToString());
+        ActionResult result = await controller.StreamHlsVideoAudio(itemId);
 
         var notFound = Assert.IsType<NotFoundObjectResult>(result);
         Assert.NotNull(notFound.Value);
@@ -435,7 +528,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
         _libraryManagerMock.Setup(m => m.GetItemById(folder.Id)).Returns(folder);
 
-        var controller = CreateController();
+        var controller = CreateController(folder.Id.ToString());
         controller.FfmpegPath = "/usr/bin/ffmpeg";
 
         ActionResult result = await controller.StreamHlsVideoAudio(folder.Id.ToString());
@@ -697,13 +790,15 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
         await File.WriteAllTextAsync(playlistPath, new string('x', 12 * 1024));
 
-        var controller = CreateController();
+        var controller = CreateController(audioItem.Id.ToString());
         controller.FfmpegPath = "/usr/bin/ffmpeg";
 
         ActionResult result = await controller.StreamHlsVideoAudio(audioItem.Id.ToString());
 
-        var physicalResult = Assert.IsType<PhysicalFileResult>(result);
-        Assert.Equal("application/vnd.apple.mpegurl", physicalResult.ContentType);
+        // JF-309: when a token is present (as it is here via CreateController), the playlist is
+        // rewritten with ?token= on each segment line and served as ContentResult (not PhysicalFile).
+        var contentResult = Assert.IsType<ContentResult>(result);
+        Assert.Equal("application/vnd.apple.mpegurl", contentResult.ContentType);
     }
 
     /// <summary>
@@ -743,13 +838,14 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
 #pragma warning restore CA3003, CA1416
 
-        var controller = CreateController();
+        var controller = CreateController(audioItem.Id.ToString());
         controller.FfmpegPath = fakeFfmpegPath;
 
         var httpContext = new DefaultHttpContext
         {
             RequestAborted = CancellationToken.None
         };
+        httpContext.Request.Query = controller.ControllerContext.HttpContext.Request.Query;
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = httpContext
@@ -757,9 +853,9 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         ActionResult result = await controller.StreamHlsVideoAudio(audioItem.Id.ToString());
 
-        // HLS serves the playlist via PhysicalFile as soon as the first segment appears
-        var physicalResult = Assert.IsType<PhysicalFileResult>(result);
-        Assert.Equal("application/vnd.apple.mpegurl", physicalResult.ContentType);
+        // JF-309: when a token is present, the playlist is rewritten and served as ContentResult.
+        var contentResult = Assert.IsType<ContentResult>(result);
+        Assert.Equal("application/vnd.apple.mpegurl", contentResult.ContentType);
     }
 
     // ========== Segment Endpoint Tests ==========
@@ -784,16 +880,17 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     [Fact]
     public void GetSegment_InvalidSegmentName_Returns400()
     {
-        var controller = CreateController();
+        string itemId = Guid.NewGuid().ToString();
+        var controller = CreateController(itemId);
 
         // Test various traversal and injection attempts
-        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(Guid.NewGuid().ToString(), "../etc/passwd"));
-        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(Guid.NewGuid().ToString(), "../../secret"));
-        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(Guid.NewGuid().ToString(), "seg_000.ts/../../etc/passwd"));
-        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(Guid.NewGuid().ToString(), ""));
-        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(Guid.NewGuid().ToString(), "seg_00.ts"));
-        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(Guid.NewGuid().ToString(), "seg_00000.ts"));   // 5 digits
-        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(Guid.NewGuid().ToString(), "segment.ts"));
+        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(itemId, "../etc/passwd"));
+        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(itemId, "../../secret"));
+        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(itemId, "seg_000.ts/../../etc/passwd"));
+        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(itemId, ""));
+        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(itemId, "seg_00.ts"));
+        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(itemId, "seg_00000.ts"));   // 5 digits
+        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(itemId, "segment.ts"));
     }
 
     /// <summary>
@@ -802,9 +899,10 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     [Fact]
     public void GetSegment_SegmentNotFound_Returns404()
     {
-        var controller = CreateController();
+        string itemId = Guid.NewGuid().ToString();
+        var controller = CreateController(itemId);
 
-        ActionResult result = controller.GetSegment(Guid.NewGuid().ToString(), "seg_000.ts");
+        ActionResult result = controller.GetSegment(itemId, "seg_000.ts");
 
         Assert.IsType<NotFoundObjectResult>(result);
     }
@@ -826,7 +924,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         string segmentPath = Path.Combine(hlsDir, "seg_000.ts");
         File.WriteAllText(segmentPath, new string('x', 1024));
 
-        var controller = CreateController();
+        var controller = CreateController(itemIdStr);
 
         ActionResult result = controller.GetSegment(itemIdStr, "seg_000.ts");
 
@@ -1078,7 +1176,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
         _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns((MediaBrowser.Controller.Entities.BaseItem?)null);
 
-        var controller = CreateController();
+        var controller = CreateController(parentId.ToString());
         controller.FfmpegPath = "/usr/bin/ffmpeg";
 
         ActionResult result = await controller.StreamHlsAudiobook(parentId.ToString());
@@ -1104,7 +1202,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         _libraryManagerMock.Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
             .Returns(new List<MediaBrowser.Controller.Entities.BaseItem>());
 
-        var controller = CreateController();
+        var controller = CreateController(parentId.ToString());
         controller.FfmpegPath = "/usr/bin/ffmpeg";
 
         ActionResult result = await controller.StreamHlsAudiobook(parentId.ToString());
@@ -1138,7 +1236,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         _libraryManagerMock.Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
             .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { chapterItem });
 
-        var controller = CreateController();
+        var controller = CreateController(parentId.ToString());
 
         // Single chapter should redirect to single-item HLS which will return 400
         // because the folder doesn't have media sources — but the key behavior is
@@ -1201,13 +1299,14 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
 #pragma warning restore CA3003, CA1416
 
-        var controller = CreateController();
+        var controller = CreateController(parentId.ToString());
         controller.FfmpegPath = fakeFfmpegPath;
 
         var httpContext = new DefaultHttpContext
         {
             RequestAborted = CancellationToken.None
         };
+        httpContext.Request.Query = controller.ControllerContext.HttpContext.Request.Query;
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = httpContext
@@ -1215,8 +1314,10 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         ActionResult result = await controller.StreamHlsAudiobook(parentId.ToString());
 
-        var physicalResult = Assert.IsType<PhysicalFileResult>(result);
-        Assert.Equal("application/vnd.apple.mpegurl", physicalResult.ContentType);
+        // JF-309: when a token is present, the audiobook playlist is rewritten with ?token= and
+        // served as ContentResult (not PhysicalFile).
+        var contentResult = Assert.IsType<ContentResult>(result);
+        Assert.Equal("application/vnd.apple.mpegurl", contentResult.ContentType);
     }
 
     /// <summary>
@@ -1267,13 +1368,15 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
 #pragma warning restore CA3003, CA1416
 
-        var controller = CreateController();
+        var controller = CreateController(parentId.ToString());
         controller.FfmpegPath = fakeFfmpegPath;
 
+        var preservedQuery = controller.ControllerContext.HttpContext.Request.Query;
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext { RequestAborted = CancellationToken.None }
         };
+        controller.ControllerContext.HttpContext.Request.Query = preservedQuery;
 
         await controller.StreamHlsAudiobook(parentId.ToString());
 

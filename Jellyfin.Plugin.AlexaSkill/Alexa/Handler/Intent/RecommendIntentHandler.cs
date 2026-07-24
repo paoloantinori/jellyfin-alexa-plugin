@@ -185,7 +185,7 @@ public class RecommendIntentHandler : BaseHandler
         // Use VideoApp for movies, AudioPlayer for audio
         if (item is MediaBrowser.Controller.Entities.Movies.Movie)
         {
-            string? recSsml = GetSsml("RecommendPlayingSsml", locale, item.Name);
+            string? recSsml = GetSsml("RecommendPlayingSsml", locale, EscapeXml(item.Name));
             var outputSpeech = recSsml != null
                 ? (IOutputSpeech)new SsmlOutputSpeech { Ssml = $"<speak>{recSsml}</speak>" }
                 : new PlainTextOutputSpeech(ResponseStrings.Get("RecommendPlaying", locale, item.Name));
@@ -214,9 +214,9 @@ public class RecommendIntentHandler : BaseHandler
         }
 
         // For audio, add NowPlaying speech before the audio directive
-        string? nowPlayingSsml = GetSsml("NowPlayingSsml", locale, item.Name);
+        string? nowPlayingSsml = GetSsml("NowPlayingSsml", locale, EscapeXml(item.Name));
         var audioResponse = BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, item, user, context);
-        if (nowPlayingSsml != null)
+        if (nowPlayingSsml != null && GetAnnounceNowPlaying(user))
         {
             audioResponse.Response.OutputSpeech = new SsmlOutputSpeech { Ssml = $"<speak>{nowPlayingSsml}</speak>" };
         }

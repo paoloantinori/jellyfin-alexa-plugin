@@ -364,10 +364,10 @@ public class MediaInfoIntentHandler : BaseHandler
 
         string position = BuildPositionDisplay(session, locale);
         var response = string.IsNullOrEmpty(position)
-            ? GetSsml("NowPlayingSsml", locale, descriptionSsml ?? description) is { } ssml
+            ? GetSsml("NowPlayingSsml", locale, descriptionSsml ?? EscapeXml(description)) is { } ssml
                 ? TellSsml(ssml)
                 : ResponseBuilder.Tell(ResponseStrings.Get("NowPlaying", locale, description))
-            : GetSsml("NowPlayingWithPositionSsml", locale, descriptionSsml ?? description, position) is { } ssmlFull
+            : GetSsml("NowPlayingWithPositionSsml", locale, descriptionSsml ?? EscapeXml(description), position) is { } ssmlFull
                 ? TellSsml(ssmlFull)
                 : ResponseBuilder.Tell(ResponseStrings.Get("NowPlayingWithPosition", locale, description, position));
 
@@ -393,7 +393,7 @@ public class MediaInfoIntentHandler : BaseHandler
 
         string enriched = trackDescription + ". " + artistInfo;
         string? enrichedSsml = trackSsml != null
-            ? trackSsml + "<break time=\"300ms\"/>" + artistInfo
+            ? trackSsml + "<break time=\"300ms\"/>" + EscapeXml(artistInfo)
             : null;
 
         return (enriched, enrichedSsml);
@@ -538,14 +538,14 @@ public class MediaInfoIntentHandler : BaseHandler
         {
             return (
                 ResponseStrings.Get("TrackByArtistFromAlbum", locale, item.Name, artist, album),
-                GetSsml("TrackByArtistFromAlbumSsml", locale, item.Name, artist, album));
+                GetSsml("TrackByArtistFromAlbumSsml", locale, EscapeXml(item.Name), EscapeXml(artist), EscapeXml(album)));
         }
 
         if (!string.IsNullOrEmpty(artist))
         {
             return (
                 ResponseStrings.Get("TrackByArtist", locale, item.Name, artist),
-                GetSsml("TrackByArtistSsml", locale, item.Name, artist));
+                GetSsml("TrackByArtistSsml", locale, EscapeXml(item.Name), EscapeXml(artist)));
         }
 
         return (item.Name ?? ResponseStrings.Get("UnknownMedia", locale), null);

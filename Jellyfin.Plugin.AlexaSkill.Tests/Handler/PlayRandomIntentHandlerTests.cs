@@ -257,6 +257,32 @@ public class PlayRandomIntentHandlerTests : PluginTestBase
         Assert.True(response.Response.ShouldEndSession);
     }
 
+    [Fact]
+    public async Task HandleAsync_VideoNameWithReservedChars_AnnouncesEscapedSsml()
+    {
+        // JF-323: the now-playing SSML announce must escape reserved chars in the item name,
+        // else a name with & < > yields invalid SSML -> InvalidResponse.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(); // default mediaType -> video
+        var user = CreateUser();
+        var session = CreateSession();
+        SetupUserMock();
+
+        var movie = new MediaBrowser.Controller.Entities.Movies.Movie
+        {
+            Name = "Rock & Roll <Live>",
+            Id = Guid.NewGuid(),
+        };
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { movie });
+
+        SkillResponse response = await handler.HandleAsync(request, CreateContext(), user, session, CancellationToken.None);
+
+        var speech = Assert.IsType<SsmlOutputSpeech>(response.Response.OutputSpeech);
+        Assert.Contains("Rock &amp; Roll &lt;Live&gt;", speech.Ssml);
+        Assert.DoesNotContain("Rock & Roll <Live>", speech.Ssml);
+    }
+
     private static Audio CreateTestAudio(string name, Guid id)
     {
         return new Audio

@@ -553,7 +553,7 @@
         "slots": [
           {
             "name": "mood",
-            "type": "AMAZON.SearchQuery"
+            "type": "Mood"
           }
         ],
         "samples": [
@@ -561,13 +561,7 @@
           "speel iets {mood}",
           "speel {mood} nummers",
           "ik wil {mood} muziek",
-          "speel mij iets {mood}",
-          "speel ochtendmuziek",
-          "speel avondmuziek",
-          "speel werkmuziek",
-          "speel focusmuziek",
-          "speel feestmuziek",
-          "speel ontspannende muziek"
+          "speel mij iets {mood}"
         ]
       },
       {
@@ -828,6 +822,93 @@
       }
     ],
     "types": [
+      {
+        "name": "Mood",
+        "values": [
+          {
+            "name": {
+              "value": "ontspannend"
+            }
+          },
+          {
+            "name": {
+              "value": "rustgevend"
+            }
+          },
+          {
+            "name": {
+              "value": "vrolijk"
+            }
+          },
+          {
+            "name": {
+              "value": "energiek"
+            }
+          },
+          {
+            "name": {
+              "value": "concentratie",
+              "synonyms": [
+                "focus"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "romantisch"
+            }
+          },
+          {
+            "name": {
+              "value": "blij",
+              "synonyms": [
+                "gelukkig"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "verdrietig"
+            }
+          },
+          {
+            "name": {
+              "value": "feest"
+            }
+          },
+          {
+            "name": {
+              "value": "workout",
+              "synonyms": [
+                "training"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "ochtend"
+            }
+          },
+          {
+            "name": {
+              "value": "avond"
+            }
+          },
+          {
+            "name": {
+              "value": "diner"
+            }
+          },
+          {
+            "name": {
+              "value": "slapen",
+              "synonyms": [
+                "slaap"
+              ]
+            }
+          }
+        ]
+      },
       {
         "name": "LibraryQueryType",
         "values": [

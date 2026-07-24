@@ -84,6 +84,20 @@ public class NoIntentHandler : BaseHandler
             return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("UnexpectedYes", locale)));
         }
 
+        // JF-363: if this disambiguation was a cross-media artist suggestion (the user asked
+        // for a song/album that wasn't found and we offered an artist instead), a "no" must
+        // decline to the clean song/album not-found, not the generic "no more matches".
+        if (sessionAttributes != null
+            && sessionAttributes.TryGetValue("crossmedia_notfound_query", out var queryObj)
+            && sessionAttributes.TryGetValue("crossmedia_notfound_type", out var typeObj)
+            && queryObj is string notFoundQuery
+            && typeObj is string notFoundType)
+        {
+            Logger.LogDebug("NoIntent: declining cross-media artist suggestion (type={Type}, query='{Query}')", notFoundType, notFoundQuery);
+            string notFoundKey = notFoundType == "album" ? "NotFoundAlbumByName" : "NotFoundSongByName";
+            return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get(notFoundKey, locale, notFoundQuery)));
+        }
+
         var (matches, index, mediaType) = state.Value;
         int nextIndex = index + 1;
 

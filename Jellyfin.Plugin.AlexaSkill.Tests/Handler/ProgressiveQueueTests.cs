@@ -27,6 +27,7 @@ using Xunit;
 using Audio = MediaBrowser.Controller.Entities.Audio.Audio;
 using BaseItem = MediaBrowser.Controller.Entities.BaseItem;
 using InternalItemsQuery = MediaBrowser.Controller.Entities.InternalItemsQuery;
+using SortOrder = Jellyfin.Database.Implementations.Enums.SortOrder;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
@@ -956,5 +957,180 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
             lm => lm.GetItemById(It.IsAny<Guid>()),
             Times.Never,
             "cached playlist continuation must not re-resolve via the library manager");
+    }
+
+    // =====================================================================
+    // Album disc/track ordering (JF-339 AC#3)
+    // =====================================================================
+
+    [Fact]
+    public void QueueContinuation_AlbumFetch_AppliesDiscThenTrackOrder()
+    {
+        SetupUserMock();
+
+        var continuation = new QueueContinuation
+        {
+            SourceType = "Album",
+            ParentId = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+            StartIndex = 5,
+            TotalCount = 30, // exceeds one batch -> exercises the paginated path
+            BatchSize = 10
+        };
+
+        InternalItemsQuery? captured = null;
+
+        // Non-zero total so the fetcher uses the primary ParentId query (not the AlbumIds fallback).
+        _libraryManagerMock
+            .Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => captured = q)
+            .Returns(new QueryResult<BaseItem>
+            {
+                Items = new List<BaseItem> { new Audio { Id = Guid.NewGuid(), Name = "t" } },
+                TotalRecordCount = 30
+            });
+
+        ILogger logger = _loggerFactory.CreateLogger("AlbumOrderTest");
+        QueueContinuationFetcher.FetchNextBatch(continuation, _libraryManagerMock.Object, _userManagerMock.Object, logger);
+
+        Assert.NotNull(captured);
+        // Literal (not the constant) pins AlbumTrackOrder's value — a corrupted constant fails here.
+        Assert.Equal(
+            new[] { (ItemSortBy.ParentIndexNumber, SortOrder.Ascending), (ItemSortBy.IndexNumber, SortOrder.Ascending) },
+            captured!.OrderBy);
+    }
+
+    [Fact]
+    public async Task PlayAlbum_TrackQuery_OrdersByDiscThenTrack()
+    {
+        var handler = new PlayAlbumIntentHandler(
+            _sessionManagerMock.Object,
+            _config,
+            _libraryManagerMock.Object,
+            _userManagerMock.Object,
+            _userDataManagerMock.Object,
+            _loggerFactory);
+
+        var session = CreateSession();
+        SetupUserMock();
+
+        var albumId = Guid.NewGuid();
+        var album = new MediaBrowser.Controller.Entities.Audio.MusicAlbum
+        {
+            Id = albumId,
+            Name = "Multi-Disc Album"
+        };
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum))))
+            .Returns(new List<BaseItem> { album });
+
+        InternalItemsQuery? capturedTrackQuery = null;
+        _libraryManagerMock
+            .Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q => q.ParentId == albumId)))
+            .Callback<InternalItemsQuery>(q => capturedTrackQuery = q)
+            .Returns(new QueryResult<BaseItem>
+            {
+                Items = Enumerable.Range(0, 5).Select(_ => (BaseItem)new Audio { Id = Guid.NewGuid(), Name = "t" }).ToList(),
+                TotalRecordCount = 25
+            });
+
+        var context = CreateContext();
+        await handler.HandleAsync(CreateAlbumIntent("Multi-Disc Album"), context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.NotNull(capturedTrackQuery);
+        Assert.Equal(
+            QueueContinuationFetcher.AlbumTrackOrder,
+            capturedTrackQuery!.OrderBy);
+
+        QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID);
+    }
+
+    [Fact]
+    public void QueueContinuation_AlbumIdsFallback_AppliesDiscThenTrackOrder()
+    {
+        // AlbumIds fallback (primary returns 0) must also carry the disc/track OrderBy.
+        SetupUserMock();
+
+        var albumId = Guid.NewGuid();
+        var continuation = new QueueContinuation
+        {
+            SourceType = "Album",
+            ParentId = albumId,
+            UserId = Guid.NewGuid(),
+            StartIndex = 5,
+            TotalCount = 30,
+            BatchSize = 10
+        };
+
+        InternalItemsQuery? capturedFallback = null;
+
+        // Primary ParentId query returns 0 -> triggers the AlbumIds fallback.
+        _libraryManagerMock
+            .Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q => q.AlbumIds == null || q.AlbumIds.Length == 0)))
+            .Returns(new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 });
+
+        // AlbumIds fallback returns tracks; capture its query.
+        _libraryManagerMock
+            .Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q => q.AlbumIds != null && q.AlbumIds.Contains(albumId))))
+            .Callback<InternalItemsQuery>(q => capturedFallback = q)
+            .Returns(new QueryResult<BaseItem>
+            {
+                Items = new List<BaseItem> { new Audio { Id = Guid.NewGuid(), Name = "t" } },
+                TotalRecordCount = 30
+            });
+
+        ILogger logger = _loggerFactory.CreateLogger("AlbumIdsFallbackOrderTest");
+        QueueContinuationFetcher.FetchNextBatch(continuation, _libraryManagerMock.Object, _userManagerMock.Object, logger);
+
+        Assert.NotNull(capturedFallback);
+        Assert.Equal(
+            QueueContinuationFetcher.AlbumTrackOrder,
+            capturedFallback!.OrderBy);
+    }
+
+    [Fact]
+    public async Task PlayAlbum_MultiDiscAlbum_QueueFollowsDiscThenTrackOrder()
+    {
+        // Verifies the handler preserves the DB's disc/track order into the queue (no reshuffle).
+        var handler = new PlayAlbumIntentHandler(
+            _sessionManagerMock.Object,
+            _config,
+            _libraryManagerMock.Object,
+            _userManagerMock.Object,
+            _userDataManagerMock.Object,
+            _loggerFactory);
+
+        var session = CreateSession();
+        SetupUserMock();
+
+        var albumId = Guid.NewGuid();
+        var album = new MediaBrowser.Controller.Entities.Audio.MusicAlbum
+        {
+            Id = albumId,
+            Name = "Double Album"
+        };
+
+        // 2 discs x 2 tracks, in disc/track order (disc 1 first). Four tracks fit within
+        // the initial fetch (default 5), so the whole album lands in the first queue page.
+        var d1t1 = new Audio { Id = Guid.NewGuid(), Name = "D1 T1", ParentIndexNumber = 1, IndexNumber = 1 };
+        var d1t2 = new Audio { Id = Guid.NewGuid(), Name = "D1 T2", ParentIndexNumber = 1, IndexNumber = 2 };
+        var d2t1 = new Audio { Id = Guid.NewGuid(), Name = "D2 T1", ParentIndexNumber = 2, IndexNumber = 1 };
+        var d2t2 = new Audio { Id = Guid.NewGuid(), Name = "D2 T2", ParentIndexNumber = 2, IndexNumber = 2 };
+        var ordered = new List<BaseItem> { d1t1, d1t2, d2t1, d2t2 };
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum))))
+            .Returns(new List<BaseItem> { album });
+
+        _libraryManagerMock.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q => q.ParentId == albumId)))
+            .Returns(new QueryResult<BaseItem> { Items = ordered, TotalRecordCount = ordered.Count });
+
+        var context = CreateContext();
+        await handler.HandleAsync(CreateAlbumIntent("Double Album"), context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        // The playback queue must be disc 1 (t1, t2) then disc 2 (t1, t2) — not reshuffled.
+        var expectedIds = new[] { d1t1.Id, d1t2.Id, d2t1.Id, d2t2.Id };
+        Assert.Equal(expectedIds, session.NowPlayingQueue.Select(q => q.Id).ToArray());
+
+        QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID);
     }
 }

@@ -52,15 +52,6 @@ public class PlaySongIntentHandler : BaseHandler
         "a música ", "a faixa ", "música ",
     };
 
-    /// <summary>
-    /// Maximum number of words in the song query for the cross-media-type artist
-    /// fallback to even be attempted. The fallback exists to catch NLU misroutes of
-    /// SHORT artist names into the song slot (e.g. "strokes" → "The Strokes"). A
-    /// multi-word song title is a poor artist query, so a clean not-found is better
-    /// than risking a wrong-artist match.
-    /// </summary>
-    private const int CrossMediaArtistMaxWords = 2;
-
     private static readonly char[] WhitespaceChars = new[] { ' ', '\t', '\n', '\r' };
 
     // Generic words meaning "music/songs" across supported locales.
@@ -84,8 +75,8 @@ public class PlaySongIntentHandler : BaseHandler
         "canções", "cancoes", "músicas", "musicas", "faixa", "faixas",
     };
 
-    private ILibraryManager _libraryManager;
-    private IUserManager _userManager;
+    private readonly ILibraryManager _libraryManager;
+    private readonly IUserManager _userManager;
     private readonly IUserDataManager _userDataManager;
     private readonly IArtistIndex? _artistIndex;
     private readonly DeviceQueueManager? _queueManager;
@@ -270,6 +261,30 @@ public class PlaySongIntentHandler : BaseHandler
                     Logger.LogInformation(
                         "PlaySong: artist fallback rejected '{ArtistName}' score={Score}<{Threshold} for query='{Query}'",
                         bestMatch.Value.Item.Name, bestMatch.Value.Score, crossMediaThreshold, songQuery);
+
+                    // JF-363: sub-strict band [normalThreshold, crossMediaThreshold). Offer or
+                    // auto-serve the artist instead of a dead-end not-found. Confirm/AutoServe are
+                    // safe (no silent wrong substitution: Confirm asks first; AutoServe is opt-in).
+                    int normalThreshold = FuzzyMatcher.GetDefaultThreshold(user);
+                    if (bestMatch.Value.Score >= normalThreshold)
+                    {
+                        BaseItem artist = bestMatch.Value.Item;
+                        var suggestionMode = GetCrossMediaArtistSuggestion(user);
+                        if (suggestionMode == CrossMediaArtistSuggestion.AutoServe)
+                        {
+                            Logger.LogInformation(
+                                "PlaySong: cross-media artist suggestion AutoServe '{Artist}' score={Score} for query='{Query}'",
+                                artist.Name, bestMatch.Value.Score, songQuery);
+                            return await PlayArtistSongsFallback(
+                                artist.Id, artist.Name, jellyfinUser!, user, session, context, locale, cancellationToken,
+                                announcement: ResponseStrings.Get("FoundArtistInstead", locale, artist.Name)).ConfigureAwait(false);
+                        }
+
+                        if (suggestionMode == CrossMediaArtistSuggestion.Confirm)
+                        {
+                            return BuildCrossMediaArtistOfferAsk(songQuery, artist, locale, "song");
+                        }
+                    }
                 }
             }
 
@@ -301,7 +316,7 @@ public class PlaySongIntentHandler : BaseHandler
                             best.Name, fuzzOffset);
                     }
 
-                    return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(iid, user), iid, best, user, context, fuzzOffset);
+                    return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(iid, user), iid, best, user, context, fuzzOffset, announceLocale: locale);
                 },
                 user: user);
 
@@ -334,7 +349,7 @@ public class PlaySongIntentHandler : BaseHandler
         Logger.LogDebug(
             "PlaySong: returning AudioPlayer, itemId={ItemId}, song='{SongName}', offsetMs={OffsetMs}",
             item_id, songs[0].Name, offsetMs);
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, songs[0], user, context, offsetMs);
+        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, songs[0], user, context, offsetMs, announceLocale: locale);
     }
 
     // Alexa's NLU can misalign slot boundaries, causing carrier phrases like

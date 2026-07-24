@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import time
+import xml.etree.ElementTree as ET
 
 import pytest
 
@@ -102,6 +103,10 @@ def test_e2e_full_chain(request, e2e_fixture, e2e_smapi_client, jellyfin_client)
         utterance, locale, skill_response, expected_response_type, e2e_fixture
     )
 
+    # --- SSML validity: any SSML output speech must be well-formed XML
+    # (catches reserved-char escaping regressions like JF-323) ---
+    _assert_ssml_valid(skill_response, utterance, locale)
+
     # --- APL directive validation (when expected) ---
     expected_apl = e2e_fixture.get("expected_apl")
     if expected_apl:
@@ -111,7 +116,7 @@ def test_e2e_full_chain(request, e2e_fixture, e2e_smapi_client, jellyfin_client)
             f"but none found in response"
         )
         for d in apl_directives:
-            apl_errors = _validate_apl_directive(d, utterance, locale)
+            apl_errors = _validate_apl_directive(d)
             assert not apl_errors, (
                 f"APL validation errors for '{utterance}' ({locale}):\n"
                 + "\n".join(f"  - {e}" for e in apl_errors)
@@ -196,6 +201,34 @@ def _parse_skill_response(skill_response: dict) -> tuple[list[str], bool]:
     return directives, has_speech
 
 
+def _extract_ssml_outputs(skill_response: dict):
+    """Yield each SSML outputSpeech string found in the skill response."""
+    for resp in skill_response.get("responses", []):
+        os = resp.get("response", {}).get("outputSpeech")
+        if isinstance(os, dict) and os.get("type") == "SSML" and os.get("ssml"):
+            yield os["ssml"]
+    body = skill_response.get("invocationResponse", {}).get("body", {})
+    if isinstance(body, dict):
+        os = body.get("outputSpeech")
+        if isinstance(os, dict) and os.get("type") == "SSML" and os.get("ssml"):
+            yield os["ssml"]
+
+
+def _assert_ssml_valid(skill_response: dict, utterance: str, locale: str) -> None:
+    """Every SSML output speech must parse as well-formed XML.
+
+    Catches the reserved-char crash class (a name with raw & < > yields invalid
+    SSML -> Alexa InvalidResponse), e.g. JF-323. Plain-text output is skipped.
+    """
+    for ssml in _extract_ssml_outputs(skill_response):
+        try:
+            ET.fromstring(ssml)
+        except ET.ParseError as exc:
+            pytest.fail(
+                f"Invalid SSML for '{utterance}' ({locale}): {exc}\n  ssml: {ssml[:200]}"
+            )
+
+
 def _extract_apl_directives(skill_response: dict) -> list[dict]:
     """Extract all APL RenderDocument directives from the skill response."""
     apl_directives = []
@@ -216,7 +249,7 @@ def _extract_apl_directives(skill_response: dict) -> list[dict]:
     return apl_directives
 
 
-def _validate_apl_directive(directive: dict, utterance: str, locale: str) -> list[str]:
+def _validate_apl_directive(directive: dict) -> list[str]:
     """Validate an APL RenderDocument directive. Returns list of errors."""
     errors = []
     dtype = directive.get("type", "")

@@ -4,6 +4,8 @@ C# Jellyfin plugin (net9.0) exposing an Alexa skill for media playback, search, 
 
 ## Build & Test
 
+**Coverage caveat:** unit tests (below) and E2E tests (`run_e2e_tests.sh`) assert response *correctness*, not response *latency*. They will NOT catch a play-path regression that exceeds Alexa's ~8s response window (→ `INVALID_RESPONSE` on-device). The only guard for that is `RetryHelperTests.Sync_AlwaysTransient_StopsWithinTimeoutBudget` — it locks the invariant that `RetryAsync` stops retrying once its timeout budget (`AlexaRequestTimeoutMs`=6000) is exhausted, which is the mechanism that keeps throwing/slow play-path queries from blowing the Alexa budget (JF-358/JF-359). A live-timing E2E assertion is intentionally not used — it's flaky and environment-dependent.
+
 ```bash
 dotnet build Jellyfin.Plugin.AlexaSkill.sln
 dotnet test Jellyfin.Plugin.AlexaSkill.Tests          # ~2476 unit tests
@@ -122,6 +124,32 @@ The n-gram index is a background hosted service (`SongNgramIndexService`) that l
 
 When a handler's primary search finds no results (e.g., PlaySongIntent finds no song), `BaseHandler.BuildArtistSongsResponseAsync` falls back to artist search. This is shared across PlaySong, PlayAlbum, and PlayVideo handlers via `BaseHandler`.
 
+`BaseHandler.TryEntityFallbackAsync` extends this to **greedy `AMAZON.SearchQuery` intents that misroute an artist query** (PlayMoodMusic's `mood` slot captures "di miles davis"; FindSong's `titleKeywords` when no artist was given). On a confirmed miss it strips locale stop-words (`KeywordMatcher.Tokenize` — covers en/it/de/fr/es/pt), runs the phonetic `ArtistSearch`, gates on `Math.Max(FuzzyMatcher.GetDefaultThreshold(user), CrossMediaArtistThreshold)` **and** the word-count guard `CrossMediaArtistMaxWords` (=2, shared in BaseHandler — a >2-word slot is a poor artist query), then plays via `BuildArtistSongsResponseAsync` with a `FoundArtistInstead` announcement. Returns null when no confident match so the caller falls through to its own not-found. Known tradeoff: a real single-word mood that coincidentally matches an artist name (>=85) substitutes it — announced, so the user knows. Do NOT remove the word-count guard (a PlaySong lesson: long queries match wrong short artists).
+
+## Cross-Media Artist Suggestion (JF-363)
+
+When PlaySong/PlayAlbum finds no exact match but the cross-media artist fallback scores a plausible artist in the **[normalThreshold, 85) band** (the gap that previously failed silently — e.g. a mispronounced name scores 63), the behavior is now configurable via `CrossMediaArtistSuggestion` (Off/Confirm/AutoServe, default **Confirm**):
+- **Confirm**: offer the single best artist for yes/no via `BuildCrossMediaArtistOfferAsk` (sets `disambig_type=artist` + `crossmedia_notfound_query`/`crossmedia_notfound_type` session attrs). "Yes" routes through `YesIntentHandler.PlayArtist`; "No" returns the clean song/album not-found (via the `crossmedia_notfound_*` attrs in `NoIntentHandler`, NOT the generic "no more matches").
+- **AutoServe** (opt-in): play the artist directly with `FoundArtistInstead`.
+- **Off**: today's clean not-found.
+
+Scores >= 85 always auto-play (unchanged); < normalThreshold (60) always not-found (unchanged). Single candidate only. Both PlaySong and PlayAlbum apply the word-count guard (`CrossMediaArtistMaxWords=2`). Per-user override (`User.CrossMediaArtistSuggestion`, nullable) → global default (`PluginConfiguration.DefaultCrossMediaArtistSuggestion`).
+
+## Romance Phonetic Synonyms (JF-362)
+
+`PhoneticSynonymGenerator` generates Italian/German/Spanish/French/Portuguese phonetic synonym variants for English artist/album names so Alexa's ASR recognizes them when spoken by non-English speakers. Shared tail rules live in `PhoneticSynonymGenerator.ApplyRomanceTailRules` (called from each generator's `TransformWord`):
+- **`-ing` → `-in`**: Italian/Spanish/French/Portuguese L1 speakers all lack the velar nasal `/ŋ/`, so they realize English "-ing" as `/in/`. German and Dutch are Germanic and **DO have `/ŋ/`** (Ding, singen, zingen) — they deliberately do NOT call this helper.
+- **`soul` → `sol`** (override map) + consonant-doubler (`GetRomanceConsonantVariants`): ASR's Italian-locale model doubles single intervocalic consonants (the "coffin" loanword mapping). The doubler emits `Cofin` → `Coffin` variants for coverage.
+- Per-name cap raised 3 → 5 to fit the coverage variants. Device-captured forms are ordered first to survive the cap.
+
+The goal is COVERAGE (emit enough plausible variants that one matches), not precision — extra near-miss synonyms are harmless to entity resolution.
+
+## Catalog Sync (JF-335)
+
+`LibrarySyncService.SyncUserLibraryAsync` uploads the user's library to SMAPI catalog slot types (`JellyfinArtist`, `AlbumName`) with locale-specific phonetic synonyms. Configured by `PluginConfiguration.CatalogSyncLocales` (string): empty = it-IT only (default); `*` = all active locales; `"de-DE,en-US"` = it-IT + listed. `CatalogManager.UploadCatalogValuesAsync` creates a catalog version by providing a hosted URL; SMAPI fetches it once (the plugin's `CatalogController` serves the payload from a 10-min-TTL single-fetch cache).
+
+**Catalog 503 retry**: `UploadCatalogValuesAsync` retries the version build on transient `GATEWAY_ERROR`/503/502/504 (when SMAPI couldn't fetch the source URL, e.g. the reverse proxy was still warming up after a Jellyfin restart) with a fresh source URL per attempt (the old URL is consumed on fetch). Non-transient failures (real validation errors) throw immediately. This makes the startup catalog-sync race self-healing.
+
 ## Live TV Channel Playback
 
 Live TV channels must launch via `VideoApp.Launch` (like movies/episodes), NOT `AudioPlayer.Play`: the static `/Audio|Videos/{id}/stream?static=true` endpoint returns HTTP 500 for a live source. `PlayChannelIntentHandler` delegates URL resolution to `ILiveTvStreamResolver` (`Alexa/Util/`), which calls `/Items/{channelId}/PlaybackInfo?AutoOpenLiveStream=true` and picks:
@@ -175,7 +203,17 @@ Handlers call `GetPostPlayBehavior(user)` to resolve per-user override → globa
 - Template: `Alexa/InteractionModel/templates/it-IT.yaml`
 - Output: `Alexa/InteractionModel/model_it-IT.json`
 - To add new slot values, samples, or vocabulary: edit the YAML template, then regenerate.
-- Other locales: edit JSON directly (only it-IT has the generator).
+
+**Mood slot generator** (other 16 locales): `python3 scripts/generate_mood_slot.py`
+- Table-driven: populates the custom `Mood` slot type + narrows PlayMoodMusic samples for the 16 non-it-IT locales from a per-locale mood-word table (`LOCALE_MOODS`).
+- Output: `Alexa/InteractionModel/model_<locale>.json` (the Mood type block only).
+- To add a mood or a locale's vocabulary: edit the `LOCALE_MOODS` table, then regenerate. Idempotent (re-running produces no diff vs committed JSONs).
+
+**Mood feature architecture (JF-354/355/356):**
+- The `mood` slot is a **custom `Mood` type** in ALL 17 locales (NOT `AMAZON.SearchQuery` — that caused the "music by X" misroute; see anti-pattern #3). Custom values restrict matching to mood words so artist queries route to PlayArtistSongs.
+- The handler reads `moodSlot.Value` (raw spoken text, NOT entity-resolved canonical), so **every slot value AND synonym must independently exist in `LocalizedMoodMap`** (or be an English `MoodGenreMap` key) to resolve to genres.
+- `MoodGenreMap` (English mood→genres, incl. Spotify-aligned `sleep`) + `LocalizedMoodMap` (localized word→English key) live in `PlayMoodMusicIntentHandler.cs`.
+- Admin overrides: `PluginConfiguration.MoodGenreOverrides` (`Collection<MoodGenreOverride>`) merges into `ResolveGenres` at resolve time; on "Rebuild models" the words are injected into the Mood slot type via `SkillInteractionModel.InjectMoodSlotValues`. XmlSerializer-safe (Collection, not Dictionary).
 
 After editing:
 1. Wrap in `{"interactionModel": <model>}` for SMAPI
@@ -204,6 +242,7 @@ NLU test fixtures in `tests/integration/fixtures/<locale>.yaml`. NLU tests use t
 - **SMAPI rate limits**: Space NLU tests with `SMAPI_DELAY=1.5`.
 - **ValueTuple serialization**: Never store `ValueTuple` in session attributes — Newtonsoft.Json serializes as Item1/Item2. Use named DTOs.
 - **Config.Users in API responses**: Never send `config.Users` via `updatePluginConfiguration` — it can wipe skill config entries. Use dedicated endpoints.
+- **[JsonIgnore] token fields are not API-readable**: `JellyfinToken` and `SmapiDeviceToken` are `[JsonIgnore]` (`Entities/User.cs`) — they persist via XmlSerializer to the on-disk XML, NOT the JSON config API. The config JSON API always shows them as null/EMPTY. **Do NOT treat an EMPTY JSON read as data loss** or a deploy casualty. Read the on-disk XML (`/config/data/plugins/configurations/Jellyfin.Plugin.AlexaSkill.xml`) to verify they persisted.
 - **AudioPlayer event restrictions**: ALL AudioPlayer event handlers (`PlaybackStarted`/`Finished`/`NearlyFinished`/`Stopped`/`Failed`) must return only `AudioPlayer.Play` or a keep-alive ack — **never `shouldEndSession=false`**. Amazon rejects it with `InvalidResponse: "Response may not have shouldEndSession set to false"`, surfacing as "Qualcosa è andato storto" / "Something went wrong" on every playback. Use `BaseHandler.BuildKeepAliveResponse()` (`shouldEndSession=null`) or `BuildEndSessionResponse()` (`true`). Don't try to keep the session open via `shouldEndSession=false` on events for StopIntent routing — it's rejected, and stop/ferma routes fine via the platform's normal AudioPlayer routing. (JF-299)
 - **Invocation name (JF-297/JF-300)**: An empty `UserSkill.InvocationName` means "use locale defaults" (`Config.LocaleInvocationNames` → it-IT "mia collezione"; other locales → `Config.InvocationName` "jellyfin player"). A non-empty custom name applies to ALL 17 locales incl. it-IT. `LocaleInvocationNames` is default-only (NOT an unconditional override). Changing the name in settings triggers a redeploy to Amazon via `IInteractionModelRedeployer` (build + `UpdateSkillAsync` + poll, ~15–30s, longer if the SMAPI access token needs refresh) — no Alexa-console edit or re-auth needed. A one-time migration in the `Plugin` ctor clears legacy stored defaults so existing users keep locale defaults.
 - **profile-nlu vs on-device divergence**: `ask smapi profile-nlu` (Utterance Profiler) tests intent/slot routing against the saved model in isolation; a real Echo adds ASR + competition from other installed skills, so routing can differ. `AMAZON.MusicRecording`/`Musician` slots capture the spoken text regardless of catalog match (PlaySong works for non-catalog titles). Trust profile-nlu for model routing; verify behavior on-device or via the plugin Simulator endpoint. (JF-298)
@@ -211,6 +250,10 @@ NLU test fixtures in `tests/integration/fixtures/<locale>.yaml`. NLU tests use t
 - **Dialog.ElicitSlot requires model registration**: Any intent that uses `Dialog.ElicitSlot` directives MUST be listed in the interaction model's `dialog.intents` array. Without this registration, Alexa **silently ignores** the directive — the session stays open (`ShouldEndSession=false`) but the user's follow-up goes through general NLU, which routes music queries to Amazon Music instead of back to the skill. Set `elicitationRequired: false` on slots when controlling dialog manually from code. This must be done in ALL 17 locales. For it-IT, add to the YAML template's `dialog` section and regenerate.
 - **Slot values ≤ 140 chars (Alexa hard limit)**: Alexa rejects slot values and synonyms longer than 140 characters with `InvalidResponse`, crashing **every** skill request (e.g. libraries with long artist fields like musical cast lists). Any code building catalog/dynamic-entity slot values MUST cap length via `SlotValueHelper.Truncate` (applied in `CatalogPayload` and `DynamicEntityBuilder`).
 - **After a DLL hot-swap, verify the ACTIVE dll**: Jellyfin migrates the plugin to a versioned dir (`AlexaSkill_<Version>`) when the AssemblyVersion changes and may install the catalog release there, displacing your hot-swapped dev DLL. Always deploy into the CURRENT versioned dir (`ls /config/data/plugins/ | grep AlexaSkill`) and verify the **running** DLL (`podman cp` it out → compare size + `strings | grep` for a unique identifier), not just the file you pushed.
+- **Signed stream tokens (JF-309)**: All 4 video-audio endpoints (`VideoAudioController`) require a signed, item-scoped HMAC token (`?token=`) minted by `StreamTokenHelper` using `PluginConfiguration.StreamTokenSecret` (auto-generated). A bare item GUID returns 401. Tokens are 10h TTL, item-scoped (not user-scoped). The token flows: skill mints it in the playlist URL → controller reads it from the query string → `WriteAudiobookPlaylist` embeds it in segment lines / `RewritePlaylistWithToken` post-processes ffmpeg-written playlists → `GetSegment` validates it. Single-chapter audiobooks re-mint a chapter-scoped token via `StreamHlsVideoAudioCore(chapterId, overrideToken)` because segments are keyed by chapterId, not parentId.
+- **MediaTypes vs IncludeItemTypes (JF-358)**: `MediaTypes=Audio` does NOT filter `ArtistIds` queries on Jellyfin 10.11.11 — it returns the entire audio library for every artist, causing sort-over-thousands NREs + 8-12s retry loops. Always use `IncludeItemTypes=BaseItemKind.Audio` for `ArtistIds`-filtered queries.
+- **AnnounceAudioPlays (JF-353 ext)**: The now-playing announce on MUSIC plays is a separate opt-in flag (`PluginConfiguration.AnnounceAudioPlays`, default `false`) — NOT the same as `DefaultAnnounceNowPlaying` (which gates video/book launches only, default `true`). `AttachAnnounceIfEnabled` in `BaseHandler` reads the audio flag via `GetAnnounceAudioPlays(user)` (per-user override → global default). Both builders (`BuildAudioPlayerResponse` + `BuildVideoAppAudioResponse`) call it.
+- **PlayBook disambiguation routing (JF-361)**: `PlayBookIntentHandler` uses `DisambiguationHelper.MediaTypeAlbum` for audiobook disambiguation. When `YesIntentHandler` confirms, it must check `item is AudioBook` and route to `PlayBook()` (audiobook HLS path), NOT `PlayAlbum()` (which would say "Non ci sono canzoni nell'album"). Single-file AudioBooks (no child chapters) are treated as their own track.
 
 ## Audiobook HLS Streaming
 
@@ -330,6 +373,8 @@ grep -rn '"[A-Z][a-z].*"' model_*.json | grep -v '{' | grep samples
 ```
 
 **Detection**: Run NLU test suite after ANY model change. Watch for intent misclassification.
+
+**Concrete instance (2026-07):** an intent with a greedy `AMAZON.SearchQuery` slot + a generic carrier — PlayMoodMusic's `"musica {mood}"` / `"play {mood} music"` — captured "music by X" and routed it to the mood intent (`mood="di miles davis"`) instead of PlayArtistSongs, in ALL 17 locales. **FIXED in JF-354/356:** the `mood` slot is now a custom `Mood` slot type (populated with locale mood vocabulary) in all 17 locales, so non-mood phrases no longer match it. The fix IS at the model layer — do NOT revert `mood` to `AMAZON.SearchQuery` (that reintroduces the misroute in every locale). To add/change Mood values: it-IT via the YAML template (`scripts/generate_interaction_model.py it-IT`); the other 16 via `scripts/generate_mood_slot.py` (table-driven). `TryEntityFallbackAsync` (see Cross-Media-Type Fallback) remains as the handler-side recovery for any residual mood-miss. When you see "X found nothing but a sibling entity query works," check whether a greedy SearchQuery slot on *some other* intent stole it before assuming a search bug.
 
 ### 4. Cross-Locale Drift (8+ incidents)
 
