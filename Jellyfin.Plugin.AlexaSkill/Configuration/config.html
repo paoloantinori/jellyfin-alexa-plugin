@@ -1047,8 +1047,22 @@
                     return t;
                 }
 
+                // JF-371: an unsaved new-user row can only persist Username + Invocation
+                // (the POST body). Showing Search/Playback controls here would let an admin
+                // set values that get silently dropped on first save. Hide them until the
+                // first save creates the user; Invocation + Libraries stay (they persist).
+                var isUnsaved = !user.Id;
+
                 // ---- SEARCH group ----
                 var searchGroup = document.createElement("div");
+                if (isUnsaved) {
+                    searchGroup.appendChild(groupTitleEl("Search"));
+                    var pendingNote = document.createElement("div");
+                    pendingNote.className = "fieldDescription";
+                    pendingNote.style.cssText = "color:#888;font-style:italic;";
+                    pendingNote.textContent = "Save this user first, then expand again to configure search and playback.";
+                    searchGroup.appendChild(pendingNote);
+                } else {
                 searchGroup.appendChild(groupTitleEl("Search"));
 
                 var smSel = panelSelect("SearchResponseMode", "Search Mode",
@@ -1093,8 +1107,10 @@
                 threshDesc.textContent = 'Scores at/above Auto-play start immediately; at/above Suggest, Alexa asks "did you mean...?"';
                 threshRow.appendChild(threshDesc);
                 grid.appendChild(searchGroup);
+                } // end !isUnsaved Search branch
 
-                // ---- PLAYBACK group ----
+                // ---- PLAYBACK group (saved users only — JF-371) ----
+                if (!isUnsaved) {
                 var pbGroup = document.createElement("div");
                 pbGroup.appendChild(groupTitleEl("Playback"));
 
@@ -1138,6 +1154,7 @@
                 announceField.appendChild(announceCbLabel);
                 pbGroup.appendChild(announceField);
                 grid.appendChild(pbGroup);
+                } // end !isUnsaved Playback branch
 
                 // ---- INVOCATION & LIBRARIES group (full width) ----
                 var invGroup = document.createElement("div");
@@ -1408,7 +1425,16 @@
                                 }).then(function (res) {
                                     return res.json().then(function (createdUser) {
                                         return ApiClient.getPluginConfiguration(Config.pluginUniqueId).then(function(freshConfig) {
-                                            refreshUserRow(row, createdUser, freshConfig);
+                                            // JF-371: the new-user panel hid Search/Playback (they aren't
+                                            // persisted by POST). Now that the user is saved (has an Id),
+                                            // swap in a full row pair so those controls appear without a
+                                            // page reload. refreshUserRow alone doesn't rebuild the panel.
+                                            var freshFragment = createUserRow(createdUser, freshConfig);
+                                            var oldDetails = row.nextElementSibling;
+                                            row.parentNode.insertBefore(freshFragment, row);
+                                            // remove the old unsaved pair (summary + details)
+                                            if (oldDetails) oldDetails.remove();
+                                            row.remove();
                                         });
                                     });
                                 }, function (res) {
