@@ -260,11 +260,14 @@ public class ConfigurationController : ControllerBase
         {
             try
             {
+                // The invocation name applies to ALL locales (a custom name is pushed to
+                // every locale's model), so this redeploy must NOT be scoped to the
+                // configured locale — otherwise only one locale picks up the new name and
+                // the other 16 keep the old one (regression of #9). localeFilter stays null.
                 ModelRedeployResult redeployResult = await _redeployer.RedeployAsync(
                     pluginUser,
                     pluginUser.UserSkill!.InvocationName,
-                    CancellationToken.None,
-                    Plugin.Instance!.Configuration.CustomModelLocale).ConfigureAwait(false);
+                    CancellationToken.None).ConfigureAwait(false);
 
                 var config = Plugin.Instance!.Configuration;
                 config.LastModelDeployTime = DateTime.UtcNow;
