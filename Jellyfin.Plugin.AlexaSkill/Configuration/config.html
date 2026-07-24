@@ -33,6 +33,40 @@
             white-space: nowrap;
         }
         details > .fieldDescription:first-of-type { margin-bottom: 1em; }
+
+        /* Per-user row-expand table (JF-365). Panel controls use emby's own
+           emby-select/emby-input/emby-checkbox + selectContainer/inputContainer
+           classes so they inherit the Jellyfin theme; only layout glue is custom. */
+        .userSkillsTable tr.user-summary-row { cursor: pointer; }
+        .userSkillsTable tr.user-summary-row:hover { background: rgba(255,255,255,0.03); }
+        .userSkillsTable tr.user-summary-row .user-chevron {
+            display: inline-block; transition: transform 0.15s ease; color: #ccc;
+            font-size: 0.7em; user-select: none;
+        }
+        .userSkillsTable tr.user-summary-row.expanded .user-chevron { transform: rotate(90deg); }
+        .userSkillsTable tr.user-summary-row .inv-summary { color: #aaa; font-size: 0.92em; }
+        .userSkillsTable tr.user-summary-row .inv-summary.default { color: #888; font-style: italic; }
+        /* !important: emby's global table CSS (table.detailTable tr) forces
+           display on every <tr>; without it the details row shows always and the
+           expand/collapse toggle has no visible effect. */
+        .userSkillsTable tr.user-details-row { display: none !important; }
+        .userSkillsTable tr.user-details-row.open { display: table-row !important; }
+        .userSkillsTable tr.user-details-row > td { background: #161616; padding: 1.2em 1.5em; }
+        .userSkillsTable .panel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4em 2.5em; }
+        .userSkillsTable .group-title {
+            color: #00A4DC; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.05em;
+            margin-bottom: 0.6em; border-bottom: 1px solid #2a2a2a; padding-bottom: 0.3em;
+        }
+        .userSkillsTable .panel-grid .full-width { grid-column: 1 / -1; }
+        .userSkillsTable .panel-note { color: #666; font-size: 0.8em; margin-top: 0.6em; word-break: break-all; }
+        @media (max-width: 768px) { .userSkillsTable .panel-grid { grid-template-columns: 1fr; } }
+
+        .pill { display:inline-block; padding:0.12em 0.55em; border-radius:10px; font-size:0.78em; font-weight:600; white-space:nowrap; }
+        .pill-ready { background:rgba(76,175,80,0.18); color:#4caf50; }
+        .pill-recoverable { background:rgba(41,182,246,0.18); color:#29b6f6; }
+        .pill-pending { background:rgba(229,160,13,0.18); color:#e5a00d; }
+        .pill-valid { background:rgba(76,175,80,0.15); color:#7ac97a; font-weight:400; }
+        .pill-none { background:rgba(136,136,136,0.15); color:#999; font-weight:400; }
     </style>
     <div id="ConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-select,emby-checkbox">
         <div data-role="content">
@@ -365,19 +399,16 @@
                 </div>
 
                 <div class="verticalSection">
-                    <table class="tblApiKeys detailTable">
+                    <table class="tblApiKeys detailTable userSkillsTable">
                         <caption class="clipForScreenReader">List of skills from user</caption>
                         <thead>
                             <tr>
+                                <th scope="col" class="detailTableHeaderCell" style="width:24px;"></th>
                                 <th scope="col" class="detailTableHeaderCell">User</th>
-                                <th scope="col" class="detailTableHeaderCell">Skill ID</th>
                                 <th scope="col" class="detailTableHeaderCell">Invocation Name</th>
-                                <th scope="col" class="detailTableHeaderCell">Libraries</th>
-                                <th scope="col" class="detailTableHeaderCell">Search Settings</th>
-                                <th scope="col" class="detailTableHeaderCell">Playback Settings</th>
-                                <th scope="col" class="detailTableHeaderCell">Status</th>
-                                <th scope="col" class="detailTableHeaderCell">Token</th>
-                                <th scope="col" class="detailTableHeaderCell">Action</th>
+                                <th scope="col" class="detailTableHeaderCell">Skill Status</th>
+                                <th scope="col" class="detailTableHeaderCell">Auth</th>
+                                <th scope="col" class="detailTableHeaderCell" style="text-align:right;">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="userTableBody"></tbody>
@@ -400,7 +431,7 @@
                         <!-- Dropdown mode: shown when Jellyfin users are available -->
                         <div id="addUserDropdownMode">
                             <div class="fieldDescription" style="margin-bottom:0.8em;color:#aaa;">Select a Jellyfin user to add:</div>
-                            <select id="addUserSelect" is="emby-select" class="emby-select-withcolor emby-select" style="width:100%;margin-bottom:1em;padding:0.5em;border-radius:3px;background:#333;color:#ccc;border:1px solid #555;">
+                            <select id="addUserSelect" is="emby-select" style="width:100%;margin-bottom:1em;padding:0.5em;border-radius:3px;background:#333;color:#ccc;border:1px solid #555;">
                             </select>
                             <div style="display:flex;gap:0.5em;justify-content:flex-end;">
                                 <button id="addUserDropdownCancel" is="emby-button" type="button" class="raised raised-mini emby-button">Cancel</button>
@@ -411,7 +442,7 @@
                         <!-- Fallback mode: shown when API fails or all users are configured -->
                         <div id="addUserFallbackMode" style="display:none;">
                             <div class="fieldDescription" style="margin-bottom:0.8em;color:#aaa;">Could not load Jellyfin users. Enter the username manually:</div>
-                            <input id="addUserManualInput" type="text" is="emby-input" class="emby-input" style="width:100%;margin-bottom:1em;padding:0.5em;border-radius:3px;background:#333;color:#ccc;border:1px solid #555;" placeholder="Username" />
+                            <input id="addUserManualInput" type="text" is="emby-input" style="width:100%;margin-bottom:1em;padding:0.5em;border-radius:3px;background:#333;color:#ccc;border:1px solid #555;" placeholder="Username" />
                             <div style="display:flex;gap:0.5em;justify-content:flex-end;">
                                 <button id="addUserFallbackCancel" is="emby-button" type="button" class="raised raised-mini emby-button">Cancel</button>
                                 <button id="addUserFallbackAdd" is="emby-button" type="button" class="raised button-submit raised-mini emby-button">Add</button>
@@ -421,7 +452,7 @@
                         <!-- No users available message -->
                         <div id="addUserNoneMode" style="display:none;">
                             <div class="fieldDescription" style="color:#aaa;">All Jellyfin users have already been configured. Enter a username manually if needed:</div>
-                            <input id="addUserNoneInput" type="text" is="emby-input" class="emby-input" style="width:100%;margin:0.8em 0;padding:0.5em;border-radius:3px;background:#333;color:#ccc;border:1px solid #555;" placeholder="Username" />
+                            <input id="addUserNoneInput" type="text" is="emby-input" style="width:100%;margin:0.8em 0;padding:0.5em;border-radius:3px;background:#333;color:#ccc;border:1px solid #555;" placeholder="Username" />
                             <div style="display:flex;gap:0.5em;justify-content:flex-end;">
                                 <button id="addUserNoneCancel" is="emby-button" type="button" class="raised raised-mini emby-button">Cancel</button>
                                 <button id="addUserNoneAdd" is="emby-button" type="button" class="raised button-submit raised-mini emby-button">Add</button>
@@ -452,6 +483,10 @@
                 pluginUniqueId: "c5df7de0-8777-4b3c-a70d-5c3dae359c9e"
             };
             var DEFAULT_LOCALE = "en-US";
+            // Monotonic counter for unique emby-control IDs. emby-select/emby-input's
+            // attachedCallback needs to resolve a label by for/id, and ids must be
+            // unique across the document (multiple users each render their own panel).
+            var _panelControlSeq = 0;
 
             document.querySelector("#ConfigPage").addEventListener("pageshow", function() {
                 Dashboard.showLoadingMsg();
@@ -528,7 +563,10 @@
             }
 
             function validateInvocationName(input) {
-                let errMsg = input.parentElement.querySelector(".invocation-name-error");
+                // JF-365: input + error live in the invocation field container; scope to it
+                // so the lookup works regardless of the exact nesting inside the panel.
+                let scope = input.closest(".invocation-field") || input.parentElement;
+                let errMsg = scope.querySelector(".invocation-name-error");
                 if (!errMsg) return;
                 if (!isValidInvocationName(input.value)) {
                     errMsg.style.display = "block";
@@ -659,15 +697,72 @@
                 });
             }
 
-            function refreshUserRow(row, user, config) {
-                row.setAttribute("data-id", user.Id);
-                for (let cell of row.cells) {
-                    cell.setAttribute("data-id", user.Id);
+            function refreshUserRow(summaryRow, user, config) {
+                // JF-365: callers iterate summary rows, so the details row is always the
+                // summary's next sibling.
+                var detailsRow = summaryRow.nextElementSibling;
+                summaryRow.setAttribute("data-id", user.Id);
+                summaryRow.setAttribute("data-username", user.Username || "");
+                if (detailsRow) detailsRow.setAttribute("data-id", user.Id);
+
+                var skillId = user.UserSkill ? (user.UserSkill.SkillId || "") : "";
+                var invocation = user.UserSkill ? (user.UserSkill.InvocationName || "") : "";
+
+                // Skill ID read-only reference in the details panel
+                var skillIdNote = detailsRow ? detailsRow.querySelector(".skill-id-note") : null;
+                if (skillIdNote) skillIdNote.textContent = skillId ? "Skill ID: " + skillId : "";
+
+                // Invocation input (details) + summary mirror
+                var invInput = detailsRow ? detailsRow.querySelector('[data-field="InvocationName"]') : null;
+                if (invInput) invInput.value = invocation;
+                updateInvocationSummary(summaryRow, invocation);
+
+                // Skill status + auth pills in the summary row (DOM elements, not HTML strings)
+                var statusCell = summaryRow.querySelector(".status-cell");
+                if (statusCell) statusCell.replaceChildren(skillStatusPill(user.UserSkill ? user.UserSkill.UserSkillStatus : null));
+                var authCell = summaryRow.querySelector(".auth-cell");
+                if (authCell) authCell.replaceChildren(authPill(user));
+
+                updateAuthorizeButton(summaryRow.querySelector(".authorize-button"), user, config);
+            }
+
+            // JF-365: render the invocation name in the summary row. Empty = locale defaults.
+            function updateInvocationSummary(summaryRow, invocation) {
+                var span = summaryRow.querySelector(".inv-summary");
+                if (!span) return;
+                var trimmed = (invocation || "").trim();
+                if (trimmed.length === 0) {
+                    span.textContent = "(locale default)";
+                    span.classList.add("default");
+                } else {
+                    span.textContent = trimmed;
+                    span.classList.remove("default");
                 }
-                row.cells[1].innerHTML = user.UserSkill ? (user.UserSkill.SkillId || "") : "";
-                row.cells[2].firstChild.value = user.UserSkill ? (user.UserSkill.InvocationName || "") : "";
-                row.cells[6].innerHTML = user.UserSkill ? normalizeSkillStatus(user.UserSkill.UserSkillStatus) : "unsaved";
-                updateAuthorizeButton(row.cells[8].children[1], user, config);
+            }
+
+            function makePill(cls, text) {
+                var span = document.createElement("span");
+                span.className = "pill " + cls;
+                span.textContent = text;
+                return span;
+            }
+
+            function skillStatusPill(status) {
+                if (status == null) return makePill("pill-none", "unsaved");
+                var s = normalizeSkillStatus(status);
+                if (s === "Ready") return makePill("pill-ready", s);
+                if (s === "AccountLinkPending") return makePill("pill-recoverable", s);
+                return makePill("pill-pending", s);
+            }
+
+            function authPill(user) {
+                if (user.SmapiDeviceToken && user.SmapiDeviceToken.ExpireTimestamp > 0) {
+                    var expires = new Date(user.SmapiDeviceToken.ExpireTimestamp * 1000);
+                    if (expires < new Date()) return makePill("pill-pending", "Token expired");
+                    return makePill("pill-valid", "Valid · exp " + expires.toLocaleDateString());
+                }
+                if (user.SmapiRefreshToken) return makePill("pill-recoverable", "Recoverable");
+                return makePill("pill-none", "None");
             }
 
             function showAjaxError(res, verb) {
@@ -706,381 +801,136 @@
             }
 
             function createUserRow(user, config) {
-                let tr = document.createElement("tr");
-                tr.setAttribute("data-id", user.Id);
-                tr.classList.add("detailTableBodyRow");
-                tr.classList.add("detailTableBodyRow-shaded");
+                // JF-365: each user is now a summary row + a hidden details row.
+                // Field collection uses data-field / data-id selectors scoped within
+                // the row pair, so it is independent of column position.
+                var fragment = document.createDocumentFragment();
 
-                let td = document.createElement("td");
-                td.setAttribute("data-id", user.Id);
-                td.classList.add("detailTableBodyCell");
-                td.style.verticalAlign = "middle";
-                td.innerHTML = user.Username;
-                tr.appendChild(td);
-
-                td = document.createElement("td");
-                td.setAttribute("data-id", user.Id);
-                td.classList.add("detailTableBodyCell");
-                td.style.verticalAlign = "middle";
-                td.innerHTML = (user.UserSkill)? user.UserSkill.SkillId : undefined;
-                tr.appendChild(td);
-
-                td = document.createElement("td");
-                td.classList.add("detailTableBodyCell");
-                td.style.verticalAlign = "middle";
-                let input = document.createElement("input");
-                input.setAttribute("data-id", user.Id);
-                input.name = "InvocationName";
-                input.type = "text";
-                input.is = "emby-input";
-                input.classList.add("emby-input")
-                // JF-300: empty value means "use locale defaults".
-                input.value = (user.UserSkill && user.UserSkill.InvocationName) ? user.UserSkill.InvocationName : "";
-                input.placeholder = "Defaults: 'mia collezione' (it-IT), 'jellyfin player' elsewhere. A custom name applies to all locales.";
-                input.addEventListener("input", function() { validateInvocationName(this); });
-                input.addEventListener("blur", function() { validateInvocationName(this); });
-                td.appendChild(input);
-                // JF-300: Reset button clears the field back to locale defaults.
-                let resetBtn = document.createElement("button");
-                resetBtn.type = "button";
-                resetBtn.classList.add("emby-button");
-                resetBtn.title = "Reset to locale defaults";
-                resetBtn.textContent = "Reset";
-                resetBtn.style.marginLeft = "0.4em";
-                resetBtn.style.fontSize = "0.85em";
-                resetBtn.addEventListener("click", function() { resetInvocationName(input); });
-                td.appendChild(resetBtn);
-                let desc = document.createElement("div");
-                desc.classList.add("fieldDescription");
-                desc.style.marginTop = "0.25em";
-                desc.textContent = 'Empty = use locale defaults. Otherwise two or more words (e.g. "jellyfin player"). A custom name applies to ALL locales.';
-                td.appendChild(desc);
-                let errMsg = document.createElement("div");
-                errMsg.classList.add("invocation-name-error");
-                errMsg.style.display = "none";
-                errMsg.style.color = "#e5a00d";
-                errMsg.style.fontSize = "0.85em";
-                errMsg.style.marginTop = "0.25em";
-                errMsg.textContent = "Invocation name must contain at least 2 words.";
-                td.appendChild(errMsg);
-                tr.appendChild(td);
-
-                // Libraries column
-                td = document.createElement("td");
-                td.classList.add("detailTableBodyCell");
-                td.style.verticalAlign = "middle";
-                let libBtn = document.createElement("button");
-                libBtn.type = "button";
-                libBtn.is = "emby-button";
-                libBtn.classList.add("raised", "raised-mini", "emby-button");
-                libBtn.setAttribute("data-mini", "true");
-                libBtn.setAttribute("data-libraries", JSON.stringify(user.AllowedLibraryIds || []));
-                libBtn.style.minWidth = "80px";
-                libBtn.textContent = "All";
-                libBtn.addEventListener("click", function() { showLibraryPicker(this); });
-                td.appendChild(libBtn);
-                tr.appendChild(td);
-
-                // Search Settings column
-                td = document.createElement("td");
-                td.classList.add("detailTableBodyCell");
-                td.style.verticalAlign = "middle";
-                let fmWrap = document.createElement("div");
-                fmWrap.style.display = "flex";
-                fmWrap.style.flexDirection = "column";
-                fmWrap.style.gap = "0.3em";
-
-                let fmSel = document.createElement("select");
-                fmSel.setAttribute("data-field", "FuzzyMatchBehavior");
-                fmSel.style.minWidth = "120px";
-                fmSel.style.padding = "0.3em 0.5em";
-                fmSel.style.borderRadius = "3px";
-                fmSel.style.backgroundColor = "#222";
-                fmSel.style.color = "#ccc";
-                fmSel.style.border = "1px solid #555";
-                [{v:"Confirm",t:"Confirm match"},{v:"AutoPlay",t:"Auto-play match"}].forEach(function(o){
-                    let opt = document.createElement("option");
-                    opt.value = o.v; opt.textContent = o.t;
-                    if (o.v === (user.FuzzyMatchBehavior || "Confirm")) opt.selected = true;
-                    fmSel.appendChild(opt);
-                });
-                fmWrap.appendChild(fmSel);
-
-                // Search Mode dropdown (Fast vs Thorough)
-                let smLabel = document.createElement("label");
-                smLabel.style.cssText = "font-size:0.8em;color:#aaa;margin-top:0.3em;";
-                smLabel.textContent = "Search mode:";
-                fmWrap.appendChild(smLabel);
-                let smSel = document.createElement("select");
-                smSel.setAttribute("data-field", "SearchResponseMode");
-                smSel.style.minWidth = "120px";
-                smSel.style.padding = "0.2em 0.4em";
-                smSel.style.borderRadius = "3px";
-                smSel.style.backgroundColor = "#222";
-                smSel.style.color = "#ccc";
-                smSel.style.border = "1px solid #555";
-                smSel.style.fontSize = "0.85em";
-                [{v:"Thorough",t:"Thorough (best match)"},{v:"Fast",t:"Fast (quick response)"}].forEach(function(o){
-                    let opt = document.createElement("option");
-                    opt.value = o.v; opt.textContent = o.t;
-                    if (o.v === (user.SearchResponseMode || "Thorough")) opt.selected = true;
-                    smSel.appendChild(opt);
-                });
-                fmWrap.appendChild(smSel);
-
-                let threshRow = document.createElement("div");
-                threshRow.style.display = "flex";
-                threshRow.style.gap = "0.5em";
-                threshRow.style.alignItems = "center";
-                let tl1 = document.createElement("label");
-                tl1.textContent = "Auto-play ≥";
-                tl1.style.fontSize = "0.8em";
-                tl1.style.whiteSpace = "nowrap";
-                threshRow.appendChild(tl1);
-                let ti1 = document.createElement("input");
-                ti1.type = "number"; ti1.min = "0"; ti1.max = "100";
-                ti1.style.width = "3.5em"; ti1.style.fontSize = "0.85em";
-                ti1.setAttribute("data-field", "FuzzyMatchThreshold");
-                ti1.value = user.FuzzyMatchThreshold != null ? user.FuzzyMatchThreshold : 60;
-                threshRow.appendChild(ti1);
-                let tl2 = document.createElement("label");
-                tl2.textContent = "Suggest ≥";
-                tl2.style.fontSize = "0.8em";
-                tl2.style.whiteSpace = "nowrap";
-                threshRow.appendChild(tl2);
-                let ti2 = document.createElement("input");
-                ti2.type = "number"; ti2.min = "0"; ti2.max = "100";
-                ti2.style.width = "3.5em"; ti2.style.fontSize = "0.85em";
-                ti2.setAttribute("data-field", "FuzzySuggestionThreshold");
-                ti2.value = user.FuzzySuggestionThreshold != null ? user.FuzzySuggestionThreshold : 40;
-                threshRow.appendChild(ti2);
-                fmWrap.appendChild(threshRow);
-
-                let fmDesc = document.createElement("div");
-                fmDesc.classList.add("fieldDescription");
-                fmDesc.style.fontSize = "0.75em";
-                fmDesc.textContent = "Scores above Auto-play start immediately; above Suggest, Alexa asks \"did you mean...?\"";
-                fmWrap.appendChild(fmDesc);
-
-                td.appendChild(fmWrap);
-                tr.appendChild(td);
-
-                // Playback Settings column
-                td = document.createElement("td");
-                td.classList.add("detailTableBodyCell");
-                td.style.verticalAlign = "middle";
-                let pbWrap = document.createElement("div");
-                pbWrap.style.display = "flex";
-                pbWrap.style.flexDirection = "column";
-                pbWrap.style.gap = "0.3em";
-
-                // Post-Play Behavior dropdown
-                let ppLabel = document.createElement("label");
-                ppLabel.style.cssText = "font-size:0.8em;color:#aaa;";
-                ppLabel.textContent = "After song ends:";
-                pbWrap.appendChild(ppLabel);
-                let ppSel = document.createElement("select");
-                ppSel.setAttribute("data-field", "PostPlayBehavior");
-                ppSel.style.minWidth = "120px";
-                ppSel.style.padding = "0.2em 0.4em";
-                ppSel.style.borderRadius = "3px";
-                ppSel.style.backgroundColor = "#222";
-                ppSel.style.color = "#ccc";
-                ppSel.style.border = "1px solid #555";
-                ppSel.style.fontSize = "0.85em";
-                [{v:"Stop",t:"Stop (silence)"},{v:"AutoPlay",t:"AutoPlay (continue)"}].forEach(function(o){
-                    let opt = document.createElement("option");
-                    opt.value = o.v; opt.textContent = o.t;
-                    if (o.v === (user.PostPlayBehavior || "Stop")) opt.selected = true;
-                    ppSel.appendChild(opt);
-                });
-                pbWrap.appendChild(ppSel);
-
-                let announceCb = document.createElement("label");
-                announceCb.style.cssText = "display:flex;align-items:center;gap:0.3em;margin-top:0.4em;font-size:0.8em;color:#aaa;cursor:pointer;";
-                let announceInput = document.createElement("input");
-                announceInput.type = "checkbox";
-                announceInput.setAttribute("data-field", "AnnouncePositionOnResume");
-                announceInput.checked = user.AnnouncePositionOnResume === true;
-                announceInput.style.margin = "0";
-                announceCb.appendChild(announceInput);
-                let announceLbl = document.createElement("span");
-                announceLbl.textContent = "Announce position on resume";
-                announceCb.appendChild(announceLbl);
-                pbWrap.appendChild(announceCb);
-
-                // Music delivery: VideoApp (seek bar) vs AudioPlayer (raw stream), or inherit global default
-                let vaaLabel = document.createElement("label");
-                vaaLabel.style.cssText = "font-size:0.8em;color:#aaa;margin-top:0.4em;";
-                vaaLabel.textContent = "Music delivery:";
-                pbWrap.appendChild(vaaLabel);
-                let vaaSel = document.createElement("select");
-                vaaSel.setAttribute("data-field", "VideoAppForAudio");
-                vaaSel.style.minWidth = "140px";
-                vaaSel.style.padding = "0.2em 0.4em";
-                vaaSel.style.borderRadius = "3px";
-                vaaSel.style.backgroundColor = "#222";
-                vaaSel.style.color = "#ccc";
-                vaaSel.style.border = "1px solid #555";
-                vaaSel.style.fontSize = "0.85em";
-                let vaaVal = user.VideoAppForAudio == null ? "inherit" : (user.VideoAppForAudio === true ? "true" : "false");
-                [
-                    {v:"inherit", t:"Use default (global)"},
-                    {v:"true", t:"VideoApp (seek bar)"},
-                    {v:"false", t:"AudioPlayer (raw stream)"}
-                ].forEach(function(o){
-                    let opt = document.createElement("option");
-                    opt.value = o.v; opt.textContent = o.t;
-                    if (o.v === vaaVal) opt.selected = true;
-                    vaaSel.appendChild(opt);
-                });
-                pbWrap.appendChild(vaaSel);
-
-                // Now-playing announce: speak the title on launch, or inherit the global default
-                let anpLabel = document.createElement("label");
-                anpLabel.style.cssText = "font-size:0.8em;color:#aaa;margin-top:0.4em;";
-                anpLabel.textContent = "Announce now-playing:";
-                pbWrap.appendChild(anpLabel);
-                let anpSel = document.createElement("select");
-                anpSel.setAttribute("data-field", "AnnounceNowPlaying");
-                anpSel.style.minWidth = "140px";
-                anpSel.style.padding = "0.2em 0.4em";
-                anpSel.style.borderRadius = "3px";
-                anpSel.style.backgroundColor = "#222";
-                anpSel.style.color = "#ccc";
-                anpSel.style.border = "1px solid #555";
-                anpSel.style.fontSize = "0.85em";
-                let anpVal = user.AnnounceNowPlaying == null ? "inherit" : (user.AnnounceNowPlaying === true ? "true" : "false");
-                [
-                    {v:"inherit", t:"Use default (global)"},
-                    {v:"true", t:"Announce title"},
-                    {v:"false", t:"Silent launch"}
-                ].forEach(function(o){
-                    let opt = document.createElement("option");
-                    opt.value = o.v; opt.textContent = o.t;
-                    if (o.v === anpVal) opt.selected = true;
-                    anpSel.appendChild(opt);
-                });
-                pbWrap.appendChild(anpSel);
-
-                // Music announce opt-in: speak the title on music plays, or inherit the global default
-                let aapLabel = document.createElement("label");
-                aapLabel.style.cssText = "font-size:0.8em;color:#aaa;margin-top:0.4em;";
-                aapLabel.textContent = "Announce music:";
-                pbWrap.appendChild(aapLabel);
-                let aapSel = document.createElement("select");
-                aapSel.setAttribute("data-field", "AnnounceAudioPlays");
-                aapSel.style.minWidth = "140px";
-                aapSel.style.padding = "0.2em 0.4em";
-                aapSel.style.borderRadius = "3px";
-                aapSel.style.backgroundColor = "#222";
-                aapSel.style.color = "#ccc";
-                aapSel.style.border = "1px solid #555";
-                aapSel.style.fontSize = "0.85em";
-                let aapVal = user.AnnounceAudioPlays == null ? "inherit" : (user.AnnounceAudioPlays === true ? "true" : "false");
-                [
-                    {v:"inherit", t:"Use default (global)"},
-                    {v:"true", t:"Announce music"},
-                    {v:"false", t:"Silent music"}
-                ].forEach(function(o){
-                    let opt = document.createElement("option");
-                    opt.value = o.v; opt.textContent = o.t;
-                    if (o.v === aapVal) opt.selected = true;
-                    aapSel.appendChild(opt);
-                });
-                pbWrap.appendChild(aapSel);
-
-                td.appendChild(pbWrap);
-                tr.appendChild(td);
-
-                // Status column
-                td = document.createElement("td");
-                td.setAttribute("data-id", user.Id);
-                td.classList.add("detailTableBodyCell");
-                td.style.verticalAlign = "middle";
-                td.innerHTML = user.UserSkill ? normalizeSkillStatus(user.UserSkill.UserSkillStatus) : "unsaved";
-                tr.appendChild(td);
-
-                td = document.createElement("td");
-                td.classList.add("detailTableBodyCell");
-                td.style.verticalAlign = "middle";
-                if (user.SmapiDeviceToken && user.SmapiDeviceToken.ExpireTimestamp > 0) {
-                    var expires = new Date(user.SmapiDeviceToken.ExpireTimestamp * 1000);
-                    var isExpired = expires < new Date();
-                    td.innerHTML = isExpired
-                        ? '<span style="color:#e5a00d">Expired</span>'
-                        : '<span style="color:#4caf50">Valid</span> (exp ' + expires.toLocaleDateString() + ')';
-                } else if (user.SmapiRefreshToken) {
-                    td.innerHTML = '<span style="color:#29b6f6">Recoverable</span>';
-                } else {
-                    td.innerHTML = '<span style="color:#888">None</span>';
-                }
-                tr.appendChild(td);
-                
-                tdDetailTableBodyCell = document.createElement("td");
-                tdDetailTableBodyCell.classList.add("detailTableBodyCell");
-                let deleteButton = document.createElement("button");
-                deleteButton.setAttribute("data-id", user.Id);
-                deleteButton.type = "button";
-                deleteButton.is = "emby-button";
-                deleteButton.setAttribute("action-type", "edit");
-                deleteButton.classList.add("raised");
-                deleteButton.classList.add("raised-mini");
-                deleteButton.classList.add("emby-button");
-                deleteButton.setAttribute("data-mini", "true");
-                deleteButton.title = "Delete";
-                deleteButton.innerHTML = "Delete";
-                deleteButton.addEventListener("click", e => {
-                    Dashboard.showLoadingMsg();
-
-                    const btn = e.target.closest("button[data-id]") || e.target;
-                    const userId = btn.getAttribute("data-id");
-
-                    // capture row reference before async work
-                    const row = e.target.closest("tr");
-
-                    if (userId === "undefined") {
-                        // just delete the row without calling the API
-                        row.remove();
-                        Dashboard.hideLoadingMsg();
-                        return;
-                    }
-
-                    ApiClient.ajax({
-                        type: "DELETE",
-                        url: ApiClient.getUrl("alexaskill/api/user-skills/" + userId)
-                    }).then(function () {
-                        row.remove();
-                        Dashboard.hideLoadingMsg();
-                    }, function (res) {
-                        Dashboard.hideLoadingMsg();
-                        showAjaxError(res, "delete");
+                // ---- helper: emby-native select for the panel ----
+                // emby-select auto-creates its own <label class="selectLabel"> from the
+                // select's `label` ATTRIBUTE in its createdCallback, so we set that and do
+                // NOT add a label ourselves. Do NOT pre-add emby-select/emby-select-withcolor
+                // classes: createdCallback uses their absence as its init guard; if already
+                // present it skips setup and attachedCallback crashes on labelElement.
+                function panelSelect(dataField, labelText, options, currentVal) {
+                    var container = document.createElement("div");
+                    container.className = "selectContainer";
+                    var sel = document.createElement("select");
+                    sel.setAttribute("is", "emby-select");
+                    if (labelText) sel.setAttribute("label", labelText);
+                    sel.setAttribute("data-field", dataField);
+                    sel.id = "panelSel_" + (_panelControlSeq++);
+                    options.forEach(function(o){
+                        var opt = document.createElement("option");
+                        opt.value = o.v; opt.textContent = o.t;
+                        if (o.v === currentVal) opt.selected = true;
+                        sel.appendChild(opt);
                     });
-                });
-                tdDetailTableBodyCell.appendChild(deleteButton);
+                    container.appendChild(sel);
+                    return container;
+                }
+                // Map a nullable bool (null = inherit global default) to the select's
+                // tri-state string. Symmetric with the save-side triState() mapping.
+                function triStateCurrent(val) {
+                    if (val == null) return "inherit";
+                    return val === true ? "true" : "false";
+                }
+                // Append the fieldDescription to a panelSelect's selectContainer.
+                // The select's label comes from its `label` attribute (set in panelSelect);
+                // emby-select auto-creates the <label>, so we do NOT add one here.
+                function panelField(labelText, control, descText) {
+                    var wrap = (control.classList && control.classList.contains("selectContainer"))
+                        ? control
+                        : control;
+                    if (descText) {
+                        var d = document.createElement("div");
+                        d.className = "fieldDescription";
+                        d.textContent = descText;
+                        wrap.appendChild(d);
+                    }
+                    return wrap;
+                }
 
-                let authorizeButton = document.createElement("button");
-                updateAuthorizeButton(authorizeButton, user, config);
+                // ============================ SUMMARY ROW ============================
+                var summary = document.createElement("tr");
+                summary.setAttribute("data-id", user.Id);
+                // Carry the username on the row so the new-user save path reads it by
+                // intent (data-username) rather than by which cell holds data-id.
+                summary.setAttribute("data-username", user.Username || "");
+                summary.classList.add("detailTableBodyRow", "detailTableBodyRow-shaded", "user-summary-row");
+
+                // chevron
+                var chevTd = document.createElement("td");
+                chevTd.classList.add("detailTableBodyCell");
+                chevTd.style.verticalAlign = "middle";
+                var chev = document.createElement("span");
+                chev.className = "user-chevron";
+                chev.innerHTML = "&#9654;";
+                // Inline style (the page <style> block is not reliably applied under
+                // emby view injection): display + rotation driven from the click handler.
+                chev.style.display = "inline-block";
+                chev.style.color = "#ccc";
+                chev.style.fontSize = "0.7em";
+                chev.style.transition = "transform 0.15s ease";
+                chevTd.appendChild(chev);
+                summary.appendChild(chevTd);
+
+                // username — carry a dedicated data-username so the save path reads it
+                // by intent, not by coincidence of which cell has data-id.
+                var userTd = document.createElement("td");
+                userTd.classList.add("detailTableBodyCell");
+                userTd.setAttribute("data-id", user.Id);
+                userTd.setAttribute("data-username", user.Username || "");
+                userTd.style.verticalAlign = "middle";
+                userTd.textContent = user.Username;
+                userTd.style.fontWeight = "600";
+                summary.appendChild(userTd);
+
+                // invocation summary (static text)
+                var invTd = document.createElement("td");
+                invTd.classList.add("detailTableBodyCell");
+                invTd.style.verticalAlign = "middle";
+                var invSpan = document.createElement("span");
+                invSpan.className = "inv-summary";
+                invTd.appendChild(invSpan);
+                summary.appendChild(invTd);
+
+                // skill status pill
+                var statusTd = document.createElement("td");
+                statusTd.classList.add("detailTableBodyCell", "status-cell");
+                statusTd.style.verticalAlign = "middle";
+                summary.appendChild(statusTd);
+
+                // auth pill
+                var authTd = document.createElement("td");
+                authTd.classList.add("detailTableBodyCell", "auth-cell");
+                authTd.style.verticalAlign = "middle";
+                summary.appendChild(authTd);
+
+                // actions
+                var actTd = document.createElement("td");
+                actTd.classList.add("detailTableBodyCell");
+                actTd.style.verticalAlign = "middle";
+                actTd.style.textAlign = "right";
+                actTd.style.whiteSpace = "nowrap";
+
+                var authorizeButton = document.createElement("button");
+                authorizeButton.className = "authorize-button";
                 authorizeButton.setAttribute("data-id", user.Id);
                 authorizeButton.type = "button";
                 authorizeButton.is = "emby-button";
                 authorizeButton.setAttribute("action-type", "edit");
-                authorizeButton.classList.add("raised");
-                authorizeButton.classList.add("raised-mini");
-                authorizeButton.classList.add("emby-button");
+                authorizeButton.classList.add("raised", "raised-mini", "emby-button");
                 authorizeButton.setAttribute("data-mini", "true");
-                authorizeButton.addEventListener("click", e => {
+                authorizeButton.addEventListener("click", function(e) {
                     Dashboard.showLoadingMsg();
-
-                    const row = e.target.closest("tr");
-                    const userId = row.getAttribute("data-id");
-
+                    var row = e.target.closest("tr");
+                    var userId = row.getAttribute("data-id");
                     ApiClient.ajax({
                         type: "PUT",
                         url: ApiClient.getUrl("alexaskill/api/user-skills/" + userId + "/authorization")
                     }).then(function (res) {
                         Dashboard.hideLoadingMsg();
-
                         res.json().then(function (data) {
                             var url = ApiClient.getUrl(data.verificationUrl);
                             document.querySelector("#authUrlInput").value = url;
@@ -1095,11 +945,279 @@
                         showAjaxError(res, "authorize");
                     });
                 });
-                tdDetailTableBodyCell.appendChild(authorizeButton);
+                actTd.appendChild(authorizeButton);
 
-                tr.appendChild(tdDetailTableBodyCell);
+                var deleteButton = document.createElement("button");
+                deleteButton.setAttribute("data-id", user.Id);
+                deleteButton.type = "button";
+                deleteButton.is = "emby-button";
+                deleteButton.setAttribute("action-type", "edit");
+                deleteButton.classList.add("raised", "raised-mini", "emby-button");
+                deleteButton.setAttribute("data-mini", "true");
+                deleteButton.title = "Delete";
+                deleteButton.innerHTML = "Delete";
+                deleteButton.style.marginLeft = "0.4em";
+                deleteButton.addEventListener("click", function(e) {
+                    Dashboard.showLoadingMsg();
+                    var btn = e.target.closest("button[data-id]") || e.target;
+                    var userId = btn.getAttribute("data-id");
+                    var summaryRow = e.target.closest("tr.user-summary-row");
+                    var detailsRow = summaryRow ? summaryRow.nextElementSibling : null;
+                    if (userId === "undefined") {
+                        if (detailsRow) detailsRow.remove();
+                        if (summaryRow) summaryRow.remove();
+                        Dashboard.hideLoadingMsg();
+                        return;
+                    }
+                    ApiClient.ajax({
+                        type: "DELETE",
+                        url: ApiClient.getUrl("alexaskill/api/user-skills/" + userId)
+                    }).then(function () {
+                        if (detailsRow) detailsRow.remove();
+                        if (summaryRow) summaryRow.remove();
+                        Dashboard.hideLoadingMsg();
+                    }, function (res) {
+                        Dashboard.hideLoadingMsg();
+                        showAjaxError(res, "delete");
+                    });
+                });
+                actTd.appendChild(deleteButton);
+                summary.appendChild(actTd);
 
-                return tr;
+                // expand/collapse toggle: chevron + row click, ignore action buttons
+                summary.addEventListener("click", function(e) {
+                    if (e.target.closest("button")) return;
+                    var details = summary.nextElementSibling;
+                    var isOpen = summary.classList.toggle("expanded");
+                    // JF-365: drive show/hide AND chevron rotation via INLINE style.
+                    // The plugin config page's <style> block is not reliably applied
+                    // under emby's view injection, so toggling a class had no effect.
+                    // Inline style always wins.
+                    if (details) details.style.display = isOpen ? "" : "none";
+                    if (chev) chev.style.transform = isOpen ? "rotate(90deg)" : "";
+                });
+
+                // ============================ DETAILS ROW ============================
+                var details = document.createElement("tr");
+                details.setAttribute("data-id", user.Id);
+                details.classList.add("user-details-row");
+                // Hidden by default via INLINE style (the config page <style> block is
+                // not reliably applied under emby view injection; inline always wins).
+                details.style.display = "none";
+                var detailsCell = document.createElement("td");
+                // Span the full summary width so the panel aligns under the header.
+                // Derived from summary.cells.length (not a hardcoded magic number) so
+                // adding/removing a summary column can't silently misalign the panel.
+                detailsCell.setAttribute("colspan", String(summary.cells.length));
+                detailsCell.classList.add("detailTableBodyCell");
+                // Inline background (the page <style> block is not reliably applied).
+                detailsCell.style.background = "#161616";
+                detailsCell.style.padding = "1.2em 1.5em";
+
+                var grid = document.createElement("div");
+                grid.className = "panel-grid";
+                // Inline (the page <style> block is not reliably applied under emby
+                // view injection): two-column grid, collapsing to one column when narrow.
+                grid.style.display = "grid";
+                grid.style.gridTemplateColumns = "1fr 1fr";
+                grid.style.columnGap = "2.5em";
+                grid.style.rowGap = "0.4em";
+
+                // helper: style a group-title header inline
+                function groupTitleEl(text) {
+                    var t = document.createElement("div");
+                    t.className = "group-title";
+                    t.textContent = text;
+                    t.style.color = "#00A4DC";
+                    t.style.fontSize = "0.85em";
+                    t.style.textTransform = "uppercase";
+                    t.style.letterSpacing = "0.05em";
+                    t.style.marginBottom = "0.6em";
+                    t.style.borderBottom = "1px solid #2a2a2a";
+                    t.style.paddingBottom = "0.3em";
+                    return t;
+                }
+
+                // ---- SEARCH group ----
+                var searchGroup = document.createElement("div");
+                searchGroup.appendChild(groupTitleEl("Search"));
+
+                var smSel = panelSelect("SearchResponseMode", "Search Mode",
+                    [{v:"Thorough",t:"Thorough (best match)"},{v:"Fast",t:"Fast (quick response)"}],
+                    user.SearchResponseMode || "Thorough");
+                searchGroup.appendChild(panelField(null, smSel,
+                    'Thorough: "play the strokes" finds the artist even if the spelling is off. Fast: quicker response, may miss obscure matches. Overrides the global default.'));
+
+                var fmSel = panelSelect("FuzzyMatchBehavior", "Auto-play Match",
+                    [{v:"Confirm",t:"Confirm match"},{v:"AutoPlay",t:"Auto-play match"}],
+                    user.FuzzyMatchBehavior || "Confirm");
+                searchGroup.appendChild(panelField(null, fmSel,
+                    'Confirm: ask "did you mean...?" on a close match. Auto-play: start the best match immediately without asking.'));
+
+                // thresholds — two emby-input number fields. emby-input auto-creates a
+                // floating <label> from the `label` attribute, so we set it (not a manual
+                // label) and must NOT pre-add the emby-input class (createdCallback guard).
+                var threshRow = document.createElement("div");
+                threshRow.style.cssText = "display:flex;gap:1.2em;align-items:flex-end;flex-wrap:wrap;";
+                function thresholdField(dataField, label, value) {
+                    var wrap = document.createElement("div");
+                    wrap.className = "inputContainer";
+                    wrap.style.flex = "0 0 auto";
+                    var inp = document.createElement("input");
+                    inp.setAttribute("is", "emby-input");
+                    inp.setAttribute("label", label);
+                    inp.id = "panelThresh_" + (_panelControlSeq++);
+                    inp.type = "number"; inp.min = "0"; inp.max = "100";
+                    inp.style.width = "5em";
+                    inp.setAttribute("data-field", dataField);
+                    inp.value = value;
+                    wrap.appendChild(inp);
+                    return wrap;
+                }
+                threshRow.appendChild(thresholdField("FuzzyMatchThreshold", "Auto-play ≥",
+                    user.FuzzyMatchThreshold != null ? user.FuzzyMatchThreshold : 60));
+                threshRow.appendChild(thresholdField("FuzzySuggestionThreshold", "Suggest ≥",
+                    user.FuzzySuggestionThreshold != null ? user.FuzzySuggestionThreshold : 40));
+                searchGroup.appendChild(threshRow);
+                var threshDesc = document.createElement("div");
+                threshDesc.className = "fieldDescription";
+                threshDesc.textContent = 'Scores at/above Auto-play start immediately; at/above Suggest, Alexa asks "did you mean...?"';
+                threshRow.appendChild(threshDesc);
+                grid.appendChild(searchGroup);
+
+                // ---- PLAYBACK group ----
+                var pbGroup = document.createElement("div");
+                pbGroup.appendChild(groupTitleEl("Playback"));
+
+                var ppSel = panelSelect("PostPlayBehavior", "Post-Play Behavior",
+                    [{v:"Stop",t:"Stop (silence)"},{v:"AutoPlay",t:"AutoPlay (continue)"}],
+                    user.PostPlayBehavior || "Stop");
+                pbGroup.appendChild(panelField(null, ppSel,
+                    "Stop: silence when a song ends. AutoPlay: the skill finds similar tracks and keeps playing, like a radio station. Overrides the global default."));
+
+                var vaaSel = panelSelect("VideoAppForAudio", "Music Delivery",
+                    [{v:"inherit",t:"Use default (global)"},{v:"true",t:"VideoApp (seek bar)"},{v:"false",t:"AudioPlayer (raw stream)"}],
+                    triStateCurrent(user.VideoAppForAudio));
+                pbGroup.appendChild(panelField(null, vaaSel,
+                    "VideoApp shows a seek bar but no album art on Echo Show. AudioPlayer shows album art but no seek bar. Use global default to inherit."));
+
+                var anpSel = panelSelect("AnnounceNowPlaying", "Announce Now-Playing",
+                    [{v:"inherit",t:"Use default (global)"},{v:"true",t:"Announce title"},{v:"false",t:"Silent launch"}],
+                    triStateCurrent(user.AnnounceNowPlaying));
+                pbGroup.appendChild(panelField(null, anpSel,
+                    'Speak the content title ("Now playing X") when content is launched.'));
+
+                var aapSel = panelSelect("AnnounceAudioPlays", "Announce Music",
+                    [{v:"inherit",t:"Use default (global)"},{v:"true",t:"Announce music"},{v:"false",t:"Silent music"}],
+                    triStateCurrent(user.AnnounceAudioPlays));
+                pbGroup.appendChild(panelField(null, aapSel,
+                    "Also speak the track name when music starts. Off by default for fast, silent music starts."));
+
+                // Announce-position checkbox — emby checkboxContainer pattern
+                var announceField = document.createElement("div");
+                announceField.className = "checkboxContainer checkboxContainer-withDescription";
+                var announceCbLabel = document.createElement("label");
+                var announceInput = document.createElement("input");
+                announceInput.type = "checkbox";
+                announceInput.setAttribute("is", "emby-checkbox");
+                announceInput.setAttribute("data-field", "AnnouncePositionOnResume");
+                announceInput.checked = user.AnnouncePositionOnResume === true;
+                announceCbLabel.appendChild(announceInput);
+                var announceLbl = document.createElement("span");
+                announceLbl.textContent = "Announce position on resume";
+                announceCbLabel.appendChild(announceLbl);
+                announceField.appendChild(announceCbLabel);
+                pbGroup.appendChild(announceField);
+                grid.appendChild(pbGroup);
+
+                // ---- INVOCATION & LIBRARIES group (full width) ----
+                var invGroup = document.createElement("div");
+                invGroup.className = "full-width";
+                invGroup.style.gridColumn = "1 / -1"; // span both columns (inline; <style> unreliable)
+                invGroup.appendChild(groupTitleEl("Invocation & Libraries"));
+
+                // invocation input — emby-input creates its own floating label from the
+                // `label` attribute, so we set that (not a manual label) and must NOT
+                // pre-add the emby-input class (createdCallback init guard).
+                var invField = document.createElement("div");
+                invField.className = "inputContainer invocation-field";
+                var invInputWrap = document.createElement("div");
+                invInputWrap.style.cssText = "display:flex;align-items:center;gap:0.5em;flex-wrap:wrap;";
+                var input = document.createElement("input");
+                input.setAttribute("is", "emby-input");
+                input.setAttribute("label", "Invocation Name");
+                input.name = "InvocationName";
+                input.id = "panelInv_" + (_panelControlSeq++);
+                input.type = "text";
+                input.setAttribute("data-field", "InvocationName");
+                input.style.flex = "1 1 280px";
+                // JF-300: empty value means "use locale defaults".
+                input.value = (user.UserSkill && user.UserSkill.InvocationName) ? user.UserSkill.InvocationName : "";
+                input.placeholder = "Defaults: 'mia collezione' (it-IT), 'jellyfin player' elsewhere. A custom name applies to all locales.";
+                input.addEventListener("input", function() { validateInvocationName(this); });
+                input.addEventListener("blur", function() { validateInvocationName(this); });
+                invInputWrap.appendChild(input);
+                var resetBtn = document.createElement("button");
+                resetBtn.type = "button";
+                resetBtn.setAttribute("is", "emby-button");
+                resetBtn.classList.add("raised", "raised-mini", "emby-button");
+                resetBtn.setAttribute("data-mini", "true");
+                resetBtn.textContent = "Reset";
+                resetBtn.title = "Reset to locale defaults";
+                resetBtn.addEventListener("click", function() { resetInvocationName(input); });
+                invInputWrap.appendChild(resetBtn);
+                invField.appendChild(invInputWrap);
+                var invDesc = document.createElement("div");
+                invDesc.className = "fieldDescription";
+                invDesc.textContent = 'Empty = use locale defaults ("mia collezione" for it-IT, "jellyfin player" elsewhere). Otherwise two or more words. A custom name applies to ALL locales and triggers an Amazon redeploy on save (~15-30s).';
+                invField.appendChild(invDesc);
+                var errMsg = document.createElement("div");
+                errMsg.classList.add("invocation-name-error");
+                errMsg.style.cssText = "display:none;color:#e5a00d;font-size:0.85em;margin-top:0.25em;";
+                errMsg.textContent = "Invocation name must contain at least 2 words.";
+                invField.appendChild(errMsg);
+                invGroup.appendChild(invField);
+
+                // libraries
+                var libField = document.createElement("div");
+                libField.className = "inputContainer";
+                var libLabel = document.createElement("label");
+                libLabel.className = "inputLabel inputLabelUnfocused";
+                libLabel.textContent = "Libraries";
+                libField.appendChild(libLabel);
+                var libBtn = document.createElement("button");
+                libBtn.type = "button";
+                libBtn.setAttribute("is", "emby-button");
+                libBtn.classList.add("raised", "raised-mini", "emby-button");
+                libBtn.setAttribute("data-mini", "true");
+                libBtn.setAttribute("data-libraries", JSON.stringify(user.AllowedLibraryIds || []));
+                libBtn.style.minWidth = "80px";
+                libBtn.textContent = "All";
+                libBtn.addEventListener("click", function() { showLibraryPicker(this); });
+                libField.appendChild(libBtn);
+                var libDesc = document.createElement("div");
+                libDesc.className = "fieldDescription";
+                libDesc.textContent = "Click to restrict which libraries this user can access. \"All\" = no restriction.";
+                libField.appendChild(libDesc);
+                invGroup.appendChild(libField);
+
+                var skillIdNote = document.createElement("div");
+                skillIdNote.className = "panel-note skill-id-note";
+                invGroup.appendChild(skillIdNote);
+                grid.appendChild(invGroup);
+
+                detailsCell.appendChild(grid);
+                details.appendChild(detailsCell);
+
+                // ============================ POPULATE SUMMARY ============================
+                updateInvocationSummary(summary, user.UserSkill ? (user.UserSkill.InvocationName || "") : "");
+                statusTd.replaceChildren(skillStatusPill(user.UserSkill ? user.UserSkill.UserSkillStatus : null));
+                authTd.replaceChildren(authPill(user));
+                updateAuthorizeButton(authorizeButton, user, config);
+
+                fragment.appendChild(summary);
+                fragment.appendChild(details);
+                return fragment;
             }
 
             document.querySelector("#saveConfigButton").addEventListener("click", function(e) {
@@ -1221,81 +1339,80 @@
                         contentType: "application/json"
                     }).then(function () {
 
-                        // Collect each row's save promise so the loading indicator covers the
-                        // full save — including the interaction-model redeploy that a changed
-                        // invocation name now triggers (JF-297), which can take ~15-30s.
+                        // Collect each summary row's save promise. JF-365: each user is now
+                        // a summary row + details row; only summary rows carry data-id and
+                        // all field lookups are scoped within the row pair via data-field.
+                        // This covers the interaction-model redeploy a changed invocation
+                        // name triggers (JF-297), which can take ~15-30s.
                         var perRowPromises = [];
-                        for (let row of document.querySelector("#userTableBody").rows) {
+                        var summaryRows = document.querySelectorAll("#userTableBody tr.user-summary-row");
+                        for (let row of summaryRows) {
                             const userId = row.getAttribute("data-id");
-                            const invocationInput = row.cells[2].querySelector("input");
+                            const details = row.nextElementSibling;
+
+                            const invocationInput = details.querySelector('[data-field="InvocationName"]');
                             if (!isValidInvocationName(invocationInput.value)) {
                                 validateInvocationName(invocationInput);
                                 continue;
                             }
 
-                            // Collect library selections from the picker button in cell 3
-                            var libBtn = row.cells[3].querySelector("button[data-libraries]");
+                            var libBtn = details.querySelector("button[data-libraries]");
                             var selectedLibs = libBtn ? JSON.parse(libBtn.getAttribute("data-libraries") || "[]") : [];
 
-                            if (userId === "undefined") {
-                                // create a new user skill
-                                let user = {
-                                    "Username": row.cells[0].innerText,
-                                    "InvocationName": row.cells[2].firstChild.value,
+                            if (userId === "undefined" || userId == null) {
+                                // create a new user skill — username lives in the summary row
+                                let newUser = {
+                                    "Username": row.getAttribute("data-username") || "",
+                                    "InvocationName": invocationInput.value,
                                 };
 
                                 perRowPromises.push(ApiClient.ajax({
                                     type: "POST",
                                     url: ApiClient.getUrl("alexaskill/api/user-skills"),
-                                    data: JSON.stringify(user),
+                                    data: JSON.stringify(newUser),
                                     contentType: "application/json"
                                 }).then(function (res) {
-                                    return res.json().then(function (user) {
+                                    return res.json().then(function (createdUser) {
                                         return ApiClient.getPluginConfiguration(Config.pluginUniqueId).then(function(freshConfig) {
-                                            refreshUserRow(row, user, freshConfig);
+                                            refreshUserRow(row, createdUser, freshConfig);
                                         });
                                     });
                                 }, function (res) {
                                     showAjaxError(res, "create");
                                 }));
                             } else {
-                                // update current user skill config
-                                var fmBehavior = row.cells[4].querySelector('[data-field="FuzzyMatchBehavior"]');
-                                var fmThreshold = row.cells[4].querySelector('[data-field="FuzzyMatchThreshold"]');
-                                var fmSuggestion = row.cells[4].querySelector('[data-field="FuzzySuggestionThreshold"]');
-                                var searchMode = row.cells[4].querySelector('[data-field="SearchResponseMode"]');
-                                var postPlayMode = row.cells[5].querySelector('[data-field="PostPlayBehavior"]');
-                                var vaaSel = row.cells[5].querySelector('[data-field="VideoAppForAudio"]');
-                                // Map the select's tri-state to JSON: inherit -> null (use global), true/false -> bool
-                                var vaaValue = null;
-                                if (vaaSel) {
-                                    if (vaaSel.value === "true") vaaValue = true;
-                                    else if (vaaSel.value === "false") vaaValue = false;
+                                // update current user skill config — collect by data-field
+                                var field = function(name) { return details.querySelector('[data-field="' + name + '"]'); };
+                                var fmBehavior = field("FuzzyMatchBehavior");
+                                var fmThreshold = field("FuzzyMatchThreshold");
+                                var fmSuggestion = field("FuzzySuggestionThreshold");
+                                var searchMode = field("SearchResponseMode");
+                                var postPlayMode = field("PostPlayBehavior");
+                                var vaaSel = field("VideoAppForAudio");
+                                var anpSel = field("AnnounceNowPlaying");
+                                var aapSel = field("AnnounceAudioPlays");
+                                var announcePos = field("AnnouncePositionOnResume");
+
+                                // Map tri-state selects to JSON: inherit -> null (use global), true/false -> bool
+                                function triState(sel) {
+                                    if (!sel) return null;
+                                    if (sel.value === "true") return true;
+                                    if (sel.value === "false") return false;
+                                    return null;
                                 }
-                                var anpSel = row.cells[5].querySelector('[data-field="AnnounceNowPlaying"]');
-                                var anpValue = null;
-                                if (anpSel) {
-                                    if (anpSel.value === "true") anpValue = true;
-                                    else if (anpSel.value === "false") anpValue = false;
-                                }
-                                var aapSel = row.cells[5].querySelector('[data-field="AnnounceAudioPlays"]');
-                                var aapValue = null;
-                                if (aapSel) {
-                                    if (aapSel.value === "true") aapValue = true;
-                                    else if (aapSel.value === "false") aapValue = false;
-                                }
+
                                 let data = {
-                                    "InvocationName": row.cells[2].firstChild.value,
+                                    "InvocationName": invocationInput.value,
                                     "AllowedLibraryIds": selectedLibs,
                                     "FuzzyMatchBehavior": fmBehavior ? fmBehavior.value : "Confirm",
                                     "FuzzyMatchThreshold": fmThreshold ? parseInt(fmThreshold.value) || 60 : 60,
                                     "FuzzySuggestionThreshold": fmSuggestion ? parseInt(fmSuggestion.value) || 40 : 40,
                                     "SearchResponseMode": searchMode ? searchMode.value : "Thorough",
                                     "PostPlayBehavior": postPlayMode ? postPlayMode.value : "Stop",
-                                    "AnnouncePositionOnResume": row.cells[5].querySelector('[data-field="AnnouncePositionOnResume"]')?.checked || false,
-                                    "VideoAppForAudio": vaaValue,
-                                    "AnnounceNowPlaying": anpValue,
-                                    "AnnounceAudioPlays": aapValue
+                                    "AnnouncePositionOnResume": announcePos ? announcePos.checked : false,
+                                    "VideoAppForAudio": triState(vaaSel),
+                                    "AnnounceNowPlaying": triState(anpSel),
+                                    "AnnounceAudioPlays": triState(aapSel)
                                 };
 
                                 perRowPromises.push(ApiClient.ajax({
