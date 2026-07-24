@@ -86,8 +86,8 @@
                     </details>
 
                     <details>
-                        <summary><span class="accordion-title">Enable / Disable Features</span></summary>
-                            <div class="fieldDescription">Disable intent groups you don't need. Disabled features return a polite "not available" message.</div>
+                        <summary><span class="accordion-title">Features</span></summary>
+                            <div class="fieldDescription">Enable or disable capabilities. Disabled features respond with a polite "not available".</div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="RadioModeEnabled" /> <span>Radio Mode</span></label>
                                 <div class="fieldDescription checkboxFieldDescription">When a song ends, automatically find and play similar tracks from your library — like a Pandora station. Toggle on/off by voice ("turn on/off radio mode") or let PostPlay AutoPlay start it automatically.</div>
@@ -128,6 +128,11 @@
                                 <label><input type="checkbox" is="emby-checkbox" id="ResumeOfferEnabled" /> <span>Resume Prompt</span></label>
                                 <div class="fieldDescription checkboxFieldDescription">When you open the skill and something was playing earlier, ask if you want to continue where you left off</div>
                             </div>
+                    </details>
+
+                    <details>
+                        <summary><span class="accordion-title">Announcements</span></summary>
+                            <div class="fieldDescription">Control what the skill speaks aloud.</div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="ResumeAnnounceTitle" /> <span>Announce Title on Resume</span></label>
                                 <div class="fieldDescription checkboxFieldDescription">Speak the content title when resuming playback. Disable for a briefer response with long titles.</div>
@@ -137,17 +142,12 @@
                                 <div class="fieldDescription checkboxFieldDescription">Speak the content title ("Now playing X") when content is launched. Disable for silent launches. Per-user overrides take precedence.</div>
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
-                                <label><input type="checkbox" is="emby-checkbox" id="AnnounceAudioPlays" /> <span>Announce Music Plays (opt-in)</span></label>
-                                <div class="fieldDescription checkboxFieldDescription">Also speak "Now playing X" when music starts (songs/albums/artists). Off by default for fast, silent music starts; turn on if you want every track announced. Per-user overrides take precedence.</div>
-                            </div>
-                            <div class="inputContainer">
-                                <label class="inputLabel" for="CatalogSyncLocales">Catalog Sync: Additional Locales</label>
-                                <input type="text" id="CatalogSyncLocales" class="emby-input" placeholder="e.g. de-DE,en-US (empty = it-IT only, * = all)" />
-                                <div class="fieldDescription">Comma-separated locale codes for catalog sync beyond it-IT (always synced). Adds phonetic synonyms for non-English names in supported languages (de/es/fr/pt/ja/nl). Use * for all active locales. Each locale adds ~7s to sync time.</div>
+                                <label><input type="checkbox" is="emby-checkbox" id="AnnounceAudioPlays" /> <span>Announce Music Plays</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">Also speak the track name when music starts (songs/albums/artists). Off by default for fast, silent music starts; turn on if you want every track announced. Example: when on, the skill says "Now playing [song name]" before playing. Per-user overrides take precedence.</div>
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
-                                <label><input type="checkbox" is="emby-checkbox" id="SeekEnabled" /> <span>Seek Controls</span></label>
-                                <div class="fieldDescription checkboxFieldDescription">Enable skip forward/back and jump-to-position voice commands. Also adds progress display when asking what's playing.</div>
+                                <label><input type="checkbox" is="emby-checkbox" id="PauseAnnouncePosition" /> <span>Announce Position on Pause</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">When paused, speak the current playback position. Example: "Paused at 2:15 of 4:30". Requires Seek Controls to be enabled. When off, pause is silent.</div>
                             </div>
                     </details>
 
@@ -172,6 +172,10 @@
                         <summary><span class="accordion-title">Playback Preferences</span></summary>
                             <div class="fieldDescription">Fine-tune how audio is delivered to Alexa devices. Changes take effect on the next playback request.</div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="SeekEnabled" /> <span>Seek Controls</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">Enable skip forward/back and jump-to-position voice commands. Also adds progress display when asking what's playing. Example: "skip 30 seconds", "jump to 2 minutes".</div>
+                            </div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="ShuffleArtistSongs" /> <span>Shuffle Artist Songs</span></label>
                                 <div class="fieldDescription checkboxFieldDescription">Randomize song order when playing an artist. Off by default — songs play in popularity order (favorites, most played, highest rated, then alphabetical). This changes the initial queue for "play artist" requests; it does not affect "Alexa, shuffle" mid-session.</div>
                             </div>
@@ -189,11 +193,7 @@
                                     <option value="Stop">Stop — silence after playback ends</option>
                                     <option value="AutoPlay">AutoPlay — continue with similar music</option>
                                 </select>
-                                <div class="fieldDescription">What happens when a song ends and the queue is exhausted. Can be overridden per-user in the User table below.</div>
-                            </div>
-                            <div class="checkboxContainer checkboxContainer-withDescription">
-                                <label><input type="checkbox" is="emby-checkbox" id="PauseAnnouncePosition" /> <span>Announce Position on Pause</span></label>
-                                <div class="fieldDescription checkboxFieldDescription">When paused, speak the current playback position (e.g. "Paused at 2:15 of 4:30"). Requires Seek Controls to be enabled. When off, pause is silent.</div>
+                                <div class="fieldDescription">What happens when a song ends and the queue is exhausted. Stop: silence when a song ends. AutoPlay: the skill finds similar tracks and keeps playing, like a radio station. Can be overridden per-user in the User table below.</div>
                             </div>
                             <div class="inputContainer">
                                 <label class="inputLabel inputLabelUnfocused" for="InitialFetchSize">Initial Fetch Size</label>
@@ -230,7 +230,7 @@
                                     <option value="Thorough">Thorough — best match, slower response</option>
                                     <option value="Fast">Fast — quick response, may miss obscure matches</option>
                                 </select>
-                                <div class="fieldDescription">Default search mode for all users. Can be overridden per-user in the User table below.</div>
+                                <div class="fieldDescription">Thorough: "play the strokes" finds the artist even if the spelling is off. Fast: quicker response, but may miss obscure matches. Can be overridden per-user in the User table below.</div>
                             </div>
                             <div class="selectContainer">
                                 <label class="selectLabel" for="DefaultCrossMediaArtistSuggestion">Artist Suggestion on Not-Found</label>
@@ -239,7 +239,7 @@
                                     <option value="AutoServe">Auto-Serve — play the artist without asking</option>
                                     <option value="Off">Off — just report not found</option>
                                 </select>
-                                <div class="fieldDescription">When a song or album isn't found but a plausible artist matches (e.g. a mispronounced name), what to do. Can be overridden per-user in the User table below.</div>
+                                <div class="fieldDescription">When a song or album isn't found but a plausible artist matches. Example: you say "play soul coffin" (a mispronounced name), no song is found, and the skill asks "Did you mean the artist Soul Coughing?". Can be overridden per-user in the User table below.</div>
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="AsrCompoundWordFixEnabled" /> <span>Compound Word Fix</span></label>
@@ -268,7 +268,7 @@
                             </div>
                     </details>
                     <details>
-                        <summary><span class="accordion-title">Custom Interaction Model</span></summary>
+                        <summary><span class="accordion-title">Custom Interaction Model &amp; Catalog</span></summary>
                             <div class="fieldDescription">Deploy a custom interaction model to override the built-in Alexa NLU model. The interaction model defines how Alexa interprets your voice commands — most users should leave this off.</div>
 
                             <div class="checkboxContainer checkboxContainer-withDescription">
@@ -324,6 +324,13 @@
                             </div>
 
                             <div class="fieldDescription" style="color:#888;">This replaces the interaction model for the selected locale. Model builds take 15-30 seconds.</div>
+
+                            <hr style="border:0;border-top:1px solid #333;margin:1.2em 0;" />
+                            <div class="inputContainer">
+                                <label class="inputLabel" for="CatalogSyncLocales">Catalog Sync: Additional Locales</label>
+                                <input type="text" id="CatalogSyncLocales" class="emby-input" placeholder="e.g. de-DE,en-US (empty = it-IT only, * = all)" />
+                                <div class="fieldDescription">Comma-separated locale codes for catalog sync beyond it-IT (always synced). Adds phonetic synonyms for non-English names so Alexa recognizes accented speech. Use * for all active locales. Each locale adds ~7s to sync time.</div>
+                            </div>
                     </details>
 
                     <details>
