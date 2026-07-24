@@ -399,16 +399,16 @@
                 </div>
 
                 <div class="verticalSection">
-                    <table class="tblApiKeys detailTable userSkillsTable">
+                    <table class="tblApiKeys detailTable userSkillsTable" style="table-layout:fixed;">
                         <caption class="clipForScreenReader">List of skills from user</caption>
                         <thead>
                             <tr>
                                 <th scope="col" class="detailTableHeaderCell" style="width:24px;"></th>
-                                <th scope="col" class="detailTableHeaderCell">User</th>
+                                <th scope="col" class="detailTableHeaderCell" style="width:15%;">User</th>
                                 <th scope="col" class="detailTableHeaderCell">Invocation Name</th>
-                                <th scope="col" class="detailTableHeaderCell">Skill Status</th>
-                                <th scope="col" class="detailTableHeaderCell">Auth</th>
-                                <th scope="col" class="detailTableHeaderCell" style="text-align:right;">Actions</th>
+                                <th scope="col" class="detailTableHeaderCell" style="width:12%;">Skill Status</th>
+                                <th scope="col" class="detailTableHeaderCell" style="width:18%;">Auth</th>
+                                <th scope="col" class="detailTableHeaderCell" style="width:23%; text-align:right;">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="userTableBody"></tbody>
@@ -487,6 +487,11 @@
             // attachedCallback needs to resolve a label by for/id, and ids must be
             // unique across the document (multiple users each render their own panel).
             var _panelControlSeq = 0;
+            // JF-368: re-entrancy guard for the Save button. The invocation-name path
+            // triggers a ~15-30s Amazon redeploy; a second click during that window would
+            // race a second all-locales redeploy. This flag is the functional guarantee —
+            // the disabled attribute is the visual cue (emby buttons honor :disabled).
+            var _saveInFlight = false;
 
             document.querySelector("#ConfigPage").addEventListener("pageshow", function() {
                 Dashboard.showLoadingMsg();
@@ -911,8 +916,13 @@
                 var actTd = document.createElement("td");
                 actTd.classList.add("detailTableBodyCell");
                 actTd.style.verticalAlign = "middle";
-                actTd.style.textAlign = "right";
-                actTd.style.whiteSpace = "nowrap";
+                // Flex (not text-align:right) so the buttons sit flush at the right edge
+                // regardless of their display mode — updateAuthorizeButton sets the
+                // authorize button to display:block, which text-align:right can't move.
+                actTd.style.display = "flex";
+                actTd.style.justifyContent = "flex-end";
+                actTd.style.alignItems = "center";
+                actTd.style.gap = "0.4em";
 
                 var authorizeButton = document.createElement("button");
                 authorizeButton.className = "authorize-button";
@@ -956,7 +966,6 @@
                 deleteButton.setAttribute("data-mini", "true");
                 deleteButton.title = "Delete";
                 deleteButton.innerHTML = "Delete";
-                deleteButton.style.marginLeft = "0.4em";
                 deleteButton.addEventListener("click", function(e) {
                     Dashboard.showLoadingMsg();
                     var btn = e.target.closest("button[data-id]") || e.target;
@@ -1221,10 +1230,18 @@
             }
 
             document.querySelector("#saveConfigButton").addEventListener("click", function(e) {
+                // JF-368: functional re-entrancy guard — block a second save while one is
+                // in flight (the redeploy can take ~15-30s). The disabled attribute is the
+                // visual cue; this flag is the actual guarantee.
+                if (_saveInFlight) { e.preventDefault(); return false; }
+                _saveInFlight = true;
                 var saveButton = document.querySelector("#saveConfigButton");
-                // JF-368: disable during the in-flight save (the invocation-name path can
-                // trigger a ~15-30s Amazon redeploy; a second click would race it).
                 saveButton.disabled = true;
+                saveButton.setAttribute("disabled", "disabled");
+                // Inline disabled style: emby's :disabled opacity doesn't show on this
+                // .button-submit button, so make the "busy" state explicit.
+                saveButton.style.opacity = "0.5";
+                saveButton.style.cursor = "default";
                 // JF-367: count skipped rows here so .finally (outer scope) can warn.
                 var skippedRows = 0;
                 Dashboard.showLoadingMsg();
@@ -1463,7 +1480,11 @@
                         Dashboard.alert("Failed to save configuration");
                     }).finally(function () {
                         Dashboard.hideLoadingMsg();
+                        _saveInFlight = false;
                         saveButton.disabled = false;
+                        saveButton.removeAttribute("disabled");
+                        saveButton.style.opacity = "";
+                        saveButton.style.cursor = "";
                         // JF-367: warn when rows were skipped so a partial save can't
                         // look fully successful. The per-row inline error still shows.
                         if (skippedRows > 0) {
