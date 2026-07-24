@@ -978,7 +978,7 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
         _config.Users[0].SmapiDeviceToken = CreateTestDeviceToken();
 
         _redeployerMock
-            .Setup(r => r.RedeployAsync(It.IsAny<User>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.RedeployAsync(It.IsAny<User>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<string?>()))
             .ReturnsAsync(new ModelRedeployResult(
                 true,
                 "rebuilt",
@@ -996,7 +996,7 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
 
         // The redeploy must fire exactly once, carrying the NEW invocation name.
         _redeployerMock.Verify(
-            r => r.RedeployAsync(It.IsAny<User>(), "media player", It.IsAny<CancellationToken>()),
+            r => r.RedeployAsync(It.IsAny<User>(), "media player", It.IsAny<CancellationToken>(), It.IsAny<string?>()),
             Times.Once);
     }
 
@@ -1015,7 +1015,7 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
 
         Assert.IsType<JsonResult>(result);
         _redeployerMock.Verify(
-            r => r.RedeployAsync(It.IsAny<User>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            r => r.RedeployAsync(It.IsAny<User>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<string?>()),
             Times.Never);
     }
 
@@ -1034,7 +1034,7 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
         Assert.IsType<JsonResult>(result);
         Assert.Equal("media player", _config.Users[0].UserSkill!.InvocationName);
         _redeployerMock.Verify(
-            r => r.RedeployAsync(It.IsAny<User>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            r => r.RedeployAsync(It.IsAny<User>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<string?>()),
             Times.Never);
     }
 
@@ -1053,7 +1053,7 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
         var jsonResult = Assert.IsType<JsonResult>(result);
         Assert.Equal(400, jsonResult.StatusCode);
         _redeployerMock.Verify(
-            r => r.RedeployAsync(It.IsAny<User>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            r => r.RedeployAsync(It.IsAny<User>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<string?>()),
             Times.Never);
     }
 

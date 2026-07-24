@@ -260,6 +260,10 @@ public class ConfigurationController : ControllerBase
         {
             try
             {
+                // The invocation name applies to ALL locales (a custom name is pushed to
+                // every locale's model), so this redeploy must NOT be scoped to the
+                // configured locale — otherwise only one locale picks up the new name and
+                // the other 16 keep the old one (regression of #9). localeFilter stays null.
                 ModelRedeployResult redeployResult = await _redeployer.RedeployAsync(
                     pluginUser,
                     pluginUser.UserSkill!.InvocationName,
@@ -859,13 +863,16 @@ public class ConfigurationController : ControllerBase
             return new JsonResult(new { error = "Plugin manifest not loaded. Restart Jellyfin first." }) { StatusCode = 503 };
         }
 
+        string? localeFilter = Plugin.Instance!.Configuration.CustomModelLocale;
+
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
             var result = await _redeployer.RedeployAsync(
                 pluginUser!,
                 pluginUser!.UserSkill!.InvocationName,
-                cts.Token).ConfigureAwait(false);
+                cts.Token,
+                localeFilter).ConfigureAwait(false);
 
             var config = Plugin.Instance.Configuration;
             config.LastModelDeployTime = DateTime.UtcNow;
