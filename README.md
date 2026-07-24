@@ -113,6 +113,8 @@ A Jellyfin plugin that creates a personal Alexa skill to play and control media 
 - **Per-user fuzzy matching**: configurable match behavior (confirm/auto-play) and threshold
 - **Phonetic artist matching**: Double Metaphone pre-filter improves matching for non-English names (e.g., "soul coughing" matches even with heavy accent distortion)
 - **Phonetic song search**: when an exact title match fails, a phonetic fallback matches misspelled titles (e.g., "rapsodi" finds "Rhapsody", "fotograf" finds "Photograph"); feature-flagged so native speakers can opt out
+- **Romance phonetic synonyms**: generates Italian/Spanish/French/Portuguese pronunciation variants for English artist and album names (e.g., "Coughing" → "Cofin"/"Coffin") so Alexa's ASR recognizes accented speech; uploaded to the catalog automatically
+- **Cross-media artist suggestion**: when a song or album isn't found but a plausible artist matches, the skill offers to play that artist instead of a dead-end "not found" (configurable: ask first / play directly / off)
 - **ASR compound-word fix**: retries split compound words when Alexa's speech recognition joins or separates them (e.g., "soulcoughing" → "soul coughing")
 - **Fast/Thorough search mode**: per-user choice between fast single-query auto-play or thorough multi-tier fallback with disambiguation
 
@@ -254,7 +256,11 @@ The plugin uses **Login with Amazon (LWA)** to create and manage your Alexa skil
 3. Select the Jellyfin user from the dropdown
 4. Optionally customize the **invocation name**. Leave it **empty** for locale defaults (Italian: "Mia Collezione"; all other locales: "Jellyfin Player"), or enter a custom name (two or more words) that applies to **all** locales. Saving redeploys the new name to Amazon automatically (~15–30s) — no need to edit the Alexa Developer Console. Use **Reset** to return to locale defaults.
 
-Per-user settings include **fuzzy match behavior** (Confirm or Auto-Play), **fuzzy match threshold** (0–100), **allowed libraries** (restrict to specific top-level folders), **content type access** (music, videos, audiobooks, books), **search response mode** (Fast or Thorough), and **PostPlay behavior** (Stop or AutoPlay). Fast mode skips fallback tiers and auto-plays the first match; Thorough runs the full fallback chain with disambiguation. AutoPlay continues with similar tracks when a song ends and the queue is empty.
+Per-user settings include **fuzzy match behavior** (Confirm or Auto-Play), **fuzzy match threshold** (0–100), **allowed libraries** (restrict to specific top-level folders), **content type access** (music, videos, audiobooks, books), **search response mode** (Fast or Thorough), **PostPlay behavior** (Stop or AutoPlay), and **cross-media artist suggestion** (Confirm, Auto-Serve, or Off). Fast mode skips fallback tiers and auto-plays the first match; Thorough runs the full fallback chain with disambiguation. AutoPlay continues with similar tracks when a song ends and the queue is empty. The cross-media artist suggestion offers a plausible artist when a song or album isn't found (e.g., a mispronounced name), so you get a helpful prompt instead of a dead-end "not found".
+
+### Catalog Sync
+
+The plugin uploads your Jellyfin library (artists and albums) to Amazon's catalog slot types with **phonetic synonyms** so Alexa recognizes names spoken with a non-English accent. By default this runs for Italian (it-IT) only. To enable it for other locales, set **Catalog Sync Locales** in the configuration: leave empty for Italian only, use `*` for all active locales, or list specific locales (e.g., `de-DE,en-US`). The sync runs weekly and on startup (skipped if synced within the last 12 hours).
 
 ### Feature Flags
 
@@ -443,11 +449,22 @@ The video-audio streaming endpoints (audiobook HLS, VideoApp seek-bar playback) 
 
 ## Troubleshooting
 
+> **If the skill seems badly broken after a config change or deploy, check this first:** Alexa caches the interaction model and catalog slot data on Amazon's side, and changes take time to propagate. An utterance that worked yesterday may fail today (or vice versa) purely because a model rebuild is still in progress or a catalog version hasn't been promoted yet. Wait 2–5 minutes after any change that triggers a rebuild (invocation name, mood words, catalog sync, "Rebuild models"), then test again. Verify the model build status in the Alexa Developer Console (your skill → **Build** → **Model**) shows "Ready" before assuming a code regression.
+
 ### "There was a problem with the requested skill's response"
 
 - Verify your Jellyfin server is publicly accessible at the configured URL
 - Check that your SSL certificate is valid
 - Ensure the skill endpoint in the Alexa Developer Console matches your server URL
+
+### The skill behaves inconsistently (works for some names, not others) after a deploy
+
+This is almost always **interaction-model or catalog propagation lag**, not a code bug. Two common causes:
+
+1. **Catalog slot data hasn't propagated**: the plugin uploads your library to SMAPI catalog slot types (`JellyfinArtist`, `AlbumName`) with phonetic synonyms. After a "Rebuild models" or a catalog sync, Amazon needs time to promote the new catalog version. Until it does, some artist/album names resolve and others don't, inconsistently. Wait a few minutes and retry.
+2. **The model build is still in progress**: changes to the interaction model (invocation name, mood words, slot types) trigger an asynchronous rebuild on Amazon's side. During the build, the skill may use a mix of old and new model state. Check the build status in the Alexa Developer Console.
+
+If the inconsistency persists after 10+ minutes with the model showing "Ready", then investigate further (check the Jellyfin logs for the specific request, verify the catalog synced successfully).
 
 ### Authorization fails or token expires
 
@@ -472,6 +489,10 @@ The video-audio streaming endpoints (audiobook HLS, VideoApp seek-bar playback) 
 - Confirm the plugin repository URL is correct
 - Check the Jellyfin logs for errors during plugin loading
 - Verify you're running Jellyfin 10.11.x or later
+
+### Artist/album search fails for everything right after a Jellyfin restart
+
+The catalog sync runs on Jellyfin startup. If the reverse proxy or tunnel (the public URL Alexa uses to reach your server) isn't fully ready in the first few seconds after a restart, Amazon can't fetch the catalog data and the sync fails for that run — leaving the slot data stale or empty, so one-shot artist/album routing breaks. The plugin now retries this automatically (up to 3 attempts with a fresh fetch URL each time), so it usually self-heals on the next sync. If it doesn't, trigger a manual "Rebuild models" from the plugin config, or simply restart Jellyfin again once the proxy is confirmed reachable.
 
 ### Configuration file
 
