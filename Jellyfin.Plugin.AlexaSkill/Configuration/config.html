@@ -1221,6 +1221,12 @@
             }
 
             document.querySelector("#saveConfigButton").addEventListener("click", function(e) {
+                var saveButton = document.querySelector("#saveConfigButton");
+                // JF-368: disable during the in-flight save (the invocation-name path can
+                // trigger a ~15-30s Amazon redeploy; a second click would race it).
+                saveButton.disabled = true;
+                // JF-367: count skipped rows here so .finally (outer scope) can warn.
+                var skippedRows = 0;
                 Dashboard.showLoadingMsg();
 
                 ApiClient.getPluginConfiguration(Config.pluginUniqueId).then(function (config) {
@@ -1345,14 +1351,25 @@
                         // This covers the interaction-model redeploy a changed invocation
                         // name triggers (JF-297), which can take ~15-30s.
                         var perRowPromises = [];
+                        // JF-367: skippedRows is declared in the handler scope so .finally
+                        // can warn after the batch. Count rows skipped so we can warn that
+                        // the save looked successful but wasn't complete (the invalid field
+                        // is hidden in a collapsed panel, so the inline error is easy to miss).
                         var summaryRows = document.querySelectorAll("#userTableBody tr.user-summary-row");
                         for (let row of summaryRows) {
                             const userId = row.getAttribute("data-id");
                             const details = row.nextElementSibling;
 
-                            const invocationInput = details.querySelector('[data-field="InvocationName"]');
+                            const invocationInput = details ? details.querySelector('[data-field="InvocationName"]') : null;
+                            // JF-369: null-guard — a missing input (DOM/emby-upgrade hiccup)
+                            // must skip the row, not throw and abort the whole save.
+                            if (!invocationInput) {
+                                skippedRows++;
+                                continue;
+                            }
                             if (!isValidInvocationName(invocationInput.value)) {
                                 validateInvocationName(invocationInput);
+                                skippedRows++;
                                 continue;
                             }
 
@@ -1446,6 +1463,12 @@
                         Dashboard.alert("Failed to save configuration");
                     }).finally(function () {
                         Dashboard.hideLoadingMsg();
+                        saveButton.disabled = false;
+                        // JF-367: warn when rows were skipped so a partial save can't
+                        // look fully successful. The per-row inline error still shows.
+                        if (skippedRows > 0) {
+                            Dashboard.alert(skippedRows + " user(s) not saved: the invocation name must be empty (use locale defaults) or at least 2 words. Expand the row to fix.");
+                        }
                     });
                 });
 
