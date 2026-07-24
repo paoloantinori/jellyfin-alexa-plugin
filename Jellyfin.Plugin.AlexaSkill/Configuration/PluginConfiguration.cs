@@ -210,6 +210,14 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public PostPlayBehavior DefaultPostPlayBehavior { get; set; } = PostPlayBehavior.Stop;
 
+    /// <summary>
+    /// Gets or sets the default cross-media artist suggestion behavior for users without an
+    /// explicit per-user setting. When a song/album is not found but a plausible artist is
+    /// (a sub-strict-threshold match), this controls whether to offer it for confirmation
+    /// (Confirm), auto-serve it (AutoServe), or do nothing (Off).
+    /// </summary>
+    public CrossMediaArtistSuggestion DefaultCrossMediaArtistSuggestion { get; set; } = CrossMediaArtistSuggestion.Confirm;
+
     // Display preferences — items sent to APL visual templates (voice reads 5 max)
     public int MaxListDisplayItems { get; set; } = 15;
     public int MaxInProgressDisplayItems { get; set; } = 10;

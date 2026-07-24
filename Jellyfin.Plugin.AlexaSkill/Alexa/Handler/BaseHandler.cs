@@ -1392,6 +1392,68 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// Gets the effective cross-media artist suggestion behavior for a user, falling back to
+    /// the global default. Per-user setting (when explicitly set, i.e. non-null) takes
+    /// precedence. Controls whether a sub-strict-threshold artist match (found when a
+    /// song/album wasn't) is offered for confirmation, auto-served, or ignored.
+    /// </summary>
+    protected CrossMediaArtistSuggestion GetCrossMediaArtistSuggestion(Entities.User? user)
+    {
+        if (user?.CrossMediaArtistSuggestion is { } userMode)
+        {
+            Logger.LogDebug("CrossMediaArtistSuggestion: user={UserId} mode={Mode} source=PerUser", user.Id, userMode);
+            return userMode;
+        }
+
+        Logger.LogDebug("CrossMediaArtistSuggestion: user={UserId} mode={Mode} source=GlobalDefault", user?.Id, _config.DefaultCrossMediaArtistSuggestion);
+        return _config.DefaultCrossMediaArtistSuggestion;
+    }
+
+    /// <summary>
+    /// Builds the cross-media artist OFFER response (Ask): "I didn't find a song/album
+    /// '{query}'. Did you mean the artist {artist}?". Keeps the session open carrying the
+    /// single best artist in the standard disambiguation session state, so YesIntentHandler
+    /// routes a "yes" to PlayArtist unchanged. Also stashes the original not-found query +
+    /// media type so NoIntentHandler can produce the correct clean not-found when the user
+    /// declines (otherwise "no" would say "no more matches", which is wrong here). Single
+    /// candidate only (per JF-363 design).
+    /// </summary>
+    /// <param name="query">The not-found song/album query (the raw slot value).</param>
+    /// <param name="artist">The single best artist match to offer.</param>
+    /// <param name="locale">The request locale.</param>
+    /// <param name="notFoundMediaType">The media type the user originally asked for ("song" or "album"), used to build the decline response.</param>
+    protected SkillResponse BuildCrossMediaArtistOfferAsk(string query, BaseItem artist, string locale, string notFoundMediaType)
+    {
+        string? promptSsml = GetSsml("CrossMediaArtistOfferSsml", locale, EscapeXml(query), EscapeXml(artist.Name));
+        string reprompt = ResponseStrings.Get("FuzzySuggestionReprompt", locale);
+
+        SkillResponse response = promptSsml != null
+            ? AskSsml(promptSsml, new Reprompt(reprompt))
+            : ResponseBuilder.Ask(ResponseStrings.Get("CrossMediaArtistOffer", locale, query, artist.Name), new Reprompt(reprompt));
+
+        var matchInfos = new List<DisambiguationHelper.MatchInfo>
+        {
+            new() { Id = artist.Id.ToString(), Name = artist.Name }
+        };
+
+        response.SessionAttributes = new Dictionary<string, object>
+        {
+            ["disambig_matches"] = Newtonsoft.Json.JsonConvert.SerializeObject(matchInfos),
+            ["disambig_index"] = 0,
+            ["disambig_type"] = DisambiguationHelper.MediaTypeArtist,
+            // JF-363: carry the original not-found request so NoIntentHandler can decline to
+            // the right "song/album not found" instead of the generic "no more matches".
+            ["crossmedia_notfound_query"] = query,
+            ["crossmedia_notfound_type"] = notFoundMediaType
+        };
+
+        Logger.LogDebug(
+            "CrossMediaArtistSuggestion: offering artist '{Artist}' for not-found query='{Query}' (type={Type})",
+            artist.Name, query, notFoundMediaType);
+        return response;
+    }
+
+    /// <summary>
     /// Gets the effective "speak the now-playing announce on launch" preference for a user,
     /// falling back to the global default. Per-user setting (when explicitly set) takes precedence.
     /// </summary>

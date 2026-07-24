@@ -174,6 +174,8 @@
   "FuzzyAutoPlayAnnouncement": "Reproduciendo {0} (resultado más cercano a '{1}')",
   "FuzzyAutoPlayAnnouncementSsml": "Reproduciendo <emphasis level=\"moderate\">{0}</emphasis><break time=\"150ms\"/>resultado más cercano a '{1}'",
   "FuzzySuggestionReprompt": "Puedes decir sí o no.",
+  "CrossMediaArtistOffer": "No encontré una canción o álbum llamado '{0}'. ¿Quizás buscabas al artista {1}? ¿Quieres que reproduzca su música?",
+  "CrossMediaArtistOfferSsml": "No encontré una canción o álbum llamado '{0}'.<break time=\"200ms\"/>¿Quizás buscabas al artista <emphasis level=\"moderate\">{1}</emphasis>? ¿Quieres que reproduzca su música?",
   "ResumePrompt": "Estabas escuchando {0}. ¿Quieres continuar?",
   "ResumePromptSsml": "Estabas escuchando <emphasis level=\"moderate\">{0}</emphasis>.<break time=\"200ms\"/>¿Quieres continuar?",
   "ResumeReprompt": "¿Quieres continuar donde lo dejaste?",

@@ -261,6 +261,30 @@ public class PlaySongIntentHandler : BaseHandler
                     Logger.LogInformation(
                         "PlaySong: artist fallback rejected '{ArtistName}' score={Score}<{Threshold} for query='{Query}'",
                         bestMatch.Value.Item.Name, bestMatch.Value.Score, crossMediaThreshold, songQuery);
+
+                    // JF-363: sub-strict band [normalThreshold, crossMediaThreshold). Offer or
+                    // auto-serve the artist instead of a dead-end not-found. Confirm/AutoServe are
+                    // safe (no silent wrong substitution: Confirm asks first; AutoServe is opt-in).
+                    int normalThreshold = FuzzyMatcher.GetDefaultThreshold(user);
+                    if (bestMatch.Value.Score >= normalThreshold)
+                    {
+                        BaseItem artist = bestMatch.Value.Item;
+                        var suggestionMode = GetCrossMediaArtistSuggestion(user);
+                        if (suggestionMode == CrossMediaArtistSuggestion.AutoServe)
+                        {
+                            Logger.LogInformation(
+                                "PlaySong: cross-media artist suggestion AutoServe '{Artist}' score={Score} for query='{Query}'",
+                                artist.Name, bestMatch.Value.Score, songQuery);
+                            return await PlayArtistSongsFallback(
+                                artist.Id, artist.Name, jellyfinUser!, user, session, context, locale, cancellationToken,
+                                announcement: ResponseStrings.Get("FoundArtistInstead", locale, artist.Name)).ConfigureAwait(false);
+                        }
+
+                        if (suggestionMode == CrossMediaArtistSuggestion.Confirm)
+                        {
+                            return BuildCrossMediaArtistOfferAsk(songQuery, artist, locale, "song");
+                        }
+                    }
                 }
             }
 

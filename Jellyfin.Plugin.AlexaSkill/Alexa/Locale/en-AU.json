@@ -54,6 +54,8 @@
   "FuzzySuggestionPrompt": "I didn't find '{0}'. Did you mean '{1}'?",
   "FuzzySuggestionPromptSsml": "I didn't find '{0}'.<break time=\"200ms\"/>Did you mean <emphasis level=\"moderate\">{1}</emphasis>?",
   "FuzzySuggestionReprompt": "You can say yes or no.",
+  "CrossMediaArtistOffer": "I couldn't find a song or album called '{0}'. Did you mean the artist {1}? Want me to play their music?",
+  "CrossMediaArtistOfferSsml": "I couldn't find a song or album called '{0}'.<break time=\"200ms\"/>Did you mean the artist <emphasis level=\"moderate\">{1}</emphasis>? Want me to play their music?",
   "GenreExpanded": "Playing {0} and similar genres.",
   "HoursAndMinutes": "{0} hours and {1} minutes",
   "InProgressItemWithPosition": "{0} at {1}",

@@ -187,6 +187,19 @@ public class PlayAlbumIntentHandler : BaseHandler
             // PlayAlbumIntent. Only fire on a HIGH-confidence artist match — a weak match
             // (e.g. "jazz caffè"→"Uazz" @75) must NOT play the wrong artist; report the
             // album as not found instead. JF-336 (was GetDefaultThreshold=60).
+            // Word-count gate: a long album title is a poor artist query and a wrong-artist
+            // offer/substitution is worse than a clean not-found (same lesson as PlaySong's
+            // "la ballata del genesio"→"Lamb" @75). JF-363 widened the band to [60,85), so
+            // the guard now matters here too (previously a sub-85 long-query match was silent).
+            int wordCount = album.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
+            if (wordCount > CrossMediaArtistMaxWords)
+            {
+                Logger.LogInformation(
+                    "PlayAlbum: skipping artist fallback for {WordCount}-word query '{Query}' (max {Max})",
+                    wordCount, album, CrossMediaArtistMaxWords);
+                return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByName", locale, album));
+            }
+
             Logger.LogDebug("PlayAlbum: no albums found, trying artist fallback with query='{Query}'", album);
             IReadOnlyList<BaseItem> fallbackArtists = await Util.ArtistSearch.SearchAsync(
                 album, user, _libraryManager, _artistIndex, Logger,
@@ -210,6 +223,33 @@ public class PlayAlbumIntentHandler : BaseHandler
                     return await PlayArtistSongsFromAlbumFallback(
                         artist.Id, artist.Name, jellyfinUser!, user, session, context, locale, cancellationToken,
                         announcement: ResponseStrings.Get("FoundArtistInstead", locale, artist.Name)).ConfigureAwait(false);
+                }
+                else if (bestMatch.HasValue)
+                {
+                    // JF-363: sub-strict band [normalThreshold, crossMediaThreshold). Offer or
+                    // auto-serve the single best artist instead of a dead-end not-found. Single
+                    // candidate only (see the RankMatches comment above). Safe because Confirm
+                    // asks first and AutoServe is opt-in.
+                    int normalThreshold = FuzzyMatcher.GetDefaultThreshold(user);
+                    if (bestMatch.Value.Score >= normalThreshold)
+                    {
+                        BaseItem artist = bestMatch.Value.Item;
+                        var suggestionMode = GetCrossMediaArtistSuggestion(user);
+                        if (suggestionMode == CrossMediaArtistSuggestion.AutoServe)
+                        {
+                            Logger.LogInformation(
+                                "PlayAlbum: cross-media artist suggestion AutoServe '{Artist}' score={Score} for query='{Query}'",
+                                artist.Name, bestMatch.Value.Score, album);
+                            return await PlayArtistSongsFromAlbumFallback(
+                                artist.Id, artist.Name, jellyfinUser!, user, session, context, locale, cancellationToken,
+                                announcement: ResponseStrings.Get("FoundArtistInstead", locale, artist.Name)).ConfigureAwait(false);
+                        }
+
+                        if (suggestionMode == CrossMediaArtistSuggestion.Confirm)
+                        {
+                            return BuildCrossMediaArtistOfferAsk(album, artist, locale, "album");
+                        }
+                    }
                 }
             }
 

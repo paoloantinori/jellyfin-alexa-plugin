@@ -174,6 +174,8 @@
   "FuzzyAutoPlayAnnouncement": "चला रहा हूँ {0} ('{1}' के लिए निकटतम मिलान)",
   "FuzzyAutoPlayAnnouncementSsml": "चला रहा हूँ <emphasis level=\"moderate\">{0}</emphasis><break time=\"150ms\"/>'{1}' के लिए निकटतम मिलान",
   "FuzzySuggestionReprompt": "आप हाँ या नहीं कह सकते हैं।",
+  "CrossMediaArtistOffer": "'{0}' नाम का कोई गाना या एल्बम नहीं मिला। क्या आपका मतलब कलाकार {1} था? क्या मैं उनका संगीत बजाऊं?",
+  "CrossMediaArtistOfferSsml": "'{0}' नाम का कोई गाना या एल्बम नहीं मिला।<break time=\"200ms\"/>क्या आपका मतलब कलाकार <emphasis level=\"moderate\">{1}</emphasis> था? क्या मैं उनका संगीत बजाऊं?",
   "ResumePrompt": "आप {0} सुन रहे थे। क्या आप फिर से शुरू करना चाहेंगे?",
   "ResumePromptSsml": "आप <emphasis level=\"moderate\">{0}</emphasis> सुन रहे थे।<break time=\"200ms\"/>क्या आप फिर से शुरू करना चाहेंगे?",
   "ResumeReprompt": "क्या आप वहीं से जारी रखना चाहेंगे जहाँ रुके थे?",

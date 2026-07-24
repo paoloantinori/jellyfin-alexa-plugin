@@ -103,6 +103,13 @@ public class User
     public PostPlayBehavior? PostPlayBehavior { get; set; }
 
     /// <summary>
+    /// Gets or sets the cross-media artist suggestion behavior: when a song/album is not
+    /// found but a plausible artist is (sub-strict-threshold match), whether to offer it for
+    /// confirmation, auto-serve it, or do nothing. When null, the global default is used.
+    /// </summary>
+    public CrossMediaArtistSuggestion? CrossMediaArtistSuggestion { get; set; }
+
+    /// <summary>
     /// Gets or sets a per-user override for whether the skill speaks the now-playing announce
     /// ("Now playing X") when content is launched. When null (not explicitly set), the global
     /// <see cref="Configuration.PluginConfiguration.DefaultAnnounceNowPlaying"/> default is used.

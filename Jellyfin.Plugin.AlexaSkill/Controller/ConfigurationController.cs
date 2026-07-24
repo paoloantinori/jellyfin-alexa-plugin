@@ -626,6 +626,17 @@ public class ConfigurationController : ControllerBase
             }
         }
 
+        // Handle DefaultCrossMediaArtistSuggestion (string enum: "Off"/"Confirm"/"AutoServe")
+        if (req.TryGetValue("DefaultCrossMediaArtistSuggestion", out var crossMediaToken)
+            && crossMediaToken.Type == JTokenType.String)
+        {
+            if (Enum.TryParse<CrossMediaArtistSuggestion>(crossMediaToken.Value<string>(), ignoreCase: true, out var crossMedia))
+            {
+                config.DefaultCrossMediaArtistSuggestion = crossMedia;
+                updated = true;
+            }
+        }
+
         if (!updated)
         {
             return new JsonResult(new { error = "No valid fields to update" }) { StatusCode = 400 };

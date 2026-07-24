@@ -232,6 +232,15 @@
                                 </select>
                                 <div class="fieldDescription">Default search mode for all users. Can be overridden per-user in the User table below.</div>
                             </div>
+                            <div class="selectContainer">
+                                <label class="selectLabel" for="DefaultCrossMediaArtistSuggestion">Artist Suggestion on Not-Found</label>
+                                <select is="emby-select" id="DefaultCrossMediaArtistSuggestion" name="DefaultCrossMediaArtistSuggestion" class="emby-select-withcolor emby-select">
+                                    <option value="Confirm">Confirm — offer the artist and ask before playing</option>
+                                    <option value="AutoServe">Auto-Serve — play the artist without asking</option>
+                                    <option value="Off">Off — just report not found</option>
+                                </select>
+                                <div class="fieldDescription">When a song or album isn't found but a plausible artist matches (e.g. a mispronounced name), what to do. Can be overridden per-user in the User table below.</div>
+                            </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="AsrCompoundWordFixEnabled" /> <span>Compound Word Fix</span></label>
                                 <div class="fieldDescription checkboxFieldDescription">When Alexa splits compound words (e.g. 'lazybones' → 'lazy bones'), retry search with joined variants. Disable if search is too slow on misses.</div>
@@ -468,6 +477,7 @@
                     // Search preferences
                     document.querySelector("#DefaultSearchResponseMode").value = config.DefaultSearchResponseMode || "Thorough";
                     document.querySelector("#DefaultPostPlayBehavior").value = config.DefaultPostPlayBehavior || "Stop";
+                    document.querySelector("#DefaultCrossMediaArtistSuggestion").value = config.DefaultCrossMediaArtistSuggestion || "Confirm";
                     document.querySelector("#MaxSearchResults").value = config.MaxSearchResults != null ? config.MaxSearchResults : 20;
                     document.querySelector("#MaxBrowseResults").value = config.MaxBrowseResults != null ? config.MaxBrowseResults : 5;
                     document.querySelector("#MaxRecentlyAddedResults").value = config.MaxRecentlyAddedResults != null ? config.MaxRecentlyAddedResults : 10;
@@ -1119,6 +1129,7 @@
                     // Search preferences
                     config.DefaultSearchResponseMode = document.querySelector("#DefaultSearchResponseMode").value || "Thorough";
                     config.DefaultPostPlayBehavior = document.querySelector("#DefaultPostPlayBehavior").value || "Stop";
+                    config.DefaultCrossMediaArtistSuggestion = document.querySelector("#DefaultCrossMediaArtistSuggestion").value || "Confirm";
                     var msrRaw = parseInt(document.querySelector("#MaxSearchResults").value);
                     config.MaxSearchResults = isNaN(msrRaw) ? 20 : msrRaw;
                     var mbrRaw = parseInt(document.querySelector("#MaxBrowseResults").value);
@@ -1193,7 +1204,8 @@
                         CustomModelLocale: config.CustomModelLocale,
                         MoodGenreOverrides: config.MoodGenreOverrides,
                         DefaultSearchResponseMode: config.DefaultSearchResponseMode,
-                        DefaultPostPlayBehavior: config.DefaultPostPlayBehavior
+                        DefaultPostPlayBehavior: config.DefaultPostPlayBehavior,
+                        DefaultCrossMediaArtistSuggestion: config.DefaultCrossMediaArtistSuggestion
                     };
                     ApiClient.ajax({
                         type: "PATCH",
