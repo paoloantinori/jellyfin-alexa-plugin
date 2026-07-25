@@ -475,6 +475,8 @@ explicit_intents:
   FollowMeIntent:
     samples:
       - seguimi
+      - seguirmi
+      - seguir mi
       - continua ad ascoltare
       - riprendi da dove ero rimasto
       - riprendi da dove ero rimasta
