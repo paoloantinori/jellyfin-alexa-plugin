@@ -3,10 +3,10 @@ id: JF-373
 title: >-
   Fix PlayPodcastIntent: query MusicAlbum/Audio instead of non-existent
   Series/Episode model
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-07-25 12:59'
-updated_date: '2026-07-25 13:45'
+updated_date: '2026-07-25 14:10'
 labels:
   - bug
   - podcasts
@@ -100,4 +100,15 @@ created: 2026-07-25 13:45
 ---
 SIMPLIFY 2026-07-25 (DoD #9 done): ran 4-angle cleanup review. Applied: (1) removed dead `using MediaType = Jellyfin.Data.Enums.MediaType;` alias in PlayPodcastIntentHandlerTests.cs (no longer referenced after the rewrite); (2) rewrote HandleAsync_EpisodeQueryTargetsAudioChildrenOfAlbum from a fragile stateful capture-counter + conditional Returns lambda to two distinct Setup calls with It.Is matchers, matching the pattern used by 4 sibling tests in the same file. Skipped: a shared HasKind() helper for the repeated It.Is matcher (~30 sites across 8 test files) - pre-existing, out of this diff's scope. Efficiency: no findings (2 queries, same as before; per-call array allocs match codebase convention). Altitude: correct - the dead Series+MediaTypes=Audio pattern was unique to PlayPodcast (sibling MediaTypes=Audio usages in YesIntent/PlayBook/SearchMedia are on leaf Audio/AudioBook queries, which work correctly; PlayEpisode queries real video Series/Episode). Build 0 warnings, 14/14 podcast tests green after simplification.
 ---
+
+created: 2026-07-25 14:10
+---
+COMMITTED 2026-07-25 on branch fix/jf-373-podcast-musicalbum-query (commit 779d46b). All gates passed: build 0 warnings, full suite 2620/2620, /simplify (3 fixes applied: dead using alias, overengineered test rewrite, stale class doc), /code-review (1 suggestion applied: AncestorIds->ParentId to match the album-track convention in PlayAlbumIntentHandler; re-verified live after the change). E2E it-IT fixture passing via SMAPI simulate-skill. Live verified on minix with the PARENTID variant (md5 050ba008 active). DoD items #4/#5/#6/#8 left unchecked honestly: this change touched none of them (no session DTO changes, no HttpClient changes, interaction model unchanged so NLU fixtures unchanged, locale strings unchanged - the existing SearchingPodcast/NotFoundPodcast/NoEpisodesInPodcast keys all still apply).
+---
 <!-- COMMENTS:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fixed PlayPodcastIntentHandler, which queried a non-existent Jellyfin data model (Series + MediaTypes=Audio never matches; a Series is always MediaType=Unknown). Now queries MusicAlbum by name and plays the newest Audio child via ParentId, matching how Jellyfin actually stores podcasts and how sibling album handlers query. The PlayPodcast intent disambiguates podcast vs same-named music album; multiple matches use existing HandleFuzzyMiss. Verified live on minix end-to-end (simulator + SMAPI simulate-skill E2E). Tests rewritten from synthetic TV.Series/Episode fixtures to real MusicAlbum/Audio. Also hardened FollowMeIntentHandler tests and documented its offset-0 limitation.
+<!-- SECTION:FINAL_SUMMARY:END -->

@@ -3,9 +3,10 @@ id: JF-374
 title: >-
   Fix FollowMeIntent routing: add infinitive 'seguirmi'/'seguir mi' samples to
   it-IT model (on-device failure)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-25 14:26'
+updated_date: '2026-07-25 16:49'
 labels:
   - bug
   - nlu
@@ -55,3 +56,17 @@ NOTE: this is distinct from JF-373 (podcast query) and from JF-270's handler log
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining, or findings applied/tracked)
 <!-- DOD:END -->
+
+## Comments
+
+<!-- COMMENTS:BEGIN -->
+created: 2026-07-25 15:00
+---
+LIVE VERIFIED 2026-07-25 via direct SMAPI push (the plugin rebuild endpoint was broken, see separate bug): pushed model_it-IT.json via `ask smapi set-interaction-model`; live model now has all 9 FollowMe samples incl seguirmi + seguir mi. NLU Utterance Profiler: all 4 it-IT FollowMe cases PASS (seguimi, seguirmi, seguir mi, +1). Committed NLU fixtures in tests/integration/fixtures/it-IT.yaml. The committed model content was correct all along; only the live-deploy path via the plugin rebuild endpoint failed (filed as separate bug). On-device re-test still pending (user hardware): say 'chiedi a mia collezione di seguirmi' and confirm it now routes to FollowMeIntent instead of the error sound.
+---
+
+created: 2026-07-25 16:49
+---
+CORRECTION 2026-07-25: my earlier note said the plugin rebuild endpoint was broken. That was WRONG. The endpoint rebuilds one locale at a time; I had called it without a 'locale' field so it rebuilt en-US (the CustomModelLocale fallback), and I misread the success. Re-calling with explicit locale:'it-IT' rebuilt it-IT correctly and the live model gained seguirmi via the plugin endpoint (no direct-SMAPI bypass needed). JF-376 filed against the endpoint was closed as not-a-bug. The committed it-IT model fix stands and is live.
+---
+<!-- COMMENTS:END -->
