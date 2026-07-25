@@ -1,0 +1,1112 @@
+
+
+
+
+Japanese phonology - Wikipedia
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Jump to content
+
+	
+			
+
+	
+	
+		
+		
+	
+
+
+		
+		
+			
+
+	
+
+Search
+	
+	
+		
+			
+				
+					
+						
+						
+					
+					
+				
+				Search
+			
+		
+	
+
+
+			
+	
+
+	
+		
+		
+			
+			
+		
+		
+	
+
+
+	
+
+	
+		
+		
+			Donate
+
+Create account
+
+Log in
+
+
+			
+		
+		
+	
+
+
+	
+	
+
+	
+	
+
+Personal tools
+	
+	
+
+
+		
+
+	
+		
+		
+			
+
+Donate
+
+
+
+Create account
+
+
+
+Log in
+
+
+			
+		
+		
+	
+
+
+	
+	
+
+
+
+
+		
+	
+
+
+	
+		
+			
+		
+		
+			
+		
+			
+		
+	
+	
+				
+			
+		
+		
+			
+				
+					Japanese phonology
+							
+
+	
+	
+
+11 languages
+	
+	
+
+		
+			
+			
+				
+				CatalàفارسیFrançaisעבריתItaliano日本語RomânăРусскийУкраїнськаاردو中文
+			
+			Edit links
+		
+
+	
+
+
+				
+					
+						
+							
+						
+						
+							
+
+							
+						
+					
+				
+				
+					
+						
+						
+					
+				
+				
+					
+							
+		
+
+						From Wikipedia, the free encyclopedia
+					
+					
+					
+					
+					
+Phonological system of the Japanese language
+For assistance with IPA transcriptions of Japanese for Wikipedia articles, see Help:IPA/Japanese.
+
+
+
+This article contains phonetic transcriptions in the International Phonetic Alphabet (IPA). For an introductory guide on IPA symbols, see Help:IPA. For the distinction between [ ], / / and ⟨ ⟩, see IPA § Brackets and transcription delimiters.
+
+
+
+
+This article includes inline links to audio files. If you have trouble playing the files, see Wikipedia Media help.
+
+
+Japanese phonology is the system of sounds used in the pronunciation of the Japanese language. Unless otherwise noted, this article describes the standard variety of Japanese based on the Tokyo dialect.
+
+There is no overall consensus on the number of contrastive individual sounds (phonemes). Common approaches recognize at least 12 distinct consonants (as many as 21 in some analyses) and 5 distinct vowels, /a, e, i, o, u/. Phonetic length is contrastive for both vowels and consonants, and the total length of Japanese words can be measured in a unit of timing called the mora (from Latin mora "delay"). Only limited types of consonant clusters are permitted. Japanese speech also has a pitch accent system in which the position or absence of a pitch drop may determine the meaning of a word: /haꜜsiɡa/ (箸が, 'chopsticks'), /hasiꜜɡa/ (橋が, 'bridge'), /hasiɡa/ (端が, 'edge').
+
+Japanese phonology has been affected by the presence of several layers of vocabulary in the language. In addition to native Japanese vocabulary, Japanese has a large amount of Chinese-based vocabulary (used especially to form technical and learned words, playing a similar role to Latin-based vocabulary in English) and loanwords from other languages. Different layers of vocabulary allow different possible sound sequences (phonotactics).
+
+Lexical strata[edit]
+
+Many generalizations about the sound system of Japanese have exceptions when recent loanwords are taken into account. For example, the consonant [p] generally does not occur at the start of native (Yamato) or Chinese-derived (Sino-Japanese) words, but it occurs freely in this position in mimetic and foreign words. Because of exceptions like this, discussions of Japanese phonology often refer to layers, or "strata," of vocabulary. The following four strata may be distinguished:
+
+Yamato[edit]
+Main article: Wago
+Called wago (和語) or yamato kotoba (大和言葉) in Japanese, this category consists of inherited native vocabulary. Morphemes in this category show a number of restrictions on structure that may be violated by vocabulary in other layers.
+
+Mimetic[edit]
+Main article: Japanese sound symbolism
+Japanese possesses a variety of mimetic words that make use of sound symbolism to serve an expressive function. Like Yamato vocabulary, these words are also of native origin, and can be considered to belong to the same overarching group. However, words of this type show some phonological peculiarities that cause some theorists to regard them as a separate layer of Japanese vocabulary.
+
+Sino-Japanese[edit]
+Main article: Sino-Japanese vocabulary
+Called kango (漢語) in Japanese, words in this stratum originate from several waves of large-scale borrowing from Chinese that occurred from the 6th-14th centuries AD. They comprise 60% of dictionary entries and 20% of ordinary spoken Japanese, ranging from formal vocabulary to everyday words. Most Sino-Japanese words are composed of more than one Sino-Japanese morpheme. Sino-Japanese morphemes have a limited phonological shape: each has a length of at most two moras, which Ito & Mester (2015a) argue reflects a restriction in size to a single prosodic foot. These morphemes represent the Japanese phonetic adaptation of Middle Chinese monosyllabic morphemes, each generally represented in writing by a single Chinese character, taken into Japanese as kanji (漢字). Japanese writers also repurposed kanji to represent native vocabulary; as a result, there is a distinction between Sino-Japanese readings of kanji, called On'yomi, and native readings, called Kun'yomi.
+
+The moraic nasal /N/ is relatively common in Sino-Japanese, and contact with Middle Chinese is often described as being responsible for the presence of /N/ in Japanese (starting from approximately 800 AD in Early Middle Japanese), although /N/ also came to exist in native Japanese words as a result of sound changes.
+
+Foreign[edit]
+Main article: Loanwords in Japanese
+Called gairaigo (外来語) in Japanese, this layer of vocabulary consists of non-Sino-Japanese words of foreign origin, mostly borrowed from Western languages after the 16th century; many of them entered the language in the 20th century. In words of this stratum, a number of consonant-vowel sequences that did not previously exist in Japanese are tolerated, which has led to the introduction of new spelling conventions and complicates the phonemic analysis of these consonant sounds in Japanese.
+
+Consonants[edit]
+
+
+Bilabial
+Alveolar
+Alveolo-palatal
+Palatal
+Velar
+Uvular
+Glottal
+Special moras
+
+Nasal
+m
+n
+(ɲ)
+
+(ŋ)
+(ɴ)
+
+/N/
+
+Plosive
+p  b
+t  d
+
+
+k  ɡ
+
+(ʔ)
+/Q/
+
+Affricate
+
+(ts)  (dz)
+(tɕ)  (dʑ)
+
+
+
+
+
+Fricative
+(ɸ)  (β)
+s  z
+(ɕ)  (ʑ)
+(ç)
+(x)  (ɣ)
+(χ)
+h  (ɦ)
+
+Liquid
+
+r
+
+
+
+
+
+
+
+Semivowel
+
+
+
+j
+w
+
+
+
+
+
+Different linguists analyze the Japanese inventory of consonant phonemes in significantly different ways. Smith (1980) recognizes only 12 underlying consonants (/m p b n t d s dz r k ɡ h/), whereas Okada (1999) recognizes 16, equivalent to Smith's 12 plus the following 4 (/j w ts ɴ/), and Vance (2008) recognizes 21, equivalent to Smith's 12 plus the following 9 (/j w ts tɕ (d)ʑ ɕ ɸ N Q/). Consonants inside parentheses in the table can be analyzed as allophones of other phonemes, at least in native words. In loanwords, /ɸ, ts/ sometimes occur phonemically.
+
+In some analyses, the glides/semivowels [j, w] are not interpreted as consonant phonemes. In non-loanword vocabulary, they generally occur only in the sequences [ja, jɯ, jo] and [wa], which are sometimes analyzed as rising diphthongs rather than as consonant-vowel sequences. Lawrence (2004) analyzes the glides as non-syllabic variants of the high vowel phonemes /i, u/, arguing that the use of [j, w] vs. [i, ɯ] may be predictable if both phonological and morphological context is taken into account.
+
+Phonetic notes[edit]
+
+Details of articulation[edit]
+
+[t, d, n] are variously described as lamino-alveolar ([t̻, d̻, n̻]),  apico-alveolar ([t̺, d̺, n̺]) or apico-dental ([t̪̺, d̪̺, n̪̺]), or simply dental or denti-alveolar.
+[ts, s, dz~z] are lamino-alveolar [t̻s̻, s̻, d̻z̻~z̻].
+[tɕ, ɕ, dʑ~ʑ] are lamino(dorso)-alveolopalatal [t̠ɕ, ɕ, d̠ʑ~ʑ]. The affricates are sometimes transcribed broadly as [cɕ, ɟʑ] (standing for prepalatal [c̟ɕ, ɟ̟ʑ]). The palatalized allophone of /n/ before /i/ or /j/ is also lamino-alveolopalatal or prepalatal, and so can be transcribed as [ɲ̟], or more broadly as [ɲ]. Recasens (2013) reports its place of articulation as dentoalveolar or alveolar.
+/w/ is traditionally described as a velar approximant [ɰ] or labialized velar approximant [w] or something between the two, or as the semivocalic equivalent of /u/ with little to no rounding, while a 2020 real-time MRI study found it is better described as a bilabial approximant [β̞] as there is less velar constriction in the consonant /w/ than in the vowel /u/ (vowels ought to have less constriction than consonants).
+/h/ is [ç] before /i/ and /j/ (listen), and [ɸ] before /u/ (listen), coarticulated with the labial compression of that vowel. When not preceded by a pause, it often may be breathy-voiced [ɦ] rather than voiceless [h].
+Realization of the liquid phoneme /r/ varies greatly depending on environment and dialect. The prototypical and most common pronunciation is an apical tap, either alveolar [ɾ] or postalveolar [ɾ̠]. Utterance-initially and after /N/, the tap is typically articulated in such a way that the tip of the tongue is at first momentarily in light contact with the alveolar ridge before being released rapidly by airflow. This sound is described variably as a tap, a "variant of [ɾ]", "a kind of weak plosive", and "an affricate with short friction, [d̠ɹ̝̆]". The apical alveolar or postalveolar lateral approximant [l] is a common variant in all conditions, particularly utterance-initially and before /i, j/. According to Akamatsu (1997), utterance-initially and intervocalically (that is, except after /N/), the lateral variant is better described as a tap [ɺ] rather than an approximant. The retroflex lateral approximant [ɭ] is also found before /i, j/. In Tokyo's Shitamachi dialect, the alveolar trill [r] is a variant marked with vulgarity. Other reported variants include the alveolar approximant [ɹ], the alveolar stop [d], the retroflex flap [ɽ], the lateral fricative [ɮ], and the retroflex stop [ɖ].
+
+Voice onset time[edit]
+
+At the start of a word, the voiceless stops /p, t, k/ are slightly aspirated—less so than English stops, but more than those in Spanish. Word-medial /p, t, k/ seem to be unaspirated on average. Phonetic studies in the 1980s observed an effect of accent as well as word position, with longer voice onset time (greater aspiration) in accented syllables than in unaccented syllables.
+
+A 2019 study of young adult speakers found that after a pause, word-initial /b, d, ɡ/ may be pronounced as plosives with zero or low positive voice onset time (categorizable as voiceless unaspirated or "short-lag" plosives); while significantly less aspirated on average than word-initial /p, t, k/, some overlap in voice onset time was observed. A secondary cue to the distinction between /b, d, ɡ/ and /p, t, k/ in word-initial position is a pitch offset on the following vowel: vowels after word-initial (but not word-medial) /p, t, k/ start out with a higher pitch compared to vowels after /b, d, ɡ/, even when the latter are phonetically devoiced. Word-medial /b, d, ɡ/ are normally fully voiced (or prevoiced), but may become non-plosives through lenition.
+
+Lenition[edit]
+
+The phonemes /b, d, ɡ/ have weakened non-plosive pronunciations that can be broadly transcribed as voiced fricatives [β, ð, ɣ], although they may be realized instead as voiced approximants [β̞, ð̞~ɹ, ɣ̞~ɰ]. There is no context where the non-plosive pronunciations are consistently used, but they occur most often between vowels:
+
+/b/ > [β]
+/aburu/ > [aβɯɾɯ]
+あぶる, aburu, 'to warm, broil' (listen)
+
+/d/ > [ð]
+/tomodati/ > [tomoðat͡ɕi]
+友達, tomodachi, 'friend' (listen)
+
+/ɡ/ > [ɣ]
+/egaku/ > [eɣakɯ]
+描く, egaku, 'to picture' (listen)
+
+These weakened pronunciations can occur after a vowel in the middle of a word, or when a word starting with /b, d, ɡ/ follows a vowel-final word with no intervening pause. Maekawa (2018) found that, as with the pronunciation of /z/ as [dz] vs. [z], the use of plosive vs. non-plosive realizations of /b, d, ɡ/ is closely correlated with the time available to a speaker to articulate the consonant, which is affected by speech rate as well as the identity of the preceding sound. All three show a high (over 90%) rate of plosive pronunciations after /Q/ or after a pause; after /N/, plosive pronunciations occur at high (over 80%) rates for /b/ and /d/, but less frequently for /ɡ/, probably because word-medial /ɡ/ after /N/ is often pronounced instead as a velar nasal [ŋ] (although the use of [ŋ] here may be declining for younger speakers). Across contexts, /d/ generally has a higher rate of plosive realizations than /b/ and /ɡ/.
+
+Moraic consonants[edit]
+
+Certain consonant sounds are called "moraic" because they count for a mora, a unit of timing or prosodic length. The phonemic analysis of moraic consonants is disputed. One approach, particularly popular among Japanese scholars, analyzes moraic consonants as the phonetic realization of special "mora phonemes" (モーラ音素, mōra onso): a mora nasal /N/, called the hatsuon, and a mora obstruent consonant /Q/, called the sokuon. The pronunciation of these sounds varies depending on context: because of this, they may be analyzed as "placeless" phonemes with no phonologically specified place of articulation. A competing approach rejects the transcriptions /Q/ and /N/ and the identification of moraic consonants as their own phonemes, treating them instead as the syllable-final realizations of other consonant phonemes (although some analysts prefer to avoid using the concept of syllables when discussing Japanese phonology).
+
+Moraic nasal[edit]
+
+The moraic nasal or mora nasal (hiragana ⟨ん⟩, katakana ⟨ン⟩, romanized as ⟨n⟩ or ⟨n'⟩) can be interpreted as a syllable-final nasal consonant. Aside from certain marginal exceptions, it is found only after a vowel, which is phonetically nasalized in this context. It can be followed by a consonant, a vowel, or the end of a word:
+
+
+[ompa]
+音波, onpa, 'sound wave'
+(hiragana: おんぱ, three moras long)
+
+[daɰ̃atsɯ]
+弾圧, dan'atsu, 'oppression'
+(hiragana: だんあつ, four moras long)
+
+[saɴ]
+三, san, 'three'
+(hiragana: さん, two moras long)
+
+
+Its pronunciation varies depending on the sound that follows it (including across a word boundary).
+Before a plosive, affricate, nasal, or liquid, it is pronounced as a nasal consonant assimilated to the place of the following consonant:
+
+
+bilabial [m] before /p, b, m/
+[sammai]
+三枚, sanmai, 'three sheets'
+
+velar [ŋ] before /k, ɡ/
+[saŋkai]
+三回, sankai, 'three times'
+
+dorso-palatal [ŋʲ] before [kʲ, ɡʲ]
+[ɡeŋʲkʲi]
+元気, genki, 'healthy'
+
+lamino-alveolar [n] before [t, d, ts, dz, n]
+[sanneɴ]
+三年, sannen, 'three years'
+
+lamino-alveolopalatal [ɲ̟] before [tɕ, dʑ, ɲ̟]
+[saɲ̟tɕoː]
+三兆, sanchō, 'three trillion'
+
+apico-alveolar [n̺] or postalveolar [n̠] before /r/
+[san̺ɾɯi], [ɕin̠d̠ɹ̝̆i]
+三塁, sanrui, 'third base', 真理, shinri, 'truth'
+
+
+Before a vowel, approximant /j, w/, or voiceless fricative [ɸ, s, ɕ, ç, h], it is a nasalized vowel or moraic semivowel that can be broadly transcribed as [ɰ̃] (its specific quality depends on the surrounding sounds). This pronunciation may also occur before the voiced fricatives [z, ʑ], although more often, they are pronounced as affricates when preceded by the moraic nasal.
+
+At the end of an utterance, the moraic nasal is pronounced as a nasal segment with a variable place of articulation and variable degree of constriction. Its pronunciation in this position is traditionally described and transcribed as uvular [ɴ], sometimes with the qualification that it is, or approaches, velar [ŋ] after front vowels. Some descriptions state that it may have incomplete occlusion and can potentially be realized as a nasalized vowel, as in intervocalic position. Instrumental studies in the 2010s showed that there is considerable variability in its pronunciation and that it often involves a lip closure or constriction. A study of real-time MRI data collected between 2017 and 2019 found that the pronunciation of the moraic nasal in utterance-final position most often involves vocal tract closure with a tongue position that can range from uvular to alveolar: it is assimilated to the position of the preceding vowel (for example, uvular realizations were observed only after the back vowels /a, o/), but the range of overlap observed between similar vowel pairs suggests this assimilation is not a categorical allophonic rule, but a gradient phonetic process. 5% of the utterance-final samples of the moraic nasal were realized as nasalized vowels with no closure: in this case, appreciable tongue raising was observed only when the preceding vowel was /a/.
+
+There are a variety of competing phonemic analyses of the moraic nasal. It may be transcribed with the non-IPA symbol /N/ and analyzed as a "placeless" nasal. Some analysts do not categorize it as a phonological consonant. Alternatively, it may be analyzed as a uvular nasal /ɴ/, based on the traditional description of its pronunciation before a pause. It is sometimes analyzed as a syllable-final allophone of the coronal nasal consonant /n/, but this requires treating syllable or mora boundaries as potentially distinctive, because there is a clear contrast in pronunciation between the moraic nasal and non-moraic /n/ before a vowel or before /j/:
+
+
+Moraic nasal
+Non-moraic /n/
+
+[kaɰ̃.a.ke]
+寒明け, kan'ake, 'the end of the coldest season'
+[ka.na.ke]
+金気, kanake, 'metallic taste'
+
+[kaɰ̃.juː]
+勧誘, kan'yū, 'solicitation; inducement'
+[ka.ɲuː]
+加入, kanyū, 'becoming a member of a group'
+
+
+Alternatively, in an analysis that treats syllabification as distinctive, the moraic nasal can be interpreted as an archiphoneme (a contextual neutralization of otherwise contrastive phonemes), since there is no contrast in syllable-final position between /m/ and /n/.
+
+Thus, depending on the analysis, a word like 三枚, sanmai, 'three sheets', pronounced phonetically as [sammai], could be phonemically transcribed as /saNmai/, /saɴmai/, or /sanmai/.
+
+Moraic obstruent[edit]
+There is a contrast between short (or singleton) and long (or geminate) consonant sounds. Compared to singleton consonants, geminate consonants have greater phonetic duration (realized for plosives and affricates in the form of a longer hold phase before the release of the consonant, and for fricatives in the form of a longer period of frication). A geminate can be analyzed phonologically as a syllable-final consonant followed by a syllable-initial consonant (although the hypothesized syllable boundary is not evident at the phonetic level) and can be transcribed phonetically as two occurrences of the same consonant phone in sequence: a geminate plosive or affricate is pronounced with just one release, so the first portion of such a geminate may be transcribed as an unreleased stop. As discussed above, geminate nasal consonants are normally analyzed as sequences of a moraic nasal followed by a non-moraic nasal, e.g. [mm], [nn] = /Nm/, /Nn/. In the case of non-nasal consonants, gemination is mostly restricted by Japanese phonotactics to the voiceless obstruents /p t k s/ and their allophones. (However, other consonant phonemes can appear as geminates in special contexts, such as in loanwords.)
+
+Geminate consonants can also be phonetically transcribed with a length mark, as in [ipːai], but this notation obscures mora boundaries. Vance (2008) uses the length marker to mark a moraic nasal, as [sɑ̃mːbɑi], based on the fact that a moraic consonant by itself has the same prosodic weight as a consonant-vowel sequence: consequently, Vance transcribes Japanese geminates with two length markers, e.g. [sɑ̃mːːɑi], [ipːːɑi], and refers to them as "extra-long" consonants, on the grounds that there is no acoustic boundary between two halves of a geminate. In the following transcriptions, geminates will be phonetically transcribed as two occurrences of the same consonant across a syllable boundary, the first being unreleased.
+
+
+Singleton
+Geminate
+
+[aka]
+垢, aka, 'dirt'
+(あか, two moras long)
+[ak̚ka]
+悪化, akka, 'worsening'
+(あっか, three moras long)
+
+[isai]
+異才, isai, 'genius'
+(いさい, three moras long)
+[issai]
+一歳, issai, 'one year old'
+(いっさい, four moras long)
+
+[satɕi]
+幸, sachi, 'good luck'
+(さち, two moras long)
+[sat̚tɕi]
+察知, satchi, 'inference'
+(さっち, three moras long)
+
+
+
+A common phonemic analysis treats all geminate obstruents as sequences starting with the same consonant: a "mora obstruent", called the sokuon (促音) in Japanese, which can be phonemically transcribed with the non-IPA character /Q/. According to this analysis, [ak̚ka], [issai], [sat̚tɕi] are phonemically /aQka/, /iQsai/, /saQti/. This analysis seems to be supported by the intuition of native speakers and matches the use in kana spelling of a single symbol, a small version of the tsu sign (hiragana ⟨っ⟩, katakana ⟨ッ⟩) to write the first half of any geminate obstruent. Some analyses treat /Q/ as an underlyingly placeless consonant.
+
+Another approach dispenses with /Q/ and treats geminate consonants as double consonant phonemes, that is, as sequences consisting of a consonant phoneme followed by itself. According to this analysis, [ak̚ka], [issai], [sat̚tɕi] are phonemically /akka/, /issai/, /satti/. Alternatively, since the contrast between different obstruent consonants such as /k/, /s/, /t/ is neutralized in syllable-final position, the first half of a geminate obstruent can be interpreted as an archiphoneme (just as the moraic nasal can be interpreted as an archiphoneme representing the neutralization of the contrast between the nasal consonants /m/, /n/ in syllable-final position).
+
+It has been suggested that the underlying phonemic representation of the sokuon might be a glottal stop /ʔ/. The sound [ʔ] is used in certain marginal forms that can be interpreted as containing /Q/ not followed by another obstruent. For example, [ʔ] can be found at the end of an exclamation, or before a sonorant in forms with emphatic gemination, and ⟨っ⟩ is used as a written representation of [ʔ] in these contexts. This suggests that Japanese speakers identify [ʔ] as the default form of /Q/, or the form it takes when it is not possible for it to share its place and manner of articulation with a following obstruent. According to this analysis, [ak̚ka], [issai], [sat̚tɕi] are phonemically /aʔka/, /iʔsai/, /saʔti/.
+
+Even if it can be phonemically analyzed as /ʔ/, the sokuon is not always phonetically glottal. A study by Fujimoto, Maekawa & Funatsu (2010) used a video recording system and observed no glottal constriction during the pronunciation of Japanese geminate consonants. These results stand in conflict with the impressionistic descriptions of some authors, such as Hattori (1984:139), who ascribes glottal tension to the first half of geminate consonants. An acoustic study by Idemaru & Guion (2008) reported some evidence of creaky voice being more frequent for vowels following geminate consonants in Japanese (although only one of three measures of creakiness showed a significant difference). Kawahara (2015:54) concludes that the role of glottal tension in Japanese geminates requires further research.
+
+Voiced affricate vs. fricative[edit]
+Main article: Yotsugana
+The distinction between the voiced fricatives [z, ʑ] (originally allophones of /z/) and the voiced affricates [dz, dʑ] (originally allophones of /d/) is neutralized in Standard Japanese and in most (although not all) regional Japanese dialects. (Some dialects, e.g. Tosa, retain the distinctions between /zi/ and /di/ and between /zu/ and /du/, while others distinguish only /zu/ and /du/ but not /zi/ and /di/. Yet others merge all four, e.g. north Tōhoku.)
+
+In accents with the merger, the phonetically variable [(d)z] sound can be transcribed phonemically as /z/, though some analyze it as /dz/, the voiced counterpart to [ts]. A 2010 corpus study found that in neutralizing varieties, both the fricative and the affricate pronunciation could be found in any position in a word, but the likelihood of the affricate realization was increased in phonetic conditions that allowed for greater time to articulate the consonant: voiced affricates were found to occur on average 60% of the time after /N/, 74% after /Q/, and 80% after a pause. In addition, the rate of fricative realizations increased as speech rate increased. In terms of direction, these effects match those found for the use of plosive vs. non-plosive pronunciations of the voiced stops /b, d, ɡ/; however, the overall rate of fricative realizations of /(d)z/ (including both [dz~z] and [dʑ~ʑ], in either intervocalic or postnasal position) seems to be higher than the rate of non-plosive realizations of /b, d, ɡ/.
+
+As a result of the neutralization, the historical spelling distinction between these sounds has been eliminated from the modern written standard except in cases where a mora is repeated once voiceless and once voiced, or where rendaku occurs in a compound word: つづく[続く] /tuzuku/, いちづける[位置付ける] /itizukeru/ from |iti+tukeru|. The use of the historical or morphological spelling in these contexts does not indicate a phonetic distinction: /zu/ and /zi/ in Standard Japanese are variably pronounced with affricates or fricatives according to the contextual tendencies described above, regardless of whether they are underlyingly voiced or derived by rendaku from /tu/ and /ti/.
+
+Voiceless coronal affricate[edit]
+In core vocabulary, [ts] can be analyzed as an allophone of /t/ before /u/:
+
+
+/t/ > [ts]
+/tuɡi/ > [tsɯɡi]
+次, tsugi, 'next'
+
+
+In loanwords, however, [ts] can occur before other vowels: examples include [tsaitoɡaisɯto] ツァイトガイスト, tsaitogaisuto, 'zeitgeist'; [eɾitsiɴ] エリツィン, Eritsin, 'Yeltsin'. There are also a small number of native forms with [ts] before a vowel other than /u/, such as オトッツァン, otottsan, 'dad', although these are marginal and nonstandard (the standard form of this word is お父さん, otōsan). Based on dialectal or colloquial forms like these, as well as the phonetic distance between plosive and affricate sounds, Hattori (1950) argues that the affricate [ts] is its own phoneme, represented by the non-IPA symbol /c/ (also interpreted to include [tɕ] before [i]). In contrast, Shibatani (1990) disregards such forms as exceptional, and prefers analyzing [ts] and [tɕ] as allophones of /t/, not as a distinct affricate phoneme.
+
+Palatalized consonants[edit]
+See also: Yōon
+Most consonants possess phonetically palatalized counterparts. Pairs of palatalized and non-palatalized consonants contrast before the back vowels /a o u/, but are in complementary distribution before the front vowels: only the palatalized version occurs before /i/, and only the non-palatalized version occurs before /e/ (excluding certain marginal forms). Palatalized consonants are often analyzed as allophones conditioned by the presence of a following /i/ or /j/. When this analysis is adopted, a palatalized consonant before a back vowel is interpreted as a biphonemic /Cj/ sequence. The phonemic analysis described above can be applied straightforwardly to the palatalized counterparts of /p b k ɡ m n r/, as in the following examples:
+
+/mi/ > [mʲi]
+/umi/ > [ɯmʲi]
+海, umi, 'sea'
+
+/mj/ > [mʲ]
+/mjaku/ > [mʲakɯ]
+脈, myaku, 'pulse'
+
+/ɡj/ > [ɡʲ]
+/ɡjoːza/ > [ɡʲoːza]
+ぎょうざ, gyōza, 'fried dumpling'
+
+/ri/ > [ɾʲi]
+/kiri/ > [kʲiɾʲi]
+霧, kiri, 'fog'
+
+
+The palatalized counterpart of /h/ is normally described as [ç] (although some speakers do not distinguish [ç] from [ɕ]):
+
+/hi/ > [çi]
+/hito/ > [çito]
+人, hito, 'person'
+
+/hj/ > [ç]
+/hjaku/ > [çakɯ]
+百, hyaku, 'hundred'
+
+
+In the analysis presented above, a sequence like [mʲa] is interpreted as containing three phonemes, /mja/, with a complex onset cluster of the form /Cj/. Palatalized consonants could instead be interpreted as their own phonemes, in which case [mʲa] is composed of /mʲ/ + /a/. A third alternative is analyzing [ja, jo, jɯ]~[ʲa, ʲo, ʲɯ] as rising diphthongs (/i͜a i͜o i͜u/), in which case [mʲa] is composed of /m/ + /i͜a/. Nogita (2016) argues for the cluster analysis /Cj/, noting that in Japanese, syllables such as [bja, ɡja, mja, nja, ɾja] show a longer average duration than their non-palatalized counterparts [ba, ɡa, ma, na, ɾa] (whereas comparable duration differences were not generally found between pairs of palatalized and unpalatalized consonants in Russian).
+
+The glides /j w/ cannot precede /j/. The alveolar-palatal sibilants [tɕ ɕ (d)ʑ] can be analyzed as the palatalized allophones of /t s z/, but it is debated whether this phonemic interpretation remains accurate in light of contrasts found in loanword phonology.
+
+Alveolo-palatal sibilants[edit]
+
+The three alveolo-palatal sibilants [tɕ ɕ (d)ʑ] function, at least historically, as the palatalized counterparts of the four coronal obstruents [t s d (d)z]. Original /ti/ came to be pronounced as [tɕi], original /si/ came to be pronounced as [ɕi], and original /di/ and /zi/ both came to be pronounced as [(d)ʑi]. (As a result, the sequences [ti si di (d)zi] do not occur in native or Sino-Japanese vocabulary.)
+
+
+/s/ > [ɕ]
+/sio/ > [ɕi.o]
+塩, shio, 'salt'
+
+/z/ > [dʑ~ʑ]
+/mozi/ > [modʑi ~ moʑi]
+文字, moji, 'letter, character'
+
+/t/ > [tɕ]
+/tiziN/ > [tɕidʑiɴ] ~ [tɕiʑiɴ]
+知人, chijin, 'acquaintance'
+
+
+Likewise, original /tj/ came to be pronounced as [tɕ], original /sj/ came to be pronounced as [ɕ], and original /dj/ and /zj/ both came to be pronounced as [(d)ʑ]:
+
+
+/sj/ > [ɕ]
+/isja/ > [iɕa]
+医者, isha, 'medical doctor'
+
+/zj/ > [dʑ~ʑ]
+/ɡozjuː/ > [ɡodʑɯː ~ ɡoʑɯː]
+五十, gojū, 'fifty'
+
+/tj/ > [tɕ]
+/tja/ > [tɕa]
+茶, cha, 'tea'
+
+
+Therefore, alveolo-palatal [tɕ dʑ ɕ ʑ] can be analyzed as positional allophones of /t d s z/ before /i/, or as the surface realization of underlying /tj dj sj zj/ clusters before other vowels. For example, [ɕi] can be analyzed as /si/ and [ɕa] as /sja/. Likewise, [tɕi] can be analyzed as /ti/ and /tɕa/ as /tja/. Most dialects show a merger in the pronunciation of underlying /d/ and /z/ before /j/ or /i/, with the resulting merged phone varying between [ʑ] and [dʑ]. The contrast between /d/ and /z/ is also neutralized before /u/ in most dialects (see above).
+
+While the diachronic origins of these sounds as allophones of /t s d z/ is uncontroversial, there is disagreement among linguists about whether alveolo-palatal sibilants continue to function synchronically as allophones of coronal consonant phonemes: the identification of [tɕ] as a palatalized allophone of /t/ is especially debated, due to the presence of a distinctive contrast between [tɕi] and [ti] in the foreign stratum of Standard Japanese vocabulary.
+
+[tɕi (d)ʑi] vs. foreign [ti, di][edit]
+
+The sequences [ti, di] are found exclusively in recent loanwords; they have been assigned the novel kana spellings ティ, ディ. (Loanwords borrowed before [ti] was widely tolerated usually replaced this sequence with チ [tɕi] or (more rarely) テ [te], and certain forms exhibiting these replacements continue to be used; likewise, ジ [(d)ʑi] or デ [de] can be found instead of [di] in some forms, such as ラジオ, rajio, 'radio' and デジタル, dejitaru, 'digital'.) Based on a study of type frequency in a lexicon and token frequency in a spoken corpus, Hall (2013) concludes that [t] and [tɕ] have become about as contrastive before /i/ as they are before /a/. Some analysts argue that the use of [ti, di] in loanwords shows that the change of /ti/ to [tɕi] is an inactive, 'fossilized' rule, and conclude that [tɕi] must now be analyzed as containing an affricate phoneme distinct from /t/; others argue that pronunciation of /ti/ as [tɕi] continues to be an active rule of Japanese phonology, but that this rule is restricted from applying to words belonging to the foreign stratum.
+
+In contrast to [ti, di], the sequences *[si, zi] are not established even in loanwords. English /s/ is still normally adapted as [ɕ] before /i/ (i.e. with katakana シ, shi). An example is シネマ, shinema [ɕinema] from cinema. Likewise, English /z/ is normally adapted as [(d)ʑ] before /i/ (i.e. with katakana ジ, ji). Pronouncing loanwords with [si] or [zi] is rare even among the most innovative speakers, but not entirely absent. To transcribe [si], as opposed to [ɕi], it is possible to use the novel kana spelling スィ (su + small i) (though this has also been used to transcribe original [sw] before /i/ in forms like スィッチ, 'switch' [sɯittɕi], as an alternative to the spellings スイッチ, suitchi or スウィッチ, suwitchi). The use of スィ and its voiced counterpart ズィ was mentioned, but not officially recommended, by a 1991 cabinet directive on the use of kana to spell foreign words. Nogita (2016) argues that the difference between [ɕi] and [si] may be marginally contrastive for some speakers, whereas Labrune (2012) denies that *[si, zi] are ever distinguished in pronunciation from [ɕi, (d)ʑi] in adapted forms, regardless of whether the spellings スィ and ズィare used in writing.
+
+The sequence [tsi] (as opposed to either [tɕi] or [ti]) also has some marginal use in loanwords. An example is エリツィン, Eritsin, 'Yeltsin'. In many cases a variant adaptation with [tɕi] exists.
+
+Alternations involving [tɕ ɕ (d)ʑ][edit]
+
+Aside from arguments based on loanword phonology, there is also disagreement about the phonemic analysis of native Japanese forms. Some verbs can be analyzed as having an underlying stem that ends in either /t/ or /s/; these become [tɕ] or [ɕ] respectively before inflectional suffixes that start with [i]:
+
+[matanai] 'wait' (negative)
+vs.
+[matɕimasu] 'wait' (polite)
+
+[kasanai] 'lend' (negative)
+vs.
+[kaɕimasu] 'lend' (polite)
+
+
+In addition, Shibatani (1990) notes that in casual speech, /se/ or /te/ in verb forms may undergo coalescence with a following /ba/ (marking the conditional), forming [ɕaː] and [tɕaː] respectively, as in [kaɕaː] for /kaseba/ 'if (I) lend' and [katɕaː] for /kateba/ 'if (I) win.' On the other hand, per Vance (1987), [tj, sj] (more narrowly, [tj̥, sj̥]) can occur instead of [tɕ, ɕ] for some speakers in contracted speech forms, such as [tjɯː] for /tojuː/ 'saying', [matja(ː)] for /mateba/ 'if one waits', and [hanasja(ː)] for /hanaseba/ 'if one speaks'; Vance notes these could be dismissed as non-phonemic rapid speech variants.
+
+Hattori (1950) argues that alternations in verb forms do not prove [tɕ] is phonemically /t/, citing kawanai (with /w/) vs. kai, kau, kae, etc. as evidence that a stem-final consonant is not always maintained without phonemic change throughout a verb's conjugated forms, and /joɴdewa/~/joɴzja/ '(must not) read' as evidence that palatalization produced by vowel coalescence can result in alternation between different consonant phonemes.
+
+Competing phonemic analyses[edit]
+
+There are several alternatives to the interpretation of [tɕ ɕ (d)ʑ] as allophones of /t s z/ before /i/ or /j/.
+
+Some interpretations agree with the analysis of [ɕ] as an allophone of /s/ and [(d)ʑ] as an allophone of /z/ (or /dz/), but treat [tɕ] as the palatalized allophone of a voiceless coronal affricate phoneme /ts/ (to clarify that it is analyzed as a single phoneme, some linguists phonemically transcribe this affricate as /tˢ/ or with the non-IPA symbol /c/). In this sort of analysis, [tɕi, tɕa] = /tsi, tsja/.
+
+Other interpretations treat [tɕ ɕ (d)ʑ] as their own phonemes, while treating other palatalized consonants as allophones or clusters. The status of [tɕ ɕ (d)ʑ] as phonemes rather than clusters ending in /j/ is argued to be supported by the stable use of the sequences [tɕe (d)ʑe ɕe] in loanwords; in contrast, /je/ is somewhat unstable (it may be variably replaced with /ie/ or /e/), and other consonant + /je/ sequences such as [pje], [kje] are generally absent. (Aside from loanwords, [tɕe ɕe] also occur marginally in native vocabulary in certain exclamatory forms.)
+
+It has alternatively been suggested that pairs like [tɕi] vs. [ti] could be analyzed as /tji/ vs. /ti/. Vance (2008) objects to analyses like /tji/ on the basis that the sequence /ji/ is otherwise forbidden in Japanese phonology.
+
+Voiceless bilabial fricative[edit]
+
+In core vocabulary, the voiceless bilabial fricative [ɸ] occurs only before /u/. In this context, [ɸ] can be analyzed as an allophone of /h/. Examples include [ɸɯne] (ふね, fune, 'boat') and [ɸɯ̥ta] (ふた, futa, 'lid'), which can be phonemically transcribed as /hune/, /huta/. Some descriptions of Japanese phonetics state that the initial sound of ふ, fu /hu/ is not consistently produced as [ɸ], but is sometimes a sound with weak or no bilabial friction that could be transcribed as [h] (a voiceless approximant similar to the start of English "who").
+
+In loanwords, [ɸ] can occur before other vowels or before /j/. Examples include [ɸiɴ] (フィン, fin, 'fin'), [ɸeɾiː] (フェリー, ferī, 'ferry'), [ɸaɴ] (ファン, fan, 'fan'), [ɸoːmɯ] (フォーム, fōmu, 'form'), and [ɸjɯː(d)ʑoɴ] (フュージョン, fyūjon, 'fusion'). Because of loanwords like these, the consonant [ɸ] is distinguished from [h] before /a e o/, as in the minimal pair [ɸoːkɯ] (フォーク, fōku) and [hoːkɯ] (ホーク, hōku) from English  fork and hawk; likewise, [ɸ] is distinguished from [ç] before /i/. Even in loanwords, [ɸ] is not distinguished from [h] before /u/: for example, English hood and food are both adopted as Japanese [ɸɯːdo] (フード, fūdo).
+
+The integration of [ɸi], [ɸe], [ɸa], [ɸo] and [ɸjɯ] into contemporary spoken Standard Japanese seems to have been completed at some point after the middle of the twentieth century, in the post-war period: before then, these sequences of sounds seem to have been commonly used only in educated pronunciation. Loanwords borrowed more recently than around 1890 fairly consistently show [ɸ] as an adaptation of foreign [f]. Some older borrowed forms show adaptation of foreign [f] to Japanese /h/ before a vowel other than /u/, such as コーヒー, kōhī, 'coffee' and プラットホーム, purattohōmu, 'platform'. 
+Another old adaptation pattern replaced foreign [f] with [ɸɯ] before a vowel other than /u/, e.g. film > [ɸɯ.i.rɯ.mɯ] フイルム, fuirumu. Both of these replacement strategies are largely obsolete nowadays, although certain old adapted forms continue to be used, sometimes with specialized meanings compared to a variant pronunciation: for example, フイルム, fuirumu tends to be restricted in modern use to photographic films, whereas フィルム, firumu is used for other senses of "film" such as movie films.
+
+Voiced bilabial fricative[edit]
+
+Spellings with the kana vu (ヴ) have been used in narrow transcriptions into Japanese, in an attempt to render a voiced labiodental fricative, [v], in other languages, which most Japanese speakers find difficult. The actual pronunciation of a foreign "v sound" is normally not distinguished from a Japanese /b/: for example, there is no meaningful phonological or phonetic difference in pronunciation between Eruvisu (エルヴィス) and Erubisu (エルビス; Elvis"), or between vaiorin (ヴァイオリン) and baiorin (バイオリン; "violin") Vance (2008:81) considers an attempt at rendering [v] to be a "foreignism," in other words, if an innovative Japanese speaker tries to pronounce it, they are treating it as part of a foreign word, rather than of a word that is fully integrated into Japanese lexicon. According to Irwin (2011:73) and Labrune (2012:97–98), the foreign [v] is realized in Japanese as a voiced bilabial fricative, [β], which already exists as an allophone of /b/ in the Yamato and Sino-Japanese strata, although it "seems to be much less fricative than the corresponding Castillan Spanish [sic] sound in lobo for instance". Thus, Venetsia (ヴェネツィア; "Venice") can be phonetically transcribed as [βenetsiɑ]. Irwin is non-committal on the phonemic status of [β]. Bloch (1950:122) suggests a different realization, a "voiced labiodental spirant," thus [v], which is questioned by Vance (1987:32) and rejected by Labrune (2012:97–98). Depending on the source language, a foreign "v sound" can alternatively be rendered (in Hepburn romanization) as b, v or w.
+
+Velar nasal onset[edit]
+For some speakers, the velar nasal [ŋ] can occur as an onset in place of the voiced velar plosive [ɡ] in certain conditions. Onset [ŋ], called bidakuon (鼻濁音), is generally restricted to word-internal position, where it may occur either after a vowel (as in 禿, hage, 'baldness' [haŋe]) or after a moraic nasal /N/ (as in 音楽, ongaku, 'music' [oŋŋakɯ~oŋŋakɯ̥]). It is debated whether onset [ŋ] constitutes a separate phoneme or an allophone of /ɡ/. They are written the same way in kana, and native speakers have the intuition that the two sounds belong to the same phoneme.
+
+Speakers can be divided in three groups based on the extent to which they use [ŋ] in contexts where [ɡ] is not required: some consistently use [ŋ], some never use [ŋ], and some show variable use of [ŋ] versus [ɡ] (or [ɣ]). Speakers who consistently use [ŋ] are a minority. The distribution of [ŋ] versus [ɡ] for these speakers mostly follows predictable rules (as described below): however, a number of complications and exceptions exist, and as a result, some linguists analyze /ŋ/ as a distinct phoneme for consistent nasal speakers. The contrast has very low functional load, but it is possible to find or construct some pairs of words that are segmentally identical aside from the use of [ɡ] versus [ŋ] for consistent nasal speakers, such as [oːɡaɾasɯ] (大硝子, 'big sheet of glass') versus [oːŋaɾasɯ] (大烏, 'big raven'). Another commonly cited pair is [seŋɡo] 千五, 'one thousand and five' versus [seŋŋo] 戦後, 'postwar', although aside from the segmental difference in the consonant, these are prosodically distinct: the first is normally pronounced as two accent phrases, [seꜜŋɡoꜜ], whereas the second is pronounced as a single accent phrase (either [seꜜŋŋo] or [seŋŋo]).
+
+Distribution of [ŋ] vs. [ɡ][edit]
+At the start of an independent word, all speakers use [ɡ] in almost all circumstances. However, postpositional particles, such as the subject marker が, ga, are pronounced with [ŋ] by consistent nasal speakers. In addition, a few words may be pronounced with [ŋ] even when they occur at the start of an utterance: examples include the conjunction が, ga, 'but' and the word ぐらい, gurai, 'approximately'.
+
+In the middle of a native morpheme, consistent nasal speakers always use [ŋ]. But in the middle of foreign-stratum morphemes, [ɡ] may be used even by consistent nasal speakers. It is also possible for foreign morphemes to be pronounced with medial [ŋ]: there is considerable variability, but this may be more common in older borrowings (such as オルガン, orugan, 'organ', from Portuguese órgão) or in borrowings that contained [ŋ] in the source language (such as イギリス, igirisu, 'England', from Portuguese inglês).
+
+At the start of a morpheme in the middle of a word, either [ŋ] or [ɡ] may be possible, depending on the word. Only [ɡ] is possible after the honorific prefix お, o (as in お元気, ogenki, 'health' [oɡenki]) or at the start of a reduplicated mimetic morpheme (as in がらがら, gara-gara, 'rattle-rattle' [ɡaɾaɡaɾa]). Consistent nasal speakers typically use [ŋ] at the start of the second morpheme of a bimorphemic Sino-Japanese word, or at the start of a morpheme that has undergone rendaku (that is, one that begins with /k/ when pronounced as an independent word). In cases where the second morpheme in a compound starts with [ɡ] when used independently, the compound might be pronounced with either [ɡ] or [ŋ] by consistent nasal speakers: factors such as the lexical stratum of the morpheme may play a role, but it seems difficult to establish precise rules predicting which pronunciation occurs in this context, and the pronunciation of some words varies even among consistent nasal speakers, such as 縞柄, shimagara, 'striped pattern' [ɕimaɡaɾa~ɕimaŋaɾa].
+
+The morpheme 五, go, 'five', is pronounced with [ɡ] when it is used as part of a compound numeral, as in [ɲi(d)ʑɯːgo] 二十五, nijū-go, 'twenty-five' (accented as [ɲiꜜ(d)ʑɯːgoꜜ]), although 五 can potentially be pronounced as [ŋo] when it occurs non-initially in certain proper nouns or lexicalized compound words, such as [tameŋoɾoː] 為五郎 (a male given name), [ɕitɕiŋosaɴ] 七五三 (the name of a festival for children aged seven, five or three), or [(d)ʑɯːŋoja] 十五夜 (a night of the full moon).
+
+To summarize:
+
+ 
+
+in the middle of a morpheme
+at the start of a word
+at the start of a morpheme,in the middle of a word
+
+
+はげ, hage, 'baldness'
+外遊, gaiyū, 'overseas trip'
+
+inconsistent speakers
+[haŋe] or [haɡe] or [haɣe]
+[ɡaijɯː], but not *[ŋaijɯː]
+sometimes [ŋ], sometimes [ɡ]~[ɣ]
+
+consistent nasal speakers
+[haŋe]
+
+consistent stop speakers
+[haɡe] or [haɣe]
+[ɡ] or [ɣ]
+
+
+Sociolinguistics of [ŋ][edit]
+The frequency of onset [ŋ] in Tokyo Japanese speech was falling as of 2008, and seems to have already been on the decline in 1940. Pronunciations with [ŋ] are generally less frequent for younger speakers, and even though the use of [ŋ] was traditionally prescribed as a feature of standard Japanese, pronunciations with [ɡ] seem in practice to have acquired a more prestigious status, as shown by studies that find higher rates of [ɡ] usage when speakers read words from a list. The frequency of [ŋ] also varies by region: it is rare in the southwestern Kansai dialects, but more common in the northeastern Tohoku dialects, with an intermediate frequency in the Kanto dialects (which includes the Tokyo dialect).
+
+Vowels[edit]
+The vowels of Standard Japanese on a vowel chart. Adapted from Okada (1999:117).
+
+Vowel phonemes of Japanese
+
+Front
+Central
+Back
+
+Close
+iu
+
+Mid
+eo
+
+Open
+a
+
+/a/ is central. Okada (1999:117) shows a fronter quality, [ä], while Vance (2008:54) shows a backer quality, [ɑ̟].
+/e, o/ are mid [e̞, o̞].
+/u/ is a close near-back vowel with the lips unrounded [ɯ̟] or compressed [ɯ̟ᵝ]. When compressed, it is pronounced with the side portions of the lips in contact but with no salient protrusion. In conversational speech, compression may be weakened or completely dropped. It is centralized [ɨ] after /s, z, t/ and palatalized consonants (/Cj/), and possibly also after /n/. In contradiction to the preceding descriptions, Nogita & Yamane (2019) characterize /u/ as rounded and propose that the transcription [ʉ̜] is more accurate than [ɯ], while acknowledging the possibility of unrounding in fast speech. Based on visual recordings of Japanese speakers' lips, they conclude that /u/ is pronounced with lip protrusion (forward motion causing the lip corners to be brought closer together horizontally), in contrast to the spread lip position of a vowel like /i/, or the vertical movement of the lips towards each other for the [β] allophone of /b/. They suggest that the perceptual impression of Japanese /u/ as an unrounded vowel could be caused partly by its fronted articulation, and partly by its protrusion being accompanied by less vertical lip closure compared to /u/ in other languages, resulting in a less rounded sound. Lip protrusion was also found to be greater for Japanese /u/ than for /i/ in a 2005 MRI study and in a 1997 study using x-ray microbeam kinematic data. A 2012 study using electromagnetic tracking observed Japanese /u/ to have greater lip protrusion in angry or sad emotional contexts than in emotionally neutral speech.
+All vowels are more centralized in prose than in individual words. The more careful the pronunciation, the less centralized the vowels are.
+
+Long vowels and vowel sequences[edit]
+
+All vowels display a length contrast: short vowels are phonemically distinct from long vowels:
+
+[obasaɴ]
+伯母さん, obasan, 'aunt'
+[obaːsaɴ]
+お祖母さん, obāsan, 'grandmother'
+
+[keɡeɴ]
+怪訝, kegen, 'dubious'
+[keːɡeɴ]
+軽減, keigen, 'reduction'
+
+[çirɯ]
+蛭, hiru, 'leech'
+[çiːrɯ]
+ヒール, hīru, 'heel'
+
+[tokai]
+都会, tokai, 'city'
+[toːkai]
+倒壊, tōkai, 'destruction'
+
+[kɯ]
+区, ku, 'district'
+[kɯː]
+空, kū, 'void'
+
+
+Long vowels are pronounced with around 2.5 or 3 times the phonetic duration of short vowels, but are considered to be two moras long at the phonological level. In normal speech, a "double vowel", that is, a sequence of two identical short vowels (for example, across morpheme boundaries), is pronounced the same way as a long vowel. However, in slow or formal speech, a sequence of two identical short vowels may be pronounced differently from an intrinsically long vowel:
+
+
+[satoːja]
+砂糖屋, satō-ya, 'sugar shop'
+
+[satoːja]~[sato.oja]
+里親, sato-oya, 'foster parent'
+
+[sɯꜜːɾi]
+数理, sūri, 'mathematical theory'
+
+[sɯꜜːɾi]~[sɯꜜ.ɯɾi]
+酢売り, su-uri, 'vinegar seller'
+
+
+In the above transcriptions, [.] represents hiatus between two identical vowels at morpheme boundaries (which may occur when a speaker wishes to disambiguate an utterance). In the waveforms of carefully pronounced samples, a slight "dip in intensity" has been observed at the morpheme boundary between sato and oya in sato-oya (里親), but not in satō-ya (砂糖屋) where such a boundary is not present. There is disagreement as to what causes this dip. Bloch (1950:105) describes it as "a diminution in loudness between the two vowels (sometimes accompanied by a slight glottal constriction) and a renewed pulse of expiration on the second." Martin (1952:13) says that it is a "glottal stop", which the author considered a phoneme, and that "this phoneme also represents the glottal constriction associated with vowel rearticulation." Labrune (2012:45) says it can be "a pause or a light glottal stop". Both Martin and Labrune adopt the transcription [ˀ], a superscript glottal stop letter. Vance, following Martin, used the term "vowel rearticulation" and transcribed it as [ˀ] at first, but now adopts [*]. Vance's notion of "vowel rearticulation" has been criticized for citing Bloch's spurious phonetic description without proposing an alternative, such as whether palatal or labial glides can separate two identical vowels across morpheme boundaries, as in 委員会, i-inkai, 'committee' and 場合, ba-ai, 'circumstance'. Given that the voicing of the vowels, facilitated by the vibration of the vocal folds, is not interrupted during hiatus, Shibatani (1990) states that there is no complete glottal closure, questions whether there is any actual glottal narrowing at all, and notes that the articulation of the second vowel in su-uri (酢売り) involves slight labial narrowing. However, full glottal stops (with interrupted voicing) have been found to occur through acoustic analyses (previous descriptions by Bloch, Martin and Vance were impressionistic), albeit seldom in individual words and much less commonly even in slowly read sentences.
+
+In fast speech, a sequence of two identical short vowels may fuse into one long vowel. This applies not only to sato-oya (里親) and su-uri (酢売り), but also to any two identical vowels straddling morpheme or word boundaries: kai-in (会員; [kai.iɴ ~ kaiːɴ], 'member'), aku-un (悪運; [akɯ.ɯɴ ~ akɯːɴ], 'bad luck'), akai ie (赤い家; [akai ieꜜ ~ akaiːeꜜ], 'red house'), Tōkyō ni iku (東京に行く; [toːkʲoː ni ikɯ ~ toːkʲoː niːkɯ], 'go to Tokyo'), Tarō ni inu o yaru (太郎に犬を遣る; [taꜜɾoː ni inɯꜜ o jaɾɯ ~ taꜜɾoː niːnɯꜜ o jaɾɯ], 'give Tarō a dog').
+
+A double vowel may bear pitch accent on either the first or second element, whereas an intrinsically long vowel can be accented only on its first mora. The distinction between double vowels and long vowels may be phonologically analyzed in various ways. One analysis interprets long vowels as ending in a special segment /R/ (or sometimes notated as /H/; in Japanese publications, the length mark ー is used) that adds a mora to the preceding vowel sound (a chroneme). Another analysis interprets long vowels as sequences of the same vowel phoneme twice, with double vowels distinguished by the presence of a "zero consonant" or empty onset between the vowels. A third approach also interprets long vowels as sequences of the same vowel phoneme twice, but treats the difference between long and double vowels as a matter of syllabification, with the long vowel [oː] consisting of the phonemes /oo/ pronounced in one syllable, and the double vowel [o.o] consisting of the same two phonemes split between two syllables.
+
+Any pair of short vowels may occur in sequence (although only a subset of vowel sequences can be found within a morpheme in native or Sino-Japanese vocabulary). Sequences of three or more vowels also occur. Similar to the distinction between long vowels and double vowels, some analyses of Japanese phonology recognize a distinction between diphthongs (two different vowel phonemes pronounced in one syllable) and heterosyllabic vowel sequences; other analyses make no such distinction.
+
+For certain verbs and adjectives with predictable accent locations, whether to phonologically analyze a sequence of two identical vowels as two separate vowels or a single continuous long vowel is a matter of convention, preference or accentual rules. For example, most accented verbs are predictably accented on the penultimate mora: thus ōu ~ oou (覆う) is considered to have one long vowel if unaccented, as in /oRɯ/, but two separate vowels if accented, as in /oóɯ/. However, tōru (通る) and tōsu (通す) are always accented on their antepenultimate mora, and this seemingly irregular location is attributed to a leftward accent shift to avoid accenting the special mora /R/, which is almost always unaccentable and has been termed "deficient". Thus, these two verbs are said to have single long vowels, as in /*toŔɾɯ → tóRɾɯ/ and /*toŔsɯ → tóRsɯ/.
+
+Like accented verbs, most accented adjectives are also predictably accented on the penultimate mora, but for ōi ~ ooi (多い), some speakers accent the antepenultimate mora, pronouncing it as /óRi/ with a long vowel, while others accent the penultimate mora, pronouncing it as /oói/ with two short /o/ sounds. Other forms of this verb, such as ōku ~ ooku (多く), are accented on the antepenultimate mora (/óRkɯ/) in the conservative variety of Tokyo Japanese, and accented on the penultimate mora (/oókɯ/) in the innovating variety. On the other hand, while tōi (遠い; /toRi/) and tōku (遠く; /toRkɯ/) are both unaccented and said to have one long vowel, tookute (遠くて) is accented and has two vowels (/toókɯte/) because of an accentual rule that applies to all unaccented adjectives followed by the particle te (て). tooi ga ~ tōi ga (遠いが) conservatively has two vowels (/toói ɡa/) and innovatingly has one long vowel (/toRí ɡa/) because of the different rule-based locations of the accent in the two varieties. Overall, in these particular cases, whether a double /o/ is treated as one long vowel /oR/ or two vowels /oo/ depends ad hoc on whether the second /o/ is accented.
+
+As noted above, adjectival forms ending in -ku (～く) are accented conservatively on the antepenultimate mora and innovatingly on the penultimate one. Yet for ōkiku (大きく), the recommended patterns are conservatively on the preantepenultimate mora, as in /óRkikɯ/, and innovatingly on the penultimate one, /oRkíkɯ/. In both cases, accentuating the antepenultimate mora is avoided and it maintains its status as the lengthening mora /R/. The antepenultimate-accented pattern, /oókikɯ/, with two identical vowels rather than one long vowel, has not been widely recommended, although at least one source has claimed it is plausible. The antepenultimate mora of chiisaku (小さく) is similarly maintained as /R/ in two patterns: conservative /tɕíRsakɯ/ and innovating /tɕiRsákɯ/. On the other hand, in ooshiku (雄々しく), the two vowels result from a reduplication of the morpheme o (雄), therefore have a morpheme boundary between them, and the conservative pattern is simply /oóɕikɯ/.
+
+-Ku (～く) forms historically can lose the consonant /k/, which gives rise to long vowels by means of vowel fusion, as in arigataku (ありがたく; /aɾiɡátakɯ/) → arigatō (ありがとう; /aɾíɡatoR/). These -u (～う) forms are found in non-Tokyo dialects, as well as in "super-polite" adjectival expressions with gozaimasu (ございます) in Tokyo Japanese, as in arigatō gozaimasu (ありがとうございます; 'I am thankful'). When kowaku (怖く; /kówakɯ/) is used this way, the result would be koō gozaimasu (怖うございます; /kóoR ɡozaimasɯ/, 'it is scary'), with a potentially triply long vowel. Phonetically, a bilabial glide has been said to be added, which would yield [kówoː], on account of the same glide existing in /kówakɯ/, but the actual production of that glide, which does not normally occur before the vowel /o/, by native speakers, is inconclusive. As for toō (遠う; /tooR/) and oō (多う; /óoR/), 16th-century transcriptions such as touô and vouô by European missionaries show that of the three /o/'s, only the last two formed a long vowel. An Ōita dialect uses a different vowel quality for the last two vowels in these cases, roughly /áɯR/ (青う) and /óɯR/ (多う), compared to the Tokyo /áoR/ and /óoR/. The auxiliary -u (～う) (historically -mu (～む)) probably has the same effect in some verbs, such as toō < towau (問おう; /toóH/, 'let's ask/inquire'), koō < kowau (乞おう; /koóH/, 'let's ask/request'), hiroō < hirowau (拾おう; /hiɾoóH/, 'let's pick up'), whose stems used to contain a labial glide. It has been suggested that these cases of "triple o" may actually be pronounced as mere "double o".
+
+There are other cases where losses of consonants also result in long vowels. In adjectives, /k/ completely disappeared from historical -ki (～き) forms, resulting in -i (～い) forms such as kanashii (悲しい; /kanaɕiR/), ureshii (嬉しい; /ɯɾeɕíR/), etc. In verbs, the intervocalic labial fricative /ɸ/ disappeared from historical -fu (～ふ) forms, resulting in verbs like kuu (食う; /kɯ́R/). Classical Japanese verbs, recited in the modern Tokyo accent, frequently contain long vowels at the end because of such -u (～う) forms (still spelt with the kana ふ, though), while their modern equivalents (other than the said kuu) do not, for example, warō (笑(わら)ふ; /waɾoR/) → warau (笑(わら)う; /waɾaɯ/), omō (思ふ; /omóR/) → omou (思う; /omóɯ/). In some cases such as suu (吸う; [sɨɯ ~ sɨː]), nuu (縫う; [nɨ́ɯ ~ nɨ́ː]), the centralizing effect of [s, n] on the first /ɯ/, phonetically [ɨ], may cause variation among speakers, some of whom have long vowels while others have a sequence of two short vowels; compare the noun sū (数; [sɨ́ː]), where only a long vowel is said to occur. In the case of yuu (言(い)う; [jɨː]), the fusion of the historical vowel sequence /iɯ/ resulted in a long vowel, despite the kana spelling.
+
+Devoicing[edit]
+See also: Elision § Japanese
+
+Japanese vowels are sometimes phonetically voiceless. There is no phonemic contrast between voiced and voiceless versions of a vowel, but the use of voiceless vowels is often described as an obligatory feature of standard Tokyo Japanese, in that it sounds unnatural to use a voiced vowel in positions where devoicing is usual. Devoicing mainly affects the short high (close) vowels /i/ and /u/ when they are preceded by a voiceless consonant and followed by a second voiceless consonant or by a pause. These vowels are normally not devoiced if they are either preceded or followed by a voiced consonant or by another vowel, although occasional exceptions to this have been observed.
+
+/i u/ between voiceless consonants or before a pause[edit]
+In general, a high vowel (/i/ or /u/) between two voiceless consonants is very likely to be devoiced if the second consonant is a stop or affricate, or if the first is a stop and the second is a voiceless fricative other than /h/.
+
+
+
+[ɕi̥ka]
+/sika/
+鹿, shika, 'deer'
+
+[kɯ̥tsɯꜜ]
+/kutuꜜ/
+靴, kutsu, 'shoe'
+
+[kɯ̥saꜜ]
+/kusaꜜ/
+草, kusa, 'grass'
+
+
+Devoicing of /i/ and /u/ between voiceless consonants is not restricted to fast speech and occurs even in careful pronunciation. Devoicing is inhibited if the second consonant is /h/ and also (to a somewhat lesser extent) if the second consonant is a fricative and the first consonant is a fricative or affricate. There is also a tendency to avoid devoicing both vowels when two consecutive syllables (or moras) contain high vowels between voiceless consonants: nevertheless, it is possible for both vowels to be devoiced in this context (perhaps especially in fast speech). Some older descriptions state that the presence of pitch accent on a mora inhibits devoicing of its vowel, but for young contemporary speakers, it seems to be possible to devoice accented vowels.
+
+Avoidance of consecutive devoicing can be seen in pronunciations such as the following:
+
+[kɯꜜɕi̥kɯmo]
+/kuꜜsikumo/
+奇しくも, kushikumo, 'strangely'
+
+[reki̥ɕiteki]
+/rekisiteki/
+歴史的, rekishi-teki, 'historic'
+
+[takitsɯ̥keꜜrɯ]
+/takitukeꜜru/
+焚き付ける, takitsukeru, 'to kindle'
+
+
+Devoicing can affect word-final /i/ or /u/. A word-final high vowel is likely to be devoiced when it is preceded by a voiceless consonant and followed without pause (or with little pause) by a word that starts with a voiceless consonant within the same phrase. A word-final high vowel may also be devoiced when preceded by a voiceless consonant and followed by a 'pause' at a phrase boundary. Devoicing between a voiceless consonant and a pause seems to occur with less overall consistency than devoicing between voiceless consonants. Final /u/ is frequently devoiced in the common sentence-ending copula です, desu and polite suffix ます, masu. Phrase-final vowels are not devoiced when the phrase carries the rising intonation associated with an interrogative sentence, as in the question 行きます?, Ikimasu?, '(Will you) go?'.
+
+Atypical devoicing[edit]
+
+A high vowel may occasionally be devoiced after a voiceless consonant even when the following sound is voiced. Devoicing in this context seems to occur more often before nasals or approximants than before other voiced consonant sounds. In particular, the final /su/ in desu and masu shows a relatively high devoicing rate before the particles yo and wa. Some studies have also found rare examples of voiceless vowels after voiced consonants. Per Vance 2008, high vowels are not devoiced next to a voiced segment in careful pronunciation.
+
+The non-high vowels /a o e/ are sometimes devoiced, usually between voiceless consonants; devoicing of these vowels is infrequent, optional, varies between speakers, and can be affected by speech rate. In theory, /a o/ must be unaccented, surrounded by voiceless consonants, and followed by the same vowel in the next mora in order to devoice. The least commonly devoiced vowel has been reported to be /e/, although a 2005 study of a corpus of spontaneous speech found lower devoicing rates for /a/; it is unclear which vowel is actually least likely to devoice.
+
+
+[ko̥koꜜɾo]
+心, kokoro, 'heart'
+
+[ho̥koɾiꜜ]
+誇り, hokori, 'pride'
+
+[hḁkaꜜ]
+墓, haka, 'tomb'
+
+[se̥kkakɯ]
+折角, sekkaku, 'on purpose'
+
+[ke̥ɕoꜜː]
+化粧, keshō, 'makeup'
+
+
+Phonetics of devoicing[edit]
+
+A so-called "devoiced vowel" does not necessarily surface as a discrete acoustic segment. In some cases, especially after a fricative, it likely disappears altogether, with no identifiable separation between the consonant and the "vowel" at all. Despite its hiddenness, the "vowel" still rhythmically contributes to a full mora, and still exerts assimilatory effects on the consonant, namely palatalization for /i/ and lip compression or velarization for /u/, hence the following realizations:
+
+
+[kʲɕoː]
+気象, kishō, 'weather'
+
+[kɕoː~kʷɕoː~kˠɕoː]
+苦笑, kushō, 'bitter smile'
+
+[ɕtɑi]
+死体, shitai, 'dead body'
+
+[ɕʷtɑi~ɕˠtɑi]
+主体, shutai, 'subject'
+
+
+Phonetically, a devoiced vowel may sound similar or identical to a voiceless fricative: for example, the devoiced /i/ of kitai sounds like the voiceless palatal fricative [ç]. Sometimes there is no clear acoustic boundary between the sound of a devoiced vowel and the sound of the preceding voiceless consonant phoneme. For example, although the word /suta↓iru/ is phonemically analyzed as starting with a consonant phoneme /s/ followed by a devoiced vowel phoneme /u/, acoustically it may sound like it starts with a fricative [s] that is sustained up until the following [t], with no third sound intervening between these two consonant sounds.
+
+Some analysts have proposed that 'devoiced' vowels may actually be deleted in some circumstances, either at the phonetic level or at some level of the phonology. However, it has been argued in response that other phenomena show at least the underlying presence of a vowel phoneme:
+
+Prosodically, vowel devoicing does not affect the mora count of a word.
+Even when the vowel of a CV sequence is devoiced and appears to be deleted, the pronunciation of the preceding consonant phoneme shows coarticulatory effects.
+When a vowel is devoiced between two identical voiceless fricatives, the result is typically not pronounced as a single long fricative. Instead, two acoustically distinct fricative segments are usually produced, although it may be difficult to describe the acoustic characteristics of the sound that separates them. In this context, alternative pronunciations involving a voiced vowel are more common than they are between other voiceless sounds. The contrast in pronunciation between a long (geminated) fricative and a sequence of two identical fricatives separated by a devoiced vowel phoneme can be illustrated by pairs such as the following:
+
+/niQsiNbasi/
+[ɲiɕːimbaɕi]
+日進橋, Nisshinbashi
+vs.
+/nisisiNbasi/
+[ɲiɕi̥ɕimbaɕi] or [ɲiɕiɕimbaɕi]
+西新橋, Nishi-shinbashi
+
+/keQsai/
+[kesːai]
+決済, 'check out'
+vs.
+/kesusai/
+[kesɯ̥sai] or [kesɯsai]
+消す際, 'while erasing'
+
+
+Sociolinguistics of devoicing[edit]
+
+Japanese speakers are usually not even aware of the difference of the voiced and devoiced pair. On the other hand, gender roles play a part in prolonging the terminal vowel: it is regarded as effeminate to prolong, particularly the terminal /u/ as in あります, arimasu, 'there is'.
+
+Nasalization[edit]
+
+Vowels are nasalized before the moraic nasal /N/ (or equivalently, before a syllable-final nasal).
+
+Glottal stop insertion[edit]
+A glottal stop [ʔ] may occur before a vowel at the beginning of an utterance, or after a vowel at the end of an utterance. This is demonstrated below with the following words (as pronounced in isolation):
+
+
+/eN/ > [eɴ] ~ [ʔeɴ]
+円, en, 'yen'
+
+/kisi/ > [kiɕiʔ]
+岸, kishi, 'shore'
+
+/u/ > [ɯʔ ~ ʔɯʔ]
+鵜, u, 'cormorant'
+
+
+When an utterance-final word is uttered with emphasis, the presence of a glottal stop is noticeable to native speakers, and it may be indicated in writing with the sokuon っ, suggesting it is identified with the moraic obstruent /Q/ (normally found as the first half of a geminate). This is also found in interjections like あっ, a and えっ, e.
+
+An attempt at producing a glottal stop may not be complete, which may result in a period of creaky voice and be characterized as a "near miss." As demonstrated by a token of 開ける, akeru, 'open', there's a "clean" glottal stop before the initial vowel /a/, but a "near miss" at the end of the final vowel /u/: [ʔɑkeɾɯɯ̰].
+
+Glottal stops have also been found medially between two identical vowels. See #Long vowels and vowel sequences.
+
+Prosody[edit]
+
+Moras[edit]
+Further information: On (Japanese prosody), Mora (linguistics) § Japanese, and Isochrony § Mora timing
+Japanese words have traditionally been analysed as composed of moras, a distinct concept from that of syllables. Each mora occupies one rhythmic unit, i.e. it is perceived to have the same time value. A mora may be "regular" consisting of just a vowel (V) or a consonant and a vowel (CV), or may be one of two "special" moras, /N/ and /Q/. A glide /j/ may precede the vowel in "regular" moras (CjV). Some analyses posit a third "special" mora, /R/, the second part of a long vowel (a chroneme). In the following table, the period represents a mora break, rather than the conventional syllable break.
+
+
+Mora type
+Example
+Japanese
+Moras per word
+
+V
+/o/
+尾, o, 'tail'
+1-mora word
+
+jV
+/jo/
+世, yo, 'world'
+1-mora word
+
+CV
+/ko/
+子, ko, 'child'
+1-mora word
+
+CjV
+/kjo/
+巨, kyo, 'hugeness'
+1-mora word
+
+R
+/R/ in /kjo.R/ or /kjo.o/
+今日, kyō, 'today'
+2-mora word
+
+N
+/N/ in /ko.N/
+紺, kon, 'deep blue'
+2-mora word
+
+Q
+/Q/ in /ko.Q.ko/ or /ko.k.ko/
+国庫, kokko, 'national treasury'
+3-mora word
+
+
+^1 Traditionally, moras were divided into plain and palatal sets, the latter of which entail palatalization of the consonant element.
+
+Thus, the disyllabic [ɲip.poɴ] (日本, 'Japan') may be analyzed as /niQpoN/, dissected into four moras: /ni/, /Q/, /po/, and /N/.
+
+In English, stressed syllables in a word are pronounced louder, longer, and with higher pitch, while unstressed syllables are relatively shorter in duration. Japanese is often considered a mora-timed language, as each mora tends to be of the same length, though not strictly: geminate consonants and moras with devoiced vowels may be shorter than other moras. Factors such as pitch have negligible influence on mora length.
+
+Pitch accent[edit]
+Main article: Japanese pitch accent
+Standard Japanese has a distinctive pitch accent system where a word can either be unaccented, or can bear an accent on one of its moras. An accented mora is pronounced with a relatively high tone and is followed by a drop in pitch, which can be marked in transcription by placing a downward-pointing arrow /ꜜ/ after the accented mora.
+
+The pitch of other moras in the word (or more precisely, in the accent phrase) is predictable. A common simplified model describes pitch patterns in terms of a two-way division between low- and high-pitched moras. Low pitch is found on all moras following the accented mora (if there is one) and usually also on the first mora of the accent phrase (unless it bears the accent). High pitch is found on the accented mora (if there is one) and on non-initial moras up to the accented mora, or up to the end of the accent phrase if there is no accented mora.
+
+Under this model, it is not possible to distinguish the pitch patterns of an unaccented phrase and a phrase with accent on the final mora: both show low pitch on the first mora and high pitch on every following mora. It is generally said that there is no audible difference between these two accentuation patterns. (Some acoustic experiments have found evidence that some speakers may produce slightly different phonetic pitch contours for these two accentuation patterns; however, even when such differences exist, they do not seem to be perceptible to listeners.) Nevertheless, there is a lexical distinction between unaccented words and words accented on the final mora, which is made apparent when the word is followed by further material within the same accent phrase. For example, even though there is no perceptible difference between /hasi/ 端, 'edge' and /hasiꜜ/ 橋, 'bridge' when pronounced in isolation, there is a clear contrast between /hasiɡa/ (端が, 'edge nom') and /hasiꜜɡa/ (橋が, 'bridge nom'), where these words are followed by the case particle が.
+
+The placement of pitch accent, and the lowering of pitch on an initial unaccented mora, show some restrictions that can be explained in terms of syllable structure. Accent cannot be placed on the second mora of a heavy (bimoraic) syllable (which may be /Q/, /N/, or the second mora of a long vowel or diphthong). An initial unaccented mora isn't always pronounced with low pitch when it occurs as part of a heavy syllable. Specifically, when the second mora of an accent phrase is /R/ (the latter part of a long vowel) or /N/ (the moraic nasal), the first two moras are optionally either LH (low-high) or HH (high-high). In contrast, when the second mora is /Q/ the first two moras are LL (low-low). When the second mora is /i/, initial lowering seems to apply as usual to the first mora only, LH (low-high). Labrune (2012) rejects the use of the syllable in descriptions of Japanese phonology and so explains these phenomena alternatively as a consequence of /N/, /Q/, /R/ constituting "deficient moras", a term Labrune suggests can also encompass moras without an onset, with a devoiced vowel, or with an epenthetic vowel.
+
+Different dialects of Japanese have different accent systems: some distinguish a greater number of contrastive pitch patterns than the Tokyo dialect, while others make fewer distinctions.
+
+Feet[edit]
+
+The bimoraic foot, a unit composed of two moras, plays an important role in linguistic analyses of Japanese prosody. The relevance of the bimoraic foot can be seen in the formation of hypocoristic names, clipped compounds, and shortened forms of longer words.
+
+For example, the hypocoristic suffix -chan is attached to the end of a name to form an affectionate term of address. When this suffix is used, the name may be unchanged in form, or it may optionally be modified: modified forms always have an even number of moras before the suffix. It is common to use the first two moras of the base name, but there are also variations that are not produced by simple truncation:
+
+Truncation to the first two moras:
+
+/o.sa.mu/
+osamu
+>
+/o.sa.tja.N/
+osachan
+
+/ta.ro.ː/
+taroo
+>
+/ta.ro.tja.N/
+tarochan
+
+/jo.ː.su.ke/
+yoosuke
+>
+/jo.ː.tja.N/
+yoochan
+
+/ta.i.zo.ː/
+taizoo
+>
+/ta.i.tja.N/
+taichan
+
+/ki.N.su.ke/
+kinsuke
+>
+/ki.N.tja.N/
+kinchan
+
+From first mora, with lengthening:
+
+/ti/
+chi
+>
+/ti.ː.tja.N/
+chiichan
+
+/ka.yo.ko/
+kayoko
+>
+/ka.ː.tja.N/
+kaachan
+
+With formation of a moraic obstruent:
+
+/a.tu.ko/
+atsuko
+>
+/a.Q.tja.N/
+atchan
+
+/mi.ti.ko/
+michiko
+>
+/mi.Q.tja.N/
+mitchan
+
+/bo.ː/
+boo
+>
+/bo.Q.tja.N/
+botchan
+
+With formation of a moraic nasal:
+
+/a.ni/
+ani
+>
+/a.N.tja.N/
+anchan
+
+/me.ɡu.mi/
+megumi
+>
+/me.N.tja.N/
+menchan
+
+/no.bu.ko/
+nobuko
+>
+/no.N.tja.N/
+nonchan
+
+From two non-adjacent moras:
+
+/a.ki.ko/
+akiko
+>
+/a.ko.tja.N/
+akochan
+
+/mo.to.ko/
+motoko
+>
+/mo.ko.tja.N/
+mokochan
+
+
+Poser (1990) argues that the various kinds of modifications are best explained in terms of a two-mora 'template' used in the formation of this type of hypocoristic: the bimoraic foot.
+
+Aside from the bimoraic foot as shown above, in some analyses monomoraic (one-mora) feet (also called "degenerate" feet) or trimoraic (three-mora) feet are considered to occur in certain contexts.
+
+Syllables[edit]
+
+Although there is debate about the usefulness or relevance of syllables to the phonology of Japanese, it is possible to analyze Japanese words as being divided into syllables. When setting Japanese lyrics to (modern Western-style) music, a single note may correspond either to a mora or to a syllable.
+
+Normally, each syllable contains at least one vowel and has a length of either one mora (called a light syllable) or two moras (called a heavy syllable); thus, the structure of a typical Japanese syllable can be represented as (C)(j)V(V/N/Q), where C represents an onset consonant, V represents a vowel, N represents a moraic nasal, Q represents a moraic obstruent, components in parentheses are optional, and components separated by a slash are mutually exclusive. However, other, more marginal syllable types (such as trimoraic syllables or vowelless syllables) may exist in restricted contexts.
+
+The majority of syllables in spontaneous Japanese speech are 'light', that is, one mora long, with the form (C)(j)V.
+
+Heavy syllables[edit]
+
+"Heavy" syllables (two moras long) may potentially take any of the following forms:
+(C)(j)VN (ending in a short vowel + /N/)
+(C)(j)VQ (ending in a short vowel + /Q/)
+(C)(j)VR (ending in a long vowel). May be analyzed either as a special case of (C)(j)VV with both V as the same vowel phoneme, or as ending in a vowel followed by a special chroneme segment (written as R or sometimes H).
+(C)(j)V₁V₂, where V₁ is different from V₂. Sometimes notated as (C)(j)VJ.
+
+Some descriptions of Japanese phonology refer to a VV sequence within a syllable as a diphthong; others use the term "quasi-diphthong" as a means of clarifying that these are analyzed as sequences of two vowel phonemes within one syllable, rather than as unitary phonemes. There is disagreement about which non-identical vowel sequences can occur within the same syllable. One criterion used to evaluate this question is the placement of pitch accent: it has been argued that, like syllables ending in long vowels, syllables ending in diphthongs cannot bear a pitch accent on their final mora. It has also been argued that diphthongs, like long vowels, cannot normally be pronounced with a glottal stop or vowel rearticulation between their two moras, whereas this may optionally occur between two vowels that belong to separate syllables. Kubozono (2015a) argues that only /ai/, /oi/ and /ui/ can be diphthongs, although some prior literature has included other sequences such as /ae/, /ao/, /oe/, /au/, when they occur within a morpheme. Labrune (2012) argues against the syllable as a unit of Japanese phonology and thus concludes that no vowel sequences ought to be analyzed as diphthongs.
+
+In some contexts, a VV sequence that could form a valid diphthong is separated by a syllable break at a morpheme boundary, as in /kuruma.iꜜdo/ 'well with a pulley' from /kuruma/ 'wheel, car' and /iꜜdo/ 'well'. However, the distinction between a heterosyllabic vowel sequence and a long vowel or diphthong is not always predictable from the position of morpheme boundaries: that is, syllable breaks between vowels do not always correspond to morpheme boundaries (or vice versa).
+
+For example, some speakers may pronounce the word 炎, honoo, 'flame' with a heterosyllabic /o.o/ sequence, even though this word is arguably monomorphemic in modern Japanese. This is an exceptional case: for the most part, heterosyllabic sequences of two identical short vowels are found only across a morpheme boundary. On the other hand, it is not so rare for a heterosyllabic sequence of two non-identical vowels to occur within a morpheme.
+
+In addition, it seems to be possible in some cases for a VV sequence to be pronounced in one syllable even across a morpheme boundary. For example, 歯医者, haisha, 'dentist' is morphologically a compound of 歯, ha, 'tooth' and 医者, isha, 'medical doctor' (itself composed of the morphemes 医, i, 'medical' and 者, sha, 'person'); despite the morpheme boundary between /a/ and /i/ in this word, they seem to be pronounced in one syllable as a diphthong, making it a homophone with 敗者, haisha, 'defeated person'. Likewise, the morpheme /i/ used as a suffix to form the dictionary form (or affirmative nonpast-tense form) of an i-adjective is almost never pronounced as a separate syllable; instead, it combines with a preceding stem-final /i/ to form the long vowel [iː], or with a preceding stem-final /a/, /o/ or /u/ to form a diphthong.
+
+Superheavy syllables[edit]
+Syllables of three or more moras, called "superheavy" syllables, are uncommon and exceptional (or "marked"); the extent to which they occur in Japanese words is debated. Superheavy syllables never occur within a morpheme in Yamato or Sino-Japanese. Apparent superheavy syllables can be found in certain morphologically derived Yamato forms (including inflected verb forms where a suffix starting with /t/ is attached to a root ending in -VVC-, derived adjectives in っぽい, -ppoi, or derived demonyms in っこ, -kko) as well as in many loanwords.
+
+
+Apparent superheavy syllables
+
+Syllable typeExamples
+
+Morphologically complex formsLoanwords
+
+(C)(j)VRNEnglish: green → Japanese: グリーン, romanized: gurīn
+
+(C)(j)V₁V₂NEnglish: Spain → Japanese: スペイン, romanized: supein
+
+(C)(j)VRQ通った, tootta, 'pass-PAST'東京っ子, tōkyōkko, 'Tokyoite'
+
+(C)(j)V₁V₂Q入って, haitte, 'enter-GERUNDIVE'仙台っ子, sendaikko, 'Sendai-ite'
+
+C)(j)VNQロンドンっ子, rondonkko, 'Londoner',ドラえもんっぽい, doraemonppoi, 'like Doraemon'
+
+C)(j)VRNQウィーンっ子, uiinkko, 'Wiener',ウィーンって言った, uiintte itta, 'Vienna, (s)he said'
+
+
+According to some accounts, certain forms listed in the above table may be avoided in favor of a different pronunciation with an ordinary heavy syllable (by reducing a long vowel to a short vowel or a geminate to a singleton consonant). Vance (1987) suggests there might be a strong tendency to reduce superheavy syllables to the length of two moras in speech at a normal conversational speed, saying that tooQta is often indistinguishable from toQta. Vance (2008) again affirms the existence of a tendency to shorten superheavy syllables in speech at a conversational tempo (specifically, to replace VRQ with VQ, VRN with VN, and VNQ with VN), but stipulates that the distinctions between 通った, tootta and 取った, totta; シーン, shiin and 芯, shin; and コンテ, konte, 'script' and 紺って, kontte, 'navy blue-QUOTATIVE' are clearly audible in careful pronunciation. Ito and Mester explicitly deny that there is a general tendency to shorten the long vowel of forms such as tootte in most styles of speech. Ohta (1991) accepts superheavy syllables ending in /RQ/ and /JQ/ but describes /NQ/ as hardly possible, stating that he and the majority of the informants he consulted judged examples such as /roNdoNQko/ to be questionably well-formed in comparison to /roNdoNko/.
+
+It has also been argued 
