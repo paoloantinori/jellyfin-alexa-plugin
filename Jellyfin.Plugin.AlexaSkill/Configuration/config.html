@@ -703,16 +703,14 @@
             }
 
             // JF-370: find a summary row's details by the data-row-pair key, not by
-            // sibling position. Falls back to nextElementSibling if the key is missing
-            // (defensive; shouldn't happen on rows built by createUserRow).
+            // sibling position. createUserRow sets data-row-pair on both rows, so a
+            // missing/unmatched key is a real defect — return null (let callers no-op)
+            // rather than silently degrading to nextElementSibling.
             function detailsForSummary(summaryRow) {
                 if (!summaryRow) return null;
                 var pairId = summaryRow.getAttribute("data-row-pair");
-                if (pairId) {
-                    var matched = document.querySelector('tr.user-details-row[data-row-pair="' + pairId + '"]');
-                    if (matched) return matched;
-                }
-                return summaryRow.nextElementSibling;
+                if (!pairId) return null;
+                return document.querySelector('tr.user-details-row[data-row-pair="' + pairId + '"]');
             }
 
             function refreshUserRow(summaryRow, user, config) {
