@@ -718,6 +718,19 @@ tests:
     expected_intent: AMAZON.PreviousIntent
     expected_slots: {}
 
+  # FollowMeIntent (imperative + infinitive forms). The infinitive/seguir-mi
+  # cases are the JF-374 fix: "chiedi a mia collezione di seguirmi" failed on-device
+  # because the model only had the imperative "seguimi".
+  - utterance: "seguimi"
+    expected_intent: FollowMeIntent
+    expected_slots: {}
+  - utterance: "seguirmi"
+    expected_intent: FollowMeIntent
+    expected_slots: {}
+  - utterance: "seguir mi"
+    expected_intent: FollowMeIntent
+    expected_slots: {}
+
   # -------------------------------------------------------------------------
   # 33. ShufflePlayIntent (playlist, shuffle-at-start) — JF-305
   # -------------------------------------------------------------------------
