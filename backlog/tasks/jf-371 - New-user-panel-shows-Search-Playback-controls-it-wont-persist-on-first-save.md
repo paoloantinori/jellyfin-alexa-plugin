@@ -1,9 +1,10 @@
 ---
 id: JF-371
 title: New-user panel shows Search/Playback controls it won't persist on first save
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-24 19:32'
+updated_date: '2026-07-24 21:04'
 labels:
   - config
   - ux

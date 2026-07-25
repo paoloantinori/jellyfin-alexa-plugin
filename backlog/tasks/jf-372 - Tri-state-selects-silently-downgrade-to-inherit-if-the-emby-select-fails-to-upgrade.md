@@ -3,9 +3,10 @@ id: JF-372
 title: >-
   Tri-state selects silently downgrade to 'inherit' if the emby-select fails to
   upgrade
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-24 19:32'
+updated_date: '2026-07-25 04:59'
 labels:
   - config
   - robustness

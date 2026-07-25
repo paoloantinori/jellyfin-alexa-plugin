@@ -90,7 +90,7 @@ public class SmapiManagement : ManagementApi
     /// <param name="manifestSkill">The new manifest skill.</param>
     /// <param name="interactionModels">The new interaction models.</param>
     /// <returns>A task representing the async operation.</returns>
-    public async Task<Dictionary<string, string>> UpdateSkillAsync(string skillId, ManifestSkill manifestSkill, Collection<SkillInteractionModel> interactionModels)
+    public virtual async Task<Dictionary<string, string>> UpdateSkillAsync(string skillId, ManifestSkill manifestSkill, Collection<SkillInteractionModel> interactionModels)
     {
         _logger.LogInformation("Updating skill {SkillId}...", skillId);
 
@@ -296,7 +296,7 @@ public class SmapiManagement : ManagementApi
     /// </summary>
     /// <param name="skillId">The id of the skill.</param>
     /// <returns>The skill status.</returns>
-    public async Task<SkillStatus> GetSkillStatusAsync(string skillId)
+    public virtual async Task<SkillStatus> GetSkillStatusAsync(string skillId)
     {
         return await this.Skills.Status(skillId).ConfigureAwait(false);
     }

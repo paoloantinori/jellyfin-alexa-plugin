@@ -3,9 +3,10 @@ id: JF-370
 title: >-
   Make summary/details row pairing structural, not positional
   (nextElementSibling convention)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-24 19:32'
+updated_date: '2026-07-25 05:13'
 labels:
   - config
   - robustness

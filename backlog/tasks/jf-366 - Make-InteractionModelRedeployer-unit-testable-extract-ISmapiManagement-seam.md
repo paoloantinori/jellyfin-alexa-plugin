@@ -1,9 +1,10 @@
 ---
 id: JF-366
 title: Make InteractionModelRedeployer unit-testable (extract ISmapiManagement seam)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-07-24 19:17'
+updated_date: '2026-07-25 05:33'
 labels:
   - testing
   - tech-debt

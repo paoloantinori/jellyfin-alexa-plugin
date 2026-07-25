@@ -3,9 +3,10 @@ id: JF-365
 title: >-
   Per-user config table: collapse dense settings into an expandable row panel
   (row-details pattern)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-24 11:28'
+updated_date: '2026-07-24 20:51'
 labels:
   - ux
   - config
@@ -70,3 +71,9 @@ Related: JF-364 (global config regroup + example utterances).
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining, or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Per-user config table reworked from a 9-column horizontal-scroll row into a summary row + expandable details panel (row-details pattern). Each user is a summary <tr> (User, Invocation summary, Skill Status pill, Auth pill, Actions) plus a hidden details <tr> that toggles open/closed, grouped into Search / Playback / Invocation & Libraries with example-utterance descriptions mirrored from the JF-364 global settings. Field collection moved from positional row.cells[N] to data-field selectors. Layout-critical CSS applied inline (config page <style> unreliable under emby view injection). Verified live on minix: collapse/expand + chevron rotation, two-column grid, value round-trip, no horizontal scroll.
+<!-- SECTION:FINAL_SUMMARY:END -->

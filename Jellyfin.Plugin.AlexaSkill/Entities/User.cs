@@ -202,6 +202,13 @@ public class User
     {
         get
         {
+            // JF-366: tests inject a fake SmapiManagement subclass (the SMAPI methods are
+            // virtual) to exercise RedeployAsync's poll-and-report logic without network.
+            if (this._smapiManagementOverride is not null)
+            {
+                return this._smapiManagementOverride;
+            }
+
             if (this.SmapiDeviceToken == null)
             {
                 return null;
@@ -210,4 +217,12 @@ public class User
             return new SmapiManagement(this.SmapiDeviceToken, Plugin.Instance!.LoggerFactory);
         }
     }
+
+    private SmapiManagement? _smapiManagementOverride;
+
+    /// <summary>
+    /// Inject a SmapiManagement instance (test seam for JF-366). Production code never
+    /// calls this; the getter computes a real instance unless this is set.
+    /// </summary>
+    internal void SetSmapiManagementForTest(SmapiManagement? instance) => this._smapiManagementOverride = instance;
 }
