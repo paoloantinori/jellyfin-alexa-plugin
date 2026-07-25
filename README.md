@@ -132,7 +132,7 @@ A Jellyfin plugin that creates a personal Alexa skill to play and control media 
 - **Multi-user**: each Jellyfin user gets their own skill with individual settings
 - **Per-user settings**: library access, content-type access, fuzzy matching, search mode, PostPlay, and music delivery — all configurable per user or globally
 - **Voice profiles**: "Learn my voice" and "Who am I" for multi-user voice recognition
-- **Follow me**: transfer playback between Alexa devices
+- **Follow me**: transfer playback between Alexa devices (pull model: speak "follow me" to the destination Echo; the current track restarts from the beginning on the new device, position is not carried over)
 - **Custom interaction models**: deploy your own interaction model via URL for any locale
 
 ### 🌍 Languages

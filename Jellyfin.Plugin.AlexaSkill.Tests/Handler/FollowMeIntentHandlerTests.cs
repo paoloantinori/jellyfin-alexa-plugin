@@ -241,6 +241,13 @@ public class FollowMeIntentHandlerTests : PluginTestBase, IDisposable
         // Slightly later, set up the living room queue
         _queueManager.SetQueue("device-livingroom", new List<string> { recentItemId.ToString() }, 0);
 
+        // SetQueue stamps DateTime.UtcNow; two back-to-back calls can collide within a
+        // single tick, making the ordering nondeterministic. Pin explicit timestamps so
+        // the "most recently modified" selection is deterministic regardless of clock
+        // resolution (the handler orders by Queue.LastModifiedUtc descending).
+        _queueManager.GetQueue("device-bedroom")!.LastModifiedUtc = DateTime.UtcNow.AddMinutes(-10);
+        _queueManager.GetQueue("device-livingroom")!.LastModifiedUtc = DateTime.UtcNow;
+
         _libraryManagerMock.Setup(l => l.GetItemById(recentItemId)).Returns(recentItem);
         _libraryManagerMock.Setup(l => l.GetItemById(olderItemId)).Returns(olderItem);
 
@@ -312,6 +319,67 @@ public class FollowMeIntentHandlerTests : PluginTestBase, IDisposable
         // Source device should have no active queue anymore
         var sourceQueues = _queueManager.GetAllActiveQueues(excludeDeviceId: "device-kitchen");
         Assert.Empty(sourceQueues);
+    }
+
+    /// <summary>
+    /// Documents the by-design offset-0 limitation: follow-me resumes the current item
+    /// from the beginning, NOT at the saved playback position. DeviceQueueManager tracks
+    /// per-item resume position, not a cross-device transfer offset. If this assertion
+    /// ever fails, either the limitation was lifted (update docs and release notes) or a
+    /// regression silently added a bogus offset.
+    /// </summary>
+    [Fact]
+    public async Task FollowMe_ResumesAtOffsetZero_ByDesign()
+    {
+        var handler = CreateHandler();
+        var session = CreateSession();
+        var context = CreateContext("device-kitchen");
+
+        var itemId = Guid.NewGuid();
+        var item = new Audio { Id = itemId, Name = "Song" };
+
+        _queueManager.SetQueue("device-livingroom", new List<string> { itemId.ToString() }, 0);
+        _libraryManagerMock.Setup(l => l.GetItemById(itemId)).Returns(item);
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "FollowMeIntent" } },
+            context,
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        var playDirective = Assert.IsType<AudioPlayerPlayDirective>(
+            response.Response.Directives!.First(d => d is AudioPlayerPlayDirective));
+        Assert.Equal(0, playDirective.AudioItem.Stream.OffsetInMilliseconds);
+    }
+
+    /// <summary>
+    /// When the source queue references an item Jellyfin can't resolve (deleted media,
+    /// stale queue), the handler returns MediaNotFound rather than crashing, and does
+    /// NOT clear the source queue (the transfer did not complete, so the source survives).
+    /// </summary>
+    [Fact]
+    public async Task FollowMe_SourceItemMissing_ReturnsMediaNotFoundAndKeepsSource()
+    {
+        var handler = CreateHandler();
+        var session = CreateSession();
+        var context = CreateContext("device-kitchen");
+
+        var itemId = Guid.NewGuid();
+        _queueManager.SetQueue("device-livingroom", new List<string> { itemId.ToString() }, 0);
+        _libraryManagerMock.Setup(l => l.GetItemById(itemId)).Returns((BaseItem?)null);
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "FollowMeIntent" } },
+            context,
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        // No AudioPlayer directive when the item can't be resolved.
+        Assert.DoesNotContain(response.Response.Directives ?? new List<IDirective>(), d => d is AudioPlayerPlayDirective);
+        // Source queue must survive: the transfer did not complete.
+        Assert.NotEmpty(_queueManager.GetAllActiveQueues(excludeDeviceId: "device-kitchen"));
     }
 
     [Fact]

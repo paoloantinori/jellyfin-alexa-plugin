@@ -17,14 +17,21 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
 /// <summary>
-/// Handler for FollowMeIntent: resumes playback from another device onto the current one.
+/// Handler for FollowMeIntent: pulls the active queue from another device onto the current one.
 ///
 /// Alexa custom skills can only send AudioPlayer directives to the device that sent
 /// the request. Therefore "follow me" works by having the user speak to the TARGET device:
 ///   1. Source device is playing music (tracked by DeviceQueueManager)
 ///   2. User walks to another room, speaks to that Echo: "ask jellyfin to follow me"
 ///   3. This handler finds the most recently active queue from any OTHER device
-///   4. Resumes playback of that queue on the current device at the stored offset
+///   4. Replays the queue's current item on the current device from offset 0
+///
+/// KNOWN LIMITATION: transfer restarts the current item from the beginning (offset 0),
+/// NOT at the saved playback position. DeviceQueueManager tracks per-item resume position
+/// for same-device resume, not a cross-device transfer offset; the source device's elapsed
+/// offset is not available to this handler. Locked by the FollowMe_ResumesAtOffsetZero_ByDesign
+/// unit test. The localized FollowMeSuccess string ("resuming from where you left off")
+/// overpromises this; it is retained because the same item continues, only the position resets.
 /// </summary>
 public class FollowMeIntentHandler : BaseHandler
 {

@@ -129,6 +129,16 @@ tests:
       song: {}
     expected_response_type: any
 
+  # --- Play podcast (MusicAlbum of Audio tracks; the only podcast model Jellyfin supports) ---
+  # "In Our Time" is a real MusicAlbum in the test Music library. expected_response_type is
+  # "any" because NLU slot resolution can truncate the spoken name; the handler play path is
+  # verified via the simulator. This fixture proves the full NLU routing -> PlayPodcastIntent.
+  - utterance: "riproduci il podcast in our time"
+    expected_intent: PlayPodcastIntent
+    expected_slots:
+      podcast_name: {}
+    expected_response_type: any
+
   # --- Browse / Library ---
   # Browse albums (uses English plural "albums" per it-IT model)
   - utterance: "elenca albums"

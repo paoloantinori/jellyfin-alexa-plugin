@@ -23,9 +23,10 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
 /// <summary>
-/// Handler for PlayPodcastIntent — plays the latest episode of a podcast.
-/// Jellyfin stores podcasts as Series items with audio media type;
-/// individual episodes are Episode items under the series.
+/// Handler for PlayPodcastIntent, plays the latest episode of a podcast.
+/// Jellyfin has no native podcast type, so a podcast is stored as a MusicAlbum of
+/// Audio tracks in a Music library; this handler queries MusicAlbum by name and plays
+/// its newest Audio child (DateCreated descending) as the latest episode.
 /// </summary>
 public class PlayPodcastIntentHandler : BaseHandler
 {
@@ -78,14 +79,17 @@ public class PlayPodcastIntentHandler : BaseHandler
             return userError;
         }
 
-        // Search for podcast series (Series with audio media type = podcast)
+        // Jellyfin has no native podcast type: a podcast is stored as a MusicAlbum of
+        // Audio tracks in a Music library (verified against live Jellyfin 10.11.x; a
+        // Series rollup is always MediaType=Unknown, so the old Series+MediaTypes=Audio
+        // query matched nothing). Query MusicAlbum by name; the MediaTypes=Audio filter
+        // is intentionally omitted because the album rollup is also MediaType=Unknown.
         var podcastQuery = new InternalItemsQuery
         {
             User = jellyfinUser,
             Recursive = true,
             SearchTerm = podcastName,
-            IncludeItemTypes = new[] { BaseItemKind.Series },
-            MediaTypes = new[] { MediaType.Audio },
+            IncludeItemTypes = new[] { BaseItemKind.MusicAlbum },
             DtoOptions = new DtoOptions(true)
         };
         ApplyLibraryFilter(podcastQuery, user, _libraryManager);
@@ -97,7 +101,7 @@ public class PlayPodcastIntentHandler : BaseHandler
 
         if (podcasts.Count == 0)
         {
-            var fuzzy = await SearchItemsFuzzyAsync(podcastName, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.Series }, cancellationToken, "PlayPodcastFuzzyFallback", mediaTypes: new[] { MediaType.Audio }).ConfigureAwait(false);
+            var fuzzy = await SearchItemsFuzzyAsync(podcastName, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.MusicAlbum }, cancellationToken, "PlayPodcastFuzzyFallback").ConfigureAwait(false);
             if (fuzzy != null)
             {
                 podcasts = new List<BaseItem> { fuzzy.Value.Item };
@@ -146,14 +150,15 @@ public class PlayPodcastIntentHandler : BaseHandler
 
         BaseItem podcast = podcasts[0];
 
-        // Get the latest episode under this podcast series
+        // Get the latest episode (newest Audio track) under this podcast album.
+        // ParentId (not AncestorIds) matches the album-track convention in PlayAlbumIntentHandler:
+        // an Audio track's direct parent is the MusicAlbum, with no intermediate "season" level.
         var episodeQuery = new InternalItemsQuery
         {
             User = jellyfinUser,
             Recursive = true,
-            IncludeItemTypes = new[] { BaseItemKind.Episode },
-            AncestorIds = new[] { podcast.Id },
-            MediaTypes = new[] { MediaType.Audio },
+            IncludeItemTypes = new[] { BaseItemKind.Audio },
+            ParentId = podcast.Id,
             OrderBy = new[] { (ItemSortBy.DateCreated, SortOrder.Descending) },
             DtoOptions = new DtoOptions(true)
         };

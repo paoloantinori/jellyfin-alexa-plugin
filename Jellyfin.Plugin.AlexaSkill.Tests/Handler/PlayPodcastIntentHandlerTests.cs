@@ -15,13 +15,13 @@ using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Alexa.NET.Assertions;
 using Xunit;
-using MediaType = Jellyfin.Data.Enums.MediaType;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
@@ -164,16 +164,16 @@ public class PlayPodcastIntentHandlerTests : PluginTestBase
 
         SetupUserMock();
 
-        var podcast = new global::MediaBrowser.Controller.Entities.TV.Series
+        var podcast = new MusicAlbum
         {
             Name = "Serial",
             Id = Guid.NewGuid()
         };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Series))))
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))))
             .Returns(new List<BaseItem> { podcast });
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Episode))))
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))))
             .Returns(new List<BaseItem>());
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -193,23 +193,22 @@ public class PlayPodcastIntentHandlerTests : PluginTestBase
 
         SetupUserMock();
 
-        var podcast = new global::MediaBrowser.Controller.Entities.TV.Series
+        var podcast = new MusicAlbum
         {
             Name = "Serial",
             Id = Guid.NewGuid()
         };
 
-        var episode = new global::MediaBrowser.Controller.Entities.TV.Episode
+        var episode = new Audio
         {
             Name = "Episode 1",
             Id = Guid.NewGuid(),
-            SeriesId = podcast.Id
         };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Series))))
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))))
             .Returns(new List<BaseItem> { podcast });
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Episode))))
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))))
             .Returns(new List<BaseItem> { episode });
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -229,32 +228,30 @@ public class PlayPodcastIntentHandlerTests : PluginTestBase
 
         SetupUserMock();
 
-        var podcast = new global::MediaBrowser.Controller.Entities.TV.Series
+        var podcast = new MusicAlbum
         {
             Name = "Serial",
             Id = Guid.NewGuid()
         };
 
-        var oldEpisode = new global::MediaBrowser.Controller.Entities.TV.Episode
+        var oldEpisode = new Audio
         {
             Name = "Episode 1",
             Id = Guid.NewGuid(),
-            SeriesId = podcast.Id,
             DateCreated = DateTime.UtcNow.AddDays(-10)
         };
 
-        var newEpisode = new global::MediaBrowser.Controller.Entities.TV.Episode
+        var newEpisode = new Audio
         {
             Name = "Episode 12",
             Id = Guid.NewGuid(),
-            SeriesId = podcast.Id,
             DateCreated = DateTime.UtcNow.AddDays(-1)
         };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Series))))
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))))
             .Returns(new List<BaseItem> { podcast });
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Episode))))
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))))
             .Returns(new List<BaseItem> { newEpisode, oldEpisode });
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -277,23 +274,22 @@ public class PlayPodcastIntentHandlerTests : PluginTestBase
 
         SetupUserMock();
 
-        var podcast = new global::MediaBrowser.Controller.Entities.TV.Series
+        var podcast = new MusicAlbum
         {
             Name = "Serial",
             Id = Guid.NewGuid()
         };
 
-        var episode = new global::MediaBrowser.Controller.Entities.TV.Episode
+        var episode = new Audio
         {
             Name = "Episode 1",
             Id = Guid.NewGuid(),
-            SeriesId = podcast.Id
         };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Series))))
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))))
             .Returns(new List<BaseItem> { podcast });
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Episode))))
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))))
             .Returns(new List<BaseItem> { episode });
 
         await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -351,18 +347,62 @@ public class PlayPodcastIntentHandlerTests : PluginTestBase
 
         SetupUserMock();
 
-        InternalItemsQuery? capturedSeriesQuery = null;
+        // Capture the FIRST query (podcast discovery). With the fix this must target
+        // MusicAlbum, NOT Series, and must NOT apply a MediaTypes=Audio filter
+        // (a MusicAlbum rollup is MediaType=Unknown in Jellyfin, so that filter would
+        // exclude every album, which is the production bug this test now guards against).
+        InternalItemsQuery? capturedDiscoveryQuery = null;
         int captureCount = 0;
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Series))))
-            .Callback<InternalItemsQuery>(q => { if (captureCount++ == 0) capturedSeriesQuery = q; })
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => { if (captureCount++ == 0) capturedDiscoveryQuery = q; })
             .Returns(new List<BaseItem>());
 
         await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
-        Assert.NotNull(capturedSeriesQuery);
-        Assert.NotNull(capturedSeriesQuery.MediaTypes);
-        Assert.Contains(MediaType.Audio, capturedSeriesQuery.MediaTypes);
-        Assert.Equal("Serial", capturedSeriesQuery.SearchTerm);
+        Assert.NotNull(capturedDiscoveryQuery);
+        Assert.NotNull(capturedDiscoveryQuery.IncludeItemTypes);
+        Assert.Contains(BaseItemKind.MusicAlbum, capturedDiscoveryQuery.IncludeItemTypes);
+        Assert.DoesNotContain(BaseItemKind.Series, capturedDiscoveryQuery.IncludeItemTypes);
+        // No MediaType filter on the album rollup (the old bug).
+        Assert.True(capturedDiscoveryQuery.MediaTypes == null || capturedDiscoveryQuery.MediaTypes.Length == 0);
+        Assert.Equal("Serial", capturedDiscoveryQuery.SearchTerm);
+    }
+
+    /// <summary>
+    /// Guards the episode-selection query shape: it must fetch Audio children scoped to
+    /// the matched album via ParentId, sorted newest-first, NOT query Episode/MediaTypes=Audio
+    /// (the old dead path). Returns a real album so the handler reaches the episode query.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_EpisodeQueryTargetsAudioChildrenOfAlbum()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(podcastName: "Serial");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var album = new MusicAlbum { Name = "Serial", Id = Guid.NewGuid() };
+
+        // Two distinct Setups by IncludeItemTypes, matching the sibling-test pattern:
+        // album discovery (MusicAlbum) returns the album; episode query (Audio) captures itself.
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))))
+            .Returns(new List<BaseItem> { album });
+
+        InternalItemsQuery? capturedEpisodeQuery = null;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))))
+            .Callback<InternalItemsQuery>(q => capturedEpisodeQuery = q)
+            .Returns(new List<BaseItem> { new Audio { Name = "Episode 1", Id = Guid.NewGuid() } });
+
+        await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(capturedEpisodeQuery);
+        Assert.NotNull(capturedEpisodeQuery.IncludeItemTypes);
+        Assert.Contains(BaseItemKind.Audio, capturedEpisodeQuery.IncludeItemTypes);
+        Assert.DoesNotContain(BaseItemKind.Episode, capturedEpisodeQuery.IncludeItemTypes);
+        Assert.Equal(album.Id, capturedEpisodeQuery.ParentId);
     }
 
     [Fact]
@@ -376,19 +416,19 @@ public class PlayPodcastIntentHandlerTests : PluginTestBase
 
         SetupUserMock();
 
-        var podcast1 = new global::MediaBrowser.Controller.Entities.TV.Series
+        var podcast1 = new MusicAlbum
         {
             Name = "Morning Edition",
             Id = Guid.NewGuid()
         };
 
-        var podcast2 = new global::MediaBrowser.Controller.Entities.TV.Series
+        var podcast2 = new MusicAlbum
         {
             Name = "All Things Considered",
             Id = Guid.NewGuid()
         };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Series))))
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))))
             .Returns(new List<BaseItem> { podcast1, podcast2 });
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
