@@ -251,10 +251,16 @@ The plugin uses **Login with Amazon (LWA)** to create and manage your Alexa skil
 
 ### Adding a User Skill
 
-1. In the plugin configuration, you'll see a table of users
+1. In the plugin configuration, you'll see a table of users. Each row shows the **user name**, **invocation name**, **skill status** (Ready / Recoverable / Auth pending), and **auth** state, plus **Re-authorize** and **Delete** actions.
 2. Click **Add** to create a new skill for a Jellyfin user
 3. Select the Jellyfin user from the dropdown
-4. Optionally customize the **invocation name**. Leave it **empty** for locale defaults (Italian: "Mia Collezione"; all other locales: "Jellyfin Player"), or enter a custom name (two or more words) that applies to **all** locales. Saving redeploys the new name to Amazon automatically (~15–30s) — no need to edit the Alexa Developer Console. Use **Reset** to return to locale defaults.
+4. **Save** to create the skill (a new user only persists the invocation name at first).
+5. Click a row (or its chevron) to **expand** it and reveal the per-user settings grouped into three panels:
+   - **Invocation & Libraries**: the invocation name (leave **empty** for locale defaults — Italian: "Mia Collezione"; all other locales: "Jellyfin Player" — or enter a custom two-or-more-word name that applies to **all** locales) plus the allowed-libraries picker. Saving a changed invocation name redeploys it to Amazon automatically (~15–30s); use **Reset** to return to locale defaults.
+   - **Search**: fuzzy match behavior, thresholds, and search response mode.
+   - **Playback**: PostPlay behavior, music delivery (seek bar vs. raw stream), and announcement options.
+
+The summary row stays visible when collapsed, so skill status is glanceable without expanding each user.
 
 Per-user settings include **fuzzy match behavior** (Confirm or Auto-Play), **fuzzy match threshold** (0–100), **allowed libraries** (restrict to specific top-level folders), **content type access** (music, videos, audiobooks, books), **search response mode** (Fast or Thorough), **PostPlay behavior** (Stop or AutoPlay), and **cross-media artist suggestion** (Confirm, Auto-Serve, or Off). Fast mode skips fallback tiers and auto-plays the first match; Thorough runs the full fallback chain with disambiguation. AutoPlay continues with similar tracks when a song ends and the queue is empty. The cross-media artist suggestion offers a plausible artist when a song or album isn't found (e.g., a mispronounced name), so you get a helpful prompt instead of a dead-end "not found".
 
