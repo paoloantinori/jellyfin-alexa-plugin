@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-07-25 18:07'
+updated_date: '2026-07-25 18:07'
 labels:
   - enhancement
   - phonetic
@@ -51,3 +52,12 @@ NOTE: distinct from the catalog-injection question (JF-380). This task is about 
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining, or findings applied/tracked)
 <!-- DOD:END -->
+
+## Comments
+
+<!-- COMMENTS:BEGIN -->
+created: 2026-07-25 18:07
+---
+EXTENDED 2026-07-25: add a u<->oo (and likely u<->o, oo<->ou) vowel-substitution rule alongside the c/k/ck/q consonant rule. Same evidence: 'Koop' (oo) was heard as 'cup' (u) on the it-IT Echo. The English /uː/ ('oo') maps to Italian 'u', and ASR transcribes it back inconsistently. So a name with 'oo' should emit 'u'/'o' variants too. The consonant rule (K->C) and the vowel rule (oo->u) are complementary; together they cover 'Koop' -> 'Coop' (consonant) -> 'Cup' (consonant+vowel). Update AC #1 to include both consonant and vowel substitution families, bounded by the same per-name cap.
+---
+<!-- COMMENTS:END -->
