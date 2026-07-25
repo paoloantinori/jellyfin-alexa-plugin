@@ -1407,8 +1407,15 @@
                         for (let row of summaryRows) {
                             const userId = row.getAttribute("data-id");
                             const details = detailsForSummary(row);
+                            // JF-370/JF-369: a missing details row (broken data-row-pair)
+                            // must skip the row, not throw and abort the whole save. The
+                            // existing-user branch below dereferences `details` unguarded.
+                            if (!details) {
+                                skippedRows++;
+                                continue;
+                            }
 
-                            const invocationInput = details ? details.querySelector('[data-field="InvocationName"]') : null;
+                            const invocationInput = details.querySelector('[data-field="InvocationName"]');
                             // JF-369: null-guard — a missing input (DOM/emby-upgrade hiccup)
                             // must skip the row, not throw and abort the whole save.
                             if (!invocationInput) {
