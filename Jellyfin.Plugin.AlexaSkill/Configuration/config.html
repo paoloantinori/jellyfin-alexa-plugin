@@ -1460,6 +1460,19 @@
                                     return null;
                                 }
 
+                                // JF-372: a tri-state select whose value isn't inherit/true/false has
+                                // failed to read correctly (e.g. an emby-select upgrade hiccup left
+                                // sel.value undefined/stale). Don't silently coerce that to null (which
+                                // would downgrade an explicit true/false override to "inherit global" on
+                                // save); skip the row and warn, same as the invalid-invocation path.
+                                function triStateReadable(sel) {
+                                    return !sel || ["inherit", "true", "false"].indexOf(sel.value) >= 0;
+                                }
+                                if (!triStateReadable(vaaSel) || !triStateReadable(anpSel) || !triStateReadable(aapSel)) {
+                                    skippedRows++;
+                                    continue;
+                                }
+
                                 let data = {
                                     "InvocationName": invocationInput.value,
                                     "AllowedLibraryIds": selectedLibs,
@@ -1513,7 +1526,7 @@
                         // JF-367: warn when rows were skipped so a partial save can't
                         // look fully successful. The per-row inline error still shows.
                         if (skippedRows > 0) {
-                            Dashboard.alert(skippedRows + " user(s) not saved: the invocation name must be empty (use locale defaults) or at least 2 words. Expand the row to fix.");
+                            Dashboard.alert(skippedRows + " user(s) not saved. Check each row: the invocation name must be empty (use locale defaults) or at least 2 words, and all dropdowns must have a selected value. Expand the row to fix, then Save again.");
                         }
                     });
                 });
