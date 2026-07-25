@@ -702,10 +702,21 @@
                 });
             }
 
+            // JF-370: find a summary row's details by the data-row-pair key, not by
+            // sibling position. Falls back to nextElementSibling if the key is missing
+            // (defensive; shouldn't happen on rows built by createUserRow).
+            function detailsForSummary(summaryRow) {
+                if (!summaryRow) return null;
+                var pairId = summaryRow.getAttribute("data-row-pair");
+                if (pairId) {
+                    var matched = document.querySelector('tr.user-details-row[data-row-pair="' + pairId + '"]');
+                    if (matched) return matched;
+                }
+                return summaryRow.nextElementSibling;
+            }
+
             function refreshUserRow(summaryRow, user, config) {
-                // JF-365: callers iterate summary rows, so the details row is always the
-                // summary's next sibling.
-                var detailsRow = summaryRow.nextElementSibling;
+                var detailsRow = detailsForSummary(summaryRow);
                 summaryRow.setAttribute("data-id", user.Id);
                 summaryRow.setAttribute("data-username", user.Username || "");
                 if (detailsRow) detailsRow.setAttribute("data-id", user.Id);
@@ -857,8 +868,13 @@
                 }
 
                 // ============================ SUMMARY ROW ============================
+                // JF-370: pair the summary and details rows with a unique key so lookups
+                // don't depend on them being adjacent siblings (nextElementSibling breaks
+                // silently if anything is ever inserted between them).
+                var pairId = "r" + (_panelControlSeq++);
                 var summary = document.createElement("tr");
                 summary.setAttribute("data-id", user.Id);
+                summary.setAttribute("data-row-pair", pairId);
                 // Carry the username on the row so the new-user save path reads it by
                 // intent (data-username) rather than by which cell holds data-id.
                 summary.setAttribute("data-username", user.Username || "");
@@ -971,7 +987,7 @@
                     var btn = e.target.closest("button[data-id]") || e.target;
                     var userId = btn.getAttribute("data-id");
                     var summaryRow = e.target.closest("tr.user-summary-row");
-                    var detailsRow = summaryRow ? summaryRow.nextElementSibling : null;
+                    var detailsRow = detailsForSummary(summaryRow);
                     if (userId === "undefined") {
                         if (detailsRow) detailsRow.remove();
                         if (summaryRow) summaryRow.remove();
@@ -996,7 +1012,7 @@
                 // expand/collapse toggle: chevron + row click, ignore action buttons
                 summary.addEventListener("click", function(e) {
                     if (e.target.closest("button")) return;
-                    var details = summary.nextElementSibling;
+                    var details = detailsForSummary(summary);
                     var isOpen = summary.classList.toggle("expanded");
                     // JF-365: drive show/hide AND chevron rotation via INLINE style.
                     // The plugin config page's <style> block is not reliably applied
@@ -1009,6 +1025,7 @@
                 // ============================ DETAILS ROW ============================
                 var details = document.createElement("tr");
                 details.setAttribute("data-id", user.Id);
+                details.setAttribute("data-row-pair", pairId);
                 details.classList.add("user-details-row");
                 // Hidden by default via INLINE style (the config page <style> block is
                 // not reliably applied under emby view injection; inline always wins).
@@ -1391,7 +1408,7 @@
                         var summaryRows = document.querySelectorAll("#userTableBody tr.user-summary-row");
                         for (let row of summaryRows) {
                             const userId = row.getAttribute("data-id");
-                            const details = row.nextElementSibling;
+                            const details = detailsForSummary(row);
 
                             const invocationInput = details ? details.querySelector('[data-field="InvocationName"]') : null;
                             // JF-369: null-guard — a missing input (DOM/emby-upgrade hiccup)
@@ -1429,7 +1446,7 @@
                                             // swap in a full row pair so those controls appear without a
                                             // page reload. refreshUserRow alone doesn't rebuild the panel.
                                             var freshFragment = createUserRow(createdUser, freshConfig);
-                                            var oldDetails = row.nextElementSibling;
+                                            var oldDetails = detailsForSummary(row);
                                             row.parentNode.insertBefore(freshFragment, row);
                                             // remove the old unsaved pair (summary + details)
                                             if (oldDetails) oldDetails.remove();
