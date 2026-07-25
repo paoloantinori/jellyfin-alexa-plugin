@@ -1055,16 +1055,14 @@
 
                 // ---- SEARCH group ----
                 var searchGroup = document.createElement("div");
+                searchGroup.appendChild(groupTitleEl("Search"));
                 if (isUnsaved) {
-                    searchGroup.appendChild(groupTitleEl("Search"));
                     var pendingNote = document.createElement("div");
                     pendingNote.className = "fieldDescription";
                     pendingNote.style.cssText = "color:#888;font-style:italic;";
                     pendingNote.textContent = "Save this user first, then expand again to configure search and playback.";
                     searchGroup.appendChild(pendingNote);
-                    grid.appendChild(searchGroup);
                 } else {
-                searchGroup.appendChild(groupTitleEl("Search"));
 
                 var smSel = panelSelect("SearchResponseMode", "Search Mode",
                     [{v:"Thorough",t:"Thorough (best match)"},{v:"Fast",t:"Fast (quick response)"}],
@@ -1107,8 +1105,8 @@
                 threshDesc.className = "fieldDescription";
                 threshDesc.textContent = 'Scores at/above Auto-play start immediately; at/above Suggest, Alexa asks "did you mean...?"';
                 threshRow.appendChild(threshDesc);
+                } // end isUnsaved Search else-branch
                 grid.appendChild(searchGroup);
-                } // end !isUnsaved Search branch
 
                 // ---- PLAYBACK group (saved users only — JF-371) ----
                 if (!isUnsaved) {
