@@ -1,7 +1,7 @@
 ---
 name: Alexa Skill
 guid: c5df7de0-8777-4b3c-a70d-5c3dae359c9e
-version: 0.10.0.0
+version: 0.11.0.0
 targetAbi: 10.11.0.0
 framework: net9.0
 overview: Alexa skill plugin for Jellyfin
@@ -20,4 +20,4 @@ artifacts:
   - Amazon.Lambda.Serialization.Json.dll
   - Jellyfin.Plugin.AlexaSkill.dll
   - Refit.dll
-changelog: "Major matching improvements: if you ask for music by an artist and Alexa mishears it as a mood or search request, the skill now plays the right artist instead of saying 'not found' — in every supported language. Fuzzy and phonetic matching now covers all media types (songs, albums, artists, videos, books, playlists, podcasts, channels), so accented or slightly misspoken names are found. Reliability: audiobook resume positions survive a crash mid-save, and the 'searching…' hint no longer stalls. Security: hardened request validation and the account-linking login page."
+changelog: "Per-user config reworked into a clean expandable table (collapsed rows show status at a glance; expand to edit search/playback/invocation settings). Rebuilds of the interaction model are now scoped to your selected locale instead of rebuilding all 17, so the Rebuild button finishes in seconds rather than minutes. Ask for music by mood (e.g. 'play sleep music') in all 17 locales, with admin-customizable moods. Catalog sync now supports multiple locales beyond Italian, so non-English artist/album names are recognized when spoken with an accent. New per-user options for music delivery (seek bar vs. raw stream) and whether to announce each music track. When a song or album isn't found, the skill now suggests a plausible artist instead of a dead-end 'not found'. Video-audio endpoints now require a signed token (security hardening). Many smaller fixes: audiobook resume survives a crash, the 'searching…' hint no longer stalls, album ordering for multi-disc sets, and SSML escaping for metadata names. With huge thanks to @Gronsten (Mark Campbell) for the locale-scoped rebuild contribution."
