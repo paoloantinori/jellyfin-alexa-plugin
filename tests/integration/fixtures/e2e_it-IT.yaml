@@ -61,6 +61,17 @@ tests:
   #     musician: {}
   #   expected_response_type: any
 
+  # ASR accent drift: "Koop" transcribed as "cup" on an it-IT Echo (JF-381).
+  # Cannot be E2E-tested via simulate-skill: the NLU cannot route "suona i cup"
+  # from text (it needs the audio context to interpret "cup" as a musician slot).
+  # Handler-level fix verified via the Simulator endpoint (slot=cup resolves to Koop).
+  # On-device verification is the remaining step.
+  # - utterance: "suona i cup"
+  #   expected_intent: PlayArtistSongsIntent
+  #   expected_slots:
+  #     musician: {}
+  #   expected_response_type: any
+
   # Multi-word prefix — "led zep" truncated (Led Zeppelin)
   - utterance: "metti i led zep"
     expected_intent: PlayArtistSongsIntent
