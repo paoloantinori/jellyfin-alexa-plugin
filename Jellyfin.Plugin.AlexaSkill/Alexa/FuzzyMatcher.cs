@@ -41,6 +41,13 @@ internal static class FuzzyMatcher
     private const int PhoneticBonus = 15;
 
     /// <summary>
+    /// Maximum length difference (in characters) between query and candidate for the
+    /// phonetic-code-collision floor to apply. Accent drift produces short garbled strings
+    /// close in length to the intended name. JF-381.
+    /// </summary>
+    private const int PhoneticFloorLengthBand = 3;
+
+    /// <summary>
     /// Gets the fuzzy match threshold from the user, falling back to the compile-time constant.
     /// </summary>
     public static int GetDefaultThreshold(Entities.User? user) =>
@@ -191,18 +198,29 @@ internal static class FuzzyMatcher
             score = ApplyLengthPenalty(normalizedQuery, candidateText, score);
 
             // Apply phonetic bonus: if the candidate's pre-computed phonetic codes match
-            // the query's phonetic codes, boost the score
-            if (score < ContainmentScore)
+            // the query's phonetic codes, boost the score. When the codes collide AND the
+            // candidate is within a length band of the query (genuine accent drift, not a
+            // coincidental substring), floor the score ABOVE ContainmentScore so it beats
+            // any substring-containment match from a longer candidate (e.g. "cup" in
+            // "Porcupine Tree" scores 90 containment, but "cup"->"Koop" is the intended
+            // phonetic match, so Koop gets 91+). The additive PhoneticBonus is kept on top
+            // of the floor so candidates with higher Levenshtein still rank above lower ones
+            // among code-matched candidates (e.g. Smith > Smoot for query "smit"). JF-381.
+            Guid candidateId = candidateIdSelector(candidate);
+            var candidatePhonetic = phoneticLookup(candidateId);
+            if (candidatePhonetic.HasValue)
             {
-                Guid candidateId = candidateIdSelector(candidate);
-                var candidatePhonetic = phoneticLookup(candidateId);
-                if (candidatePhonetic.HasValue)
+                if (PhoneticCodesMatch(queryPhonetic.Primary, queryPhonetic.Alternate,
+                        candidatePhonetic.Value.Primary, candidatePhonetic.Value.Alternate))
                 {
-                    if (PhoneticCodesMatch(queryPhonetic.Primary, queryPhonetic.Alternate,
-                            candidatePhonetic.Value.Primary, candidatePhonetic.Value.Alternate))
+                    int boosted = Math.Min(score + PhoneticBonus, 100);
+                    if (Math.Abs(candidateText.Length - normalizedQuery.Length) <= PhoneticFloorLengthBand)
                     {
-                        score = Math.Min(score + PhoneticBonus, 100);
+                        // Length-matched phonetic collision: prefer over containment, keeping
+                        // the Levenshtein differential as a tiebreaker among code matches.
+                        boosted = Math.Max(boosted, ContainmentScore + 1);
                     }
+                    score = boosted;
                 }
             }
 
@@ -211,7 +229,12 @@ internal static class FuzzyMatcher
                 bestScore = score;
                 bestMatch = candidate;
 
-                if (bestScore >= ContainmentScore)
+                // In the phonetic overload, early-return only when the score is above what
+                // a length-matched phonetic collision could achieve (ContainmentScore + 1).
+                // This allows a later phonetic match (floored at ContainmentScore + 1) to
+                // beat a plain containment score (90). Without this gate, "Porcupine Tree"
+                // (containment 90) returns before "Koop" (phonetic 91) is evaluated.
+                if (bestScore > ContainmentScore + 1)
                 {
                     return (bestMatch, bestScore);
                 }

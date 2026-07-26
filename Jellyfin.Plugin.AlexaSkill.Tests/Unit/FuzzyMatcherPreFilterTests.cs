@@ -219,4 +219,60 @@ public class FuzzyMatcherPreFilterTests
     }
 
     private record TestItem(string Name);
+
+    // --- JF-381: phonetic code-match preferred over substring containment for accent drift ---
+
+    [Fact]
+    public void FindBestMatch_Phonetic_MatchesCupToKoop_JF381()
+    {
+        var koopId = System.Guid.NewGuid();
+        var items = new List<PhoneticCandidate>
+        {
+            new(koopId, "Koop"),
+            new(System.Guid.NewGuid(), "Radiohead"),
+            new(System.Guid.NewGuid(), "Metallica")
+        };
+
+        var result = FuzzyMatcher.FindBestMatch(
+            "cup", items, c => c.Name, c => c.Id,
+            id => id == koopId ? DoubleMetaphone.Encode("Koop") : null);
+
+        Assert.NotNull(result);
+        Assert.Equal("Koop", result!.Name);
+    }
+
+    [Fact]
+    public void FindBestMatch_Phonetic_PrefersKoopOverPorcupineTree_JF381()
+    {
+        // THE REGRESSION GUARD: "Porcupine Tree" contains "cup" (containment score 90)
+        // and shares the KP code. "Koop" also codes KP and is length-matched (4 vs 3).
+        // The phonetic overload must prefer Koop (91, phonetic-floored) over Porcupine
+        // Tree (90, coincidental substring containment).
+        var koopId = System.Guid.NewGuid();
+        var porcupineId = System.Guid.NewGuid();
+        var items = new List<PhoneticCandidate>
+        {
+            new(koopId, "Koop"),
+            new(porcupineId, "Porcupine Tree"),
+            new(System.Guid.NewGuid(), "Radiohead")
+        };
+
+        var result = FuzzyMatcher.FindBestMatch(
+            "cup", items, c => c.Name, c => c.Id,
+            id => id == koopId ? DoubleMetaphone.Encode("Koop")
+               : id == porcupineId ? DoubleMetaphone.Encode("Porcupine Tree") : null);
+
+        Assert.NotNull(result);
+        Assert.Equal("Koop", result!.Name);
+    }
+
+    [Fact]
+    public void FindBestMatch_LevenshteinOnly_DoesNotMatchCupToKoop_JF381()
+    {
+        var items = new List<TestItem> { new("Koop"), new("Radiohead") };
+        var result = FuzzyMatcher.FindBestMatch("cup", items, i => i.Name);
+        Assert.Null(result);
+    }
+
+    private record PhoneticCandidate(System.Guid Id, string Name);
 }

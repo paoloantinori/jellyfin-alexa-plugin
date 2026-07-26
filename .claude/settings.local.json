@@ -53,7 +53,12 @@
       "Skill(deep-research)",
       "Bash(python3 -c ' *)",
       "mcp__zread__search_doc",
-      "mcp__zread__read_file"
+      "mcp__zread__read_file",
+      "Bash(export NUGET_PACKAGES=/tmp/nuget-jf381b NUGET_HTTP_CACHE_PATH=/tmp/nuget-http-jf381b)",
+      "Bash(rm Program.cs)",
+      "Bash(export NUGET_PACKAGES=/tmp/nuget_pkgs NUGET_HTTP_CACHE_PATH=/tmp/nuget_http)",
+      "Bash(git revert *)",
+      "Bash(NUGET_PACKAGES=/tmp/nuget-revert NUGET_HTTP_CACHE_PATH=/tmp/nuget-http-revert dotnet build Jellyfin.Plugin.AlexaSkill.sln -warnaserror -nologo)"
     ]
   },
   "enabledMcpjsonServers": [

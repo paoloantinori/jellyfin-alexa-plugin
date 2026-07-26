@@ -29,6 +29,14 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public class PlayArtistSongsIntentHandler : BaseHandler
 {
+    /// <summary>
+    /// Maximum extra characters a tier-1 containment candidate may have beyond the query.
+    /// Prevents coincidental substrings (e.g. "cup" in "Porcupine Tree") from short-
+    /// circuiting the search before the phonetic/fuzzy tiers can find the intended match.
+    /// JF-381.
+    /// </summary>
+    private const int ContainmentLengthBand = 10;
+
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
     private readonly IUserDataManager _userDataManager;
@@ -123,10 +131,15 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 : null;
             var allArtists = _artistIndex.GetArtists(topParentIds);
 
-            // Tier 1: name contains query (in-memory equivalent of SearchTerm)
+            // Tier 1: name contains query (in-memory equivalent of SearchTerm).
+            // Gate: skip containment matches where the query is much shorter than the
+            // candidate name, since a short query inside a long name is a coincidental
+            // substring (e.g. "cup" in "Porcupine Tree"), not an intended match. This lets
+            // the fuzzy/phonetic tiers handle accent drift instead. JF-381.
             tierSw.Restart();
             artists = allArtists
-                .Where(a => a.Name.Contains(musician, StringComparison.OrdinalIgnoreCase))
+                .Where(a => a.Name.Contains(musician, StringComparison.OrdinalIgnoreCase)
+                    && a.Name.Length <= musician.Length + ContainmentLengthBand)
                 .ToList();
             tierSw.Stop();
             tierReached = 1;
@@ -140,7 +153,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 {
                     // Fast mode: skip prefix tiers, go straight to fuzzy-all
                     tierSw.Restart();
-                    BaseItem? fuzzy = FuzzyMatch(musician, allArtists, a => a.Name, user);
+                    BaseItem? fuzzy = FuzzyMatchPhonetic(musician, allArtists, a => a.Name, a => a.Id, _artistIndex, user);
                     tierSw.Stop();
                     tierReached = 4;
                     Logger.LogInformation(
@@ -161,7 +174,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                     var prefixCandidates = allArtists
                         .Where(a => a.Name.StartsWith(firstWord, StringComparison.OrdinalIgnoreCase))
                         .ToList();
-                    BaseItem? tier2Match = FuzzyMatch(musician, prefixCandidates, a => a.Name, user);
+                    BaseItem? tier2Match = FuzzyMatchPhonetic(musician, prefixCandidates, a => a.Name, a => a.Id, _artistIndex, user);
                     tierSw.Stop();
                     tierReached = 2;
                     Logger.LogInformation(
@@ -179,7 +192,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                         var fullPrefixCandidates = allArtists
                             .Where(a => a.Name.StartsWith(musician, StringComparison.OrdinalIgnoreCase))
                             .ToList();
-                        BaseItem? tier3Match = FuzzyMatch(musician, fullPrefixCandidates, a => a.Name, user);
+                        BaseItem? tier3Match = FuzzyMatchPhonetic(musician, fullPrefixCandidates, a => a.Name, a => a.Id, _artistIndex, user);
                         tierSw.Stop();
                         tierReached = 3;
                         Logger.LogInformation(
@@ -195,7 +208,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                     if (artists.Count == 0)
                     {
                         tierSw.Restart();
-                        BaseItem? tier4Match = FuzzyMatch(musician, allArtists, a => a.Name, user);
+                        BaseItem? tier4Match = FuzzyMatchPhonetic(musician, allArtists, a => a.Name, a => a.Id, _artistIndex, user);
                         tierSw.Stop();
                         tierReached = 4;
                         Logger.LogInformation(
@@ -345,7 +358,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         else if (fastAutoPlay)
         {
             // Fast mode: pick the best fuzzy match and auto-play
-            var best = FuzzyMatch(musician, artists, a => a.Name, user);
+            var best = FuzzyMatchPhonetic(musician, artists, a => a.Name, a => a.Id, _artistIndex, user);
             if (best != null)
             {
                 artists = new List<BaseItem> { best };

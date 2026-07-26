@@ -1286,6 +1286,36 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// Phonetic-aware fuzzy match: like <see cref="FuzzyMatch{T}"/> but prefers Double
+    /// Metaphone code collisions for cross-language accent drift (e.g. "Koop" heard as
+    /// "cup", both code "KP"). When codes collide AND the candidate is within a length
+    /// band, the score is floored above ContainmentScore so it beats coincidental
+    /// substring matches. JF-381.
+    /// </summary>
+    /// <typeparam name="T">The candidate item type.</typeparam>
+    protected T? FuzzyMatchPhonetic<T>(string query, IEnumerable<T> candidates, Func<T, string> selector, Func<T, Guid> idSelector, IArtistIndex? artistIndex, Entities.User? user = null, int threshold = -1)
+        where T : class
+    {
+        if (artistIndex == null)
+        {
+            return FuzzyMatch(query, candidates, selector, user, threshold);
+        }
+
+        int effectiveThreshold = threshold >= 0 ? threshold : FuzzyMatcher.GetDefaultThreshold(user);
+        var result = FuzzyMatcher.FindBestMatch(
+            query,
+            candidates,
+            selector,
+            idSelector,
+            id => artistIndex.TryGetPhoneticCode(id, out var codes) ? codes : null,
+            effectiveThreshold);
+
+        Logger.LogDebug("FuzzyMatchPhonetic: query={Query}, best={BestMatch}, threshold={Threshold}, matched={Matched}",
+            query, result != null ? selector(result) : "(null)", effectiveThreshold, result != null);
+        return result;
+    }
+
+    /// <summary>
     /// Fuzzy fallback for handlers whose exact Jellyfin searchTerm query returned 0.
     /// Fetches all items of the given types from the user's library and fuzzy-matches
     /// the query against their names via FuzzyMatcher partial-ratio (Levenshtein).
