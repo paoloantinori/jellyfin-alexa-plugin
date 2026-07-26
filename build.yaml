@@ -1,7 +1,7 @@
 ---
 name: Alexa Skill
 guid: c5df7de0-8777-4b3c-a70d-5c3dae359c9e
-version: 0.11.0.0
+version: 0.11.1.0
 targetAbi: 10.11.0.0
 framework: net9.0
 overview: Alexa skill plugin for Jellyfin
@@ -20,4 +20,4 @@ artifacts:
   - Amazon.Lambda.Serialization.Json.dll
   - Jellyfin.Plugin.AlexaSkill.dll
   - Refit.dll
-changelog: "Per-user config reworked into a clean expandable table (collapsed rows show status at a glance; expand to edit search/playback/invocation settings). Rebuilds of the interaction model are now scoped to your selected locale instead of rebuilding all 17, so the Rebuild button finishes in seconds rather than minutes. Ask for music by mood (e.g. 'play sleep music') in all 17 locales, with admin-customizable moods. Catalog sync now supports multiple locales beyond Italian, so non-English artist/album names are recognized when spoken with an accent. New per-user options for music delivery (seek bar vs. raw stream) and whether to announce each music track. When a song or album isn't found, the skill now suggests a plausible artist instead of a dead-end 'not found'. Video-audio endpoints now require a signed token (security hardening). Many smaller fixes: audiobook resume survives a crash, the 'searching…' hint no longer stalls, album ordering for multi-disc sets, and SSML escaping for metadata names. With huge thanks to @Gronsten (Mark Campbell) for the locale-scoped rebuild contribution."
+changelog: "Podcast playback now works: the skill was querying Jellyfin for a podcast data model that does not exist, so every podcast request returned not-found. Podcasts are now found as music-library albums and their latest episode plays. Artist search handles foreign-name accent drift: when Alexa mishears an artist name (e.g. Koop heard as cup on an Italian Echo), the Double Metaphone phonetic match now resolves it instead of returning not-found or matching a coincidental substring. Follow-me transfer between Echo devices: the Italian infinitive form (chiedi a mia collezione di seguirmi) now routes correctly, and the announcement no longer falsely claims resuming from the previous position. Full per-language phonetic research (7 languages) is included as reference data for future accent-coverage work."
