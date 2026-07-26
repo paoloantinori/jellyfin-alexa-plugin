@@ -138,12 +138,9 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             {
                 if (mode == SearchResponseMode.Fast)
                 {
-                    // Fast mode: skip prefix tiers, go straight to fuzzy-all. Use the
-                    // phonetic-aware overload so ASR accent drift (e.g. "Koop" heard as
-                    // "cup", both Double Metaphone code "KP") matches via the code collision.
-                    // JF-381.
+                    // Fast mode: skip prefix tiers, go straight to fuzzy-all
                     tierSw.Restart();
-                    BaseItem? fuzzy = FuzzyMatchPhonetic(musician, allArtists, a => a.Name, a => a.Id, _artistIndex, user);
+                    BaseItem? fuzzy = FuzzyMatch(musician, allArtists, a => a.Name, user);
                     tierSw.Stop();
                     tierReached = 4;
                     Logger.LogInformation(
@@ -164,7 +161,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                     var prefixCandidates = allArtists
                         .Where(a => a.Name.StartsWith(firstWord, StringComparison.OrdinalIgnoreCase))
                         .ToList();
-                    BaseItem? tier2Match = FuzzyMatchPhonetic(musician, prefixCandidates, a => a.Name, a => a.Id, _artistIndex, user);
+                    BaseItem? tier2Match = FuzzyMatch(musician, prefixCandidates, a => a.Name, user);
                     tierSw.Stop();
                     tierReached = 2;
                     Logger.LogInformation(
@@ -182,7 +179,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                         var fullPrefixCandidates = allArtists
                             .Where(a => a.Name.StartsWith(musician, StringComparison.OrdinalIgnoreCase))
                             .ToList();
-                        BaseItem? tier3Match = FuzzyMatchPhonetic(musician, fullPrefixCandidates, a => a.Name, a => a.Id, _artistIndex, user);
+                        BaseItem? tier3Match = FuzzyMatch(musician, fullPrefixCandidates, a => a.Name, user);
                         tierSw.Stop();
                         tierReached = 3;
                         Logger.LogInformation(
@@ -194,12 +191,11 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                         }
                     }
 
-                    // Tier 4: fuzzy match against ALL artists (catches misspellings). Phonetic
-                    // overload for accent drift (JF-381). See Fast-mode tier-4 above.
+                    // Tier 4: fuzzy match against ALL artists (catches misspellings)
                     if (artists.Count == 0)
                     {
                         tierSw.Restart();
-                        BaseItem? tier4Match = FuzzyMatchPhonetic(musician, allArtists, a => a.Name, a => a.Id, _artistIndex, user);
+                        BaseItem? tier4Match = FuzzyMatch(musician, allArtists, a => a.Name, user);
                         tierSw.Stop();
                         tierReached = 4;
                         Logger.LogInformation(
@@ -349,7 +345,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         else if (fastAutoPlay)
         {
             // Fast mode: pick the best fuzzy match and auto-play
-            var best = FuzzyMatchPhonetic(musician, artists, a => a.Name, a => a.Id, _artistIndex, user);
+            var best = FuzzyMatch(musician, artists, a => a.Name, user);
             if (best != null)
             {
                 artists = new List<BaseItem> { best };
