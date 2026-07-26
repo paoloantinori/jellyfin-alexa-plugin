@@ -35,7 +35,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
     /// circuiting the search before the phonetic/fuzzy tiers can find the intended match.
     /// JF-381.
     /// </summary>
-    private const int ContainmentLengthBand = 10;
+    private const int Tier1ContainmentLengthBand = 10;
 
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
@@ -139,7 +139,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             tierSw.Restart();
             artists = allArtists
                 .Where(a => a.Name.Contains(musician, StringComparison.OrdinalIgnoreCase)
-                    && a.Name.Length <= musician.Length + ContainmentLengthBand)
+                    && a.Name.Length <= musician.Length + Tier1ContainmentLengthBand)
                 .ToList();
             tierSw.Stop();
             tierReached = 1;

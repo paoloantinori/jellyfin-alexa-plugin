@@ -48,6 +48,14 @@ internal static class FuzzyMatcher
     private const int PhoneticFloorLengthBand = 3;
 
     /// <summary>
+    /// Score floor for a length-matched phonetic code collision. Must be above
+    /// <see cref="ContainmentScore"/> so a phonetic match beats a coincidental substring
+    /// containment (e.g. "cup" in "Porcupine Tree"). Named so the invariant is visible
+    /// if ContainmentScore ever changes. JF-381.
+    /// </summary>
+    private const int PhoneticFloorScore = ContainmentScore + 1;
+
+    /// <summary>
     /// Gets the fuzzy match threshold from the user, falling back to the compile-time constant.
     /// </summary>
     public static int GetDefaultThreshold(Entities.User? user) =>
@@ -218,7 +226,7 @@ internal static class FuzzyMatcher
                     {
                         // Length-matched phonetic collision: prefer over containment, keeping
                         // the Levenshtein differential as a tiebreaker among code matches.
-                        boosted = Math.Max(boosted, ContainmentScore + 1);
+                        boosted = Math.Max(boosted, PhoneticFloorScore);
                     }
                     score = boosted;
                 }
@@ -230,11 +238,11 @@ internal static class FuzzyMatcher
                 bestMatch = candidate;
 
                 // In the phonetic overload, early-return only when the score is above what
-                // a length-matched phonetic collision could achieve (ContainmentScore + 1).
-                // This allows a later phonetic match (floored at ContainmentScore + 1) to
+                // a length-matched phonetic collision could achieve (PhoneticFloorScore).
+                // This allows a later phonetic match (floored at PhoneticFloorScore) to
                 // beat a plain containment score (90). Without this gate, "Porcupine Tree"
                 // (containment 90) returns before "Koop" (phonetic 91) is evaluated.
-                if (bestScore > ContainmentScore + 1)
+                if (bestScore > PhoneticFloorScore)
                 {
                     return (bestMatch, bestScore);
                 }
