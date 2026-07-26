@@ -272,6 +272,8 @@ The plugin uploads your Jellyfin library (artists and albums) to Amazon's catalo
 
 Toggle individual features on or off from the configuration page: radio mode, podcasts, mood music, sleep timer, chapter navigation, recommendations, artist library queries, voice profile recognition, resume offer, and ASR compound-word correction.
 
+**Podcasts**: Jellyfin has no dedicated podcast type, so podcasts must be stored as albums in your Music library (one album per podcast show, one audio track per episode). The skill plays the latest episode by name.
+
 ### Custom Interaction Model
 
 Deploy a custom interaction model from a URL to override the built-in model for any of the 17 supported locales. This allows adding custom intents or utterances without modifying the plugin source. Use the **Deploy** button after entering the model URL and selecting the target locale. The **Restore** button reverts to the default embedded model.
