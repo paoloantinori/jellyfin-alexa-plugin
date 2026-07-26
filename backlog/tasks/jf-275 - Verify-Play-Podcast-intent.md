@@ -3,10 +3,10 @@ id: JF-275
 title: >-
   PlayPodcastIntent is broken: MediaTypes=Audio filter on Series never matches
   (never worked in production)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-06-08 09:31'
-updated_date: '2026-07-25 12:54'
+updated_date: '2026-07-26 13:56'
 labels:
   - e2e
   - podcasts
@@ -87,6 +87,12 @@ created: 2026-07-25 12:54
 FIX DIRECTION (not yet implemented): rewrite PlayPodcastIntentHandler to (a) drop MediaTypes=Audio from any Series query OR query MusicAlbum by name, (b) fetch Audio track children sorted by DateCreated desc for 'latest episode', (c) play via the existing /Audio/{id}/stream path. Requires confirming how to distinguish a podcast album from a music album (folder path? a config allowlist? user intent only via the dedicated PlayPodcast utterance?). Open question for the fix task: is treating podcasts-as-albums acceptable, or does the team want to require a dedicated podcast library/plugin?
 ---
 <!-- COMMENTS:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fixed in JF-373 (v0.11.1.0): PlayPodcastIntentHandler now queries MusicAlbum/Audio instead of the non-existent Series/MediaTypes=Audio model. Verified live on minix: 'play the podcast In Our Time' returns AudioPlayer.Play to the newest episode. E2E fixture passes via SMAPI simulate-skill.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->

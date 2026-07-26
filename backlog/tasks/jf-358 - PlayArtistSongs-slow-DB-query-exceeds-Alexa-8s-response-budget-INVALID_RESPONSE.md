@@ -3,9 +3,10 @@ id: JF-358
 title: >-
   PlayArtistSongs slow DB query exceeds Alexa 8s response budget
   (INVALID_RESPONSE)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-20 16:13'
+updated_date: '2026-07-26 13:57'
 labels:
   - performance
   - playback
@@ -53,3 +54,18 @@ Acceptance criteria:
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining, or findings applied/tracked)
 <!-- DOD:END -->
+
+## Comments
+
+<!-- COMMENTS:BEGIN -->
+created: 2026-07-26 13:57
+---
+REVIEWED 2026-07-26: the root cause identified in this task (MediaTypes=Audio not constraining ArtistIds queries) was ALREADY FIXED inline in the handler. Line 387 now uses IncludeItemTypes=BaseItemKind.Audio (not MediaTypes=Audio), with an explicit JF-358 comment explaining why. The fix also adds Limit = GetInitialFetchSize() to fetch only the first page, and uses GetItemList (not GetItemsResult) to avoid the slow dbQuery.Count(). This task is LIKELY OBSOLETE: the specific 12s query path described here has been addressed. The progressive response (SendProgressiveResponse at line 103) is already fire-and-forget. Remaining risk: the in-memory index path (used when _artistIndex.IsReady) is sub-ms; the DB fallback path still uses GetItemList but with the corrected filter. Close as Done unless a live 12s repro resurfaces.
+---
+<!-- COMMENTS:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+The root cause (MediaTypes=Audio not constraining ArtistIds, causing sort over thousands of items + 8s budget burn) was already fixed inline in PlayArtistSongsIntentHandler.cs:387 with IncludeItemTypes=BaseItemKind.Audio + Limit + GetItemList (not GetItemsResult). The progressive response is fire-and-forget. No further action needed unless a live 12s repro resurfaces.
+<!-- SECTION:FINAL_SUMMARY:END -->
