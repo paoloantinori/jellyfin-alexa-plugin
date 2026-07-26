@@ -457,6 +457,16 @@ Encryption of tokens at rest is not currently implemented.
 
 The video-audio streaming endpoints (audiobook HLS, VideoApp seek-bar playback) are additionally protected by **signed item-scoped stream tokens** (HMAC-SHA256, 10-hour TTL). These tokens are auto-generated per server instance and embedded in stream URLs by the skill. A bare item GUID without a valid token returns HTTP 401, preventing unauthorized streaming even if a GUID is leaked.
 
+### How do I set up podcasts?
+
+Jellyfin has no dedicated podcast type. Podcasts must be stored as **albums in your Music library**: one album per podcast show, with each episode as an audio track (mp3/m4a). To listen, say "play the podcast [name]" (Italian: "riproduci il podcast [nome]"). The skill plays the latest episode (the most recently added track).
+
+### Alexa doesn't recognize my non-English artist/album names
+
+The skill syncs your library's artist and album names to Amazon's catalog so Alexa recognizes them when spoken with an accent. By default (since v0.11.2.0), this sync covers **all active locales**, not just Italian. If you installed an earlier version, the sync may have been Italian-only. To fix: open the plugin config page, find the **Custom Interaction Model & Catalog** section, and make sure the catalog sync locales field is set to `*` (all locales) or lists your specific locales.
+
+For artist names that Alexa consistently mishears (e.g. a Swedish name like "Koop" transcribed as "cup" on an Italian Echo), the skill now uses Double Metaphone phonetic matching to resolve accent drift automatically. No configuration needed.
+
 ## Troubleshooting
 
 > **If the skill seems badly broken after a config change or deploy, check this first:** Alexa caches the interaction model and catalog slot data on Amazon's side, and changes take time to propagate. An utterance that worked yesterday may fail today (or vice versa) purely because a model rebuild is still in progress or a catalog version hasn't been promoted yet. Wait 2–5 minutes after any change that triggers a rebuild (invocation name, mood words, catalog sync, "Rebuild models"), then test again. Verify the model build status in the Alexa Developer Console (your skill → **Build** → **Model**) shows "Ready" before assuming a code regression.

@@ -100,9 +100,9 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Gets or sets the additional locales (beyond it-IT) to include in catalog sync, as a
     /// comma-separated string of locale codes (e.g. "de-DE,en-US"). it-IT is always synced.
     /// Only locales with phonetic synonym generators (de/es/fr/pt/ja/nl) get phonetic variants;
-    /// others get raw names. Empty = it-IT only (default). Use "*" to sync all active locales.
+    /// others get raw names. Use "*" to sync all active locales (default since v0.11.2.0).
     /// </summary>
-    public string CatalogSyncLocales { get; set; } = string.Empty;
+    public string CatalogSyncLocales { get; set; } = "*";
 
     /// <summary>
     /// Gets or sets a value indicating whether the intent simulator endpoint is enabled.
