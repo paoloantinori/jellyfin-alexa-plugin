@@ -236,6 +236,8 @@ The plugin uses **Login with Amazon (LWA)** to create and manage your Alexa skil
   <img src="screenshots/settings.png" alt="Plugin Configuration" width="700" />
 </div>
 
+The configuration page has two sections: global settings at the top (server address, SSL, Amazon credentials, feature toggles, announcements, playback defaults, cache, search, catalog sync, mood overrides), and the per-user skill table below (each row expands to show search mode, playback, music delivery, invocation name, and library access for that user).
+
 1. Open your Jellyfin admin dashboard
 2. Go to **Plugins** and find **AlexaSkill** in the installed plugins list
 3. Click on the plugin to open its configuration page
