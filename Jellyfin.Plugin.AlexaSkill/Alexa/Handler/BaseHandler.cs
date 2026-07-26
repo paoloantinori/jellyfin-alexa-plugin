@@ -1286,6 +1286,40 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// Phonetic-aware fuzzy match: like <see cref="FuzzyMatch{T}"/> but gives a score bonus
+    /// (and a threshold-clearing floor) when the candidate's pre-computed Double Metaphone
+    /// code collides with the query's. Use this overload for cross-language accent drift
+    /// where spelling diverges but pronunciation matches (e.g. an it-IT Echo transcribing
+    /// "Koop" as "cup", both code "KP"). The non-phonetic overload above would miss it.
+    /// JF-381.
+    /// </summary>
+    /// <typeparam name="T">The candidate item type.</typeparam>
+    /// <param name="artistIndex">The artist index holding pre-computed phonetic codes (may be null).</param>
+    protected T? FuzzyMatchPhonetic<T>(string query, IEnumerable<T> candidates, Func<T, string> selector, Func<T, Guid> idSelector, IArtistIndex? artistIndex, Entities.User? user = null, int threshold = -1)
+        where T : class
+    {
+        int effectiveThreshold = threshold >= 0 ? threshold : FuzzyMatcher.GetDefaultThreshold(user);
+
+        if (artistIndex == null)
+        {
+            // No phonetic codes available; fall back to the Levenshtein-only path.
+            return FuzzyMatch(query, candidates, selector, user, effectiveThreshold);
+        }
+
+        var result = FuzzyMatcher.FindBestMatch(
+            query,
+            candidates,
+            selector,
+            idSelector,
+            id => artistIndex.TryGetPhoneticCode(id, out var codes) ? codes : null,
+            effectiveThreshold);
+
+        Logger.LogDebug("FuzzyMatchPhonetic: query={Query}, best={BestMatch}, threshold={Threshold}, matched={Matched}",
+            query, result != null ? selector(result) : "(null)", effectiveThreshold, result != null);
+        return result;
+    }
+
+    /// <summary>
     /// Fuzzy fallback for handlers whose exact Jellyfin searchTerm query returned 0.
     /// Fetches all items of the given types from the user's library and fuzzy-matches
     /// the query against their names via FuzzyMatcher partial-ratio (Levenshtein).

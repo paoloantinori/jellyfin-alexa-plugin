@@ -219,4 +219,53 @@ public class FuzzyMatcherPreFilterTests
     }
 
     private record TestItem(string Name);
+
+    // --- JF-381: phonetic code-match should clear the threshold for ASR accent drift ---
+    // The Koop case (2026-07-25 on-device): an it-IT Echo transcribed "Koop" as "cup".
+    // Double Metaphone gives both code "KP" (codesMatch=True), but the additive
+    // PhoneticBonus (15) on top of a low Levenshtein base (~33) landed at 48, below the
+    // DefaultThreshold (60), so the match was rejected. A Metaphone code collision means
+    // the words ARE phonetically equivalent, so it should clear the threshold. Fix: a
+    // PhoneticMatchFloor equal to DefaultThreshold when codes match.
+
+    [Fact]
+    public void FindBestMatch_PhoneticOverload_MatchesCupToKoop_JF381()
+    {
+        var koopId = System.Guid.NewGuid();
+        var items = new List<PhoneticCandidate>
+        {
+            new(koopId, "Koop"),
+            new(System.Guid.NewGuid(), "Radiohead"),
+            new(System.Guid.NewGuid(), "Metallica")
+        };
+
+        var result = FuzzyMatcher.FindBestMatch(
+            query: "cup",
+            candidates: items,
+            selector: c => c.Name,
+            candidateIdSelector: c => c.Id,
+            phoneticLookup: id => id == koopId ? DoubleMetaphone.Encode("Koop") : null);
+
+        Assert.NotNull(result);
+        Assert.Equal("Koop", result!.Name);
+    }
+
+    [Fact]
+    public void FindBestMatch_LevenshteinOnly_DoesNotMatchCupToKoop_JF381()
+    {
+        // Contrast guard: the NON-phonetic overload (what the artist path uses today) must
+        // still FAIL to match "cup" to "Koop". This proves the gap is closed only by the
+        // phonetic path, not by loosening Levenshtein.
+        var items = new List<TestItem>
+        {
+            new("Koop"),
+            new("Radiohead"),
+            new("Metallica")
+        };
+
+        var result = FuzzyMatcher.FindBestMatch("cup", items, i => i.Name);
+        Assert.Null(result);
+    }
+
+    private record PhoneticCandidate(System.Guid Id, string Name);
 }

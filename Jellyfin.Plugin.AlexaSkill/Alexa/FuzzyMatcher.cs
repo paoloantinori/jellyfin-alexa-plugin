@@ -201,7 +201,14 @@ internal static class FuzzyMatcher
                     if (PhoneticCodesMatch(queryPhonetic.Primary, queryPhonetic.Alternate,
                             candidatePhonetic.Value.Primary, candidatePhonetic.Value.Alternate))
                     {
-                        score = Math.Min(score + PhoneticBonus, 100);
+                        // A Double Metaphone code collision means the words are phonetically
+                        // equivalent by the algorithm's definition, so it should clear the
+                        // threshold even when the spellings diverge enough that Levenshtein
+                        // alone scores low (e.g. ASR accent drift "Koop" heard as "cup": both
+                        // code "KP", but Levenshtein ~33). Floor the score at DefaultThreshold
+                        // on a code match, in addition to the additive bonus for near-misses.
+                        // JF-381.
+                        score = Math.Max(Math.Min(score + PhoneticBonus, 100), DefaultThreshold);
                     }
                 }
             }
