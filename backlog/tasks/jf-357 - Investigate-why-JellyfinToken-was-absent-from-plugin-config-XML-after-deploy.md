@@ -1,9 +1,10 @@
 ---
 id: JF-357
 title: Investigate why JellyfinToken was absent from plugin config XML after deploy
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-20 15:45'
+updated_date: '2026-07-27 07:50'
 labels:
   - deploy
   - account-linking
@@ -43,3 +44,21 @@ Acceptance criteria:
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining, or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+RESOLVED BY INVESTIGATION 2026-07-27 (no code fix warranted; mechanism proven, documented).
+
+PROVEN MECHANISM (suspect 1, the full-config POST): `POST /Plugins/{id}/Configuration` is a wholesale-replace through System.Text.Json, which honors `[JsonIgnore]` and omits JellyfinToken/SmapiDeviceToken from the body. A full-config POST done to toggle one flag (e.g. SimulatorEnabled on 2026-07-20, the JF-353 deploy day this bug was filed) re-serializes the config WITHOUT the token fields, and that state is written back to the XML on save, dropping them. Same wholesale-replace class as deploy_config_api_no_full_post (which proved Users wiped to 0 the same way).
+
+THE PLUGIN'S OWN SAVE PATH IS SAFE (verified against code): AlexaSkillController.cs:241-243 sets user.JellyfinToken on the in-memory object then calls Plugin.Instance.SaveConfiguration(), which persists via Jellyfin's XmlSerializer. XmlSerializer ignores [JsonIgnore] (User.cs:41) and WRITES the token. So account-linking and the partial alexaskill/api/config PATCH endpoint are safe; only the external full-config POST drops the token.
+
+Suspect 2 (DLL hot-swap) remains a secondary, UNPROVEN theory; it was likely a full-POST mis-attributed to the hot-swap during the same dev session.
+
+NO CODE FIX: the plugin's serialization is correct. The fix is operational (already documented): NEVER full-POST /Plugins/{id}/Configuration; use the partial alexaskill/api/config PATCH for single-field changes. If the token is wiped, re-link the account.
+
+Memory deploy_hotswap_jellyfintoken.md updated from "inferred" to "proven" (full-config POST mechanism), per the task's AC.
+
+AC MET: mechanism proven (full-config POST via System.Text.Json [JsonIgnore] omission + wholesale replace); plugin save path confirmed safe; memory updated.
+<!-- SECTION:FINAL_SUMMARY:END -->

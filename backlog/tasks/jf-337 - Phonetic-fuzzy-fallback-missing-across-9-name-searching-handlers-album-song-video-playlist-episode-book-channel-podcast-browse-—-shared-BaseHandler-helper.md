@@ -4,10 +4,10 @@ title: >-
   Phonetic/fuzzy fallback missing across 9 name-searching handlers
   (album/song/video/playlist/episode/book/channel/podcast/browse) — shared
   BaseHandler helper
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-13 05:55'
-updated_date: '2026-07-22 21:15'
+updated_date: '2026-07-27 07:51'
 labels:
   - search
   - phonetic
@@ -146,6 +146,23 @@ RECONCILIATION 2026-07-22 (user flagged the task description was stale; verified
 
 - AC #1/#2/#3 are effectively DONE (the helper exists + 8 adoptions). The remaining real gap is AC #4 (locale phonetic quality) which folds into JF-362. This task can be closed as 'handler-layer work complete; catalog-synonym gap tracked in JF-362'.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+VERIFIED RESOLVED 2026-07-27 (handler-layer work shipped; no code change this session).
+
+The task's own 2026-07-22 reconciliation note is accurate, confirmed against current code:
+- AC #1 (shared helper): SHIPPED as BaseHandler.SearchItemsFuzzyAsync (BaseHandler.cs:1334). Non-phonetic FuzzyMatcher.FindBestMatchWithScore (3-arg, pure Levenshtein, threshold 60); cold-path-only (exact-search 0 results). Originally SearchItemsPhoneticAsync in commit c14475d, renamed since.
+- AC #2 (adoptions): 8 ADOPTIONS verified. Direct callers: BrowseLibrary, PlayBook, PlayChannel, PlayEpisode, PlayPodcast, PlayVideo, SearchMedia (7 intent files). PlayPlaylist uses it via the BaseHandler-internal call at BaseHandler.cs:2535. PlaySong deliberately does NOT use it (PlaySongIntentHandler.cs:207 NOTE: Audio catalog too large; uses ArtistSearch cross-media fallback instead) - its only reference is the explanatory comment.
+- AC #3 (ordering): the helper runs on exact-search 0 results before the not-found, verified in the adoption sites.
+
+AC #4 (locale phonetic quality for non-Romance) FOLDED into JF-362, which is the parent of JF-379 (the data-driven generative-phonetics spec committed last session, 814e93b). The 'sol coffin'->'Soul Coughing' accent-drift case that drove this umbrella is a CATALOG-LAYER problem (PhoneticSynonymGenerator), not a handler-fuzzy problem: a prior token-level phonetic FuzzyManager fix was REVERTED in /code-review high (false positive: 'sol coffin' also matched 'Soul Train'). The catalog-layer fix is JF-379.
+
+AC #5 (no regression): PlayArtistSongs/FindSong untouched; SearchItemsFuzzyAsync is additive (cold path only).
+
+Task closed per its own reconciliation recommendation: handler-layer work complete; catalog-synonym gap tracked in JF-362/JF-379.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
