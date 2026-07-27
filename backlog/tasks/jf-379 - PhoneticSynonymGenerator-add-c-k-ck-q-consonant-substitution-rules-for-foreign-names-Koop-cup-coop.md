@@ -6,13 +6,15 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-07-25 18:07'
-updated_date: '2026-07-25 18:46'
+updated_date: '2026-07-27 05:35'
 labels:
   - enhancement
   - phonetic
   - asr
   - artist-search
   - catalog
+  - designed
+  - multi-session
 dependencies: []
 modified_files:
   - Jellyfin.Plugin.AlexaSkill/Alexa/Catalog/PhoneticSynonymGenerator.cs
@@ -76,3 +78,20 @@ created: 2026-07-25 18:46
 NEXT STEP per the synthesis: run /superpowers:brainstorming to design how PhoneticSynonymGenerator consumes the per-language rule tables (data structure, variant bounding, device-captured forms first) before implementing. Do not implement directly from the research.
 ---
 <!-- COMMENTS:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+REDESIGNED 2026-07-27 from hand-rolled rules to a data-driven GENERATIVE composite, per maintainer requirement (no per-case hand substitutions; must generalize across languages).
+
+Research (claudedocs/research_jf379_generative_phonetic_libs_2026-07-27.md, exhaustive, primary sources): NO turnkey library GENERATES L1-transfer accent variants. The build is a composite:
+1. Forward English g2p (text -> IPA): Epitran rule engine (MIT, port to C#; Go port exists as reference) + CMUdict (public domain) for English-word coverage. Spot-check: CMUdict contains koop/bush/soul/coughing/pink/floyd/adele/metallica/nirvana; misses novel coinages (radiohead) which fall back to rules.
+2. Per-L1 phonological interference (the core win): a once-curated map from English phonemes to L1-substituted phonemes, DERIVED FROM PHOIBLE 2.0 feature vectors (CC-BY). Replaces per-case hand rules with one feature-distance table per L1.
+3. Inverse orthography (per-L1 IPA -> spelling): necessarily per-L1, small static table.
+
+SCOPE: only the 7 L1s the plugin already has generators for (it/de/es/fr/pt/ja/nl), bounded to the user's catalog vocabulary. NOT all languages.
+
+Design spec: docs/superpowers/specs/2026-07-27-jf379-generative-phonetic-synonyms-design.md (committed 814e93b). Multi-session build; spec captures open decisions for review (CMUdict delivery: full vs trimmed-per-catalog vs rule-only; interference curation method; rollout gating behind a feature flag).
+
+NOT YET IMPLEMENTED. Status remains To Do (designed, awaiting build). Related: JF-381 (query-time Double Metaphone, shipped, fixes the reported Koop/cup defect at the query layer; JF-379 is the catalog-layer one-shot complement).
+<!-- SECTION:FINAL_SUMMARY:END -->

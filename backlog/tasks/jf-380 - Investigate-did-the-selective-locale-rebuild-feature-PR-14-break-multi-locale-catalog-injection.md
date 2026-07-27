@@ -3,9 +3,10 @@ id: JF-380
 title: >-
   Investigate: did the selective-locale rebuild feature (PR #14) break
   multi-locale catalog injection?
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-25 18:07'
+updated_date: '2026-07-26 15:00'
 labels:
   - bug
   - catalog
@@ -40,6 +41,12 @@ LIKELY AREA: CatalogManager catalog-injection + how it calls the redeploy/push w
 - [ ] #3 Regression test: a catalog sync injects the catalog into every active locale's model, not just one
 - [ ] #4 Determine if this is why on-device artist recognition (e.g. 'Koop') fails despite a synced catalog with 86 artists
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+INVESTIGATED 2026-07-26: NOT a regression from PR #14. The catalog sync was it-IT only because CatalogSyncLocales config was empty (the documented default = it-IT only). The LibrarySyncService.ResolveSyncLocalesAsync correctly handles '*' (all active locales) and explicit locale lists. The selective-locale rebuild feature (PR #14) only affects the manual rebuild button endpoint, not the catalog sync path. FIX APPLIED: set CatalogSyncLocales='*' on the live minix instance. The next catalog sync will inject JellyfinArtist/AlbumName catalogs into all active locales. Could not verify the multi-locale sync end-to-end (classifier blocked the SSH trigger command), but the config change is confirmed and the code path is correct by inspection.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

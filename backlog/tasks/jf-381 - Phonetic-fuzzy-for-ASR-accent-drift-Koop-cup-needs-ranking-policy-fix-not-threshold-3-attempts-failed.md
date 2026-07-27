@@ -3,9 +3,10 @@ id: JF-381
 title: >-
   Phonetic fuzzy for ASR accent drift (Koop->cup) - needs ranking-policy fix,
   not threshold (3 attempts failed)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-26 05:41'
+updated_date: '2026-07-27 05:05'
 labels:
   - enhancement
   - artist-search
@@ -35,6 +36,26 @@ An it-IT Echo transcribed "Koop" as "cup" (2026-07-25). Three fix attempts all f
 - [ ] #3 Unit test: cup + Koop + Porcupine Tree all in the candidate set -> Koop wins (the regression guard that broke v1/v2/v3)
 - [ ] #4 Live verify on minix against the real library (which has Porcupine Tree): PlayArtistSongs slot=cup resolves to Koop, NOT Porcupine Tree
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+VERIFIED RESOLVED 2026-07-27 (shipped; the task description's "all reverted, branch clean" was stale).
+
+The task description captured the state after the v1 revert (commit fab2c72), but a subsequent successful approach re-landed the fix:
+- 1766b6f: JF-381 v1 (phonetic fuzzy)
+- fab2c72: REVERTED v1 (Porcupine Tree regression) - the state the task describes
+- 54cb038: RE-LANDED as "phonetic fuzzy + tier-1 length gate for ASR accent drift (JF-381)" - the working approach that shipped
+- be0a31a: /simplify extracted PhoneticFloorScore constant
+
+SHIPPED CODE: FuzzyManager.cs phonetic FindBestMatchWithScore overload floors a length-matched phonetic code collision at PhoneticFloorScore (ContainmentScore+1 = 91) so it beats a coincidental substring containment (90). Gated by PhoneticFloorLengthBand=3 (candidate within 3 chars of query length) so it only fires for genuine accent-drift shape (cup->Koop, both code KP, length 3 vs 4), not coincidental substrings (cup->Porcupine Tree, large length difference). This is approach (b) from AC #1 (phonetic floor at ContainmentScore+1 when length-matched). The early-return gate was tuned so a later phonetic match can beat an earlier containment match.
+
+AC #3 (unit test regression guard): FindBestMatch_Phonetic_PrefersKoopOverPorcupineTree_JF381 in FuzzyMatcherPreFilterTests.cs locks cup+Koop+Porcupine Tree -> Koop wins. Plus FindBestMatch_Phonetic_MatchesCupToKoop_JF381.
+
+AC #4 (LIVE VERIFIED on minix 2026-07-27): simulator PlayArtistSongs slot=cup locale=it-IT -> played "In a Heartbeat" by Koop feat. Terry Callier (track 810e7ee8...), NOT Porcupine Tree. ArtistSearch tier=4 InMemoryFuzzyAll matched=True for cup, phonetic floor ranked Koop above Porcupine Tree. The original "Koop heard as cup" defect that spawned the phonetics cluster (JF-362/377/379/381) is resolved end-to-end on the real library.
+
+No code change this session. Task closed as verified-resolved.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
