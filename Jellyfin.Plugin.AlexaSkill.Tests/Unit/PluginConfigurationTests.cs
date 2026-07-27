@@ -351,4 +351,134 @@ public class PluginConfigurationTests
 
         Assert.StartsWith("https://example.com:8096/Items/", streamUrl.ToString());
     }
+
+    // JF-319: proves the Users collection is safe under concurrent read-during-write.
+    // Before the copy-on-write fix, a config edit concurrent with a request that foreach-over
+    // config.Users threw InvalidOperationException (Collection was modified) or produced a torn
+    // read. This test hammers AddUser/DeleteUser from one thread while many readers enumerate
+    // config.Users and call GetUserById, and asserts no reader throws and no torn read occurs.
+    [Fact]
+    public void Users_ConcurrentReadWrite_NoInvalidOperationExceptionOrTornRead()
+    {
+        var config = CreateConfig();
+        var stableId = Guid.NewGuid();
+        config.AddUser(TestHelpers.CreateTestUser(stableId, "stable"));
+
+        var cts = new System.Threading.CancellationTokenSource();
+        var readerExceptions = new System.Collections.Concurrent.ConcurrentQueue<Exception>();
+        var readersDone = new System.Threading.CountdownEvent(4);
+
+        // 4 readers: enumerate config.Users + lookup, for the test duration.
+        for (int r = 0; r < 4; r++)
+        {
+            System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try
+                {
+                    var token = cts.Token;
+                    while (!token.IsCancellationRequested)
+                    {
+                        // foreach over the live property is the exact hot-path pattern that used to race.
+                        foreach (var u in config.Users)
+                        {
+                            // Touch a field to make a torn read observable (not just skipped).
+                            _ = u.Id;
+                        }
+
+                        // GetUserById is the other hot-path reader; must not throw or miss the stable user
+                        // due to a swap (the stable user is never deleted, so it must always resolve).
+                        var found = config.GetUserById(stableId);
+                        if (found == null || found.Id != stableId)
+                        {
+                            throw new InvalidOperationException("Torn read: stable user missing during concurrent write");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    readerExceptions.Enqueue(ex);
+                }
+                finally
+                {
+                    readersDone.Signal();
+                }
+            });
+        }
+
+        // 1 writer: repeatedly add + delete a transient user, racing the readers.
+        var transientId = Guid.NewGuid();
+        for (int i = 0; i < 2000; i++)
+        {
+            config.AddUser(TestHelpers.CreateTestUser(transientId, "transient" + i));
+            config.DeleteUser(transientId);
+        }
+
+        cts.Cancel();
+        Assert.True(readersDone.Wait(TimeSpan.FromSeconds(10)), "readers did not finish in time");
+        Assert.Empty(readerExceptions);
+    }
+
+    [Fact]
+    public void Users_DeleteUser_RemovesAndPreservesOthers()
+    {
+        var config = CreateConfig();
+        var keepId = Guid.NewGuid();
+        var removeId = Guid.NewGuid();
+        config.AddUser(TestHelpers.CreateTestUser(keepId, "keep"));
+        config.AddUser(TestHelpers.CreateTestUser(removeId, "remove"));
+
+        bool removed = config.DeleteUser(removeId);
+
+        Assert.True(removed);
+        Assert.Null(config.GetUserById(removeId));
+        Assert.NotNull(config.GetUserById(keepId));
+        Assert.Single(config.Users);
+    }
+
+    // JF-319 code-review: proves AddUser's CAS retry loop closes the lost-update hazard. With
+    // concurrent writers, the old build-then-unconditional-swap could silently drop a user (two
+    // writers read the same snapshot; the second swap clobbers the first). The CAS loop commits
+    // only if the snapshot hasn't changed since read, retrying otherwise. This test fires many
+    // distinct users from concurrent writers and asserts NONE are lost. Against the pre-CAS code,
+    // this test drops users (verified by reverting the CAS loop).
+    [Fact]
+    public void AddUser_ConcurrentWriters_NoUserLost()
+    {
+        var config = CreateConfig();
+        const int writerCount = 4;
+        const int usersPerWriter = 250;
+        var allIds = new System.Collections.Concurrent.ConcurrentBag<Guid>();
+
+        var writersDone = new System.Threading.CountdownEvent(writerCount);
+        for (int w = 0; w < writerCount; w++)
+        {
+            System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try
+                {
+                    for (int i = 0; i < usersPerWriter; i++)
+                    {
+                        var id = Guid.NewGuid();
+                        allIds.Add(id);
+                        config.AddUser(TestHelpers.CreateTestUser(id, "u" + id));
+                    }
+                }
+                finally
+                {
+                    writersDone.Signal();
+                }
+            });
+        }
+
+        Assert.True(writersDone.Wait(TimeSpan.FromSeconds(30)), "writers did not finish in time");
+
+        // Every added user must be present. A lost update (clobbered swap) would leave some missing.
+        Assert.Equal(writerCount * usersPerWriter, allIds.Count);
+        foreach (var id in allIds)
+        {
+            Assert.NotNull(config.GetUserById(id));
+        }
+
+        Assert.Equal(writerCount * usersPerWriter, config.Users.Count);
+    }
 }

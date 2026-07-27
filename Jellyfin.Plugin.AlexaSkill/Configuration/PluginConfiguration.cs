@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Security.Cryptography;
+using System.Threading;
 using Alexa.NET.Management;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Manifest;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
@@ -224,10 +226,26 @@ public class PluginConfiguration : BasePluginConfiguration
     public int MaxQueueDisplayItems { get; set; } = 10;
 
     /// <summary>
-    /// Gets or sets the list of users.
+    /// Gets or sets the list of users. Copy-on-write (JF-319): the backing collection is
+    /// swapped atomically on every write (AddUser/DeleteUser) via a CAS loop
+    /// (<see cref="Interlocked.CompareExchange{T}(ref T, T, T)"/>), so concurrent readers (the
+    /// request hot path iterates this via GetUserById/GetUserByPersonId and several handlers
+    /// foreach over config.Users) always see one consistent snapshot that production write paths
+    /// never mutate in place. This eliminates the <c>InvalidOperationException: Collection was
+    /// modified</c> race and torn reads without requiring callers to take a lock. The setter is
+    /// called by XmlSerializer deserialization with a fresh instance; runtime writes go through
+    /// AddUser/DeleteUser, which build a new collection and commit via CAS loop so concurrent
+    /// writers cannot silently clobber each other. (Tests may bypass this via config.Users.Add
+    /// directly; the invariant holds for production code, which has no in-place mutation.)
     /// </summary>
 #pragma warning disable CA2227
-    public Collection<User> Users { get; set; } = new Collection<User>();
+    public Collection<User> Users
+    {
+        get => _users;
+        set => Interlocked.Exchange(ref _users, value);
+    }
+
+    private Collection<User> _users = new Collection<User>();
 #pragma warning restore CA2227
 
     // Custom Interaction Model
@@ -443,16 +461,27 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <param name="user">The user to add.</param>
     public void AddUser(User user)
     {
-        // check if the user is already inside the list
-        foreach (User u in Users)
+        // Copy-on-write (JF-319): build a new collection and commit it via a CAS loop so a
+        // concurrent writer cannot be silently lost. The duplicate check-then-add TOCTOU is
+        // inherent (the caller's own GetUserById-then-AddUser already has this race, see
+        // ConfigurationController.cs), but the CAS loop guarantees the build and the swap
+        // commit against the SAME snapshot, eliminating the lost-update window between them.
+        while (true)
         {
-            if (user.Id == u.Id)
+            Collection<User> snapshot = _users;
+            if (snapshot.Any(u => user.Id == u.Id))
             {
                 throw new ArgumentException("User already inside list");
             }
-        }
 
-        Users.Add(user);
+            var next = new Collection<User>(snapshot.ToList()) { user };
+            if (Interlocked.CompareExchange(ref _users, next, snapshot) == snapshot)
+            {
+                return;
+            }
+
+            // Another writer swapped in between our read and commit; re-check against the new snapshot.
+        }
     }
 
     /// <summary>
@@ -503,15 +532,24 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <returns>True if the user was deleted, false otherwise.</returns>
     public bool DeleteUser(Guid guid)
     {
-        foreach (User u in Users)
+        // Copy-on-write (JF-319): build a new collection without the user and commit via a CAS
+        // loop so a concurrent writer cannot be silently lost (see AddUser for the rationale).
+        while (true)
         {
-            if (guid == u.Id)
+            Collection<User> snapshot = _users;
+            if (!snapshot.Any(u => guid == u.Id))
             {
-                return Users.Remove(u);
+                return false;
             }
-        }
 
-        return false;
+            var next = new Collection<User>(snapshot.Where(u => u.Id != guid).ToList());
+            if (Interlocked.CompareExchange(ref _users, next, snapshot) == snapshot)
+            {
+                return true;
+            }
+
+            // Another writer swapped in; re-check against the new snapshot.
+        }
     }
 }
 

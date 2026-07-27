@@ -3,10 +3,10 @@ id: JF-319
 title: >-
   Concurrency: Synchronize the Users collection read/write on the request hot
   path
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-12 14:59'
-updated_date: '2026-07-13 20:17'
+updated_date: '2026-07-27 08:54'
 labels:
   - concurrency
   - reliability
@@ -33,6 +33,25 @@ Fix: snapshot the collection to an immutable array on read, or guard reads/write
 - [ ] #3 Add/Delete user still persists correctly to plugin config (serialization unchanged)
 - [ ] #4 A concurrency test (or documented reasoning) demonstrates the read path is safe under concurrent mutation
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+IMPLEMENTED 2026-07-27 (committed, deployed, live-verified).
+
+Fix: PluginConfiguration.Users converted from a plain auto-property Collection<User> to COPY-ON-WRITE with a CAS retry loop. The backing _users field is swapped atomically; AddUser/DeleteUser build a new collection and commit via Interlocked.CompareExchange(ref _users, next, snapshot), retrying if another writer swapped in between read and commit. Every reader (GetUserById/GetUserByPersonId, and the ~15 callers that foreach/index/LINQ over config.Users) sees one consistent, never-mutated-in-place snapshot. This eliminates the InvalidOperationException: Collection was modified race and torn reads on the request hot path without requiring callers to take a lock.
+
+AC #1 (no InvalidOperationException/torn read under concurrent Add/Remove): DONE. Concurrency test Users_ConcurrentReadWrite_NoInvalidOperationExceptionOrTornRead proves it - and FAILS against the pre-fix code (verified by reverting: throws the exact race).
+AC #2 (GetUserById/GetUserByPersonId read a consistent snapshot): DONE - they foreach over the immutable-per-read _users reference.
+AC #3 (Add/Delete persists correctly): DONE - XmlSerializer round-trip preserved (setter swaps in the deserialized instance); existing AddUser/DeleteUser invariants (duplicate throws, bool return) preserved.
+AC #4 (concurrency test demonstrates read safety): DONE - plus a second test AddUser_ConcurrentWriters_NoUserLost that proves the CAS loop closes the writer-writer lost-update hazard (also FAILS against the pre-CAS code).
+
+CODE-REVIEW HIGH (5 agents): one real finding - the lost-update hazard across concurrent writers (silent user loss). Fixed with the CAS retry loop per maintainer decision. Doc comment scoped to production write paths (tests bypass via config.Users.Add directly; the invariant holds for production code which has no in-place mutation). /simplify (4 agents) clean. Release build 0 warnings, 2636 tests green.
+
+LIVE-VERIFIED on minix: deployed to active 0.11.2.0 (identifier present), config survived (1 user), PlayArtistSongs smoke test resolved the user + played Pink Floyd (hot-path GetUserById read works under COW).
+
+Note: the separate caller-side check-then-act race (ConfigurationController.cs:1062 comment, GetUserById-then-AddUser) is out of scope and already tolerated by the codebase; the CAS loop closes the lost-update window INSIDE AddUser/DeleteUser, not that caller-side race.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
