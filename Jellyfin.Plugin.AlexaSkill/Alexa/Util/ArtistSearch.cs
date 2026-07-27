@@ -218,6 +218,86 @@ internal static class ArtistSearch
         return fuzzy != null ? new List<BaseItem> { fuzzy } : Array.Empty<BaseItem>();
     }
 
+    /// <summary>
+    /// Detects a coincidental substring-containment match: the candidate name is shorter
+    /// than the query, sits inside the query as a substring, yet its words cover fewer than
+    /// half of the query's CONTENT words (locale stop words excluded). This is the false-positive
+    /// shape from JF-377 (e.g. query "zzzqqq nonexistent artist" vs artist "artist"): the
+    /// containment shortcut in FuzzyMatcher.PartialRatio scores it 90, but only one of three
+    /// content words belongs to the candidate, so it is unrelated noise rather than an intended
+    /// match. Returns false for every legitimate shape: candidate at least as long as the query
+    /// (ASR truncation), candidate not a substring of the query (genuine fuzzy-distance match),
+    /// or the candidate's words covering at least half the query's content words.
+    /// <para>
+    /// This NARROWS the JF-342 invariant in FuzzyMatcher.ApplyLengthPenalty (which exempts ALL
+    /// contained candidates from the length penalty as "a real near-exact match"): the low-coverage
+    /// subcase detected here is the exception where that assumption fails. The exemption in
+    /// FuzzyManager itself is intentionally left intact (broad blast radius); this predicate is the
+    /// caller-side refinement applied at the artist tier-4 single-match decision point.
+    /// </para>
+    /// </summary>
+    /// <param name="locale">Locale used to strip carrier/grammar stop words before computing
+    /// coverage. This is essential: the <c>musician</c> slot carries raw spoken text (CLAUDE.md
+    /// gotcha), so carrier phrases like it-IT "suona la musica di {artist}" bleed into the query.
+    /// Without stop-word stripping a real single-word artist ("Bush") inside that carrier would
+    /// cover only 1 of 5 raw words and be wrongly rejected. <see cref="KeywordMatcher.Tokenize"/>
+    /// handles en/it/de/fr/es/pt; unknown locales (ja/ar/hi) get no stripping (documented-weak
+    /// fallback, JF-337 AC #4).</param>
+    internal static bool IsCoincidentalContainmentMatch(string query, string candidateName, string? locale = null)
+    {
+        if (string.IsNullOrWhiteSpace(query) || string.IsNullOrWhiteSpace(candidateName))
+        {
+            return false;
+        }
+
+        string q = query.Trim();
+        string c = candidateName.Trim();
+
+        // Only the short-candidate-inside-long-query shape is suspect. A candidate at least
+        // as long as the query is the intended ASR-truncation / full-name case.
+        if (c.Length >= q.Length)
+        {
+            return false;
+        }
+
+        // Must actually be a containment match (the 90-score shortcut path). If the candidate
+        // is not a substring, the match came from Levenshtein distance and is genuine.
+        if (q.IndexOf(c, StringComparison.OrdinalIgnoreCase) < 0)
+        {
+            return false;
+        }
+
+        // Coverage = fraction of the query's CONTENT words (stop words excluded) that appear
+        // among the candidate's content words. KeywordMatcher.Tokenize strips locale carrier/
+        // grammar words (so it-IT "suona la musica di bush" -> [bush], not [suona, la, musica,
+        // di, bush]) and splits on non-alphanumerics (trailing punctuation does not break the
+        // match). Without stop-word stripping a real artist inside a carrier phrase is wrongly
+        // rejected (code-review JF-377 regression).
+        string loc = locale ?? string.Empty;
+        var queryTokens = KeywordMatcher.Tokenize(q, loc);
+        if (queryTokens.Length < 2)
+        {
+            // Fewer than 2 content words can't be coincidental (no unrelated content to hide in).
+            return false;
+        }
+
+        var candidateTokens = new HashSet<string>(
+            KeywordMatcher.Tokenize(c, loc),
+            StringComparer.OrdinalIgnoreCase);
+        if (candidateTokens.Count == 0)
+        {
+            // Candidate has no content tokens (e.g. a stop-word-only name). Coverage is
+            // undefined; do not reject.
+            return false;
+        }
+
+        int covered = queryTokens.Count(t => candidateTokens.Contains(t));
+
+        // Reject only when the candidate covers a minority (strictly under half) of the query's
+        // content words. At-or-above half is a plausible multi-word near-match and is kept.
+        return covered * 2 < queryTokens.Length;
+    }
+
     private static BaseItem? FuzzyMatch(string query, IReadOnlyList<BaseItem> candidates, Entities.User? user,
         IArtistIndex? artistIndex)
     {

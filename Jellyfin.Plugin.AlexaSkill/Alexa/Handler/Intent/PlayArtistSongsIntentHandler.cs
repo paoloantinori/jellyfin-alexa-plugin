@@ -12,6 +12,7 @@ using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -320,6 +321,32 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         {
             Logger.LogDebug("PlayArtistSongs: no artist found for query='{Query}'", musician);
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundArtist", locale, musician));
+        }
+
+        // JF-377: when a single artist matched with the "coincidental containment" shape (a short
+        // name sitting as one content word inside a longer query, detected by
+        // ArtistSearch.IsCoincidentalContainmentMatch), do NOT auto-play it silently. The shape is
+        // ambiguous: it may be a nonsense query that happened to contain a common-word artist name
+        // ("zzzqqq nonexistent artist" -> "artist"), or a real artist hidden in a carrier phrase that
+        // bled into the raw slot value ("suona la musica di bush" -> "Bush"). These are
+        // string-indistinguishable (research jf377_discriminator_2026-07-26), so instead of silently
+        // auto-playing (the bug) or silently rejecting (which regresses the carrier-bleed real-artist
+        // case), offer a yes/no prompt. A real artist still plays after the user says "yes"; nonsense
+        // resolves to not-found after "no". The check keys on the match SHAPE (not the tier): the
+        // predicate returns false for the legitimate shapes that must still auto-play below, namely
+        // candidate >= query length (ASR truncation, e.g. "radiohed" -> "Radiohead") and coverage >=
+        // half the query content words (a real multi-word near-match).
+        if (artists.Count == 1
+            && ArtistSearch.IsCoincidentalContainmentMatch(musician, artists[0].Name, locale))
+        {
+            Logger.LogInformation(
+                "PlayArtistSongs: single match='{Match}' for query='{Query}' is coincidental-containment, downgrading to disambiguation (JF-377)",
+                artists[0].Name, musician);
+            var matches = new List<(Guid Id, string Name, string? ArtUrl)>
+            {
+                (artists[0].Id, artists[0].Name, GetImageUrl(artists[0].Id.ToString("N"), user))
+            };
+            return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeArtist, locale, context);
         }
 
         // Disambiguation: in Fast mode, auto-play the best match

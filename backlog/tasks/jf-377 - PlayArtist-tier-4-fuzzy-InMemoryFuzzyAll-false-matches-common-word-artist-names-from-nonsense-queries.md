@@ -3,9 +3,10 @@ id: JF-377
 title: >-
   PlayArtist tier-4 fuzzy (InMemoryFuzzyAll) false-matches common-word artist
   names from nonsense queries
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-25 17:57'
+updated_date: '2026-07-27 04:33'
 labels:
   - bug
   - artist-search
@@ -36,6 +37,24 @@ LIKELY AREA: BaseHandler.ArtistSearch tier-4 (Alexa/Util/ArtistSearch.cs) + the 
 - [ ] #4 Regression: verify a real near-miss artist query still resolves (don't break the intended fuzzy recall), and the nonsense query no longer false-matches
 - [ ] #5 Live verify on minix: the false-positive case returns a clean not-found, and a legitimate artist still plays
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+FIXED 2026-07-27 with a disambiguation DOWNGRADE (not a reject), after exhaustive research proved a pure reject is not viable.
+
+ROOT CAUSE (verified live on minix,corr=8799e4e2 confirmed): a nonsense query "zzzqqq nonexistent artist" auto-plays the literal artist "artist" because FuzzyMatcher.PartialRatio has a containment shortcut (if one string contains the other, score jumps to ContainmentScore=90 >= the single-match auto-play path). The auto-play was NOT a HandleFuzzyMiss decision - when tier-4 returns exactly 1 artist, PlayArtistSongsIntentHandler skips HandleFuzzyMiss (runs only at count>1) and plays artists[0] unconditionally.
+
+THREE REJECT ATTEMPTS FAILED (all discarded): a tier-4 word-coverage reject guard was reverted in /code-review high because it also rejects REAL artists when carrier phrases bleed into the raw musician slot value (e.g. "suona la musica di bush" -> "Bush" rejected). Stop-word stripping (KeywordMatcher.Tokenize) only removes articles/prepositions, NOT carrier verbs/nouns (suona, musica), so it cannot separate the cases.
+
+RESEARCH (claudedocs/research_jf377_discriminator_2026-07-26.md, exhaustive, primary Amazon docs + IR entity-linking literature): the bug case and the regression case are STRING-INDISTINGUISHABLE by coverage/length/frequency. Amazon's own docs define carrier phrases as "the word or words that are part of the utterance, but not the slot" - so carrier bleed into the slot is an NLU-failure tail case, not the common path. The established mitigation for an ambiguous entity match (entity-linking literature) is NOT silent reject, it is downgrade-to-confirmation.
+
+FIX (shipped): ArtistSearch.IsCoincidentalContainmentMatch(query, candidateName, locale) predicate + a PlayArtistSongsIntentHandler branch: when artists.Count==1 AND the match is coincidental-containment, return DisambiguationHelper.AskFirstMatch (yes/no "Did you mean X?") instead of auto-playing. Real artists still play via "yes"; nonsense resolves to not-found via "no". KEY PROPERTY: NO regression (one extra turn for the ambiguous case is the deliberate trade). YesIntent routes MediaTypeArtist -> PlayArtist.
+
+VERIFICATION: 2633 unit tests green, Release build clean, /simplify clean (4 agents), /code-review high clean (5 agents, 3 doc-comment defects fixed, no blocking correctness findings). Live-verified on minix: nonsense -> disambig prompt; "suona la musica di bush" -> disambig prompt (Bush reachable via yes, NO regression); "radiohed" -> auto-play; "soul coughing"/"bush" bare -> auto-play. Deployed to active 0.11.2.0 DLL (verified by identifier).
+
+SCOPE LIMITATION (filed as JF-382): the downgrade only covers PlayArtistSongs count==1. The same coincidental-containment shape still ships through PlayArtistSongs count>1 paths and 12 other ArtistSearch.SearchAsync callers (cross-media fallbacks). Lower priority - file when a user reports the variant.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

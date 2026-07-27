@@ -241,6 +241,20 @@ public class FuzzyMatcherTests
 
     private record TestItem(string Name);
 
+    // JF-377 root-cause lock: a short candidate contained as one word inside a longer
+    // nonsense query wins the containment shortcut (score = ContainmentScore). This is the
+    // underlying scoring fact; the fix lives one layer up, in ArtistSearch tier-4, which
+    // rejects such coincidental containment matches.
+    [Fact]
+    public void FindBestMatchWithScore_NonsenseQueryContainingCandidateName_ScoresContainment()
+    {
+        var items = new List<TestItem> { new("artist") };
+        var result = FuzzyMatcher.FindBestMatchWithScore("zzzqqq nonexistent artist", items, i => i.Name);
+
+        Assert.NotNull(result);
+        Assert.Equal(FuzzyMatcher.ContainmentScore, result.Value.Score);
+    }
+
     // --- Phonetic pre-filter tests ---
 
     [Fact]
