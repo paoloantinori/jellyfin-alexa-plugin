@@ -6,7 +6,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-08-20 06:40'
-updated_date: '2026-08-20 07:35'
+updated_date: '2026-08-20 09:28'
 labels:
   - bug
   - search
@@ -55,21 +55,20 @@ Upstream GitHub issue: see the corresponding issue in paoloantinori/jellyfin-ale
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-IMPLEMENTED 2026-08-20 (commit f52b990, deployed to minix, on-device confirmation pending).
+IMPLEMENTED 2026-08-20 in TWO commits after live on-device follow-up:
 
-Fix: abbreviation equivalence map applied inside KeywordMatcher.Tokenize, post stop-word filter, so title index and spoken keywords canonicalize identically (bidirectional match): st/saint->street, rd->road, ave->avenue, pt->part, vol->volume.
+COMMIT 1 (f52b990): abbreviation canonicalization map in KeywordMatcher.Tokenize (st/saint->street, rd->road, ave->avenue, pt->part, vol->volume; number/no excluded). Unit-verified.
 
-AC #1 DONE. Map as specified PLUS saint added to the st class (/code-review finding: tagged "St." is ambiguous between Street and Saint, "St. Louis Blues" vs "Decatur St."; the canonical token is a class representative, extra cross-matching acceptable in coverage-oriented search). number/no EXCLUDED with documented reasoning: "no" is a real en/it word, a Japanese grammatical particle, and a Portuguese stop word; canonicalizing it would corrupt token streams (hard guard test: "watashi no uta" untouched).
+COMMIT 2 (7aa891a): ON-DEVICE TESTING SHOWED THE FIX NEVER RAN ON THE LIVE PATHS. The user retried and it still failed (log 09:36: "search returned 0, artist=The Twilight Singers, keywords=street"). Audit found the shared failure pattern: a server-side substring pre-filter starves the keyword matcher of candidates before canonicalization can act. Three fixes:
+1. FindSong artist-scoped: on empty NameContains pre-filter, retry with ArtistIds only (Limit 500) -> KeywordMatcher decides. THE live failure.
+2. PlaySong WITH musician: on exact SearchTerm miss, fetch artist songs (Limit 500) and keyword-match. Covers the natural phrasing (the user's actual first attempt, 09:35).
+3. PlaySong WITHOUT musician: on exact miss, consult the n-gram index (O(1)) + phonetic, before the cross-media artist fallback.
 
-AC #2 DONE. 6 new TDD tests (written first, verified failing): the exact Score integration (title "Decatur St." found by keyword "street"), full-map bidirectionality, the saint path, ja-JP particle guard, similar-token guard (stone/roadster/storage untouched).
+Also: shared BaseHandler.GetArtistSongsAsync (3 inline query blocks consolidated, JF-382 no-third-copy rule); review fixes applied (unbounded artist-songs fetch capped Limit 500 - aggregate "Various Artists" entries are the JF-358 budget shape); documented the deliberately-unfixed global DB fallback (cold path, self-heals, unfiltered retry would be unbounded catalog scan).
 
-AC #3 PARTIAL (tooling limitation, honestly stated): the intent simulator cannot carry session attributes across turns, so the 2-turn FindSong flow (artist, then keywords) cannot be driven end-to-end with existing tooling; the E2E harness is single-turn too. Verified instead: (a) unit integration test at the exact changed layer, (b) deployed active DLL contains the fix (identifier check), (c) n-gram index rebuilt at restart with the new tokenizer (12766 songs logged). ON-DEVICE confirmation pending: user retry "Decature Street by the twilight singers" on the Echo. If a follow-up is wanted, a small task could add session-attribute injection to the simulator (would enable multi-turn testing generally).
+VERIFICATION: TDD (3 new tests, verified RED first; 2645 green, Release 0 warnings). /simplify + /code-review high findings all applied. LIVE-VERIFIED END-TO-END on minix post-commit: simulator PlaySong 'decatur street'+'twilight singers' plays 'Decatur St.' (metadata confirmed), and the no-musician variant via n-gram (log: "title fallback (n-gram index) matched 1 songs"). The AC#3 gap from commit 1 is now closed for the PlaySong paths (single-turn, simulable); the FindSong multi-turn flow remains beyond the simulator (no session persistence) but its artist-scoped fix is unit+code-path verified and shares the same matcher.
 
-AC #4 DONE. 2642 tests green (0 regressions), Release 0 warnings. All 6 stop-word locale sets verified literally: neither map inputs nor outputs are stop words anywhere (documented as a LOAD-BEARING INVARIANT).
-
-AC #5 DONE. /simplify (3 agents: consolidated to single-point post-filter loop, added invariant note), /code-review high (bug scan found the Saint ambiguity -> addressed; in-file comments agent found a wording imprecision -> fixed), /review-local gate (5 agents): NO findings >= 80.
-
-GH issue #19 open for the external report; comment with fix + release note pending next release.
+GH #19 comment updated pending release.
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
