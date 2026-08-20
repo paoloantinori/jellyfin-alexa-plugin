@@ -3,10 +3,10 @@ id: JF-383
 title: >-
   Abbreviation mismatch in song title search: spoken "Street"/"Road"/"Avenue"
   never matches tagged "St."/"Rd."/"Ave."
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-20 06:40'
-updated_date: '2026-08-20 06:41'
+updated_date: '2026-08-20 07:35'
 labels:
   - bug
   - search
@@ -51,6 +51,26 @@ Upstream GitHub issue: see the corresponding issue in paoloantinori/jellyfin-ale
 - [ ] #4 #4 No regression: existing keyword-search tests unchanged; token count/purity for non-abbreviated titles unaffected
 - [ ] #5 #5 /simplify + /code-review high pass before commit
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+IMPLEMENTED 2026-08-20 (commit f52b990, deployed to minix, on-device confirmation pending).
+
+Fix: abbreviation equivalence map applied inside KeywordMatcher.Tokenize, post stop-word filter, so title index and spoken keywords canonicalize identically (bidirectional match): st/saint->street, rd->road, ave->avenue, pt->part, vol->volume.
+
+AC #1 DONE. Map as specified PLUS saint added to the st class (/code-review finding: tagged "St." is ambiguous between Street and Saint, "St. Louis Blues" vs "Decatur St."; the canonical token is a class representative, extra cross-matching acceptable in coverage-oriented search). number/no EXCLUDED with documented reasoning: "no" is a real en/it word, a Japanese grammatical particle, and a Portuguese stop word; canonicalizing it would corrupt token streams (hard guard test: "watashi no uta" untouched).
+
+AC #2 DONE. 6 new TDD tests (written first, verified failing): the exact Score integration (title "Decatur St." found by keyword "street"), full-map bidirectionality, the saint path, ja-JP particle guard, similar-token guard (stone/roadster/storage untouched).
+
+AC #3 PARTIAL (tooling limitation, honestly stated): the intent simulator cannot carry session attributes across turns, so the 2-turn FindSong flow (artist, then keywords) cannot be driven end-to-end with existing tooling; the E2E harness is single-turn too. Verified instead: (a) unit integration test at the exact changed layer, (b) deployed active DLL contains the fix (identifier check), (c) n-gram index rebuilt at restart with the new tokenizer (12766 songs logged). ON-DEVICE confirmation pending: user retry "Decature Street by the twilight singers" on the Echo. If a follow-up is wanted, a small task could add session-attribute injection to the simulator (would enable multi-turn testing generally).
+
+AC #4 DONE. 2642 tests green (0 regressions), Release 0 warnings. All 6 stop-word locale sets verified literally: neither map inputs nor outputs are stop words anywhere (documented as a LOAD-BEARING INVARIANT).
+
+AC #5 DONE. /simplify (3 agents: consolidated to single-point post-filter loop, added invariant note), /code-review high (bug scan found the Saint ambiguity -> addressed; in-file comments agent found a wording imprecision -> fixed), /review-local gate (5 agents): NO findings >= 80.
+
+GH issue #19 open for the external report; comment with fix + release note pending next release.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
