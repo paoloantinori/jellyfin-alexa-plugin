@@ -116,27 +116,28 @@ internal static class KeywordMatcher
         AbbreviationCanonicalForms.TryGetValue(token, out string? canonical) ? canonical : token;
 
     /// <summary>
+    /// The English stop-word set, hoisted for <see cref="Tokenize"/> (JF-384: always
+    /// stripped, in addition to the locale set, because English titles spoken under
+    /// non-English locales carry English function words). The "en" key is guaranteed
+    /// by the <see cref="StopWords"/> initializer.
+    /// </summary>
+    private static readonly HashSet<string> EnglishStopWords = StopWords["en"];
+
+    /// <summary>
     /// Lowercases a raw token and adds it unless it is a stop word of the request locale
     /// OR of English (see the JF-384 note in <see cref="Tokenize"/>).
     /// </summary>
     private static void AddIfNotStopWord(
         string raw,
         HashSet<string>? localeStopWords,
-        HashSet<string>? englishStopWords,
+        HashSet<string> englishStopWords,
         List<string> tokens)
     {
         string token = raw.ToLowerInvariant();
-        if (localeStopWords != null && localeStopWords.Contains(token))
+        if (!(localeStopWords?.Contains(token) ?? false) && !englishStopWords.Contains(token))
         {
-            return;
+            tokens.Add(token);
         }
-
-        if (englishStopWords != null && englishStopWords.Contains(token))
-        {
-            return;
-        }
-
-        tokens.Add(token);
     }
 
     /// <summary>
@@ -163,11 +164,17 @@ internal static class KeywordMatcher
 
         // JF-384: music titles are mostly English, so an English title spoken under a
         // NON-English locale carries English function words the locale list does not
-        // strip (it-IT keeps "the"). Always strip the English set too: symmetric on both
-        // sides (the n-gram index is built with "en-US"), and English function words are
-        // never meaningful match keywords. Harmless for en itself (same set).
-        StopWords.TryGetValue("en", out HashSet<string>? englishStopWords);
-
+        // strip (it-IT keeps "the"). Always strip the English set too (EnglishStopWords):
+        // symmetric with the n-gram index (built with "en-US"), and English function
+        // words are never meaningful match keywords. Harmless for en itself (same set).
+        // RESIDUAL ASYMMETRY (known, accepted): the index side keeps NON-English stop
+        // words (it is built with en-US), so an Italian title like "Il Sole" indexes as
+        // [il, sole] while an it-IT query tokenizes to [sole]. This is harmless: the
+        // index's extra function words only widen the candidate lookup keys, and ranking
+        // always re-tokenizes the title with the request locale (Score/ScorePhonetic),
+        // so coverage is computed on identical token streams. Do not "fix" by
+        // union-stripping the index: locale stop-word sets collide with real title words
+        // across languages ("da" in "Da Vinci", "la" as a musical note).
         // Split on any character that is not a letter or digit
         var tokens = new List<string>();
         int start = -1;
@@ -186,7 +193,7 @@ internal static class KeywordMatcher
             {
                 if (start >= 0)
                 {
-                    AddIfNotStopWord(text.Substring(start, i - start), stopWordSet, englishStopWords, tokens);
+                    AddIfNotStopWord(text.Substring(start, i - start), stopWordSet, EnglishStopWords, tokens);
                     start = -1;
                 }
             }
@@ -195,7 +202,7 @@ internal static class KeywordMatcher
         // Handle trailing token
         if (start >= 0)
         {
-            AddIfNotStopWord(text[start..], stopWordSet, englishStopWords, tokens);
+            AddIfNotStopWord(text[start..], stopWordSet, EnglishStopWords, tokens);
         }
 
         // Canonicalize abbreviations post-filter (JF-383): safe because no canonical
@@ -206,6 +213,32 @@ internal static class KeywordMatcher
         }
 
         return tokens.ToArray();
+    }
+
+    /// <summary>
+    /// Exact keyword scoring with the JF-384 phonetic fallback: if the exact matcher
+    /// (100% keyword coverage) returns nothing and the caller's phonetic flag is on,
+    /// re-scores the SAME candidate set phonetically (>=50% keyword coverage + penalty),
+    /// so accent drift on one keyword ("Decature" heard as "cater") does not veto the
+    /// match. The single place the flag + fallback semantics live (mirrors the global
+    /// n-gram path's stage 1 -> 2 chain). A single garbage keyword still misses both.
+    /// </summary>
+    /// <param name="songs">Candidate songs to score (bounded set, e.g. one artist's).</param>
+    /// <param name="keywordTokens">Pre-tokenized user keywords (from <see cref="Tokenize"/>).</param>
+    /// <param name="locale">The locale string for tokenizing song titles.</param>
+    /// <param name="phoneticEnabled">Whether the phonetic fallback stage may run
+    /// (caller's PhoneticSongSearchEnabled).</param>
+    /// <returns>Exact-match results if any, else phonetic results, else empty.</returns>
+    public static List<(BaseItem Item, double Score)> ScoreWithPhoneticFallback(
+        IReadOnlyList<BaseItem> songs, string[] keywordTokens, string locale, bool phoneticEnabled)
+    {
+        var exact = Score(songs, keywordTokens, locale);
+        if (exact.Count > 0 || !phoneticEnabled)
+        {
+            return exact;
+        }
+
+        return ScorePhonetic(songs, keywordTokens, locale);
     }
 
     /// <summary>

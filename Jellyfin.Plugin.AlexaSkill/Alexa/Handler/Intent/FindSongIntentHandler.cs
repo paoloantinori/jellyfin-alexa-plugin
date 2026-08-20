@@ -419,19 +419,9 @@ public class FindSongIntentHandler : BaseHandler
                     limit: 500).ConfigureAwait(false);
             }
 
-            // Post-filter with KeywordMatcher
-            scored = KeywordMatcher.Score(allArtistSongs, keywordTokens, locale);
-
-            // JF-384: accent drift on ONE keyword ("Decature" heard as "cater") vetoes the
-            // exact matcher (100% keyword coverage). Mirror the global n-gram path's stage-2
-            // semantics on the same bounded candidate set: phonetic scoring with >=50%
-            // keyword coverage + penalty, behind the same feature flag. A single garbage
-            // keyword still misses (0% coverage on both matchers).
-            if (scored.Count == 0 && _config.PhoneticSongSearchEnabled)
-            {
-                scored = KeywordMatcher.ScorePhonetic(allArtistSongs, keywordTokens, locale);
-            }
-
+            // Post-filter with KeywordMatcher; JF-384: the phonetic fallback (inside the
+            // helper) prevents one accent-drifted keyword from vetoing the match.
+            scored = KeywordMatcher.ScoreWithPhoneticFallback(allArtistSongs, keywordTokens, locale, _config.PhoneticSongSearchEnabled);
             songs = scored.Select(s => s.Item).ToList();
         }
         else

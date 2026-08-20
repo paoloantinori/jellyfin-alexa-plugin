@@ -230,16 +230,10 @@ public class PlaySongIntentHandler : BaseHandler
                     limit: 500).ConfigureAwait(false);
 
                 var keywordTokens = Util.KeywordMatcher.Tokenize(songQuery, locale);
-                var scoredByKeywords = Util.KeywordMatcher.Score(artistSongs, keywordTokens, locale);
 
-                // JF-384: phonetic second stage on the same bounded candidate set (mirrors
-                // the global n-gram path and FindSong's artist-scoped search), so accent
-                // drift on one keyword does not veto the match.
-                if (scoredByKeywords.Count == 0 && _config.PhoneticSongSearchEnabled)
-                {
-                    scoredByKeywords = Util.KeywordMatcher.ScorePhonetic(artistSongs, keywordTokens, locale);
-                }
-
+                // JF-384: the helper's phonetic fallback prevents one accent-drifted
+                // keyword from vetoing the match.
+                var scoredByKeywords = Util.KeywordMatcher.ScoreWithPhoneticFallback(artistSongs, keywordTokens, locale, _config.PhoneticSongSearchEnabled);
                 if (scoredByKeywords.Count > 0)
                 {
                     songs = scoredByKeywords.Select(s => s.Item).ToList();
