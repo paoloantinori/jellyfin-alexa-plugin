@@ -310,6 +310,92 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         Assert.True(response.Response.ShouldEndSession);
     }
 
+    // JF-384: accent drift on ONE keyword ("Decature" heard as "cater") must not veto the
+    // whole artist-scoped match. The exact matcher (100% coverage) misses; the phonetic
+    // stage (>=50% coverage + penalty, same semantics as the global n-gram path) finds
+    // "Decatur St." via the un-drifted "street" token.
+    [Fact]
+    public async Task AwaitingKeywords_ArtistScoped_AccentDriftOnOneWord_PhoneticStageFinds()
+    {
+        var artistId = Guid.NewGuid();
+        SetupJellyfinUser();
+
+        _libraryManagerMock.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                bool isAudioByArtist = q.ArtistIds != null && q.ArtistIds.Length > 0
+                    && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio);
+                if (isAudioByArtist)
+                {
+                    return new List<BaseItem> { CreateAudioItem(Guid.NewGuid(), "Decatur St.") }.AsReadOnly();
+                }
+
+                return new List<BaseItem>().AsReadOnly();
+            });
+
+        var user = CreateTestUser();
+        var session = CreateSession();
+        var existingData = new FindSongSessionData
+        {
+            State = FindSongState.AwaitingKeywords,
+            ArtistId = artistId,
+            ArtistName = "The Twilight Singers"
+        };
+        var sessionAttrs = BuildSessionAttributes(existingData);
+
+        var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
+        {
+            ["titleKeywords"] = "cater street"
+        });
+
+        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+
+        // Found via the phonetic stage: auto-plays instead of "Non ho trovato nulla".
+        Assert.True(response.Response.ShouldEndSession);
+    }
+
+    // JF-384 garbage control: a single keyword that matches nothing (0% coverage on both
+    // matchers) must stay not-found even in the artist scope.
+    [Fact]
+    public async Task AwaitingKeywords_ArtistScoped_SingleGarbageKeyword_StillNotFound()
+    {
+        var artistId = Guid.NewGuid();
+        SetupJellyfinUser();
+
+        _libraryManagerMock.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                bool isAudioByArtist = q.ArtistIds != null && q.ArtistIds.Length > 0
+                    && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio);
+                if (isAudioByArtist)
+                {
+                    return new List<BaseItem> { CreateAudioItem(Guid.NewGuid(), "Decatur St.") }.AsReadOnly();
+                }
+
+                return new List<BaseItem>().AsReadOnly();
+            });
+
+        var user = CreateTestUser();
+        var session = CreateSession();
+        var existingData = new FindSongSessionData
+        {
+            State = FindSongState.AwaitingKeywords,
+            ArtistId = artistId,
+            ArtistName = "The Twilight Singers"
+        };
+        var sessionAttrs = BuildSessionAttributes(existingData);
+
+        var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
+        {
+            ["titleKeywords"] = "xyzzyfoo"
+        });
+
+        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+
+        // Not found: no AudioPlayer directive.
+        Assert.True(response.Response?.Directives == null || response.Response.Directives.All(d => d.Type != "AudioPlayer.Play"));
+    }
+
     // ========== AwaitingArtist ==========
 
     [Fact]

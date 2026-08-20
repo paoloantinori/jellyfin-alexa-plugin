@@ -116,6 +116,30 @@ internal static class KeywordMatcher
         AbbreviationCanonicalForms.TryGetValue(token, out string? canonical) ? canonical : token;
 
     /// <summary>
+    /// Lowercases a raw token and adds it unless it is a stop word of the request locale
+    /// OR of English (see the JF-384 note in <see cref="Tokenize"/>).
+    /// </summary>
+    private static void AddIfNotStopWord(
+        string raw,
+        HashSet<string>? localeStopWords,
+        HashSet<string>? englishStopWords,
+        List<string> tokens)
+    {
+        string token = raw.ToLowerInvariant();
+        if (localeStopWords != null && localeStopWords.Contains(token))
+        {
+            return;
+        }
+
+        if (englishStopWords != null && englishStopWords.Contains(token))
+        {
+            return;
+        }
+
+        tokens.Add(token);
+    }
+
+    /// <summary>
     /// Tokenizes the input text by lowercasing, splitting on whitespace and punctuation,
     /// removing locale-specific stop words, and canonicalizing title-word abbreviations
     /// (see <see cref="AbbreviationCanonicalForms"/>).
@@ -137,6 +161,13 @@ internal static class KeywordMatcher
             StopWords.TryGetValue(prefix, out stopWordSet);
         }
 
+        // JF-384: music titles are mostly English, so an English title spoken under a
+        // NON-English locale carries English function words the locale list does not
+        // strip (it-IT keeps "the"). Always strip the English set too: symmetric on both
+        // sides (the n-gram index is built with "en-US"), and English function words are
+        // never meaningful match keywords. Harmless for en itself (same set).
+        StopWords.TryGetValue("en", out HashSet<string>? englishStopWords);
+
         // Split on any character that is not a letter or digit
         var tokens = new List<string>();
         int start = -1;
@@ -155,12 +186,7 @@ internal static class KeywordMatcher
             {
                 if (start >= 0)
                 {
-                    string token = text.Substring(start, i - start).ToLowerInvariant();
-                    if (stopWordSet == null || !stopWordSet.Contains(token))
-                    {
-                        tokens.Add(token);
-                    }
-
+                    AddIfNotStopWord(text.Substring(start, i - start), stopWordSet, englishStopWords, tokens);
                     start = -1;
                 }
             }
@@ -169,11 +195,7 @@ internal static class KeywordMatcher
         // Handle trailing token
         if (start >= 0)
         {
-            string token = text[start..].ToLowerInvariant();
-            if (stopWordSet == null || !stopWordSet.Contains(token))
-            {
-                tokens.Add(token);
-            }
+            AddIfNotStopWord(text[start..], stopWordSet, englishStopWords, tokens);
         }
 
         // Canonicalize abbreviations post-filter (JF-383): safe because no canonical

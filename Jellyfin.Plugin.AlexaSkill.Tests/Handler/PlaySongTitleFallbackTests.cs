@@ -150,6 +150,49 @@ public class PlaySongTitleFallbackTests : PluginTestBase
         public List<(BaseItem Item, double Score)> SearchPhonetic(string[] keywordTokens, string locale, Guid[]? topParentIds = null) => _results;
     }
 
+    // JF-384: the live repro verbatim. "Decature Street" arrives as "the cater street"
+    // (accent drift on one word). Exact keyword match vetoes (100% coverage); the phonetic
+    // stage on the artist's songs finds "Decatur St." via the un-drifted "street".
+    [Fact]
+    public async Task PlaySong_ExactMiss_AccentDriftOnOneWord_PhoneticStageFinds()
+    {
+        SetupUserMock();
+        var artistId = Guid.NewGuid();
+        var song = new Audio { Name = "Decatur St.", Id = Guid.NewGuid() };
+
+        _libraryManagerMock.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                {
+                    return new List<BaseItem> { new MusicArtist { Name = "The Twilight Singers", Id = artistId } };
+                }
+
+                // Exact song search (SearchTerm + ArtistIds): misses
+                if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))
+                {
+                    return new List<BaseItem>();
+                }
+
+                // Artist-songs fallback (ArtistIds + Audio, no SearchTerm): the real track
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0 && q.SearchTerm == null
+                    && q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.Audio))
+                {
+                    return new List<BaseItem> { song };
+                }
+
+                return new List<BaseItem>();
+            });
+
+        var handler = CreateSongHandler();
+        var request = CreateSongIntent("the cater street", "twilight singers");
+
+        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response.Response?.Directives);
+        Assert.NotEmpty(response.Response.Directives);
+    }
+
     [Fact]
     public async Task PlaySong_ExactMiss_NoMusician_UsesNgramIndex()
     {

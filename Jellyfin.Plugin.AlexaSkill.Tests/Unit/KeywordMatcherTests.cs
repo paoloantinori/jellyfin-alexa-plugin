@@ -149,10 +149,14 @@ public class KeywordMatcherTests
     }
 
     [Fact]
-    public void Tokenize_EmptyLocale_NoStopWordsRemoved()
+    public void Tokenize_EmptyLocale_EnglishStopWordsStillRemoved()
     {
+        // Contract changed by JF-384: English stop words are stripped under EVERY locale
+        // (including empty/unknown), because English titles spoken under non-English
+        // locales carry English function words that would otherwise veto the keyword
+        // coverage. Locale-specific stop words are NOT applied when the locale is unknown.
         var result = KeywordMatcher.Tokenize("the a song", string.Empty);
-        Assert.Equal(new[] { "the", "a", "song" }, result);
+        Assert.Equal(new[] { "song" }, result);
     }
 
     // ─── Tokenize: Edge Cases ───────────────────────────────────────────
@@ -541,5 +545,67 @@ public class KeywordMatcherTests
         // Tokens that merely share letters with abbreviations must not be touched.
         var result = KeywordMatcher.Tokenize("stone roadster storage", "en-US");
         Assert.Equal(new[] { "stone", "roadster", "storage" }, result);
+    }
+
+    // JF-384 live follow-up: an English title spoken under a NON-English locale carries
+    // English function words that the locale's stop-word list does not strip
+    // (it-IT keeps "the" -> [the, cater, street], phonetic coverage 1/3 = 33% < 50%).
+    // This also asymmetrizes index vs query: the n-gram index is built with "en-US"
+    // (strips "the" from titles), the query with the user locale. Fix: always strip the
+    // ENGLISH stop-word set in addition to the locale set (music titles are mostly
+    // English; its function words are never meaningful match keywords).
+    [Fact]
+    public void Tokenize_CrossLocale_StripsEnglishStopWords()
+    {
+        // The exact live repro: it-IT request, English title words.
+        Assert.Equal(new[] { "cater", "street" }, KeywordMatcher.Tokenize("the cater street", "it-IT"));
+        Assert.Equal(new[] { "cater", "street" }, KeywordMatcher.Tokenize("the cater street", "en-US"));
+
+        // Other locales too, and locale stop words still stripped alongside.
+        Assert.Equal(new[] { "cater", "street" }, KeywordMatcher.Tokenize("the cater and street", "de-DE"));
+        Assert.Equal(new[] { "sole", "luna" }, KeywordMatcher.Tokenize("il the sole e la luna", "it-IT"));
+    }
+
+    // JF-384 AC#1: quantify the two matchers on the live accent-drift repro.
+    // Spoken "Decature Street" arrives ASR-mangled as "the cater street"; the library
+    // title is "Decatur St.". Post tokenization + canonicalization:
+    //   query -> [cater, street], title -> [decatur, street].
+    // DM(cater)=KTR vs DM(decatur)=TKTR: no phonetic collision on the drifted word,
+    // but "street" matches exactly. So Score (100% keyword coverage) must MISS, while
+    // ScorePhonetic (>=50% coverage, 0.75 penalty) must FIND it at exactly 50%.
+    [Fact]
+    public void JF384_Diagnostics_ScoreMisses_ScorePhoneticFinds()
+    {
+        var songs = new List<Audio>
+        {
+            new() { Name = "Decatur St.", Id = Guid.NewGuid() }
+        }.Cast<BaseItem>().ToList();
+        var keywordTokens = KeywordMatcher.Tokenize("the cater street", "en-US");
+
+        Assert.Equal(new[] { "cater", "street" }, keywordTokens);
+        Assert.Equal(new[] { "decatur", "street" }, KeywordMatcher.Tokenize("Decatur St.", "en-US"));
+
+        var exact = KeywordMatcher.Score(songs, keywordTokens, "en-US");
+        Assert.Empty(exact); // the full-word veto: one drifted word kills the match
+
+        var phonetic = KeywordMatcher.ScorePhonetic(songs, keywordTokens, "en-US");
+        Assert.NotEmpty(phonetic); // 1/2 coverage = 50%, at the gate
+    }
+
+    // JF-384 garbage control: a single-word query that matches nothing (0% coverage)
+    // must miss on BOTH matchers. This is the honest control: a two-word query with one
+    // real word legitimately passes the 50% phonetic gate (same semantics as the global
+    // n-gram path today), but one garbage word alone has nothing to stand on.
+    [Fact]
+    public void JF384_Diagnostics_SingleGarbageWord_MissesBothMatchers()
+    {
+        var songs = new List<Audio>
+        {
+            new() { Name = "Decatur St.", Id = Guid.NewGuid() }
+        }.Cast<BaseItem>().ToList();
+        var keywordTokens = KeywordMatcher.Tokenize("xyzzyfoo", "en-US");
+
+        Assert.Empty(KeywordMatcher.Score(songs, keywordTokens, "en-US"));
+        Assert.Empty(KeywordMatcher.ScorePhonetic(songs, keywordTokens, "en-US"));
     }
 }
