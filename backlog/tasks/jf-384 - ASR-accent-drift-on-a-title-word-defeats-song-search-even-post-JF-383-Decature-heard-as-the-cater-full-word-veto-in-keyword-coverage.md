@@ -3,9 +3,10 @@ id: JF-384
 title: >-
   ASR accent-drift on a title word defeats song search even post-JF-383
   ("Decature" heard as "the cater", full-word veto in keyword coverage)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-20 09:30'
+updated_date: '2026-08-20 20:03'
 labels:
   - bug
   - search
@@ -51,6 +52,25 @@ VERIFICATION CASE (real library): PlaySong slot "the cater street" + "twilight s
 - [ ] #3 #3 Implement + TDD: unit test locks 'the cater street' + 'twilight singers' resolving to 'Decatur St.' AND a guard that pure-garbage queries still miss (no Soul-Train-style false positive)
 - [ ] #4 #4 /simplify + /code-review high before commit
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+IMPLEMENTED 2026-08-20 (commit 5a1c916, deployed to minix, live-verified with the exact failed ASR string).
+
+TWO root causes found (the second only via live testing):
+
+1. FULL-WORD VETO (the task's original analysis): the exact keyword matcher requires 100% coverage, so one accent-drifted word ('cater' from 'Decature') killed the whole match; DM cannot bridge (KTR vs TKTR, no collision - unlike Koop/cup). FIX: phonetic second stage (KeywordMatcher.ScorePhonetic, >=50% coverage + 0.75 penalty, behind PhoneticSongSearchEnabled) in the two artist-scoped paths (FindSong artist search, PlaySong with-musician title fallback) - the same stage-2 semantics the global n-gram path always had. The un-drifted word ('street') carries the match; single garbage keyword (0%) still misses both matchers.
+
+2. CROSS-LOCALE ENGLISH STOP WORDS (found during live verification): 'the cater street' under it-IT kept 'the' (not an Italian stop word) -> tokens [the, cater, street] -> phonetic coverage 1/3 = 33% < 50%, sinking even the phonetic stage (unit tests passed only because they used en-US). Also a PRE-EXISTING asymmetry: the n-gram index is built with en-US (strips 'the' from titles) while queries used the user locale. FIX: Tokenize always strips the English stop-word set in addition to the locale set. Deliberate contract change (empty-locale test updated with documentation); ja-JP particle guard unaffected.
+
+AC #1 DONE: diagnostics tests lock the behavior (Score misses, ScorePhonetic finds at 50%, single garbage misses both).
+AC #2 DONE: altitude = reuse existing ScorePhonetic on the same bounded set; no new scoring policy, no Score relaxation. FP discipline verified by review: multiple candidates disambiguate (not silent auto-play), single candidate auto-plays ANNOUNCED within the correct artist scope, flag-off-able, mirrors shipped global semantics.
+AC #3 DONE: TDD, 8 new tests; 'the cater street' + 'twilight singers' -> 'Decatur St.' locked at unit level in both handlers; garbage control locked.
+AC #4 DONE: review scans clean (phonetic stage + cross-locale blast radius: all empty-token paths guarded, symmetric, invariant on canonical outputs holds). Known accepted edges: single-English-stopword titles ('On'/'It') were already unreachable via the en-US-built index; residual pre-existing locale-stopword asymmetry noted in review, not introduced here.
+
+VERIFICATION: 2651 tests green, Release 0 warnings. LIVE on minix with the EXACT failed device string: PlaySong 'the cater street' + 'twilight singers' (it-IT) plays 'Decatur St.' with the honest closest-match announcement ('Riproduco Decatur St., risultato piu' simile a...').
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
