@@ -1316,9 +1316,58 @@ public abstract class BaseHandler
     }
 
     /// <summary>
-    /// Fuzzy fallback for handlers whose exact Jellyfin searchTerm query returned 0.
-    /// Fetches all items of the given types from the user's library and fuzzy-matches
-    /// the query against their names via FuzzyMatcher partial-ratio (Levenshtein).
+    /// Fetches an artist's (or artists') songs with the shared query shape: ArtistIds +
+    /// IncludeItemTypes=Audio (JF-358: never MediaTypes=Audio) + library filter + retry.
+    /// Single helper for all artist-scoped song fetches (FindSong's keyword search,
+    /// PlaySong's title fallback), so the query shape stays consistent (JF-382 rule:
+    /// no third copy of the artist-search path). Pass <paramref name="nameContains"/>
+    /// for a server-side substring pre-filter, or leave it null for the unfiltered
+    /// (keyword-matcher-scored) form; <paramref name="limit"/> bounds the fetch for
+    /// aggregate artists ("Various Artists" can hold 10k+ tracks).
+    /// </summary>
+    /// <param name="jellyfinUser">The Jellyfin user (for query scoping).</param>
+    /// <param name="user">The plugin user (for the library filter).</param>
+    /// <param name="libraryManager">The library manager.</param>
+    /// <param name="artistIds">The artist IDs to scope to.</param>
+    /// <param name="retryLabel">Label for RetryAsync logging.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="nameContains">Optional server-side NameContains pre-filter.</param>
+    /// <param name="limit">Optional row cap (e.g. 500, like SearchItemsFuzzyAsync).</param>
+    /// <returns>The artist's songs matching the query.</returns>
+    protected async Task<IReadOnlyList<BaseItem>> GetArtistSongsAsync(
+        Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
+        Entities.User user,
+        ILibraryManager libraryManager,
+        Guid[] artistIds,
+        string retryLabel,
+        CancellationToken cancellationToken,
+        string? nameContains = null,
+        int? limit = null)
+    {
+        var query = new InternalItemsQuery
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            ArtistIds = artistIds,
+            IncludeItemTypes = new[] { Jellyfin.Data.Enums.BaseItemKind.Audio },
+            DtoOptions = new DtoOptions(true)
+        };
+        if (nameContains != null)
+        {
+            query.NameContains = nameContains;
+        }
+
+        if (limit.HasValue)
+        {
+            query.Limit = limit.Value;
+        }
+
+        ApplyLibraryFilter(query, user, libraryManager, Logger);
+
+        return await RetryAsync(() => libraryManager.GetItemList(query), retryLabel, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Bridges ASR accent/transcription variants (e.g. "caffè" vs "Cafe") that
     /// Jellyfin's search index doesn't normalize. Cold path only (exact miss).
     /// JF-337.

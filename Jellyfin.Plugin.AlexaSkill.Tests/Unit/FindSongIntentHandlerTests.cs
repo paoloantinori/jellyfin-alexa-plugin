@@ -256,6 +256,60 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         Assert.True(response.Response.ShouldEndSession);
     }
 
+    // JF-383 generalization: the artist-scoped search pre-filters server-side with
+    // NameContains=firstKeyword. When the spoken keyword is a full word and the tagged
+    // title uses the abbreviation ("street" vs "Decatur St."), the substring pre-filter
+    // returns ZERO candidates and KeywordMatcher never gets to canonicalize. The fix:
+    // when the NameContains-filtered query comes back empty, retry with ArtistIds only
+    // (one artist's songs, bounded) and let KeywordMatcher.Score decide.
+    [Fact]
+    public async Task AwaitingKeywords_ArtistScoped_NameContainsMiss_RetriesWithoutFilter_AndCanonicalizes()
+    {
+        var artistId = Guid.NewGuid();
+        SetupJellyfinUser();
+
+        // Live repro shape: NameContains pre-filter misses ("street" not a substring of
+        // "Decatur St."), but the artist HAS the song.
+        _libraryManagerMock.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                bool isAudioByArtist = q.ArtistIds != null && q.ArtistIds.Length > 0
+                    && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio);
+                if (isAudioByArtist && !string.IsNullOrEmpty(q.NameContains))
+                {
+                    return new List<BaseItem>().AsReadOnly(); // the starving pre-filter
+                }
+
+                if (isAudioByArtist)
+                {
+                    return new List<BaseItem> { CreateAudioItem(Guid.NewGuid(), "Decatur St.") }.AsReadOnly();
+                }
+
+                return new List<BaseItem>().AsReadOnly();
+            });
+
+        var user = CreateTestUser();
+        var session = CreateSession();
+        var existingData = new FindSongSessionData
+        {
+            State = FindSongState.AwaitingKeywords,
+            ArtistId = artistId,
+            ArtistName = "The Twilight Singers"
+        };
+        var sessionAttrs = BuildSessionAttributes(existingData);
+
+        var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
+        {
+            ["titleKeywords"] = "street"
+        });
+
+        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+
+        // Single match found via the unfiltered retry + abbreviation canonicalization:
+        // auto-plays (ShouldEndSession=true) instead of "Non ho trovato nulla".
+        Assert.True(response.Response.ShouldEndSession);
+    }
+
     // ========== AwaitingArtist ==========
 
     [Fact]

@@ -402,18 +402,22 @@ public class FindSongIntentHandler : BaseHandler
         if (sessionData.ArtistId.HasValue)
         {
             // Artist-scoped search: use ArtistIds + NameContains filter
-            var artistQuery = new InternalItemsQuery
-            {
-                User = jellyfinUser,
-                Recursive = true,
-                ArtistIds = new[] { sessionData.ArtistId.Value },
-                NameContains = keywordTokens[0],
-                IncludeItemTypes = new[] { BaseItemKind.Audio },
-                DtoOptions = new DtoOptions(true)
-            };
-            ApplyLibraryFilter(artistQuery, user, _libraryManager);
+            var artistIds = new[] { sessionData.ArtistId.Value };
+            IReadOnlyList<BaseItem> allArtistSongs = await GetArtistSongsAsync(
+                jellyfinUser, user, _libraryManager, artistIds, "GetSongsByArtist", cancellationToken,
+                nameContains: keywordTokens[0]).ConfigureAwait(false);
 
-            IReadOnlyList<BaseItem> allArtistSongs = await RetryAsync(() => _libraryManager.GetItemList(artistQuery), "GetSongsByArtist", cancellationToken).ConfigureAwait(false);
+            // JF-383: the NameContains pre-filter is a server-side substring match, so a
+            // spoken full word ("street") misses abbreviated tagged titles ("Decatur St.")
+            // and starves KeywordMatcher with zero candidates. On an empty pre-filtered
+            // result, retry with ArtistIds only (one artist's songs, bounded) and let
+            // KeywordMatcher.Score (with abbreviation canonicalization) decide.
+            if (allArtistSongs.Count == 0)
+            {
+                allArtistSongs = await GetArtistSongsAsync(
+                    jellyfinUser, user, _libraryManager, artistIds, "GetSongsByArtistUnfiltered", cancellationToken,
+                    limit: 500).ConfigureAwait(false);
+            }
 
             // Post-filter with KeywordMatcher
             scored = KeywordMatcher.Score(allArtistSongs, keywordTokens, locale);
@@ -446,7 +450,13 @@ public class FindSongIntentHandler : BaseHandler
 
             if (scored.Count == 0)
             {
-                // Fallback: DB NameContains query + KeywordMatcher post-filter
+                // Fallback: DB NameContains query + KeywordMatcher post-filter.
+                // DELIBERATELY NOT applying the JF-383 unfiltered retry here (unlike the
+                // artist-scoped path above): without an artist scope, dropping NameContains
+                // means scanning the ENTIRE Audio catalog server-side, the JF-358 shape that
+                // blew the 8s Alexa budget. This site only runs while the n-gram index is
+                // cold (startup), and self-heals once the index loads; the starvation window
+                // is seconds. Do not "fix" it without a bounded candidate source.
                 Logger.LogDebug("FindSong: n-gram index miss or unavailable, falling back to DB query");
                 string firstToken = keywordTokens[0];
                 var nameQuery = new InternalItemsQuery

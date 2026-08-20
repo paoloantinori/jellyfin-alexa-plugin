@@ -80,6 +80,7 @@ public class PlaySongIntentHandler : BaseHandler
     private readonly IUserDataManager _userDataManager;
     private readonly IArtistIndex? _artistIndex;
     private readonly DeviceQueueManager? _queueManager;
+    private readonly ISongNgramIndex? _songNgramIndex;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PlaySongIntentHandler"/> class.
@@ -92,6 +93,7 @@ public class PlaySongIntentHandler : BaseHandler
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
     /// <param name="artistIndex">Optional in-memory artist index for fast search.</param>
     /// <param name="queueManager">Optional per-device queue manager for crash recovery.</param>
+    /// <param name="songNgramIndex">Optional in-memory song n-gram index for the exact-miss title fallback (JF-383).</param>
     public PlaySongIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
@@ -100,13 +102,15 @@ public class PlaySongIntentHandler : BaseHandler
         IUserDataManager userDataManager,
         ILoggerFactory loggerFactory,
         IArtistIndex? artistIndex = null,
-        DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
+        DeviceQueueManager? queueManager = null,
+        ISongNgramIndex? songNgramIndex = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _userDataManager = userDataManager;
         _artistIndex = artistIndex;
         _queueManager = queueManager;
+        _songNgramIndex = songNgramIndex;
     }
 
     /// <inheritdoc/>
@@ -204,11 +208,52 @@ public class PlaySongIntentHandler : BaseHandler
             }).ConfigureAwait(false);
         Logger.LogDebug("PlaySong: Jellyfin returned {SongCount} songs for query='{SongQuery}'", songs.Count, songQuery);
 
-        // NOTE: PlaySong does NOT use SearchItemsFuzzyAsync — the Audio catalog is too large
-        // (thousands of tracks → 11s scan → exceeds Alexa's 8s timeout → InvalidResponse).
-        // Song search is handled by the n-gram index (SongNgramIndexService via FindSongIntent)
-        // + SearchWithAsrFallbackAsync above. The generic fuzzy helper is safe for smaller
-        // catalogs (albums, videos, books, channels, playlists) but NOT for Audio.
+        // NOTE: PlaySong does NOT use SearchItemsFuzzyAsync - the Audio catalog is too large
+        // (thousands of tracks -> 11s scan -> exceeds Alexa's 8s timeout -> InvalidResponse).
+        // Song search is handled by SearchWithAsrFallbackAsync above, the keyword-matcher
+        // fallbacks below (JF-383, bounded/O(1)), and the n-gram index via FindSongIntent.
+        // The generic fuzzy helper is safe for smaller catalogs (albums, videos, books,
+        // channels, playlists) but NOT for Audio.
+
+        // JF-383: the exact SearchTerm query misses abbreviated tagged titles ("decatur
+        // street" vs "Decatur St."). Before giving up, try the keyword matchers, which
+        // canonicalize abbreviations. Both fallbacks are bounded and respect the NOTE
+        // above: with a musician, fetch only that artist's songs (NOT the full catalog)
+        // and score them; without one, consult the n-gram index (O(1) lookup).
+        if (songs.Count == 0)
+        {
+            if (artistsIds.Count > 0)
+            {
+                IReadOnlyList<BaseItem> artistSongs = await GetArtistSongsAsync(
+                    jellyfinUser, user, _libraryManager, artistsIds.ToArray(),
+                    "GetSongsByArtistTitleFallback", cancellationToken,
+                    limit: 500).ConfigureAwait(false);
+
+                var keywordTokens = Util.KeywordMatcher.Tokenize(songQuery, locale);
+                var scoredByKeywords = Util.KeywordMatcher.Score(artistSongs, keywordTokens, locale);
+                if (scoredByKeywords.Count > 0)
+                {
+                    songs = scoredByKeywords.Select(s => s.Item).ToList();
+                    Logger.LogDebug("PlaySong: title fallback (artist songs + keyword matcher) matched {Count} songs for query='{Query}'", songs.Count, songQuery);
+                }
+            }
+            else if (_songNgramIndex is { IsReady: true })
+            {
+                var keywordTokens = Util.KeywordMatcher.Tokenize(songQuery, locale);
+                Guid[]? topParentIds = GetAllowedLibraryIds(user);
+                var scoredByIndex = _songNgramIndex.Search(keywordTokens, locale, topParentIds);
+                if (scoredByIndex.Count == 0 && _config.PhoneticSongSearchEnabled)
+                {
+                    scoredByIndex = _songNgramIndex.SearchPhonetic(keywordTokens, locale, topParentIds);
+                }
+
+                if (scoredByIndex.Count > 0)
+                {
+                    songs = scoredByIndex.Select(s => s.Item).ToList();
+                    Logger.LogDebug("PlaySong: title fallback (n-gram index) matched {Count} songs for query='{Query}'", songs.Count, songQuery);
+                }
+            }
+        }
 
         if (songs.Count == 0 && !string.IsNullOrWhiteSpace(musicianQuery) && artistsIds.Count > 0)
         {
