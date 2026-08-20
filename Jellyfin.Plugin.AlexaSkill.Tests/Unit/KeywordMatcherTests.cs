@@ -449,7 +449,7 @@ public class KeywordMatcherTests
     [Fact]
     public void Score_DuplicateKeywordsInInput_Harmless()
     {
-        // User says "hello hello" — tokenized to ["hello", "hello"]
+        // User says "hello hello" - tokenized to ["hello", "hello"]
         // Title "Hello" -> tokens ["hello"]
         // keywordCoverage: 2/2 keywords found? "hello" is in title tokens -> found for both = 2/2 = 1.0
         // titleCoverage: 1/1 title token covered = 1.0
@@ -462,5 +462,84 @@ public class KeywordMatcherTests
 
         Assert.Single(result);
         Assert.Equal(105.0, result[0].Score);
+    }
+
+    // JF-383: abbreviation canonicalization (street/st, road/rd, avenue/ave,
+    // part/pt, volume/vol). Music taggers abbreviate title words ("Decatur St.");
+    // the spoken full word ("street") must match the abbreviated tagged token,
+    // bidirectionally. The map intentionally EXCLUDES number/no: "no" is a real
+    // word in English/Italian and a grammatical particle in Japanese
+    // ("watashi no uta"), so canonicalizing it globally would corrupt token
+    // streams (see the ja-JP regression guard below).
+
+    [Fact]
+    public void Tokenize_CanonicalizesAbbreviatedTitleTokens()
+    {
+        // The live JF-383 repro: tagged title "Decatur St." must tokenize to the same
+        // tokens as the spoken "Decatur Street" so the n-gram/keyword search matches.
+        var abbreviated = KeywordMatcher.Tokenize("Decatur St.", "en-US");
+        var spoken = KeywordMatcher.Tokenize("Decatur Street", "en-US");
+
+        Assert.Equal(new[] { "decatur", "street" }, abbreviated);
+        Assert.Equal(abbreviated, spoken);
+    }
+
+    [Fact]
+    public void Tokenize_CanonicalizesAbbreviations_Bidirectional()
+    {
+        // Reverse direction: the abbreviated keyword must map to the same canonical
+        // token as the spelled-out title word (and the other map members likewise).
+        Assert.Equal(KeywordMatcher.Tokenize("Street", "en-US"), KeywordMatcher.Tokenize("St.", "en-US"));
+        Assert.Equal(KeywordMatcher.Tokenize("Road", "en-US"), KeywordMatcher.Tokenize("Rd.", "en-US"));
+        Assert.Equal(KeywordMatcher.Tokenize("Avenue", "en-US"), KeywordMatcher.Tokenize("Ave.", "en-US"));
+        Assert.Equal(KeywordMatcher.Tokenize("Part", "en-US"), KeywordMatcher.Tokenize("Pt.", "en-US"));
+        Assert.Equal(KeywordMatcher.Tokenize("Volume", "en-US"), KeywordMatcher.Tokenize("Vol.", "en-US"));
+    }
+
+    [Fact]
+    public void Score_SpokenKeywordMatchesAbbreviatedTitle()
+    {
+        // Integration shape of the live repro: song titled "Decatur St.", user keyword "street".
+        var songs = new List<Audio>
+        {
+            new() { Name = "Decatur St.", Id = Guid.NewGuid() }
+        }.Cast<BaseItem>().ToList();
+
+        var result = KeywordMatcher.Score(songs, KeywordMatcher.Tokenize("street", "en-US"), "en-US");
+
+        Assert.Single(result);
+    }
+
+    [Fact]
+    public void Tokenize_SaintSharesStClass()
+    {
+        // Tagged "St." is ambiguous between Street and Saint ("Decatur St." vs
+        // "St. Louis Blues"), so "saint" joins the st equivalence class: a spoken
+        // "saint louis" must find a tagged "St. Louis Blues" (code-review JF-383).
+        var songs = new List<Audio>
+        {
+            new() { Name = "St. Louis Blues", Id = Guid.NewGuid() }
+        }.Cast<BaseItem>().ToList();
+
+        var result = KeywordMatcher.Score(songs, KeywordMatcher.Tokenize("saint louis", "en-US"), "en-US");
+
+        Assert.Single(result);
+    }
+
+    [Fact]
+    public void Tokenize_JapaneseParticleNo_IsNotCanonicalized()
+    {
+        // Hard guard: "no" (the Japanese particle) must pass through unchanged, which
+        // is why number/no is excluded from the abbreviation map.
+        var result = KeywordMatcher.Tokenize("watashi no uta", "ja-JP");
+        Assert.Equal(new[] { "watashi", "no", "uta" }, result);
+    }
+
+    [Fact]
+    public void Tokenize_NonAbbreviationTokens_Unchanged()
+    {
+        // Tokens that merely share letters with abbreviations must not be touched.
+        var result = KeywordMatcher.Tokenize("stone roadster storage", "en-US");
+        Assert.Equal(new[] { "stone", "roadster", "storage" }, result);
     }
 }

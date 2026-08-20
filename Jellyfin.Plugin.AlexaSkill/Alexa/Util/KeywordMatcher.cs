@@ -84,12 +84,45 @@ internal static class KeywordMatcher
     };
 
     /// <summary>
+    /// Canonicalizes common title-word abbreviations (JF-383) so a spoken full word
+    /// ("street") matches an abbreviated tagged token ("St.") and vice versa. Music taggers
+    /// frequently abbreviate these words in track titles. Applied inside
+    /// <see cref="Tokenize"/> so BOTH sides (title index and user keywords) canonicalize
+    /// identically, making the match bidirectional. "saint" shares the st class because
+    /// tagged "St." is ambiguous between Street and Saint ("Decatur St." vs "St. Louis
+    /// Blues"); the canonical token is a class representative, not a semantic claim, and
+    /// the extra cross-matching is acceptable in this coverage-oriented search.
+    /// number/no is deliberately EXCLUDED: "no" is a real word in English/Italian and a
+    /// grammatical particle in Japanese (e.g. "watashi no uta"), so canonicalizing it
+    /// would corrupt token streams.
+    /// LOAD-BEARING INVARIANT: no canonical OUTPUT may be a stop word in any locale
+    /// (canonicalization runs after the stop-word filter), otherwise matching would
+    /// break asymmetrically: the abbreviated title token would survive Tokenize while
+    /// the spoken full word would be stop-word-filtered on the keyword side. None of
+    /// street/road/avenue/part/volume is a stop word today; keep it that way when
+    /// extending this map.
+    /// </summary>
+    private static readonly Dictionary<string, string> AbbreviationCanonicalForms = new(StringComparer.Ordinal)
+    {
+        ["st"] = "street",
+        ["saint"] = "street",
+        ["rd"] = "road",
+        ["ave"] = "avenue",
+        ["pt"] = "part",
+        ["vol"] = "volume"
+    };
+
+    private static string CanonicalizeAbbreviation(string token) =>
+        AbbreviationCanonicalForms.TryGetValue(token, out string? canonical) ? canonical : token;
+
+    /// <summary>
     /// Tokenizes the input text by lowercasing, splitting on whitespace and punctuation,
-    /// and removing locale-specific stop words.
+    /// removing locale-specific stop words, and canonicalizing title-word abbreviations
+    /// (see <see cref="AbbreviationCanonicalForms"/>).
     /// </summary>
     /// <param name="text">The text to tokenize.</param>
     /// <param name="locale">The locale string (e.g. "en-US") used to resolve stop words.</param>
-    /// <returns>An array of non-stop-word tokens, lowercased. Empty array for null, empty, or stop-words-only input.</returns>
+    /// <returns>An array of non-stop-word, abbreviation-canonicalized tokens, lowercased. Empty array for null, empty, or stop-words-only input.</returns>
     public static string[] Tokenize(string? text, string locale)
     {
         if (string.IsNullOrWhiteSpace(text))
@@ -141,6 +174,13 @@ internal static class KeywordMatcher
             {
                 tokens.Add(token);
             }
+        }
+
+        // Canonicalize abbreviations post-filter (JF-383): safe because no canonical
+        // output is a stop word (see the invariant on AbbreviationCanonicalForms).
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            tokens[i] = CanonicalizeAbbreviation(tokens[i]);
         }
 
         return tokens.ToArray();
