@@ -477,6 +477,15 @@ For artist names that Alexa consistently mishears (e.g. a Swedish name like "Koo
 - Check that your SSL certificate is valid
 - Ensure the skill endpoint in the Alexa Developer Console matches your server URL
 
+### Behind Cloudflare or a reverse proxy: account linking works, but every voice request fails
+
+If account linking succeeds (it goes through your browser) while every spoken request fails immediately, your proxy or firewall is most likely blocking Alexa itself. Alexa's skill requests are server-to-server `POST` calls from Amazon AWS IP addresses, with no browser fingerprint and not necessarily from your country. Two settings are known to block them, and note that **fixing only one of them is not enough** (a real case needed both, see [#18](https://github.com/paoloantinori/jellyfin-alexa-plugin/issues/18)):
+
+1. **Bot / geo-IP / WAF rules.** Cloudflare's *Bot Fight Mode*, country-blocking rules, and similar filters on other proxies challenge or block Alexa's calls, typically answering with an immediate `403`. Allow `POST` requests to the skill endpoint from any IP, or add a rule that skips bot protection and geo-blocking for your Jellyfin hostname (you can scope it to the skill path later). See also [#8](https://github.com/paoloantinori/jellyfin-alexa-plugin/issues/8), where *Bot Fight Mode* alone was the culprit.
+2. **Certificate type must be "Wildcard" on BOTH sides.** In the plugin settings *and* in the Alexa Developer Console (or your LWA security profile), set the SSL certificate type to the wildcard/self-signed option matching your setup. Having "Trusted Certificate" selected on either side breaks the skill-to-server calls even when everything else is correct.
+
+A quick way to tell this class of problem apart from a plugin bug: if the failure is instant (the device reports an error in the same breath) and linking works, it is almost always the network path, not the skill.
+
 ### The skill behaves inconsistently (works for some names, not others) after a deploy
 
 This is almost always **interaction-model or catalog propagation lag**, not a code bug. Two common causes:
