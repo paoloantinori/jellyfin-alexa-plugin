@@ -377,10 +377,14 @@ public class AlexaSkillController : ControllerBase
                 // always route to FindSongIntentHandler regardless of what intent Alexa's
                 // NLU assigned. Short replies like "family" often get misrouted by NLU
                 // (e.g. to ShowMoreIntent or BrowseLibraryIntent) when the user is in
-                // a multi-turn FindSong conversation.
+                // a multi-turn FindSong conversation. IntentRequests only: a
+                // SessionEndedRequest arriving with FindSong attributes must fall through
+                // to SessionEndedRequestHandler (FindSongIntentHandler casts to
+                // IntentRequest and crashed with InvalidCastException, live 2026-08-21).
                 string intentName = req.Request is IntentRequest intentReq ? intentReq.Intent?.Name ?? "null" : "n/a";
 
-                if (req.Session?.Attributes != null
+                if (req.Request is IntentRequest
+                    && req.Session?.Attributes != null
                     && req.Session.Attributes.ContainsKey("FindSongSessionData"))
                 {
                     var findSongHandler = _findSongHandler;
