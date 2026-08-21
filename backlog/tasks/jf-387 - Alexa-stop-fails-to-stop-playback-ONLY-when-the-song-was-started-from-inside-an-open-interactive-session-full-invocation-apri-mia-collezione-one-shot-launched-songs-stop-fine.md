@@ -4,9 +4,10 @@ title: >-
   'Alexa stop' fails to stop playback ONLY when the song was started from inside
   an open interactive session (full invocation 'apri mia collezione');
   one-shot-launched songs stop fine
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-21 07:21'
+updated_date: '2026-08-21 09:20'
 labels:
   - bug
   - playback
@@ -46,6 +47,21 @@ WORKAROUNDS (current): pause ('alexa pause' always routes to the active player) 
 - [ ] #3 #3 If the session-open variant correlates with stop failure, evaluate whether the play-from-open-session path can close the session differently (e.g. shouldEndSession=true on the play directive) without breaking in-session follow-ups; respect JF-299 (shouldEndSession=false on events is rejected; false on Play responses was harmful)
 - [ ] #4 #4 Check the Alexa app activity card for where 'stop' was routed in the failing variant (evidence for platform claim vs skill miss)
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+INVESTIGATED + FIX SHIPPED 2026-08-21 (commit 9041e47, deployed to minix; on-device confirmation pending).
+
+ANALYSIS (local + web research):
+1. LOCAL: BuildAudioPlayerResponse sets shouldEndSession=true on BOTH paths (one-shot and interactive) - the play response shape was identical EXCEPT one thing: the SessionAttributesInterceptor copied ALL incoming session attributes onto EVERY response, so an interactive FindSong-flow play response carried FindSongSessionData (State:1) and resume_state while the one-shot play carried none. This was the only observable difference between the two play responses.
+2. WEB RESEARCH (docs+forums): Amazon delivers 'stop' to the last-streaming skill as AMAZON.PauseIntent when the skill is NOT in an active session; no documented dialog-state persistence across session close; the research's explicit recommendation was to 'verify mechanically that the final elicit-flow response is byte-equivalent to the one-shot response' - a session-ending response silently carrying session state was the one skill-side mechanism consistent with all symptoms.
+3. USER HYPOTHESIS CONFIRMED in the sense that we WERE sending dead session data on the terminal play response; whether this alone caused the platform misrouting can only be confirmed on-device (the routing itself is platform-controlled once a clean Play lands - HIGH confidence per docs).
+
+FIX: SessionAttributesInterceptor no longer copies attributes when shouldEndSession=true (session-ending responses are attribute-free; attributes remain preserved on multi-turn elicit responses, which is the interceptor's purpose). The interactive play response is now byte-equivalent to the one-shot one.
+
+VERIFICATION: TDD (guard RED first; two pre-existing tests updated to open-session responses). 2653 green, Release -warnaserror clean, container CI-matching green. Deployed. ON-DEVICE TEST for the user: 'apri mia collezione' -> FindSong flow -> play -> 'alexa stop' should now work; report either way, and if it still fails the AC#1/#2 reproduction matrix becomes the next step (pure platform routing, no further skill-side difference exists to remove).
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
