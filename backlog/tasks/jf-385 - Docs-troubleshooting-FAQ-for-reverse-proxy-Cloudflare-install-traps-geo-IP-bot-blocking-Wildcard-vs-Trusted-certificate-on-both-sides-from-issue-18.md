@@ -4,9 +4,10 @@ title: >-
   Docs: troubleshooting FAQ for reverse-proxy/Cloudflare install traps
   (geo-IP/bot blocking + Wildcard-vs-Trusted certificate on both sides) from
   issue #18
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-20 21:16'
+updated_date: '2026-08-21 06:10'
 labels:
   - docs
   - faq
@@ -40,6 +41,12 @@ VALUE: a troubleshooting section saves the next user a round-trip, supports the 
 - [ ] #2 #2 (b) certificate mode must be Wildcard on BOTH sides (Amazon skill AND plugin); Trusted on either side fails - each fix alone does NOT suffice, only both together
 - [ ] #3 #3 Cross-link issues #18 and #8 for provenance; user-facing plain English, no internals
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+DONE 2026-08-20 (commit c853d00): added the troubleshooting subsection to README.md ("Behind Cloudflare or a reverse proxy: account linking works, but every voice request fails"), right after the generic "problem with the requested skill's response" entry whose symptom it explains. Covers both traps (bot/geo-IP/WAF blocking with the linking-works-voice-fails asymmetry + the misleading instant failure; Wildcard required on BOTH sides), states explicitly that fixing only one is not enough, cross-links #18 and #8, plain user-facing English, includes the diagnostic hint (instant failure + linking works = network path, not the skill). AC #1/#2/#3 all met. No code touched.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
