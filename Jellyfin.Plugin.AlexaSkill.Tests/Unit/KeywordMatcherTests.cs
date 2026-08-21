@@ -539,6 +539,71 @@ public class KeywordMatcherTests
         Assert.Equal(new[] { "watashi", "no", "uta" }, result);
     }
 
+    // JF-388: when candidates tie on phonetic coverage, the residual (non-matching)
+    // keywords break the tie. Live case: query 'the cater street' -> [cater, street];
+    // 'Decatur St.' -> [decatur, street] (cater PartialRatio decatur = 80);
+    // 'St. Gregory' -> [street, gregory] (cater PartialRatio gregory = 20).
+    // Both pass the 50% phonetic gate via 'street', but Decatur St. must rank FIRST.
+    // Without the tiebreak, St. Gregory won 42.5 vs 37.5 via the PositionalBonus
+    // misfire on the canonicalized 'St.' in first position.
+    [Fact]
+    public void ScorePhonetic_ResidualTiebreak_RightCandidateRanksFirst()
+    {
+        var songs = new List<Audio>
+        {
+            new() { Name = "Decatur St.", Id = Guid.NewGuid() },
+            new() { Name = "St. Gregory", Id = Guid.NewGuid() }
+        }.Cast<BaseItem>().ToList();
+        var keywordTokens = KeywordMatcher.Tokenize("the cater street", "en-US");
+
+        var phonetic = KeywordMatcher.ScorePhonetic(songs, keywordTokens, "en-US");
+
+        Assert.NotEmpty(phonetic);
+        Assert.Equal("Decatur St.", phonetic[0].Item.Name);
+    }
+
+    // JF-388 garbage control: the residual tiebreak must not let garbage keywords
+    // gain ranking. 'xyzzyfoo street' vs 'Decatur St.': xyzzyfoo matches nothing
+    // (PartialRatio vs decatur ~ 0), so the residual contribution is ~0 and this
+    // candidate must NOT outrank anything on the residual signal alone.
+    [Fact]
+    public void ScorePhonetic_ResidualTiebreak_GarbageKeyword_DoesNotGainRanking()
+    {
+        var songs = new List<Audio>
+        {
+            new() { Name = "Decatur St.", Id = Guid.NewGuid() },
+            new() { Name = "St. Gregory", Id = Guid.NewGuid() }
+        }.Cast<BaseItem>().ToList();
+        var keywordTokens = KeywordMatcher.Tokenize("xyzzyfoo street", "en-US");
+
+        var phonetic = KeywordMatcher.ScorePhonetic(songs, keywordTokens, "en-US");
+
+        // Both pass the 50% gate via 'street'; the residual for xyzzyfoo is ~0 for
+        // both, so the tiebreak must NOT create a decisive gap (scores stay close).
+        if (phonetic.Count == 2)
+        {
+            Assert.True(Math.Abs(phonetic[0].Score - phonetic[1].Score) < 10,
+                $"garbage residual must not create a decisive gap: {phonetic[0].Item.Name}={phonetic[0].Score} vs {phonetic[1].Item.Name}={phonetic[1].Score}");
+        }
+    }
+
+    // JF-388 saint-class guard: 'saint' must still find 'St. Gregory' via the exact
+    // matcher (both canonicalize to 'street'). The residual tiebreak only applies
+    // in ScorePhonetic, not in Score, so the exact path is unchanged.
+    [Fact]
+    public void Score_SaintQuery_StGregory_StillExactMatches()
+    {
+        var songs = new List<Audio>
+        {
+            new() { Name = "St. Gregory", Id = Guid.NewGuid() }
+        }.Cast<BaseItem>().ToList();
+
+        var result = KeywordMatcher.Score(songs, KeywordMatcher.Tokenize("saint gregory", "en-US"), "en-US");
+
+        Assert.NotEmpty(result);
+        Assert.Equal("St. Gregory", result[0].Item.Name);
+    }
+
     [Fact]
     public void Tokenize_NonAbbreviationTokens_Unchanged()
     {

@@ -46,6 +46,16 @@ internal static class KeywordMatcher
     private const double MinPhoneticKeywordCoverage = 0.5;
 
     /// <summary>
+    /// Maximum ranking bonus from the residual-keyword tiebreak (JF-388). Must exceed
+    /// the PositionalBonus (+5) to override it when the residual closeness clearly favors
+    /// one candidate (80/100 vs 20/100 in the live case), but small enough that it cannot
+    /// bridge a coverage-tier gap: a 100%-coverage candidate has NO unmatched keywords
+    /// (residual = 0) and its base (~63.75) stays safely above a 50%-coverage candidate's
+    /// best case (~37.5 + 5 positional + 10 residual = 52.5).
+    /// </summary>
+    private const double ResidualTiebreakCap = 10.0;
+
+    /// <summary>
     /// Stop words keyed by locale prefix (e.g. "en" for en-US, en-GB, etc.).
     /// Unknown locale prefixes default to an empty set.
     /// </summary>
@@ -450,11 +460,121 @@ internal static class KeywordMatcher
                 }
             }
 
+            // JF-388 residual tiebreak: candidates that tie on phonetic coverage (both
+            // matched 'street') are separated by the fuzzy closeness of their NON-matching
+            // keyword/title-token pairs. The live case: query 'the cater street';
+            // 'Decatur St.' (cater PartialRatio decatur = 80) must outrank 'St. Gregory'
+            // (cater PartialRatio gregory = 20), which otherwise wins via the positional
+            // bonus on its canonicalized 'St.' in first position. This is the discriminating
+            // signal the reverted JF-337 attempt identified, applied here ONLY as a ranking
+            // contribution (never as an admission gate), so it cannot create false-positive
+            // matches: a garbage keyword contributes ~0 and does not promote its candidate.
+            score += ResidualKeywordTiebreak(keywordTokens, titleTokens, keywordPhonetics, titlePhonetics);
+
             results.Add((song, score));
         }
 
         return results
             .OrderByDescending(r => r.Score)
             .ToList();
+    }
+
+    /// <summary>
+    /// Computes a small ranking bonus from the fuzzy closeness of the NON-matching
+    /// keyword/title-token pairs (JF-388). For each keyword that did NOT phonetically
+    /// match any title token, finds the best PartialRatio against the unmatched title
+    /// tokens; returns the average, scaled to at most <see cref="ResidualTiebreakCap"/>.
+    /// This separates candidates tied on phonetic coverage ('Decatur St.' vs
+    /// 'St. Gregory' for 'the cater street') without acting as an admission gate:
+    /// garbage keywords score ~0 and never promote a candidate on their own.
+    /// </summary>
+    /// <param name="keywordTokens">The raw keyword tokens (for fuzzy comparison).</param>
+    /// <param name="titleTokens">The raw title tokens (for fuzzy comparison).</param>
+    /// <param name="keywordPhonetics">Pre-computed keyword phonetic codes.</param>
+    /// <param name="titlePhonetics">Pre-computed title phonetic codes.</param>
+    /// <returns>A bonus in [0, <see cref="ResidualTiebreakCap"/>].</returns>
+    private static double ResidualKeywordTiebreak(
+        string[] keywordTokens,
+        string[] titleTokens,
+        (string Primary, string? Alternate)[] keywordPhonetics,
+        (string Primary, string? Alternate)[] titlePhonetics)
+    {
+        if (keywordTokens.Length == 0 || titleTokens.Length == 0)
+        {
+            return 0;
+        }
+
+        // Identify which keywords and title tokens did NOT phonetically match
+        var unmatchedKeywords = new List<int>();
+        for (int k = 0; k < keywordTokens.Length; k++)
+        {
+            bool matched = false;
+            for (int t = 0; t < titlePhonetics.Length; t++)
+            {
+                if (FuzzyMatcher.PhoneticCodesMatch(keywordPhonetics[k].Primary, keywordPhonetics[k].Alternate,
+                        titlePhonetics[t].Primary, titlePhonetics[t].Alternate))
+                {
+                    matched = true;
+                    break;
+                }
+            }
+
+            if (!matched)
+            {
+                unmatchedKeywords.Add(k);
+            }
+        }
+
+        if (unmatchedKeywords.Count == 0)
+        {
+            return 0;
+        }
+
+        var unmatchedTitleTokens = new List<int>();
+        for (int t = 0; t < titleTokens.Length; t++)
+        {
+            bool matched = false;
+            for (int k = 0; k < keywordPhonetics.Length; k++)
+            {
+                if (FuzzyMatcher.PhoneticCodesMatch(keywordPhonetics[k].Primary, keywordPhonetics[k].Alternate,
+                        titlePhonetics[t].Primary, titlePhonetics[t].Alternate))
+                {
+                    matched = true;
+                    break;
+                }
+            }
+
+            if (!matched)
+            {
+                unmatchedTitleTokens.Add(t);
+            }
+        }
+
+        if (unmatchedTitleTokens.Count == 0)
+        {
+            return 0;
+        }
+
+        // Best PartialRatio of each unmatched keyword against the unmatched title tokens
+        double total = 0;
+        foreach (int k in unmatchedKeywords)
+        {
+            int best = 0;
+            foreach (int t in unmatchedTitleTokens)
+            {
+                int ratio = FuzzyMatcher.PartialRatio(keywordTokens[k], titleTokens[t]);
+                if (ratio > best)
+                {
+                    best = ratio;
+                }
+            }
+
+            total += best;
+        }
+
+        double average = total / unmatchedKeywords.Count;
+
+        // Scale to [0, ResidualTiebreakCap]: 80/100 closeness -> ~0.8 * cap
+        return (average / 100.0) * ResidualTiebreakCap;
     }
 }
