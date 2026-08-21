@@ -717,8 +717,10 @@ public class PipelineTests : PluginTestBase
             { "media_type", "Audio" }
         };
 
-        var response = ResponseBuilder.Tell("test");
-        // ResponseBuilder.Tell does not set SessionAttributes by default
+        // NOTE: Tell sets shouldEndSession=true, but the preserve test below is the one
+        // that pins the session-ending behavior. This test now needs an open-session
+        // response for the merge to apply (Ask leaves shouldEndSession=false).
+        var response = ResponseBuilder.Ask("test", new Reprompt("test reprompt"));
         Assert.Null(response.SessionAttributes);
 
         var ctx = new RequestContext(
@@ -736,6 +738,39 @@ public class PipelineTests : PluginTestBase
         Assert.Equal("Audio", ctx.Response.SessionAttributes["media_type"]);
     }
 
+    // JF-387: session attributes on a response that ENDS the session are semantically
+    // dead weight (the session dies, attributes are dropped), and they made the
+    // interactive-session play response differ from the byte-equivalent one-shot one
+    // (which carries no attributes because its session was new). "alexa stop" after a
+    // FindSong-flow play was claimed by the device instead of routing PauseIntent to the
+    // skill; the one-shot path worked. Eliminating the one observable difference between
+    // the two play responses.
+    [Fact]
+    public async Task SessionAttributesInterceptor_SessionEndingResponse_DoesNotCopyAttributes()
+    {
+        var interceptor = new SessionAttributesInterceptor(_loggerFactory.CreateLogger<SessionAttributesInterceptor>());
+
+        var incomingAttrs = new Dictionary<string, object>
+        {
+            { "FindSongSessionData", "{\"State\":1,\"ArtistId\":\"abc\"}" },
+            { "resume_state", "{\"itemId\":\"xyz\"}" }
+        };
+
+        var response = ResponseBuilder.Tell("In riproduzione");
+        Assert.True(response.Response.ShouldEndSession);
+
+        var ctx = new RequestContext(
+            CreateSkillRequest(),
+            CreateAuthenticatableContext(),
+            CreateSession(incomingAttrs),
+            CreatePlaceholderHandler());
+        ctx.Response = response;
+
+        await interceptor.ProcessAsync(ctx, CancellationToken.None);
+
+        Assert.Null(ctx.Response.SessionAttributes);
+    }
+
     [Fact]
     public async Task SessionAttributesInterceptor_DoesNotOverwriteExistingKeys()
     {
@@ -747,7 +782,7 @@ public class PipelineTests : PluginTestBase
             { "incoming_only", "present" }
         };
 
-        var response = ResponseBuilder.Tell("test");
+        var response = ResponseBuilder.Ask("test", new Reprompt("test reprompt"));
         response.SessionAttributes = new Dictionary<string, object>
         {
             { "shared_key", "existing_value" },
@@ -869,7 +904,7 @@ public class PipelineTests : PluginTestBase
             { "state", "disambiguating" }
         };
 
-        var handlerResponse = ResponseBuilder.Tell("picking");
+        var handlerResponse = ResponseBuilder.Ask("picking", new Reprompt("picking?"));
         var handlerCalled = false;
 
         var handler = CreateHandler(() =>

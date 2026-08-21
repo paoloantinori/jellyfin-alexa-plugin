@@ -31,6 +31,20 @@ public class SessionAttributesInterceptor : IResponseInterceptor
             return Task.CompletedTask;
         }
 
+        // JF-387: do not carry session attributes onto a response that ends the session.
+        // They are semantically dead (the session dies and Amazon drops them), and they
+        // made the play response from an interactive FindSong flow differ from the
+        // byte-equivalent one-shot play response (which carries no attributes because its
+        // session was new). "alexa stop" after the interactive-path play was claimed by
+        // the device instead of routing PauseIntent to the skill, while the one-shot path
+        // worked; removing the one observable difference between the two responses.
+        // Multi-turn responses (shouldEndSession=false/null, e.g. elicitations) still
+        // preserve attributes, which is the interceptor's purpose.
+        if (context.Response.Response.ShouldEndSession == true)
+        {
+            return Task.CompletedTask;
+        }
+
         Dictionary<string, object> incomingAttributes = context.AlexaSession.Attributes;
         context.Response.SessionAttributes ??= new Dictionary<string, object>();
 
