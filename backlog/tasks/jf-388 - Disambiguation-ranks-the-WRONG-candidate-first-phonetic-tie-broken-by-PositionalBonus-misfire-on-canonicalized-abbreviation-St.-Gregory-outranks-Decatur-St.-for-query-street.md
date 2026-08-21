@@ -4,10 +4,10 @@ title: >-
   Disambiguation ranks the WRONG candidate first: phonetic-tie broken by
   PositionalBonus misfire on canonicalized abbreviation ('St. Gregory' outranks
   'Decatur St.' for query 'street')
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-21 09:32'
-updated_date: '2026-08-21 09:40'
+updated_date: '2026-08-21 09:58'
 labels:
   - bug
   - ranking
@@ -55,6 +55,22 @@ CANDIDATE PROLIFERATION NOTE: since JF-384 the 50%-coverage stage surfaces more 
 - [ ] #5 No regression: the 2653-test suite green; the saint-class matches (query 'saint louis' -> 'St. Louis Blues') still work
 - [ ] #6 /simplify + /code-review high before commit
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+IMPLEMENTED 2026-08-21 (commit 1ebcff2, deployed to minix, LIVE-VERIFIED).
+
+FIX: ResidualKeywordTiebreak in KeywordMatcher.ScorePhonetic. When candidates tie on phonetic coverage (both matched 'street' via the 50% gate), the NON-matching keywords' fuzzy closeness breaks the tie: cater PartialRatio decatur = 80 vs cater PartialRatio gregory = 20. Applied as a RANKING contribution only (cap 10.0, above the +5 PositionalBonus it must override, below the ~26-point coverage-tier gap it must never bridge), never as an admission gate (the reverted JF-337 lesson).
+
+Probe-verified scores: Decatur St. 45.5 > St. Gregory 44.5 (was 37.5 < 42.5).
+
+USER'S INSIGHT CONFIRMED: 'St. Gregory' semantically means 'Saint Gregory' (a different word from 'street'); the canonicalization's saint->street guess for St. Gregory was wrong in context, and the ordering (St. before a proper noun = Saint) was the semantic signal. The residual tiebreak implements this discrimination mechanically (the unmatched keyword 'cater' is close to 'decatur' but not to 'gregory') without needing the positional heuristic.
+
+VERIFICATION: TDD (3 new tests: ranking RED-then-GREEN, garbage control, saint-class guard). 2656 green, Release -warnaserror clean, container CI-matching green. LIVE on minix: 'the cater street' + 'twilight singers' now plays 'Decatur St.' DIRECTLY (no disambiguation prompt needed - the right candidate dominates).
+
+Log fix (secondary AC): NOT addressed in this commit; the pick-log index mismatch remains (low priority, log-only).
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
