@@ -430,6 +430,26 @@ Workarounds:
 - Use **"Alexa, pause"** (Italian: *"Alexa, pausa"*) — pause always routes to the active player and stops the audio.
 - Force the skill with its invocation name: English *"Alexa, ask Jellyfin Player to stop"*, Italian *"Alexa, chiedi a Mia Collezione ferma"* (use the imperative **ferma**/**stop**, not the infinitive "fermare").
 
+### Why is there no progress bar / scrubber when music plays?
+
+Music playback through this skill uses Amazon's `AudioPlayer` interface, which only provides play/pause/next/previous controls. The native music player with the seek bar is reserved for the Music/Radio/Podcast Skill API, which requires an Amazon partnership and is not available to custom skills. Every third-party Jellyfin (or Plex) skill has the same limitation; it is not a plugin bug.
+
+What you can get instead:
+
+- **Audiobooks on Echo Show** do have a full seek bar, because they play through the video interface (`VideoApp`). The trade-off is no album art or on-screen metadata on that path.
+- The plugin setting **Native controls for audio** reroutes music through the video interface as well, gaining the seek bar at the cost of on-device transcoding (slower first play) and compatibility issues on some devices. If you enable it and playback breaks, turn it off again; the default (plain `AudioPlayer`) is the reliable path.
+
+### Why does "next" sometimes answer "Sorry, I can't move to the next track"?
+
+If you ask for the next track well before the current song is near its end, the Echo's own buffering sometimes answers with its built-in error message instead of passing the request to the skill. The skill is never consulted in that case, so nothing is skipped. Asking again, or waiting until the track is closer to its end, works. This comes from the device's preloaded-buffer behavior and cannot be changed from the skill side.
+
+### What does "follow me" (moving playback to another Echo) actually do?
+
+Saying *"Alexa, chiedi a Mia Collezione seguimi"* (English: *"ask Jellyfin Player to follow me"*) starts playback of the current track on the Echo you are speaking to. Two things to know:
+
+1. Use the imperative form **"seguimi"**, not *"di seguirmi"*: the latter is often split by speech recognition into separate words and fails to match.
+2. Playback starts the **current track from the beginning** on the new device, and the previous Echo is not always stopped automatically. Pause or stop the old device yourself if both are playing.
+
 ### Why do some Live TV / IPTV channels show a black screen or fail to play?
 
 Live TV channels launch through the Echo's video player (`VideoApp.Launch`) — the same interface used for movies and episodes. That player decodes only a fixed set of formats. Per Amazon's [VideoApp Interface Reference](https://developer.amazon.com/en-US/docs/alexa/custom-skills/videoapp-interface-reference.html):
@@ -466,6 +486,19 @@ Jellyfin has no dedicated podcast type. Podcasts must be stored as **albums in y
 The skill syncs your library's artist and album names to Amazon's catalog so Alexa recognizes them when spoken with an accent. By default (since v0.11.2.0), this sync covers **all active locales**, not just Italian. If you installed an earlier version, the sync may have been Italian-only. To fix: open the plugin config page, find the **Custom Interaction Model & Catalog** section, and make sure the catalog sync locales field is set to `*` (all locales) or lists your specific locales.
 
 For artist names that Alexa consistently mishears (e.g. a Swedish name like "Koop" transcribed as "cup" on an Italian Echo), the skill now uses Double Metaphone phonetic matching to resolve accent drift automatically. No configuration needed.
+
+### I asked for an artist, but Alexa says it can't find a song
+
+A bare artist name ("play Soul Coughing") is ambiguous to Alexa's language understanding: it often gets captured as a *song title* request instead of an artist request, so a miss comes back worded as "no song found". This is intent competition in the language model, not a library problem.
+
+Two reliable fixes:
+
+- Add a **carrier word** before the name: *"play the band Soul Coughing"*, *"play the singer X"* (Italian: *"suona la band X"*, *"metti il cantante X"*, *"il gruppo X"*). The carrier word tells Alexa the name is an artist, and the request routes correctly.
+- If the skill answers **"Did you mean X?"**, that is the disambiguation prompt: say *yes* to play the suggested match, or *no* for a clean "not found". Nothing plays without your confirmation on that path, so a wrong suggestion can never start on its own.
+
+### Mood or genre requests find nothing, even though my artists are tagged with that genre
+
+Jellyfin does not propagate genre tags from an artist to its audio tracks. Mood and genre playback searches the **tracks** (and albums), so tagging genres only on the artist entry in Jellyfin has no effect. Open the artist's albums in Jellyfin and set the genre on the tracks (or on the albums), then retry: *"Alexa, chiedi a Mia Collezione di mettere musica rilassante"* will find the tracks once the genre is on the audio files themselves.
 
 ## Troubleshooting
 
@@ -512,6 +545,12 @@ If the inconsistency persists after 10+ minutes with the model showing "Ready", 
 - Verify your Jellyfin credentials are correct
 - Check that the plugin's **Account Linking Client ID** is set (auto-generated on first configuration)
 - Ensure your Jellyfin server's account linking endpoint is reachable
+
+### The plugin says "Ready", but Alexa still asks me to link the account
+
+The plugin's **Ready** status only means your Jellyfin username and password were accepted and stored. It does not tell you whether Amazon finished the linking on its side. The real test is a playback command: *"Alexa, ask Jellyfin Player to play my favorites"*. If it plays, linking completed and any webview loop you saw during setup was cosmetic; if Alexa answers that you need to link the account, open the plugin configuration and click **Authorize** again.
+
+Related: during linking, the flow may redirect through a regional Amazon domain such as `alexa.amazon.co.jp` even though your account is not Japanese. Amazon picks that host from your account's marketplace, not from the skill's language, and it is harmless. As above, trust the playback test, not the redirect you saw.
 
 ### Plugin not appearing in Jellyfin
 
