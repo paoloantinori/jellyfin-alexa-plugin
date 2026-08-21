@@ -1,7 +1,7 @@
 ---
 name: Alexa Skill
 guid: c5df7de0-8777-4b3c-a70d-5c3dae359c9e
-version: 0.11.2.0
+version: 0.12.0.0
 targetAbi: 10.11.0.0
 framework: net9.0
 overview: Alexa skill plugin for Jellyfin
@@ -20,4 +20,4 @@ artifacts:
   - Amazon.Lambda.Serialization.Json.dll
   - Jellyfin.Plugin.AlexaSkill.dll
   - Refit.dll
-changelog: "Catalog sync now defaults to all active locales (previously Italian-only), so non-English artist and album names are recognized on every Echo locale, not just Italian. Podcast setup FAQ and accent-drift FAQ added to the README."
+changelog: "Song search is now much more forgiving: titles stored with abbreviations (\"Decatur St.\") are found when you say the full word (\"Decatur Street\"), and a single misheard word no longer blocks an otherwise correct request. The skill also asks for confirmation instead of silently playing a loosely-matching artist when it did not understand what you said, no longer fails with \"something went wrong\" when a dialog prompt and background entity updates collide, and intermittent request failures triggered by editing settings while the skill is busy are fixed. New troubleshooting guides in the README cover reverse-proxy/Cloudflare setups, missing seek bar, follow-me behavior and more."
