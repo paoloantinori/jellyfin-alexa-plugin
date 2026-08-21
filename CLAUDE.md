@@ -8,7 +8,7 @@ C# Jellyfin plugin (net9.0) exposing an Alexa skill for media playback, search, 
 
 ```bash
 dotnet build Jellyfin.Plugin.AlexaSkill.sln
-dotnet test Jellyfin.Plugin.AlexaSkill.Tests          # ~2476 unit tests
+dotnet test Jellyfin.Plugin.AlexaSkill.Tests          # ~2656 unit tests
 python3 scripts/validate_interaction_models.py        # Check all 17 models (JSON, slots, drift)
 python3 scripts/validate_locales.py                   # Check locale key coverage (baseline-aware)
 python3 scripts/validate_versions.py                  # Check version consistency across files
@@ -34,7 +34,7 @@ GitHub Actions runs the validation/build pipeline on **PRs to main** and via man
 
 Plugin source lives under `Jellyfin.Plugin.AlexaSkill/` (the C# project root) — all `Alexa/`, `Configuration/`, and `Controller/` paths below are relative to it. Repo-root paths (`docs/`, `tests/`, `scripts/`, `Directory.Build.props`) have no prefix.
 
-- `Jellyfin.Plugin.AlexaSkill/Alexa/Handler/Intent/` — 60 intent handlers (one per intent, inherit `BaseHandler`)
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Handler/Intent/` - 61 intent handlers (one per intent, inherit `BaseHandler`)
 - `Jellyfin.Plugin.AlexaSkill/Alexa/Handler/BaseHandler.cs` — shared utilities: `FuzzyMatch`, `HandleFuzzyMiss`, `RetryAsync`, stream URLs, library filters
 - `Jellyfin.Plugin.AlexaSkill/Alexa/InteractionModel/` — 17 per-locale interaction model JSONs (`model_*.json`), generated from templates in `Alexa/InteractionModel/templates/`
 - `Jellyfin.Plugin.AlexaSkill/Alexa/Locale/` — Response strings: keys in `ResponseStrings.cs`, values in 17 `<locale>.json` files
@@ -104,25 +104,39 @@ New intents need: handler class + `IntentNames.cs` entry + interaction model sam
 ## Artist Search Fallback Chain
 
 `PlayArtistSongsIntentHandler` has a 4-tier fallback (each is a separate DB query):
-1. `SearchTerm` — Jellyfin search index
-2. `NameStartsWith` first word — prefix with single word
-3. `NameStartsWith` full query — prefix with full string
-4. `NameContains` full query — substring match anywhere in name
+1. `SearchTerm` - Jellyfin search index
+2. `NameStartsWith` first word - prefix with single word
+3. `NameStartsWith` full query - prefix with full string
+4. `NameContains` full query - substring match anywhere in name
 
 All tiers go through `FuzzyMatch` (phonetic-aware via `FuzzyMatchPhonetic` in `BaseHandler`, which passes `ArtistIndexService`'s pre-computed Double Metaphone codes) to filter false positives and resolve ASR accent drift (e.g. "Koop" heard as "cup" on an it-IT Echo, both code "KP"). Results are served from the in-memory `ArtistIndexService` when available.
 
 **Tier-1 length gate (JF-381):** the in-memory tier-1 Contains filter (`a.Name.Contains(musician)`) skips candidates whose name is more than 10 chars longer than the query. This prevents coincidental substring matches (e.g. "cup" in "Porcupine Tree") from short-circuiting before the phonetic/fuzzy tiers can find the intended accent-drift match. The phonetic `FuzzyMatchPhonetic` overload floors length-matched code-collision scores above `ContainmentScore` so they beat substring matches.
 
-**Duplicated search path (JF-382):** `PlayArtistSongsIntentHandler` has its OWN inline 4-tier search, duplicating `ArtistSearch.SearchAsync` (Alexa/Util/ArtistSearch.cs) which already has phonetic matching on all tiers and is used by all other handlers. The inline copy exists for Fast/Thorough/Parallel mode selection. Do not add a third copy; consolidate via JF-382.
+**Coincidental-containment downgrade (JF-377):** when a single tier-4 match is a coincidental substring containment (short common-word name inside a longer query, detected by `ArtistSearch.IsCoincidentalContainmentMatch`), the handler downgrades to a yes/no disambiguation prompt (`DisambiguationHelper.AskFirstMatch`) instead of auto-playing. Real artists still play via "yes"; nonsense resolves to not-found via "no". Bug and regression cases are string-indistinguishable (the JF-377 research), so the prompt is the only no-regression design.
+
+**Duplicated search path (JF-382):** `PlayArtistSongsIntentHandler` still has its own inline 4-tier search (Fast/Thorough/Parallel mode selection), duplicating `ArtistSearch.SearchAsync`. The artist-SONGS query blocks have been consolidated into `BaseHandler.GetArtistSongsAsync` (shared by FindSong artist-scoped, PlaySong title fallback, and future callers), but the 4-tier SEARCH duplication remains. Do not add a third copy of the search; consolidate via JF-382.
 
 ## Song Search Pipeline
 
 `FindSongIntentHandler` uses a 3-stage search chain in `SearchAndRespondAsync()`:
-1. **N-gram index** (`SongNgramIndexService.Search`) — O(1) bigram/single-token lookup → `KeywordMatcher.Score` with 100% keyword coverage. Fast path.
-2. **Phonetic index** (`SongNgramIndexService.SearchPhonetic`) — Double Metaphone phonetic code lookup → `KeywordMatcher.ScorePhonetic` with 50% keyword coverage + 0.75 penalty. Cold path, only on exact-match miss. Protected by `PhoneticSongSearchEnabled` feature flag (default: true).
-3. **DB fallback** — Jellyfin search API query. Slowest, last resort.
+1. **N-gram index** (`SongNgramIndexService.Search`) - O(1) bigram/single-token lookup, then `KeywordMatcher.Score` with 100% keyword coverage. Fast path.
+2. **Phonetic index** (`SongNgramIndexService.SearchPhonetic`) - Double Metaphone phonetic code lookup, then `KeywordMatcher.ScorePhonetic` with 50% keyword coverage + 0.75 penalty. Cold path, only on exact-match miss. Protected by `PhoneticSongSearchEnabled` feature flag (default: true).
+3. **DB fallback** - Jellyfin search API query. Slowest, last resort.
 
-The n-gram index is a background hosted service (`SongNgramIndexService`) that loads all `Audio` items at startup, builds bigram/single-token/phonetic dictionaries, and refreshes on library changes (debounced 5s). Pre-computed phonetic codes make phonetic lookup O(1) — only the user's 2-3 keywords need encoding at query time.
+**Abbreviation canonicalization (JF-383):** `KeywordMatcher.Tokenize` canonicalizes common title-word abbreviations via `AbbreviationCanonicalForms` (st/saint->street, rd->road, ave->avenue, pt->part, vol->volume) on BOTH sides (title index and spoken keywords), bidirectionally. `number/no` is deliberately excluded ("no" is a real word in en/it, a Japanese particle, and a Portuguese stop word). LOAD-BEARING INVARIANT: no canonical output may be a stop word in any locale.
+
+**Cross-locale English stop words (JF-384):** `KeywordMatcher.Tokenize` always strips the English stop-word set (`EnglishStopWords`) in addition to the locale-specific set, because English titles spoken under non-English locales carry English function words ("the") that would otherwise veto keyword coverage. The n-gram index is built with en-US, so this also repairs a pre-existing index/query asymmetry.
+
+**Phonetic second stage (JF-384):** `KeywordMatcher.ScoreWithPhoneticFallback(songs, tokens, locale, phoneticEnabled)` runs exact `Score` first, then on miss runs `ScorePhonetic` on the same bounded candidate set. Used by FindSong artist-scoped and PlaySong title fallback paths.
+
+**Residual keyword tiebreak (JF-388):** `KeywordMatcher.ScorePhonetic` adds a ranking bonus from the fuzzy closeness of NON-matching keyword/title-token pairs (`ResidualKeywordTiebreak`, cap 10.0). Separates candidates tied on phonetic coverage ("Decatur St." vs "St. Gregory" for "the cater street"). Ranking-only: never an admission gate (the reverted JF-337 lesson); a 100%-coverage candidate always gets residual=0.
+
+**Artist-scoped NameContains retry (JF-383):** when the artist-scoped `NameContains` pre-filter returns 0 candidates (spoken full word vs abbreviated tagged title), FindSong retries with ArtistIds only (Limit 500) and lets KeywordMatcher decide.
+
+**PlaySong title fallback (JF-383/JF-384):** on exact SearchTerm miss, PlaySong falls back to (a) the artist's songs scored by `ScoreWithPhoneticFallback` (when a musician slot is present, bounded Limit 500), or (b) the n-gram index with phonetic fallback (when no musician, O(1)). `ISongNgramIndex` is an optional ctor param.
+
+The n-gram index is a background hosted service (`SongNgramIndexService`) that loads all `Audio` items at startup, builds bigram/single-token/phonetic dictionaries, and refreshes on library changes (debounced 5s). Pre-computed phonetic codes make phonetic lookup O(1); only the user's 2-3 keywords need encoding at query time.
 
 ## Cross-Media-Type Fallback
 
@@ -241,6 +255,10 @@ NLU test fixtures in `tests/integration/fixtures/<locale>.yaml`. NLU tests use t
 - **Stop vs Pause**: `AMAZON.StopIntent`/`AMAZON.CancelIntent` → `AudioPlayerStop()` + `ShouldEndSession=true`. `AMAZON.PauseIntent` → `AudioPlayerStop()` + `ShouldEndSession=true` + optional position card. All paths send `AudioPlayer.Stop` directive to guarantee audio stops. Do NOT use `ResponseBuilder.Empty()` for stop/cancel — it lacks the `AudioPlayer.Stop` directive.
 - **AudioPlayer responses**: `BuildAudioPlayerResponse` sets `ShouldEndSession=true`. Amazon routes **pause/resume** to the active skill automatically when audio is playing, regardless of session state. **Stop/Next/Previous are NOT reliably routed** during playback (see next item — claimed by the default music service). Using `ShouldEndSession=false` on Play responses kept an active session that prevented the Echo from routing "stop/ferma" to `AMAZON.PauseIntent` (it sent `SessionEndedRequest` instead).
 - **Stop/Next/Previous + content switching during playback → default music service (skill competition)**: While AudioPlayer is playing, Amazon auto-routes ONLY **Pause/Resume** to the active skill. **Stop/Next/Previous are frequently claimed by the device's default music service** (Amazon Music/Spotify), so the skill never receives them — verified on-device 2026-07-02 (zero `StopIntent`/`NextIntent`/`PlaybackStopped` events for "stop"/"ferma"/"avanti"; Alexa simulator `ConsideredIntents` = `<IntentForDifferentSkill>`). A fresh content request ("play a different playlist/album/artist/song") is likewise NOT auto-routed — it goes to the default music service. Workaround: use **Pause** (always routes to the active player) or one-shot with the invocation name (`ask <invocation> to stop` / it-IT `chiedi a mia collezione ferma` — imperative, NOT the infinitive "fermare" which resolves to no intent). Not fixable plugin-side: custom `AudioPlayer` skills cannot claim the device's default-music slot (reserved for the Music/Radio/Podcast Skill API, Amazon-partnership-only — same reason custom skills get no seek bar). `PlaybackController` interface is NOT a fix (per Amazon docs it serves hardware buttons only, has no STOP op, and is never sent for voice). Keeping the session open does NOT help (and `JF-299` shows `shouldEndSession=false` is harmful). This is platform behavior, not a bug.
+- **Session attributes must NOT ride on session-ending responses (JF-387)**: `SessionAttributesInterceptor` skips copying when `ShouldEndSession == true`. Copying dead session data onto a terminal play response made the interactive-session play differ from the byte-equivalent one-shot play, and "alexa stop" was misrouted after interactive-session playback. Attributes are preserved only on multi-turn (open-session) responses.
+- **Response interceptors run in REVERSE registration order**: `RequestPipeline.ExecuteAsync` iterates `_responseInterceptors` from `Count-1` down to 0. `ResponseBodyLoggingInterceptor` (registered last) runs FIRST and its snapshot does NOT include mutations by later interceptors (`DynamicEntitiesInterceptor`, `SessionAttributesInterceptor`). Trust Amazon's error messages over the logged body for post-logging mutations.
+- **Dialog.UpdateDynamicEntities cannot coexist with other Dialog.* directives**: `DynamicEntitiesInterceptor` skips injection when the response already carries `Dialog.ElicitSlot`/`ConfirmSlot`/`Delegate`. Amazon rejects the combination with `INVALID_RESPONSE: "No other directives are allowed to be specified with a Dialog directive"`. Live incident: skill open into FindSong failed audibly on every entry (2026-08-21).
+- **FindSong session routing is IntentRequest-only**: `AlexaSkillController` routes to `FindSongIntentHandler` when `FindSongSessionData` is in session attributes, but ONLY for `IntentRequest`. A `SessionEndedRequest` arriving with FindSong attributes must fall through to `SessionEndedRequestHandler`; routing it to FindSongIntentHandler crashes with `InvalidCastException` (live incident 2026-08-21, ErrorRef f1ff87c1).
 - **Resume item resolution**: Prefer `context.AudioPlayer.Token` over `session.FullNowPlayingItem`. Jellyfin's `PlaybackStopped` event clears `FullNowPlayingItem` before the resume request arrives, but `AudioPlayer.Token` survives.
 - **NLU competition**: Ambiguous utterances between intents need concrete (non-slotted) samples to disambiguate.
 - **SMAPI rate limits**: Space NLU tests with `SMAPI_DELAY=1.5`.

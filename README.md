@@ -83,9 +83,10 @@ Full custom utterances in 11 languages: English (5 variants), Spanish (3), Frenc
 10. [Supported Languages](#supported-languages)
 11. [FAQ](#faq)
 12. [Troubleshooting](#troubleshooting)
-13. [Third Party Notices](#third-party-notices)
-14. [All Voice Commands by Language](VOICE_COMMANDS.md)
-15. [License](#license)
+13. [Development](#development)
+14. [Third Party Notices](#third-party-notices)
+15. [All Voice Commands by Language](VOICE_COMMANDS.md)
+16. [License](#license)
 
 ## About
 
@@ -116,6 +117,10 @@ A Jellyfin plugin that creates a personal Alexa skill to play and control media 
 - **Romance phonetic synonyms**: generates Italian/Spanish/French/Portuguese pronunciation variants for English artist and album names (e.g., "Coughing" → "Cofin"/"Coffin") so Alexa's ASR recognizes accented speech; uploaded to the catalog automatically
 - **Cross-media artist suggestion**: when a song or album isn't found but a plausible artist matches, the skill offers to play that artist instead of a dead-end "not found" (configurable: ask first / play directly / off)
 - **ASR compound-word fix**: retries split compound words when Alexa's speech recognition joins or separates them (e.g., "soulcoughing" → "soul coughing")
+- **Abbreviation matching**: titles stored with abbreviations ("Decatur St.") are found when you say the full word ("Decatur Street"). Covers St./Rd./Ave./Pt./Vol. bidirectionally
+- **Accent-drift tolerance**: a single misheard word in a multi-word title no longer blocks the match; the un-drifted words carry it (e.g., "Decature" heard as "the cater" still finds "Decatur St.")
+- **Smart ranking**: when multiple songs match partially, the one whose remaining words are closest to what you said ranks first (e.g., "Decatur St." beats "St. Gregory" when you said "street")
+- **Cross-locale English tolerance**: English function words ("the", "and") are stripped regardless of the device locale, so English titles spoken on non-English Echos match correctly
 - **Fast/Thorough search mode**: per-user choice between fast single-query auto-play or thorough multi-tier fallback with disambiguation
 
 ### ▶️ Resume & continuity
@@ -268,7 +273,7 @@ Per-user settings include **fuzzy match behavior** (Confirm or Auto-Play), **fuz
 
 ### Catalog Sync
 
-The plugin uploads your Jellyfin library (artists and albums) to Amazon's catalog slot types with **phonetic synonyms** so Alexa recognizes names spoken with a non-English accent. By default this runs for Italian (it-IT) only. To enable it for other locales, set **Catalog Sync Locales** in the configuration: leave empty for Italian only, use `*` for all active locales, or list specific locales (e.g., `de-DE,en-US`). The sync runs weekly and on startup (skipped if synced within the last 12 hours).
+The plugin uploads your Jellyfin library (artists and albums) to Amazon's catalog slot types with **phonetic synonyms** so Alexa recognizes names spoken with a non-English accent. By default (since v0.11.2.0) this covers **all active locales**. To restrict it, set **Catalog Sync Locales** in the configuration: leave empty for Italian only, use `*` for all active locales (the default), or list specific locales (e.g., `de-DE,en-US`). The sync runs weekly and on startup (skipped if synced within the last 12 hours).
 
 ### Feature Flags
 
@@ -410,7 +415,7 @@ Use the **Alexa Developer Console** simulator. Go to your skill → **test** →
 
 ### Why does "play a different playlist" go to Amazon Music while my playlist is playing?
 
-While music is playing from the skill, Alexa only routes the standard playback commands back to it automatically — **pause, resume, next, previous, stop**. A request to play something *new* (a different playlist, album, artist, or song) is treated as a fresh music search, so Alexa sends it to your **default music service** (Amazon Music, Spotify, …) instead of the skill. The skill never receives that request.
+While music is playing from the skill, Alexa only routes **pause** and **resume** back to it automatically (it's the active audio player). A request to play something *new* (a different playlist, album, artist, or song) is treated as a fresh music search, so Alexa sends it to your **default music service** (Amazon Music, Spotify, …) instead of the skill. The skill never receives that request.
 
 To switch to different content while something is playing, include the skill's name in the request:
 
@@ -499,6 +504,22 @@ Two reliable fixes:
 ### Mood or genre requests find nothing, even though my artists are tagged with that genre
 
 Jellyfin does not propagate genre tags from an artist to its audio tracks. Mood and genre playback searches the **tracks** (and albums), so tagging genres only on the artist entry in Jellyfin has no effect. Open the artist's albums in Jellyfin and set the genre on the tracks (or on the albums), then retry: *"Alexa, chiedi a Mia Collezione di mettere musica rilassante"* will find the tracks once the genre is on the audio files themselves.
+
+### How do audiobooks work? Where should they be stored?
+
+Audiobooks must be stored in your Jellyfin library with the `AudioBook` content type. Multi-chapter books are played as a single continuous stream via the Echo Show's video player, giving you a **full-book seek bar** (you can scrub to any position across all chapters). Resume remembers your position across sessions.
+
+One known limitation: the seek bar's timeline is **relative to where you resumed**, not the book's absolute start. If you resume at chapter 3, the progress bar starts at 0:00 from that point. The audio position is correct; only the visual reference differs.
+
+### The skill was working fine, then I updated the plugin and now it's broken
+
+Plugin updates can occasionally reset the stored configuration (a known Jellyfin plugin behavior when the plugin version changes). If the skill suddenly asks you to re-link your account or shows zero users:
+
+1. Open the plugin configuration page
+2. If your user is gone, re-add it and click **Authorize** again
+3. Verify the invocation name and other settings survived; restore from a backup if you made one before updating
+
+This is not specific to this plugin; it affects any Jellyfin plugin that changes version. Making a note of your settings (or a screenshot of the config page) before updating is the practical mitigation.
 
 ## Troubleshooting
 
