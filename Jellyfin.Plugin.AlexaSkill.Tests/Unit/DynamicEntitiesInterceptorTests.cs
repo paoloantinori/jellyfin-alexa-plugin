@@ -7,6 +7,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.DynamicEntities;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
@@ -336,6 +337,33 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
             Times.Never);
 
         Assert.Single(ctx.Response.Response.Directives);
+    }
+
+    // Live bug 2026-08-21 (corr 9c796d4f, 07bf42a4): on a NEW session the interceptor
+    // injected Dialog.UpdateDynamicEntities into a response that already carried a
+    // Dialog.ElicitSlot (FindSong keyword elicitation). Amazon rejects the combination
+    // with INVALID_RESPONSE "No other directives are allowed to be specified with a
+    // Dialog directive", so opening the skill into a FindSong flow failed audibly.
+    // Dialog.UpdateDynamicEntities must never ride along with another Dialog.* directive.
+    [Fact]
+    public async Task ProcessAsync_DialogElicitSlotInResponse_SkipsDynamicEntities()
+    {
+        var interceptor = CreateInterceptor();
+        var request = new LaunchRequest { Type = "LaunchRequest" };
+        var ctx = CreateContext(request);
+        ctx.Response.Response.Directives = new List<IDirective>
+        {
+            new ElicitSlotDirective("titleKeywords", "FindSongIntent")
+        };
+
+        await interceptor.ProcessAsync(ctx, CancellationToken.None);
+
+        _builderMock.Verify(
+            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Guid[]>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        Assert.Single(ctx.Response.Response.Directives);
+        Assert.DoesNotContain(ctx.Response.Response.Directives, d => d is DynamicEntitiesDirective);
     }
 
     [Fact]

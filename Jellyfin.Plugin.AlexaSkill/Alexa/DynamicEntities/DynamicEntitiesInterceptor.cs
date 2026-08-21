@@ -50,9 +50,22 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
             return Task.CompletedTask;
         }
 
-        // AudioPlayer directives carry their own dialog state — skip DynamicEntities.
+        // AudioPlayer directives carry their own dialog state. Skip DynamicEntities for those.
         if (context.Response.Response.Directives?.Any(d =>
             d is AudioPlayerPlayDirective or StopDirective or ClearQueueDirective) == true)
+        {
+            return Task.CompletedTask;
+        }
+
+        // Amazon rejects a Dialog.UpdateDynamicEntities ride-along on a response that
+        // already carries another Dialog.* directive (ElicitSlot/ConfirmSlot/Delegate):
+        // INVALID_RESPONSE "No other directives are allowed to be specified with a Dialog
+        // directive" (live 2026-08-21, new-session FindSong elicitation). Skip instead;
+        // the entities refresh simply lands on a later turn. Matched by Type prefix
+        // because the Dialog directive classes share no common base type.
+        if (context.Response.Response.Directives?.Any(d =>
+                d.Type?.StartsWith("Dialog.", StringComparison.Ordinal) == true
+                && d is not DynamicEntitiesDirective) == true)
         {
             return Task.CompletedTask;
         }
