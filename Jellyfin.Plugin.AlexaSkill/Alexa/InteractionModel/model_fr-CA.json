@@ -317,7 +317,15 @@
         "name": "PlayPlaylistIntent",
         "samples": [
           "Lis la playlist {playlist}",
-          "Lis ma playlist {playlist}"
+          "Lis ma playlist {playlist}",
+          "Joue la playlist {playlist}",
+          "Joue ma playlist {playlist}",
+          "Mets la playlist {playlist}",
+          "Lance la playlist {playlist}",
+          "Lance ma playlist {playlist}",
+          "Démarrer la playlist {playlist}",
+          "De jouer la playlist {playlist}",
+          "De lancer la playlist {playlist}"
         ],
         "slots": [
           {

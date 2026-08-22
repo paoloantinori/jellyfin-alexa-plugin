@@ -311,7 +311,13 @@
         "name": "PlayPlaylistIntent",
         "samples": [
           "Reproduce la lista de reproducción {playlist}",
-          "Reproduce mi lista de reproducción {playlist}"
+          "Reproduce mi lista de reproducción {playlist}",
+          "Reproduce la playlist {playlist}",
+          "Reproduce mi playlist {playlist}",
+          "Pon la playlist {playlist}",
+          "Pon mi playlist {playlist}",
+          "Inicia la playlist {playlist}",
+          "Reproducir la playlist {playlist}"
         ],
         "slots": [
           {

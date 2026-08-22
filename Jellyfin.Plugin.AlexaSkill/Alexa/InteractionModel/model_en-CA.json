@@ -312,7 +312,12 @@
         "name": "PlayPlaylistIntent",
         "samples": [
           "Play the playlist {playlist}",
-          "Play my playlist {playlist}"
+          "Play my playlist {playlist}",
+          "play the playlist {playlist}",
+          "play my playlist {playlist}",
+          "start the playlist {playlist}",
+          "start playlist {playlist}",
+          "to play the playlist {playlist}"
         ],
         "slots": [
           {

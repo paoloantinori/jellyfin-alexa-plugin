@@ -159,29 +159,6 @@
         ]
       },
       {
-        "name": "PlayPlaylistIntent",
-        "samples": [
-          "Riproduci playlist {playlist}",
-          "Suona playlist {playlist}",
-          "Metti playlist {playlist}",
-          "Pleia playlist {playlist}",
-          "Di riprodurre playlist {playlist}",
-          "Di suonare playlist {playlist}",
-          "Di mettere playlist {playlist}",
-          "Di pleiare playlist {playlist}",
-          "Riproduci la playlist {playlist}",
-          "Suona la playlist {playlist}",
-          "Metti la playlist {playlist}",
-          "Pleia la playlist {playlist}"
-        ],
-        "slots": [
-          {
-            "name": "playlist",
-            "type": "AMAZON.SearchQuery"
-          }
-        ]
-      },
-      {
         "name": "ShufflePlayIntent",
         "samples": [
           "Mescola la playlist {playlist}",
@@ -861,6 +838,37 @@
           {
             "name": "musician",
             "type": "AMAZON.Musician"
+          }
+        ]
+      },
+      {
+        "name": "PlayPlaylistIntent",
+        "samples": [
+          "Riproduci playlist {playlist}",
+          "Suona playlist {playlist}",
+          "Metti playlist {playlist}",
+          "Pleia playlist {playlist}",
+          "Ascolta playlist {playlist}",
+          "Riproduci la playlist {playlist}",
+          "Suona la playlist {playlist}",
+          "Metti la playlist {playlist}",
+          "Pleia la playlist {playlist}",
+          "Ascolta la playlist {playlist}",
+          "Di riprodurre playlist {playlist}",
+          "Di suonare playlist {playlist}",
+          "Di mettere playlist {playlist}",
+          "Di pleiare playlist {playlist}",
+          "Di ascoltare playlist {playlist}",
+          "Di riprodurre la playlist {playlist}",
+          "Di suonare la playlist {playlist}",
+          "Di mettere la playlist {playlist}",
+          "Di pleiare la playlist {playlist}",
+          "Di ascoltare la playlist {playlist}"
+        ],
+        "slots": [
+          {
+            "name": "playlist",
+            "type": "AMAZON.SearchQuery"
           }
         ]
       },
