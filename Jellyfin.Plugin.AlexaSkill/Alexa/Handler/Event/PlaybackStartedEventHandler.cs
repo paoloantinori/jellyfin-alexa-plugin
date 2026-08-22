@@ -6,6 +6,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
@@ -48,8 +49,13 @@ public class PlaybackStartedEventHandler : BaseHandler
 
     /// <summary>
     /// Set the currently started media as playing, and (when PreEnqueueOnStart is on)
-    /// enqueue the next track from the server-side queue so the device transitions
-    /// automatically without needing the timing-sensitive PlaybackNearlyFinished event.
+    /// pre-compute the next track's resolution so PlaybackNearlyFinished can respond
+    /// instantly when it fires (JF-390). NOTE: Amazon REJECTS AudioPlayer.Play
+    /// directives in PlaybackStarted responses ("must not contain more than 0
+    /// AudioPlayer.Play directive(s) for this request type"), so we can only
+    /// PRE-COMPUTE here, not pre-enqueue. The pre-computed data is stored in
+    /// <see cref="NextTrackPrecomputeCache"/> and consumed by
+    /// PlaybackNearlyFinishedEventHandler.
     /// </summary>
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
@@ -72,15 +78,14 @@ public class PlaybackStartedEventHandler : BaseHandler
 
         await SessionManager.OnPlaybackStart(playbackStartInfo).ConfigureAwait(false);
 
-        // JF-390 PreEnqueueOnStart: enqueue the next track when this one STARTS,
-        // eliminating the per-track PlaybackNearlyFinished round-trip dependency.
+        // JF-390 PreEnqueueOnStart (pre-compute): resolve the next track EARLY so
+        // PlaybackNearlyFinished can respond with zero library lookups. This reduces
+        // the server-side processing window on high-latency endpoints (Tailscale).
+        // We cannot send AudioPlayer.Play from PlaybackStarted (platform rejects it);
+        // we only cache the resolution result.
         if (_config.PreEnqueueOnStart && _libraryManager != null)
         {
-            SkillResponse? enqueueResponse = TryPreEnqueueNext(req.Token, session, user, context);
-            if (enqueueResponse != null)
-            {
-                return enqueueResponse;
-            }
+            TryPrecomputeNext(req.Token, session, user, context);
         }
 
         // JF-299: return a keep-alive ack (shouldEndSession=null). Amazon REJECTS
@@ -94,19 +99,18 @@ public class PlaybackStartedEventHandler : BaseHandler
     }
 
     /// <summary>
-    /// Resolves the next sequential item in the session queue after the currently
-    /// playing token and returns an AudioPlayer.Play (Enqueue) response for it.
-    /// Returns null (caller falls through to keep-alive) when there is no next item,
-    /// the queue is empty, or the current item cannot be found. Deliberately simple
-    /// (sequential only): shuffle, repeat-one, radio mode, and PostPlay AutoPlay are
-    /// still handled by PlaybackNearlyFinished, which remains the authoritative
-    /// resolver for those modes.
+    /// Resolves the next sequential queue item, fetches its library metadata, and
+    /// stores the result in <see cref="NextTrackPrecomputeCache"/> keyed by device +
+    /// current track token. PlaybackNearlyFinishedEventHandler checks this cache first
+    /// and, on a hit, skips the library lookups entirely (instant response).
+    /// Deliberately sequential-only: shuffle, repeat, and radio/PostPlay resolution
+    /// remain in NearlyFinished as the authoritative resolver.
     /// </summary>
-    private SkillResponse? TryPreEnqueueNext(string currentToken, SessionInfo session, Entities.User user, Context context)
+    private void TryPrecomputeNext(string currentToken, SessionInfo session, Entities.User user, Context context)
     {
         if (session.NowPlayingQueue.Count == 0 || !Guid.TryParse(currentToken, out Guid currentId))
         {
-            return null;
+            return;
         }
 
         int currentIndex = -1;
@@ -121,20 +125,22 @@ public class PlaybackStartedEventHandler : BaseHandler
 
         if (currentIndex < 0 || currentIndex + 1 >= session.NowPlayingQueue.Count)
         {
-            return null;
+            return;
         }
 
         Guid nextId = session.NowPlayingQueue[currentIndex + 1].Id;
         MediaBrowser.Controller.Entities.BaseItem? item = _libraryManager?.GetItemById(nextId);
         if (item == null)
         {
-            return null;
+            return;
         }
 
-        Logger.LogInformation(
-            "PlaybackStarted: PreEnqueueOnStart enqueuing next item='{NextItem}' after current='{CurrentItem}' (queue position {Position}/{QueueSize})",
-            item.Name, currentToken, currentIndex + 2, session.NowPlayingQueue.Count);
+        string streamUrl = GetStreamUrl(nextId.ToString(), user);
+        string deviceId = context.System?.Device?.DeviceID ?? string.Empty;
 
-        return BuildAudioPlayerResponse(PlayBehavior.Enqueue, GetStreamUrl(nextId.ToString(), user), nextId.ToString(), item, user, context);
+        NextTrackPrecomputeCache.Store(deviceId, currentToken, nextId, item, streamUrl);
+        Logger.LogInformation(
+            "PlaybackStarted: pre-computed next track='{NextItem}' for device={DeviceId} (current='{CurrentToken}', queue position {Position}/{QueueSize})",
+            item.Name, deviceId, currentToken, currentIndex + 2, session.NowPlayingQueue.Count);
     }
 }

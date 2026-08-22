@@ -120,14 +120,17 @@ public class PreEnqueueOnStartTests : PluginTestBase
     }
 
     // When the knob is ON and there is a next item in the queue, PlaybackStarted
-    // returns an AudioPlayer.Play (Enqueue) directive for that item.
+    // pre-computes it into NextTrackPrecomputeCache (NOT an AudioPlayer.Play response,
+    // which Amazon rejects for this event type). The response is a keep-alive; the
+    // cache entry is consumed by PlaybackNearlyFinished for an instant response.
     [Fact]
-    public async Task PlaybackStarted_KnobOn_NextInQueue_EnqueuesNextTrack()
+    public async Task PlaybackStarted_KnobOn_NextInQueue_PopulatesPrecomputeCache()
     {
         _config.PreEnqueueOnStart = true;
         var currentId = Guid.NewGuid();
         var nextId = Guid.NewGuid();
         SetupLibraryItem(nextId, "Next Track");
+        var deviceId = "test-device-precompute";
 
         var handler = CreateHandler();
         var request = CreateStartedRequest(currentId.ToString());
@@ -139,11 +142,23 @@ public class PreEnqueueOnStartTests : PluginTestBase
             },
             currentId);
 
-        SkillResponse response = await handler.HandleAsync(
-            request, CreateContext(currentId.ToString()), TestHelpers.CreateTestUser(), session, CancellationToken.None);
+        var context = CreateContext(currentId.ToString());
+        context.System.Device = new global::Alexa.NET.Request.Device { DeviceID = deviceId };
 
-        Assert.NotNull(response.Response?.Directives);
-        Assert.Contains(response.Response.Directives, d => d.Type == "AudioPlayer.Play");
+        SkillResponse response = await handler.HandleAsync(
+            request, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        // Response is keep-alive (NOT AudioPlayer.Play; Amazon rejects it for PlaybackStarted)
+        var directives = response.Response?.Directives ?? new List<IDirective>();
+        Assert.DoesNotContain(directives, d => d.Type == "AudioPlayer.Play");
+
+        // But the cache has the pre-computed next track
+        Assert.True(Jellyfin.Plugin.AlexaSkill.Alexa.Playback.NextTrackPrecomputeCache.TryGet(
+            deviceId, currentId.ToString(), out Guid cachedId, out _, out _));
+        Assert.Equal(nextId, cachedId);
+
+        // Cleanup
+        Jellyfin.Plugin.AlexaSkill.Alexa.Playback.NextTrackPrecomputeCache.Invalidate(deviceId);
     }
 
     // When the knob is ON but the current track is the LAST in the queue,
