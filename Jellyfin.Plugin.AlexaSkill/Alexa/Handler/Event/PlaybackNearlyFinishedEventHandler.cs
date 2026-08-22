@@ -94,6 +94,19 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             }
         }
 
+        // JF-390 PreEnqueueOnStart: when the next track was already enqueued by
+        // PlaybackStarted (sequential playback only), skip the normal enqueue here to
+        // avoid a duplicate. Radio mode, PostPlay AutoPlay, shuffle, and repeat-one
+        // still need this handler (PlaybackStarted only pre-enqueues the simple
+        // sequential-next case and defers all other modes).
+        if (_config.PreEnqueueOnStart
+            && (session.PlayState?.RepeatMode ?? RepeatMode.RepeatNone) == RepeatMode.RepeatNone
+            && (session.PlayState?.PlaybackOrder ?? PlaybackOrder.Default) == PlaybackOrder.Default)
+        {
+            Logger.LogDebug("PlaybackNearlyFinished: PreEnqueueOnStart active, sequential mode, next track already enqueued by PlaybackStarted. Checking for radio/PostPlay only.");
+            return await HandleQueueExhaustionOnlyAsync(session, context, user, cancellationToken).ConfigureAwait(false);
+        }
+
         // Progressive queue building: fetch more items if we're approaching the end
         TryFetchContinuationBatch(session, context);
 
@@ -188,6 +201,88 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             resolvedReshuffled);
 
         return BuildAudioPlayerResponse(PlayBehavior.Enqueue, audioUrl, itemId, item, user, context);
+    }
+
+    /// <summary>
+    /// Handles ONLY the queue-exhaustion paths (radio mode and PostPlay AutoPlay)
+    /// when PreEnqueueOnStart is active and the normal sequential next track was
+    /// already enqueued by PlaybackStarted. Returns a keep-alive when the queue
+    /// still has items (the pre-enqueued track handles the transition), or the
+    /// radio/PostPlay enqueue when the queue is exhausted.
+    /// </summary>
+    private async Task<SkillResponse> HandleQueueExhaustionOnlyAsync(
+        SessionInfo session, Context context, Entities.User user, CancellationToken cancellationToken)
+    {
+        // Determine if the queue still has items after the current one
+        Guid? currentItemId = session.FullNowPlayingItem?.Id
+            ?? (context.AudioPlayer?.Token != null && Guid.TryParse(context.AudioPlayer.Token, out Guid t) ? t : null);
+        if (currentItemId == null)
+        {
+            return BuildKeepAliveResponse();
+        }
+
+        int currentIndex = -1;
+        for (int i = 0; i < session.NowPlayingQueue.Count; i++)
+        {
+            if (session.NowPlayingQueue[i].Id == currentItemId.Value)
+            {
+                currentIndex = i;
+                break;
+            }
+        }
+
+        bool hasMoreItems = currentIndex >= 0 && currentIndex + 1 < session.NowPlayingQueue.Count;
+        if (hasMoreItems)
+        {
+            // The next track is already in the device queue (pre-enqueued by PlaybackStarted).
+            // Nothing to do here.
+            return BuildKeepAliveResponse();
+        }
+
+        // Queue exhausted: run the radio-mode and PostPlay AutoPlay paths.
+        Logger.LogDebug("PlaybackNearlyFinished: queue exhausted, checking radio mode and PostPlay");
+
+        Guid? nextItemId = null;
+        if (RadioModeState.IsEnabled(session.UserId, context.System.Device.DeviceID))
+        {
+            nextItemId = await AutoPopulateRadioTracks(session, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (nextItemId == null)
+        {
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID);
+
+            bool radioActive = RadioModeState.IsEnabled(session.UserId, context.System.Device.DeviceID);
+            if (!radioActive && GetPostPlayBehavior(user) == PostPlayBehavior.AutoPlay)
+            {
+                string? currentToken = context.AudioPlayer?.Token;
+                if (!string.IsNullOrEmpty(currentToken))
+                {
+                    nextItemId = await AutoPopulatePostPlayTracks(
+                        currentToken, session, user, context, cancellationToken).ConfigureAwait(false);
+                }
+            }
+        }
+
+        if (nextItemId == null)
+        {
+            return ResponseBuilder.Empty();
+        }
+
+        BaseItem? item = _libraryManager.GetItemById((Guid)nextItemId);
+        if (item == null)
+        {
+            return ResponseBuilder.Empty();
+        }
+
+        string itemId = item.Id.ToString();
+        if (_queueManager != null)
+        {
+            _queueManager.MoveTo(context.System.Device.DeviceID, itemId);
+        }
+
+        Logger.LogInformation("PlaybackNearlyFinished: radio/PostPlay enqueuing '{ItemName}' after queue exhaustion", item.Name);
+        return BuildAudioPlayerResponse(PlayBehavior.Enqueue, GetStreamUrl(itemId, user), itemId, item, user, context);
     }
 
     /// <summary>

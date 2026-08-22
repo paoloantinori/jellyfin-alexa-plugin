@@ -114,6 +114,18 @@ public class PluginConfiguration : BasePluginConfiguration
 
     // Feature flags — disable intent groups via config page
     public bool RadioModeEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the next track is pre-enqueued when the
+    /// current track STARTS playing (PlaybackStarted) instead of waiting for the
+    /// timing-sensitive PlaybackNearlyFinished event. Eliminates the per-track
+    /// round-trip dependency that breaks auto-advance on high-latency endpoints
+    /// (JF-390 / GH #20). When on, PlaybackNearlyFinished still handles radio mode
+    /// and PostPlay AutoPlay (queue exhaustion) but skips the normal sequential
+    /// enqueue (the next track is already in the device queue).
+    /// Default false (existing behavior: NearlyFinished-driven enqueue).
+    /// </summary>
+    public bool PreEnqueueOnStart { get; set; } = false;
     public bool PodcastsEnabled { get; set; } = true;
     public bool LiveTvEnabled { get; set; } = true;
     public bool SleepTimerEnabled { get; set; } = true;

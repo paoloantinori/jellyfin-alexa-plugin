@@ -529,6 +529,9 @@ public class ConfigurationController : ControllerBase
         if (req.TryGetValue("AsrCompoundWordFixEnabled", out var asrToken) && asrToken.Type == JTokenType.Boolean)
         { config.AsrCompoundWordFixEnabled = asrToken.Value<bool>(); updated = true; }
 
+        if (req.TryGetValue("PreEnqueueOnStart", out var preEnqueueToken) && preEnqueueToken.Type == JTokenType.Boolean)
+        { config.PreEnqueueOnStart = preEnqueueToken.Value<bool>(); updated = true; }
+
         if (req.TryGetValue("SeekEnabled", out var seekToken) && seekToken.Type == JTokenType.Boolean)
         { config.SeekEnabled = seekToken.Value<bool>(); updated = true; }
 
