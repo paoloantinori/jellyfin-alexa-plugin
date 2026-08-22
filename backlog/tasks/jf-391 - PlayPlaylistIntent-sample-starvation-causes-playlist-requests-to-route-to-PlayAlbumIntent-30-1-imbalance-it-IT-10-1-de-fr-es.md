@@ -3,9 +3,10 @@ id: JF-391
 title: >-
   PlayPlaylistIntent sample starvation causes playlist requests to route to
   PlayAlbumIntent (30:1 imbalance it-IT, 10:1 de/fr/es)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-22 08:48'
+updated_date: '2026-08-22 09:08'
 labels:
   - bug
   - nlu
@@ -49,6 +50,28 @@ FIX DIRECTION:
 - [ ] #5 Regenerate it-IT model from template; validate all 17 models
 - [ ] #6 Deploy models to all active locales and verify routing with profile-nlu
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+FIXED 2026-08-22 (commit 579dc9c, models deployed to 10 locales via SMAPI and verified).
+
+it-IT FIX: moved PlayPlaylistIntent from explicit_intents (12 hand-written samples) to the templates section (Cartesian product from imperative/infinitive vocabulary). Now generates 20 samples including the critical missing form 'Di riprodurre la playlist {playlist}' (infinitive + article).
+
+OTHER LOCALES: added 4-10 samples each to the 9 starved locales:
+- de-DE: 2 -> 11 (Spiele/abspielen/starten/lege auf variants)
+- fr-FR/fr-CA: 2 -> 12/10 (Joue/mets/lance/demarrer variants)
+- es-ES/es-MX/es-US: 2 -> 12/8/7 (Reproduce/pon/inicia variants)
+- en-AU/en-CA/en-IN: 2 -> 10/7/6 (play/start/queue variants)
+
+Artist-scoped variants deliberately omitted (would let NLU capture part of the playlist name as the musician).
+
+DEPLOYED: models pushed via SMAPI to it-IT, de-DE, fr-FR, fr-CA, es-ES, es-MX, es-US, en-AU, en-CA, en-IN. Verified on SMAPI: it-IT has 20 samples with 'Di riprodurre la playlist' present; de-DE has 11; fr-FR has 12; es-ES has 12.
+
+ALSO TRACKED: JF-392 (stop ignored during playback, platform limitation).
+
+GH #21 tracks this issue.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
