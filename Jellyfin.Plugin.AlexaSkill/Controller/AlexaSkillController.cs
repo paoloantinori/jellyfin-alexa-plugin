@@ -17,6 +17,7 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Diagnostics;
 using Jellyfin.Plugin.AlexaSkill.Controller.Handler;
 using Jellyfin.Plugin.AlexaSkill.Diagnostics;
 using Jellyfin.Plugin.AlexaSkill.Entities;
@@ -369,6 +370,31 @@ public class AlexaSkillController : ControllerBase
                 {
                     _logger.LogWarning("Received skill request with null request body");
                     return SkillResponseContent(ResponseBuilder.Empty());
+                }
+
+                // JF-393 diagnostic interaction logging (gated on per-user/global setting):
+                // a "[diag]" line per request so intermittent routing failures (JF-392
+                // 'alexa stop') can be correlated with on-device attempts. Play-initiating
+                // intents are recorded as the new playback origin; every other request is
+                // logged with its elapsed time since playback started on this device.
+                if (InteractionDiagnostics.IsEnabled(user, Plugin.Instance!.Configuration))
+                {
+                    string diagIntent = req.Request is IntentRequest diagIr ? diagIr.Intent?.Name ?? "none" : req.Request.Type;
+                    bool diagSessionNew = req.Session?.New ?? false;
+                    if (req.Request is IntentRequest && InteractionDiagnostics.IsPlayInitiatingIntent(diagIntent))
+                    {
+                        InteractionDiagnostics.RecordPlayRequest(deviceId, diagIntent, diagSessionNew);
+                        _logger.LogInformation(
+                            "[diag] play request: intent={Intent} sessionNew={SessionNew} device={DeviceId} req={RequestId}",
+                            diagIntent, diagSessionNew, deviceId, requestId);
+                    }
+                    else
+                    {
+                        double? diagSinceStart = InteractionDiagnostics.SincePlaybackStarted(deviceId);
+                        _logger.LogInformation(
+                            "[diag] request: type={Type} intent={Intent} sessionNew={SessionNew} device={DeviceId} sincePlaybackStarted={SinceStart}s req={RequestId}",
+                            req.Request.Type, diagIntent, diagSessionNew, deviceId, diagSinceStart?.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) ?? "n/a", requestId);
+                    }
                 }
 
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(6));

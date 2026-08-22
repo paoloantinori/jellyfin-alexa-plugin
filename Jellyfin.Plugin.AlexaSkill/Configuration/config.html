@@ -186,6 +186,15 @@
                     </details>
 
                     <details>
+                        <summary><span class="accordion-title">Diagnostics</span></summary>
+                            <div class="fieldDescription">Troubleshooting aids. Leave off unless investigating a problem.</div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="DefaultDiagnosticInteractionLogging" /> <span>Diagnostic Interaction Logging</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">Write one "[diag]" log line per Alexa request and playback event (with elapsed time since playback started) to the Jellyfin log. Used to troubleshoot intermittent voice-command routing, e.g. when "stop" sometimes does nothing. Off by default. Per-user overrides take precedence.</div>
+                            </div>
+                    </details>
+
+                    <details>
                         <summary><span class="accordion-title">Media Type Access</span></summary>
                             <div class="fieldDescription">Control which content types appear in search results and library browsing. Disabled types are excluded from queries entirely.</div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
@@ -515,6 +524,9 @@
                     ["MusicEnabled", "VideosEnabled", "BooksEnabled"].forEach(function(f) {
                         document.querySelector("#" + f).checked = config[f] !== false;
                     });
+
+                    // Diagnostics (default-false flag: separate from the default-true lists above)
+                    document.querySelector("#DefaultDiagnosticInteractionLogging").checked = config.DefaultDiagnosticInteractionLogging === true;
 
                     // Playback preferences
                     document.querySelector("#InitialFetchSize").value = config.InitialFetchSize != null ? config.InitialFetchSize : 5;
@@ -1152,6 +1164,12 @@
                 pbGroup.appendChild(panelField(null, aapSel,
                     "Also speak the track name when music starts. Off by default for fast, silent music starts."));
 
+                var dilSel = panelSelect("DiagnosticInteractionLogging", "Diagnostic Logging",
+                    [{v:"inherit",t:"Use default (global)"},{v:"true",t:"Enabled"},{v:"false",t:"Disabled"}],
+                    triStateCurrent(user.DiagnosticInteractionLogging));
+                pbGroup.appendChild(panelField(null, dilSel,
+                    'Write one "[diag]" log line per request/playback event for this user (troubleshooting voice-command routing).'));
+
                 // Announce-position checkbox — emby checkboxContainer pattern
                 var announceField = document.createElement("div");
                 announceField.className = "checkboxContainer checkboxContainer-withDescription";
@@ -1297,6 +1315,9 @@
                         config[f] = document.querySelector("#" + f).checked;
                     });
 
+                    // Diagnostics (default-false flag)
+                    config.DefaultDiagnosticInteractionLogging = document.querySelector("#DefaultDiagnosticInteractionLogging").checked;
+
                     // Playback preferences
                     var ifRaw = parseInt(document.querySelector("#InitialFetchSize").value);
                     config.InitialFetchSize = isNaN(ifRaw) ? 5 : ifRaw;
@@ -1384,7 +1405,8 @@
                         MoodGenreOverrides: config.MoodGenreOverrides,
                         DefaultSearchResponseMode: config.DefaultSearchResponseMode,
                         DefaultPostPlayBehavior: config.DefaultPostPlayBehavior,
-                        DefaultCrossMediaArtistSuggestion: config.DefaultCrossMediaArtistSuggestion
+                        DefaultCrossMediaArtistSuggestion: config.DefaultCrossMediaArtistSuggestion,
+                        DefaultDiagnosticInteractionLogging: config.DefaultDiagnosticInteractionLogging
                     };
                     ApiClient.ajax({
                         type: "PATCH",
@@ -1472,6 +1494,7 @@
                                 var vaaSel = field("VideoAppForAudio");
                                 var anpSel = field("AnnounceNowPlaying");
                                 var aapSel = field("AnnounceAudioPlays");
+                                var dilSel = field("DiagnosticInteractionLogging");
                                 var announcePos = field("AnnouncePositionOnResume");
 
                                 // Map tri-state selects to JSON: inherit -> null (use global), true/false -> bool
@@ -1490,7 +1513,7 @@
                                 function triStateReadable(sel) {
                                     return !sel || ["inherit", "true", "false"].indexOf(sel.value) >= 0;
                                 }
-                                if (!triStateReadable(vaaSel) || !triStateReadable(anpSel) || !triStateReadable(aapSel)) {
+                                if (!triStateReadable(vaaSel) || !triStateReadable(anpSel) || !triStateReadable(aapSel) || !triStateReadable(dilSel)) {
                                     skippedRows++;
                                     continue;
                                 }
@@ -1506,7 +1529,8 @@
                                     "AnnouncePositionOnResume": announcePos ? announcePos.checked : false,
                                     "VideoAppForAudio": triState(vaaSel),
                                     "AnnounceNowPlaying": triState(anpSel),
-                                    "AnnounceAudioPlays": triState(aapSel)
+                                    "AnnounceAudioPlays": triState(aapSel),
+                                    "DiagnosticInteractionLogging": triState(dilSel)
                                 };
 
                                 perRowPromises.push(ApiClient.ajax({

@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
@@ -6,6 +7,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Diagnostics;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Library;
@@ -77,6 +79,21 @@ public class PlaybackStartedEventHandler : BaseHandler
         };
 
         await SessionManager.OnPlaybackStart(playbackStartInfo).ConfigureAwait(false);
+
+        // JF-393 diagnostic interaction logging: record playback start so later control
+        // intents can report elapsed time since start (JF-392 data collection).
+        if (InteractionDiagnostics.IsEnabled(user, _config))
+        {
+            string diagDevice = context.System?.Device?.DeviceID ?? string.Empty;
+            InteractionDiagnostics.RecordPlaybackStarted(diagDevice);
+            Logger.LogInformation(
+                "[diag] playback started: device={DeviceId} item={Token} sincePlayRequest={SinceRequest}s playIntent={PlayIntent} playSessionNew={PlaySessionNew}",
+                diagDevice,
+                req.Token,
+                InteractionDiagnostics.SincePlayRequest(diagDevice)?.ToString("F1", CultureInfo.InvariantCulture) ?? "n/a",
+                InteractionDiagnostics.LastPlayIntent(diagDevice) ?? "n/a",
+                InteractionDiagnostics.LastPlaySessionNew(diagDevice)?.ToString() ?? "n/a");
+        }
 
         // JF-390 PreEnqueueOnStart (pre-compute): resolve the next track EARLY so
         // PlaybackNearlyFinished can respond with zero library lookups. This reduces

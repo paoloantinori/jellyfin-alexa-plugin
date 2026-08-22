@@ -138,6 +138,17 @@ public class User
     public bool? VideoAppForAudio { get; set; }
 
     /// <summary>
+    /// Gets or sets a per-user override enabling diagnostic interaction logging (JF-393):
+    /// one greppable "[diag]" log line per Alexa request and playback event, with elapsed
+    /// times since playback start, to troubleshoot intermittent routing issues (JF-392
+    /// 'alexa stop') and support remote debugging for other users. When null (not
+    /// explicitly set), the global
+    /// <see cref="Configuration.PluginConfiguration.DefaultDiagnosticInteractionLogging"/>
+    /// default (false) is used.
+    /// </summary>
+    public bool? DiagnosticInteractionLogging { get; set; }
+
+    /// <summary>
     /// Transitions skill status from AccountLinkPending to Ready if the user
     /// has completed account linking (JellyfinToken is present).
     /// </summary>

@@ -243,6 +243,21 @@ public class ConfigurationController : ControllerBase
             }
         }
 
+        // Handle DiagnosticInteractionLogging (JF-393 per-user diag logging; boolean or null to inherit)
+        if (req.TryGetValue("DiagnosticInteractionLogging", out var dilToken))
+        {
+            if (dilToken.Type == JTokenType.Boolean)
+            {
+                pluginUser!.DiagnosticInteractionLogging = dilToken.Value<bool>();
+                updated = true;
+            }
+            else if (dilToken.Type == JTokenType.Null)
+            {
+                pluginUser!.DiagnosticInteractionLogging = null;
+                updated = true;
+            }
+        }
+
         if (!updated)
         {
             return new JsonResult(new { error = "No valid fields to update" }) { StatusCode = 400 };
@@ -522,6 +537,9 @@ public class ConfigurationController : ControllerBase
 
         if (req.TryGetValue("AnnounceAudioPlays", out var announceAudioToken) && announceAudioToken.Type == JTokenType.Boolean)
         { config.AnnounceAudioPlays = announceAudioToken.Value<bool>(); updated = true; }
+
+        if (req.TryGetValue("DefaultDiagnosticInteractionLogging", out var diagLoggingToken) && diagLoggingToken.Type == JTokenType.Boolean)
+        { config.DefaultDiagnosticInteractionLogging = diagLoggingToken.Value<bool>(); updated = true; }
 
         if (req.TryGetValue("CatalogSyncLocales", out var catalogSyncToken) && catalogSyncToken.Type == JTokenType.String)
         { config.CatalogSyncLocales = catalogSyncToken.Value<string>() ?? string.Empty; updated = true; }

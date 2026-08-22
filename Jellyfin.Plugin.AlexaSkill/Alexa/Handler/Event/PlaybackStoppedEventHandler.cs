@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -7,6 +8,7 @@ using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Diagnostics;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Library;
@@ -61,6 +63,7 @@ public class PlaybackStoppedEventHandler : BaseHandler
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         AudioPlayerRequest req = (AudioPlayerRequest)request;
+        string device = context.System?.Device?.DeviceID ?? string.Empty;
 
         long realPositionTicks = TimeSpan.FromMilliseconds(req.OffsetInMilliseconds).Ticks;
 
@@ -68,11 +71,24 @@ public class PlaybackStoppedEventHandler : BaseHandler
             "PlaybackStopped: item={Token}, offset={OffsetMs}ms, playerActivity={Activity}",
             req.Token, req.OffsetInMilliseconds, context.AudioPlayer?.PlayerActivity);
 
+        // JF-393 diagnostic interaction logging: report elapsed since playback start and
+        // clear the marker (displacement transitions re-record on the next PlaybackStarted).
+        if (InteractionDiagnostics.IsEnabled(user, _config))
+        {
+            string diagDevice = device;
+            Logger.LogInformation(
+                "[diag] playback stopped: device={DeviceId} item={Token} sincePlaybackStarted={SinceStart}s",
+                diagDevice,
+                req.Token,
+                InteractionDiagnostics.SincePlaybackStarted(diagDevice)?.ToString("F1", CultureInfo.InvariantCulture) ?? "n/a");
+            InteractionDiagnostics.RecordPlaybackStopped(diagDevice);
+        }
+
         // Detect displacement events: when a new AudioPlayer.Play replaces the current track,
         // Alexa sends PlaybackStopped for the OLD item with a near-zero offset from the new
         // track's start. This would overwrite the real saved position of the old item.
         bool isDisplacement = false;
-        var queue = _queueManager.GetOrCreateQueue(context.System.Device.DeviceID);
+        var queue = _queueManager.GetOrCreateQueue(device);
         string? expectedItemId = null;
         if (queue.CurrentIndex >= 0 && queue.CurrentIndex < queue.ItemIds.Count)
         {
@@ -115,7 +131,7 @@ public class PlaybackStoppedEventHandler : BaseHandler
             queue.CurrentItemId = req.Token;
             Logger.LogDebug(
                 "Saved playback position to DeviceQueue: device={DeviceId}, item={ItemId}, offset={OffsetMs}ms",
-                context.System.Device.DeviceID, req.Token, req.OffsetInMilliseconds);
+                device, req.Token, req.OffsetInMilliseconds);
         }
 
         // Persist real position to ItemPositionState (bypasses Jellyfin's MinAudiobookResume)
@@ -129,7 +145,7 @@ public class PlaybackStoppedEventHandler : BaseHandler
             // Evict stale entries when the dictionary grows beyond cap
             TrimItemPositionState(queue);
 
-            _queueManager.SchedulePersist(context.System.Device.DeviceID);
+            _queueManager.SchedulePersist(device);
             Logger.LogDebug(
                 "Saved to ItemPositionState: item={ItemId}, ticks={Ticks}",
                 req.Token, realPositionTicks);

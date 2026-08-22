@@ -158,6 +158,15 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool AsrCompoundWordFixEnabled { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets the global default for diagnostic interaction logging (JF-393): one
+    /// "[diag]" log line per Alexa request/playback event with elapsed times since playback
+    /// start. Used to collect data on intermittent voice-routing failures (JF-392 'alexa
+    /// stop') and to support remote troubleshooting for other users. Per-user
+    /// DiagnosticInteractionLogging overrides this. Default false (no extra log noise).
+    /// </summary>
+    public bool DefaultDiagnosticInteractionLogging { get; set; } = false;
+
+    /// <summary>
     /// Gets or sets a value indicating whether phonetic (Double Metaphone) matching
     /// is enabled for song title search. When enabled, misspelled titles (e.g. "rapsodi"
     /// for "rhapsody") can still match via phonetic encoding. Native English speakers

@@ -4,10 +4,10 @@ title: >-
   'Alexa stop' intermittent: works sometimes (skill opened directly?) but not
   after one-shot invocation - two failure modes or intermittent platform
   routing?
-status: Done
+status: To Do
 assignee: []
 created_date: '2026-08-22 08:54'
-updated_date: '2026-08-22 19:02'
+updated_date: '2026-08-22 19:25'
 labels:
   - bug
   - playback
@@ -20,20 +20,7 @@ priority: low
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-RESOLVED 2026-08-22: the discriminator is TIMING, not launch mode.
-
-TEST RESULTS (user, 2026-08-22 ~21:00):
-- Test A (interactive: apri mia collezione -> play -> stop): WORKS. PauseIntent arrived 8 seconds after PlaybackStarted.
-- Test B (one-shot: chiedi a... di suonare -> stop immediately): FAILS. No StopIntent/PauseIntent/SessionEndedRequest arrived.
-- Test C (one-shot -> wait -> stop): WORKS. PauseIntent arrived ~90 seconds after PlaybackStarted.
-
-ROOT CAUSE (platform timing): the device needs time after a one-shot invocation to fully register the skill as 'the last skill that streamed audio' and start routing 'stop' as PauseIntent. In the interactive path, the multiple turns naturally provide this delay. In the one-shot path, saying 'stop' within ~30 seconds of playback start finds the device still transitioning.
-
-NOT PLUGIN-FIXABLE: this is Amazon device firmware behavior. The skill response is identical in both paths (verified in code and confirmed by the JF-387 session-attributes fix making the responses byte-equivalent).
-
-IMPLICATION: the previously documented JF-387 fix (session attributes) may have been addressing a different layer of the same timing issue (session close race), or may have been coincidental with natural timing differences. The platform timing behavior persists regardless of our response shape.
-
-DOCUMENTED in README FAQ as a note: 'stop' may not work in the first ~30 seconds after starting playback via one-shot invocation; wait a bit or use 'pause' (always works immediately).
+'Alexa stop' intermittently not routed to the skill during AudioPlayer playback. Initial hypothesis (one-shot vs interactive session launch mode) superseded by a timing hypothesis (stop fails within ~30s of a one-shot play), which was then WITHDRAWN after exhaustive research (2026-08-22, claudedocs/research_alexa_stop_routing_2026-08-22.md): no external corroboration, Amazon docs state routing unconditionally. Current status: mechanism UNCONFIRMED. Candidate mechanisms: (a) default-music NLU competition (probabilistic per utterance, verified class on-device 2026-07-02), (b) transient Amazon-side routing incidents (documented class, answerhub a78813), (c) timing/settling window (unsupported by evidence). Evidence so far: 3 test instances (interactive+8s works, one-shot immediate fails, one-shot+90s works). Next step is DATA, not research: per-user diagnostic logging of playback-start context (invocation mode, session.new, timestamp) and stop-attempt outcomes (PauseIntent/StopIntent received or absent), collect N>20 instances. Discriminator: failures clustering under 30s of one-shot starts supports timing; scattered failures support competition/incident.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
@@ -43,14 +30,16 @@ DOCUMENTED in README FAQ as a note: 'stop' may not work in the first ~30 seconds
 - [ ] #3 If NOT platform behavior (skill was invoked but rejected): investigate the session state on the play response
 <!-- AC:END -->
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+REOPENED 2026-08-22: the earlier "platform 30-second settling window" conclusion is WITHDRAWN. Exhaustive research (claudedocs/research_alexa_stop_routing_2026-08-22.md) found: (1) Amazon docs state stop routing unconditionally, no settling window, no one-shot vs session difference; (2) no other Alexa skill project (ASK SDK issue trackers, alexa-samples, My Media for Alexa, music-assistant prototype, bock-media) documents the pattern; (3) Amazon-side intermittent routing incidents ARE a documented class (answerhub a78813 "known issue"); (4) default-music NLU competition (verified on-device 2026-07-02) is probabilistic per utterance and the leading candidate mechanism. Status: mechanism UNCONFIRMED. Candidate mechanisms: (a) default-music NLU competition, (b) transient Amazon routing incidents, (c) timing/settling (unsupported). Next: data collection, not research — instrument playback-start + stop-attempt outcomes via the new per-user diagnostic logging setting (see instrumentation task), collect N>20 instances. If failures cluster under 30s of one-shot starts, timing earns MEDIUM confidence; if scattered randomly, competition/incident wins. Related: JF-340 (open), JF-387, JF-302.
+<!-- SECTION:NOTES:END -->
+
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-RESOLVED as platform timing behavior (not plugin-fixable). The user's hypothesis about interactive vs one-shot was partially correct: the REAL discriminator is how much time passes between playback start and the stop command. Interactive sessions naturally have more delay (multiple turns), so stop works. One-shot + immediate stop fails because the device hasn't finished transitioning to audio mode. One-shot + 30+ second wait works.
-
-Test evidence: A (interactive, 8s delta) works; B (one-shot, <30s delta) fails; C (one-shot, 90s delta) works.
-
-README FAQ should be updated to note the timing behavior. The existing 'use pause' workaround is correct and always works.
+Conclusione "platform timing (settled)" RITIRATA dopo ricerca esaustiva (vedi Implementation Notes). Task riaperto in stato To Do: serve raccolta dati instrumentata (logging diagnostico per-user) per discriminare tra competizione NLU del default music service, incidenti di routing Amazon, e finestra temporale.
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done

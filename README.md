@@ -433,7 +433,7 @@ This is the same platform limitation as the "play different content" case above 
 Workarounds:
 
 - Use **"Alexa, pause"** (Italian: *"Alexa, pausa"*). Pause always routes to the active player and stops the audio, even immediately after playback starts.
-- **Wait about 30 seconds** after starting playback via a quick invocation ("ask [skill] to play X"), then try "stop". The device needs a moment to register the skill as the active audio source before it routes "stop" to it (verified on-device: stop works 8+ seconds after an interactive-session play, and 90+ seconds after a one-shot play, but not within the first seconds of a one-shot play).
+- If "stop" does nothing, try it again a moment later. Stop routing to the skill is intermittent: sometimes the utterance reaches the skill immediately, sometimes it is claimed by the default music service or lost in routing, with no pattern we or other Alexa skill developers have been able to pin down. "Pause" is the dependable alternative.
 - Force the skill with its invocation name: English *"Alexa, ask Jellyfin Player to stop"*, Italian *"Alexa, chiedi a Mia Collezione ferma"* (use the imperative **ferma**/**stop**, not the infinitive "fermare").
 
 ### Why is there no progress bar / scrubber when music plays?
