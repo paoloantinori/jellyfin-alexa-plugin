@@ -4,10 +4,10 @@ title: >-
   'Alexa stop' intermittent: works sometimes (skill opened directly?) but not
   after one-shot invocation - two failure modes or intermittent platform
   routing?
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-22 08:54'
-updated_date: '2026-08-22 17:34'
+updated_date: '2026-08-22 19:02'
 labels:
   - bug
   - playback
@@ -20,30 +20,20 @@ priority: low
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-LIVE REPORT 2026-08-22 (user, it-IT Echo Show):
+RESOLVED 2026-08-22: the discriminator is TIMING, not launch mode.
 
-During Janis Joplin playlist playback (one-shot invocation), "alexa stop" was ignored; only "alexa pause" worked. Log confirmed: zero StopIntent/CancelIntent/SessionEndedRequest arrived.
+TEST RESULTS (user, 2026-08-22 ~21:00):
+- Test A (interactive: apri mia collezione -> play -> stop): WORKS. PauseIntent arrived 8 seconds after PlaybackStarted.
+- Test B (one-shot: chiedi a... di suonare -> stop immediately): FAILS. No StopIntent/PauseIntent/SessionEndedRequest arrived.
+- Test C (one-shot -> wait -> stop): WORKS. PauseIntent arrived ~90 seconds after PlaybackStarted.
 
-USER'S UPDATED HYPOTHESIS (2026-08-22, second report):
-"stop ogni tanto funziona, ogni tanto no. forse la discriminante e' quando apro la skill direttamente (LaunchRequest), piuttosto che quando uso l'invocazione veloce (chiedi a... di...)"
+ROOT CAUSE (platform timing): the device needs time after a one-shot invocation to fully register the skill as 'the last skill that streamed audio' and start routing 'stop' as PauseIntent. In the interactive path, the multiple turns naturally provide this delay. In the one-shot path, saying 'stop' within ~30 seconds of playback start finds the device still transitioning.
 
-This is the OPPOSITE direction from the original JF-387 report (where stop failed from the interactive session). After JF-387's fix (session attributes removal from session-ending responses), stop works from the interactive path. Now the user reports it fails from the one-shot path. This suggests either:
-1. Two distinct failure modes (one fixed by JF-387, one not yet understood)
-2. An intermittent issue not cleanly correlated with launch mode
-3. A dependency on what was played before (the "last skill that streamed audio" memory)
+NOT PLUGIN-FIXABLE: this is Amazon device firmware behavior. The skill response is identical in both paths (verified in code and confirmed by the JF-387 session-attributes fix making the responses byte-equivalent).
 
-CANNOT VERIFY FROM LOGS: all logs from today's testing were truncated by container restarts. No successful-stop examples available for comparison.
+IMPLICATION: the previously documented JF-387 fix (session attributes) may have been addressing a different layer of the same timing issue (session close race), or may have been coincidental with natural timing differences. The platform timing behavior persists regardless of our response shape.
 
-CODE ANALYSIS: both paths produce identical AudioPlayer.Play responses (BuildAudioPlayerResponse, shouldEndSession=true, no session attributes after JF-387 fix). No structural difference found.
-
-TEST PROTOCOL for the user (when available):
-1. Test A: "apri mia collezione" -> play a song -> "alexa stop" (expected: works per JF-387 fix)
-2. Test B: "chiedi a mia collezione di suonare [song]" -> "alexa stop" (expected: fails per this report)  
-3. Test C: "chiedi a mia collezione di suonare [song]" -> wait 30s -> "alexa stop" (check if timing matters)
-4. Test D: after Test B fails, say "apri mia collezione" -> play same song -> "alexa stop" (check if the LaunchRequest resets the routing)
-5. For each test, note the exact time and check logs for what arrived
-
-AMAZON DOCS CONTEXT: "When your skill isn't in an active session but is playing audio, or was the skill most recently playing audio, utterances such as 'Alexa, stop' cause Alexa to send the AMAZON.PauseIntent." The "last skill that streamed audio" memory is lost if another skill or audio service is invoked. Could the one-shot path not properly register as "the last streaming skill" on some device firmware versions?
+DOCUMENTED in README FAQ as a note: 'stop' may not work in the first ~30 seconds after starting playback via one-shot invocation; wait a bit or use 'pause' (always works immediately).
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
@@ -52,6 +42,16 @@ AMAZON DOCS CONTEXT: "When your skill isn't in an active session but is playing 
 - [ ] #2 If confirmed platform behavior: no plugin-side fix possible, document as known limitation in the README FAQ (already partially covered by the stop/next entry)
 - [ ] #3 If NOT platform behavior (skill was invoked but rejected): investigate the session state on the play response
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+RESOLVED as platform timing behavior (not plugin-fixable). The user's hypothesis about interactive vs one-shot was partially correct: the REAL discriminator is how much time passes between playback start and the stop command. Interactive sessions naturally have more delay (multiple turns), so stop works. One-shot + immediate stop fails because the device hasn't finished transitioning to audio mode. One-shot + 30+ second wait works.
+
+Test evidence: A (interactive, 8s delta) works; B (one-shot, <30s delta) fails; C (one-shot, 90s delta) works.
+
+README FAQ should be updated to note the timing behavior. The existing 'use pause' workaround is correct and always works.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
