@@ -1220,4 +1220,67 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
             .Select(i => new FindSongCandidate(Guid.NewGuid(), $"Song {i + 1}", null, 90 - i * 5))
             .ToList();
     }
+
+    // ========== JF-395: exit-by-no in Disambiguating ==========
+
+    private static Dictionary<string, object> DisambiguatingAttrs(List<FindSongCandidate> candidates)
+    {
+        var data = new FindSongSessionData
+        {
+            State = FindSongState.Disambiguating,
+            Keywords = "song",
+            Candidates = candidates
+        };
+        return new Dictionary<string, object>
+        {
+            ["FindSongSessionData"] = JsonConvert.SerializeObject(data)
+        };
+    }
+
+    private async Task<SkillResponse> DisambiguateWithInput(string input, string locale = "en-US")
+    {
+        var user = CreateTestUser();
+        var session = CreateSession();
+        var attrs = DisambiguatingAttrs(CreateTestCandidates(3));
+        var request = CreateIntentRequest("AMAZON.FallbackIntent", new Dictionary<string, string?>
+        {
+            ["titleKeywords"] = input
+        });
+        request.Locale = locale;
+        return await _handler.HandleAsync(request, CreateContext(), user, session, attrs, CancellationToken.None);
+    }
+
+    [Theory]
+    [InlineData("no", "en-US")]
+    [InlineData("none of them", "en-US")]
+    [InlineData("nope", "en-US")]
+    [InlineData("nessuna", "it-IT")]
+    [InlineData("nessuno di questi", "it-IT")]
+    [InlineData("keine", "de-DE")]
+    [InlineData("aucune", "fr-FR")]
+    [InlineData("ninguna", "es-ES")]
+    [InlineData("nenhuma", "pt-BR")]
+    public async Task Disambiguating_NegativeAnswer_EndsSessionCleanly(string input, string locale)
+    {
+        SkillResponse response = await DisambiguateWithInput(input, locale);
+
+        // Clean exit: a Tell that ends the session, NOT the FindSongInvalidPick re-prompt loop
+        Assert.True(response.Response.ShouldEndSession);
+        Assert.NotNull(response.Response.OutputSpeech);
+        string speech = TestHelpers.GetSpeechText(response);
+        string invalidPick = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("FindSongInvalidPick", locale);
+        Assert.NotEqual(invalidPick, speech);
+    }
+
+    [Fact]
+    public async Task Disambiguating_UnparsableNonNegative_StillRePrompts()
+    {
+        // Regression guard: a non-negative unrecognizable answer keeps the existing behavior
+        SkillResponse response = await DisambiguateWithInput("banana");
+
+        Assert.False(response.Response.ShouldEndSession);
+        string speech = TestHelpers.GetSpeechText(response);
+        string invalidPick = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("FindSongInvalidPick", "en-US");
+        Assert.Equal(invalidPick, speech);
+    }
 }

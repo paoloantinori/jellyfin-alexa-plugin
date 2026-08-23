@@ -7,6 +7,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
@@ -114,6 +115,9 @@ public class NoIntentHandler : BaseHandler
 
     /// <summary>
     /// Handle resume rejection: clear resume state and return a fresh welcome prompt.
+    /// JF-394: the resume_state attribute is marked for removal so the interceptor does
+    /// not merge it back onto this open-session response; without this, a later stray
+    /// "yes" resumed the item the user just declined.
     /// </summary>
     /// <param name="locale">The locale for localized responses.</param>
     /// <returns>A welcome Ask response.</returns>
@@ -122,6 +126,8 @@ public class NoIntentHandler : BaseHandler
         string freshStart = ResponseStrings.Get("FreshStart", locale);
         string reprompt = ResponseStrings.Get("WelcomeReprompt", locale);
 
-        return Task.FromResult(ResponseBuilder.Ask(freshStart, new Reprompt(reprompt)));
+        SkillResponse response = ResponseBuilder.Ask(freshStart, new Reprompt(reprompt));
+        SessionAttributeRemoval.Mark(response, "resume_state");
+        return Task.FromResult(response);
     }
 }

@@ -124,6 +124,55 @@ public class ResumeOnRelaunchTests : PluginTestBase, IDisposable
             _loggerFactory);
     }
 
+    // JF-394 regression: after the user declines the resume offer, the resume_state
+    // attribute must NOT survive the interceptor merge. Before the fix, the rejection
+    // Ask carried no attributes, the interceptor merged resume_state back in, and a
+    // later stray "yes" resumed the item the user had just declined.
+    [Fact]
+    public async Task NoIntent_ResumeRejection_ThenInterceptor_DoesNotCarryResumeState()
+    {
+        var handler = CreateNoHandler();
+        var request = new IntentRequest
+        {
+            Locale = "en-US",
+            Intent = new Intent { Name = "AMAZON.NoIntent" }
+        };
+        var context = CreateContextWithoutAudio();
+        var session = CreateSession();
+
+        var resumeState = new ResumeHelper.ResumeState
+        {
+            ItemId = Guid.NewGuid().ToString(),
+            OffsetMs = 60000
+        };
+        var sessionAttributes = new Dictionary<string, object>
+        {
+            ["resume_state"] = Newtonsoft.Json.JsonConvert.SerializeObject(resumeState),
+            ["media_type"] = "Audio" // unrelated key that must survive the merge
+        };
+
+        SkillResponse response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, sessionAttributes, CancellationToken.None);
+
+        // Open session (Ask), so the interceptor merge applies
+        Assert.NotEqual(true, response.Response.ShouldEndSession);
+
+        // Simulate the pipeline's SessionAttributesInterceptor on the rejection response
+        var interceptor = new Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.SessionAttributesInterceptor(
+            _loggerFactory.CreateLogger<Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.SessionAttributesInterceptor>());
+        var ctx = new Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.RequestContext(
+            request, context,
+            new global::Alexa.NET.Request.Session { Attributes = sessionAttributes, New = false },
+            handler);
+        ctx.Response = response;
+        await interceptor.ProcessAsync(ctx, CancellationToken.None);
+
+        Assert.NotNull(ctx.Response.SessionAttributes);
+        Assert.False(ctx.Response.SessionAttributes.ContainsKey("resume_state"),
+            "resume_state must be dropped after the user declines the resume");
+        Assert.True(ctx.Response.SessionAttributes.ContainsKey("media_type"),
+            "unrelated attributes must still be preserved");
+    }
+
     // =====================================================================
     // LaunchRequestHandler
     // =====================================================================

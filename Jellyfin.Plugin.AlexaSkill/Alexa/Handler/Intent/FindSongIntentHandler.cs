@@ -342,6 +342,16 @@ public class FindSongIntentHandler : BaseHandler
 
         if (!pickIndex.HasValue || pickIndex.Value < 0 || pickIndex.Value >= sessionData.Candidates.Count)
         {
+            // JF-395: a NEGATIVE answer ("no", "nessuna", "none of them") is a clean exit
+            // from the picker, not another invalid pick. Checked AFTER ResolvePick so a
+            // phrasing that both starts with a negative and resolves a candidate
+            // ("no, the second one") still picks.
+            if (IsNegativeAnswer(input))
+            {
+                Logger.LogDebug("FindSong: disambiguation declined (negative answer), ending search");
+                return ResponseBuilder.Tell(ResponseStrings.Get("FindSongDisambigAbandoned", locale));
+            }
+
             string invalidMsg = ResponseStrings.Get("FindSongInvalidPick", locale);
             return ElicitTitleKeywords(invalidMsg,
                 sessionData);
@@ -552,6 +562,59 @@ public class FindSongIntentHandler : BaseHandler
     }
 
     /// <summary>
+    /// Negative answer words for the disambiguation picker, across the supported locales
+    /// (JF-395). A negative answer is a clean exit from the candidate list; the user cannot
+    /// otherwise say "none of them" (the picker looped on FindSongInvalidPick forever).
+    /// </summary>
+    private static readonly HashSet<string> NegativeAnswerWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        // en
+        "no", "nope", "none", "neither", "nor",
+        // it
+        "no", "nessuna", "nessuno", "nessun",
+        // de
+        "nein", "kein", "keine",
+        // fr
+        "non", "aucun", "aucune",
+        // es
+        "ninguna", "ninguno", "ningún",
+        // pt
+        "não", "nenhuma", "nenhum",
+        // nl
+        "nee", "geen",
+        // ja / hi / ar
+        "いいえ", "नहीं", "لا"
+    };
+
+    /// <summary>
+    /// True when the utterance is a negative answer to the candidate picker: either a
+    /// single negative word, or a short phrase (up to 4 tokens) that STARTS with one
+    /// ("none of them", "nessuno di questi"). Longer utterances are treated as attempted
+    /// picks, not exits.
+    /// </summary>
+    /// <param name="input">The trimmed user input from the disambiguation turn.</param>
+    internal static bool IsNegativeAnswer(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return false;
+        }
+
+        string[] tokens = input.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length == 0 || tokens.Length > 4)
+        {
+            return false;
+        }
+
+        if (tokens.Length == 1)
+        {
+            return NegativeAnswerWords.Contains(tokens[0].Trim('?', '.', '!', ','));
+        }
+
+        return NegativeAnswerWords.Contains(tokens[0].Trim('?', '.', '!', ','));
+    }
+
+    /// <summary>
     /// Resolve which candidate the user picked by number, ordinal word, or partial title match.
     /// Returns a 0-based index, or null if no match.
     /// </summary>
@@ -561,7 +624,6 @@ public class FindSongIntentHandler : BaseHandler
         {
             return null;
         }
-
         string trimmed = input.Trim();
 
         // 1. Try numeric match: "1", "2", "the first one", "the second one", etc.

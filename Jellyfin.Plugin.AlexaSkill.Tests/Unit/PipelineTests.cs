@@ -804,6 +804,72 @@ public class PipelineTests : PluginTestBase
         Assert.Equal("kept", ctx.Response.SessionAttributes["response_only"]);
     }
 
+    // JF-394: a response can mark incoming attribute keys for REMOVAL via the
+    // __remove_attributes marker. Without it, keys the flow considers concluded
+    // (e.g. resume_state after the user declines) ride along forever and a later
+    // stray "yes" acts on stale state.
+    [Fact]
+    public async Task SessionAttributesInterceptor_RemovalMarker_DropsListedIncomingKeys()
+    {
+        var interceptor = new SessionAttributesInterceptor(_loggerFactory.CreateLogger<SessionAttributesInterceptor>());
+
+        var incomingAttrs = new Dictionary<string, object>
+        {
+            { "resume_state", "{\"itemId\":\"xyz\"}" },
+            { "media_type", "Audio" }
+        };
+
+        var response = ResponseBuilder.Ask("test", new Reprompt("test reprompt"));
+        response.SessionAttributes = new Dictionary<string, object>
+        {
+            { SessionAttributeRemoval.MarkerKey, new List<object> { "resume_state" } }
+        };
+
+        var ctx = new RequestContext(
+            CreateSkillRequest(),
+            CreateAuthenticatableContext(),
+            CreateSession(incomingAttrs),
+            CreatePlaceholderHandler());
+        ctx.Response = response;
+
+        await interceptor.ProcessAsync(ctx, CancellationToken.None);
+
+        Assert.False(ctx.Response.SessionAttributes.ContainsKey("resume_state"));
+        Assert.True(ctx.Response.SessionAttributes.ContainsKey("media_type"));
+        // The marker itself must not leak to Alexa
+        Assert.False(ctx.Response.SessionAttributes.ContainsKey(SessionAttributeRemoval.MarkerKey));
+    }
+
+    // Marker naming a key that is NOT in the incoming attributes: no crash, marker stripped.
+    [Fact]
+    public async Task SessionAttributesInterceptor_RemovalMarker_UnknownKey_NoCrashMarkerStripped()
+    {
+        var interceptor = new SessionAttributesInterceptor(_loggerFactory.CreateLogger<SessionAttributesInterceptor>());
+
+        var incomingAttrs = new Dictionary<string, object>
+        {
+            { "media_type", "Audio" }
+        };
+
+        var response = ResponseBuilder.Ask("test", new Reprompt("test reprompt"));
+        response.SessionAttributes = new Dictionary<string, object>
+        {
+            { SessionAttributeRemoval.MarkerKey, new List<object> { "resume_state" } }
+        };
+
+        var ctx = new RequestContext(
+            CreateSkillRequest(),
+            CreateAuthenticatableContext(),
+            CreateSession(incomingAttrs),
+            CreatePlaceholderHandler());
+        ctx.Response = response;
+
+        await interceptor.ProcessAsync(ctx, CancellationToken.None);
+
+        Assert.Single(ctx.Response.SessionAttributes);
+        Assert.Equal("Audio", ctx.Response.SessionAttributes["media_type"]);
+    }
+
     [Fact]
     public async Task SessionAttributesInterceptor_NoopsWhenSessionHasNoAttributes()
     {

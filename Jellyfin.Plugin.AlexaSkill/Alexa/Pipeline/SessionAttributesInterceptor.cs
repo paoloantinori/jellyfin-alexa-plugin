@@ -56,6 +56,24 @@ public class SessionAttributesInterceptor : IResponseInterceptor
             }
         }
 
+        // JF-394: honor the removal marker. Keys listed under __remove_attributes are
+        // stripped from the merged output (and the marker itself never reaches Alexa),
+        // so a concluded flow (e.g. resume declined) does not leave stale state riding
+        // along for a later stray "yes" to act on.
+        if (context.Response.SessionAttributes.TryGetValue(SessionAttributeRemoval.MarkerKey, out object? marker)
+            && marker is IEnumerable<object> removals)
+        {
+            foreach (object? key in removals)
+            {
+                if (key is string keyName)
+                {
+                    context.Response.SessionAttributes.Remove(keyName);
+                }
+            }
+
+            context.Response.SessionAttributes.Remove(SessionAttributeRemoval.MarkerKey);
+        }
+
         return Task.CompletedTask;
     }
 }

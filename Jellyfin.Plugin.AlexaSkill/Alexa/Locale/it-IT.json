@@ -239,5 +239,6 @@
   "FindSongArtistNotFound": "Non ho trovato un artista chiamato {0}. Riprova.",
   "FindSongTooVague": "Ho bisogno di parole più specifiche. Riprova con alcune parole del titolo.",
   "FindSongInvalidPick": "Non ho capito. Di' il numero o il titolo della canzone.",
+  "FindSongDisambigAbandoned": "Nessun problema. Chiedimi di nuovo quando vuoi cercare una canzone.",
   "FindSongCancelled": "Ok, ho interrotto la ricerca."
 }
