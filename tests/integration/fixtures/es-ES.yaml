@@ -334,3 +334,16 @@ tests:
     expected_intent: SearchMediaIntent
     expected_slots:
       query: {}
+
+  # -------------------------------------------------------------------------
+  # FindSongIntent conversational search (JF-399 sample enrichment)
+  # -------------------------------------------------------------------------
+  - utterance: "busca una cancion que se llame corazon"
+    expected_intent: FindSongIntent
+    expected_slots:
+      titleKeywords: "corazon"
+
+  - utterance: "encuentra una cancion sobre el mar"
+    expected_intent: FindSongIntent
+    expected_slots:
+      titleKeywords: "el mar"

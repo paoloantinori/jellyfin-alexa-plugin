@@ -789,7 +789,16 @@
           "me ajude a encontrar uma musica",
           "estou procurando uma musica",
           "encontre uma musica chamada {titleKeywords}",
-          "procure uma musica chamada {titleKeywords}"
+          "procure uma musica chamada {titleKeywords}",
+          "procure uma musica",
+          "quero encontrar uma musica",
+          "quero achar uma musica",
+          "quero encontrar uma musica chamada {titleKeywords}",
+          "uma musica chamada {titleKeywords}",
+          "encontre uma musica sobre {titleKeywords}",
+          "procure uma musica sobre {titleKeywords}",
+          "me ajuda a achar uma musica",
+          "me ajuda a procurar uma musica"
         ],
         "slots": [
           {

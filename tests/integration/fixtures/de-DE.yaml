@@ -365,3 +365,16 @@ tests:
     expected_intent: SearchMediaIntent
     expected_slots:
       query: {}
+
+  # -------------------------------------------------------------------------
+  # FindSongIntent conversational search (JF-399 sample enrichment)
+  # -------------------------------------------------------------------------
+  - utterance: "ich will ein lied finden namens lange nacht"
+    expected_intent: FindSongIntent
+    expected_slots:
+      titleKeywords: "lange nacht"
+
+  - utterance: "suche ein lied das liebe heisst"
+    expected_intent: FindSongIntent
+    expected_slots:
+      titleKeywords: "liebe"

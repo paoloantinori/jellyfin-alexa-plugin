@@ -816,7 +816,17 @@
           "ayudame a encontrar una cancion",
           "estoy buscando una cancion",
           "busca una cancion llamada {titleKeywords}",
-          "encuentra una cancion llamada {titleKeywords}"
+          "encuentra una cancion llamada {titleKeywords}",
+          "encuentra una cancion",
+          "quiero encontrar una cancion",
+          "busco una cancion",
+          "busca una cancion que se llame {titleKeywords}",
+          "encuentra una cancion que se llame {titleKeywords}",
+          "busco una cancion que se llame {titleKeywords}",
+          "encuentra una cancion sobre {titleKeywords}",
+          "busca una cancion sobre {titleKeywords}",
+          "ayudame a buscar una cancion",
+          "una cancion llamada {titleKeywords}"
         ],
         "slots": [
           {

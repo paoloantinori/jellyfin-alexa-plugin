@@ -44,10 +44,10 @@ LOCALE_MOODS = {
     "en-GB": None, "en-AU": None, "en-CA": None, "en-IN": None,
 
     "de-DE": [
-        ("entspannend", ["entspannt"]), ("beruhigend", []), ("beschwingt", []),
-        ("energisch", []), ("fokus", []), ("romantisch", []),
-        ("fröhlich", ["glücklich"]), ("traurig", []), ("feier", ["party"]),
-        ("training", []), ("morgens", []), ("abend", ["abends"]),
+        ("entspannend", ["entspannt", "entspannende", "entspannendes"]), ("beruhigend", ["beruhigende", "beruhigendes"]), ("beschwingt", ["beschwingte", "beschwingtes"]),
+        ("energisch", ["energische", "energisches"]), ("fokus", []), ("romantisch", ["romantische", "romantisches"]),
+        ("fröhlich", ["glücklich", "fröhliche", "fröhliches"]), ("traurig", ["traurige", "trauriges"]), ("feier", ["party", "feierliche", "feierliches"]),
+        ("training", ["training"]), ("morgens", ["morgentliche"]), ("abend", ["abends", "abendliche"]),
         ("abendessen", []), ("schlafen", ["einschlafen"]),
     ],
     "es-ES": [

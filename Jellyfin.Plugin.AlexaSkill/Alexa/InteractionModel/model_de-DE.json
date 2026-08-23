@@ -842,7 +842,17 @@
           "suche ein lied",
           "ich suche ein lied",
           "finde ein lied namens {titleKeywords}",
-          "suche ein lied namens {titleKeywords}"
+          "suche ein lied namens {titleKeywords}",
+          "ich will ein lied finden",
+          "ich moechte ein lied finden",
+          "ich will ein lied finden namens {titleKeywords}",
+          "ich moechte ein lied namens {titleKeywords} finden",
+          "finde ein lied das {titleKeywords} heisst",
+          "suche ein lied das {titleKeywords} heisst",
+          "finde ein lied mit {titleKeywords} im titel",
+          "ich suche ein lied namens {titleKeywords}",
+          "hilf mir ein lied namens {titleKeywords} zu finden",
+          "ein lied uber {titleKeywords} finden"
         ],
         "slots": [
           {
@@ -889,23 +899,37 @@
             "name": {
               "value": "entspannend",
               "synonyms": [
-                "entspannt"
+                "entspannt",
+                "entspannende",
+                "entspannendes"
               ]
             }
           },
           {
             "name": {
-              "value": "beruhigend"
+              "value": "beruhigend",
+              "synonyms": [
+                "beruhigende",
+                "beruhigendes"
+              ]
             }
           },
           {
             "name": {
-              "value": "beschwingt"
+              "value": "beschwingt",
+              "synonyms": [
+                "beschwingte",
+                "beschwingtes"
+              ]
             }
           },
           {
             "name": {
-              "value": "energisch"
+              "value": "energisch",
+              "synonyms": [
+                "energische",
+                "energisches"
+              ]
             }
           },
           {
@@ -915,45 +939,64 @@
           },
           {
             "name": {
-              "value": "romantisch"
+              "value": "romantisch",
+              "synonyms": [
+                "romantische",
+                "romantisches"
+              ]
             }
           },
           {
             "name": {
               "value": "fröhlich",
               "synonyms": [
-                "glücklich"
+                "glücklich",
+                "fröhliche",
+                "fröhliches"
               ]
             }
           },
           {
             "name": {
-              "value": "traurig"
+              "value": "traurig",
+              "synonyms": [
+                "traurige",
+                "trauriges"
+              ]
             }
           },
           {
             "name": {
               "value": "feier",
               "synonyms": [
-                "party"
+                "party",
+                "feierliche",
+                "feierliches"
               ]
             }
           },
           {
             "name": {
-              "value": "training"
+              "value": "training",
+              "synonyms": [
+                "training"
+              ]
             }
           },
           {
             "name": {
-              "value": "morgens"
+              "value": "morgens",
+              "synonyms": [
+                "morgentliche"
+              ]
             }
           },
           {
             "name": {
               "value": "abend",
               "synonyms": [
-                "abends"
+                "abends",
+                "abendliche"
               ]
             }
           },
