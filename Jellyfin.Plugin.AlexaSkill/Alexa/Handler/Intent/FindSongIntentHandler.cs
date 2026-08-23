@@ -34,7 +34,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public class FindSongIntentHandler : BaseHandler
 {
-    private const string SessionDataKey = "FindSongSessionData";
+    internal const string SessionDataKey = "FindSongSessionData";
 
     /// <summary>
     /// Cardinal pick words for the candidate picker, all supported locales (JF-396).
@@ -636,11 +636,6 @@ public class FindSongIntentHandler : BaseHandler
             return false;
         }
 
-        if (tokens.Length == 1)
-        {
-            return NegativeAnswerWords.Contains(tokens[0].Trim('?', '.', '!', ','));
-        }
-
         return NegativeAnswerWords.Contains(tokens[0].Trim('?', '.', '!', ','));
     }
 
@@ -664,10 +659,10 @@ public class FindSongIntentHandler : BaseHandler
         }
 
         // 2. Try ordinal words: "one", "two", "three", "four"
-        int? ordinalPick = TryParseOrdinalWord(trimmed);
-        if (ordinalPick.HasValue)
+        int? cardinalPick = TryParseCardinalWord(trimmed);
+        if (cardinalPick.HasValue)
         {
-            return ordinalPick;
+            return cardinalPick;
         }
 
         // 3. Try partial title match against candidate names
@@ -700,7 +695,7 @@ public class FindSongIntentHandler : BaseHandler
         return null;
     }
 
-    private static int? TryParseOrdinalWord(string input)
+    private static int? TryParseCardinalWord(string input)
     {
         string lower = input.ToLowerInvariant().Trim();
 

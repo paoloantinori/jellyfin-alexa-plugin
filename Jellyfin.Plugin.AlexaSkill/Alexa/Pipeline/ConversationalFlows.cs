@@ -18,13 +18,13 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 public static class ConversationalFlows
 {
     /// <summary>Session keys owned by the FindSong conversational search flow.</summary>
-    public static readonly string[] FindSongKeys = { "FindSongSessionData" };
+    public static readonly string[] FindSongKeys = { Handler.FindSongIntentHandler.SessionDataKey };
 
     /// <summary>Session keys owned by the resume-offer flow.</summary>
-    public static readonly string[] ResumeKeys = { "resume_state" };
+    public static readonly string[] ResumeKeys = { Handler.ResumeHelper.ResumeStateKey };
 
     /// <summary>Session keys owned by the list-pagination flow.</summary>
-    public static readonly string[] PaginationKeys = { "pagination_state" };
+    public static readonly string[] PaginationKeys = { Handler.ListPaginationHelper.AttrKey };
 
     /// <summary>
     /// Session keys owned by the disambiguation flow, including the cross-media artist
@@ -32,9 +32,16 @@ public static class ConversationalFlows
     /// </summary>
     public static readonly string[] DisambiguationKeys =
     {
-        "disambig_matches", "disambig_index", "disambig_type",
+        Handler.DisambiguationHelper.AttrMatches, Handler.DisambiguationHelper.AttrIndex,
+        Handler.DisambiguationHelper.AttrType,
         "crossmedia_notfound_query", "crossmedia_notfound_type"
     };
+
+    private static readonly string[] AllFlowKeys = FindSongKeys
+        .Concat(ResumeKeys)
+        .Concat(PaginationKeys)
+        .Concat(DisambiguationKeys)
+        .ToArray();
 
     /// <summary>
     /// Marks every OTHER flow's session keys for removal on the response, so the flow being
@@ -44,11 +51,7 @@ public static class ConversationalFlows
     /// <param name="activeKeys">The session keys owned by the flow being activated.</param>
     public static void MarkOthersInactive(SkillResponse response, params string[] activeKeys)
     {
-        IEnumerable<string> others = FindSongKeys
-            .Concat(ResumeKeys)
-            .Concat(PaginationKeys)
-            .Concat(DisambiguationKeys)
-            .Except(activeKeys);
+        IEnumerable<string> others = AllFlowKeys.Except(activeKeys);
 
         SessionAttributeRemoval.Mark(response, others.ToArray());
     }

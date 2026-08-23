@@ -127,7 +127,7 @@ public class NoIntentHandler : BaseHandler
         string reprompt = ResponseStrings.Get("WelcomeReprompt", locale);
 
         SkillResponse response = ResponseBuilder.Ask(freshStart, new Reprompt(reprompt));
-        SessionAttributeRemoval.Mark(response, "resume_state");
+        SessionAttributeRemoval.Mark(response, ConversationalFlows.ResumeKeys);
         return Task.FromResult(response);
     }
 }

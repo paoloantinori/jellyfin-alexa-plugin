@@ -1709,6 +1709,8 @@ public abstract class BaseHandler
             ["disambig_type"] = mediaType
         };
 
+        // JF-398: activating the disambiguation flow supersedes any other flow's state.
+        ConversationalFlows.MarkOthersInactive(response, ConversationalFlows.DisambiguationKeys);
         return (FuzzyMissOutcome.SuggestionHandled, response);
     }
 

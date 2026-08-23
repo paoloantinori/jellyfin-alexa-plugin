@@ -13,6 +13,8 @@ internal static class ResumeHelper
     /// <summary>
     /// Serializable resume state stored in session attributes.
     /// </summary>
+    internal const string ResumeStateKey = "resume_state";
+
     internal class ResumeState
     {
         [JsonProperty("itemId")]
@@ -39,7 +41,7 @@ internal static class ResumeHelper
     public static bool HasResumeState(Dictionary<string, object>? sessionAttributes)
     {
         return sessionAttributes != null
-            && sessionAttributes.ContainsKey("resume_state");
+            && sessionAttributes.ContainsKey(ResumeStateKey);
     }
 
     /// <summary>
@@ -54,7 +56,7 @@ internal static class ResumeHelper
             return null;
         }
 
-        string? json = sessionAttributes!["resume_state"]?.ToString();
+        string? json = sessionAttributes![ResumeStateKey]?.ToString();
         if (string.IsNullOrEmpty(json))
         {
             return null;

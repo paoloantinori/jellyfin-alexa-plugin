@@ -42,6 +42,9 @@ public class SessionAttributesInterceptor : IResponseInterceptor
         // preserve attributes, which is the interceptor's purpose.
         if (context.Response.Response.ShouldEndSession == true)
         {
+            // Defensive: never let the removal marker reach Amazon even if a future
+            // call site marks a session-ending response (all current sites are Asks).
+            context.Response.SessionAttributes?.Remove(SessionAttributeRemoval.MarkerKey);
             return Task.CompletedTask;
         }
 

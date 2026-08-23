@@ -18,9 +18,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 internal static class DisambiguationHelper
 {
-    private const string AttrMatches = "disambig_matches";
-    private const string AttrIndex = "disambig_index";
-    private const string AttrType = "disambig_type";
+    internal const string AttrMatches = "disambig_matches";
+    internal const string AttrIndex = "disambig_index";
+    internal const string AttrType = "disambig_type";
 
     public const string MediaTypeSong = "song";
     public const string MediaTypeAlbum = "album";

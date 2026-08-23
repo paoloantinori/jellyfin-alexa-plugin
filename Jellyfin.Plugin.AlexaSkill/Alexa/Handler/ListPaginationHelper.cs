@@ -17,7 +17,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 internal static class ListPaginationHelper
 {
-    private const string AttrKey = "pagination_state";
+    internal const string AttrKey = "pagination_state";
 
     /// <summary>
     /// Identifies which list type produced the paginated results.
