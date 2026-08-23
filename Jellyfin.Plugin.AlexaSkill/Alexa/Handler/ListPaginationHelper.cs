@@ -4,6 +4,7 @@ using System.Linq;
 using Alexa.NET;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using MediaBrowser.Controller.Library;
 using Newtonsoft.Json;
 
@@ -165,6 +166,9 @@ internal static class ListPaginationHelper
         {
             response.SessionAttributes = new Dictionary<string, object>();
             WriteState(response.SessionAttributes, paginationState.Type, paginationState.ItemIds, newOffset, paginationState.PageSize);
+
+            // JF-398: activating the pagination flow supersedes any other flow's state.
+            ConversationalFlows.MarkOthersInactive(response, ConversationalFlows.PaginationKeys);
         }
 
         return response;

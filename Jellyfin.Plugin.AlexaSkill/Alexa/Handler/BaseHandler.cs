@@ -14,6 +14,7 @@ using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
@@ -1525,6 +1526,10 @@ public abstract class BaseHandler
             ["crossmedia_notfound_query"] = query,
             ["crossmedia_notfound_type"] = notFoundMediaType
         };
+
+        // JF-398: activating the cross-media artist offer (a disambiguation flavor)
+        // supersedes any other flow's state.
+        ConversationalFlows.MarkOthersInactive(response, ConversationalFlows.DisambiguationKeys);
 
         Logger.LogDebug(
             "CrossMediaArtistSuggestion: offering artist '{Artist}' for not-found query='{Query}' (type={Type})",

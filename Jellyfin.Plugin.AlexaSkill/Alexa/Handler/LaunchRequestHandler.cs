@@ -9,6 +9,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -288,6 +289,8 @@ public class LaunchRequestHandler : BaseHandler
             ["resume_state"] = JsonConvert.SerializeObject(resumeState)
         };
 
+        // JF-398: activating the resume-offer flow supersedes any other flow's state.
+        ConversationalFlows.MarkOthersInactive(response, ConversationalFlows.ResumeKeys);
         return response;
     }
 

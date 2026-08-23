@@ -124,6 +124,47 @@ public class ResumeOnRelaunchTests : PluginTestBase, IDisposable
             _loggerFactory);
     }
 
+    // JF-398: a resume offer issued while pagination state was riding along must
+    // supersede it: after the interceptor merge only resume_state may survive.
+    [Fact]
+    public async Task LaunchRequest_ResumeOffer_SupersedesPaginationState()
+    {
+        var itemId = Guid.NewGuid();
+        _libraryManagerMock.Setup(l => l.GetItemById(itemId)).Returns(new Audio
+        {
+            Name = "Bohemian Rhapsody",
+            Id = itemId
+        });
+
+        var handler = CreateLaunchHandler();
+        var request = new LaunchRequest { Locale = "en-US" };
+        var context = CreateContextWithAudio(itemId.ToString(), 45000);
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+        Assert.True(response.SessionAttributes.ContainsKey("resume_state"));
+
+        var interceptor = new Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.SessionAttributesInterceptor(
+            _loggerFactory.CreateLogger<Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.SessionAttributesInterceptor>());
+        var ctx = new Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.RequestContext(
+            request, context,
+            new global::Alexa.NET.Request.Session
+            {
+                New = true,
+                Attributes = new Dictionary<string, object>
+                {
+                    ["pagination_state"] = "{\"type\":\"Artist\",\"currentOffset\":0}"
+                }
+            },
+            handler);
+        ctx.Response = response;
+        await interceptor.ProcessAsync(ctx, CancellationToken.None);
+
+        Assert.True(ctx.Response.SessionAttributes.ContainsKey("resume_state"));
+        Assert.False(ctx.Response.SessionAttributes.ContainsKey("pagination_state"),
+            "a new resume offer must supersede the pagination flow's state (JF-398)");
+    }
+
     // JF-394 regression: after the user declines the resume offer, the resume_state
     // attribute must NOT survive the interceptor merge. Before the fix, the rejection
     // Ask carried no attributes, the interceptor merged resume_state back in, and a

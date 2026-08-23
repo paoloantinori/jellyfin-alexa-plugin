@@ -6,6 +6,7 @@ using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Newtonsoft.Json;
 
@@ -70,6 +71,9 @@ internal static class DisambiguationHelper
         }
 
         response.SessionAttributes = BuildAttributes(matchList, index, mediaType);
+
+        // JF-398: activating the disambiguation flow supersedes any other flow's state.
+        ConversationalFlows.MarkOthersInactive(response, ConversationalFlows.DisambiguationKeys);
         return response;
     }
 
@@ -105,6 +109,9 @@ internal static class DisambiguationHelper
         }
 
         response.SessionAttributes = BuildAttributes(matchList, index, mediaType);
+
+        // JF-398: activating the disambiguation flow supersedes any other flow's state.
+        ConversationalFlows.MarkOthersInactive(response, ConversationalFlows.DisambiguationKeys);
 
         if (context != null && AplHelper.DeviceSupportsApl(context) && AplHelper.VisualsEnabled)
         {
@@ -156,6 +163,9 @@ internal static class DisambiguationHelper
         }
 
         response.SessionAttributes = BuildAttributes(matches, nextIndex, mediaType);
+
+        // JF-398: activating the disambiguation flow supersedes any other flow's state.
+        ConversationalFlows.MarkOthersInactive(response, ConversationalFlows.DisambiguationKeys);
         return response;
     }
 

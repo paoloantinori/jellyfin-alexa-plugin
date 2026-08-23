@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
@@ -868,6 +869,66 @@ public class PipelineTests : PluginTestBase
 
         Assert.Single(ctx.Response.SessionAttributes);
         Assert.Equal("Audio", ctx.Response.SessionAttributes["media_type"]);
+    }
+
+    // ========== JF-398: conversational-flow mutual exclusion ==========
+
+    [Fact]
+    public void ConversationalFlows_MarkOthersInactive_ListsAllOtherFlowKeys()
+    {
+        var response = ResponseBuilder.Ask("test", new Reprompt("reprompt"));
+        response.SessionAttributes = new Dictionary<string, object>
+        {
+            { "disambig_matches", "[]" }
+        };
+
+        ConversationalFlows.MarkOthersInactive(response, ConversationalFlows.DisambiguationKeys);
+
+        var marker = Assert.IsAssignableFrom<IEnumerable<object>>(response.SessionAttributes[SessionAttributeRemoval.MarkerKey]);
+        var marked = marker.Cast<string>().ToList();
+        Assert.Contains("FindSongSessionData", marked);
+        Assert.Contains("resume_state", marked);
+        Assert.Contains("pagination_state", marked);
+        // Active flow's own keys are NOT marked
+        Assert.DoesNotContain("disambig_matches", marked);
+        Assert.DoesNotContain("disambig_index", marked);
+        Assert.DoesNotContain("crossmedia_notfound_query", marked);
+    }
+
+    // A disambiguation Ask issued while resume + pagination state was incoming: after the
+    // interceptor merge only the disambiguation flow may survive.
+    [Fact]
+    public async Task ConversationalFlows_DisambiguationAsk_SupersedesResumeAndPagination()
+    {
+        var interceptor = new SessionAttributesInterceptor(_loggerFactory.CreateLogger<SessionAttributesInterceptor>());
+
+        var incomingAttrs = new Dictionary<string, object>
+        {
+            { "resume_state", "{\"itemId\":\"xyz\"}" },
+            { "pagination_state", "{\"type\":\"Artist\",\"currentOffset\":0}" }
+        };
+
+        var response = DisambiguationHelper.AskNextMatch(
+            new List<DisambiguationHelper.MatchInfo>
+            {
+                new() { Id = Guid.NewGuid().ToString(), Name = "Pink Floyd" }
+            },
+            0,
+            DisambiguationHelper.MediaTypeArtist,
+            "en-US");
+
+        var ctx = new RequestContext(
+            CreateSkillRequest(),
+            CreateAuthenticatableContext(),
+            CreateSession(incomingAttrs),
+            CreatePlaceholderHandler());
+        ctx.Response = response;
+
+        await interceptor.ProcessAsync(ctx, CancellationToken.None);
+
+        Assert.True(ctx.Response.SessionAttributes.ContainsKey("disambig_matches"));
+        Assert.False(ctx.Response.SessionAttributes.ContainsKey("resume_state"));
+        Assert.False(ctx.Response.SessionAttributes.ContainsKey("pagination_state"));
     }
 
     [Fact]

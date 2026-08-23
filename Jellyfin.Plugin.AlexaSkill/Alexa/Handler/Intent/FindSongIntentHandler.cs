@@ -14,6 +14,7 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
@@ -860,7 +861,7 @@ public class FindSongIntentHandler : BaseHandler
         string prompt,
         FindSongSessionData sessionData)
     {
-        return new SkillResponse
+        var response = new SkillResponse
         {
             Version = "1.0",
             SessionAttributes = BuildSessionAttributes(sessionData),
@@ -875,5 +876,10 @@ public class FindSongIntentHandler : BaseHandler
                 }
             }
         };
+
+        // JF-398: a FindSong elicitation supersedes any other conversational flow whose
+        // state was riding along (the interceptor would otherwise merge it back in).
+        ConversationalFlows.MarkOthersInactive(response, ConversationalFlows.FindSongKeys);
+        return response;
     }
 }
