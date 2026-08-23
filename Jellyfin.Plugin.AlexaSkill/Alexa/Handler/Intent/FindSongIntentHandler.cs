@@ -35,10 +35,39 @@ public class FindSongIntentHandler : BaseHandler
 {
     private const string SessionDataKey = "FindSongSessionData";
 
-    private static readonly string[] OrdinalWords = new[]
+    /// <summary>
+    /// Cardinal pick words for the candidate picker, all supported locales (JF-396).
+    /// Maps the spoken count word to the 0-based candidate index.
+    /// </summary>
+    private static readonly Dictionary<string, int> CardinalPickWords = new(StringComparer.OrdinalIgnoreCase)
     {
-        "one", "two", "three", "four", "uno", "due", "tre", "quattro",
-        "eins", "zwei", "drei", "vier", "un", "deux", "trois", "quatre"
+        // en
+        ["one"] = 0, ["two"] = 1, ["three"] = 2, ["four"] = 3,
+        // it
+        ["uno"] = 0, ["due"] = 1, ["tre"] = 2, ["quattro"] = 3,
+        // de
+        ["eins"] = 0, ["zwei"] = 1, ["drei"] = 2, ["vier"] = 3,
+        // fr
+        ["un"] = 0, ["une"] = 0, ["deux"] = 1, ["trois"] = 2, ["quatre"] = 3,
+        // es (uno/dos/tres/cuatro)
+        ["dos"] = 1, ["tres"] = 2, ["cuatro"] = 3,
+        // pt (um/uma, dois/duas, três, quatro)
+        ["um"] = 0, ["uma"] = 0, ["dois"] = 1, ["duas"] = 1, ["três"] = 2, ["quatro"] = 3,
+        // nl (een/twee/drie; "vier" already covered by the German entry, same index)
+        ["een"] = 0, ["twee"] = 1, ["drie"] = 2
+    };
+
+    /// <summary>
+    /// Ordinal word stems per rank (1st..4th) across the supported locales (JF-396).
+    /// Substring match, so gendered variants ("segunda"/"segundo") share a stem where
+    /// possible; "quarto" (it) and "cuarto"/"quarta" (es/pt) are listed separately.
+    /// </summary>
+    private static readonly string[][] OrdinalStemsByRank = new[]
+    {
+        new[] { "first", "primo", "erste", "premier", "primera", "primeira" },
+        new[] { "second", "secondo", "zweite", "deuxième", "segund", "tweede" },
+        new[] { "third", "terzo", "dritte", "troisième", "tercer", "terceir", "derde" },
+        new[] { "fourth", "quarto", "cuarto", "quarta", "vierte", "quatrième", "vierde" }
     };
 
     private readonly ILibraryManager _libraryManager;
@@ -652,37 +681,19 @@ public class FindSongIntentHandler : BaseHandler
             return num - 1;
         }
 
-        // English ordinals: "the first one", "the second one", "the third one", "the fourth one"
-        // Italian: "il primo", "il secondo", "il terzo", "il quarto"
-        // German: "der erste", "der zweite", "der dritte", "der vierte"
+        // Ordinals across all supported locales (JF-396): "the first one", "il primo",
+        // "der zweite", "le deuxième", "la segunda", "o terceiro", "de tweede", etc.
         string lower = input.ToLowerInvariant();
 
-        if (lower.Contains("first", StringComparison.OrdinalIgnoreCase)
-            || lower.Contains("primo", StringComparison.OrdinalIgnoreCase)
-            || lower.Contains("erste", StringComparison.OrdinalIgnoreCase))
+        for (int rank = 0; rank < OrdinalStemsByRank.Length; rank++)
         {
-            return 0;
-        }
-
-        if (lower.Contains("second", StringComparison.OrdinalIgnoreCase)
-            || lower.Contains("secondo", StringComparison.OrdinalIgnoreCase)
-            || lower.Contains("zweite", StringComparison.OrdinalIgnoreCase))
-        {
-            return 1;
-        }
-
-        if (lower.Contains("third", StringComparison.OrdinalIgnoreCase)
-            || lower.Contains("terzo", StringComparison.OrdinalIgnoreCase)
-            || lower.Contains("dritte", StringComparison.OrdinalIgnoreCase))
-        {
-            return 2;
-        }
-
-        if (lower.Contains("fourth", StringComparison.OrdinalIgnoreCase)
-            || lower.Contains("quarto", StringComparison.OrdinalIgnoreCase)
-            || lower.Contains("vierte", StringComparison.OrdinalIgnoreCase))
-        {
-            return 3;
+            foreach (string stem in OrdinalStemsByRank[rank])
+            {
+                if (lower.Contains(stem, StringComparison.Ordinal))
+                {
+                    return rank;
+                }
+            }
         }
 
         return null;
@@ -692,18 +703,7 @@ public class FindSongIntentHandler : BaseHandler
     {
         string lower = input.ToLowerInvariant().Trim();
 
-        for (int i = 0; i < OrdinalWords.Length; i++)
-        {
-            if (string.Equals(lower, OrdinalWords[i], StringComparison.OrdinalIgnoreCase))
-            {
-                // Map: one->0, two->1, three->2, four->3
-                // Words are grouped in sets of 4 (English, Italian, German, French)
-                int ordinalIndex = i % 4;
-                return ordinalIndex;
-            }
-        }
-
-        return null;
+        return CardinalPickWords.TryGetValue(lower, out int index) ? index : null;
     }
 
     private static int? TryMatchByTitle(string input, List<FindSongCandidate> candidates)

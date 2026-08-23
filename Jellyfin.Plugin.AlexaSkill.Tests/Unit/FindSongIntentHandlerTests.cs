@@ -833,6 +833,50 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         Assert.Equal(1, result);
     }
 
+    // ========== JF-396: cardinal + ordinal pick words for es/pt/fr/nl ==========
+
+    [Theory]
+    [InlineData("dos", 1)]          // es cardinal
+    [InlineData("tres", 2)]
+    [InlineData("cuatro", 3)]
+    [InlineData("segundo", 1)]      // es ordinal
+    [InlineData("la tercera", 2)]
+    [InlineData("el cuarto", 3)]
+    [InlineData("dois", 1)]         // pt cardinal
+    [InlineData("três", 2)]
+    [InlineData("o terceiro", 2)]   // pt ordinal
+    [InlineData("a quarta", 3)]
+    [InlineData("deuxième", 1)]     // fr ordinal
+    [InlineData("le premier", 0)]
+    [InlineData("le troisième", 2)]
+    [InlineData("le quatrième", 3)]
+    [InlineData("tweede", 1)]       // nl ordinal
+    [InlineData("derde", 2)]
+    [InlineData("vierde", 3)]
+    [InlineData("eerste", 0)]       // nl eerste contains erste, was already matched
+    public void ResolvePick_EsPtFrNl_Answers_ResolveCorrectIndex(string input, int expected)
+    {
+        var candidates = CreateTestCandidates(4);
+        var result = FindSongIntentHandler.ResolvePick(input, candidates, "es-ES");
+        Assert.Equal(expected, result);
+    }
+
+    // Guards: existing en/it behavior unchanged after the refactor
+    [Theory]
+    [InlineData("the second one", 1)]
+    [InlineData("il terzo", 2)]
+    [InlineData("zweite", 1)]
+    [InlineData("un", 0)]
+    [InlineData("quattro", 3)]
+    [InlineData("no", null)]        // negative answers are NOT picks (JF-395 exit path)
+    [InlineData("banana", null)]    // non-matching word is not a pick
+    public void ResolvePick_ExistingWords_Unchanged(string input, int? expected)
+    {
+        var candidates = CreateTestCandidates(4);
+        var result = FindSongIntentHandler.ResolvePick(input, candidates, "en-US");
+        Assert.Equal(expected, result);
+    }
+
     [Fact]
     public void ResolvePick_ByPartialTitle_ReturnsMatchingIndex()
     {
