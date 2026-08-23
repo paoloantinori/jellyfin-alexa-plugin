@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,12 +21,14 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 public class FallbackIntentHandlerTests : PluginTestBase
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
+    private readonly Mock<MediaBrowser.Controller.Library.ILibraryManager> _libraryManagerMock;
     private readonly PluginConfiguration _config;
     private readonly ILoggerFactory _loggerFactory;
 
     public FallbackIntentHandlerTests()
     {
         _sessionManagerMock = new Mock<ISessionManager>();
+        _libraryManagerMock = new Mock<MediaBrowser.Controller.Library.ILibraryManager>();
         _config = new PluginConfiguration();
         TestHelpers.SetServerAddress(_config, "https://test.example.com");
         _loggerFactory = LoggerFactory.Create(b => { });
@@ -33,7 +36,7 @@ public class FallbackIntentHandlerTests : PluginTestBase
 
     private FallbackIntentHandler CreateHandler()
     {
-        return new FallbackIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+        return new FallbackIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory, _libraryManagerMock.Object);
     }
 
     private static Context CreateContext()
@@ -150,5 +153,75 @@ public class FallbackIntentHandlerTests : PluginTestBase
 
         Assert.NotNull(response);
         Assert.NotNull(response.Response?.OutputSpeech);
+    }
+
+    // ========== JF-397: state-aware fallback re-prompts instead of killing the session ==========
+
+    private static IntentRequest FallbackRequest()
+    {
+        return new IntentRequest
+        {
+            Intent = new Intent { Name = IntentNames.AmazonFallback },
+            Locale = "en-US",
+            RequestId = "diag-fallback"
+        };
+    }
+
+    [Fact]
+    public async Task Fallback_WithDisambiguationState_RePromptsCurrentMatch()
+    {
+        var handler = CreateHandler();
+        var request = FallbackRequest();
+        var attrs = new Dictionary<string, object>
+        {
+            ["disambig_matches"] = Newtonsoft.Json.JsonConvert.SerializeObject(new[]
+            {
+                new { id = Guid.NewGuid().ToString(), name = "Pink Floyd", artUrl = (string?)null },
+                new { id = Guid.NewGuid().ToString(), name = "Pink", artUrl = (string?)null }
+            }),
+            ["disambig_index"] = 1,
+            ["disambig_type"] = "artist"
+        };
+
+        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), attrs, CancellationToken.None);
+
+        // Open session, re-asking the current (index 1) candidate
+        Assert.False(response.Response.ShouldEndSession);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Pink", speech);
+        Assert.DoesNotContain("Pink Floyd", speech);
+    }
+
+    [Fact]
+    public async Task Fallback_WithPaginationState_RePromptsShowMore()
+    {
+        var handler = CreateHandler();
+        var request = FallbackRequest();
+        var attrs = new Dictionary<string, object>
+        {
+            ["pagination_state"] = Newtonsoft.Json.JsonConvert.SerializeObject(new { type = "Artist", itemIds = new[] { Guid.NewGuid().ToString() }, currentOffset = 0, pageSize = 5 })
+        };
+
+        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), attrs, CancellationToken.None);
+
+        Assert.False(response.Response.ShouldEndSession);
+        string speech = TestHelpers.GetSpeechText(response);
+        string showMore = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("ShowMorePrompt", "en-US");
+        Assert.Contains(showMore, speech);
+    }
+
+    [Fact]
+    public async Task Fallback_NoState_StillTellsCouldNotUnderstand()
+    {
+        // Guard: bare fallback (no conversational state) keeps the existing Tell behavior
+        var handler = CreateHandler();
+        var request = FallbackRequest();
+
+        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), null, CancellationToken.None);
+
+        Assert.True(response.Response.ShouldEndSession);
+        string speech = TestHelpers.GetSpeechText(response);
+        string couldNot = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("CouldNotUnderstand", "en-US");
+        Assert.Equal(couldNot, speech);
     }
 }
