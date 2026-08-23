@@ -316,6 +316,10 @@ The final step links your Jellyfin account to the Alexa skill:
 
 > 🎨 **[Voice Command Explorer](https://paoloantinori.github.io/jellyfin-alexa-plugin/)** — browse every voice command and how it routes between intents, interactively, in all 17 locales (utterance transition graphs).
 
+### What the committed models contain (and what they don't)
+
+The interaction model JSONs in this repo are the STATIC base: intents, sample utterances, and built-in slot types. They intentionally contain **no catalog data**. Your library's artist and album names are injected at RUNTIME by the plugin: a scheduled catalog sync (`CatalogSyncService`) uploads your library to SMAPI catalog slot types as dynamic values, with locale-specific phonetic synonyms (so an Italian speaker saying "sol coffin" still matches *Soul Coughing*). Two consequences worth knowing. First, the interaction-model state a real user has on Amazon cannot be reconstructed from this repo alone: the committed models plus your library ARE the deployed model. Second, if artist or album one-shot routing regresses, check the catalog sync status in the plugin config page before touching the JSONs. This architecture is deliberate; see the "Replacing catalog-backed custom slot types" anti-pattern in `CLAUDE.md` before swapping custom types for built-ins.
+
 ### Automated NLU Tests
 
 Validate that Alexa's NLU resolves utterances to the correct intents using the SMAPI `profile-nlu` endpoint:
