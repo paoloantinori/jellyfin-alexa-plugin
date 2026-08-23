@@ -370,6 +370,8 @@ These patterns have caused bugs repeatedly across many sessions. Every rule here
 grep -rn '"[A-Z][a-z].*"' model_*.json | grep -v '{' | grep samples
 ```
 
+**Boundary (JF-403 audit)**: the rule applies to intents whose slots are REQUIRED for the handler to act. Static samples on OPTIONAL-slot intents are correct Alexa design and are NOT violations: the static variant must deliver a working default (handler prompts or falls back). Verified optional-slot intents carrying static samples (do not "clean these up"): FindSongIntent (conversation openers), MediaInfoIntent ("what's playing"), PlayFavorites/PlayLastAdded/PlayRandom/Recommend (media_type defaults), GoToChapter ("next/previous chapter"), SkipForwardBack ("skip forward" = default 30s).
+
 ### 2. AMAZON.SearchQuery Coexistence (9+ incidents)
 
 **`AMAZON.SearchQuery` CANNOT coexist with ANY other slot type in the same intent.** SMAPI rejects the model build. Use custom slot types instead.
