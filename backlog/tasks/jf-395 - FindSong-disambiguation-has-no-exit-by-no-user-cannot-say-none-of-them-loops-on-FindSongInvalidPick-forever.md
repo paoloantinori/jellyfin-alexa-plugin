@@ -3,9 +3,10 @@ id: JF-395
 title: >-
   FindSong disambiguation has no exit-by-no: user cannot say 'none of them',
   loops on FindSongInvalidPick forever
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-23 05:56'
+updated_date: '2026-08-23 06:10'
 labels:
   - ux
   - multi-turn
@@ -37,3 +38,9 @@ Fix: accept negative answers in Disambiguating as a clean exit (Tell the not-fou
 - [ ] #10 /code-review high passed (no blocking findings remaining
 - [ ] #11 or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fixed in fd69f7f (TDD: 9 negative-answer cases across en/it/de/fr/es/pt + unparsable-non-negative guard, all RED-first). IsNegativeAnswer checked only after ResolvePick fails (so 'no, the second one' still picks). FindSongDisambigAbandoned string added to all 17 locales; validate_locales passes. NOTE: ja/hi/ar/nl negative words included in the word set but only smoke-tested via en/it/de/fr/es/pt cases; on-device verification for those locales still open.
+<!-- SECTION:FINAL_SUMMARY:END -->

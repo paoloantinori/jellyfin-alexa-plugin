@@ -3,9 +3,10 @@ id: JF-394
 title: >-
   Bug: resume_state survives the user's 'no' - stray later 'yes' resumes the
   declined item
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-23 05:56'
+updated_date: '2026-08-23 06:10'
 labels:
   - bug
   - multi-turn
@@ -37,3 +38,9 @@ Fix: clear resume_state (build the rejection response with an explicit attribute
 - [ ] #10 /code-review high passed (no blocking findings remaining
 - [ ] #11 or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fixed in fd69f7f (TDD: 2 interceptor marker tests + 1 handler+interceptor regression test, all RED-first). Root cause: rejection Ask carried no attributes so the interceptor merged resume_state back. Fix: SessionAttributeRemoval marker contract (__remove_attributes) honored by SessionAttributesInterceptor; HandleResumeRejection marks resume_state. Generic mechanism available for other flows (JF-398 direction).
+<!-- SECTION:FINAL_SUMMARY:END -->

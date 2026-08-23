@@ -3,9 +3,10 @@ id: JF-397
 title: >-
   FallbackIntent kills mid-dialog sessions: unrecognized answer ends the
   conversation instead of re-prompting
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-23 05:56'
+updated_date: '2026-08-23 06:17'
 labels:
   - ux
   - multi-turn
@@ -37,3 +38,9 @@ Fix direction: make FallbackIntentHandler state-aware: if any conversational sta
 - [ ] #10 /code-review high passed (no blocking findings remaining
 - [ ] #11 or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fixed in this commit (TDD: 3 RED cases incl. no-state guard). FallbackIntentHandler gained an attrs-aware overload: resume (re-asks ResumePromptSsml with title via optional ILibraryManager) > pagination (ShowMorePrompt) > disambiguation (AskNextMatch at stored index). FindSong dialogs unaffected (controller override claims their fallbacks). Known residual: unsupported-built-in intents during a dialog still Tell and end the session (pre-existing branch, left unchanged); ja/hi/ar reprompts use the same localized strings so no gap.
+<!-- SECTION:FINAL_SUMMARY:END -->

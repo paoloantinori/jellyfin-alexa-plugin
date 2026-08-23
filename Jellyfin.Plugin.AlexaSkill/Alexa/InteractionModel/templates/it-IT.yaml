@@ -45,6 +45,12 @@ static_intents:
 # Intents with explicit samples (not generated from templates).
 # Each has a "samples" list and optional "slots" list.
 explicit_intents:
+  # DELIBERATE EXCEPTION to anti-pattern #5 ("never add custom samples to AMAZON.*
+  # built-ins", see CLAUDE.md): these it-IT samples make the imperative "ferma" route
+  # one-shot to StopIntent on Italian Echos. Added in the early template era (May 2026,
+  # SleepTimer epoch); no incident documented against it. Do NOT remove blindly:
+  # first verify on-device/profile-nlu that "ferma" still routes without them
+  # (tracked as device-testing follow-up of JF-402).
   AMAZON.StopIntent:
     samples:
       - ferma

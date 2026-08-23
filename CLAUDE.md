@@ -422,6 +422,8 @@ grep -rn '"[A-Z][a-z].*"' model_*.json | grep -v '{' | grep samples
 
 **Detection**: `grep -rn '"AMAZON\.' model_*.json | grep -v '"samples": \[\]'`
 
+**Known deliberate exception (JF-402)**: `AMAZON.StopIntent` in it-IT carries 6 custom samples ("ferma", "ferma tutto", ...) from the YAML template (May 2026 era), so the Italian imperative "ferma" routes one-shot. No incident documented against it. Do not "fix" it blindly: removal requires first verifying on-device that "ferma" still routes without the samples.
+
 ### 6. Vocabulary Expansion Side Effects (YAML Template Only)
 
 Adding a verb to `imperative`/`infinitive` vocabulary in the it-IT YAML template generates samples across ALL template intents via Cartesian product. A verb appropriate for one intent may produce nonsensical samples for another.

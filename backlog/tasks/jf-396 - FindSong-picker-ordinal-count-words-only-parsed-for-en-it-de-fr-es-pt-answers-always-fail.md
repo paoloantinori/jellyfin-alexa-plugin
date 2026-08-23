@@ -3,9 +3,10 @@ id: JF-396
 title: >-
   FindSong picker ordinal/count words only parsed for en/it/de/fr - es/pt
   answers always fail
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-23 05:56'
+updated_date: '2026-08-23 06:14'
 labels:
   - localization
   - multi-turn
@@ -35,3 +36,9 @@ Localization gap (found by the 2026-08-23 multi-turn audit). FindSongIntentHandl
 - [ ] #10 /code-review high passed (no blocking findings remaining
 - [ ] #11 or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fixed in 77779d0 (TDD: 17 RED cases + 7 behavior guards). CardinalPickWords map + OrdinalStemsByRank per-rank stems replace the en/it/de/fr-only parsing; es/pt/fr/nl spoken answers now resolve. Gendered variants covered via stems (segund/tercer/terceir/cuarto/quarta). ja/hi/ar count words not added (those locales use numerals/words not yet verified on-device; left as follow-up if users report). 2715 tests passing.
+<!-- SECTION:FINAL_SUMMARY:END -->
