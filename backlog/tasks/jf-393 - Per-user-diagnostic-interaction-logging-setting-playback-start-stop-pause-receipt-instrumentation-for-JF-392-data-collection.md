@@ -6,7 +6,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-08-22 19:26'
-updated_date: '2026-08-22 19:31'
+updated_date: '2026-08-22 19:53'
 labels:
   - observability
   - playback
@@ -48,3 +48,15 @@ Design: reuse the existing per-user override to global default pattern (like Get
 - [ ] #10 /code-review high passed (no blocking findings remaining
 - [ ] #11 or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-08-22: code complete + committed 7b91214. Remaining: deploy to minix (remember: config.html is an embedded resource - delete output DLL before Release build, verify served page with cache-buster curl), then enable the flag for the test user and collect [diag] data for JF-392.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented, reviewed, and committed (7b91214). Per-user DiagnosticInteractionLogging (tri-state) + global DefaultDiagnosticInteractionLogging (false); [diag] lines at controller choke point (requestId, sincePlaybackStarted) and PlaybackStarted/Stopped; config UI in new Diagnostics section + user panel; PATCH endpoints whitelisted. Build 0 warn/err, 2677/2677 tests. /simplify and /code-review high both run; review caught 2 real config-page bugs (dilSel ReferenceError aborting user saves; global flag missing from generalConfig PATCH), both fixed pre-commit. Deploy to minix + live data collection still pending (JF-392 discriminator needs N>20 instances).
+<!-- SECTION:FINAL_SUMMARY:END -->
