@@ -398,17 +398,6 @@ public class ShowMoreIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
-    public void ListPaginationHelper_ClearState_RemovesKey()
-    {
-        var attrs = new Dictionary<string, object>();
-        ListPaginationHelper.WriteState(attrs, ListPaginationHelper.ListType.Queue, new[] { "id1" }, 0, 5);
-
-        Assert.True(ListPaginationHelper.HasPaginationState(attrs));
-        ListPaginationHelper.ClearState(attrs);
-        Assert.False(ListPaginationHelper.HasPaginationState(attrs));
-    }
-
-    [Fact]
     public void ListPaginationHelper_ReadState_NullAttrs_ReturnsNull()
     {
         var state = ListPaginationHelper.ReadState(null);

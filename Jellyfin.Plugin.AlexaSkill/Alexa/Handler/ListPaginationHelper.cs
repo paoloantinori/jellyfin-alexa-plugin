@@ -90,6 +90,11 @@ internal static class ListPaginationHelper
     /// </summary>
     public static void WriteState(Dictionary<string, object> attributes, ListType type, string[] itemIds, int currentOffset, int pageSize)
     {
+        // JF-398 (review fix): activating the pagination flow supersedes any other
+        // flow's state. Centralized here so EVERY pagination activation is covered
+        // (the five handler call sites and BuildNextPageResponse alike).
+        ConversationalFlows.MarkOthersInactive(attributes, ConversationalFlows.PaginationKeys);
+
         var state = new PaginationState
         {
             Type = type,
@@ -98,14 +103,6 @@ internal static class ListPaginationHelper
             PageSize = pageSize
         };
         attributes[AttrKey] = JsonConvert.SerializeObject(state);
-    }
-
-    /// <summary>
-    /// Remove pagination state from the attributes dictionary.
-    /// </summary>
-    public static void ClearState(Dictionary<string, object> attributes)
-    {
-        attributes.Remove(AttrKey);
     }
 
     /// <summary>
@@ -166,9 +163,6 @@ internal static class ListPaginationHelper
         {
             response.SessionAttributes = new Dictionary<string, object>();
             WriteState(response.SessionAttributes, paginationState.Type, paginationState.ItemIds, newOffset, paginationState.PageSize);
-
-            // JF-398: activating the pagination flow supersedes any other flow's state.
-            ConversationalFlows.MarkOthersInactive(response, ConversationalFlows.PaginationKeys);
         }
 
         return response;

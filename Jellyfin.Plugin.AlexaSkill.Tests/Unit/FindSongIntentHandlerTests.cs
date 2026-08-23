@@ -74,10 +74,13 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
     }
 
     [Fact]
-    public void CanHandle_FallbackIntent_ReturnsTrue()
+    public void CanHandle_FallbackIntent_ReturnsFalse()
     {
+        // JF-397 review fix: FindSong must NOT claim FallbackIntent unconditionally.
+        // The controller-level FindSongSessionData override routes fallbacks here while
+        // a dialog is active; the CanHandle claim starved FallbackIntentHandler.
         var request = CreateIntentRequest("AMAZON.FallbackIntent");
-        Assert.True(_handler.CanHandle(request));
+        Assert.False(_handler.CanHandle(request));
     }
 
     [Fact]
@@ -931,25 +934,6 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
     // ========== FallbackIntent without session ==========
 
-    [Fact]
-    public async Task FallbackIntent_WithoutSession_ReturnsStandardFallback()
-    {
-        SetupJellyfinUser();
-        var user = CreateTestUser();
-        var session = CreateSession();
-
-        var request = CreateIntentRequest("AMAZON.FallbackIntent");
-
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, null, CancellationToken.None);
-
-        // Should return the same "CouldNotUnderstand" response as FallbackIntentHandler
-        string speech = TestHelpers.GetSpeechText(response);
-        Assert.NotNull(speech);
-        Assert.NotEmpty(speech);
-        // The response ends the session (Tell, not Ask)
-        Assert.True(response.Response.ShouldEndSession);
-    }
-
     // ========== Arbitrary Intent Routing (session-based override) ==========
 
     [Fact]
@@ -1314,6 +1298,54 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         string speech = TestHelpers.GetSpeechText(response);
         string invalidPick = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("FindSongInvalidPick", locale);
         Assert.NotEqual(invalidPick, speech);
+    }
+
+    // Review regression: a bare "no" must EXIT even when a candidate title merely
+    // contains the substring ("No Surprises") - the title matcher ran first before.
+    [Fact]
+    public async Task Disambiguating_SingleTokenNo_ExitsEvenWhenTitleContainsIt()
+    {
+        var user = CreateTestUser();
+        var session = CreateSession();
+        var candidates = new List<FindSongCandidate>
+        {
+            new(Guid.NewGuid(), "No Surprises", null, 95),
+            new(Guid.NewGuid(), "Creep", null, 85)
+        };
+        var attrs = DisambiguatingAttrs(candidates);
+        var request = CreateIntentRequest("AMAZON.FallbackIntent", new Dictionary<string, string?>
+        {
+            ["titleKeywords"] = "no"
+        });
+        request.Locale = "en-US";
+
+        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, attrs, CancellationToken.None);
+
+        Assert.True(response.Response.ShouldEndSession);
+        string abandoned = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("FindSongDisambigAbandoned", "en-US");
+        Assert.Equal(abandoned, TestHelpers.GetSpeechText(response));
+    }
+
+    // Review regression: a multi-token answer matching a candidate TITLE must win over
+    // the ordinal stem it contains ("Second Chance" is a title, not rank 2).
+    [Fact]
+    public void ResolvePick_TitleWithOrdinalWord_TitleWinsOverRank()
+    {
+        var candidates = new List<FindSongCandidate>
+        {
+            new(Guid.NewGuid(), "First Cut Is the Deepest", null, 90),
+            new(Guid.NewGuid(), "Second Chance", null, 85)
+        };
+
+        // "second chance" must pick the TITLE at index 1 because it is the second
+        // candidate, NOT because "second" maps to rank 1: verify with the title at a
+        // different position too.
+        var result = FindSongIntentHandler.ResolvePick("second chance", candidates, "en-US");
+        Assert.Equal(1, result);
+
+        var reordered = new List<FindSongCandidate> { candidates[1], candidates[0] };
+        var result2 = FindSongIntentHandler.ResolvePick("second chance", reordered, "en-US");
+        Assert.Equal(0, result2); // the title, wherever it sits
     }
 
     [Fact]

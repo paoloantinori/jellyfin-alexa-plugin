@@ -125,15 +125,11 @@ public class FindSongIntentHandler : BaseHandler
             return true;
         }
 
-        // FallbackIntent is handled when we have active FindSong session state
-        if (string.Equals(intentName, IntentNames.AmazonFallback, StringComparison.Ordinal))
-        {
-            // We cannot read session attributes from CanHandle since the request context
-            // doesn't carry session attributes at this point. The pipeline passes them
-            // to HandleAsync. So we accept FallbackIntent here and check state inside.
-            return true;
-        }
-
+        // NOTE: FallbackIntent is NOT claimed here. The controller-level
+        // FindSongSessionData override routes fallbacks to this handler while a FindSong
+        // dialog is active (it can see session attributes); claiming FallbackIntent here
+        // unconditionally made every other fallback bypass FallbackIntentHandler, whose
+        // state-aware re-prompts (JF-397) were therefore unreachable in real routing.
         return false;
     }
 
@@ -157,15 +153,6 @@ public class FindSongIntentHandler : BaseHandler
 
         // Read existing session state
         FindSongSessionData? sessionData = ReadSessionData(sessionAttributes);
-
-        // If FallbackIntent but no active FindSong session, return the standard
-        // fallback response (same as FallbackIntentHandler) since we intercepted it.
-        if (sessionData == null
-            && string.Equals(intentRequest.Intent.Name, IntentNames.AmazonFallback, StringComparison.Ordinal))
-        {
-            Logger.LogDebug("FindSong: FallbackIntent without active session, returning standard fallback");
-            return ResponseBuilder.Tell(ResponseStrings.Get("CouldNotUnderstand", locale));
-        }
 
         // If we have session data and the intent is FindSongIntent, it could be
         // a fresh invocation or a continuation. Check for slot values to distinguish.
@@ -366,6 +353,18 @@ public class FindSongIntentHandler : BaseHandler
         }
 
         input = input.Trim();
+
+        // JF-395 review fix: a SINGLE-token negative always exits, BEFORE ResolvePick.
+        // The title matcher is a substring match, so a bare "no" would otherwise pick
+        // any candidate whose title merely contains it ("No Surprises", "November
+        // Rain", "Nowhere Man"). Multi-token negatives still resolve after ResolvePick
+        // so "no, the second one" keeps picking.
+        string[] inputTokens = input.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (inputTokens.Length == 1 && IsNegativeAnswer(input))
+        {
+            Logger.LogDebug("FindSong: disambiguation declined (single-token negative), ending search");
+            return ResponseBuilder.Tell(ResponseStrings.Get("FindSongDisambigAbandoned", locale));
+        }
 
         // Try to match by number, ordinal, or partial title
         int? pickIndex = ResolvePick(input, sessionData.Candidates, locale);
@@ -650,35 +649,45 @@ public class FindSongIntentHandler : BaseHandler
             return null;
         }
         string trimmed = input.Trim();
+        string[] tokens = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
-        // 1. Try numeric match: "1", "2", "the first one", "the second one", etc.
-        int? numericPick = TryParseNumericPick(trimmed);
-        if (numericPick.HasValue)
-        {
-            return numericPick;
-        }
-
-        // 2. Try ordinal words: "one", "two", "three", "four"
-        int? cardinalPick = TryParseCardinalWord(trimmed);
-        if (cardinalPick.HasValue)
-        {
-            return cardinalPick;
-        }
-
-        // 3. Try partial title match against candidate names
-        return TryMatchByTitle(trimmed, candidates);
-    }
-
-    private static int? TryParseNumericPick(string input)
-    {
-        // Direct number: "1", "2", etc.
-        if (int.TryParse(input, out int num) && num >= 1 && num <= 4)
+        // 1. Direct digits: "1", "2" (1-4, matching the top-4 candidate cap).
+        if (int.TryParse(trimmed, out int num) && num >= 1 && num <= 4)
         {
             return num - 1;
         }
 
-        // Ordinals across all supported locales (JF-396): "the first one", "il primo",
-        // "der zweite", "le deuxième", "la segunda", "o terceiro", "de tweede", etc.
+        // 2. SINGLE-token cardinal ("two", "dos", "dois") or ordinal word ("second",
+        // "segunda"): a lone pick word is a rank, never a title.
+        if (tokens.Length == 1)
+        {
+            int? single = TryParseCardinalWord(trimmed) ?? TryParseOrdinalStem(trimmed);
+            if (single.HasValue)
+            {
+                return single;
+            }
+        }
+
+        // 3. Title match BEFORE ordinal phrases: ordinal stems substring-match, so a
+        // multi-token answer that matches a candidate title ("Second Chance") must win
+        // over the rank the stem would otherwise hijack it to (review finding: title
+        // picks containing ordinal words resolved as ranks).
+        int? titlePick = TryMatchByTitle(trimmed, candidates);
+        if (titlePick.HasValue)
+        {
+            return titlePick;
+        }
+
+        // 4. Ordinal phrases LAST: "the second one", "il primo", "le deuxième".
+        return TryParseOrdinalStem(trimmed);
+    }
+
+    /// <summary>
+    /// Match an ordinal phrase ("the second one", "la segunda") to its rank via the
+    /// per-locale stems. Substring-based, so it must run AFTER title matching.
+    /// </summary>
+    private static int? TryParseOrdinalStem(string input)
+    {
         string lower = input.ToLowerInvariant();
 
         for (int rank = 0; rank < OrdinalStemsByRank.Length; rank++)
@@ -727,7 +736,7 @@ public class FindSongIntentHandler : BaseHandler
                 }
 
                 string candidateLower = candidates[i].Name!.ToLowerInvariant();
-                if (inputWords.Any(w => candidateLower.Contains(w, StringComparison.OrdinalIgnoreCase)))
+                if (inputWords.Any(w => w.Length >= 3 && candidateLower.Contains(w, StringComparison.OrdinalIgnoreCase)))
                 {
                     return i;
                 }

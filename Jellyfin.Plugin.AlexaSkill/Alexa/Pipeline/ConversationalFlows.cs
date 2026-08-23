@@ -11,7 +11,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 /// (a resume offer issued during an active pagination carried both), forcing the Yes/No
 /// handlers to resolve collisions with a hard-coded priority chain and letting stale state
 /// act later (the JF-394 class). Writers now declare which flow they are activating via
-/// <see cref="MarkOthersInactive"/>: every OTHER flow's keys are marked for removal, so at
+/// <c>MarkOthersInactive</c>: every OTHER flow's keys are marked for removal, so at
 /// most one conversational flow is live per session. Backward compatible: the key formats
 /// are unchanged, so in-flight sessions across a deploy keep working.
 /// </summary>
@@ -51,8 +51,20 @@ public static class ConversationalFlows
     /// <param name="activeKeys">The session keys owned by the flow being activated.</param>
     public static void MarkOthersInactive(SkillResponse response, params string[] activeKeys)
     {
+        response.SessionAttributes ??= new System.Collections.Generic.Dictionary<string, object>();
+        MarkOthersInactive(response.SessionAttributes, activeKeys);
+    }
+
+    /// <summary>
+    /// Dictionary-level variant for flow writers that build the attributes dictionary
+    /// directly (e.g. ListPaginationHelper.WriteState).
+    /// </summary>
+    /// <param name="attributes">The response session-attributes dictionary being written.</param>
+    /// <param name="activeKeys">The session keys owned by the flow being activated.</param>
+    public static void MarkOthersInactive(Dictionary<string, object> attributes, params string[] activeKeys)
+    {
         IEnumerable<string> others = AllFlowKeys.Except(activeKeys);
 
-        SessionAttributeRemoval.Mark(response, others.ToArray());
+        SessionAttributeRemoval.Mark(attributes, others.ToArray());
     }
 }

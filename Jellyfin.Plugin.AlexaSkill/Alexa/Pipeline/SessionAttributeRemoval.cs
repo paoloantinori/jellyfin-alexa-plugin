@@ -27,19 +27,31 @@ public static class SessionAttributeRemoval
     /// <param name="keys">The session-attribute keys to drop from the merged output.</param>
     public static void Mark(SkillResponse response, params string[] keys)
     {
+        response.SessionAttributes ??= new Dictionary<string, object>();
+        Mark(response.SessionAttributes, keys);
+    }
+
+    /// <summary>
+    /// Marks the given attribute keys for removal on an attributes dictionary that is
+    /// (or will become) a response's SessionAttributes. Used by flow writers that build
+    /// the dictionary directly (e.g. ListPaginationHelper.WriteState).
+    /// </summary>
+    /// <param name="attributes">The response session-attributes dictionary.</param>
+    /// <param name="keys">The session-attribute keys to drop from the merged output.</param>
+    public static void Mark(Dictionary<string, object> attributes, params string[] keys)
+    {
         var list = new List<object>(keys.Length);
         foreach (string key in keys)
         {
             list.Add(key);
         }
 
-        response.SessionAttributes ??= new Dictionary<string, object>();
-        if (response.SessionAttributes.TryGetValue(MarkerKey, out object? existing)
+        if (attributes.TryGetValue(MarkerKey, out object? existing)
             && existing is IEnumerable<object> existingList)
         {
             list.InsertRange(0, existingList);
         }
 
-        response.SessionAttributes[MarkerKey] = list;
+        attributes[MarkerKey] = list;
     }
 }
