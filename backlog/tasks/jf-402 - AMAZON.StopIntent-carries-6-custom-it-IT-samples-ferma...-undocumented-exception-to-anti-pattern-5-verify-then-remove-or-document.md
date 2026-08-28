@@ -3,9 +3,10 @@ id: JF-402
 title: >-
   AMAZON.StopIntent carries 6 custom it-IT samples ('ferma...') - undocumented
   exception to anti-pattern #5, verify-then-remove-or-document
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-23 05:57'
+updated_date: '2026-08-23 06:26'
 labels:
   - interaction-model
   - documentation
@@ -37,3 +38,9 @@ Action: either (a) verify on-device/profile-nlu that "ferma" routes without the 
 - [ ] #10 /code-review high passed (no blocking findings remaining
 - [ ] #11 or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Resolved via documentation route (f418837): exception documented in CLAUDE.md anti-pattern #5 and in the it-IT YAML template above the sample block. The removal+verify experiment goes into the device-testing task (profile-nlu 'ferma' without custom samples). No model change shipped.
+<!-- SECTION:FINAL_SUMMARY:END -->

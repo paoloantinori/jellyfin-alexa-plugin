@@ -3,9 +3,10 @@ id: JF-400
 title: >-
   11 of 17 locales have zero NLU/E2E test coverage - extend fixtures starting
   from pt-BR, ja, hi, en-variants
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-08-23 05:57'
+updated_date: '2026-08-23 10:36'
 labels:
   - testing
   - nlu
@@ -37,3 +38,13 @@ Plan: extend NLU fixtures locale by locale. Not all 11 are equal priority: pt-BR
 - [ ] #10 /code-review high passed (no blocking findings remaining
 - [ ] #11 or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-08-23 partial (commit f146dfb): en-AU/en-CA/en-IN fixtures derived from en-GB (57 utterances each), live-verified on profile-nlu. Fixed a stale en-GB case inherited by derivation ('Repeat the song' -> replaced with the real sample 'Repeat this song forever'). Remaining uncovered: pt-BR, ja-JP, hi-IN, ar-SA, nl-NL, es-US, es-MX, fr-CA (need language work).
+
+Caveat discovered while running suites: profile-nlu is NONDETERMINISTIC at the infrastructure level - individual cases fail in full-suite runs (sometimes Amazon 500s) but pass when re-run in isolation. Do not treat a single full-suite failure as a regression without re-running the case alone. Candidate improvement (separate task if wanted): add a retry-on-5xx to SmapiClient.profile_nlu.
+
+2026-08-23 second batch (commit 66b340b): es-MX + fr-CA fixtures added and fully green (116/116 live). Divergences annotated per-case (fr-CA album-vs-song greedy capture; es-MX muestrame fallback). es-US fixture REVERTED after ~20 systematic divergences -> new task JF-406. Coverage now 11/17 locales (it, en-US/GB/AU/CA/IN, de, fr-FR/CA, es-ES/MX). Remaining 6 (pt-BR, ja, hi, ar, nl, es-US): pt/ja/hi/ar/nl are NOT active locales on the dev skill so cannot be tested against profile-nlu at all; es-US blocked by JF-406. This task can close when those blockers resolve (enable locales / fix divergence), or be kept open as tracking.
+<!-- SECTION:NOTES:END -->

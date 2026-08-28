@@ -3,9 +3,10 @@ id: JF-398
 title: >-
   Session attribute ride-along across flows: single active-flow state
   namespacing refactor
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-23 05:56'
+updated_date: '2026-08-23 10:53'
 labels:
   - refactor
   - multi-turn
@@ -37,3 +38,9 @@ Direction: namespace conversational state under a single active-flow key (e.g. a
 - [ ] #10 /code-review high passed (no blocking findings remaining
 - [ ] #11 or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented incrementally in c7d9f47 (instead of the key-format rewrite): ConversationalFlows helper + MarkOthersInactive wired at every flow START (FindSong BuildElicitSlotResponse, DisambiguationHelper AskFirstMatch x2/AskNextMatch, BaseHandler cross-media offer, ListPaginationHelper BuildNextPageResponse, LaunchRequestHandler resume offer). Only one conversational flow can be live per session; key formats unchanged so sessions open across a deploy survive. The Yes/No priority chain stays as defense-in-depth, now unreachable in steady state. TDD: helper test + 2 handler/interceptor integration tests; 2721 passing. Deploy pending (rides the next /deploy; on-device sanity is JF-405 item 8).
+<!-- SECTION:FINAL_SUMMARY:END -->

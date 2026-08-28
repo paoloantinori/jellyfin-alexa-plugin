@@ -3,9 +3,10 @@ id: JF-401
 title: >-
   dialog.intents registration asymmetric across locales (6 intents in 6 locales
   vs 3 in 11) - dormant ElicitSlot mine
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-23 05:57'
+updated_date: '2026-08-23 06:26'
 labels:
   - interaction-model
   - localization
@@ -35,3 +36,9 @@ Model hygiene finding (2026-08-23 audit). dialog.intents registration is not uni
 - [ ] #10 /code-review high passed (no blocking findings remaining
 - [ ] #11 or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fixed in 3b314a1. All 17 locales now register the same 6 dialog.intents (PlayEpisode/PlaySong/PlayAlbum added to the 11 that had only 3; entries built from each locale's own slot shapes; it-IT via the YAML template + regeneration, idempotent). validate_interaction_models PASS. Models not yet pushed to Amazon: next /deploy or rebuild models will carry them.
+<!-- SECTION:FINAL_SUMMARY:END -->

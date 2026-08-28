@@ -25,8 +25,15 @@ def _video_audio_url(jellyfin_url: str, item_id: str, suffix: str = "") -> str:
     return f"{base}/alexaskill/api/video-audio/{item_id}{suffix}"
 
 
+def _skip_without_live_server(jellyfin_client) -> None:
+    """Skip under --dry-run or without E2E parameters (client is None there)."""
+    if jellyfin_client is None:
+        pytest.skip("Jellyfin E2E parameters not configured")
+
+
 def test_stream_video_audio_no_token_returns_401(jellyfin_client):
     """A bare-GUID request to the MP4 endpoint with no token must be rejected."""
+    _skip_without_live_server(jellyfin_client)
     item_id = jellyfin_client.get_first_audio_item_id()
     url = _video_audio_url(jellyfin_client.base_url, item_id)
     resp = requests.get(url, timeout=10, allow_redirects=False)
@@ -35,6 +42,7 @@ def test_stream_video_audio_no_token_returns_401(jellyfin_client):
 
 def test_stream_hls_video_audio_no_token_returns_401(jellyfin_client):
     """A bare-GUID request to the HLS playlist endpoint with no token must be rejected."""
+    _skip_without_live_server(jellyfin_client)
     item_id = jellyfin_client.get_first_audio_item_id()
     url = _video_audio_url(jellyfin_client.base_url, item_id, "/stream.m3u8")
     resp = requests.get(url, timeout=10, allow_redirects=False)
@@ -43,6 +51,7 @@ def test_stream_hls_video_audio_no_token_returns_401(jellyfin_client):
 
 def test_get_segment_no_token_returns_401(jellyfin_client):
     """A bare-GUID segment request with no token must be rejected."""
+    _skip_without_live_server(jellyfin_client)
     item_id = jellyfin_client.get_first_audio_item_id()
     url = _video_audio_url(jellyfin_client.base_url, item_id, "/segments/seg_0000.ts")
     resp = requests.get(url, timeout=10, allow_redirects=False)
@@ -51,6 +60,7 @@ def test_get_segment_no_token_returns_401(jellyfin_client):
 
 def test_stream_video_audio_garbage_token_returns_401(jellyfin_client):
     """A request with a malformed/garbage token must be rejected."""
+    _skip_without_live_server(jellyfin_client)
     item_id = jellyfin_client.get_first_audio_item_id()
     url = _video_audio_url(jellyfin_client.base_url, item_id) + "?token=garbage"
     resp = requests.get(url, timeout=10, allow_redirects=False)
@@ -63,6 +73,8 @@ def test_stream_video_audio_wrong_item_token_returns_401(jellyfin_client):
     import hashlib
     import base64
     import time
+
+    _skip_without_live_server(jellyfin_client)
 
     # Mint a token for item B, then request item A.
     item_a = jellyfin_client.get_first_audio_item_id()

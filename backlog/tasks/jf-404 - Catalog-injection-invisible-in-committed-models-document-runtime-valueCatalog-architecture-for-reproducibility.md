@@ -3,9 +3,10 @@ id: JF-404
 title: >-
   Catalog injection invisible in committed models - document runtime
   valueCatalog architecture for reproducibility
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-23 05:57'
+updated_date: '2026-08-23 06:27'
 labels:
   - documentation
   - interaction-model
@@ -35,3 +36,9 @@ Reproducibility finding (2026-08-23 audit). The committed model_*.json files con
 - [ ] #10 /code-review high passed (no blocking findings remaining
 - [ ] #11 or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Done: README 'Testing' section now has 'What the committed models contain (and what they don't)' explaining static base vs runtime CatalogSyncService injection, phonetic synonyms, non-reproducibility from repo alone, and the triage rule (check catalog sync before JSONs). Skipped the validate-script guard (low value: nothing statically defines catalog slots today) and the per-JSON generator comments (README + CLAUDE.md cover it).
+<!-- SECTION:FINAL_SUMMARY:END -->

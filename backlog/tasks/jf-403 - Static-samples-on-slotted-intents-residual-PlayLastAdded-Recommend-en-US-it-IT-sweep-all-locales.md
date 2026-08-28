@@ -3,9 +3,10 @@ id: JF-403
 title: >-
   Static samples on slotted intents residual (PlayLastAdded, Recommend; en-US +
   it-IT + sweep all locales)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-23 05:57'
+updated_date: '2026-08-23 06:27'
 labels:
   - interaction-model
   - nlu
@@ -35,3 +36,9 @@ Model hygiene finding (2026-08-23 audit). Residual instances of anti-pattern #1 
 - [ ] #10 /code-review high passed (no blocking findings remaining
 - [ ] #11 or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed as verified-no-defect (commit above). Full sweep: 8 intents x 17 locales carry static samples on slotted intents; ALL have optional slots with handler defaults (verified per intent). The assessment's 2 flagged instances were false positives of an under-specified rule. Sharpened anti-pattern #1 in CLAUDE.md: rule applies to required-slot intents; documented allowlist of the verified optional-slot intents so nobody 'cleans them up' later.
+<!-- SECTION:FINAL_SUMMARY:END -->
