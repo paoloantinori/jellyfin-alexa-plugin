@@ -455,8 +455,11 @@ public class PlayAlbumIntentHandler : BaseHandler
     /// as the requested slot and already-filled slots survive the round-trip. A plain Ask
     /// let follow-ups fall through to general NLU and lose the thread (on-device
     /// 2026-08-28 20:23: "quali ci sono" after the elicit surfaced unrelated
-    /// recently-added content). Requires PlayAlbumIntent in dialog.intents with
-    /// elicitationRequired=false (manual dialog control, CLAUDE.md anti-pattern #9).
+    /// recently-added content). The updatedIntent declares BOTH intent slots: Amazon
+    /// rejects the directive otherwise (live INVALID_RESPONSE 2026-08-28 21:17: "All
+    /// slots must be defined when sending updated intent... Missing: album"). Requires
+    /// PlayAlbumIntent in dialog.intents with elicitationRequired=false (manual dialog
+    /// control, CLAUDE.md anti-pattern #9).
     /// </summary>
     /// <param name="slotName">The slot to elicit (musician when nothing is known, album when the artist is known).</param>
     /// <param name="promptKey">The ResponseStrings key for the prompt.</param>
@@ -473,7 +476,7 @@ public class PlayAlbumIntentHandler : BaseHandler
                 ShouldEndSession = false,
                 OutputSpeech = new PlainTextOutputSpeech { Text = prompt },
                 Reprompt = new Reprompt(prompt),
-                Directives = new List<IDirective> { new ElicitSlotDirective(slotName, IntentNames.PlayAlbum) }
+                Directives = new List<IDirective> { new ElicitSlotDirective(slotName, IntentNames.PlayAlbum, new[] { IntentNames.Slots.Album, IntentNames.Slots.Musician }) }
             }
         };
     }

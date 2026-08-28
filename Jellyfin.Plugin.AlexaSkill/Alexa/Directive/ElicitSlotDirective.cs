@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Alexa.NET.Response;
 using Newtonsoft.Json;
 
@@ -9,6 +10,11 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 /// a built-in class for this directive type. It serializes to:
 /// <c>{ "type": "Dialog.ElicitSlot", "slotToElicit": "...", "updatedIntent": {...} }</c>
 /// which tells Alexa to capture the user's next utterance as the specified slot value.
+/// Amazon requires updatedIntent to define EVERY slot of the target intent, not just the
+/// elicited one (live INVALID_RESPONSE 2026-08-28 21:17: "All slots must be defined when
+/// sending updated intent in the Dialog.ElicitSlot directive. Missing: album" when
+/// eliciting musician on the two-slot PlayAlbumIntent); pass them all via the
+/// <c>allSlotNames</c> constructor argument.
 /// </summary>
 internal sealed class ElicitSlotDirective : IDirective
 {
@@ -21,10 +27,10 @@ internal sealed class ElicitSlotDirective : IDirective
     [JsonProperty("updatedIntent")]
     public ElicitSlotIntent UpdatedIntent { get; }
 
-    public ElicitSlotDirective(string slotToElicit, string intentName)
+    public ElicitSlotDirective(string slotToElicit, string intentName, string[]? allSlotNames = null)
     {
         SlotToElicit = slotToElicit;
-        UpdatedIntent = new ElicitSlotIntent(intentName, slotToElicit);
+        UpdatedIntent = new ElicitSlotIntent(intentName, allSlotNames ?? new[] { slotToElicit });
     }
 }
 
@@ -40,10 +46,10 @@ internal sealed class ElicitSlotIntent
     [JsonProperty("slots")]
     public Dictionary<string, ElicitSlot> Slots { get; }
 
-    public ElicitSlotIntent(string name, string slotName)
+    public ElicitSlotIntent(string name, string[] slotNames)
     {
         Name = name;
-        Slots = new Dictionary<string, ElicitSlot> { [slotName] = new(slotName) };
+        Slots = slotNames.ToDictionary(slotName => slotName, slotName => new ElicitSlot(slotName));
     }
 }
 

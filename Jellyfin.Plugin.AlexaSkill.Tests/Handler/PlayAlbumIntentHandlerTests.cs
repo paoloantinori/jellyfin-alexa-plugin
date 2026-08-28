@@ -290,6 +290,9 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         Assert.NotNull(elicit);
         Assert.Equal("musician", elicit.SlotToElicit);
         Assert.Equal("PlayAlbumIntent", elicit.UpdatedIntent.Name);
+        // Amazon requires updatedIntent to declare EVERY intent slot (live INVALID_RESPONSE
+        // 2026-08-28 21:17: "All slots must be defined... Missing: album").
+        Assert.Equal(new[] { "album", "musician" }, elicit.UpdatedIntent.Slots.Keys.OrderBy(k => k).ToArray());
     }
 
     [Fact]

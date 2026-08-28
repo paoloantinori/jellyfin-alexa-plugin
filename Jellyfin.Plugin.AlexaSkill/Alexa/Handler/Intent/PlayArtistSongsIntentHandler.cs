@@ -36,7 +36,8 @@ public class PlayArtistSongsIntentHandler : BaseHandler
     /// circuiting the search before the phonetic/fuzzy tiers can find the intended match.
     /// JF-381.
     /// </summary>
-    private const int Tier1ContainmentLengthBand = 10;
+    /// <summary>Shared with <see cref="Util.ArtistSearch"/> (JF-381); do not fork this value.</summary>
+    private const int Tier1ContainmentLengthBand = Util.ArtistSearch.Tier1ContainmentLengthBand;
 
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;

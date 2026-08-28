@@ -23,6 +23,14 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// </summary>
 internal static class ArtistSearch
 {
+    /// <summary>
+    /// JF-381 tier-1 containment gate: a candidate name longer than the query by more
+    /// than this many characters is a coincidental substring ("cup" in "Porcupine Tree"),
+    /// not an intended match; the fuzzy/phonetic tiers handle the accent drift instead.
+    /// Shared with the inline PlayArtistSongs search so the two paths cannot drift.
+    /// </summary>
+    internal const int Tier1ContainmentLengthBand = 10;
+
     public static async Task<IReadOnlyList<BaseItem>> SearchAsync(
         string musician,
         Entities.User? user,
@@ -48,10 +56,16 @@ internal static class ArtistSearch
                 : null;
             var allArtists = artistIndex.GetArtists(topParentIds);
 
-            // Tier 1: name contains query
+            // Tier 1: name contains query, with the JF-381 coincidental-containment gate.
+            // Without the gate a short query inside a long name wins tier 1 and stops the
+            // chain (live 2026-08-28 21:17: ASR "cup" for "Koop" returned "Porcupine Tree"
+            // here and the album path played the wrong artist, while the inline
+            // PlayArtistSongs search, which HAS the gate, correctly fell through to the
+            // phonetic tier). Gating lets tiers 2-4 resolve the accent drift instead.
             tierSw.Restart();
             artists = allArtists
-                .Where(a => a.Name.Contains(musician, StringComparison.OrdinalIgnoreCase))
+                .Where(a => a.Name.Contains(musician, StringComparison.OrdinalIgnoreCase)
+                    && a.Name.Length <= musician.Length + Tier1ContainmentLengthBand)
                 .ToList();
             tierSw.Stop();
             tierReached = 1;

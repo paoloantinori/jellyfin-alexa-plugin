@@ -214,6 +214,37 @@ public class ArtistSearchTests
         Assert.Equal("art", result[0].Name);
     }
 
+    [Fact]
+    public async Task SearchAsync_CoincidentalContainment_Gated_PhoneticTierResolvesKoop()
+    {
+        // Live 2026-08-28 21:17: "un disco dei Koop" spoken fast, ASR "cup". SearchAsync's
+        // ungated tier-1 returned "Porcupine Tree" ("cup" substring) and stopped the chain,
+        // so the album path played the wrong artist; the inline PlayArtistSongs search,
+        // which has the JF-381 gate, correctly fell through to the phonetic tier. With the
+        // gate, tier 1 is empty and tier 4's phonetic match resolves cup -> Koop (both
+        // code KP, length-matched, floored above the containment score).
+        var koop = new MusicArtist { Name = "Koop", Id = Guid.NewGuid() };
+        var porcupine = new MusicArtist { Name = "Porcupine Tree", Id = Guid.NewGuid() };
+        var codes = new Dictionary<Guid, (string Primary, string? Alternate)>
+        {
+            [koop.Id] = ("KP", null),
+            [porcupine.Id] = ("PRKPN", null),
+        };
+        var index = new FakeArtistIndex(new[] { koop, porcupine }, codes);
+
+        var result = await ArtistSearch.SearchAsync(
+            "cup",
+            user: null,
+            libraryManager: Mock.Of<ILibraryManager>(),
+            artistIndex: index,
+            logger: Logger,
+            dbQuery: NotCalled,
+            cancellationToken: CancellationToken.None);
+
+        Assert.Single(result);
+        Assert.Equal("Koop", result[0].Name);
+    }
+
     private static Task<IReadOnlyList<BaseItem>> NotCalled(
         InternalItemsQuery q, CancellationToken t) =>
         throw new InvalidOperationException("In-memory path must not hit the database");
@@ -226,8 +257,13 @@ public class ArtistSearchTests
     private sealed class FakeArtistIndex : IArtistIndex
     {
         private readonly IReadOnlyList<BaseItem> _artists;
+        private readonly Dictionary<Guid, (string Primary, string? Alternate)> _phoneticCodes;
 
-        public FakeArtistIndex(IEnumerable<BaseItem> artists) => _artists = artists.ToList();
+        public FakeArtistIndex(IEnumerable<BaseItem> artists, Dictionary<Guid, (string Primary, string? Alternate)>? phoneticCodes = null)
+        {
+            _artists = artists.ToList();
+            _phoneticCodes = phoneticCodes ?? new Dictionary<Guid, (string Primary, string? Alternate)>();
+        }
 
         public bool IsReady => true;
         public int Count => _artists.Count;
@@ -237,7 +273,7 @@ public class ArtistSearchTests
         public bool TryGetPhoneticCode(Guid artistId, out (string Primary, string? Alternate) codes)
         {
             codes = default;
-            return false;
+            return _phoneticCodes.TryGetValue(artistId, out codes);
         }
     }
 }
