@@ -3,10 +3,10 @@ id: JF-408
 title: >-
   PlayAlbum fuzzy fallback auto-plays 1-char album names on inflated
   partial-ratio scores ("walls for cup" matched album "O" @90)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-28 15:37'
-updated_date: '2026-08-28 16:46'
+updated_date: '2026-08-28 17:14'
 labels: []
 dependencies: []
 priority: high
@@ -61,17 +61,23 @@ AC #1/#2 REWRITTEN BY OUTCOME (was: matcher-level suppression test and handler g
 Full suite 2731 passed; Release -warnaserror 0 warnings 0 errors.
 <!-- SECTION:NOTES:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Coincidental-containment auto-plays fixed at the decision points after two review-driven redesigns: FuzzyMatcher stays pure recall (containment exemption unconditional, per the tier-4 contract), ArtistSearch.IsCoincidentalContainmentMatch gains the interior-occurrence rule (feeds the JF-377 yes/no prompt), and the new ArtistSearch.IsInteriorContainment gates the PlayAlbum fuzzy fallback. Live-verified on the deployed build: "walls for cup" returns not-found instead of playing album "O"; "xyznonexistentartist123" gets the disambiguation prompt instead of a silent auto-play of the garbage "artist" entity. Residual documented: album-side word-coverage predicate (3+ char interior shapes already covered; multi-word coincidences via album path remain theoretical).
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [x] #6 NLU test fixtures updated if interaction model changed
 - [ ] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining
 - [ ] #11 or findings applied/tracked)
 <!-- DOD:END -->

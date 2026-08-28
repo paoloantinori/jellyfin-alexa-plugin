@@ -3,11 +3,11 @@ id: JF-410
 title: >-
   PlaybackStarted handler stalls 11-20s inside SessionManager.OnPlaybackStart,
   breaching Alexa's 8s window (2x INVALID_RESPONSE on-device)
-status: In Progress
+status: Done
 assignee:
   - zai
 created_date: '2026-08-28 15:37'
-updated_date: '2026-08-28 16:46'
+updated_date: '2026-08-28 17:14'
 labels: []
 dependencies: []
 priority: medium
@@ -53,17 +53,23 @@ FOLLOW-UP RECORDED (code-review finding, not fixed here - outside diff scope): P
 Test fixed per review: the stall test awaited handleTask instead of blocking .Result (xUnit1031 under CI -warnaserror, reproduced by reviewer, build now clean).
 <!-- SECTION:NOTES:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Removed the server playback-start report from the Alexa response path: the keep-alive ack returns immediately while SessionManager.OnPlaybackStart runs as a tracked fire-and-forget with elapsed telemetry (warning above 2s). Closes the 2x INVALID_RESPONSE "Qualcosa è andato storto" on-device incidents (11.3s/20.6s stalls). Verified against Jellyfin v10.11.11 source that the stall-prone work sits behind real awaits; SlowReportMs telemetry is the on-device falsification instrument. Follow-up recorded: ResolveNextItemId prefers FullNowPlayingItem over AudioPlayer.Token (inverted vs the documented rule).
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
 - [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
+- [x] #6 NLU test fixtures updated if interaction model changed
 - [ ] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining
 - [ ] #11 or findings applied/tracked)
 <!-- DOD:END -->

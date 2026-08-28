@@ -3,11 +3,11 @@ id: JF-409
 title: >-
   NextTrackPrecomputeCache ignores currentTrackToken (doc-vs-code): stale entry
   re-enqueues the currently playing track
-status: In Progress
+status: Done
 assignee:
   - zai
 created_date: '2026-08-28 15:37'
-updated_date: '2026-08-28 16:46'
+updated_date: '2026-08-28 17:14'
 labels: []
 dependencies: []
 priority: high
@@ -52,17 +52,23 @@ Full suite: 2725 passed, 0 failed (dotnet test without --no-build).
 NOTE CORRECTION (code-review git-history finding): an earlier note here describes the composite key design ('deviceId|currentTrackToken', 'Invalidate clears all device-prefixed keys'). That was REPLACED during the /simplify pass before commit. The SHIPPED design: dictionary keyed by deviceId ALONE, the current-track token stored INSIDE the entry and validated on read (mismatch = miss + consume), Store replaces the single per-device entry (bounded), Invalidate is a plain per-device TryRemove. The entry-population and separator-duplication problems of the composite key are why it was redesigned; do not restore the composite key.
 <!-- SECTION:NOTES:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fixed the "Older Chests played twice" incident by making NextTrackPrecomputeCache honor its documented (deviceId, currentTrackToken) keying: one entry per device with the token stored inside and validated on read, consumed single-shot on TryGet (mismatch/expiry reclaim). TDD with 4 tests replicating the incident chain, full suite 2731 green, deployed to minix and verified active via MD5.
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
 - [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
+- [x] #6 NLU test fixtures updated if interaction model changed
 - [ ] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining
 - [ ] #11 or findings applied/tracked)
 <!-- DOD:END -->
