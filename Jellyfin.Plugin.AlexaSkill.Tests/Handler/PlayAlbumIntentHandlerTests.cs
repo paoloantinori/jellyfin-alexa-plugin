@@ -227,7 +227,10 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
     {
         // JF-411: "un disco dei Koop" (indefinite album-by-artist) fills only the musician
         // slot. The handler must resolve the artist's album and play it, not discard the
-        // artist behind an album-name reprompt.
+        // artist behind an album-name reprompt. The album resolution must filter on
+        // ALBUM artists (AlbumArtistIds): ArtistIds matches any album CONTAINING a track
+        // by the artist, which on the live library picked a compilation featuring Koop
+        // over Koop's own album.
         var handler = CreateHandler();
         var request = CreateIntentRequest(musician: "koop");
         SetupUserMock();
@@ -235,9 +238,11 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         var artist = new MusicArtist { Name = "Koop", Id = Guid.NewGuid() };
         var album = new MusicAlbum { Name = "Waltz for Koop", Id = Guid.NewGuid() };
         var track = new Audio { Name = "Baby", Id = Guid.NewGuid() };
+        var queries = new List<InternalItemsQuery>();
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns((InternalItemsQuery q) =>
             {
+                queries.Add(q);
                 if (q.IncludeItemTypes?.Contains(BaseItemKind.MusicArtist) == true)
                 {
                     return new List<BaseItem> { artist };
@@ -253,6 +258,14 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         Assert.NotNull(response);
         var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
         Assert.NotNull(playDirective);
+
+        // The indefinite-resolution query (the MusicAlbum query with no SearchTerm) must
+        // filter on album artists.
+        InternalItemsQuery? resolutionQuery = queries.FirstOrDefault(q =>
+            q.IncludeItemTypes?.Contains(BaseItemKind.MusicAlbum) == true && q.SearchTerm == null);
+        Assert.NotNull(resolutionQuery);
+        Assert.NotNull(resolutionQuery.AlbumArtistIds);
+        Assert.Contains(artist.Id, resolutionQuery.AlbumArtistIds);
     }
 
     [Fact]

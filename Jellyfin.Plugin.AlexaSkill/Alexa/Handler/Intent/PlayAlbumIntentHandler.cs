@@ -147,7 +147,7 @@ public class PlayAlbumIntentHandler : BaseHandler
         if (string.IsNullOrWhiteSpace(album) && artistsIds.Count > 0)
         {
             IReadOnlyList<BaseItem> artistAlbums = await RetryAsync(
-                () => _libraryManager.GetItemList(BuildAlbumQuery(jellyfinUser, user, searchTerm: null, artistIds: artistsIds.ToArray())),
+                () => _libraryManager.GetItemList(BuildAlbumQuery(jellyfinUser, user, searchTerm: null, artistIds: artistsIds.ToArray(), albumArtistsOnly: true)),
                 "GetArtistAlbums",
                 cancellationToken).ConfigureAwait(false);
 
@@ -439,7 +439,7 @@ public class PlayAlbumIntentHandler : BaseHandler
     /// Builds a MusicAlbum query scoped to the user's libraries (with library filtering).
     /// Pass a search term for the exact lookup, or null for the broad fuzzy-fallback scan.
     /// </summary>
-    private InternalItemsQuery BuildAlbumQuery(Jellyfin.Database.Implementations.Entities.User? jellyfinUser, Jellyfin.Plugin.AlexaSkill.Entities.User user, string? searchTerm, Guid[]? artistIds)
+    private InternalItemsQuery BuildAlbumQuery(Jellyfin.Database.Implementations.Entities.User? jellyfinUser, Jellyfin.Plugin.AlexaSkill.Entities.User user, string? searchTerm, Guid[]? artistIds, bool albumArtistsOnly = false)
     {
         var q = new InternalItemsQuery
         {
@@ -455,7 +455,17 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         if (artistIds is { Length: > 0 })
         {
-            q.ArtistIds = artistIds;
+            if (albumArtistsOnly)
+            {
+                // AlbumArtistIds matches albums BY the artist; ArtistIds would also match
+                // compilations merely CONTAINING a track by them (live finding: "un disco
+                // dei Koop" resolved to a compilation featuring Koop, not Koop's album).
+                q.AlbumArtistIds = artistIds;
+            }
+            else
+            {
+                q.ArtistIds = artistIds;
+            }
         }
 
         ApplyLibraryFilter(q, user, _libraryManager);
