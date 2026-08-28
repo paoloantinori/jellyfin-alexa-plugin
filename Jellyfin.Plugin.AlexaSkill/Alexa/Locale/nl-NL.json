@@ -168,6 +168,7 @@
   "ReminderDefaultMessage": "Dit is je Jellyfin herinnering.",
   "ElicitSongName": "Welk nummer wil je horen?",
   "ElicitAlbumName": "Welk album wil je horen?",
+  "ElicitArtistName": "Van welke artiest wil je een album beluisteren?",
   "ElicitSeriesName": "Welke serie wil je kijken?",
   "FuzzySuggestionPrompt": "Ik heb '{0}' niet gevonden. Bedoelde je '{1}'?",
   "FuzzySuggestionPromptSsml": "Ik heb '{0}' niet gevonden.<break time=\"200ms\"/>Bedoelde je <emphasis level=\"moderate\">{1}</emphasis>?",

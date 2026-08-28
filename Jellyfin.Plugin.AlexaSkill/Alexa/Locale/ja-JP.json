@@ -168,6 +168,7 @@
   "ReminderDefaultMessage": "これはJellyfinリマインダーです。",
   "ElicitSongName": "どの曲を聴きたいですか？",
   "ElicitAlbumName": "どのアルバムを聴きたいですか？",
+  "ElicitArtistName": "どのアーティストのアルバムを聴きたいですか？",
   "ElicitSeriesName": "どのシリーズを見たいですか？",
   "FuzzySuggestionPrompt": "'{0}' が見つかりませんでした。'{1}' のことですか？",
   "FuzzySuggestionPromptSsml": "'{0}' が見つかりませんでした。<break time=\"200ms\"/><emphasis level=\"moderate\">{1}</emphasis> のことですか？",

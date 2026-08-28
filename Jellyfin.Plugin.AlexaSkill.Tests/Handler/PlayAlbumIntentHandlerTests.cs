@@ -269,13 +269,14 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
-    public async Task HandleAsync_BothSlotsEmpty_ElicitsAlbumViaDialogDirective()
+    public async Task HandleAsync_BothSlotsEmpty_ElicitsMusicianViaDialogDirective()
     {
-        // JF-411 on-device follow-up: a plain Ask for the album name loses the
-        // conversational thread (the user's "quali ci sono" went to general NLU and
-        // surfaced unrelated recent content). Dialog.ElicitSlot keeps the session in the
-        // PlayAlbumIntent dialog so the next utterance fills the album slot and any
-        // already-filled slots (musician) are preserved.
+        // JF-411 on-device reproduction (3x: 20:23, 20:56): the device ASR swallows the
+        // short foreign artist name, so "un disco dei Koop" arrives as PlayAlbumIntent
+        // with BOTH slots empty (profile-nlu: "un disco di/dei" reproduces the shape).
+        // With no information at all, the useful question is WHICH ARTIST (the phrase
+        // shape is album-by-artist); eliciting the musician feeds the JF-411 resolution
+        // which plays an album without ever needing a title.
         var handler = CreateHandler();
         var request = CreateIntentRequest();
         SetupUserMock();
@@ -287,8 +288,27 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         Assert.NotNull(response.Response.Reprompt);
         var elicit = response.Response.Directives?.FirstOrDefault(d => d.Type == "Dialog.ElicitSlot") as Jellyfin.Plugin.AlexaSkill.Alexa.Directive.ElicitSlotDirective;
         Assert.NotNull(elicit);
-        Assert.Equal("album", elicit.SlotToElicit);
+        Assert.Equal("musician", elicit.SlotToElicit);
         Assert.Equal("PlayAlbumIntent", elicit.UpdatedIntent.Name);
+    }
+
+    [Fact]
+    public async Task HandleAsync_DialogInProgressWithMusician_ElicitsAlbumViaDialogDirective()
+    {
+        // Delegated dialog mid-flow: the musician is known and the phrasing implied an
+        // album title, so elicit the ALBUM slot (context preserved via Dialog.ElicitSlot).
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(musician: "queen");
+        request.DialogState = "IN_PROGRESS";
+        SetupUserMock();
+
+        SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.False(response.Response.ShouldEndSession);
+        var elicit = response.Response.Directives?.FirstOrDefault(d => d.Type == "Dialog.ElicitSlot") as Jellyfin.Plugin.AlexaSkill.Alexa.Directive.ElicitSlotDirective;
+        Assert.NotNull(elicit);
+        Assert.Equal("album", elicit.SlotToElicit);
     }
 
     [Fact]

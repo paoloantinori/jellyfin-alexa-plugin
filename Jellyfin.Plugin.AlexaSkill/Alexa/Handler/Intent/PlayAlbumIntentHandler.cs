@@ -97,15 +97,24 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         if (string.IsNullOrWhiteSpace(album))
         {
-            // Elicit the album title only when there is no artist to resolve it from, or
-            // when the delegated dialog is mid-flow (DialogState IN_PROGRESS means the
-            // model's dialog manager is eliciting a slot the user's phrasing implied).
-            // A fresh musician-only utterance ("un disco dei Koop", JF-411) instead falls
-            // through to the indefinite album-by-artist resolution below.
+            // Elicit via Dialog.ElicitSlot so the session stays in the PlayAlbumIntent
+            // dialog (the user's next utterance fills the slot; already-filled slots
+            // survive the round-trip). Which slot to ask for depends on what is known:
+            // - both empty (on-device 2026-08-28 20:23/20:56 x2: the ASR swallowed the
+            //   short artist name, "un disco dei Koop" arrived as "un disco dei"):
+            //   ask WHICH ARTIST; the answer feeds the JF-411 album-by-artist resolution
+            //   below, which plays without ever needing a title.
+            // - delegated dialog mid-flow with the musician known (DialogState
+            //   IN_PROGRESS): the phrasing implied a title, ask for the album.
             bool dialogInProgress = string.Equals(intentRequest.DialogState, "IN_PROGRESS", StringComparison.OrdinalIgnoreCase);
-            if (string.IsNullOrWhiteSpace(musician) || dialogInProgress)
+            if (string.IsNullOrWhiteSpace(musician))
             {
-                return BuildAlbumElicitResponse(locale);
+                return BuildSlotElicitResponse(IntentNames.Slots.Musician, "ElicitArtistName", locale);
+            }
+
+            if (dialogInProgress)
+            {
+                return BuildSlotElicitResponse(IntentNames.Slots.Album, "ElicitAlbumName", locale);
             }
         }
 
@@ -167,7 +176,7 @@ public class PlayAlbumIntentHandler : BaseHandler
         // or the JF-411 block above resolved it from the artist filter).
         if (string.IsNullOrWhiteSpace(album))
         {
-            return BuildAlbumElicitResponse(locale);
+            return BuildSlotElicitResponse(IntentNames.Slots.Album, "ElicitAlbumName", locale);
         }
 
         var albumSearchQuery = BuildAlbumQuery(jellyfinUser, user, album, artistsIds.ToArray());
@@ -441,19 +450,21 @@ public class PlayAlbumIntentHandler : BaseHandler
     /// Pass a search term for the exact lookup, or null for the broad fuzzy-fallback scan.
     /// </summary>
     /// <summary>
-    /// Builds the album-name elicitation as a Dialog.ElicitSlot response (not a plain Ask)
-    /// so the session stays in the PlayAlbumIntent dialog: the user's next utterance is
-    /// captured as the album slot and already-filled slots (musician) are preserved across
-    /// the round-trip. A plain Ask let follow-ups fall through to general NLU and lose the
-    /// thread (on-device 2026-08-28 20:23: "quali ci sono" after the elicit surfaced
-    /// unrelated recently-added content). Requires PlayAlbumIntent in dialog.intents with
+    /// Builds a slot elicitation as a Dialog.ElicitSlot response (not a plain Ask) so the
+    /// session stays in the PlayAlbumIntent dialog: the user's next utterance is captured
+    /// as the requested slot and already-filled slots survive the round-trip. A plain Ask
+    /// let follow-ups fall through to general NLU and lose the thread (on-device
+    /// 2026-08-28 20:23: "quali ci sono" after the elicit surfaced unrelated
+    /// recently-added content). Requires PlayAlbumIntent in dialog.intents with
     /// elicitationRequired=false (manual dialog control, CLAUDE.md anti-pattern #9).
     /// </summary>
+    /// <param name="slotName">The slot to elicit (musician when nothing is known, album when the artist is known).</param>
+    /// <param name="promptKey">The ResponseStrings key for the prompt.</param>
     /// <param name="locale">The request locale, for the prompt string.</param>
     /// <returns>The elicitation response.</returns>
-    private static SkillResponse BuildAlbumElicitResponse(string locale)
+    private static SkillResponse BuildSlotElicitResponse(string slotName, string promptKey, string locale)
     {
-        string prompt = ResponseStrings.Get("ElicitAlbumName", locale);
+        string prompt = ResponseStrings.Get(promptKey, locale);
         return new SkillResponse
         {
             Version = "1.0",
@@ -462,7 +473,7 @@ public class PlayAlbumIntentHandler : BaseHandler
                 ShouldEndSession = false,
                 OutputSpeech = new PlainTextOutputSpeech { Text = prompt },
                 Reprompt = new Reprompt(prompt),
-                Directives = new List<IDirective> { new ElicitSlotDirective(IntentNames.Slots.Album, IntentNames.PlayAlbum) }
+                Directives = new List<IDirective> { new ElicitSlotDirective(slotName, IntentNames.PlayAlbum) }
             }
         };
     }

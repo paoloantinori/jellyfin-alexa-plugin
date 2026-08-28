@@ -116,6 +116,7 @@
   "WhoAmIUnknown": "Todavía no reconozco tu voz. Di aprende mi voz para configurarlo.",
   "ElicitSongName": "¿Qué canción te gustaría escuchar?",
   "ElicitAlbumName": "¿Qué álbum te gustaría escuchar?",
+  "ElicitArtistName": "¿De qué artista quieres escuchar un álbum?",
   "ElicitSeriesName": "¿Qué serie te gustaría ver?",
   "ArtistInfoBioGenreAlbums": "{0} es un artista de {1} con {2} álbumes en tu biblioteca. {3}",
   "ArtistInfoBioGenre": "{0} es un artista de {1}. {2}",

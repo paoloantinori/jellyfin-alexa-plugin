@@ -168,6 +168,7 @@
   "ReminderDefaultMessage": "Questo e il tuo promemoria Jellyfin.",
   "ElicitSongName": "Quale canzone vuoi ascoltare?",
   "ElicitAlbumName": "Quale album vuoi ascoltare?",
+  "ElicitArtistName": "Di quale artista vuoi ascoltare un album?",
   "ElicitSeriesName": "Quale serie vorresti guardare?",
   "FuzzySuggestionPrompt": "Non ho trovato '{0}'. Intendevi '{1}'?",
   "FuzzySuggestionPromptSsml": "Non ho trovato '{0}'.<break time=\"200ms\"/>Intendevi <emphasis level=\"moderate\">{1}</emphasis>?",
