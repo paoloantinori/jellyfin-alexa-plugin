@@ -30,14 +30,10 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public class PlayArtistSongsIntentHandler : BaseHandler
 {
-    /// <summary>
-    /// Maximum extra characters a tier-1 containment candidate may have beyond the query.
-    /// Prevents coincidental substrings (e.g. "cup" in "Porcupine Tree") from short-
-    /// circuiting the search before the phonetic/fuzzy tiers can find the intended match.
-    /// JF-381.
-    /// </summary>
-    /// <summary>Shared with <see cref="Util.ArtistSearch"/> (JF-381); do not fork this value.</summary>
-    private const int Tier1ContainmentLengthBand = Util.ArtistSearch.Tier1ContainmentLengthBand;
+    // The JF-381 tier-1 containment band (maximum extra characters a containment
+    // candidate may have beyond the query, so "cup" in "Porcupine Tree" cannot short-
+    // circuit the search) lives in Util.ArtistSearch as the single shared definition;
+    // do not fork it back here.
 
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
@@ -141,7 +137,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             tierSw.Restart();
             artists = allArtists
                 .Where(a => a.Name.Contains(musician, StringComparison.OrdinalIgnoreCase)
-                    && a.Name.Length <= musician.Length + Tier1ContainmentLengthBand)
+                    && Util.ArtistSearch.PassesContainmentBand(a.Name, musician))
                 .ToList();
             tierSw.Stop();
             tierReached = 1;
@@ -255,6 +251,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 Logger.LogInformation(
                     "ArtistSearch: tier=1 duration={TierMs}ms results={Count} method=SearchTerm query='{Query}' mode=Fast",
                     tierSw.ElapsedMilliseconds, artists.Count, musician);
+                artists = FilterContainmentBand(artists, musician);
             }
             else
             {
@@ -278,6 +275,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 Logger.LogInformation(
                     "ArtistSearch: tier=1 duration={TierMs}ms results={Count} method=SearchTerm query='{Query}'",
                     tierSw.ElapsedMilliseconds, artists.Count, musician);
+                artists = FilterContainmentBand(artists, musician);
 
                 // Early-exit on tier 1 hit
                 if (artists.Count == 0)
@@ -557,6 +555,19 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             return null;
         }
 
-        return FuzzyMatch(musician, results, a => a.Name, user);
+        // JF-381 gate before fuzzy: the fallback queries are substring-shaped, so the
+        // candidate set itself can be purely coincidental ("cup" -> "Porcupine Tree").
+        return FuzzyMatch(musician, FilterContainmentBand(results, musician), a => a.Name, user);
     }
+
+    /// <summary>
+    /// Filters raw search results to the JF-381 containment band (shared predicate with
+    /// <see cref="Util.ArtistSearch"/>); used on the database-tier results, which unlike
+    /// the in-memory path have no later phonetic-over-full-index tier to self-correct.
+    /// </summary>
+    /// <param name="artists">Raw candidate artists.</param>
+    /// <param name="musician">The raw query.</param>
+    /// <returns>The filtered list.</returns>
+    private static List<BaseItem> FilterContainmentBand(IReadOnlyList<BaseItem> artists, string musician)
+        => artists.Where(a => Util.ArtistSearch.PassesContainmentBand(a.Name, musician)).ToList();
 }

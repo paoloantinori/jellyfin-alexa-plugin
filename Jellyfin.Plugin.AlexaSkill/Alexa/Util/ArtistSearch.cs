@@ -31,6 +31,19 @@ internal static class ArtistSearch
     /// </summary>
     internal const int Tier1ContainmentLengthBand = 10;
 
+    /// <summary>
+    /// Whether a candidate name is within the JF-381 containment band for the query.
+    /// Applied to EVERY containment-shaped candidate source (in-memory tier-1 filter,
+    /// database SearchTerm results, database NameContains results) in both search
+    /// implementations, so a short query inside a long name can never short-circuit the
+    /// tier chain before the phonetic tier runs.
+    /// </summary>
+    /// <param name="candidateName">The candidate's name.</param>
+    /// <param name="query">The raw query.</param>
+    /// <returns>True when the candidate may be a genuine containment match.</returns>
+    internal static bool PassesContainmentBand(string? candidateName, string query)
+        => !string.IsNullOrEmpty(candidateName) && candidateName.Length <= query.Length + Tier1ContainmentLengthBand;
+
     public static async Task<IReadOnlyList<BaseItem>> SearchAsync(
         string musician,
         Entities.User? user,
@@ -65,7 +78,7 @@ internal static class ArtistSearch
             tierSw.Restart();
             artists = allArtists
                 .Where(a => a.Name.Contains(musician, StringComparison.OrdinalIgnoreCase)
-                    && a.Name.Length <= musician.Length + Tier1ContainmentLengthBand)
+                    && PassesContainmentBand(a.Name, musician))
                 .ToList();
             tierSw.Stop();
             tierReached = 1;
@@ -140,7 +153,12 @@ internal static class ArtistSearch
             };
             LibraryFilter.ApplyLibraryFilter(query, user, libraryManager);
 
-            artists = await dbQuery(query, cancellationToken).ConfigureAwait(false);
+            // JF-381 gate on the raw database results too: SearchTerm matching can surface
+            // coincidental substrings, and unlike the in-memory path there is no later
+            // phonetic tier over the full index to correct them.
+            artists = (await dbQuery(query, cancellationToken).ConfigureAwait(false))
+                .Where(a => PassesContainmentBand(a.Name, musician))
+                .ToList();
 
             tierSw.Stop();
             tierReached = 1;
@@ -228,7 +246,11 @@ internal static class ArtistSearch
         LibraryFilter.ApplyLibraryFilter(query, user, libraryManager);
 
         IReadOnlyList<BaseItem> results = await dbQuery(query, cancellationToken).ConfigureAwait(false);
-        BaseItem? fuzzy = FuzzyMatch(searchTerm, results, user, null);
+
+        // JF-381 gate before fuzzy: NameContains is an explicit substring match, so the
+        // candidate set itself can be purely coincidental ("cup" -> "Porcupine Tree")
+        // and the fuzzy step would happily confirm it at ContainmentScore.
+        BaseItem? fuzzy = FuzzyMatch(searchTerm, results.Where(a => PassesContainmentBand(a.Name, searchTerm)).ToList(), user, null);
         return fuzzy != null ? new List<BaseItem> { fuzzy } : Array.Empty<BaseItem>();
     }
 

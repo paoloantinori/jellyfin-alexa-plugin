@@ -245,6 +245,37 @@ public class ArtistSearchTests
         Assert.Equal("Koop", result[0].Name);
     }
 
+    [Fact]
+    public async Task SearchAsync_DatabaseFallback_CoincidentalContainment_GatedEverywhere()
+    {
+        // JF-381 sweep: the DATABASE fallback tiers (SearchTerm tier-1 and the
+        // NameContains tier-4) return raw results, so the same "cup" -> "Porcupine Tree"
+        // coincidence that hit the in-memory tier-1 (live 2026-08-28 21:17) could surface
+        // whenever the artist index is not ready. Both DB tiers must gate the band.
+        var porcupine = new MusicArtist { Name = "Porcupine Tree", Id = Guid.NewGuid() };
+
+        Task<IReadOnlyList<BaseItem>> DbQuery(InternalItemsQuery q, CancellationToken t)
+        {
+            // SearchTerm / NameContains queries surface the coincidental substring;
+            // prefix queries (tier 2/3) legitimately find nothing.
+            IReadOnlyList<BaseItem> result = q.NameStartsWith != null
+                ? Array.Empty<BaseItem>()
+                : new[] { porcupine };
+            return Task.FromResult(result);
+        }
+
+        var result = await ArtistSearch.SearchAsync(
+            "cup",
+            user: null,
+            libraryManager: Mock.Of<ILibraryManager>(),
+            artistIndex: null,
+            logger: Logger,
+            dbQuery: DbQuery,
+            cancellationToken: CancellationToken.None);
+
+        Assert.DoesNotContain(result, a => a.Name == "Porcupine Tree");
+    }
+
     private static Task<IReadOnlyList<BaseItem>> NotCalled(
         InternalItemsQuery q, CancellationToken t) =>
         throw new InvalidOperationException("In-memory path must not hit the database");
