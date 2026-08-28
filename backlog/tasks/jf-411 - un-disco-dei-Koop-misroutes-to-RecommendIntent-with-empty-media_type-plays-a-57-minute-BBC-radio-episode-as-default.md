@@ -3,11 +3,11 @@ id: JF-411
 title: >-
   "un disco dei Koop" misroutes to RecommendIntent with empty media_type, plays
   a 57-minute BBC radio episode as default
-status: Done
+status: In Progress
 assignee:
   - zai
 created_date: '2026-08-28 15:38'
-updated_date: '2026-08-28 17:35'
+updated_date: '2026-08-28 18:32'
 labels: []
 dependencies: []
 priority: medium
@@ -51,6 +51,10 @@ FULL NLU RUN RESULT (941s, it-IT): 131 passed / 44 failed. All 44 failures are t
 Model deployment route note: the plugin's custom-model/rebuild endpoint only rebuilds CustomModelLocale (en-US here); the it-IT push was done directly via ask smapi set-interaction-model + status poll (SUCCEEDED), verified by get-interaction-model (398 samples) and the routing probe.
 
 Live verification (simulator, new DLL): musician-only 'koop' now plays 'Waltz for Koop' track 1 after the AlbumArtistIds correction (first attempt picked a compilation containing Koop; fixed and redeployed).
+
+ON-DEVICE VERIFICATION FOLLOW-UP (20:23): the user's device sent PlayAlbumIntent with BOTH slots EMPTY (session new, dialogState STARTED), so the handler hit the both-empty elicit ('Quale album vuoi ascoltare?'); the follow-up 'quali ci sono' routed to QueryRecentlyAddedIntent (recent content, context lost) and the user stopped. profile-nlu probes CANNOT reproduce the empty-empty shape: 'un disco dei koop', clitic forms (mettimi/suonami), 'qualche disco dei koop', 'ascolto un disco dei koop', 'un disco dei cop/cup' all fill musician correctly post-push. Probes DID find two real defects: desiderative forms bleed the whole phrase into the slot ('vorrei un disco dei koop' -> musician='1 disco dei koop') and there are no carrier-anchored album forms.
+
+HARDENING ITERATION: adding 'vorrei (ascoltare) un disco/un album di/dei {musician}' (fixes the bleed) and carrier-anchored 'un disco/un album della band/del gruppo {musician}' (anchors on-device slot fill, same rationale as artist_carrier) to the it-IT template; regenerate + push + probe. If the empty-empty shape recurs on-device after this, next hypothesis is one-shot NLU divergence (needs the exact spoken phrase from the user at repro time).
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
