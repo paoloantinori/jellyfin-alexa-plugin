@@ -7,7 +7,7 @@ status: Done
 assignee:
   - zai
 created_date: '2026-08-28 15:38'
-updated_date: '2026-08-28 19:41'
+updated_date: '2026-08-28 20:37'
 labels: []
 dependencies: []
 priority: medium
@@ -71,6 +71,8 @@ HARNESS FINDING: ask smapi simulate-skill (development) PERSISTS the session acr
 CONSOLE TEST ROUND (21:02-21:17, user-driven per my script): the ElicitSlot round-trip WORKED (21:04:43: the answer arrived as PlayAlbumIntent musician=koop and played). Two real failures found and fixed same-round: (1) fast-speech 'cup' played Porcupine Tree ('Blackest Eyes') via the album path - SearchAsync tier-1 lacked the JF-381 length gate that only the inline PlayArtistSongs copy had (the JF-382 duplication diverging exactly as documented); gate ported, band constant now shared, cup -> Koop simulator-verified. (2) SessionEndedRequest ERROR INVALID_RESPONSE 'All slots must be defined when sending updated intent in the Dialog.ElicitSlot directive. Missing: album' - updatedIntent now declares every intent slot; FindSong unaffected (single-slot intent). Suite 2734 green; deployed and simulator-verified both.
 
 AUDIT SWEEP (user-prompted: 'have you checked other places?'): every containment-shaped artist-search source is now gated through the single shared predicate ArtistSearch.PassesContainmentBand. Sites: in-memory tier-1 in BOTH implementations (ArtistSearch.SearchAsync + inline PlayArtistSongs, the latter refactored from its private const to the shared one), the DATABASE fallback tier-1 (raw SearchTerm results), and both NameContains fallbacks (ArtistSearch.ContainsSearchAsync, inline TrySearchFallbackAsync - where fuzzy-over-a-purely-coincidental candidate set would confirm at ContainmentScore). Prefix-shaped tiers (NameStartsWith) left ungated: a name starting with the query is not the coincidental shape. Non-artist containment paths (songs KeywordMatcher with its 100% coverage gate, albums with the interior gate) use different, already-documented mechanisms. Suite 2735 (new DB-path test red pre-gate), deployed, live cup->Waltz for Koop regression re-verified after the sweep.
+
+E2E CLOSURE (22:0x-22:4x): full suite with live env = 44/56, all 12 failures were the simulate-skill session hijack. Root-caused fully: the open Dialog.ElicitSlot captures ANY next utterance into titleKeywords (including the invocation prefix on one-shots), so stop/cancel never reach the built-ins and the FindSong session persisted forever. Fixes: (1) PRODUCT - FindSong cancel-word escape hatch (bare stop/ferma/annulla/... in captured keywords -> orphaned FindSongCancelled string as a session-ending Tell; unit-tested, live-probed: bare 'stop' -> 'Ok, ho interrotto la ricerca.' endSession=true); (2) HARNESS - autouse bare-'stop' reset before each e2e test (prefixed forms cannot trigger the hatch: the capture swallows the prefix). Rerun of the failed subset: 13/14 green; the only residual failure is 'riproduci album jazz cafe', the PRE-EXISTING unroutable phrase (no profile-nlu winner before today's changes; JF-332/JF-412 territory), not a regression. Remaining known-failing e2e: that one phrase.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
