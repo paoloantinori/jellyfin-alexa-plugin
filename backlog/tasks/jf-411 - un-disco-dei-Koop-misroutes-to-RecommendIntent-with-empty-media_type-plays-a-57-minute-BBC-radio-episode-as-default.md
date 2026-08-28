@@ -7,7 +7,7 @@ status: Done
 assignee:
   - zai
 created_date: '2026-08-28 15:38'
-updated_date: '2026-08-28 19:28'
+updated_date: '2026-08-28 19:41'
 labels: []
 dependencies: []
 priority: medium
@@ -69,6 +69,8 @@ FULL-PIPELINE AUTONOMOUS VERIFICATION: after clearing a stale simulation session
 HARNESS FINDING: ask smapi simulate-skill (development) PERSISTS the session across sequential simulations. The first Koop simulation inherited FindSongSessionData with Keywords='chiedi a mia collezione di riproduci album jazz cafe' from a prior e2e fixture run and the request came through as SessionEndedRequest. Strong candidate root cause for the 44 e2e full-chain divergences (fixtures inheriting the previous fixture's FindSong session; the controller routes IntentRequests with FindSongSessionData to the FindSong handler). The e2e harness should reset the session between fixtures (simulate a session-ending phrase, or order fixtures to avoid cross-pollution) - fold into the e2e divergence follow-up.
 
 CONSOLE TEST ROUND (21:02-21:17, user-driven per my script): the ElicitSlot round-trip WORKED (21:04:43: the answer arrived as PlayAlbumIntent musician=koop and played). Two real failures found and fixed same-round: (1) fast-speech 'cup' played Porcupine Tree ('Blackest Eyes') via the album path - SearchAsync tier-1 lacked the JF-381 length gate that only the inline PlayArtistSongs copy had (the JF-382 duplication diverging exactly as documented); gate ported, band constant now shared, cup -> Koop simulator-verified. (2) SessionEndedRequest ERROR INVALID_RESPONSE 'All slots must be defined when sending updated intent in the Dialog.ElicitSlot directive. Missing: album' - updatedIntent now declares every intent slot; FindSong unaffected (single-slot intent). Suite 2734 green; deployed and simulator-verified both.
+
+AUDIT SWEEP (user-prompted: 'have you checked other places?'): every containment-shaped artist-search source is now gated through the single shared predicate ArtistSearch.PassesContainmentBand. Sites: in-memory tier-1 in BOTH implementations (ArtistSearch.SearchAsync + inline PlayArtistSongs, the latter refactored from its private const to the shared one), the DATABASE fallback tier-1 (raw SearchTerm results), and both NameContains fallbacks (ArtistSearch.ContainsSearchAsync, inline TrySearchFallbackAsync - where fuzzy-over-a-purely-coincidental candidate set would confirm at ContainmentScore). Prefix-shaped tiers (NameStartsWith) left ungated: a name starting with the query is not the coincidental shape. Non-artist containment paths (songs KeywordMatcher with its 100% coverage gate, albums with the interior gate) use different, already-documented mechanisms. Suite 2735 (new DB-path test red pre-gate), deployed, live cup->Waltz for Koop regression re-verified after the sweep.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
