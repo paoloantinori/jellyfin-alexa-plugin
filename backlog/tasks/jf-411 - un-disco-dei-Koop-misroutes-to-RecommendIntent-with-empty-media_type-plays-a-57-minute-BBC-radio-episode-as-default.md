@@ -7,7 +7,7 @@ status: Done
 assignee:
   - zai
 created_date: '2026-08-28 15:38'
-updated_date: '2026-08-28 19:06'
+updated_date: '2026-08-28 19:28'
 labels: []
 dependencies: []
 priority: medium
@@ -67,6 +67,8 @@ FINAL UX FIX: with both slots empty the handler now elicits the MUSICIAN ('Di qu
 FULL-PIPELINE AUTONOMOUS VERIFICATION: after clearing a stale simulation session ('chiedi a mia collezione ferma'), simulate-skill of the exact one-shot phrase 'chiedi a mia collezione un disco dei koop' (ASR+NLU+endpoint, no device) yields PlayAlbumIntent(musician=koop) -> AudioPlayer.Play of 'Waltz for Koop' (Koop feat. Cecilia Stalin, track 1). The complete user flow is now verified without a physical device; only the real-device ASR swallow remains physical-only, with the verified elicit fallback covering it.
 
 HARNESS FINDING: ask smapi simulate-skill (development) PERSISTS the session across sequential simulations. The first Koop simulation inherited FindSongSessionData with Keywords='chiedi a mia collezione di riproduci album jazz cafe' from a prior e2e fixture run and the request came through as SessionEndedRequest. Strong candidate root cause for the 44 e2e full-chain divergences (fixtures inheriting the previous fixture's FindSong session; the controller routes IntentRequests with FindSongSessionData to the FindSong handler). The e2e harness should reset the session between fixtures (simulate a session-ending phrase, or order fixtures to avoid cross-pollution) - fold into the e2e divergence follow-up.
+
+CONSOLE TEST ROUND (21:02-21:17, user-driven per my script): the ElicitSlot round-trip WORKED (21:04:43: the answer arrived as PlayAlbumIntent musician=koop and played). Two real failures found and fixed same-round: (1) fast-speech 'cup' played Porcupine Tree ('Blackest Eyes') via the album path - SearchAsync tier-1 lacked the JF-381 length gate that only the inline PlayArtistSongs copy had (the JF-382 duplication diverging exactly as documented); gate ported, band constant now shared, cup -> Koop simulator-verified. (2) SessionEndedRequest ERROR INVALID_RESPONSE 'All slots must be defined when sending updated intent in the Dialog.ElicitSlot directive. Missing: album' - updatedIntent now declares every intent slot; FindSong unaffected (single-slot intent). Suite 2734 green; deployed and simulator-verified both.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
