@@ -3,11 +3,11 @@ id: JF-411
 title: >-
   "un disco dei Koop" misroutes to RecommendIntent with empty media_type, plays
   a 57-minute BBC radio episode as default
-status: In Progress
+status: Done
 assignee:
   - zai
 created_date: '2026-08-28 15:38'
-updated_date: '2026-08-28 18:32'
+updated_date: '2026-08-28 19:06'
 labels: []
 dependencies: []
 priority: medium
@@ -55,6 +55,18 @@ Live verification (simulator, new DLL): musician-only 'koop' now plays 'Waltz fo
 ON-DEVICE VERIFICATION FOLLOW-UP (20:23): the user's device sent PlayAlbumIntent with BOTH slots EMPTY (session new, dialogState STARTED), so the handler hit the both-empty elicit ('Quale album vuoi ascoltare?'); the follow-up 'quali ci sono' routed to QueryRecentlyAddedIntent (recent content, context lost) and the user stopped. profile-nlu probes CANNOT reproduce the empty-empty shape: 'un disco dei koop', clitic forms (mettimi/suonami), 'qualche disco dei koop', 'ascolto un disco dei koop', 'un disco dei cop/cup' all fill musician correctly post-push. Probes DID find two real defects: desiderative forms bleed the whole phrase into the slot ('vorrei un disco dei koop' -> musician='1 disco dei koop') and there are no carrier-anchored album forms.
 
 HARDENING ITERATION: adding 'vorrei (ascoltare) un disco/un album di/dei {musician}' (fixes the bleed) and carrier-anchored 'un disco/un album della band/del gruppo {musician}' (anchors on-device slot fill, same rationale as artist_carrier) to the it-IT template; regenerate + push + probe. If the empty-empty shape recurs on-device after this, next hypothesis is one-shot NLU divergence (needs the exact spoken phrase from the user at repro time).
+
+CONTEXT-LOSS FIX (the user's core complaint): the album elicit converted from plain Ask to Dialog.ElicitSlot(album) on PlayAlbumIntent (registered in dialog.intents, elicitationRequired=false), so follow-ups during the elicit stay in the intent's dialog and filled slots survive. Simulator-verified on the deployed build: empty PlayAlbumIntent returns Dialog.ElicitSlot slotToElicit=album, session open. Model hardening pushed and probe-verified (vorrei + carrier forms fill musician=koop). Suite 2732 green. The broader audit of other multi-step flows is now JF-413; the multilingual roll-out is JF-414.
+
+NOTE for the retry: the 20:23 empty-slots arrival was most plausibly an ASR/NLU flake or an uncovered phrasing; with the hardened model and the ElicitSlot fallback, 'un disco dei Koop' should either play Waltz for Koop directly or, worst case, keep the thread through the elicit instead of jumping to recent content.
+
+THIRD+FOURTH on-device reproduction (20:56 x2, live-watched): both requests arrived as PlayAlbumIntent with bare slot stubs (no value at all). profile-nlu REPRODUCES the shape with the truncated 'un disco di' / 'un disco dei' (selected PlayAlbumIntent, slots None): the device ASR swallows the short foreign artist name. Not a model defect; a capture-robustness issue.
+
+FINAL UX FIX: with both slots empty the handler now elicits the MUSICIAN ('Di quale artista vuoi ascoltare un album?', ElicitArtistName added to all 17 locale files) instead of the album title; the answer feeds the album-by-artist resolution and plays without a title. Album-title elicit remains for delegated-dialog IN_PROGRESS with musician known. Simulator-verified on the deployed build. Expected on-device flow: 'un disco dei Koop' (koop swallowed) -> 'Di quale artista?' -> 'koop' -> Waltz for Koop.
+
+FULL-PIPELINE AUTONOMOUS VERIFICATION: after clearing a stale simulation session ('chiedi a mia collezione ferma'), simulate-skill of the exact one-shot phrase 'chiedi a mia collezione un disco dei koop' (ASR+NLU+endpoint, no device) yields PlayAlbumIntent(musician=koop) -> AudioPlayer.Play of 'Waltz for Koop' (Koop feat. Cecilia Stalin, track 1). The complete user flow is now verified without a physical device; only the real-device ASR swallow remains physical-only, with the verified elicit fallback covering it.
+
+HARNESS FINDING: ask smapi simulate-skill (development) PERSISTS the session across sequential simulations. The first Koop simulation inherited FindSongSessionData with Keywords='chiedi a mia collezione di riproduci album jazz cafe' from a prior e2e fixture run and the request came through as SessionEndedRequest. Strong candidate root cause for the 44 e2e full-chain divergences (fixtures inheriting the previous fixture's FindSong session; the controller routes IntentRequests with FindSongSessionData to the FindSong handler). The e2e harness should reset the session between fixtures (simulate a session-ending phrase, or order fixtures to avoid cross-pollution) - fold into the e2e divergence follow-up.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
