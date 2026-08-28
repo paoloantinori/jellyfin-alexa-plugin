@@ -333,9 +333,10 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         // auto-playing (the bug) or silently rejecting (which regresses the carrier-bleed real-artist
         // case), offer a yes/no prompt. A real artist still plays after the user says "yes"; nonsense
         // resolves to not-found after "no". The check keys on the match SHAPE (not the tier): the
-        // predicate returns false for the legitimate shapes that must still auto-play below, namely
-        // candidate >= query length (ASR truncation, e.g. "radiohed" -> "Radiohead") and coverage >=
-        // half the query content words (a real multi-word near-match).
+        // predicate returns false for the legitimate shapes that must still auto-play below, among
+        // them candidate >= query length (ASR truncation, e.g. "radiohed" -> "Radiohead"), coverage
+        // >= half the query content words (a real multi-word near-match), and boundary-touching
+        // containments (whole-word or affixed forms like "outkasts" -> "outkast", JF-408).
         if (artists.Count == 1
             && ArtistSearch.IsCoincidentalContainmentMatch(musician, artists[0].Name, locale))
         {

@@ -512,6 +512,30 @@ tests:
     expected_slots:
       album: {}
 
+  # JF-411: indefinite album-by-artist forms. Before these samples existed,
+  # "un disco dei <artist>" routed to AMAZON.FallbackIntent (profile-nlu winner
+  # with PlayAlbum/PlayArtistSongs only "considered"), which on-device cascaded
+  # into Fallback "Non ho capito" and a RecommendIntent misroute (2026-08-28).
+  - utterance: "un disco dei queen"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "un album di michael jackson"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "Suona un disco dei queen"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "Metti un album di michael jackson"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      musician: {}
+
   # NOTE: "il cd" as an album carrier is weak (NLU routes "metti il cd X" to
   # PlaySongIntent) and album fixtures must use library-present albums (AlbumName
   # is catalog-backed post-JF-332, so "la cura"/"thriller" only resolve if the

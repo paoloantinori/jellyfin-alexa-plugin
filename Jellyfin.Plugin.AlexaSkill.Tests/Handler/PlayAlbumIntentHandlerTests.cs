@@ -8,6 +8,7 @@ using global::Alexa.NET.Request;
 using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
 using global::Alexa.NET.Response.Directive;
+using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
@@ -62,7 +63,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
             _queueManager);
     }
 
-    private static IntentRequest CreateIntentRequest(string? album = null)
+    private static IntentRequest CreateIntentRequest(string? album = null, string? musician = null)
     {
         var intent = new Intent { Name = IntentNames.PlayAlbum };
         intent.Slots = new Dictionary<string, global::Alexa.NET.Request.Slot>();
@@ -70,6 +71,11 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         if (album != null)
         {
             intent.Slots["album"] = new global::Alexa.NET.Request.Slot { Name = "album", Value = album };
+        }
+
+        if (musician != null)
+        {
+            intent.Slots["musician"] = new global::Alexa.NET.Request.Slot { Name = "musician", Value = musician };
         }
 
         return new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req" };
@@ -183,6 +189,64 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         SetupAlbumsAndTracks(
             new List<BaseItem> { album },
             new QueryResult<BaseItem> { Items = new[] { track }, TotalRecordCount = 1 });
+
+        SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.NotNull(playDirective);
+    }
+
+    [Fact]
+    public async Task HandleAsync_InteriorContainmentFuzzyMatch_DoesNotAutoPlay()
+    {
+        // JF-408 incident replay (live 2026-08-28): query "walls for cup" (ASR for "Waltz for
+        // Koop") fuzzy-matched album "O" at ContainmentScore because the query contains an 'o'
+        // inside "for", and auto-played it on-device. The fuzzy match is returned by the recall
+        // layer; the auto-play decision must reject an interior-only containment.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(album: "walls for cup");
+        SetupUserMock();
+
+        // Exact search (SearchTerm set) must miss; the fuzzy fallback's full-catalog scan
+        // (SearchTerm null) returns the degenerate 1-char album.
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => q.SearchTerm == null
+                ? new List<BaseItem> { new MusicAlbum { Name = "O", Id = Guid.NewGuid() } }
+                : new List<BaseItem>());
+
+        SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.Null(playDirective);
+    }
+
+    [Fact]
+    public async Task HandleAsync_MusicianOnly_PlaysArtistsAlbum()
+    {
+        // JF-411: "un disco dei Koop" (indefinite album-by-artist) fills only the musician
+        // slot. The handler must resolve the artist's album and play it, not discard the
+        // artist behind an album-name reprompt.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(musician: "koop");
+        SetupUserMock();
+
+        var artist = new MusicArtist { Name = "Koop", Id = Guid.NewGuid() };
+        var album = new MusicAlbum { Name = "Waltz for Koop", Id = Guid.NewGuid() };
+        var track = new Audio { Name = "Baby", Id = Guid.NewGuid() };
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) =>
+            {
+                if (q.IncludeItemTypes?.Contains(BaseItemKind.MusicArtist) == true)
+                {
+                    return new List<BaseItem> { artist };
+                }
+
+                return new List<BaseItem> { album };
+            });
+        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem> { Items = new[] { track }, TotalRecordCount = 1 });
 
         SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
 

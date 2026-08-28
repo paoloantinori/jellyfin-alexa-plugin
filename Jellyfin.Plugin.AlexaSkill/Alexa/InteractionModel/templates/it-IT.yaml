@@ -811,6 +811,21 @@ templates:
       - "{infinitive} {album_noun} {album}"
       - "{imperative} {album_noun} {album} {artist_article} {musician}"
       - "{infinitive} {album_noun} {album} {artist_article} {musician}"
+      # JF-411: indefinite album-by-artist forms ("un disco dei Koop" routed to
+      # FallbackIntent/RecommendIntent on-device because no sample carried the
+      # musician without an album title).
+      - "un disco di {musician}"
+      - "un album di {musician}"
+      - "un disco dei {musician}"
+      - "un album dei {musician}"
+      - "{imperative} un disco di {musician}"
+      - "{imperative} un album di {musician}"
+      - "{imperative} un disco dei {musician}"
+      - "{imperative} un album dei {musician}"
+      - "{infinitive} un disco di {musician}"
+      - "{infinitive} un album di {musician}"
+      - "{infinitive} un disco dei {musician}"
+      - "{infinitive} un album dei {musician}"
       - "c'e un album chiamato {album}"
       - "c'e un disco chiamato {album}"
       - "Fai suonare l'album {album}"

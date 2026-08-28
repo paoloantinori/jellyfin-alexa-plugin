@@ -225,9 +225,13 @@ internal static class ArtistSearch
     /// shape from JF-377 (e.g. query "zzzqqq nonexistent artist" vs artist "artist"): the
     /// containment shortcut in FuzzyMatcher.PartialRatio scores it 90, but only one of three
     /// content words belongs to the candidate, so it is unrelated noise rather than an intended
-    /// match. Returns false for every legitimate shape: candidate at least as long as the query
-    /// (ASR truncation), candidate not a substring of the query (genuine fuzzy-distance match),
-    /// or the candidate's words covering at least half the query's content words.
+    /// match. Also true for the JF-408 interior shape: every occurrence of the candidate strictly
+    /// inside another word (artist "artist" in "xyznonexistentartist123"), which the coverage
+    /// rule cannot see in single-content-word queries. Returns false for every legitimate shape:
+    /// candidate at least as long as the query (ASR truncation), candidate not a substring of the
+    /// query (genuine fuzzy-distance match), the candidate's words covering at least half the
+    /// query's content words, or a containment that touches a token boundary somewhere (whole-word
+    /// or affixed forms like "outkasts" -> "outkast").
     /// <para>
     /// This NARROWS the JF-342 invariant in FuzzyMatcher.ApplyLengthPenalty (which exempts ALL
     /// contained candidates from the length penalty as "a real near-exact match"): the low-coverage
@@ -267,6 +271,19 @@ internal static class ArtistSearch
             return false;
         }
 
+        // JF-408 residual (found via the simulator on the deployed build): a containment whose
+        // every occurrence is strictly INTERIOR (word characters on both sides) is riding
+        // inside another word ("artist" inside "xyznonexistentartist123" auto-played a
+        // garbage-metadata artist). The coverage rule below cannot see this in single-token
+        // queries (fewer than 2 content words short-circuits to "not coincidental"), so the
+        // interior shape is detected here. Prefix/suffix shapes ("outkasts" -> "outkast",
+        // plural or affixed real names) are NOT interior and fall through to the coverage
+        // rule so legit affixed matches keep auto-playing.
+        if (HasOnlyInteriorOccurrences(q, c))
+        {
+            return true;
+        }
+
         // Coverage = fraction of the query's CONTENT words (stop words excluded) that appear
         // among the candidate's content words. KeywordMatcher.Tokenize strips locale carrier/
         // grammar words (so it-IT "suona la musica di bush" -> [bush], not [suona, la, musica,
@@ -296,6 +313,60 @@ internal static class ArtistSearch
         // Reject only when the candidate covers a minority (strictly under half) of the query's
         // content words. At-or-above half is a plausible multi-word near-match and is kept.
         return covered * 2 < queryTokens.Length;
+    }
+
+    /// <summary>
+    /// Whether the candidate name occurs in the query ONLY strictly inside other words
+    /// (word characters on both sides of every occurrence). This is the coincidental
+    /// containment shape (JF-408): album "O" via the 'o' in "walls for cup", artist
+    /// "artist" inside "xyznonexistentartist123". Whole-word and affixed occurrences
+    /// ("outkasts" -> "outkast") are boundary-touching and return false. Used by
+    /// auto-play decision points that have no full word-coverage predicate (the
+    /// PlayAlbum fuzzy fallback); the artist path uses the richer
+    /// <see cref="IsCoincidentalContainmentMatch"/>.
+    /// </summary>
+    /// <param name="query">The raw query string.</param>
+    /// <param name="candidateName">The matched candidate's name.</param>
+    /// <returns>True when the candidate is contained and every occurrence is interior.</returns>
+    internal static bool IsInteriorContainment(string query, string candidateName)
+    {
+        if (string.IsNullOrWhiteSpace(query) || string.IsNullOrWhiteSpace(candidateName))
+        {
+            return false;
+        }
+
+        return HasOnlyInteriorOccurrences(query.Trim(), candidateName.Trim());
+    }
+
+    /// <summary>
+    /// Whether every occurrence of <paramref name="needle"/> in <paramref name="haystack"/>
+    /// is strictly interior: word characters on BOTH sides (an occurrence touching a token
+    /// boundary, including prefix/suffix of a longer word such as the plural form
+    /// "outkasts" -> "outkast", disqualifies). See <see cref="IsCoincidentalContainmentMatch"/>.
+    /// </summary>
+    /// <param name="haystack">The query string.</param>
+    /// <param name="needle">The candidate name.</param>
+    /// <returns>True when all occurrences are interior; false when there is none or any is boundary-touching.</returns>
+    private static bool HasOnlyInteriorOccurrences(string haystack, string needle)
+    {
+        int index = 0;
+        bool any = false;
+        while ((index = haystack.IndexOf(needle, index, StringComparison.OrdinalIgnoreCase)) >= 0)
+        {
+            any = true;
+            bool leftIsWordChar = index > 0 && char.IsLetterOrDigit(haystack[index - 1]);
+            int end = index + needle.Length;
+            bool rightIsWordChar = end < haystack.Length && char.IsLetterOrDigit(haystack[end]);
+
+            if (!(leftIsWordChar && rightIsWordChar))
+            {
+                return false;
+            }
+
+            index++;
+        }
+
+        return any;
     }
 
     private static BaseItem? FuzzyMatch(string query, IReadOnlyList<BaseItem> candidates, Entities.User? user,

@@ -622,5 +622,21 @@ public class FuzzyMatcherTests
         Assert.Equal("jazz", result!.Name);
     }
 
+    [Fact]
+    public void FindBestMatch_ShortRealNameInCarrierBleedQuery_StillMatches()
+    {
+        // JF-408 code-review regression lock: the matcher is the RECALL layer; a 1-2 char
+        // real artist name contained as a whole word in a carrier-bleed query must keep its
+        // containment score so it can reach the caller-side JF-377 prompt path. A length
+        // floor here turned this shape into a silent not-found ("suona la musica di u2"
+        // vs "U2" dropped from 90 to 8 and never reached the handler).
+        var items = new List<TestItem> { new("U2") };
+
+        TestItem? result = FuzzyMatcher.FindBestMatch("suona la musica di u2", items, i => i.Name);
+
+        Assert.NotNull(result);
+        Assert.Equal("U2", result!.Name);
+    }
+
     private record TestItemWithId(string Name, Guid Id);
 }

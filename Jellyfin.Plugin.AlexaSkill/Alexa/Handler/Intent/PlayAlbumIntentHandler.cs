@@ -96,7 +96,16 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         if (string.IsNullOrWhiteSpace(album))
         {
-            return ResponseBuilder.Ask(ResponseStrings.Get("ElicitAlbumName", locale), new Reprompt(ResponseStrings.Get("ElicitAlbumName", locale)));
+            // Elicit the album title only when there is no artist to resolve it from, or
+            // when the delegated dialog is mid-flow (DialogState IN_PROGRESS means the
+            // model's dialog manager is eliciting a slot the user's phrasing implied).
+            // A fresh musician-only utterance ("un disco dei Koop", JF-411) instead falls
+            // through to the indefinite album-by-artist resolution below.
+            bool dialogInProgress = string.Equals(intentRequest.DialogState, "IN_PROGRESS", StringComparison.OrdinalIgnoreCase);
+            if (string.IsNullOrWhiteSpace(musician) || dialogInProgress)
+            {
+                return ResponseBuilder.Ask(ResponseStrings.Get("ElicitAlbumName", locale), new Reprompt(ResponseStrings.Get("ElicitAlbumName", locale)));
+            }
         }
 
         RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
@@ -129,6 +138,35 @@ public class PlayAlbumIntentHandler : BaseHandler
             {
                 artistsIds.Add(artist.Id);
             }
+        }
+
+        // JF-411: "un disco dei X" (indefinite album-by-artist, e.g. "un disco dei Koop") fills
+        // only the musician slot. Rather than discarding the artist behind an album-name
+        // reprompt (which loops when the user repeats the phrase), resolve one of the artist's
+        // albums and play it.
+        if (string.IsNullOrWhiteSpace(album) && artistsIds.Count > 0)
+        {
+            IReadOnlyList<BaseItem> artistAlbums = await RetryAsync(
+                () => _libraryManager.GetItemList(BuildAlbumQuery(jellyfinUser, user, searchTerm: null, artistIds: artistsIds.ToArray())),
+                "GetArtistAlbums",
+                cancellationToken).ConfigureAwait(false);
+
+            if (artistAlbums.Count == 0)
+            {
+                return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByArtist", locale, matchedArtistName!));
+            }
+
+            album = artistAlbums[0].Name;
+            Logger.LogInformation(
+                "PlayAlbum: no album title given, picked '{Album}' by artist '{Artist}' (indefinite album-by-artist, JF-411)",
+                album, matchedArtistName);
+        }
+
+        // Flow guard: past this point an album title is guaranteed (either the user said one
+        // or the JF-411 block above resolved it from the artist filter).
+        if (string.IsNullOrWhiteSpace(album))
+        {
+            return ResponseBuilder.Ask(ResponseStrings.Get("ElicitAlbumName", locale), new Reprompt(ResponseStrings.Get("ElicitAlbumName", locale)));
         }
 
         var albumSearchQuery = BuildAlbumQuery(jellyfinUser, user, album, artistsIds.ToArray());
@@ -170,14 +208,28 @@ public class PlayAlbumIntentHandler : BaseHandler
             var fuzzyMatch = FuzzyMatcher.FindBestMatchWithScore(album, allAlbums, a => a.Name);
             if (fuzzyMatch.HasValue && fuzzyMatch.Value.Score >= FuzzyMatcher.GetDefaultThreshold(user))
             {
-                Logger.LogInformation(
-                    "PlayAlbum: fuzzy fallback matched album '{Name}' score={Score} for query='{Query}'",
-                    fuzzyMatch.Value.Item.Name, fuzzyMatch.Value.Score, album);
-                albums = new List<BaseItem> { fuzzyMatch.Value.Item };
-                // The exact search missed, so the matched album name may differ from
-                // what the user said (accents, spelling). Announce it so voice-only
-                // devices know which album is playing (JF-339).
-                fuzzyAlbumAnnouncement = ResponseStrings.Get("FoundAlbumInstead", locale, fuzzyMatch.Value.Item.Name);
+                if (Util.ArtistSearch.IsInteriorContainment(album, fuzzyMatch.Value.Item.Name))
+                {
+                    // JF-408: the match exists only inside other words of the query (live
+                    // incident: album "O" scored ContainmentScore against "walls for cup",
+                    // ASR for "Waltz for Koop", and auto-played on-device). The recall layer
+                    // must keep returning such candidates; the auto-play decision must not
+                    // act on them.
+                    Logger.LogInformation(
+                        "PlayAlbum: fuzzy fallback match '{Name}' score={Score} for query='{Query}' is interior containment, not auto-playing (JF-408)",
+                        fuzzyMatch.Value.Item.Name, fuzzyMatch.Value.Score, album);
+                }
+                else
+                {
+                    Logger.LogInformation(
+                        "PlayAlbum: fuzzy fallback matched album '{Name}' score={Score} for query='{Query}'",
+                        fuzzyMatch.Value.Item.Name, fuzzyMatch.Value.Score, album);
+                    albums = new List<BaseItem> { fuzzyMatch.Value.Item };
+                    // The exact search missed, so the matched album name may differ from
+                    // what the user said (accents, spelling). Announce it so voice-only
+                    // devices know which album is playing (JF-339).
+                    fuzzyAlbumAnnouncement = ResponseStrings.Get("FoundAlbumInstead", locale, fuzzyMatch.Value.Item.Name);
+                }
             }
         }
 

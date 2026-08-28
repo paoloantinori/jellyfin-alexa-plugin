@@ -396,7 +396,14 @@ internal static class FuzzyMatcher
     /// candidate is the shorter side, under half the query length, and NOT contained in the
     /// query. Legitimate matches are unaffected: ASR-truncation matches have the candidate
     /// LONGER than the query (this branch does not apply), and a candidate genuinely
-    /// contained in the query is exempt (a real near-exact match).
+    /// contained in the query is exempt (a real near-exact match). Coincidental
+    /// containment is NOT judged here: this is the recall layer (the tier-4 contract is
+    /// "SearchAsync returns, the predicate judges"), and a 1-2 char real name riding a
+    /// carrier-bleed query ("suona la musica di u2" -> "U2") must keep its containment
+    /// score so it can reach the caller. Auto-play decision points carry the guards:
+    /// the artist path uses ArtistSearch.IsCoincidentalContainmentMatch (JF-377 word
+    /// coverage + JF-408 interior-occurrence rule), the PlayAlbum fuzzy fallback uses
+    /// ArtistSearch.IsInteriorContainment (JF-408). Do NOT tighten this exemption.
     /// </summary>
     private static int ApplyLengthPenalty(string query, string candidate, int score)
     {

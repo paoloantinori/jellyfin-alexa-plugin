@@ -104,6 +104,26 @@ public class ArtistSearchTests
     }
 
     [Fact]
+    public void IsCoincidentalContainmentMatch_InteriorContainmentSingleTokenQuery_True()
+    {
+        // JF-408 residual (found via the simulator on the deployed build): the query is ONE
+        // content token, so the coverage rule cannot see the coincidence. The library had an
+        // artist literally named "artist" (garbage metadata) and "xyznonexistentartist123"
+        // auto-played it. A containment whose every occurrence is strictly INTERIOR (word
+        // characters on both sides) is riding inside another word and is coincidental.
+        Assert.True(ArtistSearch.IsCoincidentalContainmentMatch("xyznonexistentartist123", "artist", "it-IT"));
+    }
+
+    [Fact]
+    public void IsCoincidentalContainmentMatch_PluralAffixedSingleToken_False()
+    {
+        // No-regression lock for the interior rule: "outkasts" -> "outkast" is a PREFIX-shaped
+        // containment in a single-token query (a plural/affixed form of the real name) and must
+        // keep auto-playing, not be downgraded to a prompt.
+        Assert.False(ArtistSearch.IsCoincidentalContainmentMatch("outkasts", "outkast", "en-US"));
+    }
+
+    [Fact]
     public async Task SearchAsync_Tier4_RealMultiWordNearMatch_StillResolves()
     {
         // No-regression: a genuine near-match where the candidate is contained in the query
