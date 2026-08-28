@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,6 +28,13 @@ public class PlaybackStartedEventHandler : BaseHandler
     private readonly ILibraryManager? _libraryManager;
 
     /// <summary>
+    /// Server playback-start reports slower than this are logged at WARNING (not DEBUG) so
+    /// they surface at the default log level without grep-pod (JF-410: live stalls were
+    /// 11-20s and only visible by diffing log timestamps).
+    /// </summary>
+    private const long SlowReportMs = 2000;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="PlaybackStartedEventHandler"/> class.
     /// </summary>
     /// <param name="sessionManager">Instance of the <see cref="ISessionManager"/> interface.</param>
@@ -50,16 +58,17 @@ public class PlaybackStartedEventHandler : BaseHandler
     }
 
     /// <summary>
-    /// Set the currently started media as playing, and (when PreEnqueueOnStart is on)
-    /// pre-compute the next track's resolution so PlaybackNearlyFinished can respond
-    /// instantly when it fires (JF-390). NOTE: Amazon REJECTS AudioPlayer.Play
-    /// directives in PlaybackStarted responses ("must not contain more than 0
-    /// AudioPlayer.Play directive(s) for this request type"), so we can only
-    /// PRE-COMPUTE here, not pre-enqueue. The pre-computed data is stored in
+    /// Schedules the server-side playback-start report (position/PlayState update,
+    /// off the response path, JF-410) and (when PreEnqueueOnStart is on) pre-computes
+    /// the next track's resolution so PlaybackNearlyFinished can respond instantly
+    /// when it fires (JF-390). NOTE: Amazon REJECTS AudioPlayer.Play directives in
+    /// PlaybackStarted responses ("must not contain more than 0 AudioPlayer.Play
+    /// directive(s) for this request type"), so we can only PRE-COMPUTE here, not
+    /// pre-enqueue. The pre-computed data is stored in
     /// <see cref="NextTrackPrecomputeCache"/> and consumed by
     /// PlaybackNearlyFinishedEventHandler.
     /// </summary>
-    public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
+    public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         AudioPlayerRequest req = (AudioPlayerRequest)request;
 
@@ -78,7 +87,12 @@ public class PlaybackStartedEventHandler : BaseHandler
             PlaybackStartTimeTicks = startTicks,
         };
 
-        await SessionManager.OnPlaybackStart(playbackStartInfo).ConfigureAwait(false);
+        // JF-410: report playback to the server OUTSIDE the Alexa response path. This call
+        // stalled 11.3s/20.6s inside Jellyfin on-device (twice on 2026-08-28, breaching
+        // Alexa's ~8s window and surfacing as INVALID_RESPONSE "Qualcosa è andato storto"),
+        // and nothing in the keep-alive ack depends on its result. Elapsed time is logged
+        // (warning above SlowReportMs) so future stalls localize to this call immediately.
+        RunFireAndForget(ReportPlaybackStartAsync(playbackStartInfo), "PlaybackStartReport");
 
         // JF-393 diagnostic interaction logging: record playback start so later control
         // intents can report elapsed time since start (JF-392 data collection).
@@ -112,7 +126,42 @@ public class PlaybackStartedEventHandler : BaseHandler
         // control intents (Pause/Resume/Next/Previous/Stop) are auto-routed by the
         // platform while audio plays, independent of this ack. See CLAUDE.md
         // "AudioPlayer event restrictions" and the feedback_should_end_session note.
-        return BuildKeepAliveResponse();
+        return Task.FromResult(BuildKeepAliveResponse());
+    }
+
+    /// <summary>
+    /// Reports playback start to the Jellyfin server as a fire-and-forget side effect with
+    /// elapsed-time logging. The method runs concurrently with the response (only its
+    /// synchronous prefix, up to the first await inside OnPlaybackStart, executes before
+    /// HandleAsync returns). Exceptions are swallowed after logging: a failed report must
+    /// not surface to the user (the next playback event re-reports position anyway).
+    /// </summary>
+    /// <param name="playbackStartInfo">The playback-start report to send.</param>
+    private async Task ReportPlaybackStartAsync(PlaybackStartInfo playbackStartInfo)
+    {
+        try
+        {
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            await SessionManager.OnPlaybackStart(playbackStartInfo).ConfigureAwait(false);
+            stopwatch.Stop();
+
+            if (stopwatch.ElapsedMilliseconds > SlowReportMs)
+            {
+                Logger.LogWarning(
+                    "PlaybackStarted: server playback-start report took {ElapsedMs}ms for item {Token} (slow, but no longer blocks the Alexa response; JF-410)",
+                    stopwatch.ElapsedMilliseconds, playbackStartInfo.ItemId);
+            }
+            else
+            {
+                Logger.LogDebug(
+                    "PlaybackStarted: server playback-start report completed in {ElapsedMs}ms",
+                    stopwatch.ElapsedMilliseconds);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "PlaybackStarted: server playback-start report failed for item {Token}", playbackStartInfo.ItemId);
+        }
     }
 
     /// <summary>

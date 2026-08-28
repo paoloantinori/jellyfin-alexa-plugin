@@ -97,6 +97,31 @@ public class EventHandlerTests : PluginTestBase
     }
 
     [Fact]
+    public async Task PlaybackStarted_Handle_ServerReportStalls_StillResponds()
+    {
+        // JF-410: OnPlaybackStart stalled 11.3s/20.6s inside Jellyfin on-device (breaching
+        // Alexa's ~8s window, INVALID_RESPONSE, "Qualcosa è andato storto"). The keep-alive
+        // ack must not wait on the server-side playback report: respond immediately, report
+        // in the background.
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _sessionManagerMock
+            .Setup(s => s.OnPlaybackStart(It.IsAny<PlaybackStartInfo>()))
+            .Returns(gate.Task);
+
+        var handler = new PlaybackStartedEventHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+        var request = CreateAudioPlayerRequest("AudioPlayer.PlaybackStarted");
+
+        var handleTask = handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+        var winner = await Task.WhenAny(handleTask, Task.Delay(TimeSpan.FromSeconds(1)));
+
+        Assert.Same(handleTask, winner);
+        Assert.NotNull(await handleTask);
+
+        gate.TrySetResult();
+        _sessionManagerMock.Verify(s => s.OnPlaybackStart(It.IsAny<PlaybackStartInfo>()), Times.Once);
+    }
+
+    [Fact]
     public async Task PlaybackStarted_Handle_DoesNotSetShouldEndSessionFalse()
     {
         // JF-299: AudioPlayer.PlaybackStarted responses must NOT set shouldEndSession=false.
