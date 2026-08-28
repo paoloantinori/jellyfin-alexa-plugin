@@ -9,6 +9,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -104,7 +105,7 @@ public class PlayAlbumIntentHandler : BaseHandler
             bool dialogInProgress = string.Equals(intentRequest.DialogState, "IN_PROGRESS", StringComparison.OrdinalIgnoreCase);
             if (string.IsNullOrWhiteSpace(musician) || dialogInProgress)
             {
-                return ResponseBuilder.Ask(ResponseStrings.Get("ElicitAlbumName", locale), new Reprompt(ResponseStrings.Get("ElicitAlbumName", locale)));
+                return BuildAlbumElicitResponse(locale);
             }
         }
 
@@ -166,7 +167,7 @@ public class PlayAlbumIntentHandler : BaseHandler
         // or the JF-411 block above resolved it from the artist filter).
         if (string.IsNullOrWhiteSpace(album))
         {
-            return ResponseBuilder.Ask(ResponseStrings.Get("ElicitAlbumName", locale), new Reprompt(ResponseStrings.Get("ElicitAlbumName", locale)));
+            return BuildAlbumElicitResponse(locale);
         }
 
         var albumSearchQuery = BuildAlbumQuery(jellyfinUser, user, album, artistsIds.ToArray());
@@ -439,6 +440,33 @@ public class PlayAlbumIntentHandler : BaseHandler
     /// Builds a MusicAlbum query scoped to the user's libraries (with library filtering).
     /// Pass a search term for the exact lookup, or null for the broad fuzzy-fallback scan.
     /// </summary>
+    /// <summary>
+    /// Builds the album-name elicitation as a Dialog.ElicitSlot response (not a plain Ask)
+    /// so the session stays in the PlayAlbumIntent dialog: the user's next utterance is
+    /// captured as the album slot and already-filled slots (musician) are preserved across
+    /// the round-trip. A plain Ask let follow-ups fall through to general NLU and lose the
+    /// thread (on-device 2026-08-28 20:23: "quali ci sono" after the elicit surfaced
+    /// unrelated recently-added content). Requires PlayAlbumIntent in dialog.intents with
+    /// elicitationRequired=false (manual dialog control, CLAUDE.md anti-pattern #9).
+    /// </summary>
+    /// <param name="locale">The request locale, for the prompt string.</param>
+    /// <returns>The elicitation response.</returns>
+    private static SkillResponse BuildAlbumElicitResponse(string locale)
+    {
+        string prompt = ResponseStrings.Get("ElicitAlbumName", locale);
+        return new SkillResponse
+        {
+            Version = "1.0",
+            Response = new ResponseBody
+            {
+                ShouldEndSession = false,
+                OutputSpeech = new PlainTextOutputSpeech { Text = prompt },
+                Reprompt = new Reprompt(prompt),
+                Directives = new List<IDirective> { new ElicitSlotDirective(IntentNames.Slots.Album, IntentNames.PlayAlbum) }
+            }
+        };
+    }
+
     private InternalItemsQuery BuildAlbumQuery(Jellyfin.Database.Implementations.Entities.User? jellyfinUser, Jellyfin.Plugin.AlexaSkill.Entities.User user, string? searchTerm, Guid[]? artistIds, bool albumArtistsOnly = false)
     {
         var q = new InternalItemsQuery

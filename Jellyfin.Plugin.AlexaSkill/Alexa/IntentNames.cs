@@ -72,10 +72,11 @@ internal static class IntentNames
     /// </summary>
     public const string ProactiveSubscriptionChanged = "AlexaSkillEvent.ProactiveSubscriptionChanged";
 
-    /// <summary>Alexa slot name constants used across FindSong handlers.</summary>
+    /// <summary>Alexa slot name constants used across handlers.</summary>
     public static class Slots
     {
         public const string TitleKeywords = "titleKeywords";
         public const string Musician = "musician";
+        public const string Album = "album";
     }
 }

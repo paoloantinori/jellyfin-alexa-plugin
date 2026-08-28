@@ -269,6 +269,29 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
+    public async Task HandleAsync_BothSlotsEmpty_ElicitsAlbumViaDialogDirective()
+    {
+        // JF-411 on-device follow-up: a plain Ask for the album name loses the
+        // conversational thread (the user's "quali ci sono" went to general NLU and
+        // surfaced unrelated recent content). Dialog.ElicitSlot keeps the session in the
+        // PlayAlbumIntent dialog so the next utterance fills the album slot and any
+        // already-filled slots (musician) are preserved.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest();
+        SetupUserMock();
+
+        SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.False(response.Response.ShouldEndSession);
+        Assert.NotNull(response.Response.Reprompt);
+        var elicit = response.Response.Directives?.FirstOrDefault(d => d.Type == "Dialog.ElicitSlot") as Jellyfin.Plugin.AlexaSkill.Alexa.Directive.ElicitSlotDirective;
+        Assert.NotNull(elicit);
+        Assert.Equal("album", elicit.SlotToElicit);
+        Assert.Equal("PlayAlbumIntent", elicit.UpdatedIntent.Name);
+    }
+
+    [Fact]
     public async Task HandleAsync_SingleAlbum_AnnounceAudioPlaysOffByDefault_SilentLaunch()
     {
         // JF-353 AC#4 / JF-352.4: audio plays are silent by default. Even with the video-launch
