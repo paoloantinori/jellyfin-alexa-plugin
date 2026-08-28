@@ -128,6 +128,32 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
     }
 
     [Fact]
+    public async Task CapturedCancelWord_EndsFlowWithTell()
+    {
+        // Escape hatch from the elicitation trap: while a Dialog.ElicitSlot is open,
+        // Alexa captures the user's next utterance INTO the slot, so stop/cancel words
+        // arrive here as keywords instead of AMAZON.Stop/CancelIntent (observed via
+        // simulate-skill and the console 2026-08-28: "stop"/"ferma" fed the keywords and
+        // the FindSong session never ended, hijacking every subsequent utterance). A
+        // bare cancel word must end the flow cleanly.
+        SetupJellyfinUser();
+        var user = CreateTestUser();
+        var session = CreateSession();
+
+        var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
+        {
+            ["titleKeywords"] = "stop"
+        });
+
+        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, null, CancellationToken.None);
+
+        Assert.True(response.Response.ShouldEndSession != false, "cancel word must end the session");
+        var speech = (response.Response.OutputSpeech as PlainTextOutputSpeech)?.Text ?? string.Empty;
+        Assert.False(string.IsNullOrWhiteSpace(speech), "cancel response must speak the FindSongCancelled string");
+        Assert.True(response.Response.Directives?.Any(d => d.Type == "Dialog.ElicitSlot") != true, "cancel word must not re-elicit");
+    }
+
+    [Fact]
     public async Task FirstInvocation_WithTitleKeywordsSlot_EntersAwaitingArtist()
     {
         SetupJellyfinUser();

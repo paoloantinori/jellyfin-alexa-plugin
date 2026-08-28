@@ -151,6 +151,18 @@ public class FindSongIntentHandler : BaseHandler
 
         Logger.LogDebug("FindSong: entered, intent={Intent}, locale={Locale}", intentRequest.Intent.Name, locale);
 
+        // Escape hatch from the elicitation trap: while a Dialog.ElicitSlot is open,
+        // Alexa captures the user's next utterance INTO the elicited slot, so stop/cancel
+        // words arrive here as titleKeywords instead of AMAZON.Stop/CancelIntent and the
+        // dialog would never end (observed via simulate-skill and the console 2026-08-28:
+        // "stop"/"ferma" fed the keywords and every subsequent utterance stayed hijacked
+        // into the FindSong session). A bare cancel word ends the flow cleanly.
+        if (IsCancelWord(GetSlotValue(intentRequest, "titleKeywords")))
+        {
+            Logger.LogInformation("FindSong: captured keywords '{Keywords}' is a cancel word, ending flow", GetSlotValue(intentRequest, "titleKeywords"));
+            return ResponseBuilder.Tell(ResponseStrings.Get("FindSongCancelled", locale));
+        }
+
         // Read existing session state
         FindSongSessionData? sessionData = ReadSessionData(sessionAttributes);
 
@@ -178,6 +190,26 @@ public class FindSongIntentHandler : BaseHandler
     /// When the artist is provided upfront, resolves the artist ID immediately so
     /// the search is artist-scoped and doesn't need to re-ask for the artist later.
     /// </summary>
+    /// <summary>
+    /// Bare stop/cancel words (language-neutral across the skill's locales). While a
+    /// Dialog.ElicitSlot is open these arrive captured into the elicited slot instead of
+    /// routing to AMAZON.Stop/CancelIntent; treating them as an implicit cancel gives the
+    /// user a guaranteed way out of the elicitation flow.
+    /// </summary>
+    private static readonly HashSet<string> CancelWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "stop", "ferma", "fermare", "fermo", "ferma tutto", "annulla", "annullare", "cancella", "basta", "stoppa", "arresta", "cancel",
+    };
+
+    /// <summary>
+    /// Whether the captured slot text is exactly a stop/cancel word (trimmed, whole-value
+    /// match only: a keyword phrase merely containing "stop" is a legitimate search).
+    /// </summary>
+    /// <param name="slotValue">The raw captured slot value.</param>
+    /// <returns>True when the value is a bare cancel word.</returns>
+    private static bool IsCancelWord(string? slotValue)
+        => !string.IsNullOrWhiteSpace(slotValue) && CancelWords.Contains(slotValue.Trim());
+
     private async Task<SkillResponse> HandleFirstInvocationAsync(Request request, Context context, Entities.User user, SessionInfo session, string locale, CancellationToken cancellationToken)
     {
         var intentRequest = (IntentRequest)request;

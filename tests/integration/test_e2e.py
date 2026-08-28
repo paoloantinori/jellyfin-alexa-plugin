@@ -38,6 +38,34 @@ def e2e_smapi_client(skill_id, smapi_delay, e2e_fixture):
     )
 
 
+@pytest.fixture(autouse=True)
+def _reset_simulation_session(skill_id, smapi_delay):
+    """End the persistent simulate-skill session before each E2E test.
+
+    simulate-skill (development stage) PERSISTS the session across sequential
+    simulations: a FindSong elicitation left open by one fixture rides along as
+    FindSongSessionData, and the controller routes every subsequent IntentRequest to
+    FindSongIntent regardless of the utterance (observed live 2026-08-28: 'pausa' and
+    'metti una canzone dei soul coughin' both resolved to FindSongIntent; verified by
+    inspecting the inherited session attributes in the simulation payload). A BARE
+    'stop' (no invocation prefix: in the open dialog it is captured into the elicited
+    slot, where the handler's cancel-word escape hatch ends the session with a Tell)
+    resets the state. Prefixed one-shots do NOT work here: the dialog capture includes
+    the invocation prefix in the slot value. Best-effort: a failed reset surfaces
+    downstream as the recognizable find-song-hijack pattern.
+    """
+    reset_client = SmapiClient(
+        skill_id=skill_id,
+        locale="it-IT",
+        delay=smapi_delay,
+        invocation_name="",
+    )
+    try:
+        reset_client.simulate("stop")
+    except Exception as exc:  # noqa: BLE001 - reset is best effort
+        logger.warning("Session reset simulation failed (continuing): %s", exc)
+
+
 @pytest.mark.e2e
 def test_e2e_full_chain(request, e2e_fixture, e2e_smapi_client, jellyfin_client):
     """Full-chain test: utterance -> NLU -> skill -> response + side effects."""
