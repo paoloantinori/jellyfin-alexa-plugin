@@ -826,6 +826,20 @@ templates:
       - "{infinitive} un album di {musician}"
       - "{infinitive} un disco dei {musician}"
       - "{infinitive} un album dei {musician}"
+      # JF-411 hardening: desiderative forms previously bled the whole phrase into
+      # the musician slot (profile-nlu: "vorrei un disco dei koop" -> musician
+      # "1 disco dei koop"); carrier-anchored forms give the on-device NLU an
+      # explicit fill anchor (same rationale as artist_carrier).
+      - "vorrei un disco di {musician}"
+      - "vorrei un disco dei {musician}"
+      - "vorrei un album di {musician}"
+      - "vorrei un album dei {musician}"
+      - "vorrei ascoltare un disco di {musician}"
+      - "vorrei ascoltare un album di {musician}"
+      - "un disco della band {musician}"
+      - "un album della band {musician}"
+      - "un disco del gruppo {musician}"
+      - "un album del gruppo {musician}"
       - "c'e un album chiamato {album}"
       - "c'e un disco chiamato {album}"
       - "Fai suonare l'album {album}"
