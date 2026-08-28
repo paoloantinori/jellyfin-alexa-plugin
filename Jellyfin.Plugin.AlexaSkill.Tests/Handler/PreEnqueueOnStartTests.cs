@@ -8,6 +8,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Entities;
@@ -195,5 +196,90 @@ public class PreEnqueueOnStartTests : PluginTestBase
 
         var directives = response.Response?.Directives ?? new List<IDirective>();
         Assert.DoesNotContain(directives, d => d.Type == "AudioPlayer.Play");
+    }
+
+    // JF-409: the cache is documented as keyed by (deviceId, currentTrackToken) but the
+    // implementation keyed by deviceId alone, so an entry stored for a PREVIOUS track
+    // could be served for the current one and re-enqueue it on itself.
+    [Fact]
+    public void Cache_TryGet_WithDifferentCurrentToken_MissesEvenWithinTtl()
+    {
+        var deviceId = "device-jf409-" + Guid.NewGuid().ToString("N"); // unique per test: isolation without shared state
+        var tokenA = Guid.NewGuid().ToString();
+        var tokenB = Guid.NewGuid().ToString();
+        var nextId = Guid.NewGuid();
+        NextTrackPrecomputeCache.Store(deviceId, tokenA, nextId, new Audio { Name = "Next", Id = nextId }, "https://stream/next");
+
+        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, tokenB, out _, out _, out _));
+
+    }
+
+    // JF-409 regression guard: the matching-token lookup must keep hitting.
+    [Fact]
+    public void Cache_TryGet_WithSameCurrentToken_Hits()
+    {
+        var deviceId = "device-jf409-" + Guid.NewGuid().ToString("N"); // unique per test: isolation without shared state
+        var tokenA = Guid.NewGuid().ToString();
+        var nextId = Guid.NewGuid();
+        NextTrackPrecomputeCache.Store(deviceId, tokenA, nextId, new Audio { Name = "Next", Id = nextId }, "https://stream/next");
+
+        Assert.True(NextTrackPrecomputeCache.TryGet(deviceId, tokenA, out Guid cachedId, out _, out string? streamUrl));
+        Assert.Equal(nextId, cachedId);
+        Assert.Equal("https://stream/next", streamUrl);
+
+    }
+
+    // JF-409: a stored entry is single-shot. On-device, PlaybackNearlyFinished consumed
+    // the entry for track N-1 but nothing removed it, so a later NearlyFinished for the
+    // SAME context could serve it again (and re-enqueue a track on itself).
+    [Fact]
+    public void Cache_TryGet_ConsumesEntry_SingleShot()
+    {
+        var deviceId = "device-jf409-" + Guid.NewGuid().ToString("N"); // unique per test: isolation without shared state
+        var tokenA = Guid.NewGuid().ToString();
+        var nextId = Guid.NewGuid();
+        NextTrackPrecomputeCache.Store(deviceId, tokenA, nextId, new Audio { Name = "Next", Id = nextId }, "https://stream/next");
+
+        Assert.True(NextTrackPrecomputeCache.TryGet(deviceId, tokenA, out _, out _, out _));
+        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, tokenA, out _, out _, out _));
+
+    }
+
+    // JF-409 incident replay (live 2026-08-28: "Older Chests" enqueued on itself):
+    // Started(trackA) precomputes next=trackB; NearlyFinished(trackA) consumes it;
+    // Started(trackB) has nothing to precompute (trackB is last in the not-yet-extended
+    // progressive queue). NearlyFinished(trackB) must NOT be served the stale entry.
+    [Fact]
+    public async Task PlaybackStarted_AfterTransition_DoesNotServeStaleEntryForNewCurrentTrack()
+    {
+        _config.PreEnqueueOnStart = true;
+        var trackA = Guid.NewGuid();
+        var trackB = Guid.NewGuid();
+        SetupLibraryItem(trackB, "Track B");
+        var deviceId = "device-jf409-" + Guid.NewGuid().ToString("N");
+        var queue = new List<QueueItem> { new() { Id = trackA }, new() { Id = trackB } };
+        var handler = CreateHandler();
+
+        // 1) Started(trackA) -> stores (device, trackA -> trackB)
+        var contextA = CreateContext(trackA.ToString());
+        contextA.System.Device = new global::Alexa.NET.Request.Device { DeviceID = deviceId };
+        await handler.HandleAsync(
+            CreateStartedRequest(trackA.ToString()), contextA, TestHelpers.CreateTestUser(),
+            CreateSession(queue, trackA), CancellationToken.None);
+
+        // 2) NearlyFinished(trackA) consumes the precomputed entry
+        Assert.True(NextTrackPrecomputeCache.TryGet(deviceId, trackA.ToString(), out Guid consumedId, out _, out _));
+        Assert.Equal(trackB, consumedId);
+
+        // 3) Started(trackB): last item of the (not yet extended) queue -> nothing stored
+        var contextB = CreateContext(trackB.ToString());
+        contextB.System.Device = new global::Alexa.NET.Request.Device { DeviceID = deviceId };
+        await handler.HandleAsync(
+            CreateStartedRequest(trackB.ToString()), contextB, TestHelpers.CreateTestUser(),
+            CreateSession(queue, trackB), CancellationToken.None);
+
+        // 4) NearlyFinished(trackB) must NOT get a hit (the live bug re-enqueued trackB here)
+        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, trackB.ToString(), out _, out _, out _));
+
     }
 }
