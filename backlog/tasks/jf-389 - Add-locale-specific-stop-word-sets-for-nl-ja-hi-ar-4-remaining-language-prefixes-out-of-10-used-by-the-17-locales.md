@@ -3,9 +3,11 @@ id: JF-389
 title: >-
   Add locale-specific stop word sets for nl/ja/hi/ar (4 remaining language
   prefixes out of 10 used by the 17 locales)
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - zai
 created_date: '2026-08-21 11:16'
+updated_date: '2026-08-29 06:19'
 labels:
   - enhancement
   - i18n
@@ -32,21 +34,27 @@ The ja case needs care: the existing test Tokenize_JaJP_NoParticle keeps 'no' be
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Add stop word sets for nl (Dutch), ja (Japanese), hi (Hindi), ar (Arabic) to the StopWords dictionary in KeywordMatcher.cs
-- [ ] #2 Each set should contain the most common function words (articles, prepositions, conjunctions, pronouns) for that language, following the same pattern as the existing en/it/de/fr/es/pt sets
-- [ ] #3 Unit tests: Tokenize with nl-NL, ja-JP, hi-IN, ar-SA inputs strips the locale-specific stop words
-- [ ] #4 The English stop words must still be stripped under ALL locales (existing behavior, guard test)
-- [ ] #5 No regression: existing 2656 tests green
+- [x] #1 Add stop word sets for nl (Dutch), ja (Japanese), hi (Hindi), ar (Arabic) to the StopWords dictionary in KeywordMatcher.cs
+- [x] #2 Each set should contain the most common function words (articles, prepositions, conjunctions, pronouns) for that language, following the same pattern as the existing en/it/de/fr/es/pt sets
+- [x] #3 Unit tests: Tokenize with nl-NL, ja-JP, hi-IN, ar-SA inputs strips the locale-specific stop words
+- [x] #4 The English stop words must still be stripped under ALL locales (existing behavior, guard test)
+- [x] #5 No regression: existing 2656 tests green
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Completed the StopWords coverage: nl/ja/hi/ar sets (romaji/romanized + native-script forms), completing all 11 language prefixes used by the 17 locales. The ja 'no' ambiguity resolved by deliberate exclusion with the rationale documented in both the set comment and the guard test (same reasoning as the JF-383 abbreviation-map exclusion). Load-bearing invariant verified: no canonical abbreviation output is a stop word in any new set. 4 new unit tests + updated unknown-locale test; suite 2746 green.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
 - [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
 - [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
+- [x] #6 NLU test fixtures updated if interaction model changed
 - [ ] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 17 locales
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
