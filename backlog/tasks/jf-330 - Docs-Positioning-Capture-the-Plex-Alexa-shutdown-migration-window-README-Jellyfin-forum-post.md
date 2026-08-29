@@ -3,10 +3,10 @@ id: JF-330
 title: >-
   Docs/Positioning: Capture the Plex-Alexa-shutdown migration window (README +
   Jellyfin forum post)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-12 15:01'
-updated_date: '2026-07-13 20:17'
+updated_date: '2026-08-29 14:43'
 labels:
   - docs
   - positioning
@@ -29,12 +29,18 @@ This plugin's advantages over the surveyed alternatives: Jellyfin-native (no sep
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 README has a concise positioning section aimed at users leaving Plex's discontinued Alexa skill, listing verified capabilities and honest platform limits
-- [ ] #2 Claims are limited to features that actually exist in the codebase (no fabricated comparisons/benchmarks)
-- [ ] #3 Platform limitations (no native seek bar, Stop/Next routing, custom-skill constraints) are stated plainly so expectations are set
-- [ ] #4 Optionally, a draft Jellyfin-forum post is prepared for the migration audience
-- [ ] #5 Sources for the Plex-shutdown claim are cited where the date is stated
+- [x] #1 README has a concise positioning section aimed at users leaving Plex's discontinued Alexa skill, listing verified capabilities and honest platform limits
+- [x] #2 Claims are limited to features that actually exist in the codebase (no fabricated comparisons/benchmarks)
+- [x] #3 Platform limitations (no native seek bar, Stop/Next routing, custom-skill constraints) are stated plainly so expectations are set
+- [x] #4 Optionally, a draft Jellyfin-forum post is prepared for the migration audience
+- [x] #5 Sources for the Plex-shutdown claim are cited where the date is stated
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+README positioning section added between About and Features, targeting Plex Alexa skill migrants: verified capabilities (native plugin, 17 locales, audiobook seek bar, multi-turn search, phonetic matching), honest platform limitations (no scrubber, stop/next routing, default-music competition, either-or Echo Show) with FAQ pointers, and both Plex-shutdown sources cited. Jellyfin forum post draft prepared at docs/forum-post-draft-plex-migration.md (DRAFT status, not posted). All claims verified against the codebase and existing FAQ; no fabricated comparisons or benchmarks.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
