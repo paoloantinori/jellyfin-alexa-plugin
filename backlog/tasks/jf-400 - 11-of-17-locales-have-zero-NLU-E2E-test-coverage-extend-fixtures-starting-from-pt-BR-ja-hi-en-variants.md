@@ -6,7 +6,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-08-23 05:57'
-updated_date: '2026-08-23 10:36'
+updated_date: '2026-08-29 08:03'
 labels:
   - testing
   - nlu
@@ -47,4 +47,6 @@ Plan: extend NLU fixtures locale by locale. Not all 11 are equal priority: pt-BR
 Caveat discovered while running suites: profile-nlu is NONDETERMINISTIC at the infrastructure level - individual cases fail in full-suite runs (sometimes Amazon 500s) but pass when re-run in isolation. Do not treat a single full-suite failure as a regression without re-running the case alone. Candidate improvement (separate task if wanted): add a retry-on-5xx to SmapiClient.profile_nlu.
 
 2026-08-23 second batch (commit 66b340b): es-MX + fr-CA fixtures added and fully green (116/116 live). Divergences annotated per-case (fr-CA album-vs-song greedy capture; es-MX muestrame fallback). es-US fixture REVERTED after ~20 systematic divergences -> new task JF-406. Coverage now 11/17 locales (it, en-US/GB/AU/CA/IN, de, fr-FR/CA, es-ES/MX). Remaining 6 (pt-BR, ja, hi, ar, nl, es-US): pt/ja/hi/ar/nl are NOT active locales on the dev skill so cannot be tested against profile-nlu at all; es-US blocked by JF-406. This task can close when those blockers resolve (enable locales / fix divergence), or be kept open as tracking.
+
+PROGRESS 2026-08-29 (device-free, JF-414 spillover): es-US.yaml and pt-BR.yaml fixture files CREATED (first fixtures ever for both locales), each probe-verified against the pushed model BEFORE asserting (the es-US lesson: its imperative 'Reproduce un album de queen' diverges to PlaySongIntent - recorded in JF-406 - so only the working bare form is asserted; pt-BR is clean, all three album forms + browse green 4/4 live). Remaining uncovered NLU locales: ja-JP, hi-IN, ar-SA, nl-NL (no fixture files; nl/hi/ar models are live on the vendor, ja-JP is vendor-disabled 404).
 <!-- SECTION:NOTES:END -->
