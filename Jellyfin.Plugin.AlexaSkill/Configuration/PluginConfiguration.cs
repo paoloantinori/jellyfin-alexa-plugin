@@ -198,6 +198,13 @@ public class PluginConfiguration : BasePluginConfiguration
     public int VideoAudioCacheSizeMB { get; set; } = 2048;
 
     /// <summary>
+    /// Maximum number of CONCURRENT ffmpeg encode processes across all video-audio
+    /// endpoints (JF-310, DoS bound). Requests beyond the cap queue at the gate rather
+    /// than spawning unbounded processes. Minimum 1; values below 1 are treated as 1.
+    /// </summary>
+    public int MaxConcurrentFfmpegEncodes { get; set; } = 2;
+
+    /// <summary>
     /// Use VideoApp.Launch for audio playback instead of AudioPlayer.Play.
     /// Gives native progress bar/scrubber on Echo Show but without album art.
     /// </summary>

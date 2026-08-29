@@ -3,10 +3,11 @@ id: JF-310
 title: >-
   Security: Cap concurrent ffmpeg encodes and enforce disk budget before encode
   (DoS)
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - zai
 created_date: '2026-07-12 14:57'
-updated_date: '2026-07-13 20:17'
+updated_date: '2026-08-29 09:15'
 labels:
   - security
   - dos
@@ -35,6 +36,15 @@ Fix: add a global `SemaphoreSlim` bounding concurrent encodes (reject or queue o
 - [ ] #4 A burst of distinct-item requests cannot drive CPU/disk to exhaustion in a test/manual repro
 - [ ] #5 Existing single-stream encode + playback path is unaffected
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Add a configurable global cap (MaxConcurrentFfmpegEncodes, default 2, min 1) enforced by a static SemaphoreSlim inside StartFfmpegProcess - the single choke point all 5 encode sites share. Callers that exceed the cap WAIT (bounded queue, no unbounded spawn); the semaphore is released when the process exits.
+2. Pre-encode disk budget: add VideoAudioCache.EnsureDiskBudgetBeforeEncode(estimatedBytes) that (a) runs the same eviction sweep as EvictIfNeeded but ALSO reserves headroom for the incoming encode, (b) returns whether the budget fits after eviction. The controller calls it before each encode-start site (the 3 HLS/SStreamHlsAudiobook entry points already fire-and-forget EvictIfNeeded POST-encode; add the pre-check AWAITED).
+3. TDD: unit test the semaphore cap (N concurrent encodes, only C processes at a time - via an injectable process-starter seam or a counter around StartFfmpegProcess); unit test the budget check (cache at cap + estimated size > headroom -> eviction runs or refusal).
+4. Suite + deploy + verify (simulator play still works; concurrency observable in logs).
+<!-- SECTION:PLAN:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

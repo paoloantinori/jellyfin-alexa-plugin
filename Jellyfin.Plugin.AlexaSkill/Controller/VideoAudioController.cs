@@ -216,7 +216,7 @@ public class VideoAudioController : ControllerBase
             // The client receives data as ffmpeg produces it instead of waiting
             // for the entire file to be generated first.
 #pragma warning disable CA3003 // cachePath is built from GUID-validated itemId and numeric ticks
-            var ffmpegProcess = StartFfmpegProcess(validation.FfmpegPath, ffmpegArgs);
+            var ffmpegProcess = await StartFfmpegProcessGatedAsync(validation.FfmpegPath, ffmpegArgs, holdGateUntilExit: true).ConfigureAwait(false);
 
             try
             {
@@ -387,7 +387,7 @@ public class VideoAudioController : ControllerBase
             // Start ffmpeg without waiting — generate segments in the background.
             // Serve the playlist as soon as the first segment is ready so the Echo Show
             // can start playback immediately, even for long content like audiobooks.
-            var ffmpegProcess = StartFfmpegProcess(validation.FfmpegPath, ffmpegArgs);
+            var ffmpegProcess = await StartFfmpegProcessGatedAsync(validation.FfmpegPath, ffmpegArgs, holdGateUntilExit: true).ConfigureAwait(false);
 
             try
             {
@@ -686,7 +686,7 @@ public class VideoAudioController : ControllerBase
             }
 
             // Start ffmpeg in the background — writes to stream.m3u8, not our pre-written file.
-            var ffmpegProcess = StartFfmpegProcess(ffmpeg, ffmpegArgs);
+            var ffmpegProcess = await StartFfmpegProcessGatedAsync(ffmpeg, ffmpegArgs, holdGateUntilExit: true).ConfigureAwait(false);
 
             // Register the HLS directory for segment lookups immediately.
             _cache.RegisterHlsDirectory(parentId, artModifiedTicks);
@@ -1024,7 +1024,7 @@ public class VideoAudioController : ControllerBase
         List<string> arguments,
         CancellationToken cancellationToken)
     {
-        using var process = StartFfmpegProcess(ffmpegPath, arguments);
+        using var process = await StartFfmpegProcessGatedAsync(ffmpegPath, arguments, holdGateUntilExit: true, cancellationToken).ConfigureAwait(false);
 
         await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
 
@@ -1525,6 +1525,84 @@ public class VideoAudioController : ControllerBase
     /// The caller is responsible for awaiting <see cref="Process.WaitForExitAsync"/>
     /// and disposing the process.
     /// </summary>
+    /// <summary>
+    /// Global ffmpeg encode gate (JF-310, DoS bound): bounds the number of CONCURRENT
+    /// ffmpeg processes across all video-audio endpoints. Without it, an anonymous
+    /// caller who knows several item GUIDs can start unbounded parallel encodes and
+    /// saturate CPU/disk before post-hoc cache eviction reacts. Callers exceeding the
+    /// cap (MaxConcurrentFfmpegEncodes, default 2) WAIT here; the slot is released when
+    /// the process exits.
+    /// </summary>
+    private static SemaphoreSlim _encodeGate = new(2, 2);
+
+    /// <summary>
+    /// Rebuilds the encode gate when the configured cap changes (called from config
+    /// save; drain-safe: waiting callers keep their queue on the old semaphore, new
+    /// callers get the new cap).
+    /// </summary>
+    internal static void UpdateEncodeGateCapacity(int maxConcurrent)
+    {
+        int bounded = Math.Max(1, maxConcurrent);
+        if (_encodeGate.CurrentCount == bounded)
+        {
+            return;
+        }
+
+        _encodeGate = new SemaphoreSlim(bounded, bounded);
+    }
+
+    /// <summary>
+    /// Whether the calling path must hold the encode gate for the lifetime of the
+    /// spawned process. All HLS/song encode paths do; the lightweight remux
+    /// (WriteAudiobookPlaylist re-mux, no transcode) is cheap and exempt to avoid
+    /// deadlocking behind long audiobook encodes.
+    /// </summary>
+    private async Task<Process> StartFfmpegProcessGatedAsync(
+        string ffmpegPath,
+        List<string> arguments,
+        bool holdGateUntilExit,
+        CancellationToken cancellationToken = default)
+    {
+        if (!holdGateUntilExit)
+        {
+            return StartFfmpegProcess(ffmpegPath, arguments);
+        }
+
+        await _encodeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        Process process;
+        try
+        {
+            process = StartFfmpegProcess(ffmpegPath, arguments);
+        }
+        catch
+        {
+            _encodeGate.Release();
+            throw;
+        }
+
+        // Release the gate slot when the process exits (or is disposed without
+        // exiting, e.g. controller shutdown).
+        _ = Task.Run(
+            async () =>
+            {
+                try
+                {
+                    await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (InvalidOperationException)
+                {
+                    // Process already disposed; the slot is released below regardless.
+                }
+                finally
+                {
+                    try { _encodeGate.Release(); }
+                    catch (SemaphoreFullException) { /* already released via dispose path */ }
+                }
+            },
+            CancellationToken.None);
+        return process;
+    }
+
     /// <param name="ffmpegPath">Path to ffmpeg binary.</param>
     /// <param name="arguments">ffmpeg command-line arguments as individual tokens.</param>
     /// <returns>The started ffmpeg <see cref="Process"/> (not yet awaited).</returns>

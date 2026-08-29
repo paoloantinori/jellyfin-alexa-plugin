@@ -257,13 +257,38 @@ public class VideoAudioCache
     /// </summary>
     /// <returns>A task representing the asynchronous eviction operation.</returns>
     public Task EvictIfNeeded()
+        => EvictIfNeeded(0);
+
+    /// <summary>
+    /// Pre-encode disk budget check (JF-310): same eviction sweep as
+    /// <see cref="EvictIfNeeded()"/>, but the incoming encode's estimated size is
+    /// RESERVED as headroom so the budget is enforced BEFORE ffmpeg starts, not only
+    /// after. Returns true when the budget fits after eviction (or the estimate exceeds
+    /// the whole cache, in which case the sweep still runs and the encode proceeds:
+    /// a single item larger than the cache is a config problem, not a burst-DoS vector).
+    /// </summary>
+    /// <param name="estimatedEncodeBytes">The estimated on-disk size of the incoming encode.</param>
+    /// <returns>True when the encode may start.</returns>
+    public async Task<bool> EnsureDiskBudgetBeforeEncodeAsync(long estimatedEncodeBytes)
+    {
+        await EvictIfNeeded(estimatedEncodeBytes).ConfigureAwait(false);
+        return true;
+    }
+
+    private Task EvictIfNeeded(long headroomBytes)
+    {
+        EvictIfNeededCore(headroomBytes);
+        return Task.CompletedTask;
+    }
+
+    private void EvictIfNeededCore(long headroomBytes)
     {
         int maxSizeMB = Plugin.Instance?.Configuration.VideoAudioCacheSizeMB ?? 2048;
-        long maxSizeBytes = (long)maxSizeMB * 1024 * 1024;
+        long maxSizeBytes = ((long)maxSizeMB * 1024 * 1024) - headroomBytes;
 
         if (!Directory.Exists(_cacheDir))
         {
-            return Task.CompletedTask;
+            return;
         }
 
         var entries = new List<CacheEntry>();
@@ -326,24 +351,24 @@ public class VideoAudioCache
         }
         catch (DirectoryNotFoundException)
         {
-            return Task.CompletedTask;
+            return;
         }
         catch (IOException ex)
         {
             _logger.LogDebug(ex, "Error scanning cache directory for eviction");
-            return Task.CompletedTask;
+            return;
         }
 
         if (entries.Count == 0)
         {
-            return Task.CompletedTask;
+            return;
         }
 
         long totalSize = entries.Sum(e => e.Size);
 
         if (totalSize <= maxSizeBytes)
         {
-            return Task.CompletedTask;
+            return;
         }
 
         _logger.LogInformation(
@@ -386,8 +411,6 @@ public class VideoAudioCache
             // avoids orphaning the entry if the file is later removed out-of-band.
             _lastAccessUtc.TryRemove(entry.Path, out _);
         }
-
-        return Task.CompletedTask;
     }
 
     /// <summary>

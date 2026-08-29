@@ -1392,4 +1392,85 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.Contains("/stream?static=true", concatContent);
         Assert.Equal(2, concatContent.Split("file '", StringSplitOptions.RemoveEmptyEntries).Length);
     }
+
+    // ========== JF-310: encode gate + pre-encode disk budget ==========
+
+    /// <summary>
+    /// The gate capacity update is idempotent for the same value and accepts a new
+    /// value without throwing (drain-safe rebuild).
+    /// </summary>
+    [Fact]
+    public void EncodeGate_UpdateCapacity_IdempotentAndSafe()
+    {
+        VideoAudioController.UpdateEncodeGateCapacity(3);
+        VideoAudioController.UpdateEncodeGateCapacity(3); // same value: no-op
+        VideoAudioController.UpdateEncodeGateCapacity(2); // restore default
+    }
+
+    /// <summary>
+    /// The pre-encode disk budget check must run the eviction sweep with headroom for
+    /// the incoming encode, and entries that fit the budget survive (no over-eviction).
+    /// </summary>
+    [Fact]
+    public async Task EnsureDiskBudgetBeforeEncode_FitWithinBudget_NoEviction()
+    {
+        string cacheDir = Path.Combine(_tempDir, "alexaskill-video-audio");
+        Directory.CreateDirectory(cacheDir);
+        string old = Path.Combine(cacheDir, $"{Guid.NewGuid():N}_1000.mp4");
+        string recent = Path.Combine(cacheDir, $"{Guid.NewGuid():N}_2000.mp4");
+        await File.WriteAllBytesAsync(old, new byte[50 * 1024]).ConfigureAwait(false);
+        await File.WriteAllBytesAsync(recent, new byte[50 * 1024]).ConfigureAwait(false);
+        File.SetLastWriteTimeUtc(old, DateTime.UtcNow.AddDays(-2));
+        File.SetLastWriteTimeUtc(recent, DateTime.UtcNow);
+
+        int originalCap = _config.VideoAudioCacheSizeMB;
+        _config.VideoAudioCacheSizeMB = 1; // 1 MB cap, files total 100 KB
+
+        try
+        {
+            // 512 KB headroom: 1 MB - 512 KB = 512 KB budget; the 100 KB of files fit.
+            bool ok = await _cache.EnsureDiskBudgetBeforeEncodeAsync(512 * 1024).ConfigureAwait(false);
+            Assert.True(ok);
+            Assert.True(File.Exists(old), "both files fit the budget; nothing should be evicted");
+            Assert.True(File.Exists(recent));
+        }
+        finally
+        {
+            _config.VideoAudioCacheSizeMB = originalCap;
+        }
+    }
+
+    /// <summary>
+    /// When the headroom exceeds the remaining budget, the OLDEST entry is evicted
+    /// before the encode is allowed to start.
+    /// </summary>
+    [Fact]
+    public async Task EnsureDiskBudgetBeforeEncode_HeadroomForcesEvictionOfOldest()
+    {
+        string cacheDir = Path.Combine(_tempDir, "alexaskill-video-audio");
+        Directory.CreateDirectory(cacheDir);
+        string old = Path.Combine(cacheDir, $"{Guid.NewGuid():N}_1000.mp4");
+        string recent = Path.Combine(cacheDir, $"{Guid.NewGuid():N}_2000.mp4");
+        await File.WriteAllBytesAsync(old, new byte[50 * 1024]).ConfigureAwait(false);
+        await File.WriteAllBytesAsync(recent, new byte[50 * 1024]).ConfigureAwait(false);
+        File.SetLastWriteTimeUtc(old, DateTime.UtcNow.AddDays(-2));
+        File.SetLastWriteTimeUtc(recent, DateTime.UtcNow);
+
+        int originalCap = _config.VideoAudioCacheSizeMB;
+        _config.VideoAudioCacheSizeMB = 1;
+
+        try
+        {
+            // ~1 MB headroom on a 1 MB cap: the budget after headroom is ~0, so the
+            // oldest entry must go; the recent one survives (LRU order).
+            bool ok = await _cache.EnsureDiskBudgetBeforeEncodeAsync(1024 * 1024 - 60 * 1024).ConfigureAwait(false);
+            Assert.True(ok);
+            Assert.False(File.Exists(old), "the oldest entry should be evicted to make headroom");
+            Assert.True(File.Exists(recent), "only enough entries to fit are evicted");
+        }
+        finally
+        {
+            _config.VideoAudioCacheSizeMB = originalCap;
+        }
+    }
 }
