@@ -90,6 +90,36 @@ internal static class KeywordMatcher
             "o", "a", "os", "as", "um", "uma", "uns", "umas",
             "de", "do", "da", "dos", "das", "no", "na", "nos", "nas",
             "em", "com", "por", "para", "e", "ou"
+        },
+        // JF-389: the four remaining language prefixes of the 17 locales. Function words
+        // (articles, prepositions, conjunctions, pronouns) only, following the pattern of
+        // the sets above; romaji/romanized forms cover slot text as captured by the NLU,
+        // native-script forms cover script input for robustness (script usually arrives
+        // as one unsplit token, so the script entries are belt-and-braces).
+        ["nl"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "de", "het", "een", "en", "of", "van", "in", "op", "aan",
+            "bij", "met", "te", "voor", "tot", "die"
+        },
+        // "no" is DELIBERATELY EXCLUDED from the ja set: it is a real word in English
+        // and Italian (and its exclusion from AbbreviationCanonicalForms is the
+        // documented JF-383 decision for the same ambiguity); stripping it here would
+        // corrupt English titles spoken under ja-JP ("No Surprises"). Guard test:
+        // Tokenize_JapaneseParticleNo_IsNotCanonicalized.
+        ["ja"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "wa", "ga", "wo", "ni", "de", "to", "mo", "ka", "kara", "made", "yori", "nado",
+            "の", "は", "を", "に", "で", "と", "も", "が", "から", "まで"
+        },
+        ["hi"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "ka", "ki", "ke", "ko", "se", "par", "pe", "mein", "aur", "ya", "hai",
+            "का", "की", "के", "को", "से", "पर", "में", "और"
+        },
+        ["ar"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "fi", "min", "ila", "ala", "ma", "wa", "la", "bi",
+            "في", "من", "إلى", "على", "ما", "ولا"
         }
     };
 

@@ -143,9 +143,43 @@ public class KeywordMatcherTests
     [Fact]
     public void Tokenize_UnknownLocale_NoStopWordsRemoved()
     {
-        // "ja" has no stop word set, so all words are preserved
-        var result = KeywordMatcher.Tokenize("watashi no uta", "ja-JP");
+        // JF-389 added ja/nl/hi/ar sets, so the unknown-locale case uses a locale with
+        // no set (ko-KR): all words preserved except English stop words (JF-384).
+        var result = KeywordMatcher.Tokenize("watashi no uta", "ko-KR");
         Assert.Equal(new[] { "watashi", "no", "uta" }, result);
+    }
+
+    [Fact]
+    public void Tokenize_NlNL_StripsDutchStopWords()
+    {
+        // JF-389: Dutch function words must not pollute keyword coverage.
+        var result = KeywordMatcher.Tokenize("speel het lied van de band", "nl-NL");
+        Assert.Equal(new[] { "speel", "lied", "band" }, result);
+    }
+
+    [Fact]
+    public void Tokenize_JaJP_StripsJapaneseParticles_KeepsNo()
+    {
+        // JF-389: romaji particles are stripped under ja-JP; "no" stays by design
+        // (ambiguity with the English/Italian word, same rationale as JF-383).
+        var result = KeywordMatcher.Tokenize("watashi no uta wo kike", "ja-JP");
+        Assert.Equal(new[] { "watashi", "no", "uta", "kike" }, result);
+    }
+
+    [Fact]
+    public void Tokenize_HiIN_StripsHindiPostpositions()
+    {
+        // JF-389: Hindi postpositions and conjunctions are stripped under hi-IN.
+        var result = KeywordMatcher.Tokenize("queen ka gaana chalao", "hi-IN");
+        Assert.Equal(new[] { "queen", "gaana", "chalao" }, result);
+    }
+
+    [Fact]
+    public void Tokenize_ArSA_StripsArabicPrepositions()
+    {
+        // JF-389: Arabic prepositions are stripped under ar-SA.
+        var result = KeywordMatcher.Tokenize("aghani queen fi al library", "ar-SA");
+        Assert.Equal(new[] { "aghani", "queen", "al", "library" }, result);
     }
 
     [Fact]
@@ -534,7 +568,9 @@ public class KeywordMatcherTests
     public void Tokenize_JapaneseParticleNo_IsNotCanonicalized()
     {
         // Hard guard: "no" (the Japanese particle) must pass through unchanged, which
-        // is why number/no is excluded from the abbreviation map.
+        // is why number/no is excluded from the abbreviation map AND from the ja stop
+        // word set (JF-389): it is a real word in English/Italian, and stripping it
+        // under ja-JP would corrupt English titles ("No Surprises").
         var result = KeywordMatcher.Tokenize("watashi no uta", "ja-JP");
         Assert.Equal(new[] { "watashi", "no", "uta" }, result);
     }
