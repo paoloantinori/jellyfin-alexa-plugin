@@ -9,6 +9,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -141,7 +142,13 @@ public class PlaySongIntentHandler : BaseHandler
 
         if (string.IsNullOrWhiteSpace(songQuery))
         {
-            return ResponseBuilder.Ask(ResponseStrings.Get("ElicitSongName", locale), new Reprompt(ResponseStrings.Get("ElicitSongName", locale)));
+            // JF-413: Dialog.ElicitSlot (not a plain Ask) so the session stays in the
+            // PlaySongIntent dialog: the user's answer (a bare song title) fills the song
+            // slot directly instead of having to re-match through general NLU, and an
+            // already-filled musician slot survives the round-trip. PlaySongIntent is
+            // registered in dialog.intents in all 17 locales (verified 2026-08-29); the
+            // updatedIntent must declare BOTH intent slots (Amazon rejects partial ones).
+            return BuildSongElicitResponse(locale);
         }
 
         songQuery = StripSongCarrierPhrase(songQuery);
@@ -402,6 +409,32 @@ public class PlaySongIntentHandler : BaseHandler
 
     // Alexa's NLU can misalign slot boundaries, causing carrier phrases like
     // "la canzone" to bleed into the slot value. Strip them before searching.
+    /// <summary>
+    /// Song-name elicitation via Dialog.ElicitSlot (context-preserving, JF-413): the next
+    /// utterance fills the song slot inside the PlaySongIntent dialog instead of falling
+    /// through to general NLU, and an already-filled musician slot survives the
+    /// round-trip. Declares BOTH intent slots in updatedIntent (Amazon rejects partial
+    /// updatedIntent, live INVALID_RESPONSE 2026-08-28). PlaySongIntent is registered in
+    /// dialog.intents in all 17 locales (verified 2026-08-29).
+    /// </summary>
+    /// <param name="locale">The request locale, for the prompt string.</param>
+    /// <returns>The elicitation response.</returns>
+    private static SkillResponse BuildSongElicitResponse(string locale)
+    {
+        string prompt = ResponseStrings.Get("ElicitSongName", locale);
+        return new SkillResponse
+        {
+            Version = "1.0",
+            Response = new ResponseBody
+            {
+                ShouldEndSession = false,
+                OutputSpeech = new PlainTextOutputSpeech { Text = prompt },
+                Reprompt = new Reprompt(prompt),
+                Directives = new List<IDirective> { new ElicitSlotDirective(IntentNames.Slots.Song, IntentNames.PlaySong, new[] { IntentNames.Slots.Song, IntentNames.Slots.Musician }) }
+            }
+        };
+    }
+
     internal static string StripSongCarrierPhrase(string query)
     {
         string trimmed = query.TrimStart();

@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-07-13 10:32'
-updated_date: '2026-07-14 17:12'
+updated_date: '2026-08-29 04:33'
 labels:
   - playback
   - stop
@@ -31,11 +31,6 @@ references:
     https://developer.amazon.com/en-US/docs/alexa/custom-skills/use-long-form-audio.html
   - >-
     https://developer.amazon.com/en-US/docs/alexa/custom-skills/audioplayer-interface-reference.html
-modified_files:
-  - Jellyfin.Plugin.AlexaSkill/Alexa/Handler/Intent/PauseIntentHandler.cs
-  - >-
-    Jellyfin.Plugin.AlexaSkill/Alexa/Handler/Event/PlaybackNearlyFinishedEventHandler.cs
-  - CLAUDE.md
 priority: medium
 ---
 
@@ -105,6 +100,8 @@ User observation right after the clean repro: 'the only difference [from the fai
 HYPOTHESIS: 'alexa stop' fails during the early-playback window (first few seconds after AudioPlayer.Play, around/before PlaybackStarted settles) when the device has not yet firmly attributed 'most-recent audio skill' status / settled the AudioPlayer state. It works once playback is established. If reproducible, this is a TIME-DEPENDENT pattern, not random platform competition — and could have a plugin-side mitigation (Play-directive shape, progressive-response timing, anything that delays device attribution) or at minimum a precise user-facing rule.
 
 DO NOT CLOSE JF-340. Validation repro in progress: Trial 1 & 2 = start a track, say 'alexa stop' within ~3s (predict fail, zero skill entries); Trial 3 = start a track, wait ~30s, say 'alexa stop' (predict works). If early-fails / late-works reproduces, investigate the early window for any plugin lever before concluding 'platform-only'.
+
+RESCOPED (2026-08-28 night): the 'genuine bug vs platform competition' question is decomposed - the genuine-bug component was the Dialog.ElicitSlot capture trap (stop captured as slot value during open elicitation), FIXED via the FindSong cancel-word escape hatch (see JF-392 closure notes). What remains here is the PLATFORM component only: stop claimed by the default music service during playback (not plugin-fixable, Music Skill API reservation). Residual value of this task: keep the JF-392 data-collection instrumentation summary and on-device spot checks of the escape hatch (say 'ferma' right after a skill question: expect 'Ok, ho interrotto la ricerca' and silence); if that holds on device, this can be closed as documented-platform-behavior.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done

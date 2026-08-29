@@ -78,5 +78,6 @@ internal static class IntentNames
         public const string TitleKeywords = "titleKeywords";
         public const string Musician = "musician";
         public const string Album = "album";
+        public const string Song = "song";
     }
 }

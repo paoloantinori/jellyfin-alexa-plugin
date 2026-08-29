@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
@@ -104,6 +105,33 @@ public class EmptyMusicianSlotTests : PluginTestBase
     }
 
     private static Context CreateContext() => TestHelpers.CreateTestContext();
+
+    [Fact]
+    public async Task PlaySong_EmptySongSlot_ElicitsSongViaDialogDirective()
+    {
+        // JF-413 audit: ElicitSongName was a plain Ask with no flow state - the user's
+        // answer (a bare song title) had to re-match through general NLU, and any
+        // already-filled musician slot was discarded: the same context-loss shape as the
+        // album elicit fixed on 2026-08-28. Dialog.ElicitSlot keeps the session in the
+        // PlaySongIntent dialog (registered in dialog.intents in all 17 locales), the
+        // answer fills the song slot, and the updatedIntent must declare BOTH intent
+        // slots (Amazon rejects partial updatedIntent, live INVALID_RESPONSE 2026-08-28).
+        var handler = CreateSongHandler();
+        var request = CreateSongIntentRequest(string.Empty, null);
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.False(response.Response.ShouldEndSession);
+        var elicit = response.Response.Directives?.FirstOrDefault(d => d.Type == "Dialog.ElicitSlot") as Jellyfin.Plugin.AlexaSkill.Alexa.Directive.ElicitSlotDirective;
+        Assert.NotNull(elicit);
+        Assert.Equal("song", elicit.SlotToElicit);
+        Assert.Equal("PlaySongIntent", elicit.UpdatedIntent.Name);
+        Assert.Equal(new[] { "musician", "song" }, elicit.UpdatedIntent.Slots.Keys.OrderBy(k => k).ToArray());
+    }
 
     private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
 

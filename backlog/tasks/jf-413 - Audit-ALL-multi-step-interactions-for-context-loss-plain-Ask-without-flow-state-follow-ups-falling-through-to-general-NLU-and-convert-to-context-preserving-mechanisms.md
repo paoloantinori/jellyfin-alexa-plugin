@@ -4,9 +4,11 @@ title: >-
   Audit ALL multi-step interactions for context loss (plain Ask without flow
   state; follow-ups falling through to general NLU) and convert to
   context-preserving mechanisms
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - zai
 created_date: '2026-08-28 18:37'
+updated_date: '2026-08-29 04:48'
 labels: []
 dependencies: []
 priority: high
@@ -28,6 +30,18 @@ Audit scope: every handler returning Ask()/open-session prompts. Known flow-stat
 - [ ] #4 Cross-check JF-401 asymmetry (dialog.intents registration differs across locales) since ElicitSlot silently fails where unregistered
 - [ ] #5 On-device verification of at least the converted flows on it-IT
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+INVENTORY COMPLETE (AC #1/#2). CONTEXT-PRESERVING (state + consumer verified): resume prompt (LaunchRequest + FallbackIntentHandler, resume_state + Yes/No); DisambiguationHelper's 3 Asks (disambig_matches/index/type + Yes/No); HandleFuzzyMiss Confirm (BaseHandler, disambig_* + Yes/No); CrossMediaArtistOffer (crossmedia_notfound_* + disambig artist + Yes/No, JF-363); pagination 'altri?' (ListPaginationHelper + ListQueue, pagination_state consumed by FallbackIntentHandler); carousel Asks (BrowseLibrary/QueryRecentlyAdded/InProgress/QueryArtist, pagination_state via helper + Fallback); PlayBook disambiguation (disambig MediaTypeAlbum, JF-361); FindSong elicitation (FindSongSessionData + ElicitSlot, reference implementation, now with the cancel-word escape hatch); PlayAlbum elicit (ElicitSlot, fixed 2026-08-28). OK-BY-DESIGN (nothing to preserve): welcome prompts (LaunchRequest 2nd, SkillConnection x2 - the expected follow-up IS a fresh content request); NoIntent fresh-start (clears state deliberately).
+
+CONTEXT-LOSING FOUND AND FIXED: PlaySongIntentHandler's ElicitSongName was a plain Ask with NO state (the user's bare-title answer had to re-match general NLU; an already-filled musician slot was discarded - same shape as the album elicit). Converted to Dialog.ElicitSlot(song) declaring BOTH slots (song+musician) in updatedIntent. TDD: EmptyMusicianSlotTests.PlaySong_EmptySongSlot_ElicitsSongViaDialogDirective red->green; suite 2737; deployed; simulator-verified: empty PlaySong -> ElicitSlot slotToElicit=song, updatedIntent slots [musician,song], 'Quale canzone vuoi ascoltare?'.
+
+BORDERLINE, NOT CONVERTED (follow-up for JF-414): BrowseLibraryIntent's two category Asks (empty/unknown browse_category) expect a bare category word back through general NLU; BrowseLibraryIntent is NOT in dialog.intents, so an ElicitSlot conversion requires registration in all 17 models first (JF-414 scope). Risk assessed low: category words ('artisti', 'album') are strongly matched by Browse samples.
+
+AC #4 VERIFIED: all 17 locale models register the SAME 6 dialog intents (FindSong, FindSongByArtist, ShufflePlay, PlayEpisode, PlaySong, PlayAlbum) - the JF-401 asymmetry no longer exists in the current models, so every ElicitSlot emitter is registered everywhere. Remaining for closure: on-device spot check of the PlaySong elicit round-trip (user: 'metti una canzone' -> 'Quale canzone?' -> title -> plays) once device testing is available.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
