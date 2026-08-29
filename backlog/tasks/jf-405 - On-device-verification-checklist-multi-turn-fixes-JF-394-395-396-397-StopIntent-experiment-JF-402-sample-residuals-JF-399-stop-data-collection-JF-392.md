@@ -7,7 +7,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-08-23 07:09'
-updated_date: '2026-08-23 12:12'
+updated_date: '2026-08-29 09:12'
 labels:
   - testing
   - on-device
@@ -51,4 +51,6 @@ Single checklist of everything that needs a REAL Echo/on-device verification and
 
 <!-- SECTION:NOTES:BEGIN -->
 Review-pass update (deploy 348b171): items 1-4 now test the FULL routing (the first deploy had JF-397 dead code: FindSong intercepted all fallbacks). NEW checks to add from the /code-review pass: (a) plain 'no' during a FindSong disambiguation may route to AMAZON.NoIntent with EMPTY slots - built-in intents carry no slot values - verify the ElicitSlot dialog captures 'no' as titleKeywords (else the exit needs a NoIntent branch reading the FindSong session); (b) verify the debug log line 'FallbackIntent: active resume offer, re-asking resume prompt' appears once (confirms ILibraryManager DI resolved non-null in FallbackIntentHandler); (c) triage note: response logs show PRE-removal merged attributes including __remove_attributes (ResponseBodyLoggingInterceptor runs first in reverse order) - the final payload is correct, don't misread logs.
+
+CHECKLIST REFRESHED 2026-08-29 for tonight's change set: docs/manual-verification-2026-08-29.md (committed). Covers the Koop flow (routing, fast-speech ASR, artist-question fallback, context retention), cancel words during open questions (both regimes), the PlaySong elicit round-trip incl. musician survival, stop decomposition (informational), the en-* Musician canonicalization check, the duplicate-track regression, and the PlaybackStarted stall telemetry. The original multi-turn items (JF-394-397) remain from the previous checklist; sample residuals JF-399 partially superseded by JF-414's multilingual push; stop data collection JF-392 CLOSED (two failure modes identified and fixed/documented).
 <!-- SECTION:NOTES:END -->
