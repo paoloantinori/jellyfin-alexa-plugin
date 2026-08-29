@@ -8,7 +8,7 @@ status: In Progress
 assignee:
   - zai
 created_date: '2026-08-28 18:37'
-updated_date: '2026-08-29 06:36'
+updated_date: '2026-08-29 06:47'
 labels: []
 dependencies: []
 priority: medium
@@ -43,6 +43,8 @@ PUSH RESULTS (round 1): 10 locales SUCCEEDED (en-GB/AU/CA/IN, de, fr x2, es x3);
 ROUTING VERIFIED on pushed models: de-DE 'ein Album von Queen' -> PlayAlbumIntent(musician=queen) PERFECT; fr-FR 'un album de coldplay' -> PlayAlbumIntent(musician=coldplay) PERFECT; en-GB 'an album by queen' -> PlayAlbumIntent (correct intent) BUT see the platform finding.
 
 PLATFORM FINDING (en-*, probe-evidenced 2026-08-29): the AMAZON.Musician built-in REWRITES the raw slot value to a knowledge-graph canonical entity under en locales: queen->'Paula Abdul', the beatles->'John Lennon', coldplay->'Christopher Anthony John Martin', pink floyd->'Syd Barrett'. PRE-EXISTING behavior, NOT caused by the new samples (the pre-existing QueryArtistLibrary 'albums by {musician}' forms rewrite identically); it-IT and fr-FR do NOT rewrite (raw preserved). Handler consequence: artist search on the mangled full-person-name -> clean not-found ('Sorry, I couldn't find any albums with the artist Christopher Anthony John Martin', simulator-verified; no wrong plays - the not-found-first design holds). MITIGATION DIRECTION (not tonight): swap the musician slot to the catalog-backed JellyfinArtist custom type in the affected locales - that is the DESIGNED artist architecture (JF-96.2 catalog sync with phonetic synonyms) and custom types return raw spoken text, but slot-type consistency requires swapping it across all intents of those locales, a scoped decision (note: anti-pattern #10 was about ALBUM swaps; musician-to-catalog is the architecture's own pattern). Recorded as the JF-414 residual.
+
+PHASE D FINAL (authoritative verification via get-interaction-model on the SAVED models, immune to the build-status window): all 16 ENABLED locales carry the new indefinite album-by-artist samples (it-IT from yesterday + en-US/GB/AU/CA/IN, de, fr-FR/CA, es-ES/MX/US, pt-BR, nl-NL, hi-IN, ar-SA verified PRESENT with markers). The round-1 'build:?' entries for pt-BR/nl/hi/ar were status-window noise - the saves had landed. ja-JP is the ONLY exception: SMAPI 404s the locale (not enabled on the vendor skill); the repo model is ready and enabling it requires a manifest locale addition (separate action, recorded here, not blocking). en-US round-2 push SUCCEEDED after the dialog slot-type fix.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
