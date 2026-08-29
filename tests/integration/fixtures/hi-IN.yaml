@@ -1,0 +1,15 @@
+locale: hi-IN
+invocation_name: jellyfin player
+tests:
+  # JF-400: hi-IN had no NLU fixture file; seeded (probe-verified 2026-08-29 against the
+  # live model) with the JF-414 indefinite album-by-artist forms. Both route to
+  # PlayAlbumIntent with the raw musician value preserved. Extend per the JF-400 program.
+  - utterance: "queen का एल्बम चलाओ"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "queen का एल्बम सुनो"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      musician: {}

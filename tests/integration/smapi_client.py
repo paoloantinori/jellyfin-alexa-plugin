@@ -94,6 +94,12 @@ class SmapiClient:
         "es-MX": "pide a {inv} que ",
         "ja-JP": "{inv} を開いて ",
         "pt-BR": "peça para {inv} ",
+        # JF-400 2026-08-29: these three were missing and fell back to the English
+        # "ask {inv} to ", which misroutes Arabic utterances (live: 'shughl album queen'
+        # went to PlayVideoIntent under the English prefix, PlayAlbumIntent bare).
+        "ar-SA": "اطلب من {inv} ",
+        "nl-NL": "vraag {inv} om ",
+        "hi-IN": "{inv} से कहो ",
     }
 
     def simulate(self, utterance: str, stage: str = "development") -> dict[str, Any]:

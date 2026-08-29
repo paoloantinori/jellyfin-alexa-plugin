@@ -1,0 +1,14 @@
+locale: ar-SA
+invocation_name: jellyfin player
+tests:
+  # JF-400: ar-SA had no NLU fixture file; seeded (probe-verified 2026-08-29 against the
+  # live model) with the JF-414 indefinite album-by-artist form that routes reliably
+  # bare. NOTE: 'shughl album queen' (the imperative sample) is ambiguous bare - it
+  # routes deterministically to PlayVideoIntent on profile-nlu (4/4 probes) because
+  # 'shughl' is generic 'play/operate'; it routes to PlayAlbumIntent when prefixed by
+  # the Arabic invocation ('utlub min jellyfin player ...', verified). JF-406-class
+  # data point. Extend per the JF-400 program.
+  - utterance: "استمع إلى ألبوم queen"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      musician: {}

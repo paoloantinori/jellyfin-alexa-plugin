@@ -1,0 +1,20 @@
+locale: nl-NL
+invocation_name: jellyfin player
+tests:
+  # JF-400: nl-NL had no NLU fixture file; seeded (probe-verified 2026-08-29 against the
+  # live model) with the JF-414 indefinite album-by-artist forms. All three route to
+  # PlayAlbumIntent with the raw musician value preserved. Extend per the JF-400 program.
+  - utterance: "een album van queen"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "speel een album van queen"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "luister naar een album van queen"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      musician: {}
