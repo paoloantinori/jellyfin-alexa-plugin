@@ -8,7 +8,7 @@ status: In Progress
 assignee:
   - zai
 created_date: '2026-08-28 18:37'
-updated_date: '2026-08-29 04:48'
+updated_date: '2026-08-29 05:40'
 labels: []
 dependencies: []
 priority: high
@@ -41,6 +41,12 @@ CONTEXT-LOSING FOUND AND FIXED: PlaySongIntentHandler's ElicitSongName was a pla
 BORDERLINE, NOT CONVERTED (follow-up for JF-414): BrowseLibraryIntent's two category Asks (empty/unknown browse_category) expect a bare category word back through general NLU; BrowseLibraryIntent is NOT in dialog.intents, so an ElicitSlot conversion requires registration in all 17 models first (JF-414 scope). Risk assessed low: category words ('artisti', 'album') are strongly matched by Browse samples.
 
 AC #4 VERIFIED: all 17 locale models register the SAME 6 dialog intents (FindSong, FindSongByArtist, ShufflePlay, PlayEpisode, PlaySong, PlayAlbum) - the JF-401 asymmetry no longer exists in the current models, so every ElicitSlot emitter is registered everywhere. Remaining for closure: on-device spot check of the PlaySong elicit round-trip (user: 'metti una canzone' -> 'Quale canzone?' -> title -> plays) once device testing is available.
+
+REVIEW GATE RECOVERED (user challenge 'are you doing DoD without reminders?' - honest answer was no for the last 3 deploys): 5-agent code-review over 18cc2bb..HEAD found 4 real defects in my own sweep/hatches, all fixed in one batch: (1) the containment band gated the PREFIX fallbacks via shared TrySearchFallbackAsync (ASR-truncation shape killed on the DB path); (2) Fast-mode DB path gated with no recovery tier (direct long-name hits became not-founds cold); (3) the FindSong cancel hatch fired on first invocation (songs titled 'Stop' unsearchable) and missed the force-routed StopIntent regime (no titleKeywords slot -> hijack survived); (4) the new elicits lacked JF-398 MarkOthersInactive and their own cancel escape hatch. Also fixed: dialog.intents parity for PlaySong/PlayAlbum in the 6 asymmetric locales (the earlier AC#4 verification had checked INTENT presence but not slot-level elicitationRequired - too shallow), CLAUDE.md JF-381 paragraph updated, e2e reset locale limitation documented.
+
+TEST REASONING (user asked): added 6 tests covering each behavioral fix at its discriminator - open-flow vs first-invocation cancel (the gating), force-routed StopIntent (the second capture regime), PlaySong/PlayAlbum captured-cancel, and JF-398 removal-marker assertions on both elicit responses. Deliberately NOT unit-tested: the prefix-ungate and Fast-DB ungate (private fallback methods in the inline handler; restoring pre-sweep behavior that itself had no coverage; the shared predicate is covered by the ArtistSearch DB-path tests) - recorded as a known gap; a handler-level DB-mock harness would close it if the inline path survives JF-382 consolidation. Dialog-flag parity is data: covered by validators + the check script; a structural validator rule belongs to JF-414.
+
+Suite 2742 green; Release -warnaserror clean; deployed (md5-verified) and live-regression-checked: both elicit shapes with __remove_attributes markers present, cup->Waltz for Koop intact.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
