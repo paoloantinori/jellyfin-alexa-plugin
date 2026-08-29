@@ -1448,7 +1448,7 @@
         "slots": [
           {
             "name": "album",
-            "type": "AlbumName",
+            "type": "AMAZON.MusicRecording",
             "confirmationRequired": false,
             "elicitationRequired": false
           },
