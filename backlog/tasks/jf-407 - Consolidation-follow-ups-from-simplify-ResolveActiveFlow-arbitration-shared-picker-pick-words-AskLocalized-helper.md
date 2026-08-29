@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - zai
 created_date: '2026-08-23 11:59'
-updated_date: '2026-08-29 14:44'
+updated_date: '2026-08-29 19:43'
 labels:
   - refactor
   - multi-turn
@@ -36,6 +36,16 @@ Item-by-item (bounded, no behavior change):
 3. Shared pick-words to DisambiguationHelper: CardinalPickWords/OrdinalStemsByRank/NegativeAnswerWords/ResolvePick/IsNegativeAnswer currently private in FindSongIntentHandler; move to DisambiguationHelper so every picker gets cardinal/ordinal + JF-395 negative-exit.
 Each item: tests stay green (no behavior change), commit individually.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+ITEM 3 (AskLocalized) DONE (commit ~14989076): BaseHandler.AskLocalized(ssmlKey, textKey, repromptKey, locale, args) consolidates the SSML-or-plain Ask pattern from 7 hand-written sites (DisambiguationHelper x3, FallbackIntentHandler, LaunchRequestHandler, BaseHandler HandleFuzzyMiss + BuildCrossMediaArtistOfferAsk). The helper does XML escaping internally (matching BuildOutputSpeech), takes RAW args, looks up the reprompt by key. Net -21 lines. No behavior change; one site (LaunchRequestHandler) that passed the reprompt string without a Reprompt wrapper is now consistent. Suite 2749 green.
+
+ITEM 1 (ResolveActiveFlow) DEFERRED, finding recorded: the three handlers' arbitration is less duplicated than the task description suggested. Yes/No/Fallback share the same ORDER (resume > pagination > disambiguation) but each branch's ACTIONS are completely different (confirm/decline/re-ask). A ResolveActiveFlow -> Flow enum would move the if/else-if chain to ConversationalFlows without eliminating any real duplication; the value would only be locking the order against future drift, which the existing JF-398 ConversationalFlows class already does via MarkOthersInactive (at most one flow is active). The real remaining item is the FindSong CanHandle-level FallbackIntent capture fold-in, which is a behavioral change (not a refactoring) and needs its own design.
+
+ITEM 2 (shared pick-words) NOT STARTED: CardinalPickWords/OrdinalStemsByRank/NegativeAnswerWords/ResolvePick/IsNegativeAnswer still private in FindSongIntentHandler. The move to DisambiguationHelper is straightforward but touches 10+ handler call sites; best done in a fresh session with the review gate.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
