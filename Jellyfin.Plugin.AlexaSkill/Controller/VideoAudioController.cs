@@ -110,6 +110,11 @@ public class VideoAudioController : ControllerBase
         _mediaSourceManager = mediaSourceManager;
         _cache = cache;
         _logger = loggerFactory.CreateLogger<VideoAudioController>();
+
+        // JF-310: apply the configured encode-gate capacity. The controller is
+        // constructed per-request, so this also picks up config changes on the next
+        // request after a save (no explicit config-save hook needed).
+        UpdateEncodeGateCapacity(Plugin.Instance?.Configuration.MaxConcurrentFfmpegEncodes ?? 2);
     }
 
     /// <summary>
@@ -1567,6 +1572,14 @@ public class VideoAudioController : ControllerBase
         {
             return StartFfmpegProcess(ffmpegPath, arguments);
         }
+
+        // JF-310: pre-encode disk budget - evict BEFORE ffmpeg starts, with the
+        // incoming encode reserved as headroom. The estimate is intentionally
+        // conservative (a full audiobook HLS is the worst case; short songs are
+        // negligible next to it): the purpose is forcing the eviction sweep to run
+        // before, not predicting the exact size.
+        const long HeadroomEstimateBytes = 64L * 1024 * 1024;
+        await _cache.EnsureDiskBudgetBeforeEncodeAsync(HeadroomEstimateBytes).ConfigureAwait(false);
 
         await _encodeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         Process process;

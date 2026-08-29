@@ -1418,10 +1418,10 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Directory.CreateDirectory(cacheDir);
         string old = Path.Combine(cacheDir, $"{Guid.NewGuid():N}_1000.mp4");
         string recent = Path.Combine(cacheDir, $"{Guid.NewGuid():N}_2000.mp4");
-        await File.WriteAllBytesAsync(old, new byte[50 * 1024]).ConfigureAwait(false);
-        await File.WriteAllBytesAsync(recent, new byte[50 * 1024]).ConfigureAwait(false);
-        File.SetLastWriteTimeUtc(old, DateTime.UtcNow.AddDays(-2));
-        File.SetLastWriteTimeUtc(recent, DateTime.UtcNow);
+        await File.WriteAllBytesAsync(old, new byte[50 * 1024]);
+        await File.WriteAllBytesAsync(recent, new byte[50 * 1024]);
+        File.SetLastAccessTimeUtc(old, DateTime.UtcNow.AddDays(-2));
+        File.SetLastAccessTimeUtc(recent, DateTime.UtcNow);
 
         int originalCap = _config.VideoAudioCacheSizeMB;
         _config.VideoAudioCacheSizeMB = 1; // 1 MB cap, files total 100 KB
@@ -1429,7 +1429,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         try
         {
             // 512 KB headroom: 1 MB - 512 KB = 512 KB budget; the 100 KB of files fit.
-            bool ok = await _cache.EnsureDiskBudgetBeforeEncodeAsync(512 * 1024).ConfigureAwait(false);
+            bool ok = await _cache.EnsureDiskBudgetBeforeEncodeAsync(512 * 1024);
             Assert.True(ok);
             Assert.True(File.Exists(old), "both files fit the budget; nothing should be evicted");
             Assert.True(File.Exists(recent));
@@ -1451,19 +1451,20 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Directory.CreateDirectory(cacheDir);
         string old = Path.Combine(cacheDir, $"{Guid.NewGuid():N}_1000.mp4");
         string recent = Path.Combine(cacheDir, $"{Guid.NewGuid():N}_2000.mp4");
-        await File.WriteAllBytesAsync(old, new byte[50 * 1024]).ConfigureAwait(false);
-        await File.WriteAllBytesAsync(recent, new byte[50 * 1024]).ConfigureAwait(false);
-        File.SetLastWriteTimeUtc(old, DateTime.UtcNow.AddDays(-2));
-        File.SetLastWriteTimeUtc(recent, DateTime.UtcNow);
+        await File.WriteAllBytesAsync(old, new byte[50 * 1024]);
+        await File.WriteAllBytesAsync(recent, new byte[50 * 1024]);
+        File.SetLastAccessTimeUtc(old, DateTime.UtcNow.AddDays(-2));
+        File.SetLastAccessTimeUtc(recent, DateTime.UtcNow);
 
         int originalCap = _config.VideoAudioCacheSizeMB;
         _config.VideoAudioCacheSizeMB = 1;
 
         try
         {
+            // DEBUG: see what the eviction actually reads
             // ~1 MB headroom on a 1 MB cap: the budget after headroom is ~0, so the
             // oldest entry must go; the recent one survives (LRU order).
-            bool ok = await _cache.EnsureDiskBudgetBeforeEncodeAsync(1024 * 1024 - 60 * 1024).ConfigureAwait(false);
+            bool ok = await _cache.EnsureDiskBudgetBeforeEncodeAsync(1024 * 1024 - 60 * 1024);
             Assert.True(ok);
             Assert.False(File.Exists(old), "the oldest entry should be evicted to make headroom");
             Assert.True(File.Exists(recent), "only enough entries to fit are evicted");
