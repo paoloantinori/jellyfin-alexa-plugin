@@ -92,6 +92,21 @@ Full custom utterances in 11 languages: English (5 variants), Spanish (3), Frenc
 
 A Jellyfin plugin that creates a personal Alexa skill to play and control media from your Jellyfin server using voice commands. Each Jellyfin user gets their own skill with a customizable invocation name, per-user library access controls, and configurable fuzzy matching. Supports custom interaction model deployment for advanced users who want to add their own intents or utterances.
 
+### Migrating from the discontinued Plex Alexa skill?
+
+Plex disabled its official Alexa skill on **June 15, 2026** ([Plex announcement](https://forums.plex.tv/t/important-update-regarding-the-plex-alexa-skill/938054/1), [The Register](https://www.theregister.com/2026/04/17/alexa_loses_its_plex_appeal)). If you're looking for a replacement, this plugin streams your own media library to Alexa devices with no separate server to run (it's a native Jellyfin plugin), across 17 locales and 11 languages.
+
+**What this skill does**: play songs, albums, artists, playlists, audiobooks, podcasts, and videos by voice. Browse your library on Echo Show with tappable cards. Resume audiobooks with a full-book seek bar. Multi-turn song search ("find a song by..."). Per-user library access, phonetic matching for accented speech, and configurable fuzzy search.
+
+**What it honestly cannot do** (these are Amazon platform constraints, not plugin bugs; every custom Alexa skill shares them):
+
+- No native scrubber/progress bar during music playback (reserved for Amazon's Music Skill API partners)
+- "Stop", "next", and "previous" during playback are often intercepted by your default music service (Amazon Music, Spotify); use "pause" instead, or the one-shot invocation form ("ask \<skill name\> to stop")
+- A fresh "play X" request during playback goes to your default music service, not the skill; include the invocation name for each new request
+- Music delivery on Echo Show is either seek-bar video mode OR instant audio with album art, not both
+
+See the [FAQ](#faq) for details and workarounds on each of these.
+
 ## Features
 
 ### 🎵 Playback & queue
