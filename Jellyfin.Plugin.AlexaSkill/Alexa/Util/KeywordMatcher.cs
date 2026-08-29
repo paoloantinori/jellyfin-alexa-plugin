@@ -91,21 +91,31 @@ internal static class KeywordMatcher
             "de", "do", "da", "dos", "das", "no", "na", "nos", "nas",
             "em", "com", "por", "para", "e", "ou"
         },
-        // JF-389: the four remaining language prefixes of the 17 locales. Function words
-        // (articles, prepositions, conjunctions, pronouns) only, following the pattern of
-        // the sets above; romaji/romanized forms cover slot text as captured by the NLU,
-        // native-script forms cover script input for robustness (script usually arrives
-        // as one unsplit token, so the script entries are belt-and-braces).
+        // JF-389: the four remaining language prefixes of the 17 locales. Common
+        // grammatical function words, following the pattern of the sets above;
+        // romaji/romanized forms cover slot text as captured by the NLU. Accepted
+        // collision class: some entries are also rare title words ("die" under nl,
+        // "la" under ar - the de/fr/es sets have carried the same class since before
+        // JF-389); symmetric per-locale stripping plus the empty-token guards
+        // (Score/ScorePhonetic/n-gram search all return empty on 0 tokens) degrade
+        // a single-stop-word title to a clean not-found, never a wrong match.
+        // Entries deliberately EXCLUDED: hi "ya" (the invocative particle is a common
+        // title word in Hindi/Urdu music: "Ya Ali", "Yaara"), hi "hai" (finite verb,
+        // not a function word), ja "no" (real word in English/Italian - same JF-383
+        // ambiguity as the abbreviation map; guard test
+        // Tokenize_JapaneseParticleNo_IsNotCanonicalized), ar "al" (the definite
+        // article is a name prefix: "Al Green", "Al Jarreau", "Al Di Meola").
+        // Script entries are belt-and-braces and only include forms WITHOUT combining
+        // marks: the tokenizer splits on IsLetterOrDigit, and Devanagari matras are
+        // Mark-category code points, so entries like "का" would fragment and never
+        // match (verified at runtime, review 2026-08-29). Hindi script input in
+        // general fragments into consonant-only tokens - a pre-existing tokenizer
+        // limitation, documented here, not addressed by JF-389.
         ["nl"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "de", "het", "een", "en", "of", "van", "in", "op", "aan",
             "bij", "met", "te", "voor", "tot", "die"
         },
-        // "no" is DELIBERATELY EXCLUDED from the ja set: it is a real word in English
-        // and Italian (and its exclusion from AbbreviationCanonicalForms is the
-        // documented JF-383 decision for the same ambiguity); stripping it here would
-        // corrupt English titles spoken under ja-JP ("No Surprises"). Guard test:
-        // Tokenize_JapaneseParticleNo_IsNotCanonicalized.
         ["ja"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "wa", "ga", "wo", "ni", "de", "to", "mo", "ka", "kara", "made", "yori", "nado",
@@ -113,8 +123,8 @@ internal static class KeywordMatcher
         },
         ["hi"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "ka", "ki", "ke", "ko", "se", "par", "pe", "mein", "aur", "ya", "hai",
-            "का", "की", "के", "को", "से", "पर", "में", "और"
+            "ka", "ki", "ke", "ko", "se", "par", "pe", "mein", "aur",
+            "पर", "और"
         },
         ["ar"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {

@@ -2447,8 +2447,9 @@ public abstract class BaseHandler
     /// <summary>
     /// Entity fallback for greedy <c>AMAZON.SearchQuery</c> intents that misroute an
     /// artist query (e.g. it-IT "di miles davis" captured as a mood). Strips locale
-    /// stop-words via <see cref="KeywordMatcher.Tokenize"/> (covers the Latin-script
-    /// locales en/it/de/fr/es/pt; other locales split without stop-word removal), reuses
+    /// stop-words via <see cref="KeywordMatcher.Tokenize"/> (all 11 language prefixes of
+    /// the 17 locales since JF-389; English stop words are stripped under every locale
+    /// since JF-384), reuses
     /// the phonetic artist search pipeline, and respects the cross-media word-count guard
     /// (<see cref="CrossMediaArtistMaxWords"/>) and threshold. Returns null when no
     /// confident match is found so the caller falls through to its own not-found response.

@@ -141,7 +141,7 @@ public class KeywordMatcherTests
     }
 
     [Fact]
-    public void Tokenize_UnknownLocale_NoStopWordsRemoved()
+    public void Tokenize_UnknownLocale_OnlyEnglishStopWordsRemoved()
     {
         // JF-389 added ja/nl/hi/ar sets, so the unknown-locale case uses a locale with
         // no set (ko-KR): all words preserved except English stop words (JF-384).
