@@ -56,19 +56,8 @@ internal static class DisambiguationHelper
         var matchList = matches.Take(3).Select(m => new MatchInfo { Id = m.Id.ToString(), Name = m.Name }).ToList();
         int index = 0;
 
-        string? promptSsml = BaseHandler.GetSsml("DisambiguatePromptSsml", locale, BaseHandler.EscapeXml(matchList[index].Name));
-        string reprompt = ResponseStrings.Get("DisambiguateReprompt", locale);
-
-        SkillResponse response;
-        if (promptSsml != null)
-        {
-            response = BaseHandler.AskSsml(promptSsml, new Reprompt(reprompt));
-        }
-        else
-        {
-            string prompt = ResponseStrings.Get("DisambiguatePrompt", locale, matchList[index].Name);
-            response = ResponseBuilder.Ask(prompt, new Reprompt(reprompt));
-        }
+        SkillResponse response = BaseHandler.AskLocalized(
+            "DisambiguatePromptSsml", "DisambiguatePrompt", "DisambiguateReprompt", locale, matchList[index].Name);
 
         response.SessionAttributes = BuildAttributes(matchList, index, mediaType);
 
@@ -94,19 +83,8 @@ internal static class DisambiguationHelper
         var matchList = matches.Take(3).Select(m => new MatchInfo { Id = m.Id.ToString(), Name = m.Name, ArtUrl = m.ArtUrl }).ToList();
         int index = 0;
 
-        string? promptSsml = BaseHandler.GetSsml("DisambiguatePromptSsml", locale, BaseHandler.EscapeXml(matchList[index].Name));
-        string reprompt = ResponseStrings.Get("DisambiguateReprompt", locale);
-
-        SkillResponse response;
-        if (promptSsml != null)
-        {
-            response = BaseHandler.AskSsml(promptSsml, new Reprompt(reprompt));
-        }
-        else
-        {
-            string prompt = ResponseStrings.Get("DisambiguatePrompt", locale, matchList[index].Name);
-            response = ResponseBuilder.Ask(prompt, new Reprompt(reprompt));
-        }
+        SkillResponse response = BaseHandler.AskLocalized(
+            "DisambiguatePromptSsml", "DisambiguatePrompt", "DisambiguateReprompt", locale, matchList[index].Name);
 
         response.SessionAttributes = BuildAttributes(matchList, index, mediaType);
 
@@ -148,19 +126,8 @@ internal static class DisambiguationHelper
         string mediaType,
         string locale)
     {
-        string? promptSsml = BaseHandler.GetSsml("DisambiguateNextSsml", locale, BaseHandler.EscapeXml(matches[nextIndex].Name));
-        string reprompt = ResponseStrings.Get("DisambiguateReprompt", locale);
-
-        SkillResponse response;
-        if (promptSsml != null)
-        {
-            response = BaseHandler.AskSsml(promptSsml, new Reprompt(reprompt));
-        }
-        else
-        {
-            string prompt = ResponseStrings.Get("DisambiguateNext", locale, matches[nextIndex].Name);
-            response = ResponseBuilder.Ask(prompt, new Reprompt(reprompt));
-        }
+        SkillResponse response = BaseHandler.AskLocalized(
+            "DisambiguateNextSsml", "DisambiguateNext", "DisambiguateReprompt", locale, matches[nextIndex].Name);
 
         response.SessionAttributes = BuildAttributes(matches, nextIndex, mediaType);
 

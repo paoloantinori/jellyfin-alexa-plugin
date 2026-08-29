@@ -261,19 +261,8 @@ public class LaunchRequestHandler : BaseHandler
         Entities.User user, string locale, Context context, bool useResumePlaylist = false)
     {
         string title = item?.Name ?? ResponseStrings.Get("UnknownMedia", locale);
-        string? resumeSsml = GetSsml("ResumePromptSsml", locale, EscapeXml(title));
-        string repromptText = ResponseStrings.Get("ResumeReprompt", locale);
-
-        SkillResponse response;
-        if (resumeSsml != null)
-        {
-            response = AskSsml(resumeSsml, repromptText);
-        }
-        else
-        {
-            string prompt = ResponseStrings.Get("ResumePrompt", locale, title);
-            response = ResponseBuilder.Ask(prompt, new Reprompt(repromptText));
-        }
+        SkillResponse response = AskLocalized(
+            "ResumePromptSsml", "ResumePrompt", "ResumeReprompt", locale, title);
 
         TryAttachResumeOfferScreen(response, item, itemId, user, locale, context);
 

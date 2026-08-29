@@ -894,6 +894,37 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// Build a session-opening Ask using SSML when available, with a plaintext fallback
+    /// (JF-407 item 3). Consolidates the hand-written GetSsml-then-AskSsml-or-Ask
+    /// pattern that was duplicated across DisambiguationHelper (3x),
+    /// FallbackIntentHandler, LaunchRequestHandler, and BaseHandler (2x), where the
+    /// reprompt-key handling and XML escaping drifted between sites. Args are RAW
+    /// (unescaped): the SSML path escapes them internally, the plaintext path keeps
+    /// them raw. The reprompt is always plain text (no SSML variant is used for
+    /// reprompts in any locale; the Welcome flow's SSML reprompt is the one exception
+    /// and stays hand-written in LaunchRequestHandler).
+    /// </summary>
+    /// <param name="ssmlKey">The ResponseStrings key for the SSML prompt variant.</param>
+    /// <param name="textKey">The ResponseStrings key for the plain-text prompt variant.</param>
+    /// <param name="repromptKey">The ResponseStrings key for the plain-text reprompt.</param>
+    /// <param name="locale">The request locale.</param>
+    /// <param name="args">Format args for both prompt variants (raw, not XML-escaped).</param>
+    /// <returns>A session-opening Ask response.</returns>
+    public static SkillResponse AskLocalized(
+        string ssmlKey, string textKey, string repromptKey, string locale, params object[] args)
+    {
+        string reprompt = ResponseStrings.Get(repromptKey, locale);
+        string? ssml = GetSsml(ssmlKey, locale, EscapeStringArgs(args));
+        if (ssml != null)
+        {
+            return AskSsml(ssml, new Reprompt(reprompt));
+        }
+
+        string prompt = ResponseStrings.Get(textKey, locale, args);
+        return ResponseBuilder.Ask(prompt, new Reprompt(reprompt));
+    }
+
+    /// <summary>
     /// Escape SSML-reserved chars in string args for safe interpolation into &lt;speak&gt;.
     /// Non-string args (counts, etc.) pass through unchanged.
     /// </summary>
@@ -1504,12 +1535,8 @@ public abstract class BaseHandler
     /// <param name="notFoundMediaType">The media type the user originally asked for ("song" or "album"), used to build the decline response.</param>
     protected SkillResponse BuildCrossMediaArtistOfferAsk(string query, BaseItem artist, string locale, string notFoundMediaType)
     {
-        string? promptSsml = GetSsml("CrossMediaArtistOfferSsml", locale, EscapeXml(query), EscapeXml(artist.Name));
-        string reprompt = ResponseStrings.Get("FuzzySuggestionReprompt", locale);
-
-        SkillResponse response = promptSsml != null
-            ? AskSsml(promptSsml, new Reprompt(reprompt))
-            : ResponseBuilder.Ask(ResponseStrings.Get("CrossMediaArtistOffer", locale, query, artist.Name), new Reprompt(reprompt));
+        SkillResponse response = AskLocalized(
+            "CrossMediaArtistOfferSsml", "CrossMediaArtistOffer", "FuzzySuggestionReprompt", locale, query, artist.Name);
 
         var matchInfos = new List<DisambiguationHelper.MatchInfo>
         {
@@ -1686,20 +1713,8 @@ public abstract class BaseHandler
         Logger.LogDebug("HandleFuzzyMiss: query={Query}, best={BestMatch}, score={Score}, candidates={CandidateCount} — disambiguating",
             query, selector(best), score, candidates.Count);
         var matches = matchExtractor(best) ?? new List<(Guid, string)>();
-        string? promptSsml = GetSsml("FuzzySuggestionPromptSsml", locale, EscapeXml(query), EscapeXml(selector(best)));
-
-        SkillResponse response;
-        if (promptSsml != null)
-        {
-            string reprompt = ResponseStrings.Get("FuzzySuggestionReprompt", locale);
-            response = AskSsml(promptSsml, new Reprompt(reprompt));
-        }
-        else
-        {
-            string prompt = ResponseStrings.Get("FuzzySuggestionPrompt", locale, query, selector(best));
-            string reprompt = ResponseStrings.Get("FuzzySuggestionReprompt", locale);
-            response = ResponseBuilder.Ask(prompt, new Reprompt(reprompt));
-        }
+        SkillResponse response = AskLocalized(
+            "FuzzySuggestionPromptSsml", "FuzzySuggestionPrompt", "FuzzySuggestionReprompt", locale, query, selector(best));
 
         var matchInfos = matches.Select(m => new DisambiguationHelper.MatchInfo { Id = m.Id.ToString(), Name = m.Name }).ToList();
         response.SessionAttributes = new Dictionary<string, object>

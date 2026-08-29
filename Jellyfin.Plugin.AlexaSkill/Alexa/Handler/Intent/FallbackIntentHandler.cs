@@ -100,12 +100,8 @@ public class FallbackIntentHandler : BaseHandler
                     && _libraryManager?.GetItemById(itemId) is { Name: not null } item)
                 {
                     Logger.LogDebug("FallbackIntent: active resume offer, re-asking resume prompt");
-                    string? promptSsml = GetSsml("ResumePromptSsml", locale, EscapeXml(item.Name));
-                    string resumeReprompt = ResponseStrings.Get("ResumeReprompt", locale);
-                    SkillResponse resumeAsk = promptSsml != null
-                        ? AskSsml(promptSsml, new Reprompt(resumeReprompt))
-                        : ResponseBuilder.Ask(ResponseStrings.Get("ResumePrompt", locale, item.Name), new Reprompt(resumeReprompt));
-                    return Task.FromResult(resumeAsk);
+                    return Task.FromResult(AskLocalized(
+                        "ResumePromptSsml", "ResumePrompt", "ResumeReprompt", locale, item.Name));
                 }
             }
 

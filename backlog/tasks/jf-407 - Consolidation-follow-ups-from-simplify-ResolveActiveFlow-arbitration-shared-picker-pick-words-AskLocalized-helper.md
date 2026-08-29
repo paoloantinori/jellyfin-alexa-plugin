@@ -3,9 +3,11 @@ id: JF-407
 title: >-
   Consolidation follow-ups from /simplify: ResolveActiveFlow arbitration, shared
   picker pick-words, AskLocalized helper
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - zai
 created_date: '2026-08-23 11:59'
+updated_date: '2026-08-29 14:44'
 labels:
   - refactor
   - multi-turn
@@ -24,6 +26,16 @@ Follow-ups from the /simplify pass over JF-394..398 (commit 114b490 skipped thes
 2. Shared pick-words: CardinalPickWords/OrdinalStemsByRank/NegativeAnswerWords/ResolvePick/IsNegativeAnswer live private in FindSongIntentHandler, but numbered-candidate picking is a general DisambiguationHelper capability (used by 10 handlers). Moving them down gives every picker the cardinal/ordinal answer and the JF-395 negative-exit; today only FindSong has them.
 3. AskLocalized helper: the SSML-or-plain Ask pattern (GetSsml ?? AskSsml : ResponseBuilder.Ask) is hand-written at ~6 sites (LaunchRequestHandler resume offer, FallbackIntentHandler re-ask, DisambiguationHelper x3, BaseHandler x2); one BaseHandler.AskLocalized(ssmlKey, textKey, repromptKey, locale, args) removes the drift the FallbackIntentHandler reprompt inconsistency came from.
 <!-- SECTION:DESCRIPTION:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Item-by-item (bounded, no behavior change):
+1. AskLocalized helper in BaseHandler: one method for the SSML-or-plain Ask pattern (GetSsml ?? AskSsml : ResponseBuilder.Ask), replacing the ~6 hand-written sites (LaunchRequestHandler resume, FallbackIntentHandler re-ask, DisambiguationHelper x3, BaseHandler x2).
+2. ResolveActiveFlow in ConversationalFlows: move the resume > pagination > disambiguation arbitration (currently duplicated in YesIntentHandler, NoIntentHandler, FallbackIntentHandler) to a single Flow-enum method.
+3. Shared pick-words to DisambiguationHelper: CardinalPickWords/OrdinalStemsByRank/NegativeAnswerWords/ResolvePick/IsNegativeAnswer currently private in FindSongIntentHandler; move to DisambiguationHelper so every picker gets cardinal/ordinal + JF-395 negative-exit.
+Each item: tests stay green (no behavior change), commit individually.
+<!-- SECTION:PLAN:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
