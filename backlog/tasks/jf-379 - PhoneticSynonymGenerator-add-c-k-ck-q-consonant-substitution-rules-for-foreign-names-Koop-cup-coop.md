@@ -4,9 +4,10 @@ title: >-
   PhoneticSynonymGenerator: add c/k/ck/q consonant-substitution rules for
   foreign names (Koop->cup/coop)
 status: To Do
-assignee: []
+assignee:
+  - zai
 created_date: '2026-07-25 18:07'
-updated_date: '2026-07-27 05:35'
+updated_date: '2026-08-29 08:00'
 labels:
   - enhancement
   - phonetic
@@ -16,8 +17,6 @@ labels:
   - designed
   - multi-session
 dependencies: []
-modified_files:
-  - Jellyfin.Plugin.AlexaSkill/Alexa/Catalog/PhoneticSynonymGenerator.cs
 priority: medium
 ---
 
@@ -41,43 +40,11 @@ NOTE: distinct from the catalog-injection question (JF-380). This task is about 
 - [ ] #4 Live verify: re-sync catalog, confirm the JellyfinArtist catalog version for 'Koop' includes the new phonetic variants; on-device 'suona koop' resolves (manual)
 <!-- AC:END -->
 
-## Definition of Done
-<!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining, or findings applied/tracked)
-<!-- DOD:END -->
+## Implementation Notes
 
-## Comments
-
-<!-- COMMENTS:BEGIN -->
-created: 2026-07-25 18:07
----
-EXTENDED 2026-07-25: add a u<->oo (and likely u<->o, oo<->ou) vowel-substitution rule alongside the c/k/ck/q consonant rule. Same evidence: 'Koop' (oo) was heard as 'cup' (u) on the it-IT Echo. The English /uː/ ('oo') maps to Italian 'u', and ASR transcribes it back inconsistently. So a name with 'oo' should emit 'u'/'o' variants too. The consonant rule (K->C) and the vowel rule (oo->u) are complementary; together they cover 'Koop' -> 'Coop' (consonant) -> 'Cup' (consonant+vowel). Update AC #1 to include both consonant and vowel substitution families, bounded by the same per-name cap.
----
-
-created: 2026-07-25 18:46
----
-RESEARCH COMPLETE 2026-07-25: ran 7 parallel per-language research agents (it, es, fr, pt, de, nl, ja), each grounded in Flege SLM / Best PAM-L2 perceptual-assimilation literature + the canonical Wikipedia phonology inventory per language. Reports in claudedocs/research_raw/report_<lang>.md; synthesis in claudedocs/research_phonetic_rules_2026-07-25.md.
----
-
-created: 2026-07-25 18:46
----
-KEY FINDINGS: (1) The c/k/ck/q + u/oo rules from the Koop case are confirmed but Italian/Romance-specific (German/Dutch/Japanese have /k/ natively). (2) Per-language generators are mandatory: the same phoneme maps differently per L1, e.g. /ð/ splits IT/PT to /d/, FR/DE to /z/, JA to /z/. (3) The orthography layer (Bassetti 2015) is the highest-value input since the plugin works from written names. (4) The existing codebase design (German/Dutch skip the Romance -ing rule) is validated by the data.
----
-
-created: 2026-07-25 18:46
----
-NEXT STEP per the synthesis: run /superpowers:brainstorming to design how PhoneticSynonymGenerator consumes the per-language rule tables (data structure, variant bounding, device-captured forms first) before implementing. Do not implement directly from the research.
----
-<!-- COMMENTS:END -->
+<!-- SECTION:NOTES:BEGIN -->
+REOPENED-BY-MISTAKE 2026-08-29: briefly set In Progress based on the stale AC#1 ('add c/k/ck/q rules'); the 2026-07-27 REDESIGN supersedes that AC - data-driven generative composite (Epitran port + PHOBLE interference maps + inverse orthography), explicitly multi-session with open questions awaiting maintainer confirmation ('Confirm the team wants to commit', spec question 4). Reverted to To Do untouched. Before ANY implementation: the open questions in docs/superpowers/specs/2026-07-27-jf379-generative-phonetic-synonyms-design.md need decisions (CMUdict delivery form, replace-vs-alongside transition, rollout flag).
+<!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
@@ -95,3 +62,17 @@ Design spec: docs/superpowers/specs/2026-07-27-jf379-generative-phonetic-synonym
 
 NOT YET IMPLEMENTED. Status remains To Do (designed, awaiting build). Related: JF-381 (query-time Double Metaphone, shipped, fixes the reported Koop/cup defect at the query layer; JF-379 is the catalog-layer one-shot complement).
 <!-- SECTION:FINAL_SUMMARY:END -->
+
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [ ] #1 dotnet build passes with 0 errors
+- [ ] #2 dotnet test passes
+- [ ] #3 No new compiler warnings introduced
+- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [ ] #6 NLU test fixtures updated if interaction model changed
+- [ ] #7 E2E test added for new intent or handler logic
+- [ ] #8 Locale response strings added to all 17 locales
+- [ ] #9 /simplify passed (no blocking cleanups remaining)
+- [ ] #10 /code-review high passed (no blocking findings remaining, or findings applied/tracked)
+<!-- DOD:END -->
