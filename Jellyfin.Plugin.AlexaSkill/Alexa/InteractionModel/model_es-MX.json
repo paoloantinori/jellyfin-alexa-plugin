@@ -149,7 +149,11 @@
           "Quiero oír {album}",
           "Inicia {album}",
           "Dame {album}",
-          "Suelta {album}"
+          "Suelta {album}",
+          "un álbum de {musician}",
+          "Reproduce un álbum de {musician}",
+          "Escucha un álbum de {musician}",
+          "pon un álbum de {musician}"
         ],
         "slots": [
           {

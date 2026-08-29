@@ -157,7 +157,10 @@
           "Diffuse {album}",
           "Je veux entendre {album}",
           "Mets le disque {album}",
-          "Commence {album}"
+          "Commence {album}",
+          "un album de {musician}",
+          "Lis un album de {musician}",
+          "Écoute un album de {musician}"
         ],
         "slots": [
           {

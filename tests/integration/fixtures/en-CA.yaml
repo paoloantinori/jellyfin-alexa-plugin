@@ -345,3 +345,9 @@ tests:
     expected_intent: SearchMediaIntent
     expected_slots:
       query: {}
+
+  # JF-414: indefinite album-by-artist forms
+  - utterance: "an album by queen"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      musician: {}

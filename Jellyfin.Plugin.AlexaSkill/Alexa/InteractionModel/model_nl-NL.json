@@ -138,7 +138,10 @@
           "ik wil {album} horen",
           "kun je {album} afspelen",
           "start {album}",
-          "stream {album}"
+          "stream {album}",
+          "een album van {musician}",
+          "speel een album van {musician}",
+          "luister naar een album van {musician}"
         ],
         "slots": [
           {

@@ -348,3 +348,9 @@ tests:
     expected_intent: FindSongIntent
     expected_slots:
       titleKeywords: "el mar"
+
+  # JF-414: indefinite album-by-artist forms
+  - utterance: "un álbum de queen"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      musician: {}

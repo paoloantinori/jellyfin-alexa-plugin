@@ -125,7 +125,9 @@
           "{musician} の {album} を聴かせて",
           "{album} を流して",
           "{album} を聞きたい",
-          "ストリーム {album}"
+          "ストリーム {album}",
+          "{musician} のアルバムを再生して",
+          "{musician} のアルバムを聴かせて"
         ],
         "slots": [
           {

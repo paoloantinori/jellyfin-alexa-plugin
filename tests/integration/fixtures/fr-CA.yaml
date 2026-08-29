@@ -378,3 +378,9 @@ tests:
     expected_intent: FindSongIntent
     expected_slots:
       titleKeywords: "belle"
+
+  # JF-414: indefinite album-by-artist forms
+  - utterance: "un album de queen"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      musician: {}

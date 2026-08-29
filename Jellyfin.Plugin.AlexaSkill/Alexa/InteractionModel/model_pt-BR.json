@@ -140,7 +140,10 @@
           "pode tocar {album}",
           "começar a tocar {album}",
           "me dá {album}",
-          "stream {album}"
+          "stream {album}",
+          "um álbum de {musician}",
+          "tocar um álbum de {musician}",
+          "ouvir um álbum de {musician}"
         ],
         "slots": [
           {

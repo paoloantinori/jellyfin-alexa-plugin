@@ -140,7 +140,12 @@
           "listen to the album {album} by {musician}",
           "put on the album {album}",
           "play the record {album}",
-          "play the record {album} by {musician}"
+          "play the record {album} by {musician}",
+          "an album by {musician}",
+          "play an album by {musician}",
+          "listen to an album by {musician}",
+          "an album from {musician}",
+          "play an album from {musician}"
         ],
         "slots": [
           {

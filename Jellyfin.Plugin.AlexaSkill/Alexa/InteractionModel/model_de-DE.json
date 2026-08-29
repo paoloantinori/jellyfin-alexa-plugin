@@ -159,7 +159,10 @@
           "Starte {album}",
           "Kannst du {album} spielen",
           "Lass uns {album} hören",
-          "Mach {album} an"
+          "Mach {album} an",
+          "ein Album von {musician}",
+          "Spiele ein Album von {musician}",
+          "Höre ein Album von {musician}"
         ],
         "slots": [
           {

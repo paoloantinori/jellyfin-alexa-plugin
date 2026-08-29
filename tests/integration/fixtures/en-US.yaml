@@ -688,3 +688,13 @@ tests:
     expected_intent: PlayPlaylistIntent
     expected_slots:
       playlist: {}
+
+  # JF-414: indefinite album-by-artist forms
+  - utterance: "an album by queen"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      musician: {}
+  - utterance: "play an album from michael jackson"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      musician: {}
