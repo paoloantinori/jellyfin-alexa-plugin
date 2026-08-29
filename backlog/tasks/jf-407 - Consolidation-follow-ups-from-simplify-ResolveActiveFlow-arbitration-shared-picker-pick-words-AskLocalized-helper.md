@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - zai
 created_date: '2026-08-23 11:59'
-updated_date: '2026-08-29 19:43'
+updated_date: '2026-08-29 20:12'
 labels:
   - refactor
   - multi-turn
@@ -45,6 +45,8 @@ ITEM 3 (AskLocalized) DONE (commit ~14989076): BaseHandler.AskLocalized(ssmlKey,
 ITEM 1 (ResolveActiveFlow) DEFERRED, finding recorded: the three handlers' arbitration is less duplicated than the task description suggested. Yes/No/Fallback share the same ORDER (resume > pagination > disambiguation) but each branch's ACTIONS are completely different (confirm/decline/re-ask). A ResolveActiveFlow -> Flow enum would move the if/else-if chain to ConversationalFlows without eliminating any real duplication; the value would only be locking the order against future drift, which the existing JF-398 ConversationalFlows class already does via MarkOthersInactive (at most one flow is active). The real remaining item is the FindSong CanHandle-level FallbackIntent capture fold-in, which is a behavioral change (not a refactoring) and needs its own design.
 
 ITEM 2 (shared pick-words) NOT STARTED: CardinalPickWords/OrdinalStemsByRank/NegativeAnswerWords/ResolvePick/IsNegativeAnswer still private in FindSongIntentHandler. The move to DisambiguationHelper is straightforward but touches 10+ handler call sites; best done in a fresh session with the review gate.
+
+REVIEW GATE COMPLETE (2 agents over /tmp/jf407.diff): Finding 1 (bug-scan + comments, converged): the LaunchRequestHandler resume site's reprompt changed wire format from SSML (old AskSsml(string,string) overload wrapped in speak tags) to PlainText (helper wraps in Reprompt(string) which produces PlainTextOutputSpeech). Zero practical impact (verified: no locale's ResumeReprompt contains XML-reserved chars; verified against the Alexa.NET 1.22.0 pinned source via reflection on the actual DLL). Doc comment corrected in commit 5114791 to disclose the delta instead of claiming zero behavior change. Finding 2: transient XML-doc compilation error (angle brackets in summary) during the fix, resolved in the same commit; convention noted. Finding 3 (minor): the item-3 note cited 'commit ~14989076' which is not a valid hash; the actual AskLocalized commit is 19c6862 (corrected in this note). All other claims verified: escaping identical (EscapeStringArgs delegates to the same EscapeXml), reprompt lookup never throws (ResponseStrings.Get has a 4-level fallback), 13 keys exist in all 17 locales, 139/139 targeted tests green, 0 warnings/0 errors under TreatWarningsAsErrors.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
