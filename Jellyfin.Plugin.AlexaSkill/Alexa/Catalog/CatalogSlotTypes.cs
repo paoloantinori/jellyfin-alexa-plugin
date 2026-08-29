@@ -16,11 +16,19 @@ public static class CatalogSlotTypes
     /// otherwise the runtime values land on an inert type nobody reads.
     /// </summary>
     /// <remarks>
-    /// KNOWN MISMATCH (tracked in JF-332): Album → "AMAZON.Album", but no slot in
-    /// any locale model uses AMAZON.Album — PlayAlbumIntent.album uses "AlbumName"
-    /// (see <see cref="CatalogSlotTypeNames"/>). So dynamic album values are inert.
-    /// The fix is to point Album at the model's real type ("AlbumName"), NOT to
-    /// change the model slot to a built-in (see CatalogSlotTypeNames remarks).
+    /// KNOWN MISMATCH (tracked in JF-332, facts corrected 2026-08-29): Album is
+    /// uploaded to "AMAZON.Album", a type no locale model declares. The album slot
+    /// type is NOT uniform across locales: ONLY it-IT declares "AlbumName"
+    /// (catalog-backed, JF-96.2); the other 16 locales have declared
+    /// AMAZON.MusicRecording since before 2026-07 (verified at the 2026-07-03
+    /// commit). Consequences: (a) dynamic album values are inert everywhere
+    /// (AMAZON.Album is declared nowhere); (b) a single "point Album at AlbumName"
+    /// fix would only work for it-IT - in the other 16 locales it would recreate
+    /// the same inert-type failure on a different name, and conversely the static
+    /// catalog upload to "AlbumName" (CatalogSlotTypeNames) only reaches a
+    /// declared type in it-IT. The JF-332 resolution needs a per-locale decision
+    /// (per-locale catalog type names, or harmonizing the model slot type); do
+    /// NOT "restore" a uniform AlbumName assumption from older comments.
     /// </remarks>
     public static readonly Dictionary<CatalogType, string> Names = new()
     {

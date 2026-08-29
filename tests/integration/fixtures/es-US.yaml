@@ -1,0 +1,23 @@
+locale: es-US
+invocation_name: jellyfin player
+tests:
+  # JF-414: es-US had no NLU fixture file at all while its siblings es-ES and es-MX
+  # did (review finding 2026-08-29); seeded with the indefinite album-by-artist form
+  # that motivated the model change, plus one routing sanity entry. Extend per JF-400.
+  - utterance: "un álbum de queen"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      musician: {}
+
+  # NOTE (JF-406 divergence class, observed 2026-08-29): on es-US the imperative
+  # "Reproduce un álbum de queen" routes to PlaySongIntent (song='1 album') while
+  # the identical utterance shape works on es-ES/es-MX - per-locale NLU divergence
+  # with identical models. Only the bare form is asserted here; the divergence is
+  # tracked in JF-406.
+
+  # Routing sanity: a browse phrase must not be stolen by the new album forms
+  # (matches the model's own sample "explorar {browse_category}").
+  - utterance: "explorar álbumes"
+    expected_intent: BrowseLibraryIntent
+    expected_slots:
+      browse_category: {}

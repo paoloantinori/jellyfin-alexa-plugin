@@ -7,6 +7,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-08-23 10:30'
+updated_date: '2026-08-29 07:04'
 labels:
   - nlu
   - localization
@@ -42,3 +43,9 @@ The es-US fixture was REVERTED (don't ship 20 divergent expectations); es-MX/fr-
 - [ ] #10 /code-review high passed (no blocking findings remaining
 - [ ] #11 or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+NEW DATA POINT (2026-08-29, JF-414 verification): es-US 'Reproduce un album de queen' routes to PlaySongIntent (song='1 album') while the bare 'un album de queen' routes correctly to PlayAlbumIntent on the same model - and the identical imperative shape works on es-ES/es-MX (their siblings use the same vocabulary). Same class as the album/chapter/playlist cases already tracked here: identical committed models, divergent per-locale NLU. Fixture asserts only the working bare form; the imperative divergence is documented in tests/integration/fixtures/es-US.yaml.
+<!-- SECTION:NOTES:END -->

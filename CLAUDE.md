@@ -488,7 +488,12 @@ python3 -c "import json; d=json.load(open('model_it-IT.json')); m=d.get('interac
 PlayAlbumIntent.album type: AlbumName  →  AMAZON.MusicRecording
 #    - loses Italian phonetic synonyms for English album names
 #    - blocks the catalog-sync path (CatalogSyncTypeNames writes to AlbumName, now unused)
-#    - inconsistent with the other 16 locales
+#    - FACT CORRECTION 2026-08-29: the old "inconsistent with the other 16 locales"
+#      bullet was INVERTED - only it-IT declares AlbumName; the other 16 locales have
+#      used AMAZON.MusicRecording all along. The it-IT revert stands on the
+#      phonetic-synonym merits alone. Consequence (JF-332 extension): the static
+#      album catalog upload reaches a declared type ONLY in it-IT; in the other 16
+#      locales it is inert. Do NOT "restore" a uniform-AlbumName assumption.
 
 # ✅ RIGHT — fix the catalog population, keep the architecture
 #    Investigate why CatalogSyncTask isn't filling AlbumName with the user's real

@@ -689,7 +689,11 @@ tests:
     expected_slots:
       playlist: {}
 
-  # JF-414: indefinite album-by-artist forms
+  # JF-414: indefinite album-by-artist forms. NOTE (review 2026-08-29): under en-*
+  # the AMAZON.Musician built-in rewrites the slot value to a knowledge-graph
+  # canonical (queen -> 'Paula Abdul'); the {musician: {}} assertion passes on any
+  # non-empty value and therefore does NOT cover that mangling - it verifies
+  # ROUTING only. The value-mangling residual is tracked in JF-414 notes.
   - utterance: "an album by queen"
     expected_intent: PlayAlbumIntent
     expected_slots:
