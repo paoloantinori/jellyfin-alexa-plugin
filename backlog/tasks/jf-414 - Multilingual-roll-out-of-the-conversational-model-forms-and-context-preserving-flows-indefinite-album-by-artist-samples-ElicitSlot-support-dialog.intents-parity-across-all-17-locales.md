@@ -4,9 +4,11 @@ title: >-
   Multilingual roll-out of the conversational model forms and context-preserving
   flows (indefinite album-by-artist samples, ElicitSlot support, dialog.intents
   parity across all 17 locales)
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - zai
 created_date: '2026-08-28 18:37'
+updated_date: '2026-08-29 05:54'
 labels: []
 dependencies: []
 priority: medium
@@ -26,6 +28,12 @@ Several conversational-model fixes landed it-IT only (2026-08-28): the 44+10 ind
 - [ ] #4 NLU fixtures for the new forms in at least the locales with existing fixture coverage (per JF-400 extension order: pt-BR, ja, hi, en variants first)
 - [ ] #5 Validators green (interaction models, locales, versions); NLU runs green for covered locales; on-device spot check on it-IT plus one more locale
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Phase A (models): add indefinite album-by-artist samples to PlayAlbumIntent in the 16 non-it-IT models, phrasing grounded in each locale's EXISTING imperative vocabulary (inspect current samples first, no machine-literal translations); verify musician slot type per locale before adding. Phase B (dialog parity decision): inspect the 6 locales' PlayEpisode prompt structure and decide model-delegated-everywhere vs manual-everywhere; minimal-risk path preferred. Phase C: validators + NLU fixtures for locales with existing fixture coverage (en-US first). Phase D: SMAPI push of all changed models (sequential set-interaction-model + status poll, background). Phase E: suite + commit + notes.
+<!-- SECTION:PLAN:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
