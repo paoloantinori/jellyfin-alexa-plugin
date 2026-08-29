@@ -900,9 +900,14 @@ public abstract class BaseHandler
     /// FallbackIntentHandler, LaunchRequestHandler, and BaseHandler (2x), where the
     /// reprompt-key handling and XML escaping drifted between sites. Args are RAW
     /// (unescaped): the SSML path escapes them internally, the plaintext path keeps
-    /// them raw. The reprompt is always plain text (no SSML variant is used for
-    /// reprompts in any locale; the Welcome flow's SSML reprompt is the one exception
-    /// and stays hand-written in LaunchRequestHandler).
+    /// them raw. The reprompt is always emitted as PlainText. The one behavior change
+    /// from the sites it replaced (review 2026-08-29): the LaunchRequestHandler resume
+    /// site previously used the AskSsml(string, string) overload, which wrapped the
+    /// reprompt in speak tags (SSML output); this helper emits PlainText, which is
+    /// strictly more robust (the old wrapping would produce INVALID SSML if a future
+    /// localized reprompt contained a raw XML char) but is a wire-format difference.
+    /// The Welcome flow's dual SSML prompt+reprompt stays hand-written in
+    /// LaunchRequestHandler (it is the only site with an SSML reprompt variant).
     /// </summary>
     /// <param name="ssmlKey">The ResponseStrings key for the SSML prompt variant.</param>
     /// <param name="textKey">The ResponseStrings key for the plain-text prompt variant.</param>
