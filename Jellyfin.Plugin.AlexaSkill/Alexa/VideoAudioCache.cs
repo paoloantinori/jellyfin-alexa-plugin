@@ -286,6 +286,15 @@ public class VideoAudioCache
         int maxSizeMB = Plugin.Instance?.Configuration.VideoAudioCacheSizeMB ?? 2048;
         long maxSizeBytes = ((long)maxSizeMB * 1024 * 1024) - headroomBytes;
 
+        // Clamp to 0: a headroom that exceeds the whole cache (single audiobook
+        // larger than the configured cap) must NOT make maxSizeBytes negative and
+        // cause the eviction loop to delete every entry trying to reach an
+        // unreachable target (review 2026-08-29 finding 5).
+        if (maxSizeBytes < 0)
+        {
+            maxSizeBytes = 0;
+        }
+
         if (!Directory.Exists(_cacheDir))
         {
             return;

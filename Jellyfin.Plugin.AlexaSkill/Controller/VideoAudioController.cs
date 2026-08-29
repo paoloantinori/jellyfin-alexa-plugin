@@ -1581,7 +1581,12 @@ public class VideoAudioController : ControllerBase
         const long HeadroomEstimateBytes = 64L * 1024 * 1024;
         await _cache.EnsureDiskBudgetBeforeEncodeAsync(HeadroomEstimateBytes).ConfigureAwait(false);
 
-        await _encodeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        // Capture the gate instance at acquire time so the release always goes to
+        // the SAME semaphore, even if UpdateEncodeGateCapacity swaps the field while
+        // this encode is in flight (review 2026-08-29: releasing the new field after
+        // a swap would grant a phantom slot and strand waiters on the dead semaphore).
+        var gate = _encodeGate;
+        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         Process process;
         try
         {
@@ -1589,27 +1594,35 @@ public class VideoAudioController : ControllerBase
         }
         catch
         {
-            _encodeGate.Release();
+            gate.Release();
             throw;
         }
 
-        // Release the gate slot when the process exits (or is disposed without
-        // exiting, e.g. controller shutdown).
+        // Release the gate slot when the process exits or is disposed. Polling
+        // HasExited instead of WaitForExitAsync: the .NET runtime makes
+        // WaitForExitAsync on a disposed-but-still-running process NEVER complete
+        // (probed on net9.0, review 2026-08-29), which would permanently consume
+        // the slot. HasExited returns true for both exited and already-disposed
+        // processes. The 500ms poll interval is negligible vs. encode times.
         _ = Task.Run(
             async () =>
             {
                 try
                 {
-                    await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+                    while (!process.HasExited)
+                    {
+                        await Task.Delay(500, CancellationToken.None).ConfigureAwait(false);
+                    }
                 }
                 catch (InvalidOperationException)
                 {
-                    // Process already disposed; the slot is released below regardless.
+                    // Process disposed (ObjectDisposedException derives from
+                    // InvalidOperationException); release below regardless.
                 }
                 finally
                 {
-                    try { _encodeGate.Release(); }
-                    catch (SemaphoreFullException) { /* already released via dispose path */ }
+                    try { gate.Release(); }
+                    catch (SemaphoreFullException) { /* defensive: double-release */ }
                 }
             },
             CancellationToken.None);
