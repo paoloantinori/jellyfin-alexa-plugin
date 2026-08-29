@@ -104,6 +104,62 @@ public class EmptyMusicianSlotTests : PluginTestBase
         return new IntentRequest { Intent = intent, Locale = "it-IT", RequestId = "test-req" };
     }
 
+    [Fact]
+    public async Task PlaySong_CapturedCancelWordDuringOpenElicit_EndsFlow()
+    {
+        // JF-413/code-review 2026-08-29: while the song-name Dialog.ElicitSlot is open, a
+        // stop/cancel word is captured into the song slot (dialogState IN_PROGRESS)
+        // instead of routing to AMAZON.Stop/Cancel; the handler must end the flow.
+        var handler = CreateSongHandler();
+        var request = CreateSongIntentRequest("ferma", null);
+        request.DialogState = "IN_PROGRESS";
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.True(response.Response.ShouldEndSession != false, "captured cancel word must end the session");
+    }
+
+    [Fact]
+    public async Task PlaySong_FirstInvocationCancelWordTitle_StillSearches()
+    {
+        // Gated on IN_PROGRESS: a first invocation for a song actually titled like a
+        // cancel word must run the normal search, not cancel.
+        var handler = CreateSongHandler();
+        var request = CreateSongIntentRequest("stop", null);
+        request.DialogState = "STARTED";
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        var speech = (response.Response.OutputSpeech as PlainTextOutputSpeech)?.Text ?? string.Empty;
+        Assert.DoesNotContain("interrotto", speech, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task PlayAlbum_CapturedCancelWordDuringOpenElicit_EndsFlow()
+    {
+        // JF-413/code-review 2026-08-29: same trap on the album/musician elicit.
+        var handler = CreateAlbumHandler();
+        var intent = new Intent { Name = IntentNames.PlayAlbum };
+        intent.Slots = new Dictionary<string, Slot>
+        {
+            ["album"] = new Slot { Name = "album", Value = "ferma" }
+        };
+        var request = new IntentRequest { Intent = intent, Locale = "it-IT", RequestId = "test-req", DialogState = "IN_PROGRESS" };
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.True(response.Response.ShouldEndSession != false, "captured cancel word must end the session");
+    }
+
     private static Context CreateContext() => TestHelpers.CreateTestContext();
 
     [Fact]
@@ -131,6 +187,10 @@ public class EmptyMusicianSlotTests : PluginTestBase
         Assert.Equal("song", elicit.SlotToElicit);
         Assert.Equal("PlaySongIntent", elicit.UpdatedIntent.Name);
         Assert.Equal(new[] { "musician", "song" }, elicit.UpdatedIntent.Slots.Keys.OrderBy(k => k).ToArray());
+        // JF-398: the elicit owns no flow state, so every OTHER flow's keys must be
+        // marked for removal (no stale resume/disambiguation/pagination rides along).
+        Assert.NotNull(response.SessionAttributes);
+        Assert.True(response.SessionAttributes.ContainsKey(Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.SessionAttributeRemoval.MarkerKey), "elicit must mark other flows inactive");
     }
 
     private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);

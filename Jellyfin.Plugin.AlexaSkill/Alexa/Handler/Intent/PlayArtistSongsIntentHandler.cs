@@ -251,7 +251,12 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 Logger.LogInformation(
                     "ArtistSearch: tier=1 duration={TierMs}ms results={Count} method=SearchTerm query='{Query}' mode=Fast",
                     tierSw.ElapsedMilliseconds, artists.Count, musician);
-                artists = FilterContainmentBand(artists, musician);
+                // NOTE: no JF-381 containment-band gate here - Fast mode DB has NO
+                // recovery tier (the in-memory Fast path falls through to fuzzy-all, this
+                // one does not), so gating would turn direct long-name hits ("florence" ->
+                // "Florence + The Machine") into not-founds during the cold-index window.
+                // Trade-off: a cold-start Fast DB search can auto-play a coincidental
+                // containment, as it did before the sweep (code-review 2026-08-29).
             }
             else
             {
@@ -509,19 +514,21 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         string retryLabel, CancellationToken cancellationToken)
     {
         return await TrySearchFallbackAsync(
-            q => q.NameStartsWith = prefix, musician, topParentIds, user, retryLabel, cancellationToken).ConfigureAwait(false);
+            q => q.NameStartsWith = prefix, musician, topParentIds, user, retryLabel, applyContainmentBand: false, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
     /// Tries a NameContains substring search followed by fuzzy matching against the results.
     /// Catches cases where the query appears anywhere in the artist name (e.g. "Kidz Bop" → "The Kidz Bop Kids").
+    /// Since this is a substring-shaped source, results pass through the JF-381 containment
+    /// band (a purely coincidental candidate set would be confirmed by the fuzzy step).
     /// </summary>
     private async Task<BaseItem?> TryContainsFallbackAsync(
         string searchTerm, string musician, Guid[]? topParentIds, Entities.User? user,
         string retryLabel, CancellationToken cancellationToken)
     {
         return await TrySearchFallbackAsync(
-            q => q.NameContains = searchTerm, musician, topParentIds, user, retryLabel, cancellationToken).ConfigureAwait(false);
+            q => q.NameContains = searchTerm, musician, topParentIds, user, retryLabel, applyContainmentBand: true, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -534,7 +541,8 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         Guid[]? topParentIds,
         Entities.User? user,
         string retryLabel,
-        CancellationToken cancellationToken)
+        bool applyContainmentBand = false,
+        CancellationToken cancellationToken = default)
     {
         var query = new InternalItemsQuery()
         {
@@ -555,9 +563,13 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             return null;
         }
 
-        // JF-381 gate before fuzzy: the fallback queries are substring-shaped, so the
-        // candidate set itself can be purely coincidental ("cup" -> "Porcupine Tree").
-        return FuzzyMatch(musician, FilterContainmentBand(results, musician), a => a.Name, user);
+        // JF-381 gate before fuzzy ONLY for substring-shaped sources (NameContains):
+        // a purely coincidental candidate set would be confirmed by the fuzzy step.
+        // Prefix-shaped callers (NameStartsWith) pass applyContainmentBand=false: a short
+        // query at the START of a long name is the intended ASR-truncation shape
+        // ("crash" -> "Crash Test Dummies"), not a coincidence (code-review 2026-08-29).
+        var candidates = applyContainmentBand ? FilterContainmentBand(results, musician) : results;
+        return FuzzyMatch(musician, candidates, a => a.Name, user);
     }
 
     /// <summary>

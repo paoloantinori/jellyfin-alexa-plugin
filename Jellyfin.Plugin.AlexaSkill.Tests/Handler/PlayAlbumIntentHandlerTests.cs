@@ -293,6 +293,10 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         // Amazon requires updatedIntent to declare EVERY intent slot (live INVALID_RESPONSE
         // 2026-08-28 21:17: "All slots must be defined... Missing: album").
         Assert.Equal(new[] { "album", "musician" }, elicit.UpdatedIntent.Slots.Keys.OrderBy(k => k).ToArray());
+        // JF-398: the elicit owns no flow state, so every OTHER flow's keys must be
+        // marked for removal (no stale resume/disambiguation/pagination rides along).
+        Assert.NotNull(response.SessionAttributes);
+        Assert.True(response.SessionAttributes.ContainsKey(Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.SessionAttributeRemoval.MarkerKey), "elicit must mark other flows inactive");
     }
 
     [Fact]

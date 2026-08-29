@@ -140,14 +140,21 @@ public class PlaySongIntentHandler : BaseHandler
 
         Logger.LogDebug("PlaySong: entered, locale={Locale}", locale);
 
+        // Escape hatch from the elicitation trap (shared CancelWords helper): while OUR
+        // song-name Dialog.ElicitSlot is open, a stop/cancel word gets captured into the
+        // song slot (dialogState IN_PROGRESS) instead of routing to AMAZON.Stop/Cancel.
+        // Gated on IN_PROGRESS so a first-invocation search for a song actually titled
+        // "Stop" still runs (code-review 2026-08-29).
+        if (string.Equals(intentRequest.DialogState, "IN_PROGRESS", StringComparison.OrdinalIgnoreCase)
+            && (Util.CancelWords.IsCancelWord(songQuery) || Util.CancelWords.IsCancelWord(musicianQuery)))
+        {
+            Logger.LogInformation("PlaySong: captured cancel word during open elicit (song='{Song}'), ending flow", songQuery);
+            return ResponseBuilder.Tell(ResponseStrings.Get("FindSongCancelled", locale));
+        }
+
         if (string.IsNullOrWhiteSpace(songQuery))
         {
-            // JF-413: Dialog.ElicitSlot (not a plain Ask) so the session stays in the
-            // PlaySongIntent dialog: the user's answer (a bare song title) fills the song
-            // slot directly instead of having to re-match through general NLU, and an
-            // already-filled musician slot survives the round-trip. PlaySongIntent is
-            // registered in dialog.intents in all 17 locales (verified 2026-08-29); the
-            // updatedIntent must declare BOTH intent slots (Amazon rejects partial ones).
+            Logger.LogDebug("PlaySong: empty song slot, eliciting via Dialog.ElicitSlot");
             return BuildSongElicitResponse(locale);
         }
 
@@ -407,22 +414,22 @@ public class PlaySongIntentHandler : BaseHandler
         return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, songs[0], user, context, offsetMs, announceLocale: locale);
     }
 
-    // Alexa's NLU can misalign slot boundaries, causing carrier phrases like
-    // "la canzone" to bleed into the slot value. Strip them before searching.
     /// <summary>
     /// Song-name elicitation via Dialog.ElicitSlot (context-preserving, JF-413): the next
     /// utterance fills the song slot inside the PlaySongIntent dialog instead of falling
     /// through to general NLU, and an already-filled musician slot survives the
     /// round-trip. Declares BOTH intent slots in updatedIntent (Amazon rejects partial
     /// updatedIntent, live INVALID_RESPONSE 2026-08-28). PlaySongIntent is registered in
-    /// dialog.intents in all 17 locales (verified 2026-08-29).
+    /// dialog.intents in all 17 locales (verified 2026-08-29). MarkOthersInactive with no
+    /// active keys (JF-398): the elicit owns no session state of its own (the dialog
+    /// lives Amazon-side), so any OTHER flow's stale state must not ride along.
     /// </summary>
     /// <param name="locale">The request locale, for the prompt string.</param>
     /// <returns>The elicitation response.</returns>
     private static SkillResponse BuildSongElicitResponse(string locale)
     {
         string prompt = ResponseStrings.Get("ElicitSongName", locale);
-        return new SkillResponse
+        var response = new SkillResponse
         {
             Version = "1.0",
             Response = new ResponseBody
@@ -433,8 +440,12 @@ public class PlaySongIntentHandler : BaseHandler
                 Directives = new List<IDirective> { new ElicitSlotDirective(IntentNames.Slots.Song, IntentNames.PlaySong, new[] { IntentNames.Slots.Song, IntentNames.Slots.Musician }) }
             }
         };
+        Pipeline.ConversationalFlows.MarkOthersInactive(response);
+        return response;
     }
 
+    // Alexa's NLU can misalign slot boundaries, causing carrier phrases like
+    // "la canzone" to bleed into the slot value. Strip them before searching.
     internal static string StripSongCarrierPhrase(string query)
     {
         string trimmed = query.TrimStart();

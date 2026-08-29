@@ -53,6 +53,10 @@ def _reset_simulation_session(skill_id, smapi_delay):
     resets the state. Prefixed one-shots do NOT work here: the dialog capture includes
     the invocation prefix in the slot value. Best-effort: a failed reset surfaces
     downstream as the recognizable find-song-hijack pattern.
+    Known limitation: the reset hardcodes locale it-IT because every e2e fixture today
+    is it-IT; if Amazon scopes the persisted simulation session per device-locale, a
+    non-it-IT FindSong fixture would need its own locale-scoped reset (extend here when
+    such fixtures are added, cf. JF-400/JF-414).
     """
     reset_client = SmapiClient(
         skill_id=skill_id,

@@ -1312,10 +1312,13 @@
             "name": "song",
             "type": "AMAZON.MusicRecording",
             "confirmationRequired": false,
-            "elicitationRequired": true,
-            "prompts": {
-              "elicitation": "Elicit.SongName"
-            }
+            "elicitationRequired": false
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician",
+            "confirmationRequired": false,
+            "elicitationRequired": false
           }
         ]
       },
@@ -1325,12 +1328,15 @@
         "slots": [
           {
             "name": "album",
-            "type": "AMAZON.MusicRecording",
+            "type": "AlbumName",
             "confirmationRequired": false,
-            "elicitationRequired": true,
-            "prompts": {
-              "elicitation": "Elicit.AlbumName"
-            }
+            "elicitationRequired": false
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician",
+            "confirmationRequired": false,
+            "elicitationRequired": false
           }
         ]
       },

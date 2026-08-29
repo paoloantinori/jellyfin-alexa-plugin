@@ -95,6 +95,18 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         Logger.LogDebug("PlayAlbum: entered, locale={Locale}", locale);
 
+        // Escape hatch from the elicitation trap (shared CancelWords helper): while OUR
+        // album/musician Dialog.ElicitSlot is open, a stop/cancel word gets captured into
+        // the elicited slot (dialogState IN_PROGRESS) instead of routing to
+        // AMAZON.Stop/Cancel. Gated on IN_PROGRESS so a first-invocation search for an
+        // album actually titled "Stop" still runs (code-review 2026-08-29).
+        if (string.Equals(intentRequest.DialogState, "IN_PROGRESS", StringComparison.OrdinalIgnoreCase)
+            && (Util.CancelWords.IsCancelWord(album) || Util.CancelWords.IsCancelWord(musician)))
+        {
+            Logger.LogInformation("PlayAlbum: captured cancel word during open elicit (album='{Album}'), ending flow", album);
+            return ResponseBuilder.Tell(ResponseStrings.Get("FindSongCancelled", locale));
+        }
+
         if (string.IsNullOrWhiteSpace(album))
         {
             // Elicit via Dialog.ElicitSlot so the session stays in the PlayAlbumIntent
@@ -468,7 +480,7 @@ public class PlayAlbumIntentHandler : BaseHandler
     private static SkillResponse BuildSlotElicitResponse(string slotName, string promptKey, string locale)
     {
         string prompt = ResponseStrings.Get(promptKey, locale);
-        return new SkillResponse
+        var response = new SkillResponse
         {
             Version = "1.0",
             Response = new ResponseBody
@@ -479,6 +491,10 @@ public class PlayAlbumIntentHandler : BaseHandler
                 Directives = new List<IDirective> { new ElicitSlotDirective(slotName, IntentNames.PlayAlbum, new[] { IntentNames.Slots.Album, IntentNames.Slots.Musician }) }
             }
         };
+        // JF-398 write-time mutual exclusion: the elicit owns no session state of its own
+        // (the dialog lives Amazon-side), so no OTHER flow's stale state may ride along.
+        Pipeline.ConversationalFlows.MarkOthersInactive(response);
+        return response;
     }
 
     private InternalItemsQuery BuildAlbumQuery(Jellyfin.Database.Implementations.Entities.User? jellyfinUser, Jellyfin.Plugin.AlexaSkill.Entities.User user, string? searchTerm, Guid[]? artistIds, bool albumArtistsOnly = false)

@@ -536,6 +536,28 @@ tests:
     expected_slots:
       musician: {}
 
+  # JF-411 hardening: desiderative forms (previously bled the whole phrase into the
+  # musician slot) and carrier-anchored forms (fill anchors for on-device NLU).
+  - utterance: "vorrei un disco dei queen"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "vorrei ascoltare un album di michael jackson"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "un disco della band queen"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "un album del gruppo michael jackson"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      musician: {}
+
   # NOTE: "il cd" as an album carrier is weak (NLU routes "metti il cd X" to
   # PlaySongIntent) and album fixtures must use library-present albums (AlbumName
   # is catalog-backed post-JF-332, so "la cura"/"thriller" only resolve if the
