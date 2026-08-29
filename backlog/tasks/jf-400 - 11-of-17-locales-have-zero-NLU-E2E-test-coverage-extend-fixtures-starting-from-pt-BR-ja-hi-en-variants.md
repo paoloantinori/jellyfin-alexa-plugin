@@ -6,7 +6,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-08-23 05:57'
-updated_date: '2026-08-29 08:03'
+updated_date: '2026-08-29 08:14'
 labels:
   - testing
   - nlu
@@ -49,4 +49,8 @@ Caveat discovered while running suites: profile-nlu is NONDETERMINISTIC at the i
 2026-08-23 second batch (commit 66b340b): es-MX + fr-CA fixtures added and fully green (116/116 live). Divergences annotated per-case (fr-CA album-vs-song greedy capture; es-MX muestrame fallback). es-US fixture REVERTED after ~20 systematic divergences -> new task JF-406. Coverage now 11/17 locales (it, en-US/GB/AU/CA/IN, de, fr-FR/CA, es-ES/MX). Remaining 6 (pt-BR, ja, hi, ar, nl, es-US): pt/ja/hi/ar/nl are NOT active locales on the dev skill so cannot be tested against profile-nlu at all; es-US blocked by JF-406. This task can close when those blockers resolve (enable locales / fix divergence), or be kept open as tracking.
 
 PROGRESS 2026-08-29 (device-free, JF-414 spillover): es-US.yaml and pt-BR.yaml fixture files CREATED (first fixtures ever for both locales), each probe-verified against the pushed model BEFORE asserting (the es-US lesson: its imperative 'Reproduce un album de queen' diverges to PlaySongIntent - recorded in JF-406 - so only the working bare form is asserted; pt-BR is clean, all three album forms + browse green 4/4 live). Remaining uncovered NLU locales: ja-JP, hi-IN, ar-SA, nl-NL (no fixture files; nl/hi/ar models are live on the vendor, ja-JP is vendor-disabled 404).
+
+COMPLETION 2026-08-29 (device-free): fixture files created for the remaining live locales - es-US, pt-BR, nl-NL, hi-IN, ar-SA - each probe-verified against the pushed models BEFORE asserting (12/12 green live). NLU coverage now 16/17 locales; only ja-JP remains (vendor-disabled, SMAPI 404, manifest enablement needed - tracked in JF-414). Harness fixed: INVOCATION_PREFIX gained ar-SA/nl-NL/hi-IN (the English fallback misroutes Arabic). Two JF-406-class divergences found and documented in-file: es-US imperative 'Reproduce un album de queen' -> PlaySongIntent; ar-SA 'shughl album queen' bare -> PlayVideoIntent deterministically (4/4), correct with the Arabic invocation prefix. The 2026-08-23 note that pt/ja/hi/ar/nl were 'not active on the dev skill' is superseded: all but ja-JP are live and testable (verified by direct model reads and green runs).
+
+PER-USER NOTE for fixture extension: always probe-verify each utterance bare on profile-nlu BEFORE writing the expectation; the sample vocabulary alone does not predict routing (both divergences above are in forms present as samples).
 <!-- SECTION:NOTES:END -->
