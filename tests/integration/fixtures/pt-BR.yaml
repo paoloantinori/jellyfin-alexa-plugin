@@ -1,0 +1,29 @@
+locale: pt-BR
+invocation_name: jellyfin player
+tests:
+  # JF-400: pt-BR had no NLU fixture file; seeded (probe-verified 2026-08-29 against the
+  # pushed model) with the JF-414 indefinite album-by-artist forms plus a browse sanity
+  # entry. All three album forms route to PlayAlbumIntent with the raw musician value
+  # preserved (no es-US-style divergence). Extend per the JF-400 locale program.
+  - utterance: "um álbum de queen"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "tocar um álbum de queen"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "ouvir um álbum de queen"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      musician: {}
+
+  # Routing sanity: a browse phrase must not be stolen by the album forms
+  # (matches the model's own sample "quero {browse_category}"; 'álbuns' is a
+  # BrowseCategory type value).
+  - utterance: "quero álbuns"
+    expected_intent: BrowseLibraryIntent
+    expected_slots:
+      browse_category: {}
