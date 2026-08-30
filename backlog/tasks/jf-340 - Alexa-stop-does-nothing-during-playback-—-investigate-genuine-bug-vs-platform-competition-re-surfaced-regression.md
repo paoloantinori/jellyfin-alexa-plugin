@@ -6,7 +6,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-07-13 10:32'
-updated_date: '2026-08-30 12:26'
+updated_date: '2026-08-30 12:47'
 labels:
   - playback
   - stop
@@ -104,6 +104,8 @@ DO NOT CLOSE JF-340. Validation repro in progress: Trial 1 & 2 = start a track, 
 RESCOPED (2026-08-28 night): the 'genuine bug vs platform competition' question is decomposed - the genuine-bug component was the Dialog.ElicitSlot capture trap (stop captured as slot value during open elicitation), FIXED via the FindSong cancel-word escape hatch (see JF-392 closure notes). What remains here is the PLATFORM component only: stop claimed by the default music service during playback (not plugin-fixable, Music Skill API reservation). Residual value of this task: keep the JF-392 data-collection instrumentation summary and on-device spot checks of the escape hatch (say 'ferma' right after a skill question: expect 'Ok, ho interrotto la ricerca' and silence); if that holds on device, this can be closed as documented-platform-behavior.
 
 ON-DEVICE RESOLUTION 2026-08-30: the 'stop does nothing during playback' issue was caused by STALE DEVICE STATE, not by plugin code, session management, or permanent platform competition. After an intensive testing session (20+ DLL deploys, 17 locale model pushes, dozens of ElicitSlot interactions), the Echo device accumulated state that prevented it from executing stop commands for the skill's audio. A simple device restart (unplug 10s) cleared the state and stop/ferma immediately worked again. The device handles stop locally (no intent reaches the skill, only PlaybackStopped arrives); this is correct behavior. IMPLICATION: after heavy testing/deployment sessions, the Echo may need a restart. This is not a plugin bug but should be documented as a known operational consideration. The earlier 'platform competition' classification was PARTIALLY correct (the device was indeed handling it) but WRONG in asserting it was permanent/unfixable. JF-402 custom samples were NOT the cause (they had been working since May 2026; the premature removal attempt was reverted).
+
+PATTERN IDENTIFIED (2026-08-30, on-device): stop routing breaks after ElicitSlot interactions. Sequence: device restart → stop works → ElicitSlot dialogs (FindSong multi-turn, album elicit) → stop stops working → device restart → stop works again. Recurrence within ~20 minutes of testing. The 2 'stop' attempts between the ElicitSlot sessions and the successful 'pausa' show the same pattern as the original report. Correlation: every ElicitSlot dialog we open leaves state on the device that interferes with device-level stop routing. 'Pausa' always works (routed via AudioPlayer active-player mechanism, different from device-level stop). Practical mitigation: use 'pausa' or the one-shot 'chiedi a mia collezione ferma'. Potential fix direction: investigate whether our session-close responses (shouldEndSession=true after dialog) fully clear the device's dialog state, or whether we need a Dialog.Delegate or explicit dialog-clearing response.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
