@@ -276,6 +276,98 @@ public class ArtistSearchTests
         Assert.DoesNotContain(result, a => a.Name == "Porcupine Tree");
     }
 
+    [Fact]
+    public async Task SearchAsync_PartialFirstWordMatch_Tier4FullNameWins()
+    {
+        // JF-417 live incident (2026-08-30): "pink floyd" spoken on it-IT Echo,
+        // ASR transcribes as "P!nk floyd". The tier-2 prefix on first word "P!nk"
+        // matches the artist "P!nk" (4 chars), covering only 40% of the 10-char query.
+        // The tier-4 fuzzy-all must find "Pink Floyd" (a near-exact match for the full
+        // query) instead. Without the guard, tier-2 short-circuits and plays P!nk.
+        var pnk = new MusicArtist { Name = "P!nk", Id = Guid.NewGuid() };
+        var pinkFloyd = new MusicArtist { Name = "Pink Floyd", Id = Guid.NewGuid() };
+        var index = new FakeArtistIndex(new[] { pnk, pinkFloyd });
+
+        var result = await ArtistSearch.SearchAsync(
+            "P!nk floyd",
+            user: null,
+            libraryManager: Mock.Of<ILibraryManager>(),
+            artistIndex: index,
+            logger: Logger,
+            dbQuery: NotCalled,
+            cancellationToken: CancellationToken.None);
+
+        Assert.Single(result);
+        Assert.Equal("Pink Floyd", result[0].Name);
+    }
+
+    [Fact]
+    public async Task SearchAsync_PartialFirstWordMatch_NoBetterMatch_FallsBackToTier2()
+    {
+        // JF-417: when the guard defers tier-2 but tiers 3-4 find nothing better,
+        // the deferred tier-2 match is still the best available answer.
+        var pnk = new MusicArtist { Name = "P!nk", Id = Guid.NewGuid() };
+        var radiohead = new MusicArtist { Name = "Radiohead", Id = Guid.NewGuid() };
+        var index = new FakeArtistIndex(new[] { pnk, radiohead });
+
+        var result = await ArtistSearch.SearchAsync(
+            "P!nk something",
+            user: null,
+            libraryManager: Mock.Of<ILibraryManager>(),
+            artistIndex: index,
+            logger: Logger,
+            dbQuery: NotCalled,
+            cancellationToken: CancellationToken.None);
+
+        // Tier-4 fuzzy-all won't find anything better for "P!nk something" than
+        // "P!nk" (Radiohead is too different), so the deferred tier-2 wins.
+        Assert.Single(result);
+        Assert.Equal("P!nk", result[0].Name);
+    }
+
+    [Fact]
+    public async Task SearchAsync_SingleWordQuery_PrefixMatchNotDeferred()
+    {
+        // JF-417 guard is multi-word only: the ASR-truncation shape "crash" ->
+        // "Crash Test Dummies" must keep working via tier-2 without deferral.
+        var crashTestDummies = new MusicArtist { Name = "Crash Test Dummies", Id = Guid.NewGuid() };
+        var index = new FakeArtistIndex(new[] { crashTestDummies });
+
+        var result = await ArtistSearch.SearchAsync(
+            "crash",
+            user: null,
+            libraryManager: Mock.Of<ILibraryManager>(),
+            artistIndex: index,
+            logger: Logger,
+            dbQuery: NotCalled,
+            cancellationToken: CancellationToken.None);
+
+        Assert.Single(result);
+        Assert.Equal("Crash Test Dummies", result[0].Name);
+    }
+
+    [Fact]
+    public async Task SearchAsync_FullCoveragePrefixMatch_NotDeferred()
+    {
+        // JF-417: when the candidate covers the full query content ("The Beatles"
+        // for "the beatles"), the guard must not fire even though the query is
+        // multi-word and the first word is short.
+        var beatles = new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() };
+        var index = new FakeArtistIndex(new[] { beatles });
+
+        var result = await ArtistSearch.SearchAsync(
+            "the beatles",
+            user: null,
+            libraryManager: Mock.Of<ILibraryManager>(),
+            artistIndex: index,
+            logger: Logger,
+            dbQuery: NotCalled,
+            cancellationToken: CancellationToken.None);
+
+        Assert.Single(result);
+        Assert.Equal("The Beatles", result[0].Name);
+    }
+
     private static Task<IReadOnlyList<BaseItem>> NotCalled(
         InternalItemsQuery q, CancellationToken t) =>
         throw new InvalidOperationException("In-memory path must not hit the database");

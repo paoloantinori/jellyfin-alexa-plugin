@@ -44,6 +44,41 @@ internal static class ArtistSearch
     internal static bool PassesContainmentBand(string? candidateName, string query)
         => !string.IsNullOrEmpty(candidateName) && candidateName.Length <= query.Length + Tier1ContainmentLengthBand;
 
+    /// <summary>
+    /// Whether a tier-2 prefix match covers only the first word of a multi-word query,
+    /// leaving the rest of the query's content completely unmatched (JF-417). This shape
+    /// must NOT short-circuit the tier chain: the tier-4 fuzzy-all pass often has a much
+    /// better full-name match ("P!nk floyd" -> "Pink Floyd" at ~85, while "P!nk" only
+    /// covers the first word). The guard is deliberately narrow: it fires only when the
+    /// candidate is essentially JUST the first word (within a small margin), the first
+    /// word is less than half the query, and the query is multi-word. Single-word queries
+    /// (the ASR-truncation shape "crash" -> "Crash Test Dummies") and full-coverage
+    /// candidates ("the beatles" -> "The Beatles") are unaffected.
+    /// </summary>
+    /// <param name="query">The full raw query.</param>
+    /// <param name="firstWord">The first word extracted from the query (tier-2 prefix).</param>
+    /// <param name="candidateName">The tier-2 matched candidate's name.</param>
+    /// <returns>True when the match is a partial first-word shape and higher tiers should run.</returns>
+    internal static bool IsPartialFirstWordMatch(string query, string firstWord, string? candidateName)
+    {
+        if (string.IsNullOrEmpty(candidateName) || !query.Contains(' '))
+        {
+            return false;
+        }
+
+        // The candidate is essentially just the first word (small margin for
+        // punctuation or slight variations). If it extends meaningfully beyond the
+        // first word (like "The Beatles" for query "the beatles"), it covers the
+        // query's content and the guard must not fire.
+        bool candidateIsJustFirstWord = candidateName.Length <= firstWord.Length + 2;
+
+        // The first word is less than half the query, meaning the majority of the
+        // query's content ("floyd" in "P!nk floyd") is completely uncovered.
+        bool firstWordIsMinority = firstWord.Length < query.Length * 0.5;
+
+        return candidateIsJustFirstWord && firstWordIsMinority;
+    }
+
     public static async Task<IReadOnlyList<BaseItem>> SearchAsync(
         string musician,
         Entities.User? user,
@@ -88,6 +123,7 @@ internal static class ArtistSearch
 
             // Tier 2: prefix first word + fuzzy
             string firstWord = musician.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? musician;
+            BaseItem? deferredTier2Match = null;
             if (artists.Count == 0)
             {
                 tierSw.Restart();
@@ -102,7 +138,20 @@ internal static class ArtistSearch
                     tierSw.ElapsedMilliseconds, fuzzy != null, musician, firstWord);
                 if (fuzzy != null)
                 {
-                    artists = new List<BaseItem> { fuzzy };
+                    if (IsPartialFirstWordMatch(musician, firstWord, fuzzy.Name))
+                    {
+                        // JF-417: the tier-2 candidate covers only the first word of a
+                        // multi-word query ("P!nk" for "P!nk floyd"). Defer acceptance;
+                        // tier-4 fuzzy-all may have a better full-name match ("Pink Floyd").
+                        deferredTier2Match = fuzzy;
+                        logger.LogInformation(
+                            "ArtistSearch: tier=2 deferred (partial first-word match: candidate='{Candidate}' covers only '{FirstWord}' of query '{Query}', JF-417)",
+                            fuzzy.Name, firstWord, musician);
+                    }
+                    else
+                    {
+                        artists = new List<BaseItem> { fuzzy };
+                    }
                 }
             }
 
@@ -129,16 +178,39 @@ internal static class ArtistSearch
             if (artists.Count == 0)
             {
                 tierSw.Restart();
-                BaseItem? fuzzy = FuzzyMatch(musician, allArtists, user, artistIndex);
+                // JF-417: when a partial first-word match was deferred from tier-2,
+                // EXCLUDE that candidate from the tier-4 set. The containment
+                // exemption in ApplyLengthPenalty gives the deferred candidate an
+                // artificially high score (candidate is contained in query -> free
+                // pass at ContainmentScore), which would crowd out a genuine full-name
+                // match. Excluding it forces tier-4 to find "Pink Floyd" for
+                // "P!nk floyd" instead of returning the same "P!nk" at 90.
+                var tier4Candidates = deferredTier2Match != null
+                    ? allArtists.Where(a => !a.Id.Equals(deferredTier2Match.Id)).ToList()
+                    : allArtists;
+                BaseItem? fuzzy = FuzzyMatch(musician, tier4Candidates, user, artistIndex);
                 tierSw.Stop();
                 tierReached = 4;
                 logger.LogInformation(
-                    "ArtistSearch: tier=4 duration={TierMs}ms matched={Matched} method=InMemoryFuzzyAll query='{Query}'",
-                    tierSw.ElapsedMilliseconds, fuzzy != null, musician);
+                    "ArtistSearch: tier=4 duration={TierMs}ms matched={Matched} method=InMemoryFuzzyAll query='{Query}' deferred-excluded={Deferred}",
+                    tierSw.ElapsedMilliseconds, fuzzy != null, musician, deferredTier2Match?.Name);
                 if (fuzzy != null)
                 {
                     artists = new List<BaseItem> { fuzzy };
                 }
+            }
+
+            // JF-417: if tier-2 produced a deferred partial match and tiers 3-4 found
+            // nothing better (the deferred candidate was the ONLY plausible match),
+            // accept the deferred match as the final result. If tier-4 DID produce a
+            // different result (e.g. "Pink Floyd" for query "P!nk floyd"), the tier-4
+            // result wins by not reaching this branch.
+            if (artists.Count == 0 && deferredTier2Match != null)
+            {
+                artists = new List<BaseItem> { deferredTier2Match };
+                logger.LogInformation(
+                    "ArtistSearch: falling back to deferred tier-2 match '{Candidate}' for query '{Query}' (tiers 3-4 found nothing better, JF-417)",
+                    deferredTier2Match.Name, musician);
             }
         }
         else
