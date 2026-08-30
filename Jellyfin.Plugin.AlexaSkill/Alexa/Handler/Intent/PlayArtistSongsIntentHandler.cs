@@ -178,9 +178,18 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                     Logger.LogInformation(
                         "ArtistSearch: tier=2 duration={TierMs}ms matched={Matched} method=InMemoryPrefixFirstWord query='{Query}' prefix='{Prefix}'",
                         tierSw.ElapsedMilliseconds, tier2Match != null, musician, firstWord);
+                    BaseItem? deferredTier2 = null;
                     if (tier2Match != null)
                     {
-                        artists = new List<BaseItem> { tier2Match };
+                        if (Util.ArtistSearch.IsPartialFirstWordMatch(musician, firstWord, tier2Match.Name))
+                        {
+                            // JF-417: partial first-word match, defer and let tiers 3-4 run
+                            deferredTier2 = tier2Match;
+                        }
+                        else
+                        {
+                            artists = new List<BaseItem> { tier2Match };
+                        }
                     }
 
                     // Tier 3: prefix full query + fuzzy (e.g. "Kidz Bop" → "Kidz Bop Kids")
@@ -206,7 +215,12 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                     if (artists.Count == 0)
                     {
                         tierSw.Restart();
-                        BaseItem? tier4Match = FuzzyMatchPhonetic(musician, allArtists, a => a.Name, a => a.Id, _artistIndex, user);
+                        // JF-417: exclude the deferred partial match from tier-4 so the
+                        // containment exemption doesn't give it an artificially high score
+                        var tier4Pool = deferredTier2 != null
+                            ? allArtists.Where(a => !a.Id.Equals(deferredTier2.Id)).ToList()
+                            : allArtists;
+                        BaseItem? tier4Match = FuzzyMatchPhonetic(musician, tier4Pool, a => a.Name, a => a.Id, _artistIndex, user);
                         tierSw.Stop();
                         tierReached = 4;
                         Logger.LogInformation(
@@ -216,6 +230,12 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                         {
                             artists = new List<BaseItem> { tier4Match };
                         }
+                    }
+
+                    // JF-417: fallback to deferred tier-2 if tiers 3-4 found nothing better
+                    if (artists.Count == 0 && deferredTier2 != null)
+                    {
+                        artists = new List<BaseItem> { deferredTier2 };
                     }
                 }
             }
