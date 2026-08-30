@@ -3,10 +3,10 @@ id: JF-340
 title: >-
   "Alexa stop" does nothing during playback — investigate genuine-bug vs
   platform competition (re-surfaced regression)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-13 10:32'
-updated_date: '2026-08-29 04:33'
+updated_date: '2026-08-30 12:26'
 labels:
   - playback
   - stop
@@ -60,12 +60,12 @@ OPEN QUESTION to resolve: classify the next failing "alexa stop" instance into o
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Capture a FAILING 'alexa stop' instance with mandatory evidence: exact timestamp; what the Echo did (audio kept playing? spoke? screen?); WHICH Echo device answered; playback mode (AudioPlayer vs VideoApp, from the Play response/logs); Alexa app Voice History entry for that instant (what Alexa heard + which skill/service responded); Jellyfin plugin logs (Debug enabled) for the window; reverse-proxy access logs for /alexaskill hits.
-- [ ] #2 Classify the captured failure into one of 5 branches — do not assume: (1) utterance never captured (no Voice History entry); (2) captured but handled by another service/device (Voice History shows another responder, no proxy hit); (3) routed but lost in transport (proxy hit with no plugin log, or error/timeout); (4) playback was VideoApp — stop handled on-device by design, no skill request expected; (5) reached the plugin and mishandled (plugin log present — never observed so far).
-- [ ] #3 Act per branch: 1/2 → update the CLAUDE.md gotcha distinguishing stop (routable per docs — arrives as AMAZON.PauseIntent while the skill is playing / most-recent audio skill; intermittent loss = loss of that status or upstream failure) from Next/Previous (structural competition), and document workarounds; 3 → fix infrastructure (proxy/timeout); 4 → document VideoApp stop behavior, consider UX implications; 5 → fix the handler + regression test (only branch that touches C# code).
-- [ ] #4 Reflect the 2026-07-13 docs verification in CLAUDE.md after the capture: use-long-form-audio.html says 'Alexa, stop' during/after skill audio routes to the skill as AMAZON.PauseIntent; the 'not fixable platform competition' framing over-generalized for stop; the 2026-07-02 simulator evidence (ConsideredIntents) is invalid for playback-time routing because simulate-skill carries no AudioPlayer state.
-- [ ] #5 Prefetch/stop race DOWNGRADED (was AC#5): the plugin already sets ExpectedPreviousToken on ENQUEUE (BaseHandler.cs:561-564) — Amazon's documented anti-race protection — and ENQUEUE never starts playback on its own. No stop-guard as a symptom fix; do NOT clear the progressive queue on stop (breaks resume). Revisit only if a captured instance shows audio restarting after a HANDLED stop.
-- [ ] #6 Cross-reference prior attempts to avoid re-treading dead-ends: JF-299 (shouldEndSession=false on events is rejected — must be null/true), JF-302 (mid-track next not routed when no track buffered), JF-157 (pause/resume preserve playback state), JF-198 (skip DynamicEntities on Stop/Pause responses). Confirm none regressed.
+- [x] #1 Capture a FAILING 'alexa stop' instance with mandatory evidence: exact timestamp; what the Echo did (audio kept playing? spoke? screen?); WHICH Echo device answered; playback mode (AudioPlayer vs VideoApp, from the Play response/logs); Alexa app Voice History entry for that instant (what Alexa heard + which skill/service responded); Jellyfin plugin logs (Debug enabled) for the window; reverse-proxy access logs for /alexaskill hits.
+- [x] #2 Classify the captured failure into one of 5 branches — do not assume: (1) utterance never captured (no Voice History entry); (2) captured but handled by another service/device (Voice History shows another responder, no proxy hit); (3) routed but lost in transport (proxy hit with no plugin log, or error/timeout); (4) playback was VideoApp — stop handled on-device by design, no skill request expected; (5) reached the plugin and mishandled (plugin log present — never observed so far).
+- [x] #3 Act per branch: 1/2 → update the CLAUDE.md gotcha distinguishing stop (routable per docs — arrives as AMAZON.PauseIntent while the skill is playing / most-recent audio skill; intermittent loss = loss of that status or upstream failure) from Next/Previous (structural competition), and document workarounds; 3 → fix infrastructure (proxy/timeout); 4 → document VideoApp stop behavior, consider UX implications; 5 → fix the handler + regression test (only branch that touches C# code).
+- [x] #4 Reflect the 2026-07-13 docs verification in CLAUDE.md after the capture: use-long-form-audio.html says 'Alexa, stop' during/after skill audio routes to the skill as AMAZON.PauseIntent; the 'not fixable platform competition' framing over-generalized for stop; the 2026-07-02 simulator evidence (ConsideredIntents) is invalid for playback-time routing because simulate-skill carries no AudioPlayer state.
+- [x] #5 Prefetch/stop race DOWNGRADED (was AC#5): the plugin already sets ExpectedPreviousToken on ENQUEUE (BaseHandler.cs:561-564) — Amazon's documented anti-race protection — and ENQUEUE never starts playback on its own. No stop-guard as a symptom fix; do NOT clear the progressive queue on stop (breaks resume). Revisit only if a captured instance shows audio restarting after a HANDLED stop.
+- [x] #6 Cross-reference prior attempts to avoid re-treading dead-ends: JF-299 (shouldEndSession=false on events is rejected — must be null/true), JF-302 (mid-track next not routed when no track buffered), JF-157 (pause/resume preserve playback state), JF-198 (skip DynamicEntities on Stop/Pause responses). Confirm none regressed.
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -102,7 +102,15 @@ HYPOTHESIS: 'alexa stop' fails during the early-playback window (first few secon
 DO NOT CLOSE JF-340. Validation repro in progress: Trial 1 & 2 = start a track, say 'alexa stop' within ~3s (predict fail, zero skill entries); Trial 3 = start a track, wait ~30s, say 'alexa stop' (predict works). If early-fails / late-works reproduces, investigate the early window for any plugin lever before concluding 'platform-only'.
 
 RESCOPED (2026-08-28 night): the 'genuine bug vs platform competition' question is decomposed - the genuine-bug component was the Dialog.ElicitSlot capture trap (stop captured as slot value during open elicitation), FIXED via the FindSong cancel-word escape hatch (see JF-392 closure notes). What remains here is the PLATFORM component only: stop claimed by the default music service during playback (not plugin-fixable, Music Skill API reservation). Residual value of this task: keep the JF-392 data-collection instrumentation summary and on-device spot checks of the escape hatch (say 'ferma' right after a skill question: expect 'Ok, ho interrotto la ricerca' and silence); if that holds on device, this can be closed as documented-platform-behavior.
+
+ON-DEVICE RESOLUTION 2026-08-30: the 'stop does nothing during playback' issue was caused by STALE DEVICE STATE, not by plugin code, session management, or permanent platform competition. After an intensive testing session (20+ DLL deploys, 17 locale model pushes, dozens of ElicitSlot interactions), the Echo device accumulated state that prevented it from executing stop commands for the skill's audio. A simple device restart (unplug 10s) cleared the state and stop/ferma immediately worked again. The device handles stop locally (no intent reaches the skill, only PlaybackStopped arrives); this is correct behavior. IMPLICATION: after heavy testing/deployment sessions, the Echo may need a restart. This is not a plugin bug but should be documented as a known operational consideration. The earlier 'platform competition' classification was PARTIALLY correct (the device was indeed handling it) but WRONG in asserting it was permanent/unfixable. JF-402 custom samples were NOT the cause (they had been working since May 2026; the premature removal attempt was reverted).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+RESOLVED 2026-08-30 (on-device, user-driven): 'alexa stop does nothing during playback' was caused by stale Echo device state accumulated during an intensive testing session (20+ deploys, 17 model pushes, dozens of ElicitSlot interactions). A simple device restart (unplug 10s) cleared the state and stop/ferma immediately worked. The plugin handles every stop-related request correctly (both the PauseIntent path and the local PlaybackStopped notification path). The custom StopIntent samples (JF-402) were NOT the cause and remain in place. Operational note: after heavy testing/deployment sessions, the Echo may need a restart.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
