@@ -178,17 +178,14 @@ internal static class ArtistSearch
             if (artists.Count == 0)
             {
                 tierSw.Restart();
-                // JF-417: when a partial first-word match was deferred from tier-2,
-                // EXCLUDE that candidate from the tier-4 set. The containment
-                // exemption in ApplyLengthPenalty gives the deferred candidate an
-                // artificially high score (candidate is contained in query -> free
-                // pass at ContainmentScore), which would crowd out a genuine full-name
-                // match. Excluding it forces tier-4 to find "Pink Floyd" for
-                // "P!nk floyd" instead of returning the same "P!nk" at 90.
-                var tier4Candidates = deferredTier2Match != null
-                    ? allArtists.Where(a => !a.Id.Equals(deferredTier2Match.Id)).ToList()
-                    : allArtists;
-                BaseItem? fuzzy = FuzzyMatch(musician, tier4Candidates, user, artistIndex);
+                // JF-417 review correction: do NOT exclude the deferred candidate from
+                // tier-4. The exclusion (original JF-417 approach) fixed "P!nk floyd" ->
+                // Pink Floyd but broke the common "nirvana unplugged" shape (Nirvana was
+                // excluded, "Nirvana Tribute Band" won). The containment exemption still
+                // carries the deferred candidate at ContainmentScore at tier-4; the
+                // P!nk-floyd case is handled by the ALBUM path (PlayAlbumIntent +
+                // catalog-backed AlbumName entity resolution), not the artist path.
+                BaseItem? fuzzy = FuzzyMatch(musician, allArtists, user, artistIndex);
                 tierSw.Stop();
                 tierReached = 4;
                 logger.LogInformation(

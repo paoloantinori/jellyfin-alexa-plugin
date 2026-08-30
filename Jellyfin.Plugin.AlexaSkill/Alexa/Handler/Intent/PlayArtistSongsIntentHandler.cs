@@ -215,12 +215,8 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                     if (artists.Count == 0)
                     {
                         tierSw.Restart();
-                        // JF-417: exclude the deferred partial match from tier-4 so the
-                        // containment exemption doesn't give it an artificially high score
-                        var tier4Pool = deferredTier2 != null
-                            ? allArtists.Where(a => !a.Id.Equals(deferredTier2.Id)).ToList()
-                            : allArtists;
-                        BaseItem? tier4Match = FuzzyMatchPhonetic(musician, tier4Pool, a => a.Name, a => a.Id, _artistIndex, user);
+                        // JF-417 review correction: no exclusion (see ArtistSearch.cs comment)
+                        BaseItem? tier4Match = FuzzyMatchPhonetic(musician, allArtists, a => a.Name, a => a.Id, _artistIndex, user);
                         tierSw.Stop();
                         tierReached = 4;
                         Logger.LogInformation(
