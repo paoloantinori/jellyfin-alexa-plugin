@@ -206,6 +206,74 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
+    public async Task HandleAsync_ExactMatchWithContainmentCandidate_AutoPlays()
+    {
+        // JF-420.1 regression: exact multi-word query with a longer containment artist
+        // in the library ("Pink Floyd" + "The Pink Floyd Tribute Band"). Tier 1 returns
+        // only the exact match (the tribute band is JF-381 band-gated); the JF-420 gate
+        // must NOT demote an exact match to a disambiguation prompt.
+        var pinkFloyd = new MusicArtist { Name = "Pink Floyd", Id = Guid.NewGuid() };
+        var tribute = new MusicArtist { Name = "The Pink Floyd Tribute Band", Id = Guid.NewGuid() };
+        var allArtists = new List<BaseItem> { pinkFloyd, tribute };
+
+        _artistIndexMock.Setup(i => i.IsReady).Returns(true);
+        _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(allArtists);
+        SetupUserMock();
+        SetupSongResult(new Audio { Name = "Comfortably Numb", Id = Guid.NewGuid() });
+
+        var handler = CreateHandler(_artistIndexMock.Object);
+        var request = CreateIntentRequest(musician: "pink floyd");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // Exact match auto-plays: no disambiguation prompt
+        Assert.NotNull(response);
+        Assert.True(response.Response.ShouldEndSession);
+        var play = response.Response.Directives?.FirstOrDefault(d => d.Type == "AudioPlayer.Play");
+        Assert.NotNull(play);
+        var metadata = ((AudioPlayerPlayDirective)play).AudioItem?.Metadata;
+        Assert.NotNull(metadata);
+        Assert.Equal("Comfortably Numb", metadata.Title);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ExactMatchWithCollaborationSuffix_AutoPlays()
+    {
+        // JF-420.1 live evidence (2026-08-31): the library gained
+        // "Soul Coughing & Roni Size"; the exact query "Soul Coughing" started
+        // prompting disambiguation instead of auto-playing. Reproduced at unit level
+        // (the live simulator test test_exact_artist_name_still_works).
+        var soulCoughing = new MusicArtist { Name = "Soul Coughing", Id = Guid.NewGuid() };
+        var collaboration = new MusicArtist { Name = "Soul Coughing & Roni Size", Id = Guid.NewGuid() };
+        var allArtists = new List<BaseItem> { soulCoughing, collaboration };
+
+        _artistIndexMock.Setup(i => i.IsReady).Returns(true);
+        _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(allArtists);
+        SetupUserMock();
+        SetupSongResult(new Audio { Name = "Circles", Id = Guid.NewGuid() });
+
+        var handler = CreateHandler(_artistIndexMock.Object);
+        var request = CreateIntentRequest(musician: "Soul Coughing");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.True(response.Response.ShouldEndSession);
+        var play = response.Response.Directives?.FirstOrDefault(d => d.Type == "AudioPlayer.Play");
+        Assert.NotNull(play);
+        // The EXACT artist plays (Soul Coughing), not the collaboration
+        var metadata = ((AudioPlayerPlayDirective)play).AudioItem?.Metadata;
+        Assert.NotNull(metadata);
+        Assert.Equal("Circles", metadata.Title);
+    }
+
+    [Fact]
     public async Task HandleAsync_IndexNotReady_FallsBackToDatabase()
     {
         // JF-419 UPDATED: when the artist index EXISTS but IsReady is false (cold-start

@@ -55,6 +55,22 @@ public class PlayArtistSongsIntentHandler : BaseHandler
     private static double ComputeContainmentFairScore(string containmentName, string query)
         => (double)FuzzyMatcher.ContainmentScore * containmentName.Length / query.Length;
 
+    /// <summary>
+    /// JF-420.1: exact-name equality between the query and the
+    /// single tier-1 candidate (case-insensitive, end-trimmed; the same
+    /// normalization as FuzzyMatcher's exact-match concept). The JF-420 gate exists to
+    /// resolve CONTAINMENT matches
+    /// (artist name inside a LONGER query); equality is the degenerate case where the
+    /// containment exemption inflates both sides to ContainmentScore, the margin is
+    /// always 0, and an exact request is demoted to a disambiguation prompt (live:
+    /// "Soul Coughing" with "Soul Coughing &amp; Roni Size" in the library). An exact
+    /// match is the strongest possible signal: it must auto-play. NOT accent-insensitive
+    /// by design: an accented query ("måneskin" vs "Måneskin") is ASR accent drift,
+    /// which the phonetic tiers exist to resolve.
+    /// </summary>
+    private static bool IsExactNameMatch(string query, string name)
+        => string.Equals(query.Trim(), name.Trim(), StringComparison.OrdinalIgnoreCase);
+
     // The JF-381 tier-1 containment band (maximum extra characters a containment
     // candidate may have beyond the query, so "cup" in "Porcupine Tree" cannot short-
     // circuit the search) lives in Util.ArtistSearch as the single shared definition;
@@ -420,6 +436,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         if (artists.Count == 1
             && musician.Contains(' ')
             && musician.Contains(artists[0].Name, StringComparison.OrdinalIgnoreCase)
+            && !IsExactNameMatch(musician, artists[0].Name)
             && _artistIndex?.IsReady == true)
         {
             var searchPool = jf420ArtistPool ?? _artistIndex.GetArtists(topParentIds);
