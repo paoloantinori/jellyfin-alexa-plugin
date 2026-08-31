@@ -39,6 +39,22 @@ public class PlayArtistSongsIntentHandler : BaseHandler
     /// </summary>
     private const double ContainmentVsFullNameMargin = 20.0;
 
+    /// <summary>
+    /// What a containment match's score would be WITHOUT the containment exemption in
+    /// <see cref="FuzzyMatcher.ApplyLengthPenalty"/> (JF-420 fair-comparison model).
+    /// The exemption gives any candidate contained in the query a free pass at
+    /// ContainmentScore regardless of how much of the query it covers ("P!nk" gets 90
+    /// for "P!nk floyd" despite covering only 40%). This method computes the honest
+    /// score: ContainmentScore scaled by the length ratio, which is what the penalty
+    /// would apply without the exemption. Used by the JF-420 auto-selection gate to
+    /// compare a containment match against a full-name alternative fairly.
+    /// </summary>
+    /// <param name="containmentName">The containment-matched candidate's name.</param>
+    /// <param name="query">The raw multi-word query.</param>
+    /// <returns>The score the candidate would have without the containment exemption.</returns>
+    private static double ComputeContainmentFairScore(string containmentName, string query)
+        => (double)FuzzyMatcher.ContainmentScore * containmentName.Length / query.Length;
+
     // The JF-381 tier-1 containment band (maximum extra characters a containment
     // candidate may have beyond the query, so "cup" in "Porcupine Tree" cannot short-
     // circuit the search) lives in Util.ArtistSearch as the single shared definition;
@@ -136,6 +152,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         Guid[]? topParentIds = null;
 
         IReadOnlyList<BaseItem> artists;
+        IReadOnlyList<BaseItem>? jf420ArtistPool = null;
 
         if (_artistIndex?.IsReady == true)
         {
@@ -146,6 +163,10 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 ? Util.LibraryFilter.ResolveTopParentIds(allowedLibraryIds, _libraryManager, Logger)
                 : null;
             var allArtists = _artistIndex.GetArtists(topParentIds);
+            // JF-420 efficiency: reuse this list in the auto-selection check below
+            // instead of calling GetArtists again (re-filters + re-allocates for
+            // multi-library users).
+            jf420ArtistPool = allArtists;
 
             // Tier 1: name contains query (in-memory equivalent of SearchTerm).
             // Gate: skip containment matches where the query is much shorter than the
@@ -401,7 +422,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             && musician.Contains(artists[0].Name, StringComparison.OrdinalIgnoreCase)
             && _artistIndex?.IsReady == true)
         {
-            var searchPool = _artistIndex.GetArtists(topParentIds);
+            var searchPool = jf420ArtistPool ?? _artistIndex.GetArtists(topParentIds);
             var alternatives = searchPool.Where(a => !a.Id.Equals(artists[0].Id)).ToList();
             if (alternatives.Count > 0)
             {
@@ -414,7 +435,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                     // beats the penalized containment score by a clear margin, auto-select
                     // it (the user asked for "P!nk floyd" and means Pink Floyd, not P!nk).
                     // Only disambiguate when both are genuinely plausible.
-                    double containmentPenalized = (double)FuzzyMatcher.ContainmentScore * artists[0].Name.Length / musician.Length;
+                    double containmentPenalized = ComputeContainmentFairScore(artists[0].Name, musician);
                     double alternativeScore = best.Value.Score;
 
                     if (alternativeScore - containmentPenalized > ContainmentVsFullNameMargin)
