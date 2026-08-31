@@ -3,9 +3,11 @@ id: JF-419
 title: >-
   Cold-start artist index: skill times out on first request after DLL deploy —
   communicate warming state to user
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - zai
 created_date: '2026-08-31 06:04'
+updated_date: '2026-08-31 06:06'
 labels: []
 dependencies: []
 priority: high

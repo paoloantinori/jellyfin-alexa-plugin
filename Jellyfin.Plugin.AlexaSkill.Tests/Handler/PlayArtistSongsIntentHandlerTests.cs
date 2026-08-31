@@ -144,22 +144,15 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
     [Fact]
     public async Task HandleAsync_IndexNotReady_FallsBackToDatabase()
     {
+        // JF-419 UPDATED: when the artist index EXISTS but IsReady is false (cold-start
+        // after DLL deploy), the handler now responds with the SkillWarmingUp message
+        // instead of falling through to the potentially slow database path (live
+        // incident 2026-08-31 07:59: INVALID_RESPONSE). The DB fall-through only
+        // happens when the index is NULL (no index service configured, e.g. minimal
+        // test setups). The warming behavior is tested in SkillWarmingUpTests.
         _artistIndexMock.Setup(i => i.IsReady).Returns(false);
 
         SetupUserMock();
-        var artist = new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() };
-
-        int callCount = 0;
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns(() =>
-            {
-                callCount++;
-                return callCount == 1
-                    ? new List<BaseItem> { artist }
-                    : new List<BaseItem>();
-            });
-
-        SetupSongResult(new Audio { Name = "Yesterday", Id = Guid.NewGuid() });
 
         var handler = CreateHandler(_artistIndexMock.Object);
         var request = CreateIntentRequest(musician: "Beatles");
@@ -169,9 +162,20 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
+        // The handler responds with the warming message, not a database search result
         Assert.NotNull(response);
-        // Verify DB was queried (fallback path)
-        _libraryManagerMock.Verify(l => l.GetItemList(It.IsAny<InternalItemsQuery>()), Times.AtLeastOnce);
+        Assert.True(response.Response.ShouldEndSession);
+        var speech = (response.Response.OutputSpeech as PlainTextOutputSpeech)?.Text ?? string.Empty;
+        Assert.False(string.IsNullOrWhiteSpace(speech), "warming message must be spoken");
+        // Locale-agnostic check: the warming message exists in all 17 locales
+        Assert.True(
+            speech.Contains("preparando", StringComparison.OrdinalIgnoreCase) ||
+            speech.Contains("getting ready", StringComparison.OrdinalIgnoreCase),
+            $"expected warming message, got: {speech}");
+
+        Assert.NotNull(response);
+        // JF-419: the DB should NOT be queried (warming message short-circuits)
+        _libraryManagerMock.Verify(l => l.GetItemList(It.IsAny<InternalItemsQuery>()), Times.Never);
         Assert.True(response.Response.ShouldEndSession);
     }
 

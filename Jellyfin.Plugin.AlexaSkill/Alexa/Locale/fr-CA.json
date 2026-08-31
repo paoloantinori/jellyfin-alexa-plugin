@@ -241,5 +241,6 @@
   "FindSongTooVague": "I need more specific words to search. Try again with a few words from the title.",
   "FindSongInvalidPick": "I didn't catch that. Please say the number or the title of the song.",
   "FindSongDisambigAbandoned": "Pas de problème. Redemande-moi quand tu veux chercher une chanson.",
-  "FindSongCancelled": "Okay, I've stopped searching."
+  "FindSongCancelled": "Okay, I've stopped searching.",
+  "SkillWarmingUp": "Je suis encore en préparation. Réessaie dans une minute."
 }

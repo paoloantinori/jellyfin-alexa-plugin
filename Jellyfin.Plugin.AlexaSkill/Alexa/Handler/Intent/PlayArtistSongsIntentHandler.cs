@@ -93,6 +93,15 @@ public class PlayArtistSongsIntentHandler : BaseHandler
 
         Logger.LogDebug("PlayArtistSongs: entered, locale={Locale}", locale);
 
+        // JF-419: during the cold-start window (artist index still loading after a DLL
+        // deploy), the database fallback path can exceed Alexa's 8-second window.
+        // Respond with the warming message instead of potentially timing out.
+        if (IsArtistIndexWarming(_artistIndex))
+        {
+            Logger.LogInformation("PlayArtistSongs: artist index not ready, responding with warming message (JF-419)");
+            return BuildSkillWarmingUpResponse(locale);
+        }
+
         if (string.IsNullOrWhiteSpace(musician))
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchArtistName", locale));

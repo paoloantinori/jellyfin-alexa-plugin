@@ -1479,6 +1479,28 @@ public abstract class BaseHandler
     /// Gets the effective search response mode for a user, falling back to the global default.
     /// Per-user setting (when explicitly set, i.e. non-null) takes precedence.
     /// </summary>
+    /// <summary>
+    /// Whether the artist index is present but still loading (JF-419 cold-start).
+    /// During this window, artist searches fall through to the database path which can
+    /// exceed Alexa's ~8-second response window on a freshly restarted container
+    /// (live incident 2026-08-31 07:59: INVALID_RESPONSE on the first request after
+    /// a DLL deploy). Callers should respond with <see cref="BuildSkillWarmingUpResponse"/>
+    /// instead of attempting the search.
+    /// </summary>
+    /// <param name="artistIndex">The artist index (null in test environments).</param>
+    /// <returns>True when the index exists but is not ready.</returns>
+    protected static bool IsArtistIndexWarming(IArtistIndex? artistIndex)
+        => artistIndex != null && !artistIndex.IsReady;
+
+    /// <summary>
+    /// Builds the cold-start warming response (JF-419): a session-ending Tell that
+    /// tells the user the skill is still preparing and to retry in a minute.
+    /// </summary>
+    /// <param name="locale">The request locale.</param>
+    /// <returns>A Tell response with the SkillWarmingUp string.</returns>
+    protected static SkillResponse BuildSkillWarmingUpResponse(string locale)
+        => ResponseBuilder.Tell(ResponseStrings.Get("SkillWarmingUp", locale));
+
     protected SearchResponseMode GetSearchResponseMode(Entities.User? user)
     {
         if (user?.SearchResponseMode.HasValue == true)

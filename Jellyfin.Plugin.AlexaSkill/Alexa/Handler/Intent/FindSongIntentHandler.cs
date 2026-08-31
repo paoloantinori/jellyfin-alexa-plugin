@@ -151,6 +151,13 @@ public class FindSongIntentHandler : BaseHandler
 
         Logger.LogDebug("FindSong: entered, intent={Intent}, locale={Locale}", intentRequest.Intent.Name, locale);
 
+        // JF-419: cold-start check (see PlayArtistSongsIntentHandler)
+        if (IsArtistIndexWarming(_artistIndex))
+        {
+            Logger.LogInformation("FindSong: artist index not ready, responding with warming message (JF-419)");
+            return BuildSkillWarmingUpResponse(locale);
+        }
+
         // Read existing session state first.
         FindSongSessionData? sessionData = ReadSessionData(sessionAttributes);
 

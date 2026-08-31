@@ -140,6 +140,13 @@ public class PlaySongIntentHandler : BaseHandler
 
         Logger.LogDebug("PlaySong: entered, locale={Locale}", locale);
 
+        // JF-419: cold-start check (see PlayArtistSongsIntentHandler)
+        if (IsArtistIndexWarming(_artistIndex))
+        {
+            Logger.LogInformation("PlaySong: artist index not ready, responding with warming message (JF-419)");
+            return BuildSkillWarmingUpResponse(locale);
+        }
+
         // Escape hatch from the elicitation trap (shared CancelWords helper): while OUR
         // song-name Dialog.ElicitSlot is open, a stop/cancel word gets captured into the
         // song slot (dialogState IN_PROGRESS) instead of routing to AMAZON.Stop/Cancel.
