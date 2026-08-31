@@ -151,13 +151,6 @@ public class FindSongIntentHandler : BaseHandler
 
         Logger.LogDebug("FindSong: entered, intent={Intent}, locale={Locale}", intentRequest.Intent.Name, locale);
 
-        // JF-419: cold-start check (see PlayArtistSongsIntentHandler)
-        if (IsArtistIndexWarming(_artistIndex))
-        {
-            Logger.LogInformation("FindSong: artist index not ready, responding with warming message (JF-419)");
-            return BuildSkillWarmingUpResponse(locale);
-        }
-
         // Read existing session state first.
         FindSongSessionData? sessionData = ReadSessionData(sessionAttributes);
 
@@ -182,6 +175,13 @@ public class FindSongIntentHandler : BaseHandler
                 return ResponseBuilder.Tell(ResponseStrings.Get("FindSongCancelled", locale));
             }
         }
+
+        // JF-419 cold-start: during the warming window the DATABASE is as cold as the
+        // artist index and the n-gram index cold window coincides (both are startup
+        // hosted services), so the keywords-only DB fallback needs the same refusal.
+        // Placed AFTER the cancel hatch: an open flow must still cancel during warming.
+        // JF-419.3 granularizes per-index.
+        Util.ArtistSearch.EnsureIndexReady(_artistIndex);
 
         // If we have session data and the intent is FindSongIntent, it could be
         // a fresh invocation or a continuation. Check for slot values to distinguish.

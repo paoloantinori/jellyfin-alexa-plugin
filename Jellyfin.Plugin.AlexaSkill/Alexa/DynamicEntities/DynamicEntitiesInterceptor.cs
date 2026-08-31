@@ -50,6 +50,12 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
             return Task.CompletedTask;
         }
 
+        // JF-419.2: warming refusals must not pay cold library queries on the way out
+        if (context.SkipColdLibraryWork)
+        {
+            return Task.CompletedTask;
+        }
+
         // AudioPlayer directives carry their own dialog state. Skip DynamicEntities for those.
         if (context.Response.Response.Directives?.Any(d =>
             d is AudioPlayerPlayDirective or StopDirective or ClearQueueDirective) == true)

@@ -80,6 +80,10 @@ public class AddToQueueIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchQueueItem", locale));
         }
 
+        // JF-419 cold-start: the song search hits the same cold database the artist
+        // index loading proxies (review round 2); refuse before the announcement.
+        Util.ArtistSearch.EnsureIndexReady(_artistIndex);
+
         RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
 
         var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);

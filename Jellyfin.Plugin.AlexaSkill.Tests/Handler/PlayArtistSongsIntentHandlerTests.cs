@@ -9,6 +9,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
@@ -274,14 +275,13 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
-    public async Task HandleAsync_IndexNotReady_FallsBackToDatabase()
+    public async Task HandleAsync_IndexNotReady_ThrowsWarmingException()
     {
-        // JF-419 UPDATED: when the artist index EXISTS but IsReady is false (cold-start
-        // after DLL deploy), the handler now responds with the SkillWarmingUp message
-        // instead of falling through to the potentially slow database path (live
-        // incident 2026-08-31 07:59: INVALID_RESPONSE). The DB fall-through only
-        // happens when the index is NULL (no index service configured, e.g. minimal
-        // test setups). The warming behavior is tested in SkillWarmingUpTests.
+        // JF-419.2 UPDATED: when the artist index EXISTS but IsReady is false (cold-start
+        // after DLL deploy), the shared choke point throws SkillWarmingUpException (the
+        // request pipeline translates it into the warming Tell; the user-facing behavior
+        // is asserted in SkillWarmingUpTests). The DB fall-through only happens when the
+        // index is NULL (no index service configured, e.g. minimal test setups).
         _artistIndexMock.Setup(i => i.IsReady).Returns(false);
 
         SetupUserMock();
@@ -292,23 +292,11 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         var user = CreateUser();
         var session = CreateSession();
 
-        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+        await Assert.ThrowsAsync<SkillWarmingUpException>(() =>
+            handler.HandleAsync(request, context, user, session, CancellationToken.None));
 
-        // The handler responds with the warming message, not a database search result
-        Assert.NotNull(response);
-        Assert.True(response.Response.ShouldEndSession);
-        var speech = (response.Response.OutputSpeech as PlainTextOutputSpeech)?.Text ?? string.Empty;
-        Assert.False(string.IsNullOrWhiteSpace(speech), "warming message must be spoken");
-        // Locale-agnostic check: the warming message exists in all 17 locales
-        Assert.True(
-            speech.Contains("preparando", StringComparison.OrdinalIgnoreCase) ||
-            speech.Contains("getting ready", StringComparison.OrdinalIgnoreCase),
-            $"expected warming message, got: {speech}");
-
-        Assert.NotNull(response);
-        // JF-419: the DB should NOT be queried (warming message short-circuits)
+        // The throw fires before any search: the DB is never queried
         _libraryManagerMock.Verify(l => l.GetItemList(It.IsAny<InternalItemsQuery>()), Times.Never);
-        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]

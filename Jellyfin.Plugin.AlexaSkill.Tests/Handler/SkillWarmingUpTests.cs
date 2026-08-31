@@ -2,16 +2,16 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
-using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
@@ -22,8 +22,13 @@ using static Jellyfin.Plugin.AlexaSkill.Tests.Unit.TestHelpers;
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
 /// <summary>
-/// Tests that handlers respond with the SkillWarmingUp message when the artist
-/// index is present but not ready (JF-419 cold-start after DLL deploy).
+/// JF-419/JF-419.2: the warming gate is two-layered. Layer 1: handlers that run cold
+/// NON-artist queries first (title/album/keyword/mood searches on the same cold
+/// database) call ArtistSearch.EnsureIndexReady at entry, before their "searching"
+/// announcement. Layer 2: ArtistSearch.SearchAsync itself throws
+/// <see cref="SkillWarmingUpException"/>, covering every caller including BaseHandler
+/// fallbacks. The request pipeline translates the throw into the session-ending
+/// SkillWarmingUp Tell; MediaInfo's enrichment catch degrades instead.
 /// </summary>
 [Collection("Plugin")]
 public class SkillWarmingUpTests : PluginTestBase
@@ -44,9 +49,18 @@ public class SkillWarmingUpTests : PluginTestBase
         _config = new PluginConfiguration();
         TestHelpers.SetServerAddress(_config, "https://test.example.com");
         _loggerFactory = LoggerFactory.Create(b => { });
+
+        // PluginTestBase resets Plugin.Instance; the pipeline path reads
+        // Plugin.Instance.Configuration.ServerAddress during session resolution.
+        // Pass the SAME config/factory so the class has one live instance.
+        EnsurePluginInstance(
+            _config,
+            _loggerFactory,
+            cfg => { },
+            "warming-tests");
     }
 
-    private static IntentRequest CreateIntentRequest(string intentName, string? musician = null)
+    private static IntentRequest CreateIntentRequest(string intentName, string? musician = null, string? song = null)
     {
         var intent = new Intent { Name = intentName };
         intent.Slots = new Dictionary<string, Slot>();
@@ -54,52 +68,98 @@ public class SkillWarmingUpTests : PluginTestBase
         {
             intent.Slots["musician"] = new Slot { Name = "musician", Value = musician };
         }
+
+        // AddToQueue/PlayNext read Slots["song"] with the indexer (KeyNotFoundException
+        // when absent) and refuse EMPTY song values before reaching the artist search.
+        if (song != null)
+        {
+            intent.Slots["song"] = new Slot { Name = "song", Value = song };
+        }
+
         return new IntentRequest { Intent = intent, Locale = "it-IT", RequestId = "test-req" };
     }
 
-    private static Context CreateContext() => TestHelpers.CreateTestContext();
-
     private SessionInfo CreateSession()
         => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
-
-    private static Entities.User CreateUser() => TestHelpers.CreateTestUser();
 
     private void SetupUserMock()
         => _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
             .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
 
+    /// <summary>
+    /// Layer-1 reachability: the entry points that previously had NO gate (AddToQueue,
+    /// QueryArtistLibrary, PlayNext) now refuse at entry via the shared guard. The
+    /// PlaySong/PlayAlbum/FindSong/SearchMedia/PlayMoodMusic entry gates and the
+    /// PlayArtistSongs inline-path guard follow the identical one-line shape; the
+    /// choke-point throw itself is proven in ArtistSearchTests.
+    /// </summary>
     [Fact]
-    public async Task PlayArtistSongs_IndexNotReady_RespondsWithWarmingMessage()
+    public Task AddToQueue_WhileIndexWarming_ThrowsAtEntry()
+        => AssertEntryGateFiresAsync(artistIndex => new AddToQueueIntentHandler(
+                _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
+                _userManagerMock.Object, _loggerFactory, artistIndex: artistIndex),
+            CreateIntentRequest(IntentNames.AddToQueue, musician: "pink floyd", song: "shine on you crazy diamond"));
+
+    [Fact]
+    public Task QueryArtistLibrary_WhileIndexWarming_ThrowsAtEntry()
+        => AssertEntryGateFiresAsync(artistIndex => new QueryArtistLibraryIntentHandler(
+                _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
+                _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory,
+                artistIndex: artistIndex),
+            CreateIntentRequest(IntentNames.QueryArtistLibrary, musician: "pink floyd"));
+
+    [Fact]
+    public Task PlayNext_WhileIndexWarming_ThrowsAtEntry()
+        => AssertEntryGateFiresAsync(artistIndex => new PlayNextIntentHandler(
+                _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
+                _userManagerMock.Object, _loggerFactory, artistIndex: artistIndex),
+            CreateIntentRequest(IntentNames.PlayNext, musician: "pink floyd", song: "shine on you crazy diamond"));
+
+    private async Task AssertEntryGateFiresAsync(
+        Func<IArtistIndex, BaseHandler> createHandler,
+        IntentRequest request)
     {
-        var handler = new PlayArtistSongsIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
-            _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory,
-            artistIndex: new WarmingArtistIndex(), queueManager: null);
-        var request = CreateIntentRequest(IntentNames.PlayArtistSongs, "pink floyd");
+        BaseHandler handler = createHandler(Mock.Of<IArtistIndex>(i => i.IsReady == false));
         SetupUserMock();
 
-        SkillResponse response = await handler.HandleAsync(
-            request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
-
-        Assert.NotNull(response);
-        Assert.True(response.Response.ShouldEndSession);
-        var speech = (response.Response.OutputSpeech as PlainTextOutputSpeech)?.Text ?? string.Empty;
-        Assert.Contains("preparando", speech, StringComparison.OrdinalIgnoreCase);
+        await Assert.ThrowsAsync<SkillWarmingUpException>(() =>
+            handler.HandleAsync(request, TestHelpers.CreateTestContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None));
     }
 
-    [Fact]
-    public async Task PlaySong_IndexNotReady_RespondsWithWarmingMessage()
+    private Context CreateAuthenticatableContext(Entities.User user)
+        => new()
+        {
+            System = new global::Alexa.NET.Request.AlexaSystem
+            {
+                User = new global::Alexa.NET.Request.User { AccessToken = user.Id.ToString() },
+                Device = new Device { DeviceID = "test-device" }
+            }
+        };
+
+    /// <summary>
+    /// Drives a handler through the REAL pipeline (auth + session resolution +
+    /// translation): one shared seam test for the handler-throw-to-Tell contract.
+    /// </summary>
+    private async Task<SkillResponse> ExecuteViaPipelineAsync(BaseHandler handler, IntentRequest request)
     {
-        var handler = new PlaySongIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
-            _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory,
-            artistIndex: new WarmingArtistIndex());
-        var request = CreateIntentRequest(IntentNames.PlaySong, "bohemian rhapsody");
-        SetupUserMock();
+        var user = TestHelpers.CreateTestUser();
+        _config.Users.Add(user);
 
-        SkillResponse response = await handler.HandleAsync(
-            request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+        // HandleRequestAsync resolves the Jellyfin session before HandleAsync runs
+        _sessionManagerMock
+            .Setup(s => s.GetSessionByAuthenticationToken(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(CreateSession());
 
+        var pipeline = new RequestPipeline(
+            Array.Empty<IRequestInterceptor>(),
+            Array.Empty<IResponseInterceptor>(),
+            _loggerFactory.CreateLogger<RequestPipeline>());
+
+        return await pipeline.ExecuteAsync(handler, request, CreateAuthenticatableContext(user), null, CancellationToken.None);
+    }
+
+    private static void AssertWarmingTell(SkillResponse response)
+    {
         Assert.NotNull(response);
         Assert.True(response.Response.ShouldEndSession);
         var speech = (response.Response.OutputSpeech as PlainTextOutputSpeech)?.Text ?? string.Empty;
@@ -107,18 +167,54 @@ public class SkillWarmingUpTests : PluginTestBase
     }
 
     /// <summary>
-    /// A fake artist index that exists (non-null) but reports IsReady = false,
-    /// simulating the cold-start loading window after a DLL deploy.
+    /// The pipeline translates the choke point exception into the user-facing
+    /// session-ending warming Tell (the single response-building site).
     /// </summary>
-    private sealed class WarmingArtistIndex : IArtistIndex
+    [Fact]
+    public async Task Pipeline_TranslatesWarmingExceptionToWarmingTell()
     {
-        public bool IsReady => false;
-        public int Count => 0;
-        public IReadOnlyList<BaseItem> GetArtists(Guid[]? topParentIds = null) => Array.Empty<BaseItem>();
-        public bool TryGetPhoneticCode(Guid artistId, out (string Primary, string? Alternate) codes)
+        var handler = new WarmingStubHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+        var request = CreateIntentRequest(IntentNames.PlayArtistSongs, musician: "pink floyd");
+
+        SkillResponse response = await ExecuteViaPipelineAsync(handler, request);
+
+        AssertWarmingTell(response);
+    }
+
+    /// <summary>
+    /// Review round 2: the handler-to-pipeline seam must ALSO be proven with a REAL
+    /// handler, not only the stub (a broad catch added inside a handler would be
+    /// invisible to the stub test). PlaySong has an entry gate, so the throw travels
+    /// the real HandleRequestAsync path into the pipeline catch.
+    /// </summary>
+    [Fact]
+    public async Task Pipeline_RealHandlerWarmingIndex_ReturnsWarmingTell()
+    {
+        var handler = new PlaySongIntentHandler(
+            _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
+            _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory,
+            artistIndex: Mock.Of<IArtistIndex>(i => i.IsReady == false));
+        var request = CreateIntentRequest(IntentNames.PlaySong, musician: "pink floyd");
+
+        SkillResponse response = await ExecuteViaPipelineAsync(handler, request);
+
+        AssertWarmingTell(response);
+    }
+
+    /// <summary>
+    /// A handler whose HandleAsync throws the warming exception, simulating any
+    /// artist-search entry point hitting the choke point.
+    /// </summary>
+    private sealed class WarmingStubHandler : BaseHandler
+    {
+        public WarmingStubHandler(ISessionManager sessionManager, PluginConfiguration config, ILoggerFactory loggerFactory)
+            : base(sessionManager, config, loggerFactory)
         {
-            codes = default;
-            return false;
         }
+
+        public override bool CanHandle(Request request) => true;
+
+        public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
+            => throw new SkillWarmingUpException();
     }
 }

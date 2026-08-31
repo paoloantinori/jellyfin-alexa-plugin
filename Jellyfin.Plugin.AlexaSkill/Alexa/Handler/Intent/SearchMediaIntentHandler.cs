@@ -93,6 +93,10 @@ public class SearchMediaIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("CouldNotUnderstand", locale));
         }
 
+        // JF-419 cold-start: the primary unified search hits the same cold database as
+        // the artist index loading proxies; refuse before the "searching" announcement
+        Util.ArtistSearch.EnsureIndexReady(_artistIndex);
+
         RunFireAndForget(SendProgressiveResponse(
             context, request, ResponseStrings.Get("SearchingMedia", locale)));
 

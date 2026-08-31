@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -79,6 +80,26 @@ internal static class ArtistSearch
         return candidateIsJustFirstWord && firstWordIsMinority;
     }
 
+    /// <summary>
+    /// JF-419.2 warming gate, layer 2 of 2. Layer 1 is the per-handler entry call
+    /// (see e.g. PlaySongIntentHandler): handlers that run cold NON-artist queries
+    /// first (title/album/keyword/mood searches on the same cold database) refuse at
+    /// entry, before their "searching" announcement. This choke point covers every
+    /// ArtistSearch caller including the ones with no entry gate (BaseHandler
+    /// fallbacks, future handlers). While the in-memory index is present but still
+    /// loading, a search would fall through to the cold database path that can exceed
+    /// Alexa's ~8-second window (live incident 2026-08-31 07:59); throwing lets the
+    /// request pipeline answer with the SkillWarmingUp Tell for every intent at once.
+    /// Enrichment-only callers may catch it and degrade (see MediaInfo).
+    /// </summary>
+    internal static void EnsureIndexReady(IArtistIndex? artistIndex)
+    {
+        if (artistIndex != null && !artistIndex.IsReady)
+        {
+            throw new SkillWarmingUpException();
+        }
+    }
+
     public static async Task<IReadOnlyList<BaseItem>> SearchAsync(
         string musician,
         Entities.User? user,
@@ -88,6 +109,8 @@ internal static class ArtistSearch
         Func<InternalItemsQuery, CancellationToken, Task<IReadOnlyList<BaseItem>>> dbQuery,
         CancellationToken cancellationToken)
     {
+        EnsureIndexReady(artistIndex);
+
         var totalSw = Stopwatch.StartNew();
         var tierSw = Stopwatch.StartNew();
         int tierReached = 0;

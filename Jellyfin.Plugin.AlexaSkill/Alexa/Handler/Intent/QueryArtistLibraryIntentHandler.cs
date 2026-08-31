@@ -95,6 +95,10 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchArtistName", locale));
         }
 
+        // JF-419.2: the cold-start gate fires before the "searching" progressive
+        // response (no announcement then refusal)
+        Util.ArtistSearch.EnsureIndexReady(_artistIndex);
+
         RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
 
         var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);

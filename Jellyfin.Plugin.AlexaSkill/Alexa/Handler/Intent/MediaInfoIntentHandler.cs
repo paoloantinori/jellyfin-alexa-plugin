@@ -10,6 +10,7 @@ using Alexa.NET.Response;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
@@ -446,6 +447,13 @@ public class MediaInfoIntentHandler : BaseHandler
             }
 
             return BuildArtistInfoResponse(artistName, bio, genres, albumCount, locale);
+        }
+        catch (SkillWarmingUpException)
+        {
+            // JF-419.2: artist info is enrichment of the now-playing answer, not the
+            // answer itself; degrade instead of refusing the whole response.
+            Logger.LogDebug("MediaInfoIntent: skipping artist info during index warm-up for {Artist}", artistName);
+            return null;
         }
         catch (Exception ex)
         {

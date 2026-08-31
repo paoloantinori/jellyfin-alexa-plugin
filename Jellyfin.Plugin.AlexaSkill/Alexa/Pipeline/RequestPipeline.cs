@@ -8,7 +8,9 @@ using global::Alexa.NET;
 using global::Alexa.NET.Request;
 using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Microsoft.Extensions.Logging;
 using AlexaSession = global::Alexa.NET.Request.Session;
 
@@ -77,7 +79,24 @@ public class RequestPipeline
         }))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            requestContext.Response = await handler.HandleRequestAsync(skillRequest, context, alexaSession, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                requestContext.Response = await handler.HandleRequestAsync(skillRequest, context, alexaSession, cancellationToken).ConfigureAwait(false);
+            }
+            catch (SkillWarmingUpException)
+            {
+                // JF-419.2: the ArtistSearch choke point threw; this is the single
+                // translation site for every artist-search entry point. Logging and
+                // metrics interceptors still run below; SkipColdLibraryWork keeps
+                // DynamicEntities from riding cold DB queries on the refusal.
+                _logger.LogInformation(
+                    "Artist index warming: refusing intent={Intent} corr={CorrelationId}",
+                    requestContext.IntentName,
+                    requestContext.CorrelationId);
+                requestContext.SkipColdLibraryWork = true;
+                requestContext.Response = ResponseBuilder.Tell(
+                    ResponseStrings.Get("SkillWarmingUp", BaseHandler.GetLocalePublic(requestContext.SkillRequest)));
+            }
         }
 
         // Response interceptors run in reverse registration order (stack unwinding)

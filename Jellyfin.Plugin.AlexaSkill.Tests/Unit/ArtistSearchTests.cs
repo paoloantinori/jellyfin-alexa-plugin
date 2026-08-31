@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
@@ -395,6 +396,26 @@ public class ArtistSearchTests
 
         Assert.Single(result);
         Assert.Equal("The Beatles", result[0].Name);
+    }
+
+    /// <summary>
+    /// JF-419.2 choke point: the IsReady gate at the top of SearchAsync covers every
+    /// ArtistSearch caller; handlers with cold non-artist paths also call
+    /// EnsureIndexReady at entry (two-layer design, see ArtistSearch doc). Thrown,
+    /// not returned, so the request pipeline translates it into the SkillWarmingUp Tell.
+    /// </summary>
+    [Fact]
+    public async Task SearchAsync_IndexPresentButWarming_Throws()
+    {
+        await Assert.ThrowsAsync<SkillWarmingUpException>(() =>
+            ArtistSearch.SearchAsync(
+                "pink floyd",
+                user: null,
+                libraryManager: Mock.Of<ILibraryManager>(),
+                artistIndex: Mock.Of<IArtistIndex>(i => i.IsReady == false),
+                logger: Logger,
+                dbQuery: NotCalled,
+                cancellationToken: CancellationToken.None));
     }
 
     private static Task<IReadOnlyList<BaseItem>> NotCalled(

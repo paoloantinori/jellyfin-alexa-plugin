@@ -140,12 +140,10 @@ public class PlaySongIntentHandler : BaseHandler
 
         Logger.LogDebug("PlaySong: entered, locale={Locale}", locale);
 
-        // JF-419: cold-start check (see PlayArtistSongsIntentHandler)
-        if (IsArtistIndexWarming(_artistIndex))
-        {
-            Logger.LogInformation("PlaySong: artist index not ready, responding with warming message (JF-419)");
-            return BuildSkillWarmingUpResponse(locale);
-        }
+        // JF-419 cold-start: during the warming window the DATABASE is as cold as the
+        // artist index (review round 2: the title-only path runs the same slow queries),
+        // so refuse at entry; JF-419.3 granularizes per-index.
+        Util.ArtistSearch.EnsureIndexReady(_artistIndex);
 
         // Escape hatch from the elicitation trap (shared CancelWords helper): while OUR
         // song-name Dialog.ElicitSlot is open, a stop/cancel word gets captured into the

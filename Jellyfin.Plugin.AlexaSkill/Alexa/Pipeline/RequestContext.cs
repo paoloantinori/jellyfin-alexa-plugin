@@ -53,6 +53,14 @@ public class RequestContext
     public SkillResponse? Response { get; set; }
 
     /// <summary>
+    /// Gets or sets a flag telling cold-library response interceptors
+    /// (DynamicEntities) to skip their DB work: set on warming refusals, where the
+    /// whole point is answering fast while the database is still cold. Logging and
+    /// metrics interceptors still run (JF-419.2 review round 3).
+    /// </summary>
+    public bool SkipColdLibraryWork { get; set; }
+
+    /// <summary>
     /// Gets the request type string for logging/metrics.
     /// </summary>
     public string RequestType => SkillRequest?.Type ?? "unknown";

@@ -409,6 +409,11 @@ public class PlayMoodMusicIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchMood", locale));
         }
 
+        // JF-419 cold-start: the mood->genre queries hit the same cold database the
+        // artist index loading proxies, and the artist fallback (TryEntityFallbackAsync)
+        // throws at the choke point mid-handler; gate before the announcement.
+        Util.ArtistSearch.EnsureIndexReady(_artistIndex);
+
         RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
 
         var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
