@@ -30,6 +30,15 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public class PlayArtistSongsIntentHandler : BaseHandler
 {
+    /// <summary>
+    /// JF-420: minimum fair-score margin for auto-selecting the full-name alternative
+    /// over a containment match. Below this margin, the handler disambiguates instead.
+    /// Derived from the P!nk floyd case: penalized containment 36 vs genuine 90 = 54
+    /// margin (auto-select); a tribute band at ~65 vs penalized 37 = 28 margin (also
+    /// auto-select); a genuinely close case would be under 20 (disambiguate).
+    /// </summary>
+    private const double ContainmentVsFullNameMargin = 20.0;
+
     // The JF-381 tier-1 containment band (maximum extra characters a containment
     // candidate may have beyond the query, so "cup" in "Porcupine Tree" cannot short-
     // circuit the search) lives in Util.ArtistSearch as the single shared definition;
@@ -405,10 +414,10 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                     // beats the penalized containment score by a clear margin, auto-select
                     // it (the user asked for "P!nk floyd" and means Pink Floyd, not P!nk).
                     // Only disambiguate when both are genuinely plausible.
-                    double containmentPenalized = 90.0 * artists[0].Name.Length / musician.Length;
+                    double containmentPenalized = (double)FuzzyMatcher.ContainmentScore * artists[0].Name.Length / musician.Length;
                     double alternativeScore = best.Value.Score;
 
-                    if (alternativeScore - containmentPenalized > 20)
+                    if (alternativeScore - containmentPenalized > ContainmentVsFullNameMargin)
                     {
                         Logger.LogInformation(
                             "PlayArtistSongs: containment match '{Containment}' (penalized {Penalized:F0}) clearly beaten by full-name alternative '{Alternative}' ({Alternative:F0}), auto-selecting (JF-420)",
