@@ -19,6 +19,9 @@ vocabulary:
   song_noun: [il brano, la canzone, il pezzo, la traccia]
   album_noun: ["l'album", "il disco", album, disco, "il cd", "la raccolta", "il vinile"]
   artist_article: [di, dei, degli, delle]
+  # Nominative (subject-position) definite articles, NOT genitive like
+  # artist_article: bands take plurals ("i Pink Floyd", "gli Stooges"),
+  # solo artists take singulars ("la Mina", "lo Zucchero").
   nominative_article: [il, lo, la, i, gli, le]
   artist_carrier: [la band, il gruppo, il cantante, la cantante]
   media_noun: [brani, canzoni, musica, un brano, una canzone, un pezzo, una traccia]
@@ -868,8 +871,9 @@ templates:
       - "{imperative} {musician}"
       - "{infinitive} {musician}"
       # JF-418: nominative article forms (natural Italian: "Suona i Pink Floyd",
-      # "Di suonare i Queen", "Suona gli Radiohead"). Italians commonly use definite
-      # articles before band names; without these samples the NLU rejects the article.
+      # "Di suonare i Queen", "Suona la Mina"). Italians commonly use definite
+      # articles before band and solo-artist names; without these samples the
+      # NLU rejects the article.
       - "{imperative} {nominative_article} {musician}"
       - "{infinitive} {nominative_article} {musician}"
     slots:

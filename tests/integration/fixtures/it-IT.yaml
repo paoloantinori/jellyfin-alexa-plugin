@@ -608,14 +608,16 @@ tests:
       musician: {}
 
   # JF-418: nominative article forms ("Suona i Queen", "Riproduci i Pink Floyd").
-  # Natural Italian speech uses definite articles before band names; before the
+  # Natural Italian speech uses definite articles before band names (plural
+  # articles) and solo-artist names (singular articles); before the
   # nominative_article samples existed these all returned no selectedIntent.
   - utterance: "Suona i queen"
     expected_intent: PlayArtistSongsIntent
     expected_slots:
       musician: {}
 
-  - utterance: "Suona i pink floyd"
+  # Singular article (solo artist): covers the il/lo/la half of the vocabulary.
+  - utterance: "Suona la mina"
     expected_intent: PlayArtistSongsIntent
     expected_slots:
       musician: {}
@@ -625,7 +627,7 @@ tests:
     expected_slots:
       musician: {}
 
-  - utterance: "Suona gli radiohead"
+  - utterance: "Suona gli soul coughing"
     expected_intent: PlayArtistSongsIntent
     expected_slots:
       musician: {}
