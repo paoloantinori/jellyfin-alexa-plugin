@@ -51,6 +51,50 @@ public class VideoAudioCache
     }
 
     /// <summary>
+    /// Entries currently being WRITTEN (JF-428): an HLS directory mid-encode, an mp4
+    /// being produced, or a faststart remux in flight. Eviction never deletes a pinned
+    /// entry, even when it is the oldest over-limit one: deleting the segments the Echo
+    /// Show is fetching mid-book stalls playback with 404s. Scope is the WRITE window
+    /// only; after the write the entry is an ordinary LRU citizen (post-encode
+    /// streaming is protected by serve-recency, see RecordAccess).
+    /// </summary>
+    private readonly ConcurrentDictionary<string, int> _pinnedPaths = new();
+
+    /// <summary>
+    /// Mark a cache entry as in-use (refcounted); eviction skips it while any pin is
+    /// held. Refcounted because a retrying encode can re-pin the same path while the
+    /// previous attempt's delayed exit-poll release (up to 500ms) is still pending.
+    /// </summary>
+    public void Pin(string path) => _pinnedPaths.AddOrUpdate(path, 1, (_, count) => count + 1);
+
+    /// <summary>Release one pin taken by <see cref="Pin"/>; the entry becomes evictable when the last pin is released. Unpinning a path that was never pinned is a no-op.</summary>
+    public void Unpin(string path)
+    {
+        while (true)
+        {
+            if (!_pinnedPaths.TryGetValue(path, out int count))
+            {
+                return;
+            }
+
+            if (count <= 1)
+            {
+                // Remove only if still the value we observed (atomic compare-and-remove)
+                if (_pinnedPaths.TryRemove(new KeyValuePair<string, int>(path, count)))
+                {
+                    return;
+                }
+            }
+            else if (_pinnedPaths.TryUpdate(path, count - 1, count))
+            {
+                return;
+            }
+
+            // Raced with another Pin/Unpin: re-read and retry
+        }
+    }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="VideoAudioCache"/> class.
     /// </summary>
     /// <param name="appPaths">Jellyfin application paths for locating the cache directory.</param>
@@ -260,20 +304,13 @@ public class VideoAudioCache
         => EvictIfNeeded(0);
 
     /// <summary>
-    /// Pre-encode disk budget check (JF-310): same eviction sweep as
-    /// <see cref="EvictIfNeeded()"/>, but the incoming encode's estimated size is
-    /// RESERVED as headroom so the budget is enforced BEFORE ffmpeg starts, not only
-    /// after. Returns true when the budget fits after eviction (or the estimate exceeds
-    /// the whole cache, in which case the sweep still runs and the encode proceeds:
-    /// a single item larger than the cache is a config problem, not a burst-DoS vector).
+    /// Pre-encode disk budget reservation (JF-310/JF-428): eviction sweep with the
+    /// incoming encode's estimated size reserved as headroom; no refusal path by
+    /// design (see <see cref="EvictIfNeededCore"/> for the floor and the pin contract).
     /// </summary>
     /// <param name="estimatedEncodeBytes">The estimated on-disk size of the incoming encode.</param>
-    /// <returns>True when the encode may start.</returns>
-    public async Task<bool> EnsureDiskBudgetBeforeEncodeAsync(long estimatedEncodeBytes)
-    {
-        await EvictIfNeeded(estimatedEncodeBytes).ConfigureAwait(false);
-        return true;
-    }
+    public Task EnsureDiskBudgetBeforeEncodeAsync(long estimatedEncodeBytes)
+        => EvictIfNeeded(estimatedEncodeBytes);
 
     private Task EvictIfNeeded(long headroomBytes)
     {
@@ -284,16 +321,16 @@ public class VideoAudioCache
     private void EvictIfNeededCore(long headroomBytes)
     {
         int maxSizeMB = Plugin.Instance?.Configuration.VideoAudioCacheSizeMB ?? 2048;
-        long maxSizeBytes = ((long)maxSizeMB * 1024 * 1024) - headroomBytes;
+        long capBytes = (long)maxSizeMB * 1024 * 1024;
 
-        // Clamp to 0: a headroom that exceeds the whole cache (single audiobook
-        // larger than the configured cap) must NOT make maxSizeBytes negative and
-        // cause the eviction loop to delete every entry trying to reach an
-        // unreachable target (review 2026-08-29 finding 5).
-        if (maxSizeBytes < 0)
-        {
-            maxSizeBytes = 0;
-        }
+        // JF-428 floor: a headroom that exceeds the whole cache (single audiobook
+        // larger than the configured cap) must floor the eviction target at HALF the
+        // cap, never zero. The old clamp-to-0 still TARGETED zero and the loop deleted
+        // every entry trying to reach it, including the HLS directory of the audiobook
+        // currently being encoded and streamed (undersized config = full wipe on every
+        // encode start). Half the cap bounds what a pre-encode sweep can evict; the
+        // post-encode sweep (headroom 0) still enforces the full cap.
+        long maxSizeBytes = Math.Max(capBytes - headroomBytes, capBytes / 2);
 
         if (!Directory.Exists(_cacheDir))
         {
@@ -395,6 +432,16 @@ public class VideoAudioCache
                 break;
             }
 
+            // JF-428: never evict an in-use (pinned) entry; its size still counts
+            // toward totalSize. When pins (or failed deletes) make the target
+            // unreachable, every UNPINNED entry is still evicted oldest-first before
+            // the loop stops and warns below; that is the sweep doing its job with
+            // the entries it is allowed to touch.
+            if (_pinnedPaths.ContainsKey(entry.Path))
+            {
+                continue;
+            }
+
             try
             {
                 if (entry.IsDirectory)
@@ -419,6 +466,14 @@ public class VideoAudioCache
             // delete failed the file is re-enumerated next round (atime fallback), and this
             // avoids orphaning the entry if the file is later removed out-of-band.
             _lastAccessUtc.TryRemove(entry.Path, out _);
+        }
+
+        if (totalSize > maxSizeBytes)
+        {
+            _logger.LogWarning(
+                "VideoAudio cache still {OverMB:F1}MB over the {TargetMB:F1}MB target after eviction (pinned in-use entries and/or failed deletes)",
+                (totalSize - maxSizeBytes) / (1024.0 * 1024.0),
+                maxSizeBytes / (1024.0 * 1024.0));
         }
     }
 

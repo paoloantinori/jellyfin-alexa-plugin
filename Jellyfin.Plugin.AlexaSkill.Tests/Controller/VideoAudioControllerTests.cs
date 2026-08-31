@@ -1428,9 +1428,9 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         try
         {
-            // 512 KB headroom: 1 MB - 512 KB = 512 KB budget; the 100 KB of files fit.
-            bool ok = await _cache.EnsureDiskBudgetBeforeEncodeAsync(512 * 1024);
-            Assert.True(ok);
+            // 512 KB headroom: 1 MB - 512 KB = 512 KB budget (exactly at the JF-428
+            // floor); the 100 KB of files fit.
+            await _cache.EnsureDiskBudgetBeforeEncodeAsync(512 * 1024);
             Assert.True(File.Exists(old), "both files fit the budget; nothing should be evicted");
             Assert.True(File.Exists(recent));
         }
@@ -1451,8 +1451,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Directory.CreateDirectory(cacheDir);
         string old = Path.Combine(cacheDir, $"{Guid.NewGuid():N}_1000.mp4");
         string recent = Path.Combine(cacheDir, $"{Guid.NewGuid():N}_2000.mp4");
-        await File.WriteAllBytesAsync(old, new byte[50 * 1024]);
-        await File.WriteAllBytesAsync(recent, new byte[50 * 1024]);
+        await File.WriteAllBytesAsync(old, new byte[600 * 1024]);
+        await File.WriteAllBytesAsync(recent, new byte[100 * 1024]);
         File.SetLastAccessTimeUtc(old, DateTime.UtcNow.AddDays(-2));
         File.SetLastAccessTimeUtc(recent, DateTime.UtcNow);
 
@@ -1461,11 +1461,10 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         try
         {
-            // DEBUG: see what the eviction actually reads
-            // ~1 MB headroom on a 1 MB cap: the budget after headroom is ~0, so the
+            // 500 KB headroom on a 1 MB cap: target 524 KB, above the JF-428 floor
+            // (512 KB) so eviction is not floored; 700 KB total > 524 KB, so the
             // oldest entry must go; the recent one survives (LRU order).
-            bool ok = await _cache.EnsureDiskBudgetBeforeEncodeAsync(1024 * 1024 - 60 * 1024);
-            Assert.True(ok);
+            await _cache.EnsureDiskBudgetBeforeEncodeAsync(500 * 1024);
             Assert.False(File.Exists(old), "the oldest entry should be evicted to make headroom");
             Assert.True(File.Exists(recent), "only enough entries to fit are evicted");
         }
@@ -1473,5 +1472,21 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         {
             _config.VideoAudioCacheSizeMB = originalCap;
         }
+    }
+
+    /// <summary>
+    /// JF-428: the pre-encode headroom reservation scales with content duration
+    /// (64MB/h, measured ~57MB/h on an 8.3h audiobook) with a one-hour floor; the
+    /// old flat 64MB under-reserved every encode longer than an hour.
+    /// </summary>
+    [Theory]
+    [InlineData(0L, 64L * 1024 * 1024)]
+    [InlineData(30L * TimeSpan.TicksPerMinute, 64L * 1024 * 1024)]
+    [InlineData(90L * TimeSpan.TicksPerMinute, 128L * 1024 * 1024)]   // 1.5h rounds UP to 2h
+    [InlineData(2L * TimeSpan.TicksPerHour, 128L * 1024 * 1024)]
+    [InlineData(8L * TimeSpan.TicksPerHour, 512L * 1024 * 1024)]
+    public void EstimateEncodeBytes_ScalesWithDuration_FloorsAtOneHour(long runtimeTicks, long expectedBytes)
+    {
+        Assert.Equal(expectedBytes, VideoAudioController.EstimateEncodeBytes(runtimeTicks));
     }
 }

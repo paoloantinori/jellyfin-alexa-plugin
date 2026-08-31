@@ -221,7 +221,12 @@ public class VideoAudioController : ControllerBase
             // The client receives data as ffmpeg produces it instead of waiting
             // for the entire file to be generated first.
 #pragma warning disable CA3003 // cachePath is built from GUID-validated itemId and numeric ticks
-            var ffmpegProcess = await StartFfmpegProcessGatedAsync(validation.FfmpegPath, ffmpegArgs, holdGateUntilExit: true).ConfigureAwait(false);
+            var ffmpegProcess = await StartFfmpegProcessGatedAsync(
+                validation.FfmpegPath,
+                ffmpegArgs,
+                holdGateUntilExit: true,
+                EstimateEncodeBytes(validation.Item.RunTimeTicks ?? 0),
+                cachePath).ConfigureAwait(false);
 
             try
             {
@@ -392,7 +397,12 @@ public class VideoAudioController : ControllerBase
             // Start ffmpeg without waiting — generate segments in the background.
             // Serve the playlist as soon as the first segment is ready so the Echo Show
             // can start playback immediately, even for long content like audiobooks.
-            var ffmpegProcess = await StartFfmpegProcessGatedAsync(validation.FfmpegPath, ffmpegArgs, holdGateUntilExit: true).ConfigureAwait(false);
+            var ffmpegProcess = await StartFfmpegProcessGatedAsync(
+                validation.FfmpegPath,
+                ffmpegArgs,
+                holdGateUntilExit: true,
+                EstimateEncodeBytes(validation.Item.RunTimeTicks ?? 0),
+                hlsDir).ConfigureAwait(false);
 
             try
             {
@@ -691,7 +701,12 @@ public class VideoAudioController : ControllerBase
             }
 
             // Start ffmpeg in the background — writes to stream.m3u8, not our pre-written file.
-            var ffmpegProcess = await StartFfmpegProcessGatedAsync(ffmpeg, ffmpegArgs, holdGateUntilExit: true).ConfigureAwait(false);
+            var ffmpegProcess = await StartFfmpegProcessGatedAsync(
+                ffmpeg,
+                ffmpegArgs,
+                holdGateUntilExit: true,
+                EstimateEncodeBytes(chapters.Sum(c => c.RunTimeTicks ?? 0)),
+                hlsDir).ConfigureAwait(false);
 
             // Register the HLS directory for segment lookups immediately.
             _cache.RegisterHlsDirectory(parentId, artModifiedTicks);
@@ -1014,30 +1029,6 @@ public class VideoAudioController : ControllerBase
         public string FfmpegPath { get; set; } = string.Empty;
         public MediaBrowser.Controller.Entities.BaseItem Item { get; set; } = null!;
         public string ServerUrl { get; set; } = string.Empty;
-    }
-
-    /// <summary>
-    /// Run ffmpeg to completion: start the process, await exit with a cancellation token,
-    /// and throw on non-zero exit code. Used by HLS generation (which needs the complete
-    /// output before serving) and by the faststart remux.
-    /// </summary>
-    /// <param name="ffmpegPath">Path to ffmpeg binary.</param>
-    /// <param name="arguments">ffmpeg command-line arguments as individual tokens.</param>
-    /// <param name="cancellationToken">Cancellation token for timeout/abort.</param>
-    private async Task RunFfmpegToCompletionAsync(
-        string ffmpegPath,
-        List<string> arguments,
-        CancellationToken cancellationToken)
-    {
-        using var process = await StartFfmpegProcessGatedAsync(ffmpegPath, arguments, holdGateUntilExit: true, cancellationToken).ConfigureAwait(false);
-
-        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-
-        if (process.ExitCode != 0)
-        {
-            _logger.LogWarning("ffmpeg exited with code {ExitCode}", process.ExitCode);
-            throw new InvalidOperationException($"ffmpeg exited with code {process.ExitCode}");
-        }
     }
 
     /// <summary>
@@ -1566,6 +1557,8 @@ public class VideoAudioController : ControllerBase
         string ffmpegPath,
         List<string> arguments,
         bool holdGateUntilExit,
+        long estimatedEncodeBytes,
+        string pinPath,
         CancellationToken cancellationToken = default)
     {
         if (!holdGateUntilExit)
@@ -1573,13 +1566,12 @@ public class VideoAudioController : ControllerBase
             return StartFfmpegProcess(ffmpegPath, arguments);
         }
 
-        // JF-310: pre-encode disk budget - evict BEFORE ffmpeg starts, with the
-        // incoming encode reserved as headroom. The estimate is intentionally
-        // conservative (a full audiobook HLS is the worst case; short songs are
-        // negligible next to it): the purpose is forcing the eviction sweep to run
-        // before, not predicting the exact size.
-        const long HeadroomEstimateBytes = 64L * 1024 * 1024;
-        await _cache.EnsureDiskBudgetBeforeEncodeAsync(HeadroomEstimateBytes).ConfigureAwait(false);
+        // JF-310/JF-428: before ffmpeg starts, run the eviction sweep with the
+        // incoming encode reserved as headroom (duration-scaled, see
+        // EstimateEncodeBytes). The entry being written is PINNED after the gate is
+        // acquired so no concurrent sweep can evict it mid-encode; pinning after the
+        // await also means a cancelled wait cannot leak a pin.
+        await _cache.EnsureDiskBudgetBeforeEncodeAsync(estimatedEncodeBytes).ConfigureAwait(false);
 
         // Capture the gate instance at acquire time so the release always goes to
         // the SAME semaphore, even if UpdateEncodeGateCapacity swaps the field while
@@ -1587,6 +1579,7 @@ public class VideoAudioController : ControllerBase
         // a swap would grant a phantom slot and strand waiters on the dead semaphore).
         var gate = _encodeGate;
         await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        _cache.Pin(pinPath);
         Process process;
         try
         {
@@ -1595,6 +1588,7 @@ public class VideoAudioController : ControllerBase
         catch
         {
             gate.Release();
+            _cache.Unpin(pinPath);
             throw;
         }
 
@@ -1623,10 +1617,30 @@ public class VideoAudioController : ControllerBase
                 {
                     try { gate.Release(); }
                     catch (SemaphoreFullException) { /* defensive: double-release */ }
+
+                    // Encode finished: the entry becomes an ordinary LRU citizen.
+                    _cache.Unpin(pinPath);
                 }
             },
             CancellationToken.None);
         return process;
+    }
+
+    /// <summary>
+    /// JF-428: conservative on-disk size estimate for a video-audio encode, scaled by
+    /// content duration. Measured: an 8.3h audiobook HLS is ~472MB (~57MB/h: audio
+    /// copy at ~128kbps plus 1fps CRF51 black-frame video), so 64MB/h leaves margin.
+    /// Fractional hours round UP (ceiling): a 1.9h book predicts ~108MB and must
+    /// reserve 128MB, not fall back to the 1h floor. The floor is one hour's worth:
+    /// the previous flat 64MB reservation was implicitly the 1h case and under-reserved
+    /// every longer encode.
+    /// </summary>
+    /// <param name="runtimeTicks">Total content duration (item runtime or chapters sum).</param>
+    internal static long EstimateEncodeBytes(long runtimeTicks)
+    {
+        const long bytesPerHour = 64L * 1024 * 1024;
+        long hours = (runtimeTicks + TimeSpan.TicksPerHour - 1) / TimeSpan.TicksPerHour;
+        return Math.Max(bytesPerHour, hours * bytesPerHour);
     }
 
     /// <param name="ffmpegPath">Path to ffmpeg binary.</param>
@@ -1866,17 +1880,26 @@ public class VideoAudioController : ControllerBase
             remuxArgs.AddRange(FaststartRemuxArgs);
             remuxArgs.Add(faststartPath);
 
-            using var process = StartFfmpegProcess(ffmpegPath, remuxArgs);
-
-            await process.WaitForExitAsync().ConfigureAwait(false);
-
-            if (process.ExitCode != 0)
+            // JF-428: the partial remux is a cache entry a sweep could delete mid-write
+            _cache.Pin(faststartPath);
+            try
             {
-                _logger.LogWarning("ffmpeg remux exited with code {ExitCode}", process.ExitCode);
+                using var process = StartFfmpegProcess(ffmpegPath, remuxArgs);
+
+                await process.WaitForExitAsync().ConfigureAwait(false);
+
+                if (process.ExitCode != 0)
+                {
+                    _logger.LogWarning("ffmpeg remux exited with code {ExitCode}", process.ExitCode);
 #pragma warning disable CA3003
-                TryDelete(faststartPath);
+                    TryDelete(faststartPath);
 #pragma warning restore CA3003
-                return;
+                    return;
+                }
+            }
+            finally
+            {
+                _cache.Unpin(faststartPath);
             }
 
             _logger.LogDebug("VideoAudio: remuxed to faststart: {Path}", faststartPath);

@@ -252,6 +252,127 @@ public class VideoAudioCacheTests : PluginTestBase, IDisposable
         Assert.False(File.Exists(coldPath), "Cold file should be evicted");
     }
 
+    // --- JF-428: eviction floor + in-use pinning ---
+
+    /// <summary>
+    /// JF-428: a pre-encode headroom larger than the configured cap must floor the eviction
+    /// target at half the cap, never zero. The old clamp-to-0 targeted zero and wiped EVERY
+    /// entry, including the HLS directory of the audiobook currently being encoded/streamed.
+    /// </summary>
+    [Fact]
+    public async Task EvictIfNeeded_HeadroomExceedsCap_FloorsAtHalfCap_NotZero()
+    {
+        // Cap 1MB; entries 0.7MB total; headroom 2MB (> cap).
+        // Floor = 0.5MB: the oldest 0.2MB entry is evicted (0.7 > 0.5), the newest 0.5MB survives.
+        Plugin.Instance!.Configuration.VideoAudioCacheSizeMB = 1;
+
+        string oldestPath = _cache.GetCacheFilePath("old-item", 1);
+        string newestPath = _cache.GetCacheFilePath("new-item", 2);
+        Directory.CreateDirectory(Path.GetDirectoryName(oldestPath)!);
+
+        await File.WriteAllTextAsync(oldestPath, new string('x', 200 * 1024));
+        File.SetLastAccessTimeUtc(oldestPath, DateTime.UtcNow.AddHours(-2));
+        await File.WriteAllTextAsync(newestPath, new string('y', 512 * 1024));
+        File.SetLastAccessTimeUtc(newestPath, DateTime.UtcNow);
+
+        await _cache.EnsureDiskBudgetBeforeEncodeAsync(2L * 1024 * 1024);
+
+        Assert.False(File.Exists(oldestPath), "Oldest entry is still evictable pressure (0.7MB total > 0.5MB floor)");
+        Assert.True(File.Exists(newestPath), "Newest entry must SURVIVE: the floor is half the cap, not zero");
+    }
+
+    /// <summary>
+    /// JF-428: an entry pinned as in-use (its directory is being encoded and streamed)
+    /// is never evicted, even when it is the oldest over-limit entry.
+    /// </summary>
+    [Fact]
+    public async Task EvictIfNeeded_PinnedEntry_NeverEvictedEvenWhenOldest()
+    {
+        Plugin.Instance!.Configuration.VideoAudioCacheSizeMB = 1;
+
+        string pinnedPath = _cache.GetCacheFilePath("in-use-item", 1);
+        string coldPath = _cache.GetCacheFilePath("cold-item", 2);
+        Directory.CreateDirectory(Path.GetDirectoryName(pinnedPath)!);
+
+        await File.WriteAllTextAsync(pinnedPath, new string('x', 1536 * 1024));
+        File.SetLastAccessTimeUtc(pinnedPath, DateTime.UtcNow.AddHours(-2));
+        await File.WriteAllTextAsync(coldPath, new string('y', 100 * 1024));
+        File.SetLastAccessTimeUtc(coldPath, DateTime.UtcNow);
+
+        _cache.Pin(pinnedPath);
+        try
+        {
+            await _cache.EvictIfNeeded();
+
+            Assert.True(File.Exists(pinnedPath), "Pinned (in-use) entry must never be evicted mid-encode/mid-stream");
+            Assert.False(File.Exists(coldPath), "Cold unpinned entry should still be evicted");
+        }
+        finally
+        {
+            _cache.Unpin(pinnedPath);
+        }
+    }
+
+    /// <summary>
+    /// JF-428: when a pinned entry alone exceeds the target, the sweep stops instead of
+    /// deleting everything else trying to reach an unreachable target.
+    /// </summary>
+    [Fact]
+    public async Task EvictIfNeeded_SinglePinnedOverLimit_DeletesNothing()
+    {
+        Plugin.Instance!.Configuration.VideoAudioCacheSizeMB = 1;
+
+        string pinnedPath = _cache.GetCacheFilePath("in-use-item", 1);
+        Directory.CreateDirectory(Path.GetDirectoryName(pinnedPath)!);
+        await File.WriteAllTextAsync(pinnedPath, new string('x', 1536 * 1024));
+        File.SetLastAccessTimeUtc(pinnedPath, DateTime.UtcNow.AddHours(-2));
+
+        _cache.Pin(pinnedPath);
+        try
+        {
+            await _cache.EvictIfNeeded();
+
+            Assert.True(File.Exists(pinnedPath), "Nothing is deleted when the only entry is pinned");
+        }
+        finally
+        {
+            _cache.Unpin(pinnedPath);
+        }
+    }
+
+    /// <summary>
+    /// JF-428: pins are refcounted. A retrying encode can re-pin the same path while
+    /// the previous attempt's delayed exit-poll release (up to 500ms) is still pending;
+    /// that late release must not expose the new encode's entry to eviction.
+    /// </summary>
+    [Fact]
+    public async Task Pin_IsRefcounted_LateReleaseDoesNotExposeRePinnedEntry()
+    {
+        Plugin.Instance!.Configuration.VideoAudioCacheSizeMB = 1;
+
+        string path = _cache.GetCacheFilePath("in-use-item", 1);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.WriteAllTextAsync(path, new string('x', 1536 * 1024));
+        File.SetLastAccessTimeUtc(path, DateTime.UtcNow.AddHours(-2));
+
+        _cache.Pin(path);      // encode A
+        _cache.Pin(path);      // retrying encode B, same path
+        _cache.Unpin(path);    // A's delayed exit-poll release
+        try
+        {
+            await _cache.EvictIfNeeded();
+            Assert.True(File.Exists(path), "B's pin must still protect the entry after A's release");
+
+            _cache.Unpin(path);    // B finishes
+            await _cache.EvictIfNeeded();
+            Assert.False(File.Exists(path), "Entry is evictable once the last pin is released");
+        }
+        finally
+        {
+            _cache.Unpin(path);    // cleanup if an assert failed; no-op when unpinned
+        }
+    }
+
     [Fact]
     public async Task EvictIfNeeded_NoCacheDir_DoesNotThrow()
     {
