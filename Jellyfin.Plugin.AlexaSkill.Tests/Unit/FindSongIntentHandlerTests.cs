@@ -1442,4 +1442,53 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         string invalidPick = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("FindSongInvalidPick", "en-US");
         Assert.Equal(invalidPick, speech);
     }
+
+    [Fact]
+    public void FindSong_Disambiguation_DeduplicatesByName()
+    {
+        // JF-416: the same song from different albums appeared 3 times in the
+        // disambiguation list with zero informational difference. The LINQ dedup
+        // (Take(8) + GroupBy name + Take(4)) must collapse to 1 entry per unique name.
+        var scored = new List<(BaseItem Item, double Score)>
+        {
+            (CreateAudioItem(Guid.NewGuid(), "The Idiot Kings"), 90),
+            (CreateAudioItem(Guid.NewGuid(), "The Idiot Kings"), 88),
+            (CreateAudioItem(Guid.NewGuid(), "The Idiot Kings"), 85),
+            (CreateAudioItem(Guid.NewGuid(), "American Idiot"), 82),
+        };
+
+        var deduped = scored.Take(8)
+            .GroupBy(s => s.Item.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .Take(4)
+            .ToList();
+
+        Assert.Equal(2, deduped.Count);
+        Assert.Equal("The Idiot Kings", deduped[0].Item.Name);
+        Assert.Equal(90, deduped[0].Score); // highest-scoring representative wins
+        Assert.Equal("American Idiot", deduped[1].Item.Name);
+    }
+
+    [Fact]
+    public void FindSong_Disambiguation_DistinctNames_Unchanged()
+    {
+        // JF-416 no-regression: items with distinct names are unaffected.
+        var scored = new List<(BaseItem Item, double Score)>
+        {
+            (CreateAudioItem(Guid.NewGuid(), "Song A"), 90),
+            (CreateAudioItem(Guid.NewGuid(), "Song B"), 85),
+            (CreateAudioItem(Guid.NewGuid(), "Song C"), 80),
+            (CreateAudioItem(Guid.NewGuid(), "Song D"), 75),
+        };
+
+        var deduped = scored.Take(8)
+            .GroupBy(s => s.Item.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .Take(4)
+            .ToList();
+
+        Assert.Equal(4, deduped.Count);
+        Assert.Equal("Song A", deduped[0].Item.Name);
+        Assert.Equal("Song D", deduped[3].Item.Name);
+    }
 }

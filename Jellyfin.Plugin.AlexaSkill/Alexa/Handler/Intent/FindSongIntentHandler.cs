@@ -602,18 +602,27 @@ public class FindSongIntentHandler : BaseHandler
                 sessionData);
         }
 
-        // 1-4 matches — present disambiguation list with real scores
-        var disambigCandidates = scored.Take(4)
+        // 1-4 matches: present disambiguation list with real scores.
+        // JF-416: deduplicate by song NAME (case-insensitive) so the same song from
+        // different albums doesn't appear multiple times with zero informational
+        // difference for the user ("The Idiot Kings" offered 3 times for "idiot").
+        // The highest-scoring item per unique name wins (preserves scored order).
+        // Scan up to 8 scored items to fill up to 4 unique names.
+        var disambigCandidates = scored.Take(8)
+            .GroupBy(s => s.Item.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .Take(4)
             .Select(s => new FindSongCandidate(s.Item.Id, s.Item.Name, null, s.Score))
             .ToList();
 
         sessionData.State = FindSongState.Disambiguating;
         sessionData.Candidates = disambigCandidates;
 
-        // Build the list announcement
+        // Build the list announcement. JF-416: FindSongFoundMultiple already receives
+        // candidateNames as a format arg; do NOT append it again (the user heard the
+        // full list twice: once in the message and once in the appended prompt).
         var candidateNames = string.Join(", ", disambigCandidates.Select((c, i) => $"{i + 1}. {c.Name}"));
-        string foundMultipleMsg = ResponseStrings.Get("FindSongFoundMultiple", locale, disambigCandidates.Count, candidateNames);
-        string fullPrompt = $"{foundMultipleMsg} {candidateNames}";
+        string fullPrompt = ResponseStrings.Get("FindSongFoundMultiple", locale, disambigCandidates.Count, candidateNames);
 
         return ElicitTitleKeywords(fullPrompt,
             sessionData);

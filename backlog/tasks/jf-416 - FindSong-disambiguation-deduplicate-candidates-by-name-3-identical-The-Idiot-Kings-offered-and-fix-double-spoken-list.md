@@ -3,9 +3,11 @@ id: JF-416
 title: >-
   FindSong disambiguation: deduplicate candidates by name (3 identical "The
   Idiot Kings" offered) and fix double-spoken list
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - zai
 created_date: '2026-08-30 12:39'
+updated_date: '2026-08-31 08:22'
 labels: []
 dependencies: []
 priority: medium
