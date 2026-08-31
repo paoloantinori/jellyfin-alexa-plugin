@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-07-27 04:18'
+updated_date: '2026-08-31 15:04'
 labels:
   - bug
   - artist-search
@@ -45,3 +46,13 @@ Predicate ArtistSearch.IsCoincidentalContainmentMatch (stop-word-aware, locale p
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining, or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-08-31 /code-review high (JF-418 session) surfaced two lower-ranked findings adjacent to this task's consolidation scope, recorded here so they are not lost:
+
+1. The JF-417 tier-2 partial-first-word deferral's fallback branch (accept the deferred match if tiers 3-4 find no different winner) is DEAD CODE in both search copies: tier 4's fuzzy pass over the superset always re-finds the deferred candidate, so the explicit fallback never changes the outcome.
+
+2. The JF-417 deferral logic + the JF-420 fair-score comparison now exist in BOTH copies of the 4-tier chain (ArtistSearch.SearchAsync and the inline PlayArtistSongs Thorough mode), deepening this task's duplication: any containment/discrimination fix must be written twice until the consolidation happens. When consolidating, fold the dead fallback branch out and keep one copy of both mechanisms.
+<!-- SECTION:NOTES:END -->
