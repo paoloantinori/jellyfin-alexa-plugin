@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-08-31 15:02'
+updated_date: '2026-08-31 17:21'
 labels:
   - code-review
   - dialog
@@ -36,7 +37,14 @@ FIX SHAPE: mirror the sibling handlers' IN_PROGRESS guard for the cancel check; 
 - [ ] #2 CancelWords covers the locales that can hit the flow, or the gap is documented in the code with a follow-up (17-locale audit result recorded)
 - [ ] #3 Unit tests: (a) open FindSong flow + titleKeywords='basta' searches; (b) genuine cancel ('basta' with no other content) still cancels; (c) first-invocation search for a cancel-word title still works
 - [ ] #4 FindSong disambiguation: when name-dedup (JF-416) collapses candidates to ONE, the response speaks the single-found wording, not 'found multiple' with a 1-item list
+- [ ] #5 Cancel-word detection inspects ALL slots of the incoming request (like PlayAlbum:111/PlaySong:160), so a cancel word captured into musician (or any other slot) during a force-routed FindSong session still cancels instead of being searched as an artist
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-08-31 second code-review pass added a third aspect + AC: the cancel hatch reads only titleKeywords; PlayAlbum/PlaySong check BOTH slots and gate on DialogState. During an open FindSong artist elicitation, 'annulla' routed to another intent with musician='annulla' is force-routed back to FindSongIntentHandler (FindSongSessionData present), the hatch sees titleKeywords=null, HandleAwaitingArtistAsync falls back to the musician slot, searches artist 'annulla', not-found, re-prompts: the elicitation-trap loop the hatch was meant to close.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
