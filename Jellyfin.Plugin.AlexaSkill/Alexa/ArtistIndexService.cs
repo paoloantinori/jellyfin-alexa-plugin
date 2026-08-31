@@ -21,6 +21,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa;
 public class ArtistIndexService : IArtistIndex, IHostedService, IDisposable
 {
     private const int RefreshDebounceSeconds = 5;
+    private const int FailedLoadRetrySeconds = 30;
 
     private readonly ILibraryManager _libraryManager;
     private readonly ILogger<ArtistIndexService> _logger;
@@ -31,10 +32,17 @@ public class ArtistIndexService : IArtistIndex, IHostedService, IDisposable
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
     private readonly object _debounceLock = new();
     private Timer? _debounceTimer;
-    private bool _disposed;
+    private Timer? _retryTimer;
+    private volatile bool _disposed;
 
     public bool IsReady => _isReady;
     public int Count => _artists.Count;
+
+    /// <summary>
+    /// JF-419.1: delay before each background retry of a failed load. Internal test
+    /// hook (not a ctor parameter: MS.DI cannot resolve optional parameters).
+    /// </summary>
+    internal TimeSpan FailedLoadRetryInterval { get; set; } = TimeSpan.FromSeconds(FailedLoadRetrySeconds);
 
     /// <inheritdoc />
     public bool TryGetPhoneticCode(Guid artistId, out (string Primary, string? Alternate) codes)
@@ -109,6 +117,7 @@ public class ArtistIndexService : IArtistIndex, IHostedService, IDisposable
             _phoneticCodes = phoneticCodes;
             _artists = new List<BaseItem>(artists);
             _isReady = true;
+            DisarmRetryTimer();
 
             _logger.LogInformation("Artist index {Action}: {Count} artists, {PhoneticCount} with phonetic codes",
                 artists.Count > 0 ? "loaded" : "initialized (empty library)",
@@ -126,6 +135,7 @@ public class ArtistIndexService : IArtistIndex, IHostedService, IDisposable
         finally
         {
             _refreshLock.Release();
+            ScheduleRetryIfNotReady();
         }
     }
 
@@ -170,6 +180,14 @@ public class ArtistIndexService : IArtistIndex, IHostedService, IDisposable
     {
         lock (_debounceLock)
         {
+            // In-lock re-check: an event that passed OnLibraryChanged's check
+            // before Dispose must not arm a timer after cleanup (same race the
+            // retry path guards against)
+            if (_disposed)
+            {
+                return;
+            }
+
             _debounceTimer?.Dispose();
             _debounceTimer = new Timer(
                 async _ =>
@@ -189,6 +207,50 @@ public class ArtistIndexService : IArtistIndex, IHostedService, IDisposable
         }
     }
 
+    /// <summary>
+    /// JF-419.1: arms a one-shot retry timer when the index is not ready and re-arms
+    /// it after each failed attempt, until any load succeeds (initial, retry, or
+    /// library-change refresh; the success path calls <see cref="DisarmRetryTimer"/>).
+    /// Without this, one failed startup load left IsReady false forever and the
+    /// warming gate refused every artist request until a server restart.
+    /// </summary>
+    private void ScheduleRetryIfNotReady()
+    {
+        lock (_debounceLock)
+        {
+            if (_disposed || _isReady)
+            {
+                return;
+            }
+
+            _retryTimer?.Dispose();
+            _retryTimer = new Timer(
+                async _ =>
+                {
+                    try
+                    {
+                        await RefreshAsync(CancellationToken.None).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Artist index retry load failed");
+                    }
+                },
+                null,
+                FailedLoadRetryInterval,
+                Timeout.InfiniteTimeSpan);
+        }
+    }
+
+    private void DisarmRetryTimer()
+    {
+        lock (_debounceLock)
+        {
+            _retryTimer?.Dispose();
+            _retryTimer = null;
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -196,15 +258,20 @@ public class ArtistIndexService : IArtistIndex, IHostedService, IDisposable
             return;
         }
 
+        // Set before taking the lock so a concurrent retry callback's
+        // ScheduleRetryIfNotReady sees it and cannot re-arm after cleanup
+        _disposed = true;
+
         _libraryManager.ItemAdded -= OnLibraryChanged;
         _libraryManager.ItemRemoved -= OnLibraryChanged;
         lock (_debounceLock)
         {
             _debounceTimer?.Dispose();
             _debounceTimer = null;
+            _retryTimer?.Dispose();
+            _retryTimer = null;
         }
 
         _refreshLock.Dispose();
-        _disposed = true;
     }
 }

@@ -69,6 +69,116 @@ public class ArtistIndexServiceTests : PluginTestBase
         Assert.Empty(service.GetArtists());
     }
 
+    // --- JF-419.1: failed initial load must self-recover via background retry ---
+
+    /// <summary>
+    /// Creates a service whose load behavior is driven by <paramref name="load"/>
+    /// (may throw to simulate a failing DB). Fast retry interval by default so
+    /// recovery tests run in milliseconds.
+    /// </summary>
+    private ArtistIndexService CreateServiceWithLoad(Func<List<BaseItem>> load, TimeSpan? retryInterval = null)
+    {
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(() => load());
+
+        _libraryManagerMock
+            .Setup(l => l.GetItemById(It.IsAny<Guid>()))
+            .Returns((Guid id) => null as BaseItem);
+
+        var service = new ArtistIndexService(_libraryManagerMock.Object, _logger);
+        service.FailedLoadRetryInterval = retryInterval ?? TimeSpan.FromMilliseconds(50);
+        return service;
+    }
+
+    [Fact]
+    public async Task StartAsync_FailedInitialLoad_RetriesAndRecovers()
+    {
+        var artists = new List<BaseItem>
+        {
+            new MusicArtist { Name = "Pink Floyd", Id = Guid.NewGuid() }
+        };
+
+        int callCount = 0;
+        var service = CreateServiceWithLoad(() =>
+        {
+            callCount++;
+            if (callCount == 1)
+            {
+                throw new InvalidOperationException("db still migrating");
+            }
+
+            return artists;
+        });
+        try
+        {
+            await service.StartAsync(CancellationToken.None);
+            Assert.False(service.IsReady); // gate closed after the failed initial load
+
+            // The service must recover on its own, no restart, no library change
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+            while (!service.IsReady && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(25);
+            }
+
+            Assert.True(service.IsReady, "index should recover via background retry");
+            Assert.Equal(1, service.Count);
+        }
+        finally
+        {
+            service.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task StartAsync_PersistentFailure_KeepsRetrying()
+    {
+        int callCount = 0;
+        var service = CreateServiceWithLoad(() =>
+        {
+            callCount++;
+            throw new InvalidOperationException("db down");
+        });
+        try
+        {
+            await service.StartAsync(CancellationToken.None);
+            await Task.Delay(250);
+
+            Assert.False(service.IsReady);
+            Assert.True(callCount > 1, $"expected background retries, saw {callCount} load attempts");
+        }
+        finally
+        {
+            service.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task StartAsync_SuccessfulLoad_DoesNotScheduleRetry()
+    {
+        int callCount = 0;
+        var service = CreateServiceWithLoad(() =>
+        {
+            callCount++;
+            return new List<BaseItem> { new MusicArtist { Name = "Mina", Id = Guid.NewGuid() } };
+        });
+        try
+        {
+            await service.StartAsync(CancellationToken.None);
+            Assert.True(service.IsReady);
+
+            // Long enough for a wrongly-armed retry timer to fire at least twice
+            await Task.Delay(150);
+
+            Assert.Equal(1, callCount); // no background reload after a successful load
+        }
+        finally
+        {
+            service.Dispose();
+        }
+    }
+
     [Fact]
     public async Task GetArtists_NoFilter_ReturnsAllArtists()
     {
