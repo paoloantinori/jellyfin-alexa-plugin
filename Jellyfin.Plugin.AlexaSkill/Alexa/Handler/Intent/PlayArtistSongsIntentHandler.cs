@@ -379,6 +379,39 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeArtist, locale, context);
         }
 
+        // JF-420: when the single match is a containment shape (artist name is a substring
+        // of a multi-word query, e.g. "P!nk" contained in "P!nk floyd"), check for a
+        // DIFFERENT artist that fuzzy-matches the full query above a high threshold.
+        // If found, present BOTH as disambiguation candidates directly (NOT via
+        // HandleFuzzyMiss, which auto-plays candidates scoring >= ContainmentScore via
+        // the containment exemption, which is the exact bug we are fixing). The high
+        // threshold (80) ensures "nirvana unplugged" with only "Nirvana Tribute Band"
+        // as an alternative (scoring ~65) does NOT trigger: Nirvana auto-plays.
+        if (artists.Count == 1
+            && musician.Contains(' ')
+            && musician.Contains(artists[0].Name, StringComparison.OrdinalIgnoreCase)
+            && _artistIndex?.IsReady == true)
+        {
+            var searchPool = _artistIndex.GetArtists(topParentIds);
+            var alternatives = searchPool.Where(a => !a.Id.Equals(artists[0].Id)).ToList();
+            if (alternatives.Count > 0)
+            {
+                var best = FuzzyMatcher.FindBestMatchWithScore(musician, alternatives, a => a.Name);
+                if (best.HasValue && best.Value.Score >= 80)
+                {
+                    Logger.LogInformation(
+                        "PlayArtistSongs: containment match '{Containment}' has full-name alternative '{Alternative}' for query '{Query}', disambiguating (JF-420)",
+                        artists[0].Name, best.Value.Item.Name, musician);
+                    var disambigMatches = new List<(Guid Id, string Name, string? ArtUrl)>
+                    {
+                        (artists[0].Id, artists[0].Name, GetImageUrl(artists[0].Id.ToString("N"), user)),
+                        (best.Value.Item.Id, best.Value.Item.Name, GetImageUrl(best.Value.Item.Id.ToString("N"), user))
+                    };
+                    return DisambiguationHelper.AskFirstMatch(disambigMatches, DisambiguationHelper.MediaTypeArtist, locale, context);
+                }
+            }
+        }
+
         // Disambiguation: in Fast mode, auto-play the best match
         bool fastAutoPlay = mode == SearchResponseMode.Fast && artists.Count > 1;
 

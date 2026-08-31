@@ -3,9 +3,11 @@ id: JF-420
 title: >-
   Disambiguate containment-vs-full-name artist matches ('P!nk floyd': offer P!nk
   AND Pink Floyd instead of auto-playing P!nk)
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - zai
 created_date: '2026-08-31 06:04'
+updated_date: '2026-08-31 07:21'
 labels: []
 dependencies: []
 priority: high
@@ -30,6 +32,15 @@ Design: at the point where the artist search returns a single match that was sco
 - [ ] #5 No-regression: queries where the containment match is the ONLY match auto-play without prompting
 - [ ] #6 Unit tests: (a) P!nk floyd with both P!nk and Pink Floyd -> disambiguation prompt; (b) nirvana unplugged with only Nirvana -> auto-play; (c) single-word containment -> unchanged; (d) containment-only match -> auto-play
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. At the point where PlayArtistSongsIntentHandler gets a single artist match, check if the match was resolved via the containment exemption (the JF-417 deferred tier-2 path or tier-4 containment).
+2. If yes AND the query is multi-word, search ALL artists for a DIFFERENT artist that fuzzy-matches the full query above DefaultThreshold.
+3. If found, present both as disambiguation candidates (reuse DisambiguationHelper.AskFirstMatch pattern with numbered list).
+4. No-regression guards: single-word queries, only-one-match, and nirvana-unplugged (no full-name alternative) must auto-play unchanged.
+<!-- SECTION:PLAN:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
