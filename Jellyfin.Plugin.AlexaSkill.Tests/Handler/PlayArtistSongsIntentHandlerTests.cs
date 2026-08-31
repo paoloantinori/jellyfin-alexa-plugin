@@ -7,6 +7,7 @@ using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
+using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -142,12 +143,12 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
-    public async Task HandleAsync_ContainmentMatchWithFullNameAlternative_Disambiguates()
+    public async Task HandleAsync_ContainmentMatchWithFullNameAlternative_AutoSelectsAlternative()
     {
-        // JF-420 live incident: "suona pink floyd" → ASR "P!nk floyd". The artist
-        // search resolves to P!nk (4 chars, contained in the query) via the containment
-        // exemption. The JF-420 check finds Pink Floyd (10 chars) which fuzzy-matches
-        // the full query above 80, so BOTH are offered as disambiguation.
+        // JF-420 user-driven improvement: "P!nk floyd" should auto-select Pink Floyd,
+        // not ask the user to choose (they already said "pink floyd" once). The fair
+        // comparison: P!nk's penalized score is 90 * 4/10 = 36, Pink Floyd's genuine
+        // score is ~90. The margin (54 > 20) makes it unambiguous.
         var pnk = new MusicArtist { Name = "P!nk", Id = Guid.NewGuid() };
         var pinkFloyd = new MusicArtist { Name = "Pink Floyd", Id = Guid.NewGuid() };
         var allArtists = new List<BaseItem> { pnk, pinkFloyd };
@@ -155,6 +156,7 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         _artistIndexMock.Setup(i => i.IsReady).Returns(true);
         _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(allArtists);
         SetupUserMock();
+        SetupSongResult(new Audio { Name = "Comfortably Numb", Id = Guid.NewGuid() });
 
         var handler = CreateHandler(_artistIndexMock.Object);
         var request = CreateIntentRequest(musician: "P!nk floyd");
@@ -164,15 +166,14 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
-        // Disambiguation: session stays open, no auto-play, BOTH artists in the prompt.
+        // Auto-play Pink Floyd (no disambiguation prompt)
         Assert.NotNull(response);
-        Assert.False(response.Response.ShouldEndSession);
-        Assert.Null(response.Response.Directives?.FirstOrDefault(d => d.Type == "AudioPlayer.Play"));
-        var speech = (response.Response.OutputSpeech as PlainTextOutputSpeech)?.Text
-            ?? (response.Response.OutputSpeech as SsmlOutputSpeech)?.Ssml
-            ?? string.Empty;
-        Assert.Contains("P!nk", speech);
-        Assert.Contains("Pink Floyd", speech);
+        Assert.True(response.Response.ShouldEndSession);
+        var play = response.Response.Directives?.FirstOrDefault(d => d.Type == "AudioPlayer.Play");
+        Assert.NotNull(play);
+        var metadata = ((AudioPlayerPlayDirective)play).AudioItem?.Metadata;
+        Assert.NotNull(metadata);
+        Assert.Equal("Comfortably Numb", metadata.Title);
     }
 
     [Fact]

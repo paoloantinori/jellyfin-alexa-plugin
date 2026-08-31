@@ -399,29 +399,46 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 var best = FuzzyMatcher.FindBestMatchWithScore(musician, alternatives, a => a.Name);
                 if (best.HasValue && best.Value.Score >= 80)
                 {
-                    Logger.LogInformation(
-                        "PlayArtistSongs: containment match '{Containment}' has full-name alternative '{Alternative}' for query '{Query}', disambiguating (JF-420)",
-                        artists[0].Name, best.Value.Item.Name, musician);
-                    var disambigMatches = new List<(Guid Id, string Name, string? ArtUrl)>
+                    // Compare FAIR scores: the containment match's genuine score is
+                    // penalized by the length ratio (the 90 it got from the containment
+                    // exemption is artificially inflated). If the full-name alternative
+                    // beats the penalized containment score by a clear margin, auto-select
+                    // it (the user asked for "P!nk floyd" and means Pink Floyd, not P!nk).
+                    // Only disambiguate when both are genuinely plausible.
+                    double containmentPenalized = 90.0 * artists[0].Name.Length / musician.Length;
+                    double alternativeScore = best.Value.Score;
+
+                    if (alternativeScore - containmentPenalized > 20)
                     {
-                        (artists[0].Id, artists[0].Name, GetImageUrl(artists[0].Id.ToString("N"), user)),
-                        (best.Value.Item.Id, best.Value.Item.Name, GetImageUrl(best.Value.Item.Id.ToString("N"), user))
-                    };
-                    // Present BOTH options in the prompt (classic disambiguation, not
-                    // the yes/no single-match AskFirstMatch pattern the user rejected).
-                    var matchInfos = disambigMatches.Select(m => new DisambiguationHelper.MatchInfo { Id = m.Id.ToString(), Name = m.Name, ArtUrl = m.ArtUrl }).ToList();
-                    var matchList = string.Join(", ", disambigMatches.Select((m, i) => $"{i + 1}. {m.Name}"));
-                    string multiPrompt = ResponseStrings.Get("DisambiguateMultipleArtists", locale, matchList);
-                    var multiResponse = ResponseBuilder.Ask(multiPrompt, new Reprompt(multiPrompt));
-                    multiResponse.SessionAttributes = new Dictionary<string, object>
+                        Logger.LogInformation(
+                            "PlayArtistSongs: containment match '{Containment}' (penalized {Penalized:F0}) clearly beaten by full-name alternative '{Alternative}' ({Alternative:F0}), auto-selecting (JF-420)",
+                            artists[0].Name, containmentPenalized, best.Value.Item.Name, alternativeScore);
+                        artists = new List<BaseItem> { best.Value.Item };
+                    }
+                    else
                     {
-                        ["disambig_matches"] = Newtonsoft.Json.JsonConvert.SerializeObject(matchInfos),
-                        ["disambig_index"] = 0,
-                        ["disambig_type"] = DisambiguationHelper.MediaTypeArtist
-                    };
-                    Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.ConversationalFlows.MarkOthersInactive(
-                        multiResponse, Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.ConversationalFlows.DisambiguationKeys);
-                    return multiResponse;
+                        Logger.LogInformation(
+                            "PlayArtistSongs: containment match '{Containment}' (penalized {Penalized:F0}) vs full-name alternative '{Alternative}' ({Alternative:F0}) is ambiguous, disambiguating (JF-420)",
+                            artists[0].Name, containmentPenalized, best.Value.Item.Name, alternativeScore);
+                        var disambigMatches = new List<(Guid Id, string Name, string? ArtUrl)>
+                        {
+                            (artists[0].Id, artists[0].Name, GetImageUrl(artists[0].Id.ToString("N"), user)),
+                            (best.Value.Item.Id, best.Value.Item.Name, GetImageUrl(best.Value.Item.Id.ToString("N"), user))
+                        };
+                        var matchInfos = disambigMatches.Select(m => new DisambiguationHelper.MatchInfo { Id = m.Id.ToString(), Name = m.Name, ArtUrl = m.ArtUrl }).ToList();
+                        var matchList = string.Join(", ", disambigMatches.Select((m, i) => $"{i + 1}. {m.Name}"));
+                        string multiPrompt = ResponseStrings.Get("DisambiguateMultipleArtists", locale, matchList);
+                        var multiResponse = ResponseBuilder.Ask(multiPrompt, new Reprompt(multiPrompt));
+                        multiResponse.SessionAttributes = new Dictionary<string, object>
+                        {
+                            ["disambig_matches"] = Newtonsoft.Json.JsonConvert.SerializeObject(matchInfos),
+                            ["disambig_index"] = 0,
+                            ["disambig_type"] = DisambiguationHelper.MediaTypeArtist
+                        };
+                        Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.ConversationalFlows.MarkOthersInactive(
+                            multiResponse, Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.ConversationalFlows.DisambiguationKeys);
+                        return multiResponse;
+                    }
                 }
             }
         }
