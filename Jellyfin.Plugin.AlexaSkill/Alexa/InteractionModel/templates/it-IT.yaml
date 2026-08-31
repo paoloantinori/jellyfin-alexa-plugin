@@ -860,6 +860,12 @@ templates:
       - "{infinitive} {media_noun} {artist_article} {musician}"
       - "{imperative} {artist_carrier} {musician}"
       - "{infinitive} {artist_carrier} {musician}"
+      # JF-418: bare imperative/infinitive forms (the most natural Italian: "Suona
+      # Pink Floyd", "Di suonare Pink Floyd"). Previously ALL samples required a noun
+      # carrier (brani/canzoni/musica) or artist carrier (la band/il gruppo), so the
+      # natural phrasing without them routed to PlayVideoIntent or returned no match.
+      - "{imperative} {musician}"
+      - "{infinitive} {musician}"
     slots:
       - name: musician
         type: AMAZON.Musician

@@ -1645,7 +1645,17 @@
           "Di ascoltare la band {musician}",
           "Di ascoltare il gruppo {musician}",
           "Di ascoltare il cantante {musician}",
-          "Di ascoltare la cantante {musician}"
+          "Di ascoltare la cantante {musician}",
+          "Riproduci {musician}",
+          "Suona {musician}",
+          "Metti {musician}",
+          "Pleia {musician}",
+          "Ascolta {musician}",
+          "Di riprodurre {musician}",
+          "Di suonare {musician}",
+          "Di mettere {musician}",
+          "Di pleiare {musician}",
+          "Di ascoltare {musician}"
         ],
         "slots": [
           {
