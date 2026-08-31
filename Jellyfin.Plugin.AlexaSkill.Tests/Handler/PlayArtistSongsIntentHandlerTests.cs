@@ -164,9 +164,7 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
-        // Disambiguation: session stays open, no auto-play. AskFirstMatch presents
-        // the first candidate (P!nk) as a yes/no; Pink Floyd is the next candidate
-        // (stored in session disambig state) offered if the user says "no".
+        // Disambiguation: session stays open, no auto-play, BOTH artists in the prompt.
         Assert.NotNull(response);
         Assert.False(response.Response.ShouldEndSession);
         Assert.Null(response.Response.Directives?.FirstOrDefault(d => d.Type == "AudioPlayer.Play"));
@@ -174,6 +172,7 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
             ?? (response.Response.OutputSpeech as SsmlOutputSpeech)?.Ssml
             ?? string.Empty;
         Assert.Contains("P!nk", speech);
+        Assert.Contains("Pink Floyd", speech);
     }
 
     [Fact]

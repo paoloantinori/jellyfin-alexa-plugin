@@ -407,7 +407,21 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                         (artists[0].Id, artists[0].Name, GetImageUrl(artists[0].Id.ToString("N"), user)),
                         (best.Value.Item.Id, best.Value.Item.Name, GetImageUrl(best.Value.Item.Id.ToString("N"), user))
                     };
-                    return DisambiguationHelper.AskFirstMatch(disambigMatches, DisambiguationHelper.MediaTypeArtist, locale, context);
+                    // Present BOTH options in the prompt (classic disambiguation, not
+                    // the yes/no single-match AskFirstMatch pattern the user rejected).
+                    var matchInfos = disambigMatches.Select(m => new DisambiguationHelper.MatchInfo { Id = m.Id.ToString(), Name = m.Name, ArtUrl = m.ArtUrl }).ToList();
+                    var matchList = string.Join(", ", disambigMatches.Select((m, i) => $"{i + 1}. {m.Name}"));
+                    string multiPrompt = ResponseStrings.Get("DisambiguateMultipleArtists", locale, matchList);
+                    var multiResponse = ResponseBuilder.Ask(multiPrompt, new Reprompt(multiPrompt));
+                    multiResponse.SessionAttributes = new Dictionary<string, object>
+                    {
+                        ["disambig_matches"] = Newtonsoft.Json.JsonConvert.SerializeObject(matchInfos),
+                        ["disambig_index"] = 0,
+                        ["disambig_type"] = DisambiguationHelper.MediaTypeArtist
+                    };
+                    Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.ConversationalFlows.MarkOthersInactive(
+                        multiResponse, Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.ConversationalFlows.DisambiguationKeys);
+                    return multiResponse;
                 }
             }
         }

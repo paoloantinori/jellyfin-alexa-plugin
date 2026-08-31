@@ -57,6 +57,7 @@
   "SearchingMedia": "Procurando sua música...",
   "DisambiguatePrompt": "Encontrei vários resultados. Gostaria de ouvir {0}?",
   "DisambiguateNext": "Que tal {0}?",
+  "DisambiguateMultipleArtists": "Encontrei vários artistas: {0}. Qual?",
   "DisambiguatePromptSsml": "Encontrei vários resultados.<break time=\"200ms\"/>Gostaria de ouvir <emphasis level=\"moderate\">{0}</emphasis>?",
   "DisambiguateNextSsml": "Que tal <break time=\"150ms\"/><emphasis level=\"moderate\">{0}</emphasis>?",
   "NoMoreMatches": "Desculpe, não há mais resultados.",

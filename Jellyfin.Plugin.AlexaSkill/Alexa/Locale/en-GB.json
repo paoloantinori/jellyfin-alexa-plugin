@@ -31,6 +31,7 @@
   "DidNotCatchSleepTimer": "How long should I set the sleep timer for? Please say a number of minutes.",
   "DidNotCatchVideoTitle": "I didn't catch the video title. Please try again.",
   "DisambiguateNext": "How about {0}?",
+  "DisambiguateMultipleArtists": "I found multiple artists: {0}. Which one?",
   "DisambiguateNextSsml": "How about <break time=\"150ms\"/><emphasis level=\"moderate\">{0}</emphasis>?",
   "DisambiguatePrompt": "I found multiple matches. Would you like to hear {0}?",
   "DisambiguatePromptSsml": "I found multiple matches.<break time=\"200ms\"/>Would you like to hear <emphasis level=\"moderate\">{0}</emphasis>?",

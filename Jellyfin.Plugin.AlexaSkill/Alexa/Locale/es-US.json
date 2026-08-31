@@ -67,6 +67,7 @@
   "SearchingMedia": "Buscando tu música...",
   "DisambiguatePrompt": "He encontrado varias coincidencias. ¿Quieres escuchar {0}?",
   "DisambiguateNext": "¿Qué tal {0}?",
+  "DisambiguateMultipleArtists": "Encontré varios artistas: {0}. ¿Cuál?",
   "DisambiguatePromptSsml": "He encontrado varias coincidencias.<break time=\"200ms\"/>¿Quieres escuchar <emphasis level=\"moderate\">{0}</emphasis>?",
   "DisambiguateNextSsml": "¿Qué tal <break time=\"150ms\"/><emphasis level=\"moderate\">{0}</emphasis>?",
   "NoMoreMatches": "Lo siento, no hay más coincidencias.",
