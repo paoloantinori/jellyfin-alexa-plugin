@@ -607,6 +607,34 @@ tests:
     expected_slots:
       musician: {}
 
+  # JF-418: nominative article forms ("Suona i Queen", "Riproduci i Pink Floyd").
+  # Natural Italian speech uses definite articles before band names; before the
+  # nominative_article samples existed these all returned no selectedIntent.
+  - utterance: "Suona i queen"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "Suona i pink floyd"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "Riproduci i queen"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "Suona gli radiohead"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "Di suonare i queen"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
   # Short-form artist utterances are ambiguous — NLU resolves bare artist names
   # to various intents (MediaInfo, Fallback, PlaySong) or no selectedIntent.
   # Use explicit "musica di"/"brani di" forms for reliable resolution.
