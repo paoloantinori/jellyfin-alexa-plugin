@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-08-31 17:20'
+updated_date: '2026-08-31 19:32'
 labels:
   - code-review
   - playback-quality
@@ -35,6 +36,12 @@ FIX SHAPE: add a deliberate ordering to the AlbumArtistIds query for this path. 
 - [ ] #3 The announce wording matches the actual selection policy
 - [ ] #4 Unit test covers multi-release artists (live + studio + single)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-08-31 third code-review pass detail: the resolution fetches ALL the artist's albums with no Limit and no OrderBy, keeps only artistAlbums[0].Name, DISCARDS the BaseItem, then re-queries Jellyfin by that name; the re-query can miss on accent/index normalization and cascade into the no-artistIds full-catalog GetItemList plus library-wide fuzzy match (lines 226-238), all inside the 6s retry budget. Also: the multi-match path ~150 lines below sorts by name before choosing, so the two paths already disagree on selection policy; align both when fixing.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
