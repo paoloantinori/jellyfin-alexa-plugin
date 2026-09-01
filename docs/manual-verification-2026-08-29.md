@@ -6,19 +6,25 @@ simulator and profile-nlu verified; the device adds real ASR, which only you can
 If something fails, note the approximate TIME and what you said: the logs are classified
 from the timestamp in seconds.
 
-## A. The Koop flow (JF-408/411/412 fallout)
+## A. The Koop flow (JF-408/411/412 fallout; UPDATED 2026-09-02 for JF-422)
+
+JF-422 changed the both-empty elicit: the skill now asks "Quale album vuoi ascoltare?"
+(the album slot), not "Di quale artista...". The old artist-first expectations below were
+rewritten; a pre-JF-422 build would show the old prompt.
 
 1. "Alexa, chiedi a mia collezione un disco dei Koop"
    - BEST: music starts, track 1 of Waltz for Koop, no speech (silent launch).
-   - FALLBACK (acceptable): "Di quale artista vuoi ascoltare un album?" -> answer "koop"
-     -> music starts.
+   - FALLBACK (if ASR swallows "Koop" and both slots arrive empty): "Quale album vuoi
+     ascoltare?" -> answer a title you own -> it plays. Answering the ARTIST ("koop")
+     plays the artist only via the cross-media fallback (announced "trovato invece..."):
+     acceptable, note it if heard.
 2. Same phrase, but say "Koop" quickly/carelessly (ASR stress test).
-   - Expect either the music, or the artist question (never "quale album", never
-     recent-content lists, never a wrong artist like Porcupine Tree).
+   - Expect either the music, or the album question (never recent-content lists, never
+     a wrong artist like Porcupine Tree).
 3. "Alexa, chiedi a mia collezione un disco" (no artist at all)
-   - Expect: "Di quale artista vuoi ascoltare un album?" -> answer an artist -> album plays.
+   - Expect: "Quale album vuoi ascoltare?" -> answer a title -> it plays.
 4. While that question is open, say "quali ci sono"
-   - Expect: stays in the flow (e.g. artist not-found wording). NOT a list of recent albums.
+   - Expect: stays in the flow (e.g. album not-found wording). NOT a list of recent albums.
 
 ## B. Cancel words during open questions (JF-413 review batch)
 

@@ -38,7 +38,6 @@
   "DisambiguateReprompt": "You can say yes or no.",
   "DisambiguateCarouselTitle": "Did you mean...",
   "ElicitAlbumName": "Which album would you like to hear?",
-  "ElicitArtistName": "Which artist would you like an album by?",
   "ElicitBookName": "Which book would you like to hear?",
   "ElicitSeriesName": "Which series would you like to watch?",
   "ElicitSongName": "What song would you like to hear?",

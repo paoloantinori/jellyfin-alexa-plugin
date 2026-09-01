@@ -169,7 +169,6 @@
   "ReminderDefaultMessage": "هذا تذكير جيليفين الخاص بك.",
   "ElicitSongName": "ما الأغنية التي تريد الاستماع إليها؟",
   "ElicitAlbumName": "ما الألبوم الذي تريد الاستماع إليه؟",
-  "ElicitArtistName": "من أي فنان تريد أن تستمع إلى ألبوم؟",
   "ElicitSeriesName": "ما المسلسل الذي تريد مشاهدته؟",
   "FuzzySuggestionPrompt": "لم أجد '{0}'. هل كنت تقصد '{1}'؟",
   "FuzzySuggestionPromptSsml": "لم أجد '{0}'.<break time=\"200ms\"/>هل كنت تقصد <emphasis level=\"moderate\">{1}</emphasis>؟",

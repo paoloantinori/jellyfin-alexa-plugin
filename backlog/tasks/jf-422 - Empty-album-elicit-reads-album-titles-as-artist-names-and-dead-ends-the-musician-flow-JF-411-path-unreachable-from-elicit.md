@@ -3,9 +3,11 @@ id: JF-422
 title: >-
   Empty-album elicit reads album titles as artist names and dead-ends the
   musician flow (JF-411 path unreachable from elicit)
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - zai
 created_date: '2026-08-31 15:02'
+updated_date: '2026-09-01 23:42'
 labels:
   - code-review
   - dialog
@@ -38,6 +40,28 @@ FIX SHAPE: elicit the ALBUM slot first (title answers are the common case), and 
 - [ ] #4 No regression on the direct 'un disco dei X' one-shot forms (JF-411 originals)
 <!-- AC:END -->
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-02 orchestrator finalization: the implementer died to an API server error at report time (work complete, diff final, gates run). Final tree verified by the orchestrator: build 0 errors, full suite 2828/2828 (incl. the concurrent JF-425 event-handler tests), Release 0 warnings per two independent agents. Committing as part of the overnight batch.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+JF-422: the empty-album elicit asks for the ALBUM (the common answer) and the musician answer now reaches the JF-411 resolution instead of a dead-end title prompt.
+
+WHAT CHANGED (from the implementer run; finalized by the orchestrator after an API-error termination at report time)
+- PlayAlbumIntentHandler branching is now purely slot-presence driven: BOTH slots empty -> elicit the ALBUM slot (a title answer feeds the album-title search; the old artist-first order captured 'the dark side of the moon' into the musician slot and dead-ended in NotFoundAlbumByArtist for an album that exists). MUSICIAN filled (any dialog state) -> falls through to the JF-411 album-by-artist resolution (plays an album without a title; the old IN_PROGRESS re-elicit asked the 'any album by X' user a question they could not answer). The DialogState check was deleted from this branch.
+- The 2026-08-28 on-device case that motivated artist-first ('un disco dei' after ASR swallowed 'Koop') degrades only partially: a short article-free artist answer in the album slot still plays via the cross-media fallback; hardening that path is FILED as JF-446.
+- BuildSlotElicitResponse collapsed to BuildAlbumElicitResponse (one shape, album-only, constants inlined); the orphaned doc comment moved back to BuildAlbumQuery; the ElicitArtistName locale key removed from all 17 locale JSONs (validate_locales PASS); the manual-verification checklist section A rewritten for the new prompt.
+
+VERIFICATION
+- 4 new/updated tests: both-empty elicits the album slot (ElicitSlot SlotToElicit asserted); album-title answer resolves by title (no artist query); musician-known IN_PROGRESS plays an album by that artist with NO title prompt; DialogDelegationTests partial-slots case updated. The implementer's scoped runs: 52/52 across its affected classes; final tree 2828/2828; Release 0 warnings (verified by both the implementer and the concurrent JF-425 agent).
+- Gates: /simplify run by the implementer (findings applied: helper collapse, doc repair, test fixture reuse); code-review high run via its fork (its findings applied or filed: JF-446; the dialogState question tracked as JF-445).
+- NOTE: the implementer agent terminated on an API error at report time, after all work was complete and verified; the orchestrator verified the final tree (build 0 errors, suite 2828/2828) and finalized.
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [ ] #1 dotnet build passes with 0 errors
@@ -49,6 +73,6 @@ FIX SHAPE: elicit the ALBUM slot first (title answers are the common case), and 
 - [ ] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 17 locales
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining
-- [ ] #11 or findings applied/tracked)
+- [ ] #10 /code-review high passed (no blocking findings remaining)
+- [ ] #11 Findings applied or tracked
 <!-- DOD:END -->

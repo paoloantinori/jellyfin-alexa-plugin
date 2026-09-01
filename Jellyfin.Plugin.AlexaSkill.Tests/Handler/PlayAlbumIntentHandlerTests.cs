@@ -97,10 +97,14 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
             .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
     }
 
-    private void SetupAlbumsAndTracks(List<BaseItem> albums, QueryResult<BaseItem>? tracks = null)
+    private void SetupAlbumsAndTracks(List<BaseItem> albums, QueryResult<BaseItem>? tracks = null, List<InternalItemsQuery>? queries = null)
     {
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns(albums);
+            .Returns((InternalItemsQuery q) =>
+            {
+                queries?.Add(q);
+                return albums;
+            });
         if (tracks != null)
         {
             _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
@@ -501,14 +505,13 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
-    public async Task HandleAsync_BothSlotsEmpty_ElicitsMusicianViaDialogDirective()
+    public async Task HandleAsync_BothSlotsEmpty_ElicitsAlbumViaDialogDirective()
     {
-        // JF-411 on-device reproduction (3x: 20:23, 20:56): the device ASR swallows the
-        // short foreign artist name, so "un disco dei Koop" arrives as PlayAlbumIntent
-        // with BOTH slots empty (profile-nlu: "un disco di/dei" reproduces the shape).
-        // With no information at all, the useful question is WHICH ARTIST (the phrase
-        // shape is album-by-artist); eliciting the musician feeds the JF-411 resolution
-        // which plays an album without ever needing a title.
+        // JF-422: a bare "riproduci un album" arrives with BOTH slots empty. Ask WHICH
+        // ALBUM: the common answer is a title, which feeds the album-title search. The
+        // previous artist-first order (kept from the 2026-08-28 "un disco dei" ASR
+        // swallow) captured a title answer into the musician slot and dead-ended in
+        // NotFoundAlbumByArtist for an album that exists.
         var handler = CreateHandler();
         var request = CreateIntentRequest();
         SetupUserMock();
@@ -520,7 +523,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         Assert.NotNull(response.Response.Reprompt);
         var elicit = response.Response.Directives?.FirstOrDefault(d => d.Type == "Dialog.ElicitSlot") as Jellyfin.Plugin.AlexaSkill.Alexa.Directive.ElicitSlotDirective;
         Assert.NotNull(elicit);
-        Assert.Equal("musician", elicit.SlotToElicit);
+        Assert.Equal("album", elicit.SlotToElicit);
         Assert.Equal("PlayAlbumIntent", elicit.UpdatedIntent.Name);
         // Amazon requires updatedIntent to declare EVERY intent slot (live INVALID_RESPONSE
         // 2026-08-28 21:17: "All slots must be defined... Missing: album").
@@ -532,22 +535,71 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
-    public async Task HandleAsync_DialogInProgressWithMusician_ElicitsAlbumViaDialogDirective()
+    public async Task HandleAsync_BothSlotsEmpty_AlbumTitleAnswer_ResolvesAlbumByTitle()
     {
-        // Delegated dialog mid-flow: the musician is known and the phrasing implied an
-        // album title, so elicit the ALBUM slot (context preserved via Dialog.ElicitSlot).
+        // JF-422 defect 1: the both-empty elicit targets the ALBUM slot (asserted by
+        // HandleAsync_BothSlotsEmpty_ElicitsAlbumViaDialogDirective), so a title answer
+        // ("the dark side of the moon") arrives in the album slot mid-dialog and must
+        // drive an ALBUM search. Under the old artist-first order the title was captured
+        // as the musician, ArtistSearch found nothing, and the user got a terminal
+        // NotFoundAlbumByArtist.
+        var handler = CreateHandler();
+        SetupUserMock();
+
+        var answer = CreateIntentRequest(album: "the dark side of the moon");
+        answer.DialogState = "IN_PROGRESS";
+        var (album, albumTracks) = MakeRelease("The Dark Side of the Moon", 1973, 1, "Speak to Me");
+        var queries = new List<InternalItemsQuery>();
+        SetupAlbumsAndTracks(
+            new List<BaseItem> { album },
+            new QueryResult<BaseItem> { Items = albumTracks, TotalRecordCount = albumTracks.Count },
+            queries);
+
+        string token = await GetPlayedTrackTokenAsync(handler, answer, CreateSession());
+
+        Assert.Equal(albumTracks[0].Id.ToString(), token);
+        Assert.DoesNotContain(queries, q => q.IncludeItemTypes?.Contains(BaseItemKind.MusicArtist) == true);
+        InternalItemsQuery? albumQuery = queries.FirstOrDefault(q =>
+            q.IncludeItemTypes?.Contains(BaseItemKind.MusicAlbum) == true && q.SearchTerm != null);
+        Assert.NotNull(albumQuery);
+        Assert.Equal("the dark side of the moon", albumQuery.SearchTerm);
+    }
+
+    [Fact]
+    public async Task HandleAsync_DialogInProgressWithMusician_PlaysArtistsAlbum_NoTitlePrompt()
+    {
+        // JF-422 defect 2: the musician answer returns with dialogState IN_PROGRESS and
+        // must reach the JF-411 album-by-artist resolution and PLAY an album by that
+        // artist. The old IN_PROGRESS branch re-elicted the title first, asking the
+        // "any album by X" user a question they cannot answer.
         var handler = CreateHandler();
         var request = CreateIntentRequest(musician: "queen");
         request.DialogState = "IN_PROGRESS";
         SetupUserMock();
 
+        var artist = new MusicArtist { Name = "Queen", Id = Guid.NewGuid() };
+        var (album, albumTracks) = MakeRelease("A Night at the Opera", 1975, 1, "Bohemian Rhapsody");
+        var queries = new List<InternalItemsQuery>();
+        SetupIndefiniteAlbumCatalog(
+            artist,
+            new List<BaseItem> { album },
+            albumTracks,
+            new Dictionary<Guid, BaseItem> { [album.Id] = albumTracks[0] },
+            queries);
+
         SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response);
-        Assert.False(response.Response.ShouldEndSession);
-        var elicit = response.Response.Directives?.FirstOrDefault(d => d.Type == "Dialog.ElicitSlot") as Jellyfin.Plugin.AlexaSkill.Alexa.Directive.ElicitSlotDirective;
-        Assert.NotNull(elicit);
-        Assert.Equal("album", elicit.SlotToElicit);
+        var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.NotNull(playDirective);
+        Assert.Equal(albumTracks[0].Id.ToString(), playDirective!.AudioItem.Stream.Token);
+        Assert.DoesNotContain(response.Response.Directives ?? new List<IDirective>(), d => d.Type == "Dialog.ElicitSlot");
+        // The play came from the JF-411 resolution, not from a title search.
+        InternalItemsQuery? resolutionQuery = queries.FirstOrDefault(q =>
+            q.IncludeItemTypes?.Contains(BaseItemKind.MusicAlbum) == true && q.SearchTerm == null);
+        Assert.NotNull(resolutionQuery);
+        Assert.NotNull(resolutionQuery.AlbumArtistIds);
+        Assert.Contains(artist.Id, resolutionQuery.AlbumArtistIds);
     }
 
     [Fact]

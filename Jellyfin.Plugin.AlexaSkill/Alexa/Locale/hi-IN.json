@@ -169,7 +169,6 @@
   "ReminderDefaultMessage": "यह आपका जेलीफिन रिमाइंडर है।",
   "ElicitSongName": "आप कौन सा गाना सुनना चाहेंगे?",
   "ElicitAlbumName": "आप कौन सा एल्बम सुनना चाहेंगे?",
-  "ElicitArtistName": "किस कलाकार का एल्बम सुनना चाहेंगे?",
   "ElicitSeriesName": "आप कौन सी श्रृंगला देखना चाहेंगे?",
   "FuzzySuggestionPrompt": "मुझे '{0}' नहीं मिला। क्या आपका मतलब '{1}' था?",
   "FuzzySuggestionPromptSsml": "मुझे '{0}' नहीं मिला।<break time=\"200ms\"/>क्या आपका मतलब <emphasis level=\"moderate\">{1}</emphasis> था?",

@@ -11,9 +11,12 @@ using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
+using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Querying;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
@@ -44,6 +47,12 @@ public class DialogDelegationTests : PluginTestBase
     private static Context CreateContext() => TestHelpers.CreateTestContext();
     private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
     private static Entities.User CreateUser() => TestHelpers.CreateTestUser();
+
+    private void SetupUserMock()
+    {
+        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
+            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+    }
 
     private static IntentRequest CreateIntentRequest(string intentName, string? dialogState, Dictionary<string, string?>? slots = null)
     {
@@ -103,8 +112,7 @@ public class DialogDelegationTests : PluginTestBase
             new Dictionary<string, string> { { "song", "Bohemian Rhapsody" }, { "musician", "Queen" } });
         var session = CreateSession();
 
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+        SetupUserMock();
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
 
@@ -131,20 +139,36 @@ public class DialogDelegationTests : PluginTestBase
     }
 
     [Fact]
-    public async Task PlayAlbum_WithPartialSlots_ElicitsRemaining()
+    public async Task PlayAlbum_WithPartialSlots_ResolvesAlbumByArtist_NoDelegation()
     {
         var handler = new PlayAlbumIntentHandler(
             _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory);
-        // Album slot missing even though musician is provided
+        // Album slot missing even though musician is provided: JF-422 routes this into
+        // the album-by-artist resolution (play without a title) instead of eliciting.
         var request = CreateIntentRequest(IntentNames.PlayAlbum, "IN_PROGRESS",
             new Dictionary<string, string> { { "musician", "Queen" } });
         var session = CreateSession();
 
+        SetupUserMock();
+        var artist = new MusicArtist { Name = "Queen", Id = Guid.NewGuid() };
+        var album = new MusicAlbum { Name = "A Night at the Opera", Id = Guid.NewGuid() };
+        var track = new Audio { Name = "Bohemian Rhapsody", Id = Guid.NewGuid() };
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => q.IncludeItemTypes?.Contains(BaseItemKind.MusicArtist) == true
+                ? new List<BaseItem> { artist }
+                : new List<BaseItem> { album });
+        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem>
+            {
+                Items = new[] { track },
+                TotalRecordCount = 1
+            });
+
         SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), session, CancellationToken.None);
 
         Assert.NotNull(response);
-        Assert.False(response.Response.ShouldEndSession);
-        Assert.NotNull(response.Response.Reprompt);
+        Assert.DoesNotContain(response.Response.Directives ?? new List<IDirective>(), d => d.Type == "Dialog.Delegate");
+        Assert.Contains(response.Response.Directives ?? new List<IDirective>(), d => d.Type == "AudioPlayer.Play");
     }
 
     [Fact]
@@ -161,8 +185,7 @@ public class DialogDelegationTests : PluginTestBase
             });
         var session = CreateSession();
 
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+        SetupUserMock();
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
 
