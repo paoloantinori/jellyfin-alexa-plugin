@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-01 06:05'
+updated_date: '2026-09-01 11:20'
 labels:
   - code-review
   - cleanup
@@ -34,6 +35,12 @@ Cut-at-the-cap cleanup flagged by TWO code-review passes (2026-08-31 pass 1 and 
 - [ ] #3 No behavior change: existing dialog-flow tests stay green unchanged
 - [ ] #4 Coordinate with JF-420.2 (same code region: it reworks the numbered prompt; land order decided there)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-01 update from the JF-420.2 simplify pass: the keys themselves are now single-defined (JF-420.2 routed all 3 writer sites through DisambiguationHelper.Attr* constants), but the DICTIONARY BUILD + MarkOthersInactive ritual is still triplicated (DisambiguationHelper.BuildAttributes is private with no extra-entries param; PlayArtistSongs:534 + BaseHandler:1724 are token-identical, BaseHandler:1550 adds 2 crossmedia keys). This task's remaining scope = promote BuildAttributes to internal with an optional extraEntries param and collapse the three sites. Also noted by the altitude agent: crossmedia_notfound_query/type remain a 2-site literal family (BaseHandler:1558 + NoIntentHandler:92) - fold into this cleanup.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

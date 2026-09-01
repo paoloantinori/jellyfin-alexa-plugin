@@ -3,11 +3,11 @@ id: JF-420
 title: >-
   Disambiguate containment-vs-full-name artist matches ('P!nk floyd': offer P!nk
   AND Pink Floyd instead of auto-playing P!nk)
-status: In Progress
+status: Done
 assignee:
   - zai
 created_date: '2026-08-31 06:04'
-updated_date: '2026-08-31 07:21'
+updated_date: '2026-09-01 11:52'
 labels: []
 dependencies: []
 priority: high
@@ -41,6 +41,19 @@ Design: at the point where the artist search returns a single match that was sco
 3. If found, present both as disambiguation candidates (reuse DisambiguationHelper.AskFirstMatch pattern with numbered list).
 4. No-regression guards: single-word queries, only-one-match, and nirvana-unplugged (no full-name alternative) must auto-play unchanged.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+JF-420 (parent) closed: the containment-vs-full-name artist selection is fair, symmetric, and honest end to end.
+
+All three subtasks landed with gates:
+- JF-420.1 (14eb2a8): exact artist-name matches bypass the gate (equality is the degenerate containment case; live Soul Coughing incident).
+- JF-420.3 (42ad2a3): the margin is symmetric and drift-free - FuzzyMatcher.ApplyFairLengthPenalty single-sources the exemption-free penalty, FairComparisonScore scales both sides by the bidirectional length fraction (the matcher's 0.5 floor is a recall device that manufactured phantom margins in the gate), FuzzyMatcher.Score + full ranking fix the early-exit masking ('Floyd' hid 'Pink Floyd'), exemption-only alternatives cannot clear the 80 bar, redundant shorter forms ('Miles' vs 'Miles Davis') skip the comparison.
+- JF-420.2 (8ce633c): the ambiguous branch's prompt speaks the yes/no flow the state machine supports (reworded in all 17 locales, no numbered list), and all disambiguation session-attr keys (including the crossmedia family) are single-defined constants.
+
+Deployed: JF-420.1 live on minix since 2026-08-31 (verified: exact queries auto-play); 420.2/420.3 ride the 2026-09-01 bundle.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
