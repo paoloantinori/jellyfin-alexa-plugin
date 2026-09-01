@@ -7,6 +7,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-01 17:20'
+updated_date: '2026-09-01 19:47'
 labels:
   - code-review
   - consolidation
@@ -41,6 +42,12 @@ Below-cap items from the same review worth folding in: FakeSongIndex in tests du
 - [ ] #3 Single-song play builder: one BaseHandler shape for queue + FullNowPlayingItem + continuation-clear + AudioPlayer + announcement (currently the 4th/5th inline copy; the copies disagree on crash-recovery persistence), and normalize FindSong/YesIntent/APL single-song sites onto it
 - [ ] #4 Optional follow-up from the review: the JF-377 yes/no 'no' exit (NoIntentHandler) does not try the song index for coin-flip inputs that weakly matched one artist name ('sugar free jazz' vs artist 'Free' -> AskFirstMatch -> 'no' -> NoMoreMatches without trying songs)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-01 additions from the JF-437 review round (all CONFIRMED, deferred with reasons): (F4) the word-coverage tier's result is INERT for SearchAsync consumers that re-score with FuzzyMatcher (TryEntityFallbackAsync 85-bar, PlayAlbum cross-media gates): a word-subset match scores 27 ('The Beatles' vs 'beatles live') below every gate, so the greedy-slot misroute family still not-founds there - fold a word-coverage-aware gate into the BaseHandler promotion (AC#1); (F5) tier 1.5 exists only in the in-memory branches: cold-window/disabled-index DB paths lack it ('beatles live' not-founds while cold, plays warm) - document or mirror; (F7-cache) the tier re-tokenizes the whole pool per call (~5-15ms/20k artists, only on tier-1 misses): precompute per-artist token sets in ArtistIndexService's load loop (SongNgramIndexService precedent); (F9) FOURTH parallel word-coverage primitive now exists (KeywordMatcher.Score loops, IsCoincidentalContainmentMatch, handler IsWordSubset, WordCoverageCandidates) with different tokenization/duplicate rules - extract one shared primitive when consolidating.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
