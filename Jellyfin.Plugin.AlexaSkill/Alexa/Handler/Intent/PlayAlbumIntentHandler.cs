@@ -95,22 +95,24 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         Logger.LogDebug("PlayAlbum: entered, locale={Locale}", locale);
 
-        // JF-419 cold-start: the album queries hit the same cold database the artist
-        // index loading proxies (deliberately coarse: album paths have no in-memory
-        // index of their own to gate on).
-        Util.IndexWarmingGate.EnsureReady(_artistIndex);
-
         // Escape hatch from the elicitation trap (shared CancelWords helper): while OUR
         // album/musician Dialog.ElicitSlot is open, a stop/cancel word gets captured into
         // the elicited slot (dialogState IN_PROGRESS) instead of routing to
         // AMAZON.Stop/Cancel. Gated on IN_PROGRESS so a first-invocation search for an
-        // album actually titled "Stop" still runs (code-review 2026-08-29).
+        // album actually titled "Stop" still runs (code-review 2026-08-29). Runs BEFORE
+        // the warming gate so an open flow still cancels during the cold-start window
+        // (JF-419.2 contract, review round 2).
         if (string.Equals(intentRequest.DialogState, "IN_PROGRESS", StringComparison.OrdinalIgnoreCase)
             && (Util.CancelWords.IsCancelWord(album) || Util.CancelWords.IsCancelWord(musician)))
         {
             Logger.LogInformation("PlayAlbum: captured cancel word during open elicit (album='{Album}'), ending flow", album);
             return ResponseBuilder.Tell(ResponseStrings.Get("FindSongCancelled", locale));
         }
+
+        // JF-419 cold-start: the album queries hit the same cold database the artist
+        // index loading proxies (deliberately coarse: album paths have no in-memory
+        // index of their own to gate on).
+        Util.IndexWarmingGate.EnsureReady(_artistIndex);
 
         if (string.IsNullOrWhiteSpace(album))
         {

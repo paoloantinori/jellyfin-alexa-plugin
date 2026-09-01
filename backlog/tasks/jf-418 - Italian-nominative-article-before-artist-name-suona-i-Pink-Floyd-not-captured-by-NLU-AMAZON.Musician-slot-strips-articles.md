@@ -48,7 +48,7 @@ This is a natural Italian speech pattern: referring to bands with the definite a
 3. Regenerate the model: `python3 scripts/generate_interaction_model.py it-IT`
 4. Verify the generated samples include forms like "suona i queen", "suona i pink floyd", "di suonare i radiohead"
 5. Run NLU tests to verify routing works for article forms
-6. Check other Romance locales (fr-FR, es-ES, pt-BR) — they already have article samples, so no changes needed there
+6. Check other Romance locales (fr-FR, es-ES, pt-BR): they already have article samples, so no changes needed there
 
 **Verification**:
 - Model samples must include both bare forms (existing JF-418 fix) AND article forms

@@ -1566,11 +1566,12 @@ public class VideoAudioController : ControllerBase
             return StartFfmpegProcess(ffmpegPath, arguments);
         }
 
-        // JF-310/JF-428: before ffmpeg starts, run the eviction sweep with the
-        // incoming encode reserved as headroom (duration-scaled, see
-        // EstimateEncodeBytes). The entry being written is PINNED after the gate is
-        // acquired so no concurrent sweep can evict it mid-encode; pinning after the
-        // await also means a cancelled wait cannot leak a pin.
+        // JF-310/JF-428 (+review round 2): PIN the entry being written BEFORE the
+        // eviction sweep runs, not after the gate is acquired: the creation-to-pin
+        // window let a concurrent request's sweep delete another request's
+        // already-created but not-yet-pinned HLS directory. A cancelled gate wait
+        // unpins in the catch below, so no pin leaks.
+        _cache.Pin(pinPath);
         await _cache.EnsureDiskBudgetBeforeEncodeAsync(estimatedEncodeBytes).ConfigureAwait(false);
 
         // Capture the gate instance at acquire time so the release always goes to
@@ -1578,8 +1579,16 @@ public class VideoAudioController : ControllerBase
         // this encode is in flight (review 2026-08-29: releasing the new field after
         // a swap would grant a phantom slot and strand waiters on the dead semaphore).
         var gate = _encodeGate;
-        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        _cache.Pin(pinPath);
+        try
+        {
+            await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            _cache.Unpin(pinPath);
+            throw;
+        }
+
         Process process;
         try
         {

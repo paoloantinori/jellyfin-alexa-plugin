@@ -140,6 +140,20 @@ public class PlaySongIntentHandler : BaseHandler
 
         Logger.LogDebug("PlaySong: entered, locale={Locale}", locale);
 
+        // Escape hatch from the elicitation trap (shared CancelWords helper): while OUR
+        // song-name Dialog.ElicitSlot is open, a stop/cancel word gets captured into the
+        // song slot (dialogState IN_PROGRESS) instead of routing to AMAZON.Stop/Cancel.
+        // Gated on IN_PROGRESS so a first-invocation search for a song actually titled
+        // "Stop" still runs (code-review 2026-08-29). Runs BEFORE the warming gate so
+        // an open flow still cancels during the cold-start window (JF-419.2 contract,
+        // review round 2).
+        if (string.Equals(intentRequest.DialogState, "IN_PROGRESS", StringComparison.OrdinalIgnoreCase)
+            && (Util.CancelWords.IsCancelWord(songQuery) || Util.CancelWords.IsCancelWord(musicianQuery)))
+        {
+            Logger.LogInformation("PlaySong: captured cancel word during open elicit (song='{Song}'), ending flow", songQuery);
+            return ResponseBuilder.Tell(ResponseStrings.Get("FindSongCancelled", locale));
+        }
+
         // JF-419.3 per-path gates, both BEFORE the "searching" announcement: a
         // musician-scoped request resolves the artist first (targeted, bounded
         // queries) and never touches the song index, so it gates on the ARTIST
@@ -152,18 +166,6 @@ public class PlaySongIntentHandler : BaseHandler
         else
         {
             Util.IndexWarmingGate.EnsureReady(_songNgramIndex);
-        }
-
-        // Escape hatch from the elicitation trap (shared CancelWords helper): while OUR
-        // song-name Dialog.ElicitSlot is open, a stop/cancel word gets captured into the
-        // song slot (dialogState IN_PROGRESS) instead of routing to AMAZON.Stop/Cancel.
-        // Gated on IN_PROGRESS so a first-invocation search for a song actually titled
-        // "Stop" still runs (code-review 2026-08-29).
-        if (string.Equals(intentRequest.DialogState, "IN_PROGRESS", StringComparison.OrdinalIgnoreCase)
-            && (Util.CancelWords.IsCancelWord(songQuery) || Util.CancelWords.IsCancelWord(musicianQuery)))
-        {
-            Logger.LogInformation("PlaySong: captured cancel word during open elicit (song='{Song}'), ending flow", songQuery);
-            return ResponseBuilder.Tell(ResponseStrings.Get("FindSongCancelled", locale));
         }
 
         if (string.IsNullOrWhiteSpace(songQuery))
