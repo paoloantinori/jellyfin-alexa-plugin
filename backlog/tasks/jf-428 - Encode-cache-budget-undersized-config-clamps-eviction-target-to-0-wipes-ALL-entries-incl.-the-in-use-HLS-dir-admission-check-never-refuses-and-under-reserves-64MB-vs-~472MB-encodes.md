@@ -8,7 +8,7 @@ status: Done
 assignee:
   - zai
 created_date: '2026-08-31 19:32'
-updated_date: '2026-08-31 20:23'
+updated_date: '2026-09-01 04:12'
 labels:
   - code-review
   - cache
@@ -88,6 +88,8 @@ Altitude agent verdict: correctly scoped across the board. Follow-up note (not a
 Efficiency agent verified clean: pre-encode full sweep is PRE-EXISTING (not worsened; the floor actually reduces worst-case deletion work); no warning spam possible (EvictIfNeeded fires only at encode completion, not per segment); EstimateEncodeBytes overflow-safe (division first). Full suite 2774/2774 after fixes. /code-review high running.
 
 2026-08-31 /code-review high on THIS diff returned 6 findings, all applied in be445a1: (1) EstimateEncodeBytes truncated fractional hours (1.9h reserved the 64MB floor instead of ~128MB; now ceiling), (2) _pinnedPaths doc overclaimed the protection window + faststart remux never pinned (doc scoped to write window; remux now pinned), (3) unrefcounted pin + delayed exit-poll release could expose a retrying encode's re-pinned entry (now refcounted, with regression test), (4) pin leaked if gate WaitAsync threw (pin moved after acquire), (5) pin-skip comment described behavior the loop does not have (reworded to actual: all unpinned entries evict oldest-first when target unreachable), (6) prose-hyphens in authored comments/notes (fixed). Committed with gates; suite 2776/2776.
+
+2026-09-01 DEPLOYED to minix (DLL b79870d9, bundled with JF-419.2); boot + playback matrix green. Cache floor/pin behavior remains unit-verified (live proof would need an undersized VideoAudioCacheSizeMB on the live box; not worth risking real playback).
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
