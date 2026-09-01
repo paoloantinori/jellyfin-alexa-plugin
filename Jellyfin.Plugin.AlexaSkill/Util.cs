@@ -2,7 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Reflection;
-using Jellyfin.Plugin.AlexaSkill.Exceptions;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions;
 using Newtonsoft.Json;
 
 namespace Jellyfin.Plugin.AlexaSkill;

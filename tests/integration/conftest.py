@@ -37,7 +37,13 @@ logger = logging.getLogger("e2e.conftest")
 
 
 @pytest.fixture(scope="session")
-def skill_id(request: pytest.FixtureRequest) -> str:
+def dry_run(request: pytest.FixtureRequest) -> bool:
+    """True when --dry-run was passed: no SMAPI subprocess may fire (JF-435)."""
+    return bool(request.config.getoption("--dry-run", default=False))
+
+
+@pytest.fixture(scope="session")
+def skill_id(dry_run: bool) -> str:
     """Resolve the Alexa skill ID from ASK CLI config or environment.
 
     Lookup order:
@@ -50,7 +56,7 @@ def skill_id(request: pytest.FixtureRequest) -> str:
         outside of dry-run mode.
     """
     # In dry-run mode we never call SMAPI, so a placeholder is fine.
-    if request.config.getoption("--dry-run", default=False):
+    if dry_run:
         return "dry-run-placeholder"
 
     # Attempt auto-detection from ASK CLI state file.
@@ -204,9 +210,9 @@ def _jellyfin_configured(request: pytest.FixtureRequest) -> bool:
 
 
 @pytest.fixture(scope="session")
-def jellyfin_client(request: pytest.FixtureRequest):
+def jellyfin_client(request: pytest.FixtureRequest, dry_run: bool):
     """Create a JellyfinClient if E2E parameters are configured, else None."""
-    if request.config.getoption("--dry-run"):
+    if dry_run:
         return None
 
     url = request.config.getoption("--jellyfin-url")
@@ -235,14 +241,14 @@ def jellyfin_client(request: pytest.FixtureRequest):
 
 
 @pytest.fixture(autouse=True)
-def _skip_without_jellyfin(request: pytest.FixtureRequest):
+def _skip_without_jellyfin(request: pytest.FixtureRequest, dry_run: bool):
     """Skip E2E tests when Jellyfin parameters are not configured."""
     marker = request.node.get_closest_marker("e2e")
     if marker is None:
         yield
         return
 
-    if request.config.getoption("--dry-run"):
+    if dry_run:
         yield
         return
 
@@ -335,7 +341,7 @@ def _timeout_handler(signum: int, frame: Any) -> None:  # noqa: ARG001
 
 
 @pytest.fixture(autouse=True)
-def _smapi_test_timeout(request: pytest.FixtureRequest) -> Any:
+def _smapi_test_timeout(request: pytest.FixtureRequest, dry_run: bool) -> Any:
     """Apply a per-test timeout to NLU and E2E tests to prevent indefinite hangs.
 
     Only active for tests marked with @pytest.mark.nlu or @pytest.mark.e2e
@@ -348,7 +354,7 @@ def _smapi_test_timeout(request: pytest.FixtureRequest) -> Any:
         yield
         return
 
-    if request.config.getoption("--dry-run", default=False):
+    if dry_run:
         yield
         return
 

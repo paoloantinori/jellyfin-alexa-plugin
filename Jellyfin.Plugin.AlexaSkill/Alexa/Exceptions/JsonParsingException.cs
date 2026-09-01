@@ -1,4 +1,4 @@
-namespace Jellyfin.Plugin.AlexaSkill.Exceptions;
+namespace Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions;
 
 /// <summary>
 /// Parsing exception thrown when a json file can not be parsed to an object.

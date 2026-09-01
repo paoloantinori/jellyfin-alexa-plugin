@@ -34,14 +34,14 @@ def smapi_client(skill_id, smapi_delay, nlu_fixture):
 
 
 @pytest.mark.nlu
-def test_utterance_resolves_correct_intent(request, nlu_fixture, smapi_client):
+def test_utterance_resolves_correct_intent(dry_run, nlu_fixture, smapi_client):
     """Assert that an utterance resolves to the expected intent with required slots."""
     utterance = nlu_fixture["utterance"]
     expected_intent = nlu_fixture["expected_intent"]
     expected_slots = nlu_fixture.get("expected_slots", {})
     locale = nlu_fixture["locale"]
 
-    if request.config.getoption("--dry-run"):
+    if dry_run:
         # Fixture-only validation: check schema, skip SMAPI call
         assert utterance, f"Empty utterance in {nlu_fixture.get('source', '?')}"
         assert expected_intent, f"Missing expected_intent for '{utterance}'"

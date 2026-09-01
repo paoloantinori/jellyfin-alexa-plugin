@@ -39,7 +39,7 @@ def e2e_smapi_client(skill_id, smapi_delay, e2e_fixture):
 
 
 @pytest.fixture(autouse=True)
-def _reset_simulation_session(skill_id, smapi_delay):
+def _reset_simulation_session(dry_run, skill_id, smapi_delay):
     """End the persistent simulate-skill session before each E2E test.
 
     simulate-skill (development stage) PERSISTS the session across sequential
@@ -57,7 +57,14 @@ def _reset_simulation_session(skill_id, smapi_delay):
     is it-IT; if Amazon scopes the persisted simulation session per device-locale, a
     non-it-IT FindSong fixture would need its own locale-scoped reset (extend here when
     such fixtures are added, cf. JF-400/JF-414).
+
+    No-op in dry-run mode: this autouse fixture fires BEFORE each test's own
+    dry-run skip, so an unguarded simulate() here issued one real
+    ``ask smapi simulate-skill`` subprocess per collected test (JF-435).
     """
+    if dry_run:
+        return
+
     reset_client = SmapiClient(
         skill_id=skill_id,
         locale="it-IT",
@@ -71,7 +78,7 @@ def _reset_simulation_session(skill_id, smapi_delay):
 
 
 @pytest.mark.e2e
-def test_e2e_full_chain(request, e2e_fixture, e2e_smapi_client, jellyfin_client):
+def test_e2e_full_chain(dry_run, e2e_fixture, e2e_smapi_client, jellyfin_client):
     """Full-chain test: utterance -> NLU -> skill -> response + side effects."""
     utterance = e2e_fixture["utterance"]
     expected_intent = e2e_fixture["expected_intent"]
@@ -79,7 +86,7 @@ def test_e2e_full_chain(request, e2e_fixture, e2e_smapi_client, jellyfin_client)
     expected_response_type = e2e_fixture.get("expected_response_type", "any")
     locale = e2e_fixture["locale"]
 
-    if request.config.getoption("--dry-run"):
+    if dry_run:
         assert utterance, f"Empty utterance in {e2e_fixture.get('source', '?')}"
         assert expected_intent, f"Missing expected_intent for '{utterance}'"
         assert expected_response_type in ("any", "speech", "directive"), (
@@ -369,7 +376,7 @@ _MAX_PER_ITERATION_S = 30.0
 
 
 @pytest.mark.e2e
-def test_e2e_reliability(request, reliability_fixture, reliability_smapi_client, jellyfin_client):
+def test_e2e_reliability(dry_run, reliability_fixture, reliability_smapi_client, jellyfin_client):
     """Run each intent multiple times, tracking timing to detect intermittent hangs.
 
     Each fixture case can specify an ``iterations`` count (default 3).
@@ -380,7 +387,7 @@ def test_e2e_reliability(request, reliability_fixture, reliability_smapi_client,
     locale = reliability_fixture["locale"]
     iterations = reliability_fixture.get("iterations", 3)
 
-    if request.config.getoption("--dry-run"):
+    if dry_run:
         assert utterance, f"Empty utterance in {reliability_fixture.get('source', '?')}"
         pytest.skip("dry-run mode: reliability simulation skipped")
 
@@ -465,7 +472,7 @@ _FAST_MODE_ARTIST_UTTERANCES = [
     ids=[f"fast-{u[:30]}" for u, _, _ in _FAST_MODE_ARTIST_UTTERANCES],
 )
 def test_e2e_fast_mode(
-    request,
+    dry_run,
     utterance: str,
     locale: str,
     invocation_name: str,
@@ -482,7 +489,7 @@ def test_e2e_fast_mode(
 
     After the test, resets the user back to Thorough mode (the global default).
     """
-    if request.config.getoption("--dry-run"):
+    if dry_run:
         pytest.skip("dry-run mode: Fast mode E2E test skipped")
 
     if jellyfin_client is None:

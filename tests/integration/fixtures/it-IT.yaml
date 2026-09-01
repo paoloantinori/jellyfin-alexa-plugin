@@ -87,6 +87,45 @@ tests:
     expected_slots:
       title: {}
 
+  # JF-436: video-regression direction of the JF-418 bare-form collision.
+  # PlayArtistSongsIntent's bare '{imperative} {musician}' samples (JF-418)
+  # collide in surface shape with PlayVideoIntent's '{imperative} {title}' on
+  # 4 of 5 imperative verbs. Live profile-nlu probes (2026-09-01, 14 bare
+  # movie/series utterances) show PlayVideoIntent is NEVER selected on the
+  # Suona/Metti/Pleia verbs:
+  #   'suona/metti/pleia matrix'        -> PlayArtistSongsIntent, musician='matrix'
+  #   'suona/metti/pleia pulp fiction'  -> PlayArtistSongsIntent, musician='pulp fiction'
+  #   'suona/metti/pleia star wars'     -> PlaySongIntent, song='star wars' (the
+  #                                        pre-JF-418 documented class; the handler
+  #                                        resolves content type from Jellyfin search)
+  #   'suona/metti/pleia breaking bad', 'suona stranger things' -> no selectedIntent
+  #                                        (SeriesName catalog resolution pulls
+  #                                        PlayEpisodeIntent into the competition)
+  #   'suona inception'                 -> PlayRadioIntent, no slots
+  # The pins below record the CURRENT routing so a future model edit that flips
+  # any of them (in either direction, including restoring PlayVideoIntent) flags
+  # here for triage. Per JF-436 scope the interaction model is NOT changed here;
+  # the fixtures pin reality, they do not endorse it.
+  - utterance: "suona matrix"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "metti pulp fiction"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "pleia matrix"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "suona star wars"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+
   # -------------------------------------------------------------------------
   # 6. PlayByGenreIntent (genre)
   # -------------------------------------------------------------------------
