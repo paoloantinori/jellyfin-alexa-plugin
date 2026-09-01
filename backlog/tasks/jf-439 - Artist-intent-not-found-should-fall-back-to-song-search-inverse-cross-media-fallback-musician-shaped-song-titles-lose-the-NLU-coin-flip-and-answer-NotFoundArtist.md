@@ -8,7 +8,7 @@ status: Done
 assignee:
   - zai
 created_date: '2026-09-01 14:45'
-updated_date: '2026-09-01 17:22'
+updated_date: '2026-09-01 17:29'
 labels:
   - nlu
   - artist-search
@@ -43,6 +43,12 @@ This is the INVERSE of the existing Cross-Media-Type Fallback (BaseHandler.TryEn
 
 <!-- SECTION:NOTES:BEGIN -->
 Final-summary typo correction: the restored repeat samples are 'Ripeti ancora' and 'di ripetere ancora' (the summary line garbled the second).
+
+2026-09-01 DEPLOYED + LIVE-VERIFIED (DLL cd97aab first, then 23c90b2 with the recalibrated bar; SMAPI model redeployed with the ancora samples, build SUCCEEDED; config survived, MD5 match both swaps). Live matrix: 'screenwriters blues' as musician -> PLAYS 'Screenwriter's Blues' with 'Ho trovato il brano... Eccolo.' (log: score=72, itemId) - the fallback + announcement verified end to end; 'rolling stones' -> the normal ARTIST path (library HAS The Rolling Stones, not a score-bar case); xyzzyfoo -> clean reject (0 candidates, bar=80 in the first swap then 65).
+
+CALIBRATION CORRECTION (commit 23c90b2): the first bar (80) rejected the legitimate phonetic class - 'screenwriters blues' scores 72 live (apostrophe/plural drift), so users still got NotFoundArtist for songs that exist. Recalibrated to 65 with the live evidence: wrong half-coverage class ~34, right phonetic class ~72, exact ~105. The unit test's reject case (34) and accept case (105) both still hold.
+
+LIVE OBSERVATION (feeds the JF-437 family): on this library the motivating utterance 'sugar free jazz' never reaches the fallback - the tier-4 fuzzy artist search matches 'Sugar Ray feat. Super Cat' (auto-plays). Pre-existing fuzzy behavior, not a JF-439 defect; the word-coverage tier (JF-437) is the mechanism that would surface the real song for that specific string. The fallback IS reachable and verified via the screenwriters-blues path.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
