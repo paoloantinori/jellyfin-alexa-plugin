@@ -521,6 +521,15 @@ Two reliable fixes:
 - Add a **carrier word** before the name: *"play the band Soul Coughing"*, *"play the singer X"* (Italian: *"suona la band X"*, *"metti il cantante X"*, *"il gruppo X"*). The carrier word tells Alexa the name is an artist, and the request routes correctly.
 - If the skill answers **"Did you mean X?"**, that is the disambiguation prompt: say *yes* to play the suggested match, or *no* for a clean "not found". Nothing plays without your confirmation on that path, so a wrong suggestion can never start on its own.
 
+### Alexa found multiple artists: how do I choose one?
+
+When several artists plausibly match what you said, the skill lists them and asks about the **first** one (for example: *"I found multiple artists: P!nk, Pink Floyd. Shall I play the first one? Say no for the next."*). Say **yes** (or "play it") to play the first artist; say **no** to move to the next name; say **no** past the last one for a clean "no more matches". You can also just say the artist's name again with a carrier word (*"play the band Pink Floyd"*) to route unambiguously.
+
+### Why does the skill say it is still preparing right after a restart?
+
+Right after the Jellyfin server (re)starts, the skill loads in-memory search indexes of your library in the background. Until they finish, search requests answer with a friendly "still preparing, try again in a minute" instead of risking a timeout. The window is normally a few seconds on small libraries and up to a minute on very large ones; a single retry after that is all it takes. If the message persists for many minutes, the index failed to load repeatedly: the skill automatically falls back to direct database searches after its retry budget, so playback keeps working while you check the logs.
+
+### Mood or genre requests find nothing, even though my artists are tagged with that genre
 ### Mood or genre requests find nothing, even though my artists are tagged with that genre
 
 Jellyfin does not propagate genre tags from an artist to its audio tracks. Mood and genre playback searches the **tracks** (and albums), so tagging genres only on the artist entry in Jellyfin has no effect. Open the artist's albums in Jellyfin and set the genre on the tracks (or on the albums), then retry: *"Alexa, chiedi a Mia Collezione di mettere musica rilassante"* will find the tracks once the genre is on the audio files themselves.
