@@ -407,7 +407,7 @@ public class MediaInfoIntentHandler : BaseHandler
             IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
                 artistName, null, _libraryManager, _artistIndex, Logger,
                 (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtistInfo", ct),
-                cancellationToken).ConfigureAwait(false);
+                locale, cancellationToken).ConfigureAwait(false);
 
             if (artists.Count == 0)
             {

@@ -192,7 +192,7 @@ public class PlaySongIntentHandler : BaseHandler
             IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
                 musicianQuery, user, _libraryManager, _artistIndex, Logger,
                 (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
-                cancellationToken).ConfigureAwait(false);
+                locale, cancellationToken).ConfigureAwait(false);
 
             Logger.LogDebug("PlaySong: artist search returned {Count} results for '{Musician}'", artists.Count, musicianQuery);
 
@@ -314,7 +314,7 @@ public class PlaySongIntentHandler : BaseHandler
             IReadOnlyList<BaseItem> fallbackArtists = await Util.ArtistSearch.SearchAsync(
                 songQuery, user, _libraryManager, _artistIndex, Logger,
                 (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtistsFallback", ct),
-                cancellationToken).ConfigureAwait(false);
+                locale, cancellationToken).ConfigureAwait(false);
 
             if (fallbackArtists.Count > 0)
             {

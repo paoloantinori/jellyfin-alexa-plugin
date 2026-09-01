@@ -44,6 +44,7 @@ public class ArtistSearchTests
             artistIndex: index,
             logger: Logger,
             dbQuery: NotCalled,
+            locale: "en-US",
             cancellationToken: CancellationToken.None);
 
         Assert.Single(result);
@@ -69,6 +70,7 @@ public class ArtistSearchTests
             artistIndex: index,
             logger: Logger,
             dbQuery: NotCalled,
+            locale: "en-US",
             cancellationToken: CancellationToken.None);
 
         Assert.Single(result);
@@ -140,6 +142,7 @@ public class ArtistSearchTests
             artistIndex: index,
             logger: Logger,
             dbQuery: NotCalled,
+            locale: "en-US",
             cancellationToken: CancellationToken.None);
 
         Assert.Single(result);
@@ -162,6 +165,7 @@ public class ArtistSearchTests
             artistIndex: index,
             logger: Logger,
             dbQuery: NotCalled,
+            locale: "en-US",
             cancellationToken: CancellationToken.None);
 
         Assert.Single(result);
@@ -185,6 +189,7 @@ public class ArtistSearchTests
             artistIndex: index,
             logger: Logger,
             dbQuery: NotCalled,
+            locale: "en-US",
             cancellationToken: CancellationToken.None);
 
         Assert.Single(result);
@@ -209,6 +214,7 @@ public class ArtistSearchTests
             artistIndex: index,
             logger: Logger,
             dbQuery: NotCalled,
+            locale: "en-US",
             cancellationToken: CancellationToken.None);
 
         Assert.Single(result);
@@ -240,6 +246,7 @@ public class ArtistSearchTests
             artistIndex: index,
             logger: Logger,
             dbQuery: NotCalled,
+            locale: "en-US",
             cancellationToken: CancellationToken.None);
 
         Assert.Single(result);
@@ -272,6 +279,7 @@ public class ArtistSearchTests
             artistIndex: null,
             logger: Logger,
             dbQuery: DbQuery,
+            locale: "en-US",
             cancellationToken: CancellationToken.None);
 
         Assert.DoesNotContain(result, a => a.Name == "Porcupine Tree");
@@ -299,6 +307,7 @@ public class ArtistSearchTests
             artistIndex: index,
             logger: Logger,
             dbQuery: NotCalled,
+            locale: "en-US",
             cancellationToken: CancellationToken.None);
 
         // The deferred P!nk is still returned (containment wins at tier-4)
@@ -347,6 +356,7 @@ public class ArtistSearchTests
             artistIndex: index,
             logger: Logger,
             dbQuery: NotCalled,
+            locale: "en-US",
             cancellationToken: CancellationToken.None);
 
         // Tier-4 fuzzy-all won't find anything better for "P!nk something" than
@@ -370,6 +380,7 @@ public class ArtistSearchTests
             artistIndex: index,
             logger: Logger,
             dbQuery: NotCalled,
+            locale: "en-US",
             cancellationToken: CancellationToken.None);
 
         Assert.Single(result);
@@ -392,6 +403,7 @@ public class ArtistSearchTests
             artistIndex: index,
             logger: Logger,
             dbQuery: NotCalled,
+            locale: "en-US",
             cancellationToken: CancellationToken.None);
 
         Assert.Single(result);
@@ -415,12 +427,141 @@ public class ArtistSearchTests
                 artistIndex: Mock.Of<IArtistIndex>(i => i.IsReady == false),
                 logger: Logger,
                 dbQuery: NotCalled,
-                cancellationToken: CancellationToken.None));
+                locale: "en-US", cancellationToken: CancellationToken.None));
+    }
+
+    // --- JF-437: word-coverage tier (shared definition) ---
+
+    /// <summary>
+    /// The live finding: 'beatles live' must surface 'The Beatles' (word subset,
+    /// covers the first word) and never the near-anagram 'Eagles' (not a subset).
+    /// </summary>
+    [Fact]
+    public void WordCoverageCandidates_QualifierQuery_PicksIntendedArtist()
+    {
+        var theBeatles = new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() };
+        var eagles = new MusicArtist { Name = "Eagles", Id = Guid.NewGuid() };
+
+        var result = ArtistSearch.WordCoverageCandidates("beatles live", new List<BaseItem> { theBeatles, eagles }, "en-US");
+
+        var name = Assert.Single(result).Name;
+        Assert.Equal("The Beatles", name);
+    }
+
+    /// <summary>
+    /// Selection prefers the FULLEST subset name: 'Miles Davis' over the redundant
+    /// shorter form 'Miles' for 'miles davis live' (the JF-420.3 shorter-form case
+    /// now resolved at the search layer, without tier-2 prefix luck).
+    /// </summary>
+    [Fact]
+    public void WordCoverageCandidates_FullestNameWins()
+    {
+        var milesDavis = new MusicArtist { Name = "Miles Davis", Id = Guid.NewGuid() };
+        var miles = new MusicArtist { Name = "Miles", Id = Guid.NewGuid() };
+
+        var result = ArtistSearch.WordCoverageCandidates("miles davis live", new List<BaseItem> { milesDavis, miles }, "en-US");
+
+        var name = Assert.Single(result).Name;
+        Assert.Equal("Miles Davis", name);
+    }
+
+    /// <summary>
+    /// Review round: NO first-word winner-take-all. A carrier-word-named artist
+    /// ('The Band' for the carrier-bleed query 'la band radiohead') and the real
+    /// artist tie on coverage; honest ties return BOTH so the caller's
+    /// disambiguation prompt resolves them instead of a silent wrong play.
+    /// </summary>
+    [Fact]
+    public void WordCoverageCandidates_CarrierWordTie_ReturnsBoth()
+    {
+        var theBand = new MusicArtist { Name = "The Band", Id = Guid.NewGuid() };
+        var radiohead = new MusicArtist { Name = "Radiohead", Id = Guid.NewGuid() };
+
+        var result = ArtistSearch.WordCoverageCandidates("la band radiohead", new List<BaseItem> { theBand, radiohead }, "it-IT");
+
+        Assert.Equal(2, result.Count);
+    }
+
+    /// <summary>
+    /// Review round: contiguous in-order subsequence breaks count ties ('Miles
+    /// Davis' reads as the leading phrase of 'miles davis live'; the re-tagged
+    /// variant 'Davis Miles' does not).
+    /// </summary>
+    [Fact]
+    public void WordCoverageCandidates_InOrderSubsequenceBreaksCountTie()
+    {
+        var milesDavis = new MusicArtist { Name = "Miles Davis", Id = Guid.NewGuid() };
+        var davisMiles = new MusicArtist { Name = "Davis Miles", Id = Guid.NewGuid() };
+
+        var result = ArtistSearch.WordCoverageCandidates("miles davis live", new List<BaseItem> { milesDavis, davisMiles }, "en-US");
+
+        var name = Assert.Single(result).Name;
+        Assert.Equal("Miles Davis", name);
+    }
+
+    /// <summary>
+    /// Review round: ASR drift protection is the tier PLACEMENT, not the predicate.
+    /// 'soul coughin' drifts ('coughing' != 'coughin'), so 'Soul Coughing' is not a
+    /// word subset - the predicate honestly returns the one-word subset 'Soul'. The
+    /// tier runs AFTER tier 2 (which resolves the drift via fuzzy/phonetic), so this
+    /// result is never reached for this query; the handler-level guard is
+    /// HandleAsync_SoulCoughinDrift_Tier2ResolvesBeforeWordCoverage.
+    /// </summary>
+    [Fact]
+    public void WordCoverageCandidates_AsrDrift_PredicateReturnsTheSubset()
+    {
+        var soul = new MusicArtist { Name = "Soul", Id = Guid.NewGuid() };
+        var soulCoughing = new MusicArtist { Name = "Soul Coughing", Id = Guid.NewGuid() };
+
+        var result = ArtistSearch.WordCoverageCandidates("soul coughin", new List<BaseItem> { soul, soulCoughing }, "en-US");
+
+        var name = Assert.Single(result).Name;
+        Assert.Equal("Soul", name);
+    }
+
+    /// <summary>Single-token queries early-return (tier-1 Contains already covers them).</summary>
+    [Fact]
+    public void WordCoverageCandidates_SingleTokenQuery_ReturnsEmpty()
+    {
+        var queen = new MusicArtist { Name = "Queen", Id = Guid.NewGuid() };
+
+        var result = ArtistSearch.WordCoverageCandidates("queen", new List<BaseItem> { queen }, "en-US");
+
+        Assert.Empty(result);
+    }
+
+    /// <summary>
+    /// No subset candidates (a superstring name like a tribute band is NOT a word
+    /// subset of the query): the tier returns empty and the chain falls through.
+    /// </summary>
+    [Fact]
+    public void WordCoverageCandidates_NoSubset_ReturnsEmpty()
+    {
+        var tribute = new MusicArtist { Name = "The Beatles Tribute Band", Id = Guid.NewGuid() };
+        var sugarRay = new MusicArtist { Name = "Sugar Ray feat. Super Cat", Id = Guid.NewGuid() };
+
+        var result = ArtistSearch.WordCoverageCandidates("beatles live", new List<BaseItem> { tribute, sugarRay }, "en-US");
+
+        Assert.Empty(result);
+    }
+
+    /// <summary>
+    /// Locale stop-word stripping: the Italian article 'il' is stripped from the
+    /// artist name under it-IT, so 'Il Volo' is a subset of 'volo live'.
+    /// </summary>
+    [Fact]
+    public void WordCoverageCandidates_LocaleArticlesStripped()
+    {
+        var ilVolo = new MusicArtist { Name = "Il Volo", Id = Guid.NewGuid() };
+
+        var result = ArtistSearch.WordCoverageCandidates("volo live", new List<BaseItem> { ilVolo }, "it-IT");
+
+        Assert.Single(result);
     }
 
     /// <summary>
     /// Review round 1 finding 2: a DISABLED index (gave up after repeated load
-    /// failures) is treated as absent - the gate passes so callers degrade to their
+    /// failures) is treated as absent: the gate passes so callers degrade to their
     /// database paths instead of an endless warming refusal.
     /// </summary>
     [Fact]

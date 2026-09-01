@@ -225,7 +225,7 @@ public class FindSongIntentHandler : BaseHandler
             IReadOnlyList<BaseItem> artists = await ArtistSearch.SearchAsync(
                 artistInput, user, _libraryManager, _artistIndex, Logger,
                 (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
-                cancellationToken).ConfigureAwait(false);
+                locale, cancellationToken).ConfigureAwait(false);
 
             if (artists.Count > 0)
             {
@@ -289,7 +289,7 @@ public class FindSongIntentHandler : BaseHandler
         IReadOnlyList<BaseItem> artists = await ArtistSearch.SearchAsync(
             artistInput, user, _libraryManager, _artistIndex, Logger,
             (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
-            cancellationToken).ConfigureAwait(false);
+            locale, cancellationToken).ConfigureAwait(false);
 
         if (artists.Count == 0)
         {

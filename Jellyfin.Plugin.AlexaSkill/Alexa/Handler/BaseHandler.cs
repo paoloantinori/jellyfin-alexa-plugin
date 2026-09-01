@@ -2509,7 +2509,7 @@ public abstract class BaseHandler
         IReadOnlyList<BaseItem> artists = await ArtistSearch.SearchAsync(
             cleaned, user, libraryManager, artistIndex, Logger,
             (q, ct) => RetryAsync(() => libraryManager.GetItemList(q), logLabel + ":GetArtistsFallback", ct),
-            cancellationToken).ConfigureAwait(false);
+            locale, cancellationToken).ConfigureAwait(false);
 
         if (artists.Count == 0)
         {

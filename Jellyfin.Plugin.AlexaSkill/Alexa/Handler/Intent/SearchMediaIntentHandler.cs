@@ -127,7 +127,7 @@ public class SearchMediaIntentHandler : BaseHandler
 
         if (results.Count <= ArtistFallbackThreshold)
         {
-            IReadOnlyList<BaseItem> artistResults = await SearchByArtistNameAsync(query, jellyfinUser!, user, cancellationToken).ConfigureAwait(false);
+            IReadOnlyList<BaseItem> artistResults = await SearchByArtistNameAsync(query, jellyfinUser!, user, locale, cancellationToken).ConfigureAwait(false);
             if (artistResults.Count > 0)
             {
                 Logger.LogInformation("Artist fallback for '{Query}': found {Count} items via artist lookup", query, artistResults.Count);
@@ -196,12 +196,13 @@ public class SearchMediaIntentHandler : BaseHandler
         string query,
         Jellyfin.Database.Implementations.Entities.User jellyfinUser,
         Entities.User user,
+        string locale,
         CancellationToken cancellationToken)
     {
         IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
             query, user, _libraryManager, _artistIndex, Logger,
             (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "ArtistLookup", ct),
-            cancellationToken).ConfigureAwait(false);
+            locale, cancellationToken).ConfigureAwait(false);
 
         if (artists.Count == 0)
         {

@@ -316,6 +316,16 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                         }
                     }
 
+                // Tier 1.5 (JF-437): word-coverage tier, shared entry point with
+                // SearchAsync (placement rationale there). Thorough only: Fast mode
+                // keeps its exact pre-tier semantics (speed over recall by design).
+                if (mode != SearchResponseMode.Fast && artists.Count == 0
+                    && Util.ArtistSearch.TryWordCoverageTier(musician, allArtists, locale, Logger, out var wordCoverageMatches))
+                {
+                    artists = wordCoverageMatches;
+                    tierReached = 4; // tier 1.5 preempted tier 4 (the summary log is coarse)
+                }
+
                     // Tier 4: fuzzy match against ALL artists (catches misspellings)
                     if (artists.Count == 0)
                     {

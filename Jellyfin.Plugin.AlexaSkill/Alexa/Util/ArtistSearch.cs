@@ -79,6 +79,147 @@ internal static class ArtistSearch
         return candidateIsJustFirstWord && firstWordIsMinority;
     }
 
+    /// <summary>
+    /// JF-437 word-coverage tier: candidates whose name WORD-SET (tokenized, articles
+    /// and stop words stripped by <see cref="KeywordMatcher.Tokenize"/>, which always
+    /// strips English stop words and strips the locale's since JF-389) is a subset of
+    /// the query's word-set. This is the tier-1 containment shape without the
+    /// CONTIGUITY requirement: a trailing qualifier breaks the substring ('beatles
+    /// live' contains no 'the beatles') but not the word coverage, and tier-4's
+    /// partial window then ranks a near-anagram short name above the intended artist
+    /// ('Eagles' 83 vs 'The Beatles' 27, live finding 2026-09-01).
+    ///
+    /// Selection (review round): (1) the FULLEST distinct-word coverage wins
+    /// ('Miles Davis' over 'Miles'); (2) among count ties, candidates whose name
+    /// tokens appear in the query IN ORDER as a contiguous token subsequence are
+    /// preferred ('Miles Davis' over the re-tagged variant 'Davis Miles'); (3) there
+    /// is deliberately NO first-word winner-take-all: a carrier-word-named artist
+    /// ('The Band' for the carrier-bleed query 'la band radiohead') and the real
+    /// artist tie, and honest ties are returned TOGETHER so the caller's
+    /// disambiguation prompt resolves them instead of a silent wrong play.
+    ///
+    /// Known limits (documented, by design at this tier): a single character of ASR
+    /// drift defeats the byte-exact word membership ('beattles live' still falls to
+    /// tier 4, where the phonetic tiers own drift); single-token queries early-return
+    /// (tier-1 Contains already covers every subset they could match); the DB search
+    /// paths have no equivalent tier (cold-window divergence, same trade-off class as
+    /// JF-381/JF-417).
+    /// </summary>
+    /// <param name="query">The raw musician query.</param>
+    /// <param name="pool">All candidate artists (the in-memory index list).</param>
+    /// <param name="locale">The request locale, for stop-word stripping.</param>
+    /// <returns>The best word-coverage candidates (possibly several on a tie), or an empty list.</returns>
+    internal static List<BaseItem> WordCoverageCandidates(string query, IEnumerable<BaseItem> pool, string locale)
+    {
+        string[] queryTokens = KeywordMatcher.Tokenize(query, locale);
+        if (queryTokens.Length < 2)
+        {
+            // Single-token queries: tier-1 Contains already matches every name they
+            // could subset-match, so the pool scan is pure cost (review round).
+            return new List<BaseItem>();
+        }
+
+        var queryWords = new HashSet<string>(queryTokens, StringComparer.OrdinalIgnoreCase);
+
+        List<(BaseItem Artist, int WordCount, bool InOrder)> matches = new();
+        foreach (BaseItem candidate in pool)
+        {
+            if (string.IsNullOrWhiteSpace(candidate.Name))
+            {
+                continue;
+            }
+
+            string[] nameWords = KeywordMatcher.Tokenize(candidate.Name, locale);
+            if (nameWords.Length == 0 || !nameWords.All(queryWords.Contains))
+            {
+                continue;
+            }
+
+            // Distinct count: the query side is a set, so a repeated word ("Boom
+            // Boom") covers one word and must not outrank a two-distinct-word name.
+            var covered = new HashSet<string>(nameWords, StringComparer.OrdinalIgnoreCase);
+
+            // Contiguous in-order subsequence of the query tokens ('miles davis' in
+            // 'miles davis live'): the name reads as the query's leading phrase.
+            bool inOrder = ContainsTokenSubsequence(queryTokens, nameWords);
+            matches.Add((candidate, covered.Count, inOrder));
+        }
+
+        if (matches.Count == 0)
+        {
+            return new List<BaseItem>();
+        }
+
+        int bestCount = matches.Max(m => m.WordCount);
+        var bestByCount = matches.Where(m => m.WordCount == bestCount).ToList();
+        bool anyInOrder = bestByCount.Any(m => m.InOrder);
+        return bestByCount
+            .Where(m => m.InOrder == anyInOrder)
+            .Select(m => m.Artist)
+            .ToList();
+    }
+
+    /// <summary>Whether <paramref name="nameWords"/> appears as a contiguous
+    /// subsequence inside <paramref name="queryTokens"/> (case-insensitive).</summary>
+    private static bool ContainsTokenSubsequence(string[] queryTokens, string[] nameWords)
+    {
+        for (int start = 0; start + nameWords.Length <= queryTokens.Length; start++)
+        {
+            bool all = true;
+            for (int i = 0; i < nameWords.Length; i++)
+            {
+                if (!string.Equals(queryTokens[start + i], nameWords[i], StringComparison.OrdinalIgnoreCase))
+                {
+                    all = false;
+                    break;
+                }
+            }
+
+            if (all)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Tier 1.5 entry point shared by BOTH search implementations (inline
+    /// PlayArtistSongs chain and <see cref="SearchAsync"/>'s in-memory branch), so
+    /// the stopwatch and the tier log line exist once. Runs AFTER tiers 2-3 and
+    /// BEFORE tier 4: earlier placement short-circuits the tier-2 fuzzy/phonetic
+    /// resolution of ASR drift ('soul coughin' -> 'Soul' would preempt 'Soul
+    /// Coughing', review round probe); later placement lets tier 4's partial window
+    /// commit the near-anagram wrong match this tier exists to prevent.
+    /// </summary>
+    /// <param name="query">The raw musician query.</param>
+    /// <param name="pool">All candidate artists.</param>
+    /// <param name="locale">The request locale.</param>
+    /// <param name="logger">The caller's logger.</param>
+    /// <param name="candidates">The selected word-coverage candidates when true.</param>
+    /// <returns>True when the tier produced candidates.</returns>
+    internal static bool TryWordCoverageTier(
+        string query,
+        IEnumerable<BaseItem> pool,
+        string locale,
+        ILogger logger,
+        out List<BaseItem> candidates)
+    {
+        var sw = Stopwatch.StartNew();
+        candidates = WordCoverageCandidates(query, pool, locale);
+        sw.Stop();
+        if (candidates.Count > 0)
+        {
+            logger.LogInformation(
+                "ArtistSearch: tier=1.5 duration={TierMs}ms results={Count} method=WordCoverage query='{Query}'",
+                sw.ElapsedMilliseconds, candidates.Count, query);
+            return true;
+        }
+
+        return false;
+    }
+
     public static async Task<IReadOnlyList<BaseItem>> SearchAsync(
         string musician,
         Entities.User? user,
@@ -86,6 +227,7 @@ internal static class ArtistSearch
         IArtistIndex? artistIndex,
         ILogger logger,
         Func<InternalItemsQuery, CancellationToken, Task<IReadOnlyList<BaseItem>>> dbQuery,
+        string locale,
         CancellationToken cancellationToken)
     {
         // JF-419.2 choke point: see IndexWarmingGate (layer 2 of the warming gate)
@@ -175,6 +317,16 @@ internal static class ArtistSearch
                 {
                     artists = new List<BaseItem> { fuzzy };
                 }
+            }
+
+            // Tier 1.5 (JF-437): word-coverage tier, shared entry point (runs after
+            // tiers 2-3, before tier 4 (see TryWordCoverageTier for the placement)
+            // rationale). A single result flows through the caller's downstream
+            // judgment (JF-377 downgrade, JF-420 gate) unchanged; ties disambiguate.
+            if (artists.Count == 0 && TryWordCoverageTier(musician, allArtists, locale, logger, out var wordCoverageMatches))
+            {
+                artists = wordCoverageMatches;
+                tierReached = 4; // tier 1.5 preempted tier 4 (the tier_reached summary log is coarse)
             }
 
             // Tier 4: fuzzy match against ALL artists

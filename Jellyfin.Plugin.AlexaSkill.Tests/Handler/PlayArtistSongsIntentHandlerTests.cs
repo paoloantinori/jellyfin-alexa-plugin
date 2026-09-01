@@ -95,6 +95,46 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
     // --- JF-420.3: symmetric fair-score margin + matcher-aligned penalty ---
 
     /// <summary>
+    /// JF-437 live finding (minix, 2026-09-01): 'beatles live' resolved to Eagles
+    /// because the intended artist is neither a contiguous substring (tier 1) nor a
+    /// prefix (tiers 2-3) of the query, and tier-4's partial window ranks the
+    /// near-anagram 'Eagles' (83, via 'eatles' at edit distance 1) above 'The
+    /// Beatles' (27, the article misaligns every window). The word-coverage tier
+    /// must surface The Beatles ({beatles} covers the query's first word) instead.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_BeatlesLiveQuery_PlaysTheBeatles_NeverEagles()
+    {
+        var theBeatles = new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() };
+        var eagles = new MusicArtist { Name = "Eagles", Id = Guid.NewGuid() };
+        var allArtists = new List<BaseItem> { theBeatles, eagles };
+
+        _artistIndexMock.Setup(i => i.IsReady).Returns(true);
+        _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(allArtists);
+        var beatlesSong = new Audio { Name = "Yesterday", Id = Guid.NewGuid() };
+        var eaglesSong = new Audio { Name = "Hotel California", Id = Guid.NewGuid() };
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
+            .Returns((InternalItemsQuery q) => q.ArtistIds.Contains(theBeatles.Id)
+                ? new List<BaseItem> { beatlesSong }
+                : new List<BaseItem> { eaglesSong });
+
+        var handler = CreateHandler(_artistIndexMock.Object);
+        var request = CreateIntentRequest(musician: "beatles live");
+        SetupUserMock();
+
+        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.True(response.Response.ShouldEndSession, "must auto-play, not prompt");
+        var play = response.Response.Directives?.FirstOrDefault(d => d.Type == "AudioPlayer.Play");
+        Assert.NotNull(play);
+        var metadata = ((AudioPlayerPlayDirective)play).AudioItem?.Metadata;
+        Assert.NotNull(metadata);
+        Assert.Equal("Yesterday", metadata.Title); // The Beatles's song, never Eagles's
+    }
+
+
+    /// <summary>
     /// JF-420.3 scenario: query 'miles davis live' with 'Miles Davis' and 'Miles' in
     /// the library. Whichever of the two the tier-2 prefix match surfaces first, the
     /// outcome must be Miles Davis (word-subset skip when the alternative adds
@@ -129,6 +169,40 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         var metadata = ((AudioPlayerPlayDirective)play).AudioItem?.Metadata;
         Assert.NotNull(metadata);
         Assert.Equal("So What", metadata.Title); // Miles Davis's song, not Miles's
+    }
+
+    /// <summary>
+    /// JF-437 review round: tier 1.5 runs AFTER tier 2, so ASR drift still resolves
+    /// through the fuzzy/phonetic tier - 'soul coughin' must play Soul Coughing, not
+    /// the one-word word-subset artist 'Soul' that the predicate alone would return.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_SoulCoughinDrift_Tier2ResolvesBeforeWordCoverage()
+    {
+        var soul = new MusicArtist { Name = "Soul", Id = Guid.NewGuid() };
+        var soulCoughing = new MusicArtist { Name = "Soul Coughing", Id = Guid.NewGuid() };
+        var allArtists = new List<BaseItem> { soul, soulCoughing };
+
+        _artistIndexMock.Setup(i => i.IsReady).Returns(true);
+        _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(allArtists);
+        var coughingSong = new Audio { Name = "Sugar Free Jazz", Id = Guid.NewGuid() };
+        var soulSong = new Audio { Name = "Soul Song", Id = Guid.NewGuid() };
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
+            .Returns((InternalItemsQuery q) => q.ArtistIds.Contains(soulCoughing.Id)
+                ? new List<BaseItem> { coughingSong }
+                : new List<BaseItem> { soulSong });
+
+        var handler = CreateHandler(_artistIndexMock.Object);
+        var request = CreateIntentRequest(musician: "soul coughin");
+        SetupUserMock();
+
+        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+
+        var play = response.Response.Directives?.FirstOrDefault(d => d.Type == "AudioPlayer.Play");
+        Assert.NotNull(play);
+        var metadata = ((AudioPlayerPlayDirective)play).AudioItem?.Metadata;
+        Assert.NotNull(metadata);
+        Assert.Equal("Sugar Free Jazz", metadata.Title); // Soul Coughing's song, not Soul's
     }
 
     // --- JF-439: inverse cross-media fallback (artist not-found -> song search) ---

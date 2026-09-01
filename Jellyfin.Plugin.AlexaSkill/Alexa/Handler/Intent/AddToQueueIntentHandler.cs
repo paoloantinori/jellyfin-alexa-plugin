@@ -109,7 +109,7 @@ public class AddToQueueIntentHandler : BaseHandler
             IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
                 musicianQuery, user, _libraryManager, _artistIndex, Logger,
                 (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtistsForQueue", ct),
-                cancellationToken).ConfigureAwait(false);
+                locale, cancellationToken).ConfigureAwait(false);
 
             if (artists.Count == 0)
             {
