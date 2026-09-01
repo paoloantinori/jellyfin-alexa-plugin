@@ -149,7 +149,7 @@ public class YesIntentHandler : BaseHandler
         {
             response = mediaType switch
             {
-                DisambiguationHelper.MediaTypeSong => PlaySong(item, user, session),
+                DisambiguationHelper.MediaTypeSong => PlaySong(item, user, session, context, locale),
                 DisambiguationHelper.MediaTypeAlbum => PlayAlbum(item, jellyfinUser!, user, session, locale),
                 DisambiguationHelper.MediaTypeArtist => PlayArtist(item, jellyfinUser!, user, session, locale),
                 DisambiguationHelper.MediaTypeVideo => PlayVideo(item, user, session, locale),
@@ -241,12 +241,11 @@ public class YesIntentHandler : BaseHandler
         return Task.FromResult(standardResponse);
     }
 
-    private SkillResponse PlaySong(BaseItem song, Entities.User user, SessionInfo session)
+    private SkillResponse PlaySong(BaseItem song, Entities.User user, SessionInfo session, Context context, string locale)
     {
-        string itemId = song.Id.ToString();
-        session.NowPlayingQueue = new List<QueueItem> { new() { Id = song.Id } };
-        session.FullNowPlayingItem = song;
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, song, user);
+        // JF-440: the ONE single-song play shape (adds the stale-continuation clear
+        // the other sites already had).
+        return BuildSingleSongResponse(song, user, session, context, locale);
     }
 
     private SkillResponse PlayAlbum(BaseItem album, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale)

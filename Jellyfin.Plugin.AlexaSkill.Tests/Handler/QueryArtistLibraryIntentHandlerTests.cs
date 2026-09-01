@@ -46,7 +46,7 @@ public class QueryArtistLibraryIntentHandlerTests : PluginTestBase
         _loggerFactory = LoggerFactory.Create(b => { });
     }
 
-    private QueryArtistLibraryIntentHandler CreateHandler()
+    private QueryArtistLibraryIntentHandler CreateHandler(IArtistIndex? artistIndex = null, ISongNgramIndex? songNgramIndex = null)
     {
         return new QueryArtistLibraryIntentHandler(
             _sessionManagerMock.Object,
@@ -54,7 +54,9 @@ public class QueryArtistLibraryIntentHandlerTests : PluginTestBase
             _libraryManagerMock.Object,
             _userManagerMock.Object,
             _userDataManagerMock.Object,
-            _loggerFactory);
+            _loggerFactory,
+            artistIndex,
+            songNgramIndex);
     }
 
     private static IntentRequest CreateIntentRequest(string? musician = null, string? queryType = null)
@@ -470,5 +472,37 @@ public class QueryArtistLibraryIntentHandlerTests : PluginTestBase
 
         Assert.NotNull(response);
         Assert.Contains(response.Response.Directives, d => d.Type == "Alexa.Presentation.APL.RenderDocument");
+    }
+
+    /// <summary>
+    /// JF-440 sibling coverage: the same NLU coin flip that feeds PlayArtistSongs
+    /// feeds this intent's musician slot ('cosa abbiamo di sugar free jazz'); on an
+    /// artist miss with a confident song match, the fallback serves the song with
+    /// the FoundSongInstead announcement instead of a dead-end NotFoundArtist.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ArtistMiss_SongTitleInMusicianSlot_PlaysSongWithAnnouncement()
+    {
+        var artistIndex = new Mock<IArtistIndex>();
+        artistIndex.Setup(i => i.IsReady).Returns(true);
+        artistIndex.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(new List<BaseItem>());
+
+        var song = new Audio { Name = "Sugar Free Jazz", Id = Guid.NewGuid() };
+        var songIndex = new TestHelpers.FakeSongIndex((song, 105));
+
+        var handler = CreateHandler(artistIndex.Object, songIndex);
+        var request = CreateIntentRequest(musician: "sugar free jazz");
+        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
+            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+
+        SkillResponse response = await handler.HandleAsync(
+            request, TestHelpers.CreateTestContext(), TestHelpers.CreateTestUser(),
+            TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.True(response.Response.ShouldEndSession);
+        Assert.NotNull(response.Response.Directives?.FirstOrDefault(d => d.Type == "AudioPlayer.Play"));
+        var speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Sugar Free Jazz", speech, StringComparison.OrdinalIgnoreCase);
     }
 }

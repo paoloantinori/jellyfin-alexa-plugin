@@ -431,15 +431,10 @@ public class FindSongIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByName", locale, picked.Name));
         }
 
-        string itemId = item.Id.ToString();
-        session.NowPlayingQueue = new List<QueueItem> { new() { Id = item.Id } };
-        session.FullNowPlayingItem = item;
-
         string artistDisplay = picked.ArtistName ?? sessionData.ArtistName ?? "Unknown";
-        string announcement = ResponseStrings.Get("FindSongFoundOne", locale, item.Name, artistDisplay);
-        SkillResponse playResponse = BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, item, user, context);
-        playResponse.Response.OutputSpeech = new PlainTextOutputSpeech { Text = announcement };
-        return playResponse;
+        return BuildSingleSongResponse(
+            item, user, session, context, locale,
+            announcement: ResponseStrings.Get("FindSongFoundOne", locale, item.Name, artistDisplay));
     }
 
     /// <summary>
@@ -493,27 +488,20 @@ public class FindSongIntentHandler : BaseHandler
         else
         {
             // Try n-gram index first (O(1) lookup), fall back to DB query if unavailable
-            Guid[]? topParentIds = GetAllowedLibraryIds(user);
-            if (_songNgramIndex is { IsReady: true })
-            {
-                Logger.LogDebug("FindSong: searching n-gram index (keywords={Keywords})", string.Join(" ", keywordTokens));
-                scored = _songNgramIndex.Search(keywordTokens, locale, topParentIds);
-            }
-            else
-            {
-                scored = new List<(BaseItem, double)>();
-            }
-
-            if (scored.Count == 0)
-            {
-                // Phonetic fallback: try Double Metaphone matching when exact token match misses.
-                // Only activates when feature flag is enabled and the n-gram index is available.
-                if (_config.PhoneticSongSearchEnabled && _songNgramIndex is { IsReady: true })
-                {
-                    Logger.LogDebug("FindSong: exact match miss, trying phonetic search (keywords={Keywords})", string.Join(" ", keywordTokens));
-                    scored = _songNgramIndex.SearchPhonetic(keywordTokens, locale, topParentIds);
-                }
-            }
+            // JF-440: the ONE index lookup chain (was a private copy with its own
+            // readiness contract). The JF-419.3 entry gate guarantees readiness here,
+            // so a warming throw cannot occur mid-request; a null/disabled index
+            // returns empty and the DB fallback below owns the query. The filter is
+            // RESOLVED to parent-chain roots: the index maps roots, GetAllowedLibraryIds
+            // returns collection-folder ids, and unresolved ids filter out every
+            // candidate for library-restricted users (review round, same fix as
+            // TrySongFallback).
+            Guid[]? allowedLibraryIds = GetAllowedLibraryIds(user);
+            Guid[]? topParentIds = allowedLibraryIds != null
+                ? Util.LibraryFilter.ResolveTopParentIds(allowedLibraryIds, _libraryManager, Logger)
+                : null;
+            Logger.LogDebug("FindSong: searching n-gram index (keywords={Keywords})", string.Join(" ", keywordTokens));
+            scored = _songNgramIndex.SearchWithPhoneticFallback(keywordTokens, locale, topParentIds, _config.PhoneticSongSearchEnabled);
 
             if (scored.Count == 0)
             {
@@ -571,20 +559,13 @@ public class FindSongIntentHandler : BaseHandler
                 sessionData);
         }
 
-        // Single match — auto-play
+        // Single match: auto-play (JF-440: the ONE single-song shape)
         if (songs.Count == 1)
         {
-            BaseItem song = songs[0];
-            string itemId = song.Id.ToString();
-
-            session.NowPlayingQueue = new List<QueueItem> { new() { Id = song.Id } };
-            session.FullNowPlayingItem = song;
-
             string artistDisplay = sessionData.ArtistName ?? "Unknown";
-            string announcement = ResponseStrings.Get("FindSongFoundOne", locale, song.Name, artistDisplay);
-            SkillResponse singleResponse = BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, song, user, context);
-            singleResponse.Response.OutputSpeech = new PlainTextOutputSpeech { Text = announcement };
-            return singleResponse;
+            return BuildSingleSongResponse(
+                songs[0], user, session, context, locale,
+                announcement: ResponseStrings.Get("FindSongFoundOne", locale, songs[0].Name, artistDisplay));
         }
 
         // Multiple matches: take top 4 and check if we need artist narrowing

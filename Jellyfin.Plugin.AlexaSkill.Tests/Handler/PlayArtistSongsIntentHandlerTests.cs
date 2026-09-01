@@ -208,24 +208,6 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
     // --- JF-439: inverse cross-media fallback (artist not-found -> song search) ---
 
     /// <summary>
-    /// A song index fake returning a fixed scored result set (the n-gram index's
-    /// coverage-gated output shape).
-    /// </summary>
-    private sealed class FakeSongIndex : ISongNgramIndex
-    {
-        private readonly List<(BaseItem Item, double Score)> _results;
-        public bool IsReady => true;
-        public bool IsDisabled => false;
-        public int SongCount => _results.Count;
-        public int NgramCount => _results.Count;
-
-        public FakeSongIndex(params (BaseItem Item, double Score)[] results) => _results = results.ToList();
-
-        public List<(BaseItem Item, double Score)> Search(string[] keywordTokens, string locale, Guid[]? topParentIds = null) => _results;
-        public List<(BaseItem Item, double Score)> SearchPhonetic(string[] keywordTokens, string locale, Guid[]? topParentIds = null) => _results;
-    }
-
-    /// <summary>
     /// The motivating case: no artist named "sugar free jazz" exists, the musician
     /// slot carries a multi-word musician-shaped SONG title (NLU coin flip, JF-438),
     /// the song index has it. Must play the song with the FoundSongInstead
@@ -239,7 +221,7 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(noArtists);
 
         var song = new Audio { Name = "Sugar Free Jazz", Id = Guid.NewGuid() };
-        var songIndex = new FakeSongIndex((song, 105));
+        var songIndex = new TestHelpers.FakeSongIndex((song, 105));
 
         var handler = CreateHandler(_artistIndexMock.Object, songIndex);
         var request = CreateIntentRequest(musician: "sugar free jazz");
@@ -268,7 +250,7 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(new List<BaseItem>());
 
         var song = new Audio { Name = "Like a Rolling Stone", Id = Guid.NewGuid() };
-        var handler = CreateHandler(_artistIndexMock.Object, new FakeSongIndex((song, 34))); // phonetic half-coverage score
+        var handler = CreateHandler(_artistIndexMock.Object, new TestHelpers.FakeSongIndex((song, 34))); // phonetic half-coverage score
         var request = CreateIntentRequest(musician: "rolling stones");
         SetupUserMock();
 
@@ -288,7 +270,7 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         _artistIndexMock.Setup(i => i.IsReady).Returns(true);
         _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(new List<BaseItem>());
 
-        var handler = CreateHandler(_artistIndexMock.Object, new FakeSongIndex());
+        var handler = CreateHandler(_artistIndexMock.Object, new TestHelpers.FakeSongIndex());
         var request = CreateIntentRequest(musician: "blue marble dreams");
         SetupUserMock();
 

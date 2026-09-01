@@ -1,16 +1,19 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
+using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Entities;
 using Jellyfin.Plugin.AlexaSkill.Lwa;
 using MediaBrowser.Common.Configuration;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Serialization;
@@ -194,4 +197,24 @@ internal static class TestHelpers
 
         return condition();
     }
+
+    /// <summary>
+    /// JF-440: the ONE song-index fake (was duplicated as FakeSongIndex in
+    /// PlayArtistSongsIntentHandlerTests and FakeNgramIndex in PlaySongTitleFallbackTests).
+    /// Returns the fixed scored set from both stages (no test distinguishes them).
+    /// </summary>
+    internal sealed class FakeSongIndex : ISongNgramIndex
+    {
+        private readonly List<(BaseItem Item, double Score)> _results;
+        public bool IsReady => true;
+        public bool IsDisabled => false;
+        public int SongCount => _results.Count;
+        public int NgramCount => _results.Count;
+
+        public FakeSongIndex(params (BaseItem Item, double Score)[] results) => _results = results.ToList();
+
+        public List<(BaseItem Item, double Score)> Search(string[] keywordTokens, string locale, Guid[]? topParentIds = null) => _results;
+        public List<(BaseItem Item, double Score)> SearchPhonetic(string[] keywordTokens, string locale, Guid[]? topParentIds = null) => _results;
+    }
+
 }

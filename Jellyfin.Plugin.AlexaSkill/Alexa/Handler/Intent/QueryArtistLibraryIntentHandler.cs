@@ -34,6 +34,7 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
     private readonly IUserManager _userManager;
     private readonly IUserDataManager _userDataManager;
     private readonly IArtistIndex? _artistIndex;
+    private readonly ISongNgramIndex? _songNgramIndex;
 
     public QueryArtistLibraryIntentHandler(
         ISessionManager sessionManager,
@@ -42,12 +43,14 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
         IUserManager userManager,
         IUserDataManager userDataManager,
         ILoggerFactory loggerFactory,
-        IArtistIndex? artistIndex = null) : base(sessionManager, config, loggerFactory)
+        IArtistIndex? artistIndex = null,
+        ISongNgramIndex? songNgramIndex = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _userDataManager = userDataManager;
         _artistIndex = artistIndex;
+        _songNgramIndex = songNgramIndex;
     }
 
     /// <inheritdoc/>
@@ -115,6 +118,17 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
         if (artists.Count == 0)
         {
             Logger.LogDebug("QueryArtistLibrary: artist '{Musician}' not found", musician);
+
+            // JF-440 sibling coverage: the same NLU coin flip that feeds
+            // PlayArtistSongs feeds this intent's musician slot ('cosa abbiamo di
+            // sugar free jazz'); serve the song instead of a dead-end not-found.
+            SkillResponse? songFallback = TrySongFallback(
+                musician, user, session, context, locale, _songNgramIndex, _libraryManager, "QueryArtistLibrary", cancellationToken);
+            if (songFallback != null)
+            {
+                return songFallback;
+            }
+
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundArtist", locale, musician));
         }
 

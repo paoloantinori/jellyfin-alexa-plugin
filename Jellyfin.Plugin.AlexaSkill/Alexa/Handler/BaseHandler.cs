@@ -77,6 +77,18 @@ public abstract class BaseHandler
     protected const int CrossMediaArtistMaxWords = 2;
 
     /// <summary>
+    /// JF-439: minimum KeywordMatcher score for the inverse cross-media song
+    /// fallback to auto-play (the BaseHandler home since JF-440). Live calibration
+    /// (minix, 12766 songs): the WRONG half-coverage phonetic hit ('rolling
+    /// stones' -> 'Like a Rolling Stone') scores ~34; the RIGHT near-full phonetic
+    /// match ('screenwriters blues' -> 'Screenwriter's Blues') scores ~72; exact
+    /// full coverage scores ~105. The bar at 65 keeps 31 points of rejection margin
+    /// over the wrong-substitution class and 7 over the legitimate phonetic class.
+    /// The artist-side mirror gates fuzzy scores at 85 (different scale, not shared).
+    /// </summary>
+    protected const double CrossMediaSongThreshold = 65.0;
+
+    /// <summary>
     /// Reorder items so favorites appear first, then by personal rating descending
     /// within each group (favorites, non-favorites). Items without a rating keep
     /// their original relative order (stable sort).
@@ -2465,6 +2477,129 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// JF-440: the ONE single-song play shape (was the 4th/5th inline copy across
+    /// handlers): one-song session queue, full-item bookkeeping, stale progressive
+    /// continuation cleared (a one-song queue replacing an artist's progressive queue
+    /// must not let the OLD artist resume after the song), AudioPlayer response with
+    /// the optional announcement overriding the speech. Crash-recovery SetQueue is
+    /// deliberately NOT persisted: every single-song site historically skips it and a
+    /// one-song queue is trivially re-requestable (the divergence is tracked in JF-440's
+    /// notes; normalize rather than silently change crash-recovery behavior).
+    /// </summary>
+    /// <param name="song">The audio item to play.</param>
+    /// <param name="user">The plugin user.</param>
+    /// <param name="session">The Alexa session.</param>
+    /// <param name="context">The Alexa context.</param>
+    /// <param name="locale">The request locale.</param>
+    /// <param name="announcement">Optional spoken announcement replacing the default speech.</param>
+    /// <returns>The AudioPlayer play response.</returns>
+    protected SkillResponse BuildSingleSongResponse(
+        BaseItem song,
+        Entities.User user,
+        SessionInfo session,
+        Context context,
+        string locale,
+        string? announcement = null)
+    {
+        session.NowPlayingQueue = new List<QueueItem> { new() { Id = song.Id } };
+        session.FullNowPlayingItem = song;
+        QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID);
+
+        string itemId = song.Id.ToString();
+        SkillResponse response = BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, song, user, context, announceLocale: locale);
+        if (!string.IsNullOrWhiteSpace(announcement))
+        {
+            response.Response.OutputSpeech = new PlainTextOutputSpeech { Text = announcement };
+        }
+
+        return response;
+    }
+
+    /// <summary>
+    /// JF-439/JF-440 inverse cross-media fallback (BaseHandler home): no artist
+    /// matched, so try the song index with the musician value (the NLU coin-flips
+    /// musician-shaped song titles into artist intents). Serves the best song above
+    /// <see cref="CrossMediaSongThreshold"/> with a FoundSongInstead announcement;
+    /// returns null (caller falls through to its clean not-found) when the index is
+    /// absent/warming (an opportunistic fallback must never worsen the not-found
+    /// path) or nothing clears the bar. NO word-count guard by design: a spaceless
+    /// CJK title tokenizes to one token (JF-439 review).
+    /// </summary>
+    /// <param name="musician">The raw musician slot value.</param>
+    /// <param name="user">The plugin user.</param>
+    /// <param name="session">The Alexa session.</param>
+    /// <param name="context">The Alexa context.</param>
+    /// <param name="locale">The request locale.</param>
+    /// <param name="songIndex">The song n-gram index (null in minimal setups).</param>
+    /// <param name="libraryManager">Library manager for the library-filter walk.</param>
+    /// <param name="cancellationToken">Shutdown token.</param>
+    /// <returns>The play response, or null to fall through to the caller's not-found.</returns>
+    protected SkillResponse? TrySongFallback(
+        string musician,
+        Entities.User user,
+        SessionInfo session,
+        Context context,
+        string locale,
+        ISongNgramIndex? songIndex,
+        ILibraryManager libraryManager,
+        string logLabel,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (songIndex == null)
+        {
+            return null;
+        }
+
+        var keywordTokens = KeywordMatcher.Tokenize(musician, locale);
+        if (keywordTokens.Length == 0)
+        {
+            return null;
+        }
+
+        // The index's topParentMap holds parent-chain ROOT ids; GetAllowedLibraryIds
+        // returns CONFIGURED collection-folder ids. Resolve through the same walk the
+        // artist paths use, or every candidate is filtered out for library-restricted
+        // users and the fallback silently no-ops (JF-439 review, verified live).
+        Guid[]? allowedLibraryIds = GetAllowedLibraryIds(user);
+        Guid[]? topParentIds = allowedLibraryIds != null
+            ? LibraryFilter.ResolveTopParentIds(allowedLibraryIds, libraryManager, Logger)
+            : null;
+
+        List<(BaseItem Item, double Score)> scored;
+        try
+        {
+            scored = songIndex.SearchWithPhoneticFallback(keywordTokens, locale, topParentIds, _config.PhoneticSongSearchEnabled);
+        }
+        catch (Exceptions.SkillWarmingUpException)
+        {
+            // The warming gate's refusal answers the ORIGINAL request; this
+            // opportunistic fallback must not convert a not-found into a warming Tell.
+            Logger.LogDebug("{Label}: song fallback skipped, song index warming", logLabel);
+            return null;
+        }
+
+        if (scored.Count == 0 || scored[0].Score < CrossMediaSongThreshold)
+        {
+            Logger.LogDebug(
+                "{Label}: song fallback rejected for query='{Query}' (best score {Score:F0} over {Count} candidates, bar={Bar})",
+                logLabel, musician, scored.Count > 0 ? scored[0].Score : 0, scored.Count, CrossMediaSongThreshold);
+            return null;
+        }
+
+        BaseItem song = scored[0].Item;
+        Logger.LogInformation(
+            "Song fallback found '{SongName}' itemId={ItemId} (score={Score:F0}) for query='{Query}'",
+            song.Name, song.Id, scored[0].Score, musician);
+
+        return BuildSingleSongResponse(
+            song, user, session, context, locale,
+            announcement: ResponseStrings.Get("FoundSongInstead", locale, song.Name));
+    }
+
+    /// <summary>
     /// Entity fallback for greedy <c>AMAZON.SearchQuery</c> intents that misroute an
     /// artist query (e.g. it-IT "di miles davis" captured as a mood). Strips locale
     /// stop-words via <see cref="KeywordMatcher.Tokenize"/> (all 11 language prefixes of
@@ -2518,18 +2653,42 @@ public abstract class BaseHandler
 
         var best = FuzzyMatcher.FindBestMatchWithScore(cleaned, artists, a => a.Name);
         int threshold = Math.Max(FuzzyMatcher.GetDefaultThreshold(user), CrossMediaArtistThreshold);
+        BaseItem? bestItem = best.HasValue ? best.Value.Item : null;
+        int bestScore = best.HasValue ? best.Value.Score : 0;
 
-        if (!best.HasValue || best.Value.Item == null || best.Value.Score < threshold)
+        if (!best.HasValue || bestItem == null || bestScore < threshold)
         {
-            Logger.LogDebug(
-                "{Label}: entity fallback artist score={Score} below threshold={Threshold}, query='{Query}'",
-                logLabel, best.HasValue ? best.Value.Score : 0, threshold, cleaned);
-            return null;
+            // JF-440 (F4): a word-coverage tier match scores LOW on the fuzzy scale
+            // ('The Beatles' vs 'beatles live' = 27, below every cross-media gate),
+            // so the fuzzy bar alone rejects exactly the qualifier-query class the
+            // tier exists to serve. Accept the match when the artist is a
+            // word-subset of the cleaned query (same predicate as the search tier).
+            // Review round: the word-coverage acceptance also needs the NORMAL fuzzy
+            // floor. Without it, a one-word subset of a 2-word mood slot ('soft rock'
+            // -> artist 'Soft') auto-substitutes at any score; with it, the gate is a
+            // safety valve for genuinely-artist-shaped queries that just miss the
+            // strict cross-media bar, never a bypass of every bar (the JF-437 search
+            // tier, with its full selection + downstream gates, owns the main path).
+            int normalThreshold = FuzzyMatcher.GetDefaultThreshold(user);
+            bool wordCoverageMatch = bestItem != null
+                && bestScore >= normalThreshold
+                && Util.ArtistSearch.WordCoverageCandidates(cleaned, new[] { bestItem }, locale).Count > 0;
+            if (!wordCoverageMatch)
+            {
+                Logger.LogDebug(
+                    "{Label}: entity fallback artist score={Score} below threshold={Threshold}, query='{Query}'",
+                    logLabel, bestScore, threshold, cleaned);
+                return null;
+            }
+
+            Logger.LogInformation(
+                "{Label}: entity fallback artist '{Artist}' below fuzzy threshold ({Score}<{Threshold}) but accepted as a word-coverage match for query='{Query}'",
+                logLabel, bestItem!.Name, bestScore, threshold, cleaned);
         }
 
         return await BuildArtistSongsResponseAsync(
-            best.Value.Item.Id,
-            best.Value.Item.Name,
+            bestItem!.Id,
+            bestItem.Name,
             jellyfinUser,
             user,
             session,
@@ -2539,7 +2698,7 @@ public abstract class BaseHandler
             userDataManager,
             queueManager,
             logLabel,
-            announcement: ResponseStrings.Get("FoundArtistInstead", locale, best.Value.Item.Name),
+            announcement: ResponseStrings.Get("FoundArtistInstead", locale, bestItem.Name),
             cancellationToken).ConfigureAwait(false);
     }
 

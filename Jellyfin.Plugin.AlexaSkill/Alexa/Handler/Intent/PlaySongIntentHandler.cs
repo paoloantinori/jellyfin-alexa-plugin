@@ -12,6 +12,7 @@ using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -270,16 +271,19 @@ public class PlaySongIntentHandler : BaseHandler
                     Logger.LogDebug("PlaySong: title fallback (artist songs + keyword matcher) matched {Count} songs for query='{Query}'", songs.Count, songQuery);
                 }
             }
-            else if (_songNgramIndex is { IsReady: true })
+            else
             {
+                // JF-440: the ONE index lookup chain (was a private copy with its own
+                // readiness contract). The JF-419.3 entry gate guarantees readiness;
+                // null/disabled returns empty and the DB fallback below owns the query.
+                // The filter is RESOLVED to parent-chain roots (see FindSong's note:
+                // unresolved collection-folder ids filter out every candidate).
                 var keywordTokens = Util.KeywordMatcher.Tokenize(songQuery, locale);
-                Guid[]? topParentIds = GetAllowedLibraryIds(user);
-                var scoredByIndex = _songNgramIndex.Search(keywordTokens, locale, topParentIds);
-                if (scoredByIndex.Count == 0 && _config.PhoneticSongSearchEnabled)
-                {
-                    scoredByIndex = _songNgramIndex.SearchPhonetic(keywordTokens, locale, topParentIds);
-                }
-
+                Guid[]? songAllowed = GetAllowedLibraryIds(user);
+                Guid[]? songTopParents = songAllowed != null
+                    ? Util.LibraryFilter.ResolveTopParentIds(songAllowed, _libraryManager, Logger)
+                    : null;
+                var scoredByIndex = _songNgramIndex.SearchWithPhoneticFallback(keywordTokens, locale, songTopParents, _config.PhoneticSongSearchEnabled);
                 if (scoredByIndex.Count > 0)
                 {
                     songs = scoredByIndex.Select(s => s.Item).ToList();

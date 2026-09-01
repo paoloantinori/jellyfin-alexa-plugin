@@ -135,21 +135,6 @@ public class PlaySongTitleFallbackTests : PluginTestBase
 
     // Without a musician slot: exact SearchTerm misses; the n-gram index (which
     // canonicalizes abbreviations) finds the track. O(1) lookup, no full-catalog scan.
-    private sealed class FakeNgramIndex : ISongNgramIndex
-    {
-        private readonly List<(BaseItem Item, double Score)> _results;
-
-        public FakeNgramIndex(List<(BaseItem Item, double Score)> results) => _results = results;
-
-        public bool IsReady => true;
-        public bool IsDisabled => false;
-        public int SongCount => _results.Count;
-        public int NgramCount => _results.Count;
-
-        public List<(BaseItem Item, double Score)> Search(string[] keywordTokens, string locale, Guid[]? topParentIds = null) => _results;
-
-        public List<(BaseItem Item, double Score)> SearchPhonetic(string[] keywordTokens, string locale, Guid[]? topParentIds = null) => _results;
-    }
 
     // JF-384: the live repro verbatim. "Decature Street" arrives as "the cater street"
     // (accent drift on one word). Exact keyword match vetoes (100% coverage); the phonetic
@@ -199,7 +184,7 @@ public class PlaySongTitleFallbackTests : PluginTestBase
     {
         SetupUserMock();
         var song = new Audio { Name = "Decatur St.", Id = Guid.NewGuid() };
-        var fakeIndex = new FakeNgramIndex(new List<(BaseItem, double)> { (song, 100.0) });
+        var fakeIndex = new TestHelpers.FakeSongIndex((song, 100.0));
 
         _libraryManagerMock.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
