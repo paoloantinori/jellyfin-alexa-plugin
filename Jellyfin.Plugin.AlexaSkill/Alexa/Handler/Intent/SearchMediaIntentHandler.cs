@@ -95,7 +95,7 @@ public class SearchMediaIntentHandler : BaseHandler
 
         // JF-419 cold-start: the primary unified search hits the same cold database as
         // the artist index loading proxies; refuse before the "searching" announcement
-        Util.ArtistSearch.EnsureIndexReady(_artistIndex);
+        Util.IndexWarmingGate.EnsureReady(_artistIndex);
 
         RunFireAndForget(SendProgressiveResponse(
             context, request, ResponseStrings.Get("SearchingMedia", locale)));

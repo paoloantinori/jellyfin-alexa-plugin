@@ -13,6 +13,7 @@ using MediaBrowser.Controller.Library;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
+using static Jellyfin.Plugin.AlexaSkill.Tests.Unit.TestHelpers;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 
@@ -40,6 +41,145 @@ public class SongNgramIndexServiceTests : PluginTestBase
             .Returns((Guid id) => null as BaseItem);
 
         return new SongNgramIndexService(_libraryManagerMock.Object, _logger);
+    }
+
+    /// <summary>
+    /// JF-419.3: service over a controllable load function, with a fast retry
+    /// interval so the recovery tests run in milliseconds.
+    /// </summary>
+    private SongNgramIndexService CreateServiceWithLoad(Func<List<BaseItem>> load, TimeSpan? retryInterval = null)
+    {
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(() => load());
+
+        _libraryManagerMock
+            .Setup(l => l.GetItemById(It.IsAny<Guid>()))
+            .Returns((Guid id) => null as BaseItem);
+
+        var service = new SongNgramIndexService(_libraryManagerMock.Object, _logger);
+        service.FailedLoadRetryInterval = retryInterval ?? TimeSpan.FromMilliseconds(50);
+        return service;
+    }
+
+    // --- JF-419.3: failed-load self-recovery (mirrors ArtistIndexServiceTests) ---
+
+    [Fact]
+    public async Task StartAsync_FailedInitialLoad_RetriesAndRecovers()
+    {
+        var songs = new List<BaseItem> { MakeSong("Bohemian Rhapsody") };
+
+        int callCount = 0;
+        var service = CreateServiceWithLoad(() =>
+        {
+            callCount++;
+            if (callCount == 1)
+            {
+                throw new InvalidOperationException("db still migrating");
+            }
+
+            return songs;
+        });
+        try
+        {
+            await service.StartAsync(CancellationToken.None);
+            Assert.False(service.IsReady); // gate closed after the failed initial load
+
+            // The service must recover on its own, no restart, no library change
+            Assert.True(
+                await WaitUntilAsync(() => service.IsReady),
+                "index should recover via background retry");
+
+            Assert.Equal(1, service.SongCount);
+        }
+        finally
+        {
+            service.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task StartAsync_PersistentFailure_KeepsRetrying()
+    {
+        int callCount = 0;
+        var service = CreateServiceWithLoad(() =>
+        {
+            callCount++;
+            throw new InvalidOperationException("db down");
+        });
+        try
+        {
+            await service.StartAsync(CancellationToken.None);
+
+            Assert.False(service.IsReady);
+            Assert.True(
+                await WaitUntilAsync(() => callCount > 1),
+                $"expected background retries, saw {callCount} load attempts");
+        }
+        finally
+        {
+            service.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Review round 1 finding 2: after MaxLoadAttempts consecutive failures the index
+    /// DISABLES itself instead of retrying forever, so the warming gates treat it as
+    /// absent and callers degrade to their database paths (no endless warming Tell).
+    /// </summary>
+    [Fact]
+    public async Task StartAsync_PersistentFailure_DisablesAfterMaxAttempts()
+    {
+        int callCount = 0;
+        var service = CreateServiceWithLoad(() =>
+        {
+            callCount++;
+            throw new InvalidOperationException("full-catalog scan keeps failing");
+        });
+        try
+        {
+            await service.StartAsync(CancellationToken.None);
+
+            Assert.True(
+                await WaitUntilAsync(() => service.IsDisabled),
+                "index should give up after the max consecutive failures");
+            Assert.False(service.IsReady);
+
+            // A disabled index degrades to empty results (DB fallback), never throws
+            Assert.Empty(service.Search(new[] { "hello" }, "en-US"));
+            Assert.Empty(service.SearchPhonetic(new[] { "hello" }, "en-US"));
+
+            int attemptsAtGiveUp = callCount;
+            await Task.Delay(150);
+            Assert.Equal(attemptsAtGiveUp, callCount); // no retries after the give-up
+        }
+        finally
+        {
+            service.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task StartAsync_SuccessfulLoad_DoesNotScheduleRetry()
+    {
+        int callCount = 0;
+        var service = CreateServiceWithLoad(() =>
+        {
+            callCount++;
+            return new List<BaseItem> { MakeSong("Circles") };
+        });
+        try
+        {
+            await service.StartAsync(CancellationToken.None);
+            await Task.Delay(150);
+
+            Assert.True(service.IsReady);
+            Assert.Equal(1, callCount); // no background reload after a successful load
+        }
+        finally
+        {
+            service.Dispose();
+        }
     }
 
     private static Audio MakeSong(string title, Guid? id = null)

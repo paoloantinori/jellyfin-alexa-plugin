@@ -412,7 +412,7 @@ public class PlayMoodMusicIntentHandler : BaseHandler
         // JF-419 cold-start: the mood->genre queries hit the same cold database the
         // artist index loading proxies, and the artist fallback (TryEntityFallbackAsync)
         // throws at the choke point mid-handler; gate before the announcement.
-        Util.ArtistSearch.EnsureIndexReady(_artistIndex);
+        Util.IndexWarmingGate.EnsureReady(_artistIndex);
 
         RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
 

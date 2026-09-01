@@ -11,6 +11,7 @@ using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
 using Microsoft.Extensions.Logging;
 using Moq;
+using static Jellyfin.Plugin.AlexaSkill.Tests.Unit.TestHelpers;
 using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
@@ -116,13 +117,9 @@ public class ArtistIndexServiceTests : PluginTestBase
             Assert.False(service.IsReady); // gate closed after the failed initial load
 
             // The service must recover on its own, no restart, no library change
-            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
-            while (!service.IsReady && DateTime.UtcNow < deadline)
-            {
-                await Task.Delay(25);
-            }
-
-            Assert.True(service.IsReady, "index should recover via background retry");
+            Assert.True(
+                await WaitUntilAsync(() => service.IsReady),
+                "index should recover via background retry");
             Assert.Equal(1, service.Count);
         }
         finally

@@ -140,10 +140,19 @@ public class PlaySongIntentHandler : BaseHandler
 
         Logger.LogDebug("PlaySong: entered, locale={Locale}", locale);
 
-        // JF-419 cold-start: during the warming window the DATABASE is as cold as the
-        // artist index (review round 2: the title-only path runs the same slow queries),
-        // so refuse at entry; JF-419.3 granularizes per-index.
-        Util.ArtistSearch.EnsureIndexReady(_artistIndex);
+        // JF-419.3 per-path gates, both BEFORE the "searching" announcement: a
+        // musician-scoped request resolves the artist first (targeted, bounded
+        // queries) and never touches the song index, so it gates on the ARTIST
+        // index like PlayArtistSongs; a title-only request's fast path IS the song
+        // n-gram index, whose full-catalog cold window outlasts the artist's.
+        if (!string.IsNullOrWhiteSpace(musicianQuery))
+        {
+            Util.IndexWarmingGate.EnsureReady(_artistIndex);
+        }
+        else
+        {
+            Util.IndexWarmingGate.EnsureReady(_songNgramIndex);
+        }
 
         // Escape hatch from the elicitation trap (shared CancelWords helper): while OUR
         // song-name Dialog.ElicitSlot is open, a stop/cancel word gets captured into the

@@ -97,7 +97,7 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
 
         // JF-419.2: the cold-start gate fires before the "searching" progressive
         // response (no announcement then refusal)
-        Util.ArtistSearch.EnsureIndexReady(_artistIndex);
+        Util.IndexWarmingGate.EnsureReady(_artistIndex);
 
         RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
 

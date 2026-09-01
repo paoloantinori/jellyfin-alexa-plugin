@@ -24,7 +24,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// <summary>
 /// JF-419/JF-419.2: the warming gate is two-layered. Layer 1: handlers that run cold
 /// NON-artist queries first (title/album/keyword/mood searches on the same cold
-/// database) call ArtistSearch.EnsureIndexReady at entry, before their "searching"
+/// database) call IndexWarmingGate.EnsureReady at entry, before their "searching"
 /// announcement. Layer 2: ArtistSearch.SearchAsync itself throws
 /// <see cref="SkillWarmingUpException"/>, covering every caller including BaseHandler
 /// fallbacks. The request pipeline translates the throw into the session-ending
@@ -60,7 +60,7 @@ public class SkillWarmingUpTests : PluginTestBase
             "warming-tests");
     }
 
-    private static IntentRequest CreateIntentRequest(string intentName, string? musician = null, string? song = null)
+    private static IntentRequest CreateIntentRequest(string intentName, string? musician = null, string? song = null, string? titleKeywords = null)
     {
         var intent = new Intent { Name = intentName };
         intent.Slots = new Dictionary<string, Slot>();
@@ -74,6 +74,11 @@ public class SkillWarmingUpTests : PluginTestBase
         if (song != null)
         {
             intent.Slots["song"] = new Slot { Name = "song", Value = song };
+        }
+
+        if (titleKeywords != null)
+        {
+            intent.Slots["titleKeywords"] = new Slot { Name = "titleKeywords", Value = titleKeywords };
         }
 
         return new IntentRequest { Intent = intent, Locale = "it-IT", RequestId = "test-req" };
@@ -184,8 +189,9 @@ public class SkillWarmingUpTests : PluginTestBase
     /// <summary>
     /// Review round 2: the handler-to-pipeline seam must ALSO be proven with a REAL
     /// handler, not only the stub (a broad catch added inside a handler would be
-    /// invisible to the stub test). PlaySong has an entry gate, so the throw travels
-    /// the real HandleRequestAsync path into the pipeline catch.
+    /// invisible to the stub test). PlaySong has an entry gate on the song index
+    /// (JF-419.3), so the throw travels the real HandleRequestAsync path into the
+    /// pipeline catch.
     /// </summary>
     [Fact]
     public async Task Pipeline_RealHandlerWarmingIndex_ReturnsWarmingTell()
@@ -193,12 +199,102 @@ public class SkillWarmingUpTests : PluginTestBase
         var handler = new PlaySongIntentHandler(
             _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
             _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory,
-            artistIndex: Mock.Of<IArtistIndex>(i => i.IsReady == false));
-        var request = CreateIntentRequest(IntentNames.PlaySong, musician: "pink floyd");
+            artistIndex: ReadyArtistIndex(),
+            songNgramIndex: Mock.Of<ISongNgramIndex>(i => i.IsReady == false));
+
+        // Title-only request: the path whose fast resource IS the song index
+        var request = CreateIntentRequest(IntentNames.PlaySong, song: "bohemian rhapsody");
 
         SkillResponse response = await ExecuteViaPipelineAsync(handler, request);
 
         AssertWarmingTell(response);
+    }
+
+    /// <summary>
+    /// JF-419.3: FindSong/PlaySong gate on the index their path actually uses (the
+    /// song n-gram index), NOT the artist index. Artist-ready + song-index-warming
+    /// is the real post-restart divergence (the song index loads all Audio items and
+    /// takes longer): the artist gate would pass and the request would fall to the
+    /// cold DB path. These tests need the artist index READY to prove the song gate
+    /// is the one firing.
+    /// </summary>
+    [Fact]
+    public Task FindSong_SongIndexWarmingArtistReady_ThrowsAtEntry()
+        => AssertSongEntryGateFiresAsync(index => new FindSongIntentHandler(
+                _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
+                _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory,
+                artistIndex: ReadyArtistIndex(), songNgramIndex: index),
+            CreateIntentRequest(IntentNames.FindSongIntent, titleKeywords: "cater street"));
+
+    [Fact]
+    public Task PlaySong_SongIndexWarmingArtistReady_ThrowsAtEntry()
+        => AssertSongEntryGateFiresAsync(index => new PlaySongIntentHandler(
+                _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
+                _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory,
+                artistIndex: ReadyArtistIndex(), songNgramIndex: index),
+            CreateIntentRequest(IntentNames.PlaySong, song: "bohemian rhapsody"));
+
+    /// <summary>
+    /// Review round 1 finding 4: a MUSICIAN-scoped PlaySong resolves the artist
+    /// first and never touches the song index, so it gates on the ARTIST index -
+    /// BEFORE the "searching" announcement (no announcement-then-refusal).
+    /// </summary>
+    [Fact]
+    public Task PlaySong_MusicianScoped_ArtistIndexWarming_ThrowsAtEntry()
+    {
+        var handler = new PlaySongIntentHandler(
+            _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
+            _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory,
+            artistIndex: Mock.Of<IArtistIndex>(i => i.IsReady == false),
+            songNgramIndex: Mock.Of<ISongNgramIndex>(i => i.IsReady == true));
+
+        return AssertThrowsWarmingAsync(
+            handler,
+            CreateIntentRequest(IntentNames.PlaySong, musician: "pink floyd", song: "comfortably numb"),
+            "artist");
+    }
+
+    /// <summary>
+    /// Review round 1 finding 1: AddToQueue's song query is an unbounded Audio
+    /// SearchTerm scan; during the post-restart window (artist ready, song index
+    /// still loading) the song gate must refuse it.
+    /// </summary>
+    [Fact]
+    public Task AddToQueue_SongIndexWarmingArtistReady_ThrowsAtEntry()
+    {
+        var handler = new AddToQueueIntentHandler(
+            _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
+            _userManagerMock.Object, _loggerFactory,
+            artistIndex: ReadyArtistIndex(),
+            songNgramIndex: Mock.Of<ISongNgramIndex>(i => i.IsReady == false));
+
+        return AssertThrowsWarmingAsync(
+            handler,
+            CreateIntentRequest(IntentNames.AddToQueue, musician: "pink floyd", song: "shine on you crazy diamond"),
+            "song");
+    }
+
+    private async Task AssertThrowsWarmingAsync(BaseHandler handler, IntentRequest request, string expectedIndexName)
+    {
+        SetupUserMock();
+        var ex = await Assert.ThrowsAsync<SkillWarmingUpException>(() =>
+            handler.HandleAsync(request, TestHelpers.CreateTestContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None));
+        Assert.StartsWith(expectedIndexName, ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static IArtistIndex ReadyArtistIndex()
+        => Mock.Of<IArtistIndex>(i => i.IsReady == true);
+
+    private async Task AssertSongEntryGateFiresAsync(
+        Func<ISongNgramIndex?, BaseHandler> createHandler,
+        IntentRequest request)
+    {
+        BaseHandler handler = createHandler(Mock.Of<ISongNgramIndex>(i => i.IsReady == false));
+        SetupUserMock();
+
+        var ex = await Assert.ThrowsAsync<SkillWarmingUpException>(() =>
+            handler.HandleAsync(request, TestHelpers.CreateTestContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None));
+        Assert.Contains("song", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -215,6 +311,6 @@ public class SkillWarmingUpTests : PluginTestBase
         public override bool CanHandle(Request request) => true;
 
         public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
-            => throw new SkillWarmingUpException();
+            => throw new SkillWarmingUpException("artist");
     }
 }

@@ -23,6 +23,12 @@ public interface IArtistIndex
     bool IsReady { get; }
 
     /// <summary>
+    /// Whether the index gave up after repeated failed loads: treat as absent
+    /// (degrade to database paths) rather than warming.
+    /// </summary>
+    bool IsDisabled { get; }
+
+    /// <summary>
     /// Number of artists in the index.
     /// </summary>
     int Count { get; }

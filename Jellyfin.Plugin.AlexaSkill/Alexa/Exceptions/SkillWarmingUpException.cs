@@ -12,8 +12,13 @@ public sealed class SkillWarmingUpException : Exception
     /// <summary>
     /// Initializes a new instance of the <see cref="SkillWarmingUpException"/> class.
     /// </summary>
-    public SkillWarmingUpException()
-        : base("A required in-memory index is present but still loading (cold start)")
+    /// <param name="indexName">Which index is cold (e.g. "artist", "song n-gram"), for logs.</param>
+    public SkillWarmingUpException(string indexName)
+        : base($"{indexName} index is present but still loading (cold start)")
     {
+        IndexName = indexName;
     }
+
+    /// <summary>Which index is still loading (used by the pipeline log line).</summary>
+    public string IndexName { get; }
 }

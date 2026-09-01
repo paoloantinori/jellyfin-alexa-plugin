@@ -95,10 +95,10 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         Logger.LogDebug("PlayAlbum: entered, locale={Locale}", locale);
 
-        // JF-419 cold-start: during the warming window the DATABASE is as cold as the
-        // artist index (review round 2: the album-only path runs the same slow queries),
-        // so refuse at entry; JF-419.3 granularizes per-index.
-        Util.ArtistSearch.EnsureIndexReady(_artistIndex);
+        // JF-419 cold-start: the album queries hit the same cold database the artist
+        // index loading proxies (deliberately coarse: album paths have no in-memory
+        // index of their own to gate on).
+        Util.IndexWarmingGate.EnsureReady(_artistIndex);
 
         // Escape hatch from the elicitation trap (shared CancelWords helper): while OUR
         // album/musician Dialog.ElicitSlot is open, a stop/cancel word gets captured into

@@ -401,7 +401,7 @@ public class ArtistSearchTests
     /// <summary>
     /// JF-419.2 choke point: the IsReady gate at the top of SearchAsync covers every
     /// ArtistSearch caller; handlers with cold non-artist paths also call
-    /// EnsureIndexReady at entry (two-layer design, see ArtistSearch doc). Thrown,
+    /// EnsureReady at entry (two-layer design, see IndexWarmingGate doc). Thrown,
     /// not returned, so the request pipeline translates it into the SkillWarmingUp Tell.
     /// </summary>
     [Fact]
@@ -416,6 +416,18 @@ public class ArtistSearchTests
                 logger: Logger,
                 dbQuery: NotCalled,
                 cancellationToken: CancellationToken.None));
+    }
+
+    /// <summary>
+    /// Review round 1 finding 2: a DISABLED index (gave up after repeated load
+    /// failures) is treated as absent - the gate passes so callers degrade to their
+    /// database paths instead of an endless warming refusal.
+    /// </summary>
+    [Fact]
+    public void IndexWarmingGate_DisabledIndex_DoesNotThrow()
+    {
+        global::Jellyfin.Plugin.AlexaSkill.Alexa.Util.IndexWarmingGate.EnsureReady(Mock.Of<IArtistIndex>(i => i.IsReady == false && i.IsDisabled == true));
+        global::Jellyfin.Plugin.AlexaSkill.Alexa.Util.IndexWarmingGate.EnsureReady(Mock.Of<ISongNgramIndex>(i => i.IsReady == false && i.IsDisabled == true));
     }
 
     private static Task<IReadOnlyList<BaseItem>> NotCalled(
@@ -439,6 +451,7 @@ public class ArtistSearchTests
         }
 
         public bool IsReady => true;
+        public bool IsDisabled => false;
         public int Count => _artists.Count;
 
         public IReadOnlyList<BaseItem> GetArtists(Guid[]? topParentIds = null) => _artists;

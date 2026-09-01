@@ -142,6 +142,7 @@ public class PlaySongTitleFallbackTests : PluginTestBase
         public FakeNgramIndex(List<(BaseItem Item, double Score)> results) => _results = results;
 
         public bool IsReady => true;
+        public bool IsDisabled => false;
         public int SongCount => _results.Count;
         public int NgramCount => _results.Count;
 

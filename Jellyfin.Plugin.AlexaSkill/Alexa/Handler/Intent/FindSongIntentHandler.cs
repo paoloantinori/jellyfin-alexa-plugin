@@ -176,12 +176,10 @@ public class FindSongIntentHandler : BaseHandler
             }
         }
 
-        // JF-419 cold-start: during the warming window the DATABASE is as cold as the
-        // artist index and the n-gram index cold window coincides (both are startup
-        // hosted services), so the keywords-only DB fallback needs the same refusal.
+        // JF-419.3: this handler's PRIMARY resource is the song n-gram index (the
+        // keywords path); artist paths are covered by the ArtistSearch choke point.
         // Placed AFTER the cancel hatch: an open flow must still cancel during warming.
-        // JF-419.3 granularizes per-index.
-        Util.ArtistSearch.EnsureIndexReady(_artistIndex);
+        Util.IndexWarmingGate.EnsureReady(_songNgramIndex);
 
         // If we have session data and the intent is FindSongIntent, it could be
         // a fresh invocation or a continuation. Check for slot values to distinguish.
@@ -523,9 +521,10 @@ public class FindSongIntentHandler : BaseHandler
                 // DELIBERATELY NOT applying the JF-383 unfiltered retry here (unlike the
                 // artist-scoped path above): without an artist scope, dropping NameContains
                 // means scanning the ENTIRE Audio catalog server-side, the JF-358 shape that
-                // blew the 8s Alexa budget. This site only runs while the n-gram index is
-                // cold (startup), and self-heals once the index loads; the starvation window
-                // is seconds. Do not "fix" it without a bounded candidate source.
+                // blew the 8s Alexa budget. With the JF-419.3 entry gate this site runs
+                // only when the n-gram index is ABSENT (null) or DISABLED (gave up after
+                // repeated load failures); a merely-warming index throws at the gate. Do
+                // not "fix" it without a bounded candidate source.
                 Logger.LogDebug("FindSong: n-gram index miss or unavailable, falling back to DB query");
                 string firstToken = keywordTokens[0];
                 var nameQuery = new InternalItemsQuery

@@ -83,14 +83,16 @@ public class RequestPipeline
             {
                 requestContext.Response = await handler.HandleRequestAsync(skillRequest, context, alexaSession, cancellationToken).ConfigureAwait(false);
             }
-            catch (SkillWarmingUpException)
+            catch (SkillWarmingUpException ex)
             {
-                // JF-419.2: the ArtistSearch choke point threw; this is the single
-                // translation site for every artist-search entry point. Logging and
-                // metrics interceptors still run below; SkipColdLibraryWork keeps
-                // DynamicEntities from riding cold DB queries on the refusal.
+                // JF-419.2/JF-419.3: an index warming gate threw (artist choke point
+                // or song-index entry gate); this is the single translation site for
+                // every entry point. Logging and metrics interceptors still run below;
+                // SkipColdLibraryWork keeps DynamicEntities from riding cold DB
+                // queries on the refusal.
                 _logger.LogInformation(
-                    "Artist index warming: refusing intent={Intent} corr={CorrelationId}",
+                    "{IndexName} index warming: refusing intent={Intent} corr={CorrelationId}",
+                    ex.IndexName,
                     requestContext.IntentName,
                     requestContext.CorrelationId);
                 requestContext.SkipColdLibraryWork = true;

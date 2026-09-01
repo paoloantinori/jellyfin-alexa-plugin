@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -307,14 +308,18 @@ public class PhoneticSongSearchTests : PluginTestBase
         Assert.Empty(results);
     }
 
+    /// <summary>
+    /// JF-419.3 layer-2 choke point: a present-but-cold index throws (a caller must
+    /// not silently treat warming as "no results" and run the cold DB path). The
+    /// disabled-index degrade-to-empty path is covered in SongNgramIndexServiceTests.
+    /// </summary>
     [Fact]
-    public async Task SearchPhonetic_NotReady_ReturnsEmpty()
+    public void SearchPhonetic_NotReady_Throws()
     {
         var service = CreateService();
         // Don't call StartAsync
 
-        var results = service.SearchPhonetic(new[] { "hello" }, "en-US");
-        Assert.Empty(results);
+        Assert.Throws<SkillWarmingUpException>(() => service.SearchPhonetic(new[] { "hello" }, "en-US"));
     }
 
     [Fact]

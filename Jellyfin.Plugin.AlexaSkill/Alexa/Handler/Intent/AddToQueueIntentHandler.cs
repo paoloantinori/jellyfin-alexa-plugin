@@ -29,6 +29,7 @@ public class AddToQueueIntentHandler : BaseHandler
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
     private readonly IArtistIndex? _artistIndex;
+    private readonly ISongNgramIndex? _songNgramIndex;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AddToQueueIntentHandler"/> class.
@@ -39,17 +40,20 @@ public class AddToQueueIntentHandler : BaseHandler
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
     /// <param name="artistIndex">Optional in-memory artist index for fast search.</param>
+    /// <param name="songNgramIndex">Optional in-memory song index (warming gate proxy for the cold song query).</param>
     public AddToQueueIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
         ILoggerFactory loggerFactory,
-        IArtistIndex? artistIndex = null) : base(sessionManager, config, loggerFactory)
+        IArtistIndex? artistIndex = null,
+        ISongNgramIndex? songNgramIndex = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _artistIndex = artistIndex;
+        _songNgramIndex = songNgramIndex;
     }
 
     /// <inheritdoc/>
@@ -80,9 +84,15 @@ public class AddToQueueIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchQueueItem", locale));
         }
 
-        // JF-419 cold-start: the song search hits the same cold database the artist
-        // index loading proxies (review round 2); refuse before the announcement.
-        Util.ArtistSearch.EnsureIndexReady(_artistIndex);
+        // JF-419.3 per-path gates, before the "searching" announcement: the song
+        // query is an unbounded Audio SearchTerm scan, gated on the song index (the
+        // DB-heavy full-catalog load whose cold window it proxies); a named artist
+        // additionally gates on the artist index (targeted path).
+        Util.IndexWarmingGate.EnsureReady(_songNgramIndex);
+        if (!string.IsNullOrWhiteSpace(musicianQuery))
+        {
+            Util.IndexWarmingGate.EnsureReady(_artistIndex);
+        }
 
         RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
 

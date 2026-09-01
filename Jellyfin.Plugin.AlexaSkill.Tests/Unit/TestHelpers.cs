@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
@@ -175,5 +176,22 @@ internal static class TestHelpers
             userManager.Object);
 
         plugin.Configuration.ServerAddress = "http://localhost:8096";
+    }
+
+    /// <summary>
+    /// Polls <paramref name="condition"/> until it returns true or the timeout
+    /// elapses (JF-419.3: shared by the index services' timing tests instead of
+    /// duplicating the deadline/while loop).
+    /// </summary>
+    /// <returns>True when the condition was met before the timeout.</returns>
+    internal static async Task<bool> WaitUntilAsync(Func<bool> condition, TimeSpan? timeout = null, int pollMs = 25)
+    {
+        var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(5));
+        while (!condition() && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(pollMs).ConfigureAwait(false);
+        }
+
+        return condition();
     }
 }
