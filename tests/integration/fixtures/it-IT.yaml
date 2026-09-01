@@ -34,6 +34,12 @@ tests:
     expected_intent: RepeatSingleOnIntent
     expected_slots: {}
 
+  # JF-438: "ripetila" replaces the removed "Suonala ancora" (which collided
+  # with "Suona la ..." artist forms); the Ripeti-family must stay routable.
+  - utterance: "ripetila"
+    expected_intent: RepeatSingleOnIntent
+    expected_slots: {}
+
   # -------------------------------------------------------------------------
   # 4. PlayChannelIntent (channel)
   # -------------------------------------------------------------------------
@@ -580,6 +586,19 @@ tests:
   # The disambiguated form "Suona musica dei queen" is more reliable.
 
   - utterance: "Suona musica dei pink floyd"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  # JF-438 regression guards: the nominative-article and band-carrier forms were
+  # stolen by the RepeatSingle "Suonala ancora" collision (removed from the
+  # template); both must stay on PlayArtistSongsIntent.
+  - utterance: "suona i pink floyd"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "suona la band radiohead"
     expected_intent: PlayArtistSongsIntent
     expected_slots:
       musician: {}

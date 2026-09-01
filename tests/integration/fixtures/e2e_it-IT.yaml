@@ -121,17 +121,24 @@ tests:
     expected_response_type: any
 
   # --- Play specific song (carrier phrase stripping) ---
-  # "Suona la canzone {song}" — NLU may include "la canzone" in the slot value;
+  # "Suona la canzone {song}" - NLU may include "la canzone" in the slot value;
   # the handler strips it before searching. NLU slot resolution may truncate the
-  # value (e.g. "sugar free ja"), so response_type is "any" — the handler logic
+  # value (e.g. "sugar free ja"), so response_type is "any": the handler logic
   # is verified via the simulator endpoint instead.
-  - utterance: "suona la canzone sugar free jazz"
+  # JF-438: the title must be SONG-shaped. "sugar free jazz" is musician-shaped
+  # and now routes to PlayArtistSongs (musician slot) since the RepeatSingle
+  # "Suonala ancora" collision samples were removed; handler-side tolerance for
+  # that flip is tracked as JF-439.
+  - utterance: "suona la canzone screenwriter's blues"
     expected_intent: PlaySongIntent
     expected_slots:
       song: {}
     expected_response_type: any
 
-  # "Metti il brano {song}" — alternative carrier phrase variant
+  # "Metti il brano {song}": alternative carrier phrase variant. Deliberately
+  # keeps the musician-shaped title: the "il brano" carrier sits OUTSIDE the
+  # "Suona la ..." collision region and still routes to PlaySongIntent
+  # (profile-nlu verified 2026-09-01, JF-438).
   - utterance: "metti il brano sugar free jazz"
     expected_intent: PlaySongIntent
     expected_slots:

@@ -75,6 +75,10 @@ explicit_intents:
       - Attiva ripetizione
   RepeatSingleOnIntent:
     samples:
+      # JF-438: the old "Suonalo ancora"/"Suonala ancora" forms collided with the
+      # "Suona la/il ..." prefix region (artist carriers and nominative articles:
+      # profile-nlu routed "suona la band queen" HERE). Repeat-one keeps the
+      # "Ripeti*" family only; do not reintroduce "Suona + clitic" shapes.
       - Ripeti la canzone
       - Ripeti la traccia
       - Ripeti il brano
@@ -84,13 +88,11 @@ explicit_intents:
       - di ripeter il brano
       - di ripeter il video
       - Ripetilo
+      - Ripetila
       - di ripeterlo
+      - di ripeterla
       - riplei
       - replei
-      - Suonalo ancora
-      - di suonarlo ancora
-      - Suonala ancora
-      - di suonarla ancora
   PlayChannelIntent:
     samples:
       - Canale {channel}
