@@ -93,6 +93,10 @@ explicit_intents:
       - di ripeterla
       - riplei
       - replei
+      # Review round (JF-438): restores an "ancora" repeat phrasing without the
+      # "Suona + clitic" prefix that collided with the artist article/carrier region.
+      - Ripeti ancora
+      - di ripetere ancora
   PlayChannelIntent:
     samples:
       - Canale {channel}

@@ -48,7 +48,7 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         _loggerFactory = LoggerFactory.Create(b => { });
     }
 
-    private PlayArtistSongsIntentHandler CreateHandler(IArtistIndex? artistIndex = null)
+    private PlayArtistSongsIntentHandler CreateHandler(IArtistIndex? artistIndex = null, ISongNgramIndex? songNgramIndex = null)
     {
         return new PlayArtistSongsIntentHandler(
             _sessionManagerMock.Object,
@@ -57,7 +57,8 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
             _userManagerMock.Object,
             _userDataManagerMock.Object,
             _loggerFactory,
-            artistIndex);
+            artistIndex,
+            songNgramIndex);
     }
 
     private static IntentRequest CreateIntentRequest(string? musician = null)
@@ -130,6 +131,127 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         Assert.Equal("So What", metadata.Title); // Miles Davis's song, not Miles's
     }
 
+    // --- JF-439: inverse cross-media fallback (artist not-found -> song search) ---
+
+    /// <summary>
+    /// A song index fake returning a fixed scored result set (the n-gram index's
+    /// coverage-gated output shape).
+    /// </summary>
+    private sealed class FakeSongIndex : ISongNgramIndex
+    {
+        private readonly List<(BaseItem Item, double Score)> _results;
+        public bool IsReady => true;
+        public bool IsDisabled => false;
+        public int SongCount => _results.Count;
+        public int NgramCount => _results.Count;
+
+        public FakeSongIndex(params (BaseItem Item, double Score)[] results) => _results = results.ToList();
+
+        public List<(BaseItem Item, double Score)> Search(string[] keywordTokens, string locale, Guid[]? topParentIds = null) => _results;
+        public List<(BaseItem Item, double Score)> SearchPhonetic(string[] keywordTokens, string locale, Guid[]? topParentIds = null) => _results;
+    }
+
+    /// <summary>
+    /// The motivating case: no artist named "sugar free jazz" exists, the musician
+    /// slot carries a multi-word musician-shaped SONG title (NLU coin flip, JF-438),
+    /// the song index has it. Must play the song with the FoundSongInstead
+    /// announcement, not answer NotFoundArtist.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ArtistMiss_MusicianShapedSongTitle_PlaysSongWithAnnouncement()
+    {
+        var noArtists = new List<BaseItem>();
+        _artistIndexMock.Setup(i => i.IsReady).Returns(true);
+        _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(noArtists);
+
+        var song = new Audio { Name = "Sugar Free Jazz", Id = Guid.NewGuid() };
+        var songIndex = new FakeSongIndex((song, 105));
+
+        var handler = CreateHandler(_artistIndexMock.Object, songIndex);
+        var request = CreateIntentRequest(musician: "sugar free jazz");
+        SetupUserMock();
+
+        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.True(response.Response.ShouldEndSession);
+        var play = response.Response.Directives?.FirstOrDefault(d => d.Type == "AudioPlayer.Play");
+        Assert.NotNull(play);
+        var speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Sugar Free Jazz", speech, StringComparison.OrdinalIgnoreCase); // announcement names the song
+    }
+
+    /// <summary>
+    /// Review round: the score bar replaces the word-count guard (a spaceless CJK
+    /// title is one token). A phonetic half-coverage hit ("rolling stones" ~&gt;
+    /// "Like a Rolling Stone", score ~34) must NOT substitute an unrelated song:
+    /// the clean NotFoundArtist stands.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ArtistMiss_LowScoreSongCandidate_KeepsCleanNotFound()
+    {
+        _artistIndexMock.Setup(i => i.IsReady).Returns(true);
+        _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(new List<BaseItem>());
+
+        var song = new Audio { Name = "Like a Rolling Stone", Id = Guid.NewGuid() };
+        var handler = CreateHandler(_artistIndexMock.Object, new FakeSongIndex((song, 34))); // phonetic half-coverage score
+        var request = CreateIntentRequest(musician: "rolling stones");
+        SetupUserMock();
+
+        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+
+        var speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("rolling stones", speech, StringComparison.OrdinalIgnoreCase); // NotFoundArtist wording
+        Assert.Null(response.Response.Directives?.FirstOrDefault(d => d.Type == "AudioPlayer.Play"));
+    }
+
+    /// <summary>
+    /// No artist AND no song match: the clean NotFoundArtist is unchanged.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ArtistMiss_SongMiss_CleanNotFound()
+    {
+        _artistIndexMock.Setup(i => i.IsReady).Returns(true);
+        _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(new List<BaseItem>());
+
+        var handler = CreateHandler(_artistIndexMock.Object, new FakeSongIndex());
+        var request = CreateIntentRequest(musician: "blue marble dreams");
+        SetupUserMock();
+
+        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+
+        var speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("blue marble dreams", speech, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(response.Response.Directives?.FirstOrDefault(d => d.Type == "AudioPlayer.Play"));
+    }
+
+    /// <summary>
+    /// A warming song index must not convert the not-found into a warming Tell: the
+    /// fallback catches the gate's exception and degrades to NotFoundArtist.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ArtistMiss_WarmingSongIndex_CleanNotFound()
+    {
+        _artistIndexMock.Setup(i => i.IsReady).Returns(true);
+        _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(new List<BaseItem>());
+
+        var warming = new Mock<ISongNgramIndex>();
+        warming.Setup(i => i.IsReady).Returns(false);
+        warming.Setup(i => i.IsDisabled).Returns(false);
+        warming.Setup(i => i.Search(It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<Guid[]?>()))
+            .Throws(new SkillWarmingUpException("song n-gram"));
+
+        var handler = CreateHandler(_artistIndexMock.Object, warming.Object);
+        var request = CreateIntentRequest(musician: "sugar free jazz");
+        SetupUserMock();
+
+        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+
+        var speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("sugar free jazz", speech, StringComparison.OrdinalIgnoreCase); // NotFoundArtist, not SkillWarmingUp
+        Assert.Null(response.Response.Directives?.FirstOrDefault(d => d.Type == "AudioPlayer.Play"));
+    }
+
     /// <summary>
     /// JF-420.2: the multi-candidate prompt speaks the interaction the state machine
     /// actually supports (yes plays the first, no cycles to DisambiguateNext): no
@@ -155,7 +277,7 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
 
         Assert.NotNull(response);
         Assert.False(response.Response.ShouldEndSession, "ambiguous case must prompt");
-        var speech = (response.Response.OutputSpeech as PlainTextOutputSpeech)?.Text ?? string.Empty;
+        var speech = TestHelpers.GetSpeechText(response);
         Assert.DoesNotContain("1.", speech, StringComparison.Ordinal); // no numbering
         Assert.DoesNotContain("2.", speech, StringComparison.Ordinal);
         Assert.Contains("Beatles", speech, StringComparison.OrdinalIgnoreCase);

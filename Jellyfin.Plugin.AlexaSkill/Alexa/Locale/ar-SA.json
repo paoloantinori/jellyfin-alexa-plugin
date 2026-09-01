@@ -229,6 +229,7 @@
   "ShowMoreLastPage": "{0} إليك الـ {1} الأولى: {2}.",
   "QueryRecentlyAddedPartial": "{0} إليك الـ {1} الأولى: {2}.",
   "FoundArtistInstead": "وجدت الفنان {0}. إليك موسيقى {0}.",
+  "FoundSongInstead": "وجدت الأغنية {0}. إليكها.",
   "FoundAlbumInstead": "وجدت الألبوم {0}.",
   "FindSongPromptKeywords": "What words do you remember from the title?",
   "FindSongPromptArtist": "Who is the artist?",

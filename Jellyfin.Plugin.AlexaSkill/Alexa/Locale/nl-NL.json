@@ -229,6 +229,7 @@
   "ShowMoreLastPage": "{0} Hier zijn de eerste {1}: {2}.",
   "QueryRecentlyAddedPartial": "{0} Hier zijn de eerste {1}: {2}.",
   "FoundArtistInstead": "Ik heb de artiest {0} gevonden. Hier is muziek van {0}.",
+  "FoundSongInstead": "Ik heb het nummer {0} gevonden. Hier is het.",
   "FoundAlbumInstead": "Ik heb het album {0} gevonden.",
   "FindSongPromptKeywords": "What words do you remember from the title?",
   "FindSongPromptArtist": "Who is the artist?",

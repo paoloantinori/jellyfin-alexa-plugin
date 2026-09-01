@@ -10,6 +10,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
@@ -22,6 +23,7 @@ using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
+using JellyfinUser = Jellyfin.Database.Implementations.Entities.User;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
@@ -115,6 +117,16 @@ public class PlayArtistSongsIntentHandler : BaseHandler
     private readonly IUserDataManager _userDataManager;
     private readonly DeviceQueueManager? _queueManager;
     private readonly IArtistIndex? _artistIndex;
+    private readonly ISongNgramIndex? _songNgramIndex;
+
+    /// <summary>
+    /// JF-439: minimum KeywordMatcher score for the inverse cross-media song
+    /// fallback to auto-play (exact coverage scores ~105; the phonetic stage's
+    /// half-coverage hits land at ~34 and must stay under the bar). The forward
+    /// mirror BaseHandler.TryEntityFallbackAsync gates at 85 for the same reason:
+    /// a wrong substitution is worse than a clean not-found.
+    /// </summary>
+    private const double CrossMediaSongThreshold = 80.0;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PlayArtistSongsIntentHandler"/> class.
@@ -126,6 +138,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
     /// <param name="userDataManager">Instance of the <see cref="IUserDataManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
     /// <param name="artistIndex">Optional in-memory artist index for fast search.</param>
+    /// <param name="songNgramIndex">Optional in-memory song index for the JF-439 artist-not-found song fallback.</param>
     /// <param name="queueManager">Optional per-device queue manager for crash recovery.</param>
     public PlayArtistSongsIntentHandler(
         ISessionManager sessionManager,
@@ -135,12 +148,14 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         IUserDataManager userDataManager,
         ILoggerFactory loggerFactory,
         IArtistIndex? artistIndex = null,
+        ISongNgramIndex? songNgramIndex = null,
         DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _userDataManager = userDataManager;
         _artistIndex = artistIndex;
+        _songNgramIndex = songNgramIndex;
         _queueManager = queueManager;
     }
 
@@ -425,6 +440,21 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         if (artists.Count == 0)
         {
             Logger.LogDebug("PlayArtistSongs: no artist found for query='{Query}'", musician);
+
+            // JF-439 inverse cross-media fallback: the NLU coin-flips musician-shaped
+            // song titles ("suona la canzone sugar free jazz" -> musician="sugar free
+            // jazz") into this intent when the RepeatSingle collision region resolves
+            // to the artist reading. Before giving up, try the song index and serve
+            // the song with a FoundSongInstead announcement. Returns null when the
+            // fallback does not apply (guard/miss/warming), leaving the clean
+            // NotFoundArtist below.
+            SkillResponse? songFallback = TrySongFallback(
+                musician, user, session, context, locale, cancellationToken);
+            if (songFallback != null)
+            {
+                return songFallback;
+            }
+
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundArtist", locale, musician));
         }
 
@@ -698,6 +728,96 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             "PlayArtistSongs: returning AudioPlayer, itemId={ItemId}, startIndex={StartIndex}, queueSize={QueueSize}, offset=0",
             itemId, startIndex, queueItems.Count);
         return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, artistsItems[0], user, context, announceLocale: locale);
+    }
+
+    /// <summary>
+    /// JF-439 inverse cross-media fallback: no artist matched, so try the song index
+    /// with the musician value (the NLU feeds musician-shaped song titles here when
+    /// the "Suona la canzone {song}" / "Suona la {musician}" coin flip resolves to
+    /// the artist reading). Serves the best song with a FoundSongInstead
+    /// announcement; returns null (caller falls through to the clean NotFoundArtist)
+    /// when the index is absent/warming (opportunistic enrichment must never worsen
+    /// the not-found path), no song passes the keyword-coverage gates, or the best
+    /// score sits below <see cref="CrossMediaSongThreshold"/> (review round: a
+    /// phonetic half-coverage hit at ~34 must not substitute an unrelated song for
+    /// a clean not-found; the forward mirror TryEntityFallbackAsync gates at 85).
+    /// No word-count guard BY DESIGN (review round): a spaceless CJK title
+    /// tokenizes to one token, so a minimum-token guard would permanently disable
+    /// the fallback for ja-JP; the score bar carries the precision burden instead.
+    /// </summary>
+    private SkillResponse? TrySongFallback(
+        string musician,
+        Entities.User user,
+        SessionInfo session,
+        Context context,
+        string locale,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (_songNgramIndex == null)
+        {
+            return null;
+        }
+
+        var keywordTokens = Util.KeywordMatcher.Tokenize(musician, locale);
+        if (keywordTokens.Length == 0)
+        {
+            return null;
+        }
+
+        // The index's topParentMap holds parent-chain ROOT ids; GetAllowedLibraryIds
+        // returns CONFIGURED collection-folder ids. Resolve through the same walk the
+        // artist paths use, or every candidate is filtered out for library-restricted
+        // users and the fallback silently no-ops (review round, verified live).
+        Guid[]? allowedLibraryIds = GetAllowedLibraryIds(user);
+        Guid[]? topParentIds = allowedLibraryIds != null
+            ? Util.LibraryFilter.ResolveTopParentIds(allowedLibraryIds, _libraryManager, Logger)
+            : null;
+
+        List<(BaseItem Item, double Score)> scored;
+        try
+        {
+            scored = _songNgramIndex.Search(keywordTokens, locale, topParentIds);
+            if (scored.Count == 0 && _config.PhoneticSongSearchEnabled)
+            {
+                scored = _songNgramIndex.SearchPhonetic(keywordTokens, locale, topParentIds);
+            }
+        }
+        catch (SkillWarmingUpException)
+        {
+            // The warming gate's refusal answers the ORIGINAL artist request; this
+            // opportunistic fallback must not convert a not-found into a warming Tell.
+            Logger.LogDebug("PlayArtistSongs: song fallback skipped, song index warming");
+            return null;
+        }
+
+        if (scored.Count == 0 || scored[0].Score < CrossMediaSongThreshold)
+        {
+            Logger.LogDebug(
+                "PlayArtistSongs: song fallback rejected for query='{Query}' (best score {Score:F0} over {Count} candidates, bar={Bar})",
+                musician, scored.Count > 0 ? scored[0].Score : 0, scored.Count, CrossMediaSongThreshold);
+            return null;
+        }
+
+        BaseItem song = scored[0].Item;
+        Logger.LogInformation(
+            "PlayArtistSongs: song fallback found '{SongName}' itemId={ItemId} (score={Score:F0}) for query='{Query}' (JF-439)",
+            song.Name, song.Id, scored[0].Score, musician);
+
+        // One-song queue: same session bookkeeping as the sibling single-song play
+        // paths (FindSong/YesIntent), which deliberately skip crash-recovery
+        // persistence; the stale-continuation risk of a one-song queue replacing a
+        // progressive artist queue is closed by dropping the stored continuation.
+        session.NowPlayingQueue = new List<QueueItem> { new() { Id = song.Id } };
+        session.FullNowPlayingItem = song;
+        QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID);
+
+        string itemId = song.Id.ToString();
+        SkillResponse response = BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, song, user, context, announceLocale: locale);
+        response.Response.OutputSpeech = new PlainTextOutputSpeech { Text = ResponseStrings.Get("FoundSongInstead", locale, song.Name) };
+        return response;
     }
 
     /// <summary>
