@@ -6,7 +6,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-08-31 15:02'
-updated_date: '2026-09-01 11:52'
+updated_date: '2026-09-01 11:55'
 labels:
   - code-review
   - resource-limit
@@ -40,6 +40,8 @@ FIX SHAPE: detect a capacity change against the semaphore's ORIGINAL/max capacit
 
 <!-- SECTION:NOTES:BEGIN -->
 2026-09-01 audit of untracked review recommendations: the dead holdGateUntilExit parameter (flagged in the 2026-08-31 pass-1 and pass-3 cut lists, survived the JF-428 rewire, verified still unreachable: callers at :227/:403/:707 all pass true) is added as an AC here since it lives in the same method this task fixes.
+
+2026-09-01 DEPLOYED in the same bundle (DLL cfc36d8). Gate behavior not directly observable from the simulator (it binds during concurrent encodes); unit-proven. Boot clean, no gate-related warnings.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
