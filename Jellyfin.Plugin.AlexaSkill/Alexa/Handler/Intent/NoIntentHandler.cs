@@ -89,8 +89,8 @@ public class NoIntentHandler : BaseHandler
         // for a song/album that wasn't found and we offered an artist instead), a "no" must
         // decline to the clean song/album not-found, not the generic "no more matches".
         if (sessionAttributes != null
-            && sessionAttributes.TryGetValue("crossmedia_notfound_query", out var queryObj)
-            && sessionAttributes.TryGetValue("crossmedia_notfound_type", out var typeObj)
+            && sessionAttributes.TryGetValue(DisambiguationHelper.AttrCrossmediaQuery, out var queryObj)
+            && sessionAttributes.TryGetValue(DisambiguationHelper.AttrCrossmediaType, out var typeObj)
             && queryObj is string notFoundQuery
             && typeObj is string notFoundType)
         {

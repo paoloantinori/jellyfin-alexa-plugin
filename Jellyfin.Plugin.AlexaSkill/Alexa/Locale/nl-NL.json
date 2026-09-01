@@ -57,7 +57,7 @@
   "SearchingMedia": "Zoeken naar je muziek...",
   "DisambiguatePrompt": "Ik heb meerdere resultaten gevonden. Wil je {0} horen?",
   "DisambiguateNext": "Wat vind je van {0}?",
-  "DisambiguateMultipleArtists": "Ik heb meerdere artiesten gevonden: {0}. Welke?",
+  "DisambiguateMultipleArtists": "Ik heb meerdere artiesten gevonden: {0}. Zal ik de eerste afspelen? Zeg nee voor de volgende.",
   "DisambiguatePromptSsml": "Ik heb meerdere resultaten gevonden.<break time=\"200ms\"/>Wil je <emphasis level=\"moderate\">{0}</emphasis> horen?",
   "DisambiguateNextSsml": "Wat vind je van <break time=\"150ms\"/><emphasis level=\"moderate\">{0}</emphasis>?",
   "NoMoreMatches": "Sorry, er zijn geen andere resultaten.",

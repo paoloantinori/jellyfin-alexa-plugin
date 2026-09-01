@@ -1550,13 +1550,13 @@ public abstract class BaseHandler
 
         response.SessionAttributes = new Dictionary<string, object>
         {
-            ["disambig_matches"] = Newtonsoft.Json.JsonConvert.SerializeObject(matchInfos),
-            ["disambig_index"] = 0,
-            ["disambig_type"] = DisambiguationHelper.MediaTypeArtist,
+            [DisambiguationHelper.AttrMatches] = Newtonsoft.Json.JsonConvert.SerializeObject(matchInfos),
+            [DisambiguationHelper.AttrIndex] = 0,
+            [DisambiguationHelper.AttrType] = DisambiguationHelper.MediaTypeArtist,
             // JF-363: carry the original not-found request so NoIntentHandler can decline to
             // the right "song/album not found" instead of the generic "no more matches".
-            ["crossmedia_notfound_query"] = query,
-            ["crossmedia_notfound_type"] = notFoundMediaType
+            [DisambiguationHelper.AttrCrossmediaQuery] = query,
+            [DisambiguationHelper.AttrCrossmediaType] = notFoundMediaType
         };
 
         // JF-398: activating the cross-media artist offer (a disambiguation flavor)
@@ -1724,9 +1724,9 @@ public abstract class BaseHandler
         var matchInfos = matches.Select(m => new DisambiguationHelper.MatchInfo { Id = m.Id.ToString(), Name = m.Name }).ToList();
         response.SessionAttributes = new Dictionary<string, object>
         {
-            ["disambig_matches"] = Newtonsoft.Json.JsonConvert.SerializeObject(matchInfos),
-            ["disambig_index"] = 0,
-            ["disambig_type"] = mediaType
+            [DisambiguationHelper.AttrMatches] = Newtonsoft.Json.JsonConvert.SerializeObject(matchInfos),
+            [DisambiguationHelper.AttrIndex] = 0,
+            [DisambiguationHelper.AttrType] = mediaType
         };
 
         // JF-398: activating the disambiguation flow supersedes any other flow's state.

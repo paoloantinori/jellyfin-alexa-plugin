@@ -520,20 +520,26 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                         Logger.LogInformation(
                             "PlayArtistSongs: containment match '{Containment}' (fair {ContainmentFair:F0}) vs full-name alternative '{Alternative}' (fair {AlternativeFair:F0}) is ambiguous, disambiguating (JF-420)",
                             artists[0].Name, containmentFair, bestAlternative.Name, bestAlternativeFair);
-                        var disambigMatches = new List<(Guid Id, string Name, string? ArtUrl)>
+                        // JF-420.2: Id/Name only, because this branch renders no art (the
+                        // only ArtUrl consumer is AskFirstMatch's carousel) and embedding
+                        // token-bearing image URLs in session state nothing reads was
+                        // pure risk.
+                        var matchInfos = new List<DisambiguationHelper.MatchInfo>
                         {
-                            (artists[0].Id, artists[0].Name, GetImageUrl(artists[0].Id.ToString("N"), user)),
-                            (bestAlternative.Id, bestAlternative.Name, GetImageUrl(bestAlternative.Id.ToString("N"), user))
+                            new() { Id = artists[0].Id.ToString(), Name = artists[0].Name },
+                            new() { Id = bestAlternative.Id.ToString(), Name = bestAlternative.Name }
                         };
-                        var matchInfos = disambigMatches.Select(m => new DisambiguationHelper.MatchInfo { Id = m.Id.ToString(), Name = m.Name, ArtUrl = m.ArtUrl }).ToList();
-                        var matchList = string.Join(", ", disambigMatches.Select((m, i) => $"{i + 1}. {m.Name}"));
+                        // Plain name list: the flow is yes/no cycling (yes plays the
+                        // first, no advances via DisambiguateNext), so no numbering.
+                        // Reprompt is the family's yes/no hint, not the list again.
+                        var matchList = string.Join(", ", matchInfos.Select(m => m.Name));
                         string multiPrompt = ResponseStrings.Get("DisambiguateMultipleArtists", locale, matchList);
-                        var multiResponse = ResponseBuilder.Ask(multiPrompt, new Reprompt(multiPrompt));
+                        var multiResponse = ResponseBuilder.Ask(multiPrompt, new Reprompt(ResponseStrings.Get("DisambiguateReprompt", locale)));
                         multiResponse.SessionAttributes = new Dictionary<string, object>
                         {
-                            ["disambig_matches"] = Newtonsoft.Json.JsonConvert.SerializeObject(matchInfos),
-                            ["disambig_index"] = 0,
-                            ["disambig_type"] = DisambiguationHelper.MediaTypeArtist
+                            [DisambiguationHelper.AttrMatches] = Newtonsoft.Json.JsonConvert.SerializeObject(matchInfos),
+                            [DisambiguationHelper.AttrIndex] = 0,
+                            [DisambiguationHelper.AttrType] = DisambiguationHelper.MediaTypeArtist
                         };
                         Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.ConversationalFlows.MarkOthersInactive(
                             multiResponse, Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.ConversationalFlows.DisambiguationKeys);

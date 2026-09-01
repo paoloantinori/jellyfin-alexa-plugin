@@ -58,7 +58,7 @@
   "SearchingMedia": "Recherche de votre musique en cours...",
   "DisambiguatePrompt": "J'ai trouvé plusieurs résultats. Voulez-vous écouter {0} ?",
   "DisambiguateNext": "Que pensez-vous de {0} ?",
-  "DisambiguateMultipleArtists": "J'ai trouvé plusieurs artistes : {0}. Lequel ?",
+  "DisambiguateMultipleArtists": "J'ai trouvé plusieurs artistes : {0}. Voulez-vous le premier ? Dites non pour le suivant.",
   "DisambiguatePromptSsml": "J'ai trouvé plusieurs résultats.<break time=\"200ms\"/>Voulez-vous écouter <emphasis level=\"moderate\">{0}</emphasis> ?",
   "DisambiguateNextSsml": "Que pensez-vous de <break time=\"150ms\"/><emphasis level=\"moderate\">{0}</emphasis> ?",
   "NoMoreMatches": "Désolé, il n'y a plus d'autres résultats.",

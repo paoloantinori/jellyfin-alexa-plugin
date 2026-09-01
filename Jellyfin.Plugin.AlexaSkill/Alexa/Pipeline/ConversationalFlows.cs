@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Alexa.NET.Response;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 
@@ -34,7 +35,7 @@ public static class ConversationalFlows
     {
         Handler.DisambiguationHelper.AttrMatches, Handler.DisambiguationHelper.AttrIndex,
         Handler.DisambiguationHelper.AttrType,
-        "crossmedia_notfound_query", "crossmedia_notfound_type"
+        DisambiguationHelper.AttrCrossmediaQuery, DisambiguationHelper.AttrCrossmediaType
     };
 
     private static readonly string[] AllFlowKeys = FindSongKeys

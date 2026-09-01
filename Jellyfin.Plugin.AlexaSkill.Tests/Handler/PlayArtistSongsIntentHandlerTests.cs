@@ -131,6 +131,41 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
     }
 
     /// <summary>
+    /// JF-420.2: the multi-candidate prompt speaks the interaction the state machine
+    /// actually supports (yes plays the first, no cycles to DisambiguateNext): no
+    /// numbered list inviting a numeric answer nothing consumes, and the session
+    /// attributes are written through DisambiguationHelper's constants.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_MultiCandidatePrompt_SpeaksYesNoContractWithoutNumbering()
+    {
+        var beatles = new MusicArtist { Name = "Beatles", Id = Guid.NewGuid() };
+        var live = new MusicArtist { Name = "Live", Id = Guid.NewGuid() };
+        var allArtists = new List<BaseItem> { beatles, live };
+
+        _artistIndexMock.Setup(i => i.IsReady).Returns(true);
+        _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(allArtists);
+        SetupSongResult(new Audio { Name = "Yesterday", Id = Guid.NewGuid() });
+
+        var handler = CreateHandler(_artistIndexMock.Object);
+        var request = CreateIntentRequest(musician: "beatles live");
+        SetupUserMock();
+
+        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.False(response.Response.ShouldEndSession, "ambiguous case must prompt");
+        var speech = (response.Response.OutputSpeech as PlainTextOutputSpeech)?.Text ?? string.Empty;
+        Assert.DoesNotContain("1.", speech, StringComparison.Ordinal); // no numbering
+        Assert.DoesNotContain("2.", speech, StringComparison.Ordinal);
+        Assert.Contains("Beatles", speech, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Live", speech, StringComparison.OrdinalIgnoreCase);
+        Assert.NotNull(response.SessionAttributes);
+        Assert.True(response.SessionAttributes.ContainsKey(DisambiguationHelper.AttrMatches));
+        Assert.Equal(0, response.SessionAttributes[DisambiguationHelper.AttrIndex]);
+    }
+
+    /// <summary>
     /// JF-420.3 review round 2 (early-exit masking): the gate must rank ALL
     /// alternatives by fair score. FindBestMatchWithScore returned on the FIRST
     /// candidate reaching 90, so a containment-exempt 'Floyd' earlier in index order

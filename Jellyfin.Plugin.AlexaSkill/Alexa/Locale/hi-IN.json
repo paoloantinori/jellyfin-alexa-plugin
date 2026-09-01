@@ -57,7 +57,7 @@
   "SearchingMedia": "आपका संगीत खोज रहा हूँ...",
   "DisambiguatePrompt": "मुझे कई परिणाम मिले। क्या आप {0} सुनना चाहेंगे?",
   "DisambiguateNext": "{0} कैसा रहेगा?",
-  "DisambiguateMultipleArtists": "मुझे कई कलाकार मिले: {0}। कौन सा?",
+  "DisambiguateMultipleArtists": "मुझे कई कलाकार मिले: {0}। क्या मैं पहले कलाकार को चलाऊं? अगले के लिए ना कहें।",
   "DisambiguatePromptSsml": "मुझे कई परिणाम मिले।<break time=\"200ms\"/>क्या आप <emphasis level=\"moderate\">{0}</emphasis> सुनना चाहेंगे?",
   "DisambiguateNextSsml": "कैसा रहेगा <break time=\"150ms\"/><emphasis level=\"moderate\">{0}</emphasis>?",
   "NoMoreMatches": "क्षमा करें, कोई और परिणाम नहीं हैं।",

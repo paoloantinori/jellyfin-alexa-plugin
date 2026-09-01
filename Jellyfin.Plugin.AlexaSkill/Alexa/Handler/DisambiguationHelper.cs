@@ -22,6 +22,15 @@ internal static class DisambiguationHelper
     internal const string AttrIndex = "disambig_index";
     internal const string AttrType = "disambig_type";
 
+    /// <summary>
+    /// JF-363 cross-media decline keys: carry the original not-found request so
+    /// NoIntentHandler can decline to the right "song/album not found" instead of
+    /// the generic "no more matches" (single definition: writer BaseHandler,
+    /// reader NoIntentHandler, flow-registry ConversationalFlows).
+    /// </summary>
+    internal const string AttrCrossmediaQuery = "crossmedia_notfound_query";
+    internal const string AttrCrossmediaType = "crossmedia_notfound_type";
+
     public const string MediaTypeSong = "song";
     public const string MediaTypeAlbum = "album";
     public const string MediaTypeArtist = "artist";
