@@ -3,11 +3,11 @@ id: JF-419
 title: >-
   Cold-start artist index: skill times out on first request after DLL deploy —
   communicate warming state to user
-status: In Progress
+status: Done
 assignee:
   - zai
 created_date: '2026-08-31 06:04'
-updated_date: '2026-08-31 06:06'
+updated_date: '2026-09-01 05:59'
 labels: []
 dependencies: []
 priority: high
@@ -32,6 +32,21 @@ The user gets an unhelpful error and doesn't know the skill is still starting up
 - [ ] #5 ResponseStrings key added to all 17 locales
 - [ ] #6 Unit tests: handler responds with the cold-start message when artistIndex.IsReady is false
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+JF-419 (parent) closed: the post-deploy cold-start window no longer risks INVALID_RESPONSE on any search path.
+
+All three subtasks landed with gates:
+- JF-419.1 (36f11af): ArtistIndexService self-recovers from a failed startup load (one-shot re-arming retry timer, disarm on success, hardened dispose ordering).
+- JF-419.2 (e14b0cc): the warming gate became a two-layer mechanism - per-handler entry guards where the primary path queries the cold DB + the ArtistSearch choke point throwing SkillWarmingUpException, translated once in the request pipeline (covers controller FindSong-session route, handler loop, SimulatorController). All 10 entry points covered; metrics/logging interceptors preserved via SkipColdLibraryWork.
+- JF-419.3 (0e14aec): gates are per-index (artist vs song n-gram, per request path), both index services share the hardened DebouncedLibraryIndexService lifecycle (debounce + retry + dispose ordering), a give-up path prevents an endless warming refusal when an index load persistently fails (degrade to bounded DB paths, self-re-enable on a later successful refresh), and the song index has its own layer-2 choke point.
+
+Live-verified post-deploy (JF-419.2 bundle, DLL b79870d9): warming refusals log with intent+correlation, normal operation identical when ready. The JF-419.3 bundle ships on the next deploy.
+
+Deployed state: JF-419.2 live on minix; JF-419.3 pending next deploy.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
