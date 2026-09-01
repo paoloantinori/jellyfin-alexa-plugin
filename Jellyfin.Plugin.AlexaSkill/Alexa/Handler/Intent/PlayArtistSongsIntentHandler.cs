@@ -121,12 +121,17 @@ public class PlayArtistSongsIntentHandler : BaseHandler
 
     /// <summary>
     /// JF-439: minimum KeywordMatcher score for the inverse cross-media song
-    /// fallback to auto-play (exact coverage scores ~105; the phonetic stage's
-    /// half-coverage hits land at ~34 and must stay under the bar). The forward
-    /// mirror BaseHandler.TryEntityFallbackAsync gates at 85 for the same reason:
-    /// a wrong substitution is worse than a clean not-found.
+    /// fallback to auto-play. Live calibration (minix, 12766 songs): the WRONG
+    /// half-coverage phonetic hit ('rolling stones' -> 'Like a Rolling Stone')
+    /// scores ~34; the RIGHT near-full phonetic match ('screenwriters blues' ->
+    /// 'Screenwriter's Blues', apostrophe/plural drift) scores ~72; exact full
+    /// coverage scores ~105. The bar at 65 keeps 31 points of rejection margin
+    /// over the wrong-substitution class and 7 over the legitimate phonetic class.
+    /// The forward mirror BaseHandler.TryEntityFallbackAsync gates its fuzzy
+    /// scores at 85 for the same reason: a wrong substitution is worse than a
+    /// clean not-found (the scales differ, so the bars are not shared).
     /// </summary>
-    private const double CrossMediaSongThreshold = 80.0;
+    private const double CrossMediaSongThreshold = 65.0;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PlayArtistSongsIntentHandler"/> class.
