@@ -8,7 +8,7 @@ status: Done
 assignee:
   - zai
 created_date: '2026-09-01 12:47'
-updated_date: '2026-09-01 16:10'
+updated_date: '2026-09-01 16:12'
 labels:
   - nlu
   - it-IT
@@ -49,6 +49,8 @@ Handler layer fully green in the same run: simulator suite 8/8, E2E 54/56 includ
 2026-09-01 diagnosis correction (recorded for the method): the AC#2 'catalog competition' hypothesis was WRONG for failure #1 (queen/beatles have no album namesakes and failed identically) and the 'built-in steal' framing was wrong for #2 (RepeatSingleOnIntent is a custom intent in our model). The real single root cause was the internal sample collision. The boundary-probe step (same shape, different artists) is what falsified both hypotheses before any fix was written.
 
 WATCH item: 'riproduci album jazz cafe' E2E failed twice post-redeploy while passing pre-redeploy; profile-nlu shows 4x PlayAlbumIntent considered with none selected, siblings (dark side of the moon, thriller) route fine, catalog synced 10:38 (skip-12h at 13:53). Matches the documented catalog-propagation flakiness class. If it still fails after 2026-09-02, file a catalog-binding task (the model rebuild at 14:0x may have reset the model-catalog binding promotion).
+
+2026-09-01 consistency deploy: the minix DLL embedded the OLD it-IT model, so a config-page 'Rebuild models' would have reverted the SMAPI fix. Rebuilt + hot-swapped (DLL 26ec1ff, config 1 user survived, MD5 match, boot clean, sanity matrix green: Soul Coughing plays, song carrier plays). Repo model == SMAPI model == embedded model now.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
