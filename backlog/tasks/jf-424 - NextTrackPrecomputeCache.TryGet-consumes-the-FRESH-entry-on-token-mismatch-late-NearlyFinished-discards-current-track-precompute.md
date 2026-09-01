@@ -3,9 +3,11 @@ id: JF-424
 title: >-
   NextTrackPrecomputeCache.TryGet consumes the FRESH entry on token mismatch
   (late NearlyFinished discards current-track precompute)
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - zai
 created_date: '2026-08-31 15:02'
+updated_date: '2026-09-01 20:55'
 labels:
   - code-review
   - playback

@@ -3,10 +3,11 @@ id: JF-427
 title: >-
   Indefinite album-by-artist plays an arbitrary release: query has no OrderBy
   ('un disco di X' can pick a live album or single, changes after rescan)
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - zai
 created_date: '2026-08-31 17:20'
-updated_date: '2026-08-31 19:32'
+updated_date: '2026-09-01 21:00'
 labels:
   - code-review
   - playback-quality

@@ -3,9 +3,11 @@ id: JF-434
 title: >-
   Two Exceptions directories (legacy Exceptions/ + Alexa/Exceptions/):
   consolidate into the documented one
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - zai
 created_date: '2026-09-01 06:07'
+updated_date: '2026-09-01 21:00'
 labels:
   - cleanup
   - conventions
@@ -24,22 +26,35 @@ Trivial convention cleanup flagged by the JF-419.2 angle-D reuse review (2026-08
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 JsonParsingException moves under Alexa/Exceptions/ (namespace Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions), its single throw site (Util.cs) and any usings updated
-- [ ] #2 The old Exceptions/ directory is gone; CLAUDE.md's documented layout (Alexa/Exceptions/) becomes the single truth
-- [ ] #3 grep confirms one Exceptions namespace remains project-wide
+- [x] #1 JsonParsingException moves under Alexa/Exceptions/ (namespace Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions), its single throw site (Util.cs) and any usings updated
+- [x] #2 The old Exceptions/ directory is gone; CLAUDE.md's documented layout (Alexa/Exceptions/) becomes the single truth
+- [x] #3 grep confirms one Exceptions namespace remains project-wide
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+JF-434: one Exceptions directory, the documented one.
+
+WHAT CHANGED (commit 47594e8)
+- JsonParsingException.cs moved (git mv, history preserved) from the legacy Jellyfin.Plugin.AlexaSkill/Exceptions/ to Alexa/Exceptions/, namespace updated to Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions; the single consumer's using (Util.cs) updated, StyleCop order preserved. Old directory gone; solution-wide grep confirms one Exceptions namespace matching the CLAUDE.md layout.
+
+VERIFICATION
+- Build 0 warnings/0 errors (warnaserror on); unit suite 2812/2812.
+- Gates: gate-exempt by the trivial-fix rule (semantic diff = 2 lines: one namespace, one using); the same code-review run that covered JF-435 swept the move and reported zero findings on it.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining
-- [ ] #11 or findings applied/tracked)
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [x] #6 NLU test fixtures updated if interaction model changed
+- [x] #7 E2E test added for new intent or handler logic
+- [x] #8 Locale response strings added to all 17 locales
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining
+- [x] #11 or findings applied/tracked)
 <!-- DOD:END -->
