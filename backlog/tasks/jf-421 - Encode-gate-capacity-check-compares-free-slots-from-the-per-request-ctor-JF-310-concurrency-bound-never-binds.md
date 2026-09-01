@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-08-31 15:02'
+updated_date: '2026-09-01 06:07'
 labels:
   - code-review
   - resource-limit
@@ -32,7 +33,14 @@ FIX SHAPE: detect a capacity change against the semaphore's ORIGINAL/max capacit
 - [ ] #2 Concurrent encodes are actually bounded: with cap N, at most N ffmpeg encodes run concurrently (unit test with fake encode tasks)
 - [ ] #3 Lowering the cap while a slot is held takes effect for NEW acquisitions (documented/labeled behavior if full enforcement waits for release)
 - [ ] #4 Regression: JF-310's original concurrency purpose still holds (no unbounded encode path)
+- [ ] #5 Remove the dead holdGateUntilExit parameter and its never-taken branch in StartFfmpegProcessGatedAsync (all 3 callers pass true since the faststart remux stopped using this method; the 2026-09-01 audit confirmed the branch is unreachable) - same method this task reworks, so land together
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-01 audit of untracked review recommendations: the dead holdGateUntilExit parameter (flagged in the 2026-08-31 pass-1 and pass-3 cut lists, survived the JF-428 rewire, verified still unreachable: callers at :227/:403/:707 all pass true) is added as an AC here since it lives in the same method this task fixes.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
