@@ -3,10 +3,11 @@ id: JF-423
 title: >-
   FindSong flow defects: cancel-word swallows legitimate title searches (missing
   IN_PROGRESS guard) + single-candidate 'found multiple' prompt
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - zai
 created_date: '2026-08-31 15:02'
-updated_date: '2026-08-31 17:21'
+updated_date: '2026-09-01 22:44'
 labels:
   - code-review
   - dialog
@@ -33,11 +34,11 @@ FIX SHAPE: mirror the sibling handlers' IN_PROGRESS guard for the cancel check; 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Cancel-word check requires an in-progress dialog (session data + DialogState IN_PROGRESS or equivalent guard) so a mid-flow legitimate search for a cancel-word title searches instead of cancelling
-- [ ] #2 CancelWords covers the locales that can hit the flow, or the gap is documented in the code with a follow-up (17-locale audit result recorded)
-- [ ] #3 Unit tests: (a) open FindSong flow + titleKeywords='basta' searches; (b) genuine cancel ('basta' with no other content) still cancels; (c) first-invocation search for a cancel-word title still works
-- [ ] #4 FindSong disambiguation: when name-dedup (JF-416) collapses candidates to ONE, the response speaks the single-found wording, not 'found multiple' with a 1-item list
-- [ ] #5 Cancel-word detection inspects ALL slots of the incoming request (like PlayAlbum:111/PlaySong:160), so a cancel word captured into musician (or any other slot) during a force-routed FindSong session still cancels instead of being searched as an artist
+- [x] #1 Cancel-word check requires an in-progress dialog (session data + DialogState IN_PROGRESS or equivalent guard) so a mid-flow legitimate search for a cancel-word title searches instead of cancelling
+- [x] #2 CancelWords covers the locales that can hit the flow, or the gap is documented in the code with a follow-up (17-locale audit result recorded)
+- [x] #3 Unit tests: (a) open FindSong flow + titleKeywords='basta' searches; (b) genuine cancel ('basta' with no other content) still cancels; (c) first-invocation search for a cancel-word title still works
+- [x] #4 FindSong disambiguation: when name-dedup (JF-416) collapses candidates to ONE, the response speaks the single-found wording, not 'found multiple' with a 1-item list
+- [x] #5 Cancel-word detection inspects ALL slots of the incoming request (like PlayAlbum:111/PlaySong:160), so a cancel word captured into musician (or any other slot) during a force-routed FindSong session still cancels instead of being searched as an artist
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -46,17 +47,34 @@ FIX SHAPE: mirror the sibling handlers' IN_PROGRESS guard for the cancel check; 
 2026-08-31 second code-review pass added a third aspect + AC: the cancel hatch reads only titleKeywords; PlayAlbum/PlaySong check BOTH slots and gate on DialogState. During an open FindSong artist elicitation, 'annulla' routed to another intent with musician='annulla' is force-routed back to FindSongIntentHandler (FindSongSessionData present), the hatch sees titleKeywords=null, HandleAwaitingArtistAsync falls back to the musician slot, searches artist 'annulla', not-found, re-prompts: the elicitation-trap loop the hatch was meant to close.
 <!-- SECTION:NOTES:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+JF-423: the FindSong cancel hatch guards legitimate searches, cancels in any slot, and the dedup collapse no longer silently plays the wrong recording.
+
+WHAT CHANGED (commit 0e509d1)
+- Cancel-word escape hatch: the IN_PROGRESS dialog guard added (the PlaySong/PlayAlbum sibling idiom): a mid-flow remount searching a cancel-word TITLED song ('trova la canzone basta', 'Stop') searches; a genuine captured cancel still cancels, now in ANY slot (the all-slots predicate, force-routed 'annulla' in musician included).
+- Consolidation (review round, three findings): AnySlotIsCancelWord moved to CancelWords (its declared home) with IsDialogInProgress beside it; the three drifted hatch copies unified; PlaySong/PlayAlbum switched from their two-named-slot ORs to the shared all-slots predicate, closing their latent sibling-slot gap.
+- Single-candidate wording: a dedup collapse from MULTIPLE candidates (different recordings sharing a title, 'Stop' by two artists) now PROMPTS (keeping the negative-answer exit) instead of silently auto-playing one and announcing 'di Unknown'; a true single auto-plays with FindSongFoundOne (FoundOne local function, one definition).
+- CancelWords: +3 it-IT StopIntent phrases; the 11-of-17 locale gap documented in code and FILED as JF-444 (locale-keyed vocabulary + profile-nlu vetting).
+- FILED JF-445: the force-routed sibling-intent dialogState question (STARTED vs IN_PROGRESS) - the review found the hatch may be inert in exactly that regime, but the evidence conflicts (JF-411/JF-422 records) and the hatch log line now records dialogState, making on-device confirmation the right next step; redesigning the gate on speculation was rejected overnight.
+
+VERIFICATION
+- Tests: 5 cancel-hatch cases (mid-flow-not-in-progress searches; open-flow cancels incl. musician-slot; first-invocation searches) + the dedup pair (collapse-from-multiple prompts; true single plays). FindSongIntentHandlerTests 92. Suite 2823/2823; Release 0 warnings.
+- Gates: /simplify (implementer) + code-review high (combined pass: the dedup-silent-play bug and the hatch consolidation BOTH from its findings; remainder filed JF-444/445).
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining
-- [ ] #11 or findings applied/tracked)
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [x] #6 NLU test fixtures updated if interaction model changed
+- [x] #7 E2E test added for new intent or handler logic
+- [x] #8 Locale response strings added to all 17 locales
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining
+- [x] #11 or findings applied/tracked)
 <!-- DOD:END -->
