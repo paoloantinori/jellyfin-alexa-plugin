@@ -406,6 +406,25 @@ internal static class FuzzyMatcher
     /// ArtistSearch.IsInteriorContainment (JF-408). Do NOT tighten this exemption.
     /// </summary>
     private static int ApplyLengthPenalty(string query, string candidate, int score)
+        => query.Contains(candidate, StringComparison.OrdinalIgnoreCase)
+            ? score // containment exemption (see the doc above; do NOT tighten)
+            : ApplyFairLengthPenalty(query, candidate, score);
+
+    /// <summary>
+    /// What <see cref="ApplyLengthPenalty"/> would score WITHOUT the containment
+    /// exemption (JF-420 fair-comparison model): the honest score for a candidate
+    /// that covers only part of the query. Semantics identical to the matcher's own
+    /// penalty (longer candidates and ratio >= 0.5 unpenalized, int truncation), so
+    /// the two can never drift (JF-420.3: the handler's private copy omitted the
+    /// 0.5 floor and disagreed with the matcher by 30+ points in the floor region).
+    /// Used by the JF-420 containment-vs-full-name gate to compare both sides with
+    /// the same rules.
+    /// </summary>
+    /// <param name="query">The normalized query.</param>
+    /// <param name="candidate">The normalized candidate text.</param>
+    /// <param name="score">The pre-penalty similarity score.</param>
+    /// <returns>The score as the length penalty would leave it without the exemption.</returns>
+    internal static int ApplyFairLengthPenalty(string query, string candidate, int score)
     {
         if (candidate.Length >= query.Length)
         {
@@ -418,12 +437,31 @@ internal static class FuzzyMatcher
             return score;
         }
 
-        if (query.Contains(candidate, StringComparison.OrdinalIgnoreCase))
+        return (int)(score * ratio);
+    }
+
+    /// <summary>
+    /// Score ONE candidate exactly as the best-match loop does
+    /// (normalize both, PartialRatio, length penalty), without the loop itself or
+    /// its &gt;= <see cref="ContainmentScore"/> early exit. Used by decision points
+    /// that must rank ALL candidates themselves: the JF-420 gate's early-exit bug
+    /// let a containment-exempt short name earlier in index order ('Floyd' before
+    /// 'Pink Floyd') mask the true full-name alternative.
+    /// </summary>
+    /// <param name="query">The raw query text.</param>
+    /// <param name="candidateText">The raw candidate text.</param>
+    /// <returns>The matcher score for this candidate (0 when the length band excludes it).</returns>
+    internal static int Score(string query, string candidateText)
+    {
+        string normalizedQuery = Normalize(query);
+        string normalizedCandidate = Normalize(candidateText);
+        int maxLenDiff = Math.Max(normalizedQuery.Length * 2, 15);
+        if (Math.Abs(normalizedCandidate.Length - normalizedQuery.Length) > maxLenDiff)
         {
-            return score;
+            return 0;
         }
 
-        return (int)(score * ratio);
+        return ApplyLengthPenalty(normalizedQuery, normalizedCandidate, PartialRatio(normalizedQuery, normalizedCandidate));
     }
 
     /// <summary>

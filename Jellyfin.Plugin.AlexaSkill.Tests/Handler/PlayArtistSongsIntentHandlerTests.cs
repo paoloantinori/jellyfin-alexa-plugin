@@ -91,6 +91,116 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
             .Returns(songs.ToList<BaseItem>());
     }
 
+    // --- JF-420.3: symmetric fair-score margin + matcher-aligned penalty ---
+
+    /// <summary>
+    /// JF-420.3 scenario: query 'miles davis live' with 'Miles Davis' and 'Miles' in
+    /// the library. Whichever of the two the tier-2 prefix match surfaces first, the
+    /// outcome must be Miles Davis (word-subset skip when the alternative adds
+    /// nothing; symmetric fair scores when it does), never an auto-select of 'Miles'.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_MilesDavisLiveQuery_PlaysMilesDavis_NeverMiles()
+    {
+        var milesDavis = new MusicArtist { Name = "Miles Davis", Id = Guid.NewGuid() };
+        var miles = new MusicArtist { Name = "Miles", Id = Guid.NewGuid() };
+        var allArtists = new List<BaseItem> { milesDavis, miles };
+
+        _artistIndexMock.Setup(i => i.IsReady).Returns(true);
+        _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(allArtists);
+        var davisSong = new Audio { Name = "So What", Id = Guid.NewGuid() };
+        var milesSong = new Audio { Name = "Blue Moods", Id = Guid.NewGuid() };
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
+            .Returns((InternalItemsQuery q) => q.ArtistIds.Contains(milesDavis.Id)
+                ? new List<BaseItem> { davisSong }
+                : new List<BaseItem> { milesSong });
+
+        var handler = CreateHandler(_artistIndexMock.Object);
+        var request = CreateIntentRequest(musician: "miles davis live");
+        SetupUserMock();
+
+        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.True(response.Response.ShouldEndSession, "must auto-play, not prompt");
+        var play = response.Response.Directives?.FirstOrDefault(d => d.Type == "AudioPlayer.Play");
+        Assert.NotNull(play);
+        var metadata = ((AudioPlayerPlayDirective)play).AudioItem?.Metadata;
+        Assert.NotNull(metadata);
+        Assert.Equal("So What", metadata.Title); // Miles Davis's song, not Miles's
+    }
+
+    /// <summary>
+    /// JF-420.3 review round 2 (early-exit masking): the gate must rank ALL
+    /// alternatives by fair score. FindBestMatchWithScore returned on the FIRST
+    /// candidate reaching 90, so a containment-exempt 'Floyd' earlier in index order
+    /// masked 'Pink Floyd' entirely; with the full ranking the fair scores are
+    /// Floyd 45 vs Pink Floyd 90 and Pink Floyd is auto-selected.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_PnkFloydWithFloydInLibrary_AutoSelectsPinkFloyd()
+    {
+        var pnk = new MusicArtist { Name = "P!nk", Id = Guid.NewGuid() };
+        var floyd = new MusicArtist { Name = "Floyd", Id = Guid.NewGuid() };
+        var pinkFloyd = new MusicArtist { Name = "Pink Floyd", Id = Guid.NewGuid() };
+        var allArtists = new List<BaseItem> { pnk, floyd, pinkFloyd };
+
+        _artistIndexMock.Setup(i => i.IsReady).Returns(true);
+        _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(allArtists);
+        var pinkFloydSong = new Audio { Name = "Comfortably Numb", Id = Guid.NewGuid() };
+        var floydSong = new Audio { Name = "Floyd Song", Id = Guid.NewGuid() };
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
+            .Returns((InternalItemsQuery q) => q.ArtistIds.Contains(pinkFloyd.Id)
+                ? new List<BaseItem> { pinkFloydSong }
+                : new List<BaseItem> { floydSong });
+
+        var handler = CreateHandler(_artistIndexMock.Object);
+        var request = CreateIntentRequest(musician: "P!nk floyd");
+        SetupUserMock();
+
+        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.True(response.Response.ShouldEndSession, "must auto-play, not prompt");
+        var play = response.Response.Directives?.FirstOrDefault(d => d.Type == "AudioPlayer.Play");
+        Assert.NotNull(play);
+        var metadata = ((AudioPlayerPlayDirective)play).AudioItem?.Metadata;
+        Assert.NotNull(metadata);
+        Assert.Equal("Comfortably Numb", metadata.Title); // Pink Floyd's song, never Floyd's
+    }
+
+    /// <summary>
+    /// JF-420.3 phantom-margin regression, in the reachable gate shape: query
+    /// 'beatles live' surfaces 'Beatles' as the single containment match (tier 2,
+    /// ratio 7/11 = 0.636, above ApplyLengthPenalty's 0.5 floor) while an artist
+    /// literally named 'Live' scores 90 via the containment exemption. The handler's
+    /// old fair-score (90 * 7/11 = 57) disagreed with the matcher's floor (90) by 33
+    /// points: a phantom margin that auto-selected 'Live'. With both sides scored by
+    /// the matcher's own semantics the alternative's fair score is 32 (below the
+    /// 80 bar: exemption-only hits cannot win) and the gate disambiguates instead.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_BeatlesLiveQuery_FairScoreAligned_DisambiguatesInsteadOfShortAlternative()
+    {
+        var beatles = new MusicArtist { Name = "Beatles", Id = Guid.NewGuid() };
+        var live = new MusicArtist { Name = "Live", Id = Guid.NewGuid() };
+        var allArtists = new List<BaseItem> { beatles, live };
+
+        _artistIndexMock.Setup(i => i.IsReady).Returns(true);
+        _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(allArtists);
+        SetupSongResult(new Audio { Name = "Yesterday", Id = Guid.NewGuid() });
+
+        var handler = CreateHandler(_artistIndexMock.Object);
+        var request = CreateIntentRequest(musician: "beatles live");
+        SetupUserMock();
+
+        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.False(response.Response.ShouldEndSession, "phantom-margin case must disambiguate, not auto-select 'Live'");
+        Assert.Null(response.Response.Directives?.FirstOrDefault(d => d.Type == "AudioPlayer.Play"));
+    }
+
     [Fact]
     public void CanHandle_PlayArtistSongsIntent_ReturnsTrue()
     {

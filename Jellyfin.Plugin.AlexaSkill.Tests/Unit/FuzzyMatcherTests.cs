@@ -638,5 +638,31 @@ public class FuzzyMatcherTests
         Assert.Equal("U2", result!.Name);
     }
 
+    /// <summary>
+    /// JF-420.3: the fair (exemption-free) length penalty shares the matcher's own
+    /// semantics: longer candidates and ratio >= 0.5 unpenalized, int truncation
+    /// below. The handler's former private copy omitted the 0.5 floor and disagreed
+    /// with the matcher by 33 points in the floor region ("Beatles" vs
+    /// "beatles live": 90 vs 57), which alone exceeded the JF-420 margin.
+    /// </summary>
+    [Fact]
+    public void ApplyFairLengthPenalty_MirrorsMatcherSemantics_WithoutContainmentExemption()
+    {
+        // Ratio >= 0.5: unpenalized (the matcher's floor region)
+        Assert.Equal(90, FuzzyMatcher.ApplyFairLengthPenalty("beatles live", "Beatles", 90));
+        Assert.Equal(90, FuzzyMatcher.ApplyFairLengthPenalty("miles davis live", "Miles Davis", 90));
+
+        // Ratio < 0.5: scaled with int truncation
+        Assert.Equal(28, FuzzyMatcher.ApplyFairLengthPenalty("miles davis live", "Miles", 90));
+        Assert.Equal(30, FuzzyMatcher.ApplyFairLengthPenalty("beatles live", "Live", 90));
+
+        // Candidate at least as long as the query: unpenalized
+        Assert.Equal(90, FuzzyMatcher.ApplyFairLengthPenalty("p!nk floyd", "Pink Floyd", 90));
+
+        // Unlike ApplyLengthPenalty, a contained candidate below the floor IS
+        // penalized (that is the whole point of the fair score)
+        Assert.Equal(36, FuzzyMatcher.ApplyFairLengthPenalty("p!nk floyd", "P!nk", 90));
+    }
+
     private record TestItemWithId(string Name, Guid Id);
 }

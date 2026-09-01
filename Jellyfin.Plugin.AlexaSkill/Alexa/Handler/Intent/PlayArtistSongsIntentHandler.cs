@@ -40,20 +40,54 @@ public class PlayArtistSongsIntentHandler : BaseHandler
     private const double ContainmentVsFullNameMargin = 20.0;
 
     /// <summary>
-    /// What a containment match's score would be WITHOUT the containment exemption in
-    /// <see cref="FuzzyMatcher.ApplyLengthPenalty"/> (JF-420 fair-comparison model).
-    /// The exemption gives any candidate contained in the query a free pass at
-    /// ContainmentScore regardless of how much of the query it covers ("P!nk" gets 90
-    /// for "P!nk floyd" despite covering only 40%). This method computes the honest
-    /// score: ContainmentScore scaled by the length ratio, which is what the penalty
-    /// would apply without the exemption. Used by the JF-420 auto-selection gate to
-    /// compare a containment match against a full-name alternative fairly.
+    /// JF-420/JF-420.3: the bar for an alternative to be "genuinely plausible",
+    /// checked on the RAW score (worth comparing at all: below this the match just
+    /// auto-plays) and on the FAIR score (eligible to WIN the comparison: an
+    /// exemption-only partial-word hit cannot clear it). One bar, two checkpoints.
     /// </summary>
-    /// <param name="containmentName">The containment-matched candidate's name.</param>
-    /// <param name="query">The raw multi-word query.</param>
-    /// <returns>The score the candidate would have without the containment exemption.</returns>
-    private static double ComputeContainmentFairScore(string containmentName, string query)
-        => (double)FuzzyMatcher.ContainmentScore * containmentName.Length / query.Length;
+    private const int AlternativeFullNameThreshold = 80;
+
+    /// <summary>
+    /// Whether every word of <paramref name="shorterName"/> also appears as a word of
+    /// <paramref name="longerName"/>.
+    /// </summary>
+    private static bool IsWordSubset(string shorterName, string longerName)
+    {
+        var longerWords = new HashSet<string>(
+            longerName.Split(' ', StringSplitOptions.RemoveEmptyEntries),
+            StringComparer.OrdinalIgnoreCase);
+        return shorterName
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .All(longerWords.Contains);
+    }
+
+    /// <summary>
+    /// JF-420.3: the alternative is just a shorter form of the containment match
+    /// ("Miles" vs "Miles Davis" for "miles davis live") and adds nothing the user
+    /// could have meant, so the comparison is skipped entirely. Guarded on the
+    /// match's words appearing in the query (the gate's own substring shape) so a
+    /// SUPERSTRING tier-1 match (a tribute act matching "the beatles" by
+    /// name-contains-query) never skips.
+    /// </summary>
+    private static bool IsRedundantShorterForm(string matchName, string alternativeName, string query)
+        => IsWordSubset(matchName, query) && IsWordSubset(alternativeName, matchName);
+
+    /// <summary>
+    /// JF-420.3 comparison score: the candidate's score scaled by the length-match
+    /// fraction in BOTH directions (min(nameLen/queryLen, queryLen/nameLen)).
+    /// Deliberately NOT <see cref="FuzzyMatcher.ApplyFairLengthPenalty"/>: the
+    /// matcher's 0.5 floor is a RECALL device (keep half-coverage candidates
+    /// reachable in general matching), but in this DECISION it manufactured phantom
+    /// margins in both directions (review round 2): a containment-exempt
+    /// half-query alternative kept 90 ("Floyd" in "p!nk floyd") while a superstring
+    /// tribute also kept 90 against a floor-protected match. Decision fairness
+    /// wants the honest length fraction on both sides, symmetrically.
+    /// </summary>
+    private static double FairComparisonScore(string name, string query, int score)
+    {
+        double ratio = Math.Min((double)name.Length / query.Length, (double)query.Length / name.Length);
+        return score * ratio;
+    }
 
     /// <summary>
     /// JF-420.1: exact-name equality between the query and the
@@ -439,34 +473,57 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             var alternatives = searchPool.Where(a => !a.Id.Equals(artists[0].Id)).ToList();
             if (alternatives.Count > 0)
             {
-                var best = FuzzyMatcher.FindBestMatchWithScore(musician, alternatives, a => a.Name);
-                if (best.HasValue && best.Value.Score >= 80)
+                // JF-420.3 (review round 2): score EVERY alternative and rank by FAIR
+                // score. FindBestMatchWithScore early-returns on the first candidate
+                // reaching ContainmentScore, so a containment-exempt single-word artist
+                // earlier in index order ('Floyd' before 'Pink Floyd') masked the true
+                // full-name alternative.
+                BaseItem? bestAlternative = null;
+                double bestAlternativeFair = 0;
+                foreach (BaseItem candidate in alternatives)
                 {
-                    // Compare FAIR scores: the containment match's genuine score is
-                    // penalized by the length ratio (the 90 it got from the containment
-                    // exemption is artificially inflated). If the full-name alternative
-                    // beats the penalized containment score by a clear margin, auto-select
-                    // it (the user asked for "P!nk floyd" and means Pink Floyd, not P!nk).
-                    // Only disambiguate when both are genuinely plausible.
-                    double containmentPenalized = ComputeContainmentFairScore(artists[0].Name, musician);
-                    double alternativeScore = best.Value.Score;
+                    int raw = FuzzyMatcher.Score(musician, candidate.Name);
+                    if (raw < AlternativeFullNameThreshold)
+                    {
+                        continue;
+                    }
 
-                    if (alternativeScore - containmentPenalized > ContainmentVsFullNameMargin)
+                    double fair = FairComparisonScore(candidate.Name, musician, raw);
+                    if (fair > bestAlternativeFair)
+                    {
+                        bestAlternativeFair = fair;
+                        bestAlternative = candidate;
+                    }
+                }
+
+                if (bestAlternative != null
+                    && !IsRedundantShorterForm(artists[0].Name, bestAlternative.Name, musician))
+                {
+                    // JF-420/JF-420.3 SYMMETRIC fair comparison (FairComparisonScore:
+                    // bidirectional length fraction, no matcher recall floor). The
+                    // alternative must ALSO keep a genuinely high fair score: one that
+                    // survives only via the containment exemption (a partial-word hit
+                    // like "Miles" inside "miles davis live") cannot outrank a better
+                    // full match. If the alternative wins by a clear margin, auto-select
+                    // it ("P!nk floyd" means Pink Floyd, not P!nk); otherwise offer both.
+                    double containmentFair = FairComparisonScore(artists[0].Name, musician, FuzzyMatcher.ContainmentScore);
+
+                    if (bestAlternativeFair >= AlternativeFullNameThreshold && bestAlternativeFair - containmentFair > ContainmentVsFullNameMargin)
                     {
                         Logger.LogInformation(
-                            "PlayArtistSongs: containment match '{Containment}' (penalized {Penalized:F0}) clearly beaten by full-name alternative '{Alternative}' ({Alternative:F0}), auto-selecting (JF-420)",
-                            artists[0].Name, containmentPenalized, best.Value.Item.Name, alternativeScore);
-                        artists = new List<BaseItem> { best.Value.Item };
+                            "PlayArtistSongs: containment match '{Containment}' (fair {ContainmentFair:F0}) clearly beaten by full-name alternative '{Alternative}' (fair {AlternativeFair:F0}), auto-selecting (JF-420)",
+                            artists[0].Name, containmentFair, bestAlternative.Name, bestAlternativeFair);
+                        artists = new List<BaseItem> { bestAlternative };
                     }
                     else
                     {
                         Logger.LogInformation(
-                            "PlayArtistSongs: containment match '{Containment}' (penalized {Penalized:F0}) vs full-name alternative '{Alternative}' ({Alternative:F0}) is ambiguous, disambiguating (JF-420)",
-                            artists[0].Name, containmentPenalized, best.Value.Item.Name, alternativeScore);
+                            "PlayArtistSongs: containment match '{Containment}' (fair {ContainmentFair:F0}) vs full-name alternative '{Alternative}' (fair {AlternativeFair:F0}) is ambiguous, disambiguating (JF-420)",
+                            artists[0].Name, containmentFair, bestAlternative.Name, bestAlternativeFair);
                         var disambigMatches = new List<(Guid Id, string Name, string? ArtUrl)>
                         {
                             (artists[0].Id, artists[0].Name, GetImageUrl(artists[0].Id.ToString("N"), user)),
-                            (best.Value.Item.Id, best.Value.Item.Name, GetImageUrl(best.Value.Item.Id.ToString("N"), user))
+                            (bestAlternative.Id, bestAlternative.Name, GetImageUrl(bestAlternative.Id.ToString("N"), user))
                         };
                         var matchInfos = disambigMatches.Select(m => new DisambiguationHelper.MatchInfo { Id = m.Id.ToString(), Name = m.Name, ArtUrl = m.ArtUrl }).ToList();
                         var matchList = string.Join(", ", disambigMatches.Select((m, i) => $"{i + 1}. {m.Name}"));
