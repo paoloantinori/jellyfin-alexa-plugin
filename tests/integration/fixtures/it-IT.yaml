@@ -40,6 +40,19 @@ tests:
     expected_intent: RepeatSingleOnIntent
     expected_slots: {}
 
+  - utterance: "ripeti ancora"
+    expected_intent: RepeatSingleOnIntent
+    expected_slots: {}
+
+  # JF-439: the coin-flip state of the musician-shaped title region. Pins the
+  # CURRENT routing (PlayArtistSongs with musician slot) so a future model edit
+  # that re-flips it flags here for triage; the handler fallback serves the song
+  # either way (unit-proven in PlayArtistSongsIntentHandlerTests).
+  - utterance: "suona la canzone sugar free jazz"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
   # -------------------------------------------------------------------------
   # 4. PlayChannelIntent (channel)
   # -------------------------------------------------------------------------

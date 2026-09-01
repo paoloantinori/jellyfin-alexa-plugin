@@ -121,7 +121,7 @@ tests:
     expected_response_type: any
 
   # --- Play specific song (carrier phrase stripping) ---
-  # "Suona la canzone {song}" - NLU may include "la canzone" in the slot value;
+  # "Suona la canzone {song}": NLU may include "la canzone" in the slot value;
   # the handler strips it before searching. NLU slot resolution may truncate the
   # value (e.g. "sugar free ja"), so response_type is "any": the handler logic
   # is verified via the simulator endpoint instead.
