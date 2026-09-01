@@ -141,15 +141,17 @@ public class PlaySongIntentHandler : BaseHandler
 
         Logger.LogDebug("PlaySong: entered, locale={Locale}", locale);
 
-        // Escape hatch from the elicitation trap (shared CancelWords helper): while OUR
-        // song-name Dialog.ElicitSlot is open, a stop/cancel word gets captured into the
-        // song slot (dialogState IN_PROGRESS) instead of routing to AMAZON.Stop/Cancel.
-        // Gated on IN_PROGRESS so a first-invocation search for a song actually titled
-        // "Stop" still runs (code-review 2026-08-29). Runs BEFORE the warming gate so
-        // an open flow still cancels during the cold-start window (JF-419.2 contract,
-        // review round 2).
-        if (string.Equals(intentRequest.DialogState, "IN_PROGRESS", StringComparison.OrdinalIgnoreCase)
-            && (Util.CancelWords.IsCancelWord(songQuery) || Util.CancelWords.IsCancelWord(musicianQuery)))
+        // Escape hatch from the elicitation trap (shared CancelWords helpers): while OUR
+        // song-name Dialog.ElicitSlot is open, a stop/cancel word gets captured into a
+        // slot (dialogState IN_PROGRESS) instead of routing to AMAZON.Stop/Cancel. ANY
+        // slot counts (shared AnySlotIsCancelWord), not just song/musician: a
+        // force-routed request can carry the word in a sibling slot and searching it
+        // would reopen the trap (JF-423 consolidation). Gated on IN_PROGRESS so a
+        // first-invocation search for a song actually titled "Stop" still runs
+        // (code-review 2026-08-29). Runs BEFORE the warming gate so an open flow still
+        // cancels during the cold-start window (JF-419.2 contract, review round 2).
+        if (Util.CancelWords.IsDialogInProgress(intentRequest)
+            && Util.CancelWords.AnySlotIsCancelWord(intentRequest))
         {
             Logger.LogInformation("PlaySong: captured cancel word during open elicit (song='{Song}'), ending flow", songQuery);
             return ResponseBuilder.Tell(ResponseStrings.Get("FindSongCancelled", locale));

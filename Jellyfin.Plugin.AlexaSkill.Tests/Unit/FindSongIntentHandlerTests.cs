@@ -127,15 +127,19 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         Assert.NotNull(sessionData.ArtistId);
     }
 
-    [Fact]
-    public async Task CapturedCancelWord_WithOpenFlow_EndsFlowWithTell()
+    [Theory]
+    [InlineData("stop")]
+    [InlineData("basta")]
+    public async Task CapturedCancelWord_WithOpenFlow_EndsFlowWithTell(string cancelWord)
     {
         // Escape hatch from the elicitation trap, gated on an OPEN FindSong flow (an open
-        // elicit always persists FindSongSessionData): while a Dialog.ElicitSlot is open,
-        // Alexa captures the user's next utterance INTO the slot, so stop/cancel words
-        // arrive here as keywords instead of AMAZON.Stop/CancelIntent (observed via
-        // simulate-skill and the console 2026-08-28: "stop"/"ferma" fed the keywords and
-        // the FindSong session never ended, hijacking every subsequent utterance).
+        // elicit always persists FindSongSessionData) + dialogState IN_PROGRESS (JF-423,
+        // same guard as PlaySong/PlayAlbum): while a Dialog.ElicitSlot is open, Alexa
+        // captures the user's next utterance INTO the slot, so stop/cancel words arrive
+        // here as keywords with the dialog in progress instead of routing to
+        // AMAZON.Stop/CancelIntent (observed via simulate-skill and the console
+        // 2026-08-28: "stop"/"ferma" fed the keywords and the FindSong session never
+        // ended, hijacking every subsequent utterance).
         SetupJellyfinUser();
         var user = CreateTestUser();
         var session = CreateSession();
@@ -150,8 +154,9 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
         var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
         {
-            ["titleKeywords"] = "stop"
+            ["titleKeywords"] = cancelWord
         });
+        request.DialogState = "IN_PROGRESS";
 
         SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, attrs, CancellationToken.None);
 
@@ -159,6 +164,73 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         var speech = (response.Response.OutputSpeech as PlainTextOutputSpeech)?.Text ?? string.Empty;
         Assert.False(string.IsNullOrWhiteSpace(speech), "cancel response must speak the FindSongCancelled string");
         Assert.True(response.Response.Directives?.Any(d => d.Type == "Dialog.ElicitSlot") != true, "cancel word must not re-elicit");
+    }
+
+    [Fact]
+    public async Task CapturedCancelWord_MidFlowDialogNotInProgress_StillSearches()
+    {
+        // JF-423: the hatch additionally requires dialogState IN_PROGRESS. A mid-flow
+        // request whose dialog is NOT in progress (a full-utterance remount like
+        // "trova la canzone basta" matching the intent's slotted samples) is a
+        // legitimate search for a song titled like a cancel word (session attributes
+        // still present from the open flow), and must search and play, not cancel.
+        var artistId = Guid.NewGuid();
+        SetupJellyfinUser();
+        SetupSongSearch(new List<BaseItem> { CreateAudioItem(Guid.NewGuid(), "Basta") });
+
+        var user = CreateTestUser();
+        var session = CreateSession();
+        var attrs = BuildSessionAttributes(new FindSongSessionData
+        {
+            State = FindSongState.AwaitingKeywords,
+            ArtistId = artistId,
+            ArtistName = "Fedez"
+        });
+
+        var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
+        {
+            ["titleKeywords"] = "basta"
+        });
+        request.DialogState = "STARTED";
+
+        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, attrs, CancellationToken.None);
+
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("I found", speech);
+        Assert.DoesNotContain("stopped searching", speech, StringComparison.OrdinalIgnoreCase);
+        Assert.True(response.Response?.Directives?.Any(d => d.Type == "AudioPlayer.Play") == true,
+            "mid-flow remount of a cancel-word title must search and play, not cancel");
+    }
+
+    [Fact]
+    public async Task CapturedCancelWord_InMusicianSlotDuringOpenFlow_EndsFlowWithTell()
+    {
+        // JF-423: the hatch inspects EVERY slot, not just titleKeywords. During an open
+        // artist elicitation, "annulla" misrouted to a sibling intent is force-routed
+        // back here (controller routes any IntentRequest with FindSongSessionData) with
+        // the word captured into the musician slot; searching artist "annulla" would
+        // reopen the elicitation-trap loop the hatch exists to close.
+        SetupJellyfinUser();
+        var user = CreateTestUser();
+        var session = CreateSession();
+        var attrs = BuildSessionAttributes(new FindSongSessionData
+        {
+            State = FindSongState.AwaitingArtist,
+            Keywords = "wish you were here"
+        });
+
+        var request = CreateIntentRequest("PlaySongIntent", new Dictionary<string, string?>
+        {
+            ["musician"] = "annulla"
+        });
+        request.DialogState = "IN_PROGRESS";
+
+        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, attrs, CancellationToken.None);
+
+        string cancelled = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("FindSongCancelled", "en-US");
+        Assert.Equal(cancelled, TestHelpers.GetSpeechText(response));
+        Assert.True(response.Response.ShouldEndSession != false, "musician-slot cancel word must end the session");
+        Assert.True(response.Response.Directives?.Any(d => d.Type == "Dialog.ElicitSlot") != true, "musician-slot cancel word must not re-elicit");
     }
 
     [Fact]
@@ -178,8 +250,13 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
         SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, null, CancellationToken.None);
 
-        var speech = (response.Response.OutputSpeech as PlainTextOutputSpeech)?.Text ?? string.Empty;
-        Assert.DoesNotContain("interrotto", speech, StringComparison.OrdinalIgnoreCase);
+        // Normal first-invocation flow: keywords collected, artist elicited, no cancel.
+        Assert.False(response.Response.ShouldEndSession);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.DoesNotContain("stopped searching", speech, StringComparison.OrdinalIgnoreCase);
+        var sessionData = ReadSessionData(response);
+        Assert.NotNull(sessionData);
+        Assert.Equal(FindSongState.AwaitingArtist, sessionData.State);
     }
 
     [Fact]
@@ -671,6 +748,87 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         Assert.Equal(FindSongState.Disambiguating, sessionData.State);
         Assert.NotNull(sessionData.Candidates);
         Assert.True(sessionData.Candidates!.Count >= 1);
+    }
+
+    [Fact]
+    public async Task Search_DuplicateNames_DifferentArtistsSameTitle_DedupCollapsesToOne_PromptsNotAutoPlays()
+    {
+        // FIX 1 (review 2026-09-02): when the JF-416 name-dedup collapses a
+        // MULTI-candidate list to ONE unique name, the recordings may be DIFFERENT songs
+        // sharing a title ("Stop" by two artists). The collapse must NOT silently
+        // auto-play one of them (it would announce the wrong artist or "Unknown" and
+        // leave no way to refuse); the 1-item disambiguation prompt keeps the
+        // negative-answer exit.
+        var artistId = Guid.NewGuid();
+        SetupJellyfinUser();
+
+        var first = CreateAudioItem(Guid.NewGuid(), "Hey Jude");
+        first.Artists = new[] { "The Beatles" };
+        var second = CreateAudioItem(Guid.NewGuid(), "Hey Jude");
+        second.Artists = new[] { "Joe Cocker" };
+        SetupSongSearch(new List<BaseItem> { first, second });
+
+        var user = CreateTestUser();
+        var session = CreateSession();
+        var sessionAttrs = BuildSessionAttributes(new FindSongSessionData
+        {
+            State = FindSongState.AwaitingKeywords,
+            ArtistId = artistId,
+            ArtistName = "The Beatles"
+        });
+
+        var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
+        {
+            ["titleKeywords"] = "hey jude"
+        });
+
+        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+
+        // Prompt, not silent auto-play: the session stays open in Disambiguating with
+        // ONE candidate and no playback starts.
+        Assert.False(response.Response.ShouldEndSession);
+        Assert.True(response.Response?.Directives?.Any(d => d.Type == "AudioPlayer.Play") != true,
+            "a collapse from multiple candidates must not auto-play");
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Which one?", speech);
+        Assert.DoesNotContain("Playing it now", speech, StringComparison.OrdinalIgnoreCase);
+
+        var sessionData = ReadSessionData(response);
+        Assert.NotNull(sessionData);
+        Assert.Equal(FindSongState.Disambiguating, sessionData.State);
+        Assert.NotNull(sessionData.Candidates);
+        Assert.Single(sessionData.Candidates);
+    }
+
+    [Fact]
+    public async Task Search_SingleSong_AutoPlaysWithSingleFoundWording()
+    {
+        // FIX 1 counterpart: exactly ONE candidate BEFORE the dedup auto-plays with the
+        // single-found wording (existing behavior preserved).
+        var artistId = Guid.NewGuid();
+        SetupJellyfinUser();
+        SetupSongSearch(new List<BaseItem> { CreateAudioItem(Guid.NewGuid(), "Hey Jude") });
+
+        var user = CreateTestUser();
+        var session = CreateSession();
+        var sessionAttrs = BuildSessionAttributes(new FindSongSessionData
+        {
+            State = FindSongState.AwaitingKeywords,
+            ArtistId = artistId,
+            ArtistName = "The Beatles"
+        });
+
+        var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
+        {
+            ["titleKeywords"] = "hey jude"
+        });
+
+        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+
+        Assert.True(response.Response?.Directives?.Any(d => d.Type == "AudioPlayer.Play") == true,
+            "a true single candidate must auto-play");
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("I found Hey Jude by The Beatles", speech);
     }
 
     // ========== Disambiguating ==========

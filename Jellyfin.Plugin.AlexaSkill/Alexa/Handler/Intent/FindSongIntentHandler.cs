@@ -155,23 +155,31 @@ public class FindSongIntentHandler : BaseHandler
         FindSongSessionData? sessionData = ReadSessionData(sessionAttributes);
 
         // Escape hatch from the elicitation trap, ONLY while a FindSong flow is open (an
-        // open elicit always persists FindSongSessionData; gating on it keeps legitimate
-        // first-invocation searches working, e.g. a song actually titled "Stop"). While a
-        // Dialog.ElicitSlot is open, Alexa captures the user's next utterance INTO the
-        // elicited slot, so stop/cancel words arrive as titleKeywords instead of
-        // AMAZON.Stop/CancelIntent (observed via simulate-skill and the console 2026-08-28:
-        // "stop"/"ferma" fed the keywords and every subsequent utterance stayed hijacked).
+        // open elicit always persists FindSongSessionData) AND the dialog is actually in
+        // progress, the same guard shape as PlaySong/PlayAlbum (JF-423): a captured
+        // cancel word cancels only when it arrived THROUGH the open elicit
+        // (dialogState IN_PROGRESS). A mid-flow request whose dialog is NOT in progress
+        // (a full-utterance remount like "trova la canzone basta", or a fresh invocation)
+        // is a legitimate search for a title that happens to be a cancel word, and must
+        // search. While a Dialog.ElicitSlot is open, Alexa captures the user's next
+        // utterance INTO the elicited slot, so stop/cancel words arrive as slot values
+        // instead of AMAZON.Stop/CancelIntent (observed via simulate-skill and the console
+        // 2026-08-28: "stop"/"ferma" fed the keywords and every subsequent utterance
+        // stayed hijacked). ANY slot counts, not just titleKeywords: a force-routed
+        // request can carry the word in the musician slot ("annulla" misrouted to a
+        // sibling intent), which would otherwise be searched as an artist name.
         // Second capture regime: when the NLU DOES resolve Stop/Cancel, the controller
         // force-routes any IntentRequest with FindSongSessionData here, and those arrive
-        // with NO titleKeywords slot - treat the intent name as the cancel signal too
-        // (code-review 2026-08-29).
+        // with NO titleKeywords slot; treat the intent name as the cancel signal too
+        // (code-review 2026-08-29; an explicitly resolved Stop/CancelIntent is
+        // unambiguous, so it needs no IN_PROGRESS gate).
         if (sessionData != null)
         {
-            string? capturedKeywords = GetSlotValue(intentRequest, "titleKeywords");
             bool stopOrCancelIntent = intentRequest.Intent.Name is "AMAZON.StopIntent" or "AMAZON.CancelIntent";
-            if (stopOrCancelIntent || Util.CancelWords.IsCancelWord(capturedKeywords))
+            if (stopOrCancelIntent
+                || (Util.CancelWords.IsDialogInProgress(intentRequest) && Util.CancelWords.AnySlotIsCancelWord(intentRequest)))
             {
-                Logger.LogInformation("FindSong: cancel during open flow (intent={Intent}, keywords='{Keywords}'), ending flow", intentRequest.Intent.Name, capturedKeywords);
+                Logger.LogInformation("FindSong: cancel during open flow (intent={Intent}, dialogState={DialogState}), ending flow", intentRequest.Intent.Name, intentRequest.DialogState);
                 return ResponseBuilder.Tell(ResponseStrings.Get("FindSongCancelled", locale));
             }
         }
@@ -559,13 +567,20 @@ public class FindSongIntentHandler : BaseHandler
                 sessionData);
         }
 
-        // Single match: auto-play (JF-440: the ONE single-song shape)
-        if (songs.Count == 1)
+        // Single-found auto-play response (JF-440: the ONE single-song shape), shared by
+        // the auto-play sites below.
+        SkillResponse FoundOne(BaseItem song)
         {
             string artistDisplay = sessionData.ArtistName ?? "Unknown";
             return BuildSingleSongResponse(
-                songs[0], user, session, context, locale,
-                announcement: ResponseStrings.Get("FindSongFoundOne", locale, songs[0].Name, artistDisplay));
+                song, user, session, context, locale,
+                announcement: ResponseStrings.Get("FindSongFoundOne", locale, song.Name, artistDisplay));
+        }
+
+        // Single match: auto-play (JF-440: the ONE single-song shape)
+        if (songs.Count == 1)
+        {
+            return FoundOne(songs[0]);
         }
 
         // Multiple matches: take top 4 and check if we need artist narrowing
@@ -588,10 +603,26 @@ public class FindSongIntentHandler : BaseHandler
         // difference for the user ("The Idiot Kings" offered 3 times for "idiot").
         // The highest-scoring item per unique name wins (preserves scored order).
         // Scan up to 8 scored items to fill up to 4 unique names.
-        var disambigCandidates = scored.Take(8)
+        var uniqueScored = scored.Take(8)
             .GroupBy(s => s.Item.Name, StringComparer.OrdinalIgnoreCase)
             .Select(g => g.First())
             .Take(4)
+            .ToList();
+
+        // JF-423 review fix (2026-09-02): the dedup can collapse the list to ONE unique
+        // name, but a collapse from MULTIPLE candidates must not auto-play. Different
+        // recordings share titles ("Stop" by two artists): a silent pick would announce
+        // "Stop di Unknown" and leave the user no way to refuse the wrong recording.
+        // Auto-play survives only when there was exactly ONE candidate BEFORE the dedup;
+        // a collapsed list keeps the disambiguation prompt below, whose negative-answer
+        // exit ("no") the user may still need.
+        // A collapse from MULTIPLE candidates (different recordings sharing a title)
+        // deliberately falls through to the prompt: auto-playing one of them would be
+        // silent and uncorrectable (the review-round fix). A true single candidate was
+        // already returned by the single-match branch above, so there is no
+        // auto-play shape to handle here.
+
+        var disambigCandidates = uniqueScored
             .Select(s => new FindSongCandidate(s.Item.Id, s.Item.Name, null, s.Score))
             .ToList();
 

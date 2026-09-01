@@ -22,6 +22,7 @@ using MediaBrowser.Model.Querying;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
+using SortOrder = Jellyfin.Database.Implementations.Enums.SortOrder;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
@@ -105,6 +106,237 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
             _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
                 .Returns(tracks);
         }
+    }
+
+    /// <summary>
+    /// Builds a MusicAlbum plus <paramref name="trackCount"/> Audio tracks linked via the Album
+    /// metadata name (the linkage GetAlbumTrackCountsAsync groups by). The first track's name is
+    /// <paramref name="firstTrackName"/> so the played album is identifiable from the AudioPlayer token.
+    /// </summary>
+    private static (MusicAlbum Album, List<BaseItem> Tracks) MakeRelease(string name, int year, int trackCount, string firstTrackName)
+    {
+        var album = new MusicAlbum { Name = name, Id = Guid.NewGuid(), ProductionYear = year };
+        var tracks = new List<BaseItem>();
+        for (int i = 0; i < trackCount; i++)
+        {
+            tracks.Add(new Audio
+            {
+                Name = i == 0 ? firstTrackName : $"{name} track {i + 1}",
+                Id = Guid.NewGuid(),
+                Album = name,
+                ParentId = album.Id
+            });
+        }
+
+        return (album, tracks);
+    }
+
+    /// <summary>
+    /// Mocks the JF-411 indefinite album-by-artist flow: artist lookup, the artist's albums in the
+    /// given (insertion) order, the tracks feeding the JF-427 count query, and per-album playback
+    /// results. Queries are recorded into <paramref name="queries"/> (when given) for assertions.
+    /// </summary>
+    private void SetupIndefiniteAlbumCatalog(
+        BaseItem artist,
+        List<BaseItem> artistAlbums,
+        List<BaseItem> allTracks,
+        IReadOnlyDictionary<Guid, BaseItem> firstTrackByAlbumId,
+        List<InternalItemsQuery>? queries = null)
+    {
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) =>
+            {
+                queries?.Add(q);
+                if (q.IncludeItemTypes?.Contains(BaseItemKind.MusicArtist) == true)
+                {
+                    return new List<BaseItem> { artist };
+                }
+
+                if (q.IncludeItemTypes?.Contains(BaseItemKind.MusicAlbum) == true)
+                {
+                    return artistAlbums;
+                }
+
+                if (q.IncludeItemTypes?.Contains(BaseItemKind.Audio) == true)
+                {
+                    return allTracks;
+                }
+
+                return new List<BaseItem>();
+            });
+
+        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) =>
+                firstTrackByAlbumId.TryGetValue(q.ParentId, out BaseItem? track)
+                    ? new QueryResult<BaseItem> { Items = new[] { track }, TotalRecordCount = 1 }
+                    : new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 });
+    }
+
+    private static async Task<string> GetPlayedTrackTokenAsync(
+        PlayAlbumIntentHandler handler,
+        IntentRequest request,
+        SessionInfo session)
+    {
+        SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), session, CancellationToken.None);
+        Assert.NotNull(response);
+        var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.NotNull(playDirective);
+        return playDirective!.AudioItem.Stream.Token;
+    }
+
+    /// <summary>
+    /// Runs the indefinite album-by-artist flow once per insertion order and asserts the SAME
+    /// album plays every time (JF-427: database row order must not decide the pick).
+    /// </summary>
+    private async Task AssertPicksSameTrackAcrossOrdersAsync(
+        PlayAlbumIntentHandler handler,
+        IntentRequest request,
+        BaseItem artist,
+        MusicAlbum[] albums,
+        List<BaseItem> allTracks,
+        IReadOnlyDictionary<Guid, BaseItem> firstTrackByAlbum,
+        string expectedToken,
+        int[][] orders)
+    {
+        foreach (int[] order in orders)
+        {
+            SetupIndefiniteAlbumCatalog(
+                artist,
+                order.Select(i => (BaseItem)albums[i]).ToList(),
+                allTracks,
+                firstTrackByAlbum);
+
+            string token = await GetPlayedTrackTokenAsync(handler, request, CreateSession());
+
+            Assert.True(
+                token == expectedToken,
+                $"insertion order [{string.Join(",", order)}] picked token {token}, expected {expectedToken}");
+        }
+    }
+
+    [Fact]
+    public async Task HandleAsync_MusicianOnly_MultiReleaseArtist_PicksMostTracksAlbum()
+    {
+        // JF-427: "un disco di X" must not play an arbitrary row of the artist's catalog.
+        // Policy: the release with the MOST tracks wins (the 12-track studio album) even
+        // over a NEWER 10-track live sampler (a year-first policy would pick the live
+        // album) and a 2-track single.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(musician: "koop");
+        SetupUserMock();
+
+        var artist = new MusicArtist { Name = "Koop", Id = Guid.NewGuid() };
+        var (liveAlbum, liveTracks) = MakeRelease("BBC Sessions", 1998, 10, "Live First");
+        var (studioAlbum, studioTracks) = MakeRelease("Studio Album", 1995, 12, "Studio First");
+        var (single, singleTracks) = MakeRelease("Single", 1996, 2, "Single First");
+        var firstTrackByAlbum = new Dictionary<Guid, BaseItem>
+        {
+            [liveAlbum.Id] = liveTracks[0],
+            [studioAlbum.Id] = studioTracks[0],
+            [single.Id] = singleTracks[0]
+        };
+        var queries = new List<InternalItemsQuery>();
+        SetupIndefiniteAlbumCatalog(
+            artist,
+            new List<BaseItem> { liveAlbum, studioAlbum, single },
+            liveTracks.Concat(studioTracks).Concat(singleTracks).ToList(),
+            firstTrackByAlbum,
+            queries);
+
+        string token = await GetPlayedTrackTokenAsync(handler, request, CreateSession());
+
+        Assert.Equal(studioTracks[0].Id.ToString(), token);
+
+        // The resolution query must carry an explicit deterministic OrderBy (JF-427: the
+        // query previously had none).
+        InternalItemsQuery? resolutionQuery = queries.FirstOrDefault(q =>
+            q.IncludeItemTypes?.Contains(BaseItemKind.MusicAlbum) == true && q.SearchTerm == null);
+        Assert.NotNull(resolutionQuery);
+        Assert.NotNull(resolutionQuery.OrderBy);
+        Assert.Equal(ItemSortBy.ProductionYear, resolutionQuery.OrderBy[0].Item1);
+        Assert.Equal(SortOrder.Descending, resolutionQuery.OrderBy[0].Item2);
+    }
+
+    [Fact]
+    public async Task HandleAsync_MusicianOnly_ShuffledAlbumRows_PickIsStable()
+    {
+        // JF-427 AC#2: database row order (which a rescan changes) must not decide the
+        // pick. Same album set, every insertion order, same album played.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(musician: "koop");
+        SetupUserMock();
+
+        var artist = new MusicArtist { Name = "Koop", Id = Guid.NewGuid() };
+        var (liveAlbum, liveTracks) = MakeRelease("BBC Sessions", 1998, 10, "Live First");
+        var (studioAlbum, studioTracks) = MakeRelease("Studio Album", 1995, 12, "Studio First");
+        var (single, singleTracks) = MakeRelease("Single", 1996, 2, "Single First");
+        var firstTrackByAlbum = new Dictionary<Guid, BaseItem>
+        {
+            [liveAlbum.Id] = liveTracks[0],
+            [studioAlbum.Id] = studioTracks[0],
+            [single.Id] = singleTracks[0]
+        };
+        MusicAlbum[] albums = { liveAlbum, studioAlbum, single };
+
+        await AssertPicksSameTrackAcrossOrdersAsync(
+            handler, request, artist, albums,
+            liveTracks.Concat(studioTracks).Concat(singleTracks).ToList(),
+            firstTrackByAlbum,
+            studioTracks[0].Id.ToString(),
+            new[] { new[] { 0, 1, 2 }, new[] { 0, 2, 1 }, new[] { 1, 0, 2 }, new[] { 1, 2, 0 }, new[] { 2, 0, 1 }, new[] { 2, 1, 0 } });
+    }
+
+    [Fact]
+    public async Task HandleAsync_MusicianOnly_EqualTrackCounts_TieBreaksByNewestProductionYear()
+    {
+        // JF-427 policy tie-break 1: equal track counts fall to the newest ProductionYear.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(musician: "koop");
+        SetupUserMock();
+
+        var artist = new MusicArtist { Name = "Koop", Id = Guid.NewGuid() };
+        var (older, olderTracks) = MakeRelease("Older Album", 1995, 10, "Older First");
+        var (newer, newerTracks) = MakeRelease("Newer Album", 2001, 10, "Newer First");
+        var firstTrackByAlbum = new Dictionary<Guid, BaseItem>
+        {
+            [older.Id] = olderTracks[0],
+            [newer.Id] = newerTracks[0]
+        };
+        MusicAlbum[] albums = { older, newer };
+
+        await AssertPicksSameTrackAcrossOrdersAsync(
+            handler, request, artist, albums,
+            olderTracks.Concat(newerTracks).ToList(),
+            firstTrackByAlbum,
+            newerTracks[0].Id.ToString(),
+            new[] { new[] { 0, 1 }, new[] { 1, 0 } });
+    }
+
+    [Fact]
+    public async Task HandleAsync_MusicianOnly_EqualCountsAndYear_TieBreaksByNameAscending()
+    {
+        // JF-427 policy tie-break 2: equal counts and year fall to Name ascending, so the
+        // pick stays deterministic even when the first two keys tie.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(musician: "koop");
+        SetupUserMock();
+
+        var artist = new MusicArtist { Name = "Koop", Id = Guid.NewGuid() };
+        var (zebra, zebraTracks) = MakeRelease("Zebra Album", 2000, 5, "Zebra First");
+        var (alpha, alphaTracks) = MakeRelease("Alpha Album", 2000, 5, "Alpha First");
+        var firstTrackByAlbum = new Dictionary<Guid, BaseItem>
+        {
+            [zebra.Id] = zebraTracks[0],
+            [alpha.Id] = alphaTracks[0]
+        };
+        MusicAlbum[] albums = { zebra, alpha };
+
+        await AssertPicksSameTrackAcrossOrdersAsync(
+            handler, request, artist, albums,
+            zebraTracks.Concat(alphaTracks).ToList(),
+            firstTrackByAlbum,
+            alphaTracks[0].Id.ToString(),
+            new[] { new[] { 0, 1 }, new[] { 1, 0 } });
     }
 
     [Fact]

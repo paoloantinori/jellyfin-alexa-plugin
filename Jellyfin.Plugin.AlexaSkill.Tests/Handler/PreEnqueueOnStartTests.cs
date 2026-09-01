@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET.Request;
@@ -79,6 +80,24 @@ public class PreEnqueueOnStartTests : PluginTestBase
         }
 
         return context;
+    }
+
+    private static Context CreateDeviceContext(string token, string deviceId)
+    {
+        var context = CreateContext(token);
+        context.System.Device = new global::Alexa.NET.Request.Device { DeviceID = deviceId };
+        return context;
+    }
+
+    private static AudioPlayerRequest CreateNearlyFinishedRequest(string token)
+    {
+        return new AudioPlayerRequest
+        {
+            Type = "AudioPlayer.PlaybackNearlyFinished",
+            Token = token,
+            OffsetInMilliseconds = 0,
+            RequestId = "test-req"
+        };
     }
 
     private SessionInfo CreateSession(List<QueueItem>? queue = null, Guid? currentItem = null)
@@ -211,6 +230,84 @@ public class PreEnqueueOnStartTests : PluginTestBase
         NextTrackPrecomputeCache.Store(deviceId, tokenA, nextId, new Audio { Name = "Next", Id = nextId }, "https://stream/next");
 
         Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, tokenB, out _, out _, out _));
+
+    }
+
+    // JF-424: Amazon multi-fires NearlyFinished. A late duplicate NearlyFinished(trackA)
+    // arriving AFTER PlaybackStarted(trackB) stored entry(trackB -> trackC) must not
+    // consume that fresh entry via its token mismatch: the real NearlyFinished(trackB)
+    // still needs it, otherwise it does the full library+stream-URL resolution (the
+    // 11-20s stall JF-390 exists to avoid).
+    [Fact]
+    public void Cache_TryGet_TokenMismatch_LeavesStoredEntryForMatchingConsumer()
+    {
+        var deviceId = "device-jf424-" + Guid.NewGuid().ToString("N"); // unique per test: isolation without shared state
+        var tokenA = Guid.NewGuid().ToString();
+        var tokenB = Guid.NewGuid().ToString();
+        var nextId = Guid.NewGuid();
+        NextTrackPrecomputeCache.Store(deviceId, tokenB, nextId, new Audio { Name = "Next", Id = nextId }, "https://stream/next");
+
+        // Late/duplicate NearlyFinished for the PREVIOUS track: miss, and must NOT consume.
+        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, tokenA, out _, out _, out _));
+
+        // The fresh entry survives for the CURRENT track's real NearlyFinished.
+        Assert.True(NextTrackPrecomputeCache.TryGet(deviceId, tokenB, out Guid cachedId, out _, out string? streamUrl));
+        Assert.Equal(nextId, cachedId);
+        Assert.Equal("https://stream/next", streamUrl);
+
+    }
+
+    // JF-424 handler-level replay of the live interleaving: NearlyFinished(A) consumed
+    // entry(A->B), Started(B) stored entry(B->C), then Amazon re-sent a late duplicate
+    // NearlyFinished(A). The duplicate's mismatched probe must leave entry(B->C) in
+    // place so the REAL NearlyFinished(B) still answers from the cache. The library
+    // stops resolving C before the duplicate arrives, so trackC can only come from the
+    // precomputed entry: the full-resolution fallback cannot produce it.
+    [Fact]
+    public async Task PlaybackNearlyFinished_DuplicateForPreviousTrack_DoesNotDestroyFreshEntry()
+    {
+        _config.PreEnqueueOnStart = true;
+        var trackA = Guid.NewGuid();
+        var trackB = Guid.NewGuid();
+        var trackC = Guid.NewGuid();
+        SetupLibraryItem(trackB, "Track B");
+        SetupLibraryItem(trackC, "Track C");
+        var deviceId = "device-jf424-" + Guid.NewGuid().ToString("N"); // unique per test: isolation without shared state
+        var queue = new List<QueueItem> { new() { Id = trackA }, new() { Id = trackB }, new() { Id = trackC } };
+        var startedHandler = CreateHandler();
+        var nearlyFinishedHandler = new PlaybackNearlyFinishedEventHandler(
+            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, new Mock<IUserManager>().Object, _loggerFactory);
+
+        // 1) Started(A) stores entry(A->B); NearlyFinished(A) consumes it (normal flow).
+        await startedHandler.HandleAsync(
+            CreateStartedRequest(trackA.ToString()), CreateDeviceContext(trackA.ToString(), deviceId),
+            TestHelpers.CreateTestUser(), CreateSession(queue, trackA), CancellationToken.None);
+        await nearlyFinishedHandler.HandleAsync(
+            CreateNearlyFinishedRequest(trackA.ToString()), CreateDeviceContext(trackA.ToString(), deviceId),
+            TestHelpers.CreateTestUser(), CreateSession(queue, trackA), CancellationToken.None);
+
+        // 2) Started(B) stores entry(B->C).
+        await startedHandler.HandleAsync(
+            CreateStartedRequest(trackB.ToString()), CreateDeviceContext(trackB.ToString(), deviceId),
+            TestHelpers.CreateTestUser(), CreateSession(queue, trackB), CancellationToken.None);
+
+        // 3) From here on only the precomputed entry can answer with trackC.
+        _libraryManagerMock.Setup(l => l.GetItemById(trackC)).Returns((MediaBrowser.Controller.Entities.BaseItem?)null);
+
+        // 4) Late duplicate NearlyFinished(A): token mismatch, must NOT consume entry(B->C).
+        await nearlyFinishedHandler.HandleAsync(
+            CreateNearlyFinishedRequest(trackA.ToString()), CreateDeviceContext(trackA.ToString(), deviceId),
+            TestHelpers.CreateTestUser(), CreateSession(queue, trackB), CancellationToken.None);
+
+        // 5) The REAL NearlyFinished(B) still serves the precomputed trackC from the cache.
+        SkillResponse response = await nearlyFinishedHandler.HandleAsync(
+            CreateNearlyFinishedRequest(trackB.ToString()), CreateDeviceContext(trackB.ToString(), deviceId),
+            TestHelpers.CreateTestUser(), CreateSession(queue, trackB), CancellationToken.None);
+
+        var play = (response.Response?.Directives ?? new List<IDirective>())
+            .OfType<AudioPlayerPlayDirective>().FirstOrDefault();
+        Assert.NotNull(play);
+        Assert.Equal(trackC.ToString(), play.AudioItem?.Stream?.Token);
 
     }
 

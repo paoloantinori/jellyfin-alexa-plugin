@@ -21,6 +21,7 @@ using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
+using SortOrder = Jellyfin.Database.Implementations.Enums.SortOrder;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
@@ -95,15 +96,17 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         Logger.LogDebug("PlayAlbum: entered, locale={Locale}", locale);
 
-        // Escape hatch from the elicitation trap (shared CancelWords helper): while OUR
+        // Escape hatch from the elicitation trap (shared CancelWords helpers): while OUR
         // album/musician Dialog.ElicitSlot is open, a stop/cancel word gets captured into
-        // the elicited slot (dialogState IN_PROGRESS) instead of routing to
-        // AMAZON.Stop/Cancel. Gated on IN_PROGRESS so a first-invocation search for an
-        // album actually titled "Stop" still runs (code-review 2026-08-29). Runs BEFORE
-        // the warming gate so an open flow still cancels during the cold-start window
-        // (JF-419.2 contract, review round 2).
-        if (string.Equals(intentRequest.DialogState, "IN_PROGRESS", StringComparison.OrdinalIgnoreCase)
-            && (Util.CancelWords.IsCancelWord(album) || Util.CancelWords.IsCancelWord(musician)))
+        // a slot (dialogState IN_PROGRESS) instead of routing to AMAZON.Stop/Cancel. ANY
+        // slot counts (shared AnySlotIsCancelWord), not just album/musician: a
+        // force-routed request can carry the word in a sibling slot and searching it
+        // would reopen the trap (JF-423 consolidation). Gated on IN_PROGRESS so a
+        // first-invocation search for an album actually titled "Stop" still runs
+        // (code-review 2026-08-29). Runs BEFORE the warming gate so an open flow still
+        // cancels during the cold-start window (JF-419.2 contract, review round 2).
+        if (Util.CancelWords.IsDialogInProgress(intentRequest)
+            && Util.CancelWords.AnySlotIsCancelWord(intentRequest))
         {
             Logger.LogInformation("PlayAlbum: captured cancel word during open elicit (album='{Album}'), ending flow", album);
             return ResponseBuilder.Tell(ResponseStrings.Get("FindSongCancelled", locale));
@@ -147,6 +150,9 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         List<Guid> artistsIds = new List<Guid>();
         string? matchedArtistName = null;
+
+        // JF-411/JF-427: album resolved from the artist filter when no title was given.
+        BaseItem? resolvedAlbum = null;
         if (!string.IsNullOrWhiteSpace(musician))
         {
             Logger.LogDebug("PlayAlbum: searching for artist filter='{Musician}'", musician);
@@ -175,8 +181,16 @@ public class PlayAlbumIntentHandler : BaseHandler
         // albums and play it.
         if (string.IsNullOrWhiteSpace(album) && artistsIds.Count > 0)
         {
+            InternalItemsQuery artistAlbumQuery = BuildAlbumQuery(jellyfinUser, user, searchTerm: null, artistIds: artistsIds.ToArray(), albumArtistsOnly: true);
+
+            // JF-427: explicit deterministic order; the query previously had NO OrderBy, so the
+            // pick was an arbitrary database row that could change after an unrelated rescan. The
+            // authoritative most-tracks ranking happens in memory (PickMostTracksRelease); these
+            // keys give the fetch a stable shape and mirror its tie-breaks (AC#1).
+            artistAlbumQuery.OrderBy = new[] { (ItemSortBy.ProductionYear, SortOrder.Descending), (ItemSortBy.SortName, SortOrder.Ascending) };
+
             IReadOnlyList<BaseItem> artistAlbums = await RetryAsync(
-                () => _libraryManager.GetItemList(BuildAlbumQuery(jellyfinUser, user, searchTerm: null, artistIds: artistsIds.ToArray(), albumArtistsOnly: true)),
+                () => _libraryManager.GetItemList(artistAlbumQuery),
                 "GetArtistAlbums",
                 cancellationToken).ConfigureAwait(false);
 
@@ -185,10 +199,16 @@ public class PlayAlbumIntentHandler : BaseHandler
                 return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByArtist", locale, matchedArtistName!));
             }
 
-            album = artistAlbums[0].Name;
+            // JF-427 selection policy: prefer the release with the MOST tracks (a full studio
+            // release over a single/EP/live sampler), so "un disco di X" plays a defensible
+            // album instead of an arbitrary row.
+            IReadOnlyDictionary<string, int> trackCounts = await GetAlbumTrackCountsAsync(jellyfinUser, artistAlbums, cancellationToken).ConfigureAwait(false);
+            resolvedAlbum = PickMostTracksRelease(artistAlbums, trackCounts);
+
+            album = resolvedAlbum.Name;
             Logger.LogInformation(
-                "PlayAlbum: no album title given, picked '{Album}' by artist '{Artist}' (indefinite album-by-artist, JF-411)",
-                album, matchedArtistName);
+                "PlayAlbum: no album title given, picked '{Album}' by artist '{Artist}' out of {CandidateCount} releases (most-tracks policy; indefinite album-by-artist, JF-411/JF-427)",
+                album, matchedArtistName, artistAlbums.Count);
         }
 
         // Flow guard: past this point an album title is guaranteed (either the user said one
@@ -198,14 +218,29 @@ public class PlayAlbumIntentHandler : BaseHandler
             return BuildSlotElicitResponse(IntentNames.Slots.Album, "ElicitAlbumName", locale);
         }
 
-        var albumSearchQuery = BuildAlbumQuery(jellyfinUser, user, album, artistsIds.ToArray());
+        // JF-427: carry the album resolved from the artist filter instead of re-querying by
+        // its name. The re-query went through SearchTerm, which can miss on accent/index
+        // normalization, and a miss cascaded into the artist-less full-catalog query plus
+        // the library-wide fuzzy match below, all inside the 6s retry budget. The BaseItem
+        // is already in hand.
+        IReadOnlyList<BaseItem> albums;
+        if (resolvedAlbum != null)
+        {
+            Logger.LogDebug("PlayAlbum: using the album resolved from the artist filter, skipping the re-query by name");
+            albums = new List<BaseItem> { resolvedAlbum };
+        }
+        else
+        {
+            var albumSearchQuery = BuildAlbumQuery(jellyfinUser, user, album, artistsIds.ToArray());
 
-        Logger.LogDebug("PlayAlbum: querying Jellyfin with searchTerm='{Album}', artistIds={ArtistIdsCount}, types=MusicAlbum", album, artistsIds.Count);
-        IReadOnlyList<BaseItem> albums = await RetryAsync(
-            () => _libraryManager.GetItemList(albumSearchQuery),
-            "GetAlbums",
-            cancellationToken).ConfigureAwait(false);
-        Logger.LogDebug("PlayAlbum: Jellyfin returned {ResultCount} albums", albums.Count);
+            Logger.LogDebug("PlayAlbum: querying Jellyfin with searchTerm='{Album}', artistIds={ArtistIdsCount}, types=MusicAlbum", album, artistsIds.Count);
+            albums = await RetryAsync(
+                () => _libraryManager.GetItemList(albumSearchQuery),
+                "GetAlbums",
+                cancellationToken).ConfigureAwait(false);
+            Logger.LogDebug("PlayAlbum: Jellyfin returned {ResultCount} albums", albums.Count);
+        }
+
         if (albums.Count == 0 && !string.IsNullOrWhiteSpace(musician))
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByNameAndArtist", locale, album, matchedArtistName!));
@@ -341,6 +376,11 @@ public class PlayAlbumIntentHandler : BaseHandler
         {
             // Disambiguate distinct-name collisions only for Confirm users (AutoPlay users opted
             // out of prompts). Same-name duplicates always auto-play (a "X or X?" prompt is useless).
+            // Divergence (JF-427): this path deliberately keeps the NAME ordering as its pick
+            // policy and does NOT apply PickMostTracksRelease. The name sort also orders the
+            // disambiguation prompt list, and the track-count policy would add a tracks query
+            // to this multi-match hot path; the user named an album here, so alphabetical is
+            // already a defensible pick. The two paths diverge on purpose.
             albums = albums.OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ToList();
             bool distinctNames = albums.Select(a => a.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1;
             if (distinctNames && user.FuzzyMatchBehavior != FuzzyMatchBehavior.AutoPlay)
@@ -535,6 +575,74 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         ApplyLibraryFilter(q, user, _libraryManager);
         return q;
+    }
+
+    /// <summary>
+    /// JF-427: track counts per album name, from ONE bounded query covering all the given
+    /// albums (every Audio item across them; the artist's catalog is a naturally bounded set).
+    /// Grouping is by the track's Album metadata name, not by ParentId: split/malformed-folder
+    /// albums keep their tracks linked through that metadata even when the folder link is
+    /// broken (JF-338), so a ParentId grouping would undercount exactly those. Edge cases:
+    /// two same-name distinct albums merge their counts (deterministic, year/id tie-break wins),
+    /// and a track whose Album name differs from the MusicAlbum.Name counts under a key no
+    /// candidate ever looks up (that album falls back to the year/name tie-breaks).
+    /// </summary>
+    /// <param name="jellyfinUser">The Jellyfin user for the query.</param>
+    /// <param name="albums">The candidate albums (already library-filtered by the caller).</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>Case-insensitive album name to track count; names absent from the map count as 0.</returns>
+    private async Task<IReadOnlyDictionary<string, int>> GetAlbumTrackCountsAsync(
+        Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
+        IReadOnlyList<BaseItem> albums,
+        CancellationToken cancellationToken)
+    {
+        // Single-album elision: no ranking needed for <= 1 candidate; skip the query.
+        if (albums.Count <= 1)
+        {
+            return new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        var trackCountQuery = new InternalItemsQuery
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            IncludeItemTypes = new[] { BaseItemKind.Audio },
+            AlbumIds = albums.Select(a => a.Id).ToArray(),
+            // Only the base-row Album name is read; DtoOptions(false) alone leaves
+            // EnableImages/EnableUserData/AddCurrentProgram at their true defaults, which
+            // would still JOIN in the child collections for every track.
+            DtoOptions = new DtoOptions(false) { EnableImages = false, EnableUserData = false, AddCurrentProgram = false }
+        };
+
+        IReadOnlyList<BaseItem> tracks = await RetryAsync(
+            () => _libraryManager.GetItemList(trackCountQuery),
+            "GetArtistAlbumTrackCounts",
+            cancellationToken).ConfigureAwait(false);
+
+        return tracks
+            .GroupBy(t => t.Album ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Count());
+    }
+
+    /// <summary>
+    /// JF-427 selection policy for the indefinite album-by-artist path ("un disco di X"):
+    /// prefer the release with the MOST tracks (a full studio release over a single, EP or
+    /// live sampler), tie-break by newest ProductionYear, then Name, then Id. Track count
+    /// is not an ItemSortBy member in the Jellyfin 10.11 SDK, so the ranking runs in memory
+    /// over the artist's albums; the tie-breaks make the order TOTAL and independent of
+    /// database row order, so a library rescan cannot change which album plays.
+    /// </summary>
+    /// <param name="albums">The artist's candidate albums.</param>
+    /// <param name="trackCountsByAlbumName">Track counts keyed by album name, from <see cref="GetAlbumTrackCountsAsync"/>.</param>
+    /// <returns>The album to play.</returns>
+    private static BaseItem PickMostTracksRelease(IReadOnlyList<BaseItem> albums, IReadOnlyDictionary<string, int> trackCountsByAlbumName)
+    {
+        return albums
+            .OrderByDescending(a => trackCountsByAlbumName.TryGetValue(a.Name ?? string.Empty, out int trackCount) ? trackCount : 0)
+            .ThenByDescending(a => a.ProductionYear ?? int.MinValue)
+            .ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(a => a.Id)
+            .First();
     }
 
     /// <summary>

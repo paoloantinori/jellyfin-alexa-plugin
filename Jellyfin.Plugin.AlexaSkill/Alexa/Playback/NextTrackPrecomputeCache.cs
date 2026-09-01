@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using MediaBrowser.Controller.Entities;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
@@ -26,9 +27,9 @@ internal static class NextTrackPrecomputeCache
     /// <summary>
     /// How long a cache entry is valid before being considered stale. The TTL is evaluated
     /// lazily, only when TryGet reads the entry: there is no proactive sweep, so an entry
-    /// for a device that stops playing stays resident. This is bounded and harmless: Store
-    /// replaces the single per-device entry on every track start, so the dictionary never
-    /// holds more than one entry per device.
+    /// for a device that stops playing stays resident until its next read. This is
+    /// bounded and harmless: the dictionary is keyed by device, so it never holds more
+    /// than one entry per device.
     /// </summary>
     private static readonly TimeSpan EntryTtl = TimeSpan.FromMinutes(15);
 
@@ -48,8 +49,9 @@ internal static class NextTrackPrecomputeCache
 
     /// <summary>
     /// Attempts to retrieve a pre-computed next-track entry for a device, valid only if
-    /// the current track token matches and the entry is within its TTL. The retrieval
-    /// always consumes the entry (single-shot), including on mismatch or expiry.
+    /// the current track token matches and the entry is within its TTL. A valid
+    /// retrieval consumes the entry (single-shot); a token mismatch leaves the stored
+    /// entry intact (JF-424).
     /// </summary>
     /// <param name="deviceId">The Alexa device ID.</param>
     /// <param name="currentTrackToken">The currently playing track's token (must match the stored entry).</param>
@@ -68,23 +70,44 @@ internal static class NextTrackPrecomputeCache
             return false;
         }
 
-        // Consume on read (TryRemove): exactly one caller may serve a precomputed
-        // transition, and an entry for a different track is stale by definition (the
-        // device has moved on), so mismatches and orphans are reclaimed here too.
-        if (!Cache.TryRemove(deviceId, out PrecomputedEntry? entry))
+        // Peek first (JF-424): removal happens only once the entry is actually served
+        // or is dead, so a mismatched read cannot destroy the entry belonging to the
+        // track now playing.
+        if (!Cache.TryGetValue(deviceId, out PrecomputedEntry? entry))
         {
             return false;
         }
 
+        // TTL check, before the token check: an expired entry is dead by definition
+        // (ComputedAt is immutable, it can never re-enter the window), so it is
+        // reclaimed on any read, matched or not; this is the only removal a mismatched
+        // read may safely perform. The value-conditional remove takes only this exact
+        // entry, never a concurrent Store's replacement.
+        if (DateTimeOffset.UtcNow - entry.ComputedAt > EntryTtl)
+        {
+            Cache.TryRemove(new KeyValuePair<string, PrecomputedEntry>(deviceId, entry));
+            return false;
+        }
+
         // JF-409: the entry was stored while another track was playing; serving it here
-        // re-enqueued the current track on itself on-device.
+        // re-enqueued the current track on itself on-device. Leave it stored (JF-424):
+        // the mismatch marks a stale REQUEST (Amazon multi-fires NearlyFinished, so a
+        // late duplicate for a track that already ended can arrive after PlaybackStarted
+        // stored the entry for the track now playing), not a stale entry; removing it
+        // here would send the real NearlyFinished down the full library+stream-URL
+        // resolution path (the stall JF-390 exists to avoid). A within-TTL entry can
+        // outlive its transition (TryPrecomputeNext Stores only when a next item
+        // exists), but retention is bounded to one entry per device by the device
+        // keying and to the TTL by the check above.
         if (!string.Equals(entry.CurrentTrackToken, currentTrackToken, StringComparison.Ordinal))
         {
             return false;
         }
 
-        // TTL check: stale entries are treated as misses.
-        if (DateTimeOffset.UtcNow - entry.ComputedAt > EntryTtl)
+        // Consume (single-shot): exactly one caller may serve a precomputed transition.
+        // The value-conditional remove takes only this exact entry, never a concurrent
+        // Store's replacement.
+        if (!Cache.TryRemove(new KeyValuePair<string, PrecomputedEntry>(deviceId, entry)))
         {
             return false;
         }
