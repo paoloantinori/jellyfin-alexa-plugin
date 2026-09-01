@@ -224,7 +224,6 @@ public class VideoAudioController : ControllerBase
             var ffmpegProcess = await StartFfmpegProcessGatedAsync(
                 validation.FfmpegPath,
                 ffmpegArgs,
-                holdGateUntilExit: true,
                 EstimateEncodeBytes(validation.Item.RunTimeTicks ?? 0),
                 cachePath).ConfigureAwait(false);
 
@@ -400,7 +399,6 @@ public class VideoAudioController : ControllerBase
             var ffmpegProcess = await StartFfmpegProcessGatedAsync(
                 validation.FfmpegPath,
                 ffmpegArgs,
-                holdGateUntilExit: true,
                 EstimateEncodeBytes(validation.Item.RunTimeTicks ?? 0),
                 hlsDir).ConfigureAwait(false);
 
@@ -704,7 +702,6 @@ public class VideoAudioController : ControllerBase
             var ffmpegProcess = await StartFfmpegProcessGatedAsync(
                 ffmpeg,
                 ffmpegArgs,
-                holdGateUntilExit: true,
                 EstimateEncodeBytes(chapters.Sum(c => c.RunTimeTicks ?? 0)),
                 hlsDir).ConfigureAwait(false);
 
@@ -1532,40 +1529,55 @@ public class VideoAudioController : ControllerBase
     private static SemaphoreSlim _encodeGate = new(2, 2);
 
     /// <summary>
-    /// Rebuilds the encode gate when the configured cap changes (called from config
-    /// save; drain-safe: waiting callers keep their queue on the old semaphore, new
-    /// callers get the new cap).
+    /// The CONFIGURED capacity the current gate was built with (JF-421). Capacity
+    /// changes are detected against THIS, never against <see cref="SemaphoreSlim.CurrentCount"/>
+    /// (free slots): the old check compared free slots, so the per-request config sync
+    /// rebuilt a fresh full semaphore whenever ANY encode was in flight, and the JF-310
+    /// concurrency bound never bound.
+    /// </summary>
+    private static int _encodeGateCapacity = 2;
+
+    /// <summary>
+    /// Guards the capacity check-then-rebuild in <see cref="UpdateEncodeGateCapacity"/>
+    /// (review round: an unsynchronized interleaving across a config save could leave
+    /// the capacity field disagreeing with the live semaphore, and the early-return
+    /// then froze the wrong bound for the process lifetime).
+    /// </summary>
+    private static readonly object _gateSwapLock = new();
+
+    /// <summary>
+    /// Rebuilds the encode gate when the CONFIGURED cap changes (called from the
+    /// per-request config sync; a no-op unless the config value differs from
+    /// <see cref="_encodeGateCapacity"/>). Drain-safe: in-flight holders and waiting
+    /// callers keep the old semaphore, new callers get the new cap.
     /// </summary>
     internal static void UpdateEncodeGateCapacity(int maxConcurrent)
     {
         int bounded = Math.Max(1, maxConcurrent);
-        if (_encodeGate.CurrentCount == bounded)
+        lock (_gateSwapLock)
         {
-            return;
-        }
+            if (bounded == _encodeGateCapacity)
+            {
+                return;
+            }
 
-        _encodeGate = new SemaphoreSlim(bounded, bounded);
+            _encodeGateCapacity = bounded;
+            _encodeGate = new SemaphoreSlim(bounded, bounded);
+        }
     }
 
     /// <summary>
-    /// Whether the calling path must hold the encode gate for the lifetime of the
-    /// spawned process. All HLS/song encode paths do; the lightweight remux
-    /// (WriteAudiobookPlaylist re-mux, no transcode) is cheap and exempt to avoid
-    /// deadlocking behind long audiobook encodes.
+    /// Starts ffmpeg under the encode gate: the slot is held for the lifetime of the
+    /// spawned process (all HLS/song encode paths; the lightweight faststart remux
+    /// calls StartFfmpegProcess directly instead).
     /// </summary>
     private async Task<Process> StartFfmpegProcessGatedAsync(
         string ffmpegPath,
         List<string> arguments,
-        bool holdGateUntilExit,
         long estimatedEncodeBytes,
         string pinPath,
         CancellationToken cancellationToken = default)
     {
-        if (!holdGateUntilExit)
-        {
-            return StartFfmpegProcess(ffmpegPath, arguments);
-        }
-
         // JF-310/JF-428 (+review round 2): PIN the entry being written BEFORE the
         // eviction sweep runs, not after the gate is acquired: the creation-to-pin
         // window let a concurrent request's sweep delete another request's

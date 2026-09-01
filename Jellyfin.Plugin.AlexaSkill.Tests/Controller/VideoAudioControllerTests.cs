@@ -1407,6 +1407,83 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         VideoAudioController.UpdateEncodeGateCapacity(2); // restore default
     }
 
+    private static SemaphoreSlim GateField()
+        => (SemaphoreSlim)typeof(VideoAudioController)
+            .GetField("_encodeGate", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
+            .GetValue(null)!;
+
+    /// <summary>
+    /// JF-421: the gate is not rebuilt when the CONFIGURED capacity is unchanged,
+    /// even with an encode in flight (the old check compared free slots from the
+    /// per-request ctor, so any in-flight encode rebuilt a full semaphore and the
+    /// JF-310 bound never bound).
+    /// </summary>
+    [Fact]
+    public async Task EncodeGate_InFlightEncode_UnchangedConfigDoesNotRebuild()
+    {
+        // Force a fresh gate with a known state: the static gate is shared across
+        // the test class, and earlier tests may hold unreleased slots.
+        VideoAudioController.UpdateEncodeGateCapacity(4);
+        VideoAudioController.UpdateEncodeGateCapacity(2);
+        var original = GateField();
+
+        // Simulate one encode holding a slot (cap 2 -> one free)
+        await original.WaitAsync();
+        try
+        {
+            VideoAudioController.UpdateEncodeGateCapacity(2);
+            Assert.Same(original, GateField());
+            Assert.Equal(1, GateField().CurrentCount); // the held slot still holds
+        }
+        finally
+        {
+            original.Release();
+        }
+
+        VideoAudioController.UpdateEncodeGateCapacity(2); // restore default
+    }
+
+    /// <summary>JF-421: a real capacity change rebuilds with the new cap available.</summary>
+    [Fact]
+    public void EncodeGate_CapacityRaise_RebuildsWithFullCount()
+    {
+        VideoAudioController.UpdateEncodeGateCapacity(2);
+        var original = GateField();
+
+        VideoAudioController.UpdateEncodeGateCapacity(3);
+        var raised = GateField();
+
+        Assert.NotSame(original, raised);
+        Assert.Equal(3, raised.CurrentCount);
+        VideoAudioController.UpdateEncodeGateCapacity(2); // restore default
+    }
+
+    /// <summary>
+    /// JF-421: lowering the cap while slots are held takes effect for NEW
+    /// acquisitions immediately (in-flight holders finish on the old instance:
+    /// drain-safe).
+    /// </summary>
+    [Fact]
+    public async Task EncodeGate_CapacityLowerWhileBusy_NewCallersGetSmallerCap()
+    {
+        VideoAudioController.UpdateEncodeGateCapacity(3);
+        var raised = GateField();
+
+        await raised.WaitAsync();
+        await raised.WaitAsync();
+        try
+        {
+            VideoAudioController.UpdateEncodeGateCapacity(1);
+            Assert.Equal(1, GateField().CurrentCount);
+        }
+        finally
+        {
+            raised.Release();
+            raised.Release();
+            VideoAudioController.UpdateEncodeGateCapacity(2); // restore default
+        }
+    }
+
     /// <summary>
     /// The pre-encode disk budget check must run the eviction sweep with headroom for
     /// the incoming encode, and entries that fit the budget survive (no over-eviction).
