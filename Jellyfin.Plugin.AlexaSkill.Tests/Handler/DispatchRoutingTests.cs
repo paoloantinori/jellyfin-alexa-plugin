@@ -85,7 +85,6 @@ public class DispatchRoutingTests : PluginTestBase
         // tautological; the claim under test is only "construction succeeds for all".
         using var harness = new DispatchHarness();
         Assert.NotEmpty(harness.Handlers);
-        Assert.Equal(DispatchHarness.RegisteredHandlerTypes().Count, harness.Handlers.Count);
     }
 
     [Fact]
@@ -152,7 +151,7 @@ public class DispatchRoutingTests : PluginTestBase
             "RepeatSingleOnIntent"
         };
 
-        foreach ((string locale, string intentName) in EnumerateModelIntents())
+        foreach ((string locale, string intentName) in ModelIntents)
         {
             if (intentName.StartsWith("AMAZON.", StringComparison.Ordinal))
             {
@@ -185,7 +184,7 @@ public class DispatchRoutingTests : PluginTestBase
     public void EveryClaimedIntent_AppearsInSomeModel()
     {
         var modelIntentSet = new HashSet<string>(
-            EnumerateModelIntents().Select(m => m.IntentName),
+            ModelIntents.Select(m => m.IntentName),
             StringComparer.Ordinal);
 
         // JF-451 findings (filed), kept explicit so a fix flips the test: PlayIntent
@@ -315,7 +314,7 @@ public class DispatchRoutingTests : PluginTestBase
     public void HardwarePlayButton_RoutesToPlayIntentHandler_DespiteResumeTie()
     {
         using var harness = new DispatchHarness();
-        PlaybackControllerRequest request = CreatePlayCommand();
+        PlaybackControllerRequest request = TestHelpers.CreatePlayCommand();
 
         List<BaseHandler> claimers = harness.Handlers.Where(h => h.CanHandle(request)).ToList();
         Assert.Contains(claimers, h => h is PlayIntentHandler);
@@ -367,16 +366,6 @@ public class DispatchRoutingTests : PluginTestBase
         => new() { [DispatchHarness.FindSongSessionKey] = "{}" };
 
     /// <summary>
-    /// PlaybackControllerRequest.PlaybackRequestType is read-only; deserialize from
-    /// JSON the way PlaybackControlHandlerTests does.
-    /// </summary>
-    private static PlaybackControllerRequest CreatePlayCommand()
-    {
-        const string json = @"{""requestId"":""test"",""type"":""PlaybackController.PlayCommandIssued"",""timestamp"":""2024-01-01T00:00:00Z"",""locale"":""en-US"",""playbackRequestMethod"":""PLAY""}";
-        return Newtonsoft.Json.JsonConvert.DeserializeObject<PlaybackControllerRequest>(json)!;
-    }
-
-    /// <summary>
     /// Enumerates all string constants declared on IntentNames (intent names and
     /// AMAZON.* built-ins), excluding ProactiveSubscriptionChanged (a request type,
     /// not an intent name).
@@ -389,11 +378,17 @@ public class DispatchRoutingTests : PluginTestBase
             .OfType<string>();
 
     /// <summary>
-    /// Enumerates (locale, intent name) for every intent declared in every embedded
-    /// locale interaction model, via the same manifest enumeration production uses.
+    /// (locale, intent name) for every intent declared in every embedded locale
+    /// interaction model, via the same manifest enumeration production uses.
+    /// Memoized once per test-assembly run: the embedded models are immutable at
+    /// test runtime, and each full pass parses all 17 JSONs (~722KB of
+    /// LINQ-to-JSON DOM), which three consumers were each repeating.
     /// </summary>
-    private static IEnumerable<(string Locale, string IntentName)> EnumerateModelIntents()
+    private static readonly IReadOnlyList<(string Locale, string IntentName)> ModelIntents = LoadModelIntents();
+
+    private static IReadOnlyList<(string Locale, string IntentName)> LoadModelIntents()
     {
+        var results = new List<(string Locale, string IntentName)>();
         var assembly = typeof(global::Jellyfin.Plugin.AlexaSkill.Util).Assembly;
 
         foreach (Tuple<string, string> model in global::Jellyfin.Plugin.AlexaSkill.Util.GetLocalInteractionModels())
@@ -408,10 +403,12 @@ public class DispatchRoutingTests : PluginTestBase
                 string? name = intent?["name"]?.ToString();
                 if (!string.IsNullOrEmpty(name))
                 {
-                    yield return (model.Item1, name!);
+                    results.Add((model.Item1, name!));
                 }
             }
         }
+
+        return results;
     }
 
     /// <summary>
@@ -427,7 +424,7 @@ public class DispatchRoutingTests : PluginTestBase
         var probes = new List<Request>();
 
         var intentNames = EnumerateIntentNameConstants()
-            .Concat(EnumerateModelIntents().Select(m => m.IntentName))
+            .Concat(ModelIntents.Select(m => m.IntentName))
             .Concat(HandledButUndeclaredIntents)
             .ToHashSet(StringComparer.Ordinal);
 
@@ -469,7 +466,7 @@ public class DispatchRoutingTests : PluginTestBase
         }
 
         // PlaybackController hardware Play button (the tie case).
-        probes.Add(CreatePlayCommand());
+        probes.Add(TestHelpers.CreatePlayCommand());
 
         // ProactiveSubscriptionChanged → ProactiveSubscriptionChangedHandler.
         probes.Add(new ProactiveSubscriptionChangedProbeRequest());

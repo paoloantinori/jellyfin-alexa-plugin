@@ -459,12 +459,10 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
             _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object);
 
         // PlaybackControllerRequest.PlaybackRequestType is read-only;
-        // deserialize from JSON to set it
-        var json = @"{""requestId"":""test"",""type"":""PlaybackController.PlayCommandIssued"",""timestamp"":""2024-01-01T00:00:00Z"",""locale"":""en-US"",""playbackRequestMethod"":""PLAY""}";
-        var request = Newtonsoft.Json.JsonConvert.DeserializeObject<PlaybackControllerRequest>(json);
+        // deserialize from JSON to set it (TestHelpers.CreatePlayCommand)
+        var request = TestHelpers.CreatePlayCommand();
 
-        Assert.NotNull(request);
-        Assert.True(handler.CanHandle(request!));
+        Assert.True(handler.CanHandle(request));
     }
 
     [Fact]

@@ -199,6 +199,17 @@ internal static class TestHelpers
     }
 
     /// <summary>
+    /// The ONE hardware Play-button request (PlaybackControllerRequest's request
+    /// type is read-only, so it is deserialized from the wire JSON). Was an inline
+    /// literal in PauseResumeStateTests and DispatchRoutingTests (JF-433 simplify).
+    /// </summary>
+    internal static global::Alexa.NET.Request.Type.PlaybackControllerRequest CreatePlayCommand()
+    {
+        const string json = @"{""requestId"":""test"",""type"":""PlaybackController.PlayCommandIssued"",""timestamp"":""2024-01-01T00:00:00Z"",""locale"":""en-US"",""playbackRequestMethod"":""PLAY""}";
+        return Newtonsoft.Json.JsonConvert.DeserializeObject<global::Alexa.NET.Request.Type.PlaybackControllerRequest>(json)!;
+    }
+
+    /// <summary>
     /// JF-440: the ONE song-index fake (was duplicated as FakeSongIndex in
     /// PlayArtistSongsIntentHandlerTests and FakeNgramIndex in PlaySongTitleFallbackTests).
     /// Returns the fixed scored set from both stages (no test distinguishes them).

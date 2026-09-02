@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-02 02:41'
-updated_date: '2026-09-02 02:42'
+updated_date: '2026-09-02 03:58'
 labels:
   - playback
   - concurrency
@@ -41,6 +41,8 @@ Scope note: JF-429 already hardened the ARM side (volatile _disposed, in-lock re
 
 <!-- SECTION:NOTES:BEGIN -->
 Sync-review addition 2026-09-02: a third pre-existing window in the same family. DeviceQueueManager.Dispose calls PersistAll() before the timer-teardown lock section, so a debounce timer firing inside that window writes queue_<device>.json concurrently with PersistAll's own non-atomic WriteAllText to the same path. Microsecond window, pre-existing order (JF-429 deliberately kept the old order). Candidate fix shape, same as the tracker's: adopt AudiobookPositionTracker's ordering (timer teardown under the lock first, then the final flush).
+
+2026-09-02 simplify pass (batch JF-429/430/433) landed three related pointers on this task, since its fix re-touches both classes: (1) TEARDOWN DIVERGENCE: the two Dispose protocols already disagree (tracker: flag, then timer teardown under lock, then final flush; DQM: flag, then PersistAll, then teardown). When fixing the interleavings here, adopt ONE defined order in both. (2) SHARED HELPER: the arm-guard idiom now exists 3x (ArmOneShot + both playback copies, near-verbatim); the fix should introduce a small sealed keyed one-shot debounce helper in Alexa/Util/ (Arm/Disarm/DisposeAll owning the volatile flag, lock, timer map) that both classes adopt, so the interleaving fix lands once. The arm-copy itself was judged defensible this round (different key shapes, Timer.Change idiom, no viable base-class derivation). (3) TEST SPEED: the two new race tests sleep 7s wall-clock; the original rejection of debounce test hooks predates the discovery that InternalsVisibleTo("Jellyfin.Plugin.AlexaSkill.Tests") already exists (csproj:15), so an internal ctor overload or internal interval hook crosses no new assembly boundary. Fold that in here: 7s drops under 0.5s.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done

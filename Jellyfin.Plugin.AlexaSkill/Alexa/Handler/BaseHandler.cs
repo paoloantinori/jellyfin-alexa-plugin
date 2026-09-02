@@ -527,8 +527,7 @@ public abstract class BaseHandler
     /// <param name="intentName">The intent whose dialog the elicit continues.</param>
     /// <param name="slotToElicit">The slot the user's next utterance fills.</param>
     /// <param name="allSlotNames">Every slot of the target intent, for updatedIntent.</param>
-    /// <param name="prompt">The spoken question.</param>
-    /// <param name="reprompt">The reprompt text; defaults to the prompt.</param>
+    /// <param name="prompt">The spoken question (also used as the reprompt: every current elicit repeats its question when the user stays silent).</param>
     /// <param name="sessionAttributes">Session state for a flow that owns state (e.g. FindSong's search state); leave null when the dialog lives Amazon-side.</param>
     /// <param name="activeFlowKeys">The calling flow's session keys (JF-398 mutual exclusion); pass none when the elicit owns no flow state of its own.</param>
     /// <returns>The elicitation response.</returns>
@@ -537,11 +536,9 @@ public abstract class BaseHandler
         string slotToElicit,
         string[] allSlotNames,
         string prompt,
-        string? reprompt = null,
         Dictionary<string, object>? sessionAttributes = null,
         params string[] activeFlowKeys)
     {
-        reprompt ??= prompt;
         var response = new SkillResponse
         {
             Version = "1.0",
@@ -550,7 +547,7 @@ public abstract class BaseHandler
             {
                 ShouldEndSession = false,
                 OutputSpeech = new PlainTextOutputSpeech { Text = prompt },
-                Reprompt = new Reprompt(reprompt),
+                Reprompt = new Reprompt(prompt),
                 Directives = new List<IDirective> { new ElicitSlotDirective(slotToElicit, intentName, allSlotNames) }
             }
         };

@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-02 03:15'
+updated_date: '2026-09-02 03:58'
 labels:
   - tech-debt
   - consolidation
@@ -36,3 +37,9 @@ Filed from the JF-430 review sweep (2026-09-02). Controller/AlexaSkillController
 - [ ] #10 /code-review high passed (no blocking findings remaining
 - [ ] #11 or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-02 simplify pass EXTENDED SCOPE: two independent reviewers flagged that the constant adoption alone leaves the deeper gap. The harness's Select() mirror (DispatchHarness.cs:148-181) replicates the controller's force-route conditions from a comment citation; NOTHING pins the controller side (a controller-only edit, e.g. dropping the is-IntentRequest guard, the exact 2026-08-21 incident class, leaves the suite green). RegisteredHandlerTypes (DispatchHarness.cs:86) is likewise a verbatim copy of Registrator.cs:110-129. The full fix: extract the selection semantics (force-route predicate + first-CanHandle-wins loop, and optionally the handler-type enumeration as an internal static beside the Registrator) into an internal production unit the controller calls and the harness reuses; the mirrors become calls and JF-452's constant adoption falls out naturally. Optional piggyback noted by the altitude reviewer: resolving harness handlers via a real ServiceCollection provider would also pin DI activation (a handler whose ctor deps Registrator never registers currently constructs fine from mocks but crashes at startup).
+<!-- SECTION:NOTES:END -->
