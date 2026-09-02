@@ -1581,10 +1581,22 @@ public class VideoAudioController : ControllerBase
         // JF-310/JF-428 (+review round 2): PIN the entry being written BEFORE the
         // eviction sweep runs, not after the gate is acquired: the creation-to-pin
         // window let a concurrent request's sweep delete another request's
-        // already-created but not-yet-pinned HLS directory. A cancelled gate wait
-        // unpins in the catch below, so no pin leaks.
+        // already-created but not-yet-pinned HLS directory. Every failure path from
+        // here to process start (sweep throw, cancelled gate wait, process start
+        // failure) unpins in its own catch, so no pin leaks.
         _cache.Pin(pinPath);
-        await _cache.EnsureDiskBudgetBeforeEncodeAsync(estimatedEncodeBytes).ConfigureAwait(false);
+        try
+        {
+            await _cache.EnsureDiskBudgetBeforeEncodeAsync(estimatedEncodeBytes).ConfigureAwait(false);
+        }
+        catch
+        {
+            // The sweep threw before any of the downstream Unpin sites could run;
+            // without this the leaked pin would keep the half-created entry
+            // undeletable for the process lifetime.
+            _cache.Unpin(pinPath);
+            throw;
+        }
 
         // Capture the gate instance at acquire time so the release always goes to
         // the SAME semaphore, even if UpdateEncodeGateCapacity swaps the field while

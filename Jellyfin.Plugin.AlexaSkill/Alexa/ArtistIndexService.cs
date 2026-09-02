@@ -17,16 +17,19 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa;
 /// Background service that maintains an in-memory index of all MusicArtist items.
 /// Loads at startup and refreshes when artists are added/removed from the library.
 /// Lifecycle (debounce, failed-load retry, readiness, dispose ordering) lives in
-/// <see cref="DebouncedLibraryIndexService"/> (JF-419.3 extraction).
+/// <see cref="DebouncedLibraryIndexService"/> (JF-419.3 extraction). The loaded state is
+/// published as one immutable <see cref="ArtistIndexSnapshot"/> reference so a reader can
+/// never observe a torn mix of two loads (JF-432).
 /// </summary>
 public class ArtistIndexService : DebouncedLibraryIndexService, IArtistIndex
 {
-    private volatile List<BaseItem> _artists = [];
-    private volatile Dictionary<Guid, Guid> _artistTopParentMap = new();
-    private volatile Dictionary<Guid, (string Primary, string? Alternate)> _phoneticCodes = new();
+    private volatile ArtistIndexSnapshot _snapshot = ArtistIndexSnapshot.Empty;
+
+    /// <summary>The currently published snapshot (internal test accessor, JF-432).</summary>
+    internal ArtistIndexSnapshot CurrentSnapshot => _snapshot;
 
     /// <inheritdoc />
-    public int Count => _artists.Count;
+    public int Count => _snapshot.Artists.Count;
 
     /// <inheritdoc />
     protected override string IndexName => "artist";
@@ -47,21 +50,22 @@ public class ArtistIndexService : DebouncedLibraryIndexService, IArtistIndex
     /// <inheritdoc />
     public bool TryGetPhoneticCode(Guid artistId, out (string Primary, string? Alternate) codes)
     {
-        return _phoneticCodes.TryGetValue(artistId, out codes);
+        return _snapshot.PhoneticCodes.TryGetValue(artistId, out codes);
     }
 
     /// <inheritdoc />
     public IReadOnlyList<BaseItem> GetArtists(Guid[]? topParentIds = null)
     {
-        var artists = _artists;
+        // Capture once: the artist list and the parent map must come from the same publish
+        var snapshot = _snapshot;
 
         if (topParentIds == null || topParentIds.Length == 0)
         {
-            return artists;
+            return snapshot.Artists;
         }
 
-        var map = _artistTopParentMap;
-        return artists.Where(a => map.TryGetValue(a.Id, out var parentId) && Array.IndexOf(topParentIds, parentId) >= 0).ToList();
+        var map = snapshot.TopParentMap;
+        return snapshot.Artists.Where(a => map.TryGetValue(a.Id, out var parentId) && Array.IndexOf(topParentIds, parentId) >= 0).ToList();
     }
 
     /// <inheritdoc />
@@ -94,9 +98,8 @@ public class ArtistIndexService : DebouncedLibraryIndexService, IArtistIndex
             }
         }
 
-        _artistTopParentMap = topParentMap;
-        _phoneticCodes = phoneticCodes;
-        _artists = new List<BaseItem>(artists);
+        // One publish: all read paths see the new maps and the new list together (JF-432)
+        _snapshot = new ArtistIndexSnapshot(new List<BaseItem>(artists), topParentMap, phoneticCodes);
 
         Logger.LogInformation("Artist index {Action}: {Count} artists, {PhoneticCount} with phonetic codes",
             artists.Count > 0 ? "loaded" : "initialized (empty library)",

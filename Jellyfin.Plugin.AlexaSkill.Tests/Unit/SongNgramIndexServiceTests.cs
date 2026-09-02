@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
@@ -431,5 +432,136 @@ public class SongNgramIndexServiceTests : PluginTestBase
         var results = service.Search(new[] { "day", "life" }, "en-US");
         Assert.Single(results);
         Assert.Equal(song.Id, results[0].Item.Id);
+    }
+
+    // --- JF-432: atomic snapshot publishing (no torn reads across a refresh) ---
+
+    [Fact]
+    public void PublishedState_IsOneSnapshotField_StructuralInvariant()
+    {
+        // The loaded state must live in ONE field (an immutable snapshot record),
+        // never in a group of separate volatile fields: volatile orders the individual
+        // assignments but not the group, so sequential publishing let a reader observe
+        // a torn mix mid-refresh (old bigram candidate IDs against the new entries list,
+        // which returned empty results for an existing song). Asserting the shape
+        // mechanically guards against a regression to per-member fields.
+        var derivedFields = typeof(SongNgramIndexService)
+            .GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
+            .Where(f => f.DeclaringType == typeof(SongNgramIndexService))
+            .ToList();
+
+        // A future non-state instance field on the service is fine ONLY if this
+        // assertion is updated alongside it: the snapshot must stay the single
+        // published-state field.
+        Assert.True(
+            derivedFields.Count == 1 && derivedFields[0].FieldType == typeof(SongNgramIndexSnapshot),
+            $"SongNgramIndexService must declare exactly one published-state field of type SongNgramIndexSnapshot, found: {string.Join(", ", derivedFields.Select(f => $"{f.FieldType.Name} {f.Name}"))}");
+    }
+
+    [Fact]
+    public async Task Refresh_PublishesOneSnapshot_AllReadSurfacesAgree()
+    {
+        var song1 = MakeSong("Song One");
+        var song2 = MakeSong("Song Two");
+        int callCount = 0;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(() => ++callCount == 1
+                ? new List<BaseItem> { song1 }
+                : new List<BaseItem> { song1, song2 });
+        _libraryManagerMock
+            .Setup(l => l.GetItemById(It.IsAny<Guid>()))
+            .Returns((Guid id) => null as BaseItem);
+
+        var service = new SongNgramIndexService(_libraryManagerMock.Object, _logger);
+        await service.StartAsync(CancellationToken.None);
+        var before = service.CurrentSnapshot;
+
+        // Force refresh with updated data
+        await service.StartAsync(CancellationToken.None);
+
+        var after = service.CurrentSnapshot;
+        Assert.NotSame(before, after); // one atomic swap, not a member-by-member publish
+        Assert.Equal(2, service.SongCount);
+        Assert.Equal(2, service.NgramCount); // "song one" and "song two"
+
+        var results = service.Search(new[] { "song", "two" }, "en-US");
+        var match = Assert.Single(results);
+        Assert.Equal(song2.Id, match.Item.Id);
+
+        // The returned item must exist in the CURRENT snapshot's entries: a torn read
+        // served old-index hits against the new entries list (or the reverse)
+        Assert.Contains(after.AllEntries, s => s.Id == match.Item.Id);
+    }
+
+    [Fact]
+    public async Task ConcurrentRefreshAndReads_NeverObserveTornState()
+    {
+        // Refreshes swap two disjoint datasets (identical title, different song IDs
+        // and folders) while a reader searches with BOTH folders as the library
+        // filter, alternating the bigram path and the phonetic path so every snapshot
+        // member is exercised mid-refresh. Either snapshot alone always returns
+        // exactly one song; an empty result requires a torn publish (old bigram IDs
+        // against the new entries, or the old top-parent map filtering the new song out).
+        var folderA = Guid.NewGuid();
+        var folderB = Guid.NewGuid();
+        var songA = MakeSong("Torn Song");
+        songA.ParentId = folderA;
+        var songB = MakeSong("Torn Song");
+        songB.ParentId = folderB;
+
+        int callCount = 0;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(() => Interlocked.Increment(ref callCount) % 2 == 1
+                ? new List<BaseItem> { songA }
+                : new List<BaseItem> { songB });
+        _libraryManagerMock.Setup(l => l.GetItemById(folderA)).Returns(new Folder { Id = folderA });
+        _libraryManagerMock.Setup(l => l.GetItemById(folderB)).Returns(new Folder { Id = folderB });
+
+        var service = new SongNgramIndexService(_libraryManagerMock.Object, _logger);
+        await service.StartAsync(CancellationToken.None);
+        var filters = new[] { folderA, folderB };
+        var tokens = new[] { "torn", "song" };
+
+        using var done = new ManualResetEventSlim(false);
+        var refresher = Task.Run(async () =>
+        {
+            try
+            {
+                for (int i = 0; i < 300; i++)
+                {
+                    await service.StartAsync(CancellationToken.None).ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                done.Set(); // a faulted refresher must fail the test, not hang the read loop
+            }
+        });
+
+        try
+        {
+            // The loop condition (not a timing-dependent assert) guarantees a minimum
+            // read count: a fast refresher must not leave the reader with near-zero reads
+            int reads = 0;
+            while (!done.IsSet || reads < 50)
+            {
+                if (reads % 2 == 0)
+                {
+                    Assert.NotEmpty(service.Search(tokens, "en-US", filters));
+                }
+                else
+                {
+                    Assert.NotEmpty(service.SearchPhonetic(new[] { "torn" }, "en-US", filters));
+                }
+
+                reads++;
+            }
+
+            await refresher;
+        }
+        finally
+        {
+            service.Dispose();
+        }
     }
 }

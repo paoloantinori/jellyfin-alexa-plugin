@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -312,6 +313,16 @@ public class VideoAudioCache
     public Task EnsureDiskBudgetBeforeEncodeAsync(long estimatedEncodeBytes)
         => EvictIfNeeded(estimatedEncodeBytes);
 
+    /// <summary>
+    /// JF-431: latency budget for the synchronous cache-directory scan in
+    /// <see cref="EvictIfNeededCore"/>. A scan at or above this duration is logged at
+    /// Information level: every cache the default 2048MB cap can build measures under it
+    /// on the deployment-class host, so crossing it means a non-default configuration or
+    /// storage slower than measured. The measurement note inside
+    /// <see cref="EvictIfNeededCore"/> holds the numbers backing this threshold.
+    /// </summary>
+    private const double SlowEvictionScanThresholdMs = 50;
+
     private Task EvictIfNeeded(long headroomBytes)
     {
         EvictIfNeededCore(headroomBytes);
@@ -336,6 +347,32 @@ public class VideoAudioCache
         {
             return;
         }
+
+        // JF-431 (measured 2026-09-02, kept SYNCHRONOUS by decision): this scan runs on
+        // the Alexa request path (every gated encode start) and enumerates the whole cache
+        // directory: all *.mp4 files plus every HLS dir with per-file size stats. Numbers
+        // below are medians of 5 warm runs over synthetic sparse trees; the N100 rows are
+        // the deployment-class host (Intel N100, xfs) via a syscall-equivalent scandir+stat
+        // mirror (an upper bound), while the parenthetical dev-host numbers (i7-1185G7)
+        // use these production .NET APIs directly:
+        //   2,250 files / 2.0GB  -> 6.3ms   (3.5ms tmpfs, 3.3ms btrfs)
+        //  10,300 files / 1.8GB  -> 29.7ms  (14.5ms btrfs) [closest measured row below a
+        //                                     full default 2048MB cap, ~13,000 files]
+        //  20,400 files / 3.3GB  -> 56.5ms  (crosses the 50ms tripwire at ~18,000 files,
+        //                                     ~1.4x the default cap's file count)
+        // Page-cache-evicted runs (posix_fadvise) cost up to ~16% more (34.4ms for the
+        // 10,300-file tree), and extrapolating to the full default cap (~13,000 files)
+        // gives ~37ms warm / ~43ms cold, still under the tripwire. A truly post-boot cold
+        // cache (dcache dropped, needs root to measure) would be slower still; even at a
+        // 10x multiplier the worst measured tree stays an order of magnitude under the
+        // ~8s Alexa window, and the page-cache-warm steady state is the normal case
+        // because segment serving keeps the tree warm.
+        // Decision: a cached-size ledger or background sweep (the alternatives) adds
+        // stale-total risk against no measurable win at these sizes, and the JF-428
+        // pin-before-sweep + half-cap-floor semantics depend on this sweep running
+        // synchronously before every encode. The threshold log below is the tripwire: if a
+        // deployment's scan exceeds it, the synchronous-sweep decision no longer holds.
+        var scanWatch = Stopwatch.StartNew();
 
         var entries = new List<CacheEntry>();
 
@@ -383,6 +420,11 @@ public class VideoAudioCache
                     _logger.LogDebug(ex, "Error scanning HLS directory for eviction: {Path}", dir.FullName);
                     continue;
                 }
+                catch (UnauthorizedAccessException ex)
+                {
+                    _logger.LogDebug(ex, "Access denied scanning HLS directory for eviction: {Path}", dir.FullName);
+                    continue;
+                }
 
                 if (dirSize > 0)
                 {
@@ -404,13 +446,25 @@ public class VideoAudioCache
             _logger.LogDebug(ex, "Error scanning cache directory for eviction");
             return;
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogDebug(ex, "Access denied while scanning cache directory for eviction");
+            return;
+        }
+        finally
+        {
+            // Runs on every exit from the enumeration, including the catch returns above:
+            // an I/O-failure scan must still report its duration, because a scan that was
+            // slow AND failed is exactly the case the JF-431 threshold exists to flag.
+            LogEvictionScanCost(scanWatch, entries);
+        }
+
+        long totalSize = entries.Sum(e => e.Size);
 
         if (entries.Count == 0)
         {
             return;
         }
-
-        long totalSize = entries.Sum(e => e.Size);
 
         if (totalSize <= maxSizeBytes)
         {
@@ -461,6 +515,14 @@ public class VideoAudioCache
             {
                 _logger.LogDebug(ex, "Failed to evict cache entry: {Path}", entry.Path);
             }
+            catch (UnauthorizedAccessException ex)
+            {
+                // An undeletable entry (e.g. a root-owned subdir left by a podman cp)
+                // must not abort the sweep: the throw would escape onto the Alexa
+                // request path and, while the cache stays over cap, fail every
+                // subsequent encode. Skip it and keep evicting the other entries.
+                _logger.LogWarning(ex, "Access denied deleting cache entry, skipping it (other entries still evict): {Path}", entry.Path);
+            }
 
             // Drop the in-memory access record whether or not the delete succeeded -- if the
             // delete failed the file is re-enumerated next round (atime fallback), and this
@@ -474,6 +536,37 @@ public class VideoAudioCache
                 "VideoAudio cache still {OverMB:F1}MB over the {TargetMB:F1}MB target after eviction (pinned in-use entries and/or failed deletes)",
                 (totalSize - maxSizeBytes) / (1024.0 * 1024.0),
                 maxSizeBytes / (1024.0 * 1024.0));
+        }
+    }
+
+    /// <summary>
+    /// JF-431 scan-cost visibility for the enumeration half of
+    /// <see cref="EvictIfNeededCore"/> (the scan, not the deletes). Debug always;
+    /// Information only past the measured-cheap threshold, so a config or storage
+    /// regime that invalidates the keep-it-synchronous decision surfaces itself.
+    /// Called from the enumeration's finally: a slow scan of a directory whose contents
+    /// yield zero entries, or one that ends in an I/O failure, is exactly the
+    /// pathological case the threshold exists to flag.
+    /// </summary>
+    /// <param name="scanWatch">Watch started immediately before the enumeration.</param>
+    /// <param name="entries">Entries collected before the scan ended (partial on failure).</param>
+    private void LogEvictionScanCost(Stopwatch scanWatch, List<CacheEntry> entries)
+    {
+        double scanMs = scanWatch.Elapsed.TotalMilliseconds;
+        double totalMB = entries.Sum(e => e.Size) / (1024.0 * 1024.0);
+        _logger.LogDebug(
+            "VideoAudio cache eviction scan: {Entries} entries, {TotalMB:F1}MB, {ElapsedMs:F1}ms",
+            entries.Count,
+            totalMB,
+            scanMs);
+        if (scanMs >= SlowEvictionScanThresholdMs)
+        {
+            _logger.LogInformation(
+                "VideoAudio cache eviction scan took {ElapsedMs:F1}ms for {Entries} entries ({TotalMB:F1}MB), above the {ThresholdMs:F0}ms measured-cheap budget (JF-431); consider lowering VideoAudioCacheSizeMB or moving the cache to faster storage",
+                scanMs,
+                entries.Count,
+                totalMB,
+                SlowEvictionScanThresholdMs);
         }
     }
 

@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -371,6 +372,194 @@ public class VideoAudioCacheTests : PluginTestBase, IDisposable
         {
             _cache.Unpin(path);    // cleanup if an assert failed; no-op when unpinned
         }
+    }
+
+    // --- review 2026-09-02: permission-denied entries must not wedge the sweep ---
+
+    /// <summary>
+    /// Review fix (2026-09-02): a cache entry that cannot be deleted (access denied,
+    /// e.g. a root-owned subdir left by a podman cp incident) must be skipped with a
+    /// warning while the remaining entries still evict. Before the fix the
+    /// UnauthorizedAccessException from Directory.Delete escaped EvictIfNeededCore onto
+    /// the Alexa play path and, with the cache left over cap, failed every subsequent
+    /// encode until restart.
+    /// </summary>
+    [Fact]
+    public async Task EvictIfNeeded_UndeletableEntry_IsSkippedAndOthersStillEvicted()
+    {
+        Plugin.Instance!.Configuration.VideoAudioCacheSizeMB = 1;
+
+        if (!PermissionBitsDenyDelete())
+        {
+            return; // privileges bypass permission bits (root): no denial to simulate
+        }
+
+        string stuckDir = _cache.GetHlsDirectoryPath("aaaaaaaa-1111-1111-1111-111111111111", 1);
+        string freshDir = _cache.GetHlsDirectoryPath("bbbbbbbb-2222-2222-2222-222222222222", 2);
+        Directory.CreateDirectory(stuckDir);
+        Directory.CreateDirectory(freshDir);
+        await File.WriteAllTextAsync(Path.Combine(stuckDir, "stream.m3u8"), "#EXTM3U\n");
+        await File.WriteAllBytesAsync(Path.Combine(stuckDir, "seg_000.ts"), new byte[1200 * 1024]);
+        await File.WriteAllTextAsync(Path.Combine(freshDir, "stream.m3u8"), "#EXTM3U\n");
+        await File.WriteAllBytesAsync(Path.Combine(freshDir, "seg_000.ts"), new byte[100 * 1024]);
+
+        // Entry recency is max(dir atime, contained files' atimes): age BOTH sides so the
+        // undeletable dir is deterministically the oldest (first eviction candidate).
+        File.SetLastAccessTimeUtc(stuckDir, DateTime.UtcNow.AddHours(-2));
+        File.SetLastAccessTimeUtc(Path.Combine(stuckDir, "stream.m3u8"), DateTime.UtcNow.AddHours(-2));
+        File.SetLastAccessTimeUtc(Path.Combine(stuckDir, "seg_000.ts"), DateTime.UtcNow.AddHours(-2));
+        File.SetLastAccessTimeUtc(freshDir, DateTime.UtcNow);
+        File.SetLastAccessTimeUtc(Path.Combine(freshDir, "stream.m3u8"), DateTime.UtcNow);
+        File.SetLastAccessTimeUtc(Path.Combine(freshDir, "seg_000.ts"), DateTime.UtcNow);
+
+        // Owner loses write (mode 555 on Linux): enumeration still works, recursive
+        // delete is denied.
+        File.SetAttributes(stuckDir, FileAttributes.ReadOnly);
+        try
+        {
+            await _cache.EvictIfNeeded();
+
+            Assert.True(Directory.Exists(stuckDir), "The undeletable entry must be skipped, not crash the sweep");
+            Assert.True(File.Exists(Path.Combine(stuckDir, "seg_000.ts")), "The undeletable entry's contents must be untouched");
+            Assert.False(Directory.Exists(freshDir), "Other entries must still evict after the undeletable one is skipped");
+        }
+        finally
+        {
+            File.SetAttributes(stuckDir, FileAttributes.Normal);
+        }
+    }
+
+    /// <summary>
+    /// Review fix (2026-09-02): an HLS directory whose contents cannot be enumerated
+    /// (search permission only) is skipped during the scan while sibling entries are
+    /// still collected and evicted. Before the fix the UnauthorizedAccessException from
+    /// GetFiles escaped EvictIfNeededCore.
+    /// </summary>
+    [Fact]
+    public async Task EvictIfNeeded_UnreadableHlsDir_ScanSkipsItAndStillEvictsOthers()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return; // the mode-bit setup below needs chmod; BCL attributes cannot drop read
+        }
+
+        Plugin.Instance!.Configuration.VideoAudioCacheSizeMB = 1;
+
+        string lockedDir = _cache.GetHlsDirectoryPath("cccccccc-3333-3333-3333-333333333333", 1);
+        string freshDir = _cache.GetHlsDirectoryPath("dddddddd-4444-4444-4444-444444444444", 2);
+        Directory.CreateDirectory(lockedDir);
+        Directory.CreateDirectory(freshDir);
+        await File.WriteAllTextAsync(Path.Combine(lockedDir, "stream.m3u8"), "#EXTM3U\n");
+        await File.WriteAllBytesAsync(Path.Combine(lockedDir, "seg_000.ts"), new byte[1200 * 1024]);
+        await File.WriteAllTextAsync(Path.Combine(freshDir, "stream.m3u8"), "#EXTM3U\n");
+        await File.WriteAllBytesAsync(Path.Combine(freshDir, "seg_000.ts"), new byte[1200 * 1024]);
+        File.SetLastAccessTimeUtc(freshDir, DateTime.UtcNow);
+        File.SetLastAccessTimeUtc(Path.Combine(freshDir, "seg_000.ts"), DateTime.UtcNow);
+
+        // Owner keeps search (x) but loses read (r): the playlist stat still works, the
+        // GetFiles enumeration inside is denied.
+        Chmod(lockedDir, "111");
+        try
+        {
+            try
+            {
+                _ = Directory.GetFiles(lockedDir);
+                return; // privileges bypass mode bits (root): no denial to simulate
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // expected under a normal (non-root) user
+            }
+
+            await _cache.EvictIfNeeded();
+
+            Assert.True(Directory.Exists(lockedDir), "The unreadable entry must be skipped, not crash the scan");
+            Assert.True(File.Exists(Path.Combine(lockedDir, "seg_000.ts")), "The unreadable entry's contents must be untouched");
+            Assert.False(Directory.Exists(freshDir), "The readable sibling entry must still be evicted");
+        }
+        finally
+        {
+            Chmod(lockedDir, "755");
+        }
+    }
+
+    /// <summary>
+    /// Review fix (2026-09-02): a cache directory the process cannot read must not
+    /// throw out of the sweep (the throw lands on the Alexa play path and leaks the
+    /// pre-encode pin); the scan logs and returns without evicting.
+    /// </summary>
+    [Fact]
+    public async Task EvictIfNeeded_UnreadableCacheDir_DoesNotThrow()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return; // the mode-bit setup below needs chmod; BCL attributes cannot drop read
+        }
+
+        Plugin.Instance!.Configuration.VideoAudioCacheSizeMB = 1;
+
+        Directory.CreateDirectory(Path.GetDirectoryName(_cache.GetCacheFilePath("item1", 1))!);
+        string path = _cache.GetCacheFilePath("item1", 1);
+        await File.WriteAllTextAsync(path, new string('x', 1536 * 1024));
+
+        Chmod(Path.GetDirectoryName(path)!, "000");
+        try
+        {
+            try
+            {
+                _ = Directory.GetFiles(Path.GetDirectoryName(path)!);
+                return; // privileges bypass mode bits (root): no denial to simulate
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // expected under a normal (non-root) user
+            }
+
+            await _cache.EvictIfNeeded();
+        }
+        finally
+        {
+            Chmod(Path.GetDirectoryName(path)!, "755");
+        }
+
+        // Assert AFTER restoring permissions: through a mode-000 dir even stat is
+        // denied, so File.Exists would report false for a file that is still there.
+        Assert.True(File.Exists(path), "An unreadable cache dir means no sweep, not a crash");
+    }
+
+    /// <summary>
+    /// True when permission bits actually deny THIS process a recursive delete of a
+    /// read-only directory (the normal case for a non-root test user; root bypasses the
+    /// bits, and the denial the callers simulate does not exist).
+    /// </summary>
+    private bool PermissionBitsDenyDelete()
+    {
+        string probeDir = Path.Combine(_tempDir, "perm-probe");
+        Directory.CreateDirectory(probeDir);
+        File.WriteAllText(Path.Combine(probeDir, "f"), "x");
+        File.SetAttributes(probeDir, FileAttributes.ReadOnly);
+        try
+        {
+            Directory.Delete(probeDir, true);
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            File.SetAttributes(probeDir, FileAttributes.Normal);
+            Directory.Delete(probeDir, true);
+            return true;
+        }
+    }
+
+    /// <summary>Applies a permission mode via chmod (Linux-only, permission-denial tests).</summary>
+    private static void Chmod(string path, string mode)
+    {
+        var psi = new ProcessStartInfo("chmod") { UseShellExecute = false, CreateNoWindow = true };
+        psi.ArgumentList.Add(mode);
+        psi.ArgumentList.Add(path);
+        using var process = Process.Start(psi)
+            ?? throw new InvalidOperationException("chmod is not available");
+        process.WaitForExit();
     }
 
     [Fact]
