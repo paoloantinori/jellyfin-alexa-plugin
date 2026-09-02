@@ -4,10 +4,10 @@ title: >-
   JF-427 track-count sweep materializes the artist's full catalog on the hot
   path (1,533 rows for a 107-album artist) + raw-tag name matching zero-counts
   well-formed albums
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-01 22:27'
-updated_date: '2026-09-02 22:00'
+updated_date: '2026-09-02 22:22'
 labels:
   - code-review
   - efficiency
@@ -40,6 +40,12 @@ Efficiency finding from the JF-427 review (2026-09-02, measured live on minix): 
 <!-- SECTION:NOTES:BEGIN -->
 review-local gate (score 75): the per-album COUNT loop runs up to 12 sequential RetryAsync calls each carrying an INDEPENDENT 6s budget (fresh stopwatch per invocation); CLAUDE.md documents the per-call budget as the only Alexa-window guard, so the worst case is 12x6s on transient failures and slow-but-successful COUNTs (12x700ms) can exceed the ~8s window with no trip-wire. Task-sanctioned shape (AC#1 mandates per-album COUNT, sequential by design against SQLite contention); candidate hardening: a shared deadline across the loop (stop counting when elapsed > ~2s and rank the remainder deterministically).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped as COUNT-only queries keyed by album ID with a top-12 deterministic cap: GetAlbumTrackCountsAsync now issues one Limit=0/TotalRecordCount query per candidate (the Folder.GetChildCount pattern, semantics verified at v10.11.8 and v10.11.11), replacing the full-catalog materialization (1,533 Audio rows for the 107-album live case). The review-local gate scored its first cut 100: AlbumIds is a raw-tag NAME match on the server, not an entity link, so the original tag-mismatch claim was a mock fiction; the landed shape counts by ParentId FIRST (true entity link, which also fixes same-name-union double counting) with the AlbumIds COUNT as fallback only when ParentId returns 0, preserving the JF-338 malformed-folder case. Tests implement both server semantics; tag-mismatch (well-formed wins) and malformed-folder (fallback counts) both pinned; the 6-permutation deterministic test green. AC#3 (Alternative B) not adopted: AC#1+2 supersede it ('either alternative removes the other'). Below-cap tracked in-task: 12 sequential counts each carry an independent 6s retry budget (task-sanctioned shape; shared loop deadline is the candidate hardening). Suite 2992/0. Commit b84cadbc.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
