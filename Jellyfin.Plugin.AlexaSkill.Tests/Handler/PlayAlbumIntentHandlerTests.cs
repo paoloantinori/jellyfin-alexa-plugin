@@ -113,13 +113,19 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
     }
 
     /// <summary>
-    /// Builds a MusicAlbum plus <paramref name="trackCount"/> Audio tracks linked via the Album
-    /// metadata name (the linkage GetAlbumTrackCountsAsync groups by). The first track's name is
+    /// Builds a MusicAlbum plus <paramref name="trackCount"/> Audio tracks. By default the
+    /// tracks are linked to the album via ParentId (the entity link the JF-443 primary
+    /// COUNT keys on; the raw Album tag is irrelevant there, so
+    /// <paramref name="rawAlbumTag"/> can deliberately mismatch it). With
+    /// <paramref name="breakParentLink"/> the tracks are parented to an unrelated folder
+    /// and only the raw Album tag links them (the JF-338 malformed-folder shape the
+    /// AlbumIds fallback covers). The first track's name is
     /// <paramref name="firstTrackName"/> so the played album is identifiable from the AudioPlayer token.
     /// </summary>
-    private static (MusicAlbum Album, List<BaseItem> Tracks) MakeRelease(string name, int year, int trackCount, string firstTrackName)
+    private static (MusicAlbum Album, List<BaseItem> Tracks) MakeRelease(string name, int year, int trackCount, string firstTrackName, string? rawAlbumTag = null, bool breakParentLink = false)
     {
         var album = new MusicAlbum { Name = name, Id = Guid.NewGuid(), ProductionYear = year };
+        Guid trackParentId = breakParentLink ? Guid.NewGuid() : album.Id;
         var tracks = new List<BaseItem>();
         for (int i = 0; i < trackCount; i++)
         {
@@ -127,8 +133,8 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
             {
                 Name = i == 0 ? firstTrackName : $"{name} track {i + 1}",
                 Id = Guid.NewGuid(),
-                Album = name,
-                ParentId = album.Id
+                Album = rawAlbumTag ?? name,
+                ParentId = trackParentId
             });
         }
 
@@ -137,8 +143,12 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
 
     /// <summary>
     /// Mocks the JF-411 indefinite album-by-artist flow: artist lookup, the artist's albums in the
-    /// given (insertion) order, the tracks feeding the JF-427 count query, and per-album playback
-    /// results. Queries are recorded into <paramref name="queries"/> (when given) for assertions.
+    /// given (insertion) order, per-album track counts for the JF-443 COUNT queries, and
+    /// per-album playback results. The count semantics mirror the TWO server mechanisms
+    /// (Jellyfin BaseItemRepository 10.11.8/10.11.11): ParentId answers by entity link
+    /// (well-formed albums), AlbumIds answers by matching the track's RAW Album tag against
+    /// the album entity's Name (f.Name == e.Album; the JF-338 malformed-folder shape).
+    /// Queries are recorded into <paramref name="queries"/> (when given) for assertions.
     /// </summary>
     private void SetupIndefiniteAlbumCatalog(
         BaseItem artist,
@@ -147,6 +157,8 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         IReadOnlyDictionary<Guid, BaseItem> firstTrackByAlbumId,
         List<InternalItemsQuery>? queries = null)
     {
+        var albumNameById = artistAlbums.ToDictionary(a => a.Id, a => a.Name);
+
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns((InternalItemsQuery q) =>
             {
@@ -161,19 +173,38 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
                     return artistAlbums;
                 }
 
-                if (q.IncludeItemTypes?.Contains(BaseItemKind.Audio) == true)
-                {
-                    return allTracks;
-                }
-
                 return new List<BaseItem>();
             });
 
         _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
             .Returns((InternalItemsQuery q) =>
-                firstTrackByAlbumId.TryGetValue(q.ParentId, out BaseItem? track)
+            {
+                queries?.Add(q);
+                // JF-443 count queries are COUNT-only (Limit=0): the ParentId primary
+                // counts by entity link, the AlbumIds fallback by raw-tag name match.
+                if (q.Limit == 0)
+                {
+                    int count = q.ParentId != Guid.Empty
+                        ? allTracks.Count(t => t.ParentId == q.ParentId)
+                        : allTracks.Count(t => q.AlbumIds is { Length: > 0 }
+                            && albumNameById.TryGetValue(q.AlbumIds[0], out string? albumName)
+                            && string.Equals(t.Album, albumName, StringComparison.Ordinal));
+                    return new QueryResult<BaseItem>
+                    {
+                        Items = new List<BaseItem>(),
+                        TotalRecordCount = count
+                    };
+                }
+
+                // Playback page queries (nonzero Limit): ParentId first, then the JF-338
+                // AlbumIds retry when the folder link finds nothing.
+                Guid playKey = q.ParentId != Guid.Empty
+                    ? q.ParentId
+                    : q.AlbumIds is { Length: > 0 } ? q.AlbumIds[0] : Guid.Empty;
+                return firstTrackByAlbumId.TryGetValue(playKey, out BaseItem? track)
                     ? new QueryResult<BaseItem> { Items = new[] { track }, TotalRecordCount = 1 }
-                    : new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 });
+                    : new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 };
+            });
     }
 
     private static async Task<string> GetPlayedTrackTokenAsync(
@@ -341,6 +372,148 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
             firstTrackByAlbum,
             alphaTracks[0].Id.ToString(),
             new[] { new[] { 0, 1 }, new[] { 1, 0 } });
+    }
+
+    [Fact]
+    public async Task HandleAsync_MusicianOnly_RawAlbumTagMismatch_WellFormedAlbumWins()
+    {
+        // JF-443: the PRIMARY count keys on the ParentId entity link, not the raw Album
+        // tag. The old sweep grouped tracks under the raw tag and looked the count up by
+        // MusicAlbum.Name with OrdinalIgnoreCase, so a "Name (Disc 1)" tag (or a trailing
+        // space / accent variant) zeroed a well-formed album and flipped the pick to any
+        // exactly-matching release; an AlbumIds-only count would miss the same way
+        // (server-side AlbumIds matches the raw tag against the album Name). Here the
+        // 12-track studio release carries a mismatched raw tag but a proper ParentId
+        // link and must STILL outrank the newer 10-track live album.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(musician: "koop");
+        SetupUserMock();
+
+        var artist = new MusicArtist { Name = "Koop", Id = Guid.NewGuid() };
+        var (studio, studioTracks) = MakeRelease("Studio Album", 1995, 12, "Studio First", rawAlbumTag: "Studio Album (Disc 1)");
+        var (live, liveTracks) = MakeRelease("Live Album", 2001, 10, "Live First");
+        var firstTrackByAlbum = new Dictionary<Guid, BaseItem>
+        {
+            [studio.Id] = studioTracks[0],
+            [live.Id] = liveTracks[0]
+        };
+        var queries = new List<InternalItemsQuery>();
+        SetupIndefiniteAlbumCatalog(
+            artist,
+            new List<BaseItem> { studio, live },
+            studioTracks.Concat(liveTracks).ToList(),
+            firstTrackByAlbum,
+            queries);
+
+        string token = await GetPlayedTrackTokenAsync(handler, request, CreateSession());
+
+        Assert.Equal(studioTracks[0].Id.ToString(), token);
+
+        // The count queries must be COUNT-only ParentId queries: ParentId=album.Id,
+        // IncludeItemTypes=Audio, Limit=0 (read TotalRecordCount; no rows materialized).
+        var countQueries = queries.Where(q => q.Limit == 0 && q.ParentId != Guid.Empty).ToList();
+        Assert.Equal(2, countQueries.Count);
+        Assert.All(countQueries, q =>
+        {
+            Assert.Equal(0, q.Limit);
+            Assert.NotNull(q.IncludeItemTypes);
+            Assert.Contains(BaseItemKind.Audio, q.IncludeItemTypes!);
+        });
+        Assert.Contains(countQueries, q => q.ParentId == studio.Id);
+        Assert.Contains(countQueries, q => q.ParentId == live.Id);
+        // Both albums are well-formed (ParentId count > 0), so the AlbumIds fallback
+        // never fires.
+        Assert.DoesNotContain(queries, q => q.Limit == 0 && q.AlbumIds is { Length: > 0 });
+    }
+
+    [Fact]
+    public async Task HandleAsync_MusicianOnly_MalformedParentLink_CountsFallBackToAlbumIds()
+    {
+        // JF-338 shape: a malformed/split album whose tracks are parented to an
+        // unrelated folder (ParentId link broken) but still carry the album's raw Album
+        // tag. The ParentId count returns 0, so the AlbumIds fallback must fire and
+        // count the release by its tag; the 12-track malformed release must still
+        // outrank the well-formed newer 10-track live album.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(musician: "koop");
+        SetupUserMock();
+
+        var artist = new MusicArtist { Name = "Koop", Id = Guid.NewGuid() };
+        var (studio, studioTracks) = MakeRelease("Studio Album", 1995, 12, "Studio First", breakParentLink: true);
+        var (live, liveTracks) = MakeRelease("Live Album", 2001, 10, "Live First");
+        var firstTrackByAlbum = new Dictionary<Guid, BaseItem>
+        {
+            [studio.Id] = studioTracks[0],
+            [live.Id] = liveTracks[0]
+        };
+        var queries = new List<InternalItemsQuery>();
+        SetupIndefiniteAlbumCatalog(
+            artist,
+            new List<BaseItem> { studio, live },
+            studioTracks.Concat(liveTracks).ToList(),
+            firstTrackByAlbum,
+            queries);
+
+        string token = await GetPlayedTrackTokenAsync(handler, request, CreateSession());
+
+        // The malformed 12-track release wins via the AlbumIds tag count. (The mock's
+        // playback lookup is keyed by album id for both the ParentId and AlbumIds
+        // shapes, so which play-path query served the first track is not asserted here;
+        // the count-query shapes below are the point.)
+        Assert.Equal(studioTracks[0].Id.ToString(), token);
+
+        // The malformed album was counted by BOTH shapes: the ParentId primary returned
+        // 0 (link broken) and the AlbumIds fallback fired. The well-formed live album
+        // needed only the ParentId count.
+        Assert.Contains(queries, q => q.Limit == 0 && q.ParentId == studio.Id);
+        Assert.Contains(queries, q => q.Limit == 0 && q.AlbumIds is { Length: > 0 } && q.AlbumIds[0] == studio.Id);
+        Assert.Contains(queries, q => q.Limit == 0 && q.ParentId == live.Id);
+        Assert.DoesNotContain(queries, q => q.Limit == 0 && q.AlbumIds is { Length: > 0 } && q.AlbumIds[0] == live.Id);
+    }
+
+    [Fact]
+    public async Task HandleAsync_MusicianOnly_HundredPlusAlbumTail_CountQueriesCappedToTopTwelve()
+    {
+        // JF-443: the COUNT queries are capped to the top-12 candidates in the
+        // deterministic order (newest year, then name, then id). The oldest album here has
+        // by far the most tracks (99) but falls OUTSIDE the cap, ranks as 0 tracks, and
+        // must not win; exactly 12 count queries are issued (was: one query materializing
+        // every Audio row of the artist's catalog).
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(musician: "koop");
+        SetupUserMock();
+
+        var artist = new MusicArtist { Name = "Koop", Id = Guid.NewGuid() };
+        var artistAlbums = new List<BaseItem>();
+        var allTracks = new List<BaseItem>();
+        var firstTrackByAlbum = new Dictionary<Guid, BaseItem>();
+        for (int i = 0; i < 12; i++)
+        {
+            string name = $"Album {i:D2}";
+            var (album, tracks) = MakeRelease(name, 1995, 2, $"{name} First");
+            artistAlbums.Add(album);
+            allTracks.AddRange(tracks);
+            firstTrackByAlbum[album.Id] = tracks[0];
+        }
+
+        var (oldest, oldestTracks) = MakeRelease("Zzz Oldest Megarelease", 1990, 99, "Oldest First");
+        artistAlbums.Add(oldest);
+        allTracks.AddRange(oldestTracks);
+        firstTrackByAlbum[oldest.Id] = oldestTracks[0];
+
+        var queries = new List<InternalItemsQuery>();
+        SetupIndefiniteAlbumCatalog(artist, artistAlbums, allTracks, firstTrackByAlbum, queries);
+
+        string token = await GetPlayedTrackTokenAsync(handler, request, CreateSession());
+
+        // All counted albums tie at 2 tracks / 1995; the deterministic tie-break is Name
+        // ascending, so "Album 00" wins. The uncounted 99-track megarelease does not.
+        Assert.Equal(firstTrackByAlbum.Values.First(t => t.Name == "Album 00 First").Id.ToString(), token);
+        // COUNT-only ParentId queries (all albums well-formed, so no AlbumIds fallback).
+        var countQueries = queries.Where(q => q.Limit == 0 && q.ParentId != Guid.Empty).ToList();
+        Assert.Equal(12, countQueries.Count);
+        Assert.DoesNotContain(countQueries, q => q.ParentId == oldest.Id);
+        Assert.DoesNotContain(queries, q => q.Limit == 0 && q.AlbumIds is { Length: > 0 });
     }
 
     [Fact]

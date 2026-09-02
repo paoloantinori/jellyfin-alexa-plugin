@@ -42,6 +42,15 @@ public class PlayAlbumIntentHandler : BaseHandler
     private const int MinFuzzyAlbumQueryLength = 4;
 
     /// <summary>
+    /// JF-443: cap on the albums whose track counts are queried on the indefinite
+    /// album-by-artist path (one COUNT query each, inside the Alexa response window).
+    /// The cap takes the candidates in the existing deterministic order (newest
+    /// ProductionYear, then Name, then Id), so the 100+-album tail costs nothing; all
+    /// counted candidates still outrank every uncounted one under the same order.
+    /// </summary>
+    private const int MaxRankedAlbumCandidates = 12;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="PlayAlbumIntentHandler"/> class.
     /// </summary>
     /// <param name="sessionManager">Instance of the <see cref="ISessionManager"/> interface.</param>
@@ -105,7 +114,7 @@ public class PlayAlbumIntentHandler : BaseHandler
         // (code-review 2026-08-29). Runs BEFORE the warming gate so an open flow still
         // cancels during the cold-start window (JF-419.2 contract, review round 2).
         if (Util.CancelWords.IsDialogInProgress(intentRequest)
-            && Util.CancelWords.AnySlotIsCancelWord(intentRequest))
+            && Util.CancelWords.AnySlotIsCancelWord(intentRequest, locale))
         {
             Logger.LogInformation("PlayAlbum: captured cancel word during open elicit (album='{Album}'), ending flow", album);
             return ResponseBuilder.Tell(ResponseStrings.Get("FindSongCancelled", locale));
@@ -202,8 +211,15 @@ public class PlayAlbumIntentHandler : BaseHandler
 
             // JF-427 selection policy: prefer the release with the MOST tracks (a full studio
             // release over a single/EP/live sampler), so "un disco di X" plays a defensible
-            // album instead of an arbitrary row.
-            IReadOnlyDictionary<string, int> trackCounts = await GetAlbumTrackCountsAsync(jellyfinUser, artistAlbums, cancellationToken).ConfigureAwait(false);
+            // album instead of an arbitrary row. JF-443: counts come from COUNT-only
+            // queries over the top-K candidates in the deterministic order (was: one query
+            // materializing every Audio row of the artist's ENTIRE catalog, 1,533 rows for
+            // a 107-album artist on the live library, all deserialized inside the Alexa
+            // window under RetryAsync).
+            IReadOnlyList<BaseItem> rankedCandidates = RankByDeterministicOrder(artistAlbums)
+                .Take(MaxRankedAlbumCandidates)
+                .ToList();
+            IReadOnlyDictionary<Guid, int> trackCounts = await GetAlbumTrackCountsAsync(jellyfinUser, rankedCandidates, cancellationToken).ConfigureAwait(false);
             resolvedAlbum = PickMostTracksRelease(artistAlbums, trackCounts);
 
             album = resolvedAlbum.Name;
@@ -566,70 +582,141 @@ public class PlayAlbumIntentHandler : BaseHandler
     }
 
     /// <summary>
-    /// JF-427: track counts per album name, from ONE bounded query covering all the given
-    /// albums (every Audio item across them; the artist's catalog is a naturally bounded set).
-    /// Grouping is by the track's Album metadata name, not by ParentId: split/malformed-folder
-    /// albums keep their tracks linked through that metadata even when the folder link is
-    /// broken (JF-338), so a ParentId grouping would undercount exactly those. Edge cases:
-    /// two same-name distinct albums merge their counts (deterministic, year/id tie-break wins),
-    /// and a track whose Album name differs from the MusicAlbum.Name counts under a key no
-    /// candidate ever looks up (that album falls back to the year/name tie-breaks).
+    /// JF-427/JF-443: track counts per album ID, from COUNT-only queries. Each query reads
+    /// TotalRecordCount with Limit=0 so no row is materialized or deserialized (the pattern
+    /// Jellyfin's own Folder.GetChildCount uses; on the NRE that SafeGetItemsResult catches,
+    /// its GetItemList fallback materializes Take(0) rows, so the count degrades to 0 and
+    /// the album falls to the deterministic tie-break instead of throwing). TWO query
+    /// shapes, one per server-side linking mechanism (Jellyfin BaseItemRepository, verified
+    /// at v10.11.8 and v10.11.11):
+    /// - ParentId (primary) is the ENTITY link (e.ParentId == album.Id, the folder
+    ///   hierarchy): it counts exactly the album's child tracks however their raw Album
+    ///   tag is spelled. This removes the tag-matching edge of the old sweep (counts
+    ///   grouped by the track's raw tag and looked up by MusicAlbum.Name), which zeroed
+    ///   well-formed albums whose tags carry "Name (Disc 1)", accent or trailing-space
+    ///   variants.
+    /// - AlbumIds (fallback, fired only when the ParentId count is 0) is a raw-tag NAME
+    ///   match, NOT an entity link: the server resolves the album entities by ID and
+    ///   compares each track's raw Album tag string against the album's Name
+    ///   (f.Name == e.Album). Some malformed/split albums have broken ParentId linkage
+    ///   while the raw tag still links their tracks (the JF-338 "Jazz Cafe" shape; the
+    ///   play path above keeps an AlbumIds retry for the same reason), so this second
+    ///   query preserves their counts. Malformed albums are rare, so the extra query is
+    ///   an uncommon cost.
     /// </summary>
     /// <param name="jellyfinUser">The Jellyfin user for the query.</param>
-    /// <param name="albums">The candidate albums (already library-filtered by the caller).</param>
+    /// <param name="albums">The candidate albums (already capped and ordered by the caller).</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>Case-insensitive album name to track count; names absent from the map count as 0.</returns>
-    private async Task<IReadOnlyDictionary<string, int>> GetAlbumTrackCountsAsync(
+    /// <returns>Album ID to track count; ids absent from the map count as 0.</returns>
+    private async Task<IReadOnlyDictionary<Guid, int>> GetAlbumTrackCountsAsync(
         Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
         IReadOnlyList<BaseItem> albums,
         CancellationToken cancellationToken)
     {
-        // Single-album elision: no ranking needed for <= 1 candidate; skip the query.
+        var counts = new Dictionary<Guid, int>();
+
+        // Single-album elision (kept from the pre-JF-443 sweep): with <= 1 candidate the
+        // count cannot change PickMostTracksRelease's pick; skip the query. On the live
+        // library this covers 486 of 674 artists (single-album).
         if (albums.Count <= 1)
         {
-            return new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            return counts;
         }
 
-        var trackCountQuery = new InternalItemsQuery
+        foreach (BaseItem album in albums)
+        {
+            // Primary: the ParentId entity-link count (tag spelling irrelevant).
+            QueryResult<BaseItem> result = await RetryAsync(
+                () => SafeGetItemsResult(_libraryManager, BuildTrackCountQuery(jellyfinUser, album.Id, byParentId: true)),
+                "GetAlbumTrackCountByParentId",
+                cancellationToken).ConfigureAwait(false);
+
+            if (result.TotalRecordCount == 0)
+            {
+                // Fallback: the AlbumIds raw-tag name count, for malformed albums whose
+                // ParentId linkage is broken but whose tracks still carry the album's
+                // name tag (JF-338).
+                result = await RetryAsync(
+                    () => SafeGetItemsResult(_libraryManager, BuildTrackCountQuery(jellyfinUser, album.Id, byParentId: false)),
+                    "GetAlbumTrackCountByAlbumIds",
+                    cancellationToken).ConfigureAwait(false);
+            }
+
+            counts[album.Id] = result.TotalRecordCount;
+        }
+
+        return counts;
+    }
+
+    /// <summary>
+    /// Builds a COUNT-only track query for <see cref="GetAlbumTrackCountsAsync"/>: Limit=0
+    /// keeps TotalRecordCount (the COUNT) while Take(0) skips item materialization
+    /// entirely (verified against Jellyfin 10.11.8 BaseItemRepository.ApplyQueryPaging,
+    /// which applies Take(Limit) in both the count and list paths).
+    /// </summary>
+    /// <param name="jellyfinUser">The Jellyfin user for the query.</param>
+    /// <param name="albumId">The album to count the tracks of.</param>
+    /// <param name="byParentId">True for the ParentId entity-link count; false for the AlbumIds raw-tag name count.</param>
+    /// <returns>The COUNT-only query.</returns>
+    private static InternalItemsQuery BuildTrackCountQuery(Jellyfin.Database.Implementations.Entities.User? jellyfinUser, Guid albumId, bool byParentId)
+    {
+        var q = new InternalItemsQuery
         {
             User = jellyfinUser,
             Recursive = true,
             IncludeItemTypes = new[] { BaseItemKind.Audio },
-            AlbumIds = albums.Select(a => a.Id).ToArray(),
-            // Only the base-row Album name is read; DtoOptions(false) alone leaves
-            // EnableImages/EnableUserData/AddCurrentProgram at their true defaults, which
-            // would still JOIN in the child collections for every track.
+            Limit = 0,
             DtoOptions = new DtoOptions(false) { EnableImages = false, EnableUserData = false, AddCurrentProgram = false }
         };
 
-        IReadOnlyList<BaseItem> tracks = await RetryAsync(
-            () => _libraryManager.GetItemList(trackCountQuery),
-            "GetArtistAlbumTrackCounts",
-            cancellationToken).ConfigureAwait(false);
+        if (byParentId)
+        {
+            q.ParentId = albumId;
+        }
+        else
+        {
+            q.AlbumIds = new[] { albumId };
+        }
 
-        return tracks
-            .GroupBy(t => t.Album ?? string.Empty, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.Count());
+        return q;
+    }
+
+    /// <summary>
+    /// JF-443: the deterministic candidate order for the COUNT cap: newest
+    /// ProductionYear, then Name, then Id. This mirrors the fetch query's OrderBy
+    /// (ProductionYear/SortName, JF-427) and PickMostTracksRelease's tie-breaks, but is
+    /// computed in memory so the order stays TOTAL (Id breaks every remaining tie)
+    /// regardless of database row order.
+    /// </summary>
+    /// <param name="albums">The artist's candidate albums.</param>
+    /// <returns>The albums in deterministic order.</returns>
+    private static IOrderedEnumerable<BaseItem> RankByDeterministicOrder(IReadOnlyList<BaseItem> albums)
+    {
+        return albums
+            .OrderByDescending(a => a.ProductionYear ?? int.MinValue)
+            .ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(a => a.Id);
     }
 
     /// <summary>
     /// JF-427 selection policy for the indefinite album-by-artist path ("un disco di X"):
     /// prefer the release with the MOST tracks (a full studio release over a single, EP or
-    /// live sampler), tie-break by newest ProductionYear, then Name, then Id. Track count
-    /// is not an ItemSortBy member in the Jellyfin 10.11 SDK, so the ranking runs in memory
-    /// over the artist's albums; the tie-breaks make the order TOTAL and independent of
-    /// database row order, so a library rescan cannot change which album plays.
+    /// live sampler), tie-broken by <see cref="RankByDeterministicOrder"/> (newest
+    /// ProductionYear, then Name, then Id). Track count is not an ItemSortBy member in
+    /// the Jellyfin 10.11 SDK, so the ranking runs in memory over the artist's albums;
+    /// the tie-breaks make the order TOTAL and independent of database row order, so a
+    /// library rescan cannot change which album plays.
     /// </summary>
     /// <param name="albums">The artist's candidate albums.</param>
-    /// <param name="trackCountsByAlbumName">Track counts keyed by album name, from <see cref="GetAlbumTrackCountsAsync"/>.</param>
+    /// <param name="trackCountsByAlbumId">Track counts keyed by album ID, from <see cref="GetAlbumTrackCountsAsync"/>; uncounted candidates rank as 0 tracks.</param>
     /// <returns>The album to play.</returns>
-    private static BaseItem PickMostTracksRelease(IReadOnlyList<BaseItem> albums, IReadOnlyDictionary<string, int> trackCountsByAlbumName)
+    private static BaseItem PickMostTracksRelease(IReadOnlyList<BaseItem> albums, IReadOnlyDictionary<Guid, int> trackCountsByAlbumId)
     {
-        return albums
-            .OrderByDescending(a => trackCountsByAlbumName.TryGetValue(a.Name ?? string.Empty, out int trackCount) ? trackCount : 0)
-            .ThenByDescending(a => a.ProductionYear ?? int.MinValue)
-            .ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(a => a.Id)
+        // OrderByDescending is a stable sort in LINQ-to-Objects, so applying the count
+        // key over RankByDeterministicOrder keeps that order as the tie-break; the count
+        // cap and the tie-break therefore share ONE order definition by construction.
+        return RankByDeterministicOrder(albums)
+            .OrderByDescending(a => trackCountsByAlbumId.TryGetValue(a.Id, out int trackCount) ? trackCount : 0)
             .First();
     }
 

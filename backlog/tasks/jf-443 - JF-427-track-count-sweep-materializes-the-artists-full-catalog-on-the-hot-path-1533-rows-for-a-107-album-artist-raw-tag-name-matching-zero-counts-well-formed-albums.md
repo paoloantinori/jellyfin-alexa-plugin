@@ -4,9 +4,10 @@ title: >-
   JF-427 track-count sweep materializes the artist's full catalog on the hot
   path (1,533 rows for a 107-album artist) + raw-tag name matching zero-counts
   well-formed albums
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-01 22:27'
+updated_date: '2026-09-02 22:00'
 labels:
   - code-review
   - efficiency
@@ -33,6 +34,12 @@ Efficiency finding from the JF-427 review (2026-09-02, measured live on minix): 
 - [ ] #3 Alternatively adopt review Alternative B (carry the chosen album's pre-fetched track list to the queue build, eliminating the GetAlbumTracks re-query); either alternative removes the other
 - [ ] #4 Unit tests keep the deterministic-pick guarantees (6-permutation test stays green)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+review-local gate (score 75): the per-album COUNT loop runs up to 12 sequential RetryAsync calls each carrying an INDEPENDENT 6s budget (fresh stopwatch per invocation); CLAUDE.md documents the per-call budget as the only Alexa-window guard, so the worst case is 12x6s on transient failures and slow-but-successful COUNTs (12x700ms) can exceed the ~8s window with no trip-wire. Task-sanctioned shape (AC#1 mandates per-album COUNT, sequential by design against SQLite contention); candidate hardening: a shared deadline across the loop (stop counting when elapsed > ~2s and rank the remainder deterministically).
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
