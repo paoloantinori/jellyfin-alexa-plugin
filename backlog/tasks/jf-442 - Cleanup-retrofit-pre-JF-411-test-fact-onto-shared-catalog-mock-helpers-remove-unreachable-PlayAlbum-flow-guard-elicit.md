@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-01 21:25'
-updated_date: '2026-09-01 21:26'
+updated_date: '2026-09-01 23:28'
 labels:
   - code-quality
   - tech-debt
@@ -44,11 +44,22 @@ Both changes are behavior-neutral; full PlayAlbum test suite must stay green.
 - [ ] #11 Findings applied or tracked
 <!-- DOD:END -->
 
-
-
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [ ] #1 HandleAsync_MusicianOnly_PlaysArtistsAlbum uses SetupIndefiniteAlbumCatalog and GetPlayedTrackTokenAsync instead of its inline mock + directive extraction; the AlbumArtistIds resolution-query assertion is preserved
 - [ ] #2 The flow-guard elicit in PlayAlbumIntentHandler.HandleAsync is either removed with a proof of unreachability in the task notes, or kept with a comment justifying it as a defensive guard
 - [ ] #3 Full test suite passes with 0 failures
+- [ ] #4 BuildAlbumElicitResponse and BuildSongElicitResponse are consolidated onto one shared BaseHandler elicit builder (or the divergence is justified in comments)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-02: JF-422 code-review (high effort) landed three more items in this same family; fold them into this cleanup when it runs.
+
+3. ELICIT-BUILDER TWIN: PlayAlbumIntentHandler.BuildAlbumElicitResponse is now a line-for-line twin of PlaySongIntentHandler.BuildSongElicitResponse (~line 451): same skeleton (ShouldEndSession=false, speech+reprompt, ElicitSlotDirective declaring ALL intent slots, ConversationalFlows.MarkOthersInactive), differing only in prompt key, slot name, intent name. Hoist a BaseHandler builder BuildDialogElicitResponse(promptKey, locale, slotToElicit, intentName, allSlotNames) serving both; FindSongIntentHandler.BuildElicitSlotResponse is a genuinely different shape (session attributes, 2-arg directive) and stays separate. Both doc comments already duplicate the same 2026-08-28 INVALID_RESPONSE lesson, so the next dialog-level fix must land twice today.
+
+4. DIALOG-DELEGATION CATALOG MOCK: DialogDelegationTests.PlayAlbum_WithPartialSlots_ResolvesAlbumByArtist_NoDelegation hand-rolls a GetItemList dispatch duplicating SetupIndefiniteAlbumCatalog, with fidelity loss (returns the MusicAlbum for Audio-typed queries; stable ids were at least hoisted out of the callback in JF-422). Hoist SetupIndefiniteAlbumCatalog to the shared test helpers and keep only the Dialog.Delegate-absence assertion in that file; its scenario otherwise duplicates PlayAlbumIntentHandlerTests.HandleAsync_DialogInProgressWithMusician_PlaysArtistsAlbum_NoTitlePrompt, which is strictly stronger.
+
+Note for item 2: the flow-guard unreachability proof in the JF-422 review matches the one already written here (past the entry elicit at least one slot is non-empty; empty album implies musician set, which returns NotFoundAlbumByArtist or resolves album via PickMostTracksRelease; only a null/whitespace MusicAlbum.Name reaches the guard).
+<!-- SECTION:NOTES:END -->
