@@ -13,6 +13,7 @@ using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
@@ -511,6 +512,51 @@ public abstract class BaseHandler
                 ShouldEndSession = true
             }
         };
+    }
+
+    /// <summary>
+    /// Build a Dialog.ElicitSlot response (context-preserving elicit): the session stays
+    /// inside the target intent's dialog, so the user's next utterance fills the named
+    /// slot and already-filled slots survive the round-trip. The directive's
+    /// updatedIntent declares EVERY slot of the target intent (allSlotNames) because
+    /// Amazon rejects a partial updatedIntent (live INVALID_RESPONSE 2026-08-28 21:17:
+    /// "All slots must be defined when sending updated intent in the Dialog.ElicitSlot
+    /// directive"). The target intent must be registered in the model's dialog.intents
+    /// with elicitationRequired=false (manual dialog control, CLAUDE.md anti-pattern #9).
+    /// </summary>
+    /// <param name="intentName">The intent whose dialog the elicit continues.</param>
+    /// <param name="slotToElicit">The slot the user's next utterance fills.</param>
+    /// <param name="allSlotNames">Every slot of the target intent, for updatedIntent.</param>
+    /// <param name="prompt">The spoken question.</param>
+    /// <param name="reprompt">The reprompt text; defaults to the prompt.</param>
+    /// <param name="sessionAttributes">Session state for a flow that owns state (e.g. FindSong's search state); leave null when the dialog lives Amazon-side.</param>
+    /// <param name="activeFlowKeys">The calling flow's session keys (JF-398 mutual exclusion); pass none when the elicit owns no flow state of its own.</param>
+    /// <returns>The elicitation response.</returns>
+    protected static SkillResponse BuildElicitSlotResponse(
+        string intentName,
+        string slotToElicit,
+        string[] allSlotNames,
+        string prompt,
+        string? reprompt = null,
+        Dictionary<string, object>? sessionAttributes = null,
+        params string[] activeFlowKeys)
+    {
+        reprompt ??= prompt;
+        var response = new SkillResponse
+        {
+            Version = "1.0",
+            SessionAttributes = sessionAttributes,
+            Response = new ResponseBody
+            {
+                ShouldEndSession = false,
+                OutputSpeech = new PlainTextOutputSpeech { Text = prompt },
+                Reprompt = new Reprompt(reprompt),
+                Directives = new List<IDirective> { new ElicitSlotDirective(slotToElicit, intentName, allSlotNames) }
+            }
+        };
+
+        ConversationalFlows.MarkOthersInactive(response, activeFlowKeys);
+        return response;
     }
 
     /// <summary>
@@ -1560,16 +1606,14 @@ public abstract class BaseHandler
             new() { Id = artist.Id.ToString(), Name = artist.Name }
         };
 
-        response.SessionAttributes = new Dictionary<string, object>
-        {
-            [DisambiguationHelper.AttrMatches] = Newtonsoft.Json.JsonConvert.SerializeObject(matchInfos),
-            [DisambiguationHelper.AttrIndex] = 0,
-            [DisambiguationHelper.AttrType] = DisambiguationHelper.MediaTypeArtist,
+        response.SessionAttributes = DisambiguationHelper.BuildAttributes(
+            matchInfos,
+            0,
+            DisambiguationHelper.MediaTypeArtist,
             // JF-363: carry the original not-found request so NoIntentHandler can decline to
             // the right "song/album not found" instead of the generic "no more matches".
-            [DisambiguationHelper.AttrCrossmediaQuery] = query,
-            [DisambiguationHelper.AttrCrossmediaType] = notFoundMediaType
-        };
+            (DisambiguationHelper.AttrCrossmediaQuery, query),
+            (DisambiguationHelper.AttrCrossmediaType, notFoundMediaType));
 
         // JF-398: activating the cross-media artist offer (a disambiguation flavor)
         // supersedes any other flow's state.
@@ -1734,12 +1778,7 @@ public abstract class BaseHandler
             "FuzzySuggestionPromptSsml", "FuzzySuggestionPrompt", "FuzzySuggestionReprompt", locale, query, selector(best));
 
         var matchInfos = matches.Select(m => new DisambiguationHelper.MatchInfo { Id = m.Id.ToString(), Name = m.Name }).ToList();
-        response.SessionAttributes = new Dictionary<string, object>
-        {
-            [DisambiguationHelper.AttrMatches] = Newtonsoft.Json.JsonConvert.SerializeObject(matchInfos),
-            [DisambiguationHelper.AttrIndex] = 0,
-            [DisambiguationHelper.AttrType] = mediaType
-        };
+        response.SessionAttributes = DisambiguationHelper.BuildAttributes(matchInfos, 0, mediaType);
 
         // JF-398: activating the disambiguation flow supersedes any other flow's state.
         ConversationalFlows.MarkOthersInactive(response, ConversationalFlows.DisambiguationKeys);

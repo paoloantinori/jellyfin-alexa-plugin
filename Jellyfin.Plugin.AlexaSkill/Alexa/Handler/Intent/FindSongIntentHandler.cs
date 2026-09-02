@@ -8,9 +8,7 @@ using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
-using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
-using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
@@ -907,32 +905,21 @@ public class FindSongIntentHandler : BaseHandler
     /// which prevents Alexa from routing the utterance to other skills when the artist
     /// name isn't in Amazon's entity database (e.g. indie bands).
     /// The handler differentiates between keywords and artist based on session state.
+    /// The response shape comes from the shared elicit builder (JF-430); the FindSong
+    /// session state and flow activation stay here because they are FindSong-specific
+    /// (JF-398: a FindSong elicitation supersedes any other conversational flow whose
+    /// state was riding along, or the interceptor would merge it back in).
     /// </summary>
     private static SkillResponse BuildElicitSlotResponse(
         string slotName,
         string intentName,
         string prompt,
         FindSongSessionData sessionData)
-    {
-        var response = new SkillResponse
-        {
-            Version = "1.0",
-            SessionAttributes = BuildSessionAttributes(sessionData),
-            Response = new ResponseBody
-            {
-                ShouldEndSession = false,
-                OutputSpeech = new PlainTextOutputSpeech { Text = prompt },
-                Reprompt = new Reprompt(prompt),
-                Directives = new List<IDirective>
-                {
-                    new ElicitSlotDirective(slotName, intentName)
-                }
-            }
-        };
-
-        // JF-398: a FindSong elicitation supersedes any other conversational flow whose
-        // state was riding along (the interceptor would otherwise merge it back in).
-        ConversationalFlows.MarkOthersInactive(response, ConversationalFlows.FindSongKeys);
-        return response;
-    }
+        => BuildElicitSlotResponse(
+            intentName: intentName,
+            slotToElicit: slotName,
+            allSlotNames: new[] { slotName },
+            prompt: prompt,
+            sessionAttributes: BuildSessionAttributes(sessionData),
+            activeFlowKeys: ConversationalFlows.FindSongKeys);
 }

@@ -175,14 +175,36 @@ internal static class DisambiguationHelper
         return (matches, index, mediaType);
     }
 
-    private static Dictionary<string, object> BuildAttributes(List<MatchInfo> matches, int index, string mediaType)
+    /// <summary>
+    /// Build the disambiguation session-attribute dictionary: the serialized match list,
+    /// the cursor index, and the media type, plus optional extra entries (e.g. the JF-363
+    /// cross-media decline keys). Single definition of the attribute shape that call
+    /// sites used to hand-copy (JF-430).
+    /// </summary>
+    /// <param name="matches">The candidate matches to store.</param>
+    /// <param name="index">The cursor index of the match being presented.</param>
+    /// <param name="mediaType">The media type being disambiguated.</param>
+    /// <param name="extraEntries">Additional session entries layered on top of the disambiguation state.</param>
+    /// <returns>The session-attributes dictionary.</returns>
+    internal static Dictionary<string, object> BuildAttributes(
+        List<MatchInfo> matches,
+        int index,
+        string mediaType,
+        params (string Key, object Value)[] extraEntries)
     {
-        return new Dictionary<string, object>
+        var attributes = new Dictionary<string, object>
         {
             [AttrMatches] = JsonConvert.SerializeObject(matches),
             [AttrIndex] = index,
             [AttrType] = mediaType
         };
+
+        foreach ((string key, object value) in extraEntries)
+        {
+            attributes[key] = value;
+        }
+
+        return attributes;
     }
 
     /// <summary>

@@ -566,12 +566,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                         var matchList = string.Join(", ", matchInfos.Select(m => m.Name));
                         string multiPrompt = ResponseStrings.Get("DisambiguateMultipleArtists", locale, matchList);
                         var multiResponse = ResponseBuilder.Ask(multiPrompt, new Reprompt(ResponseStrings.Get("DisambiguateReprompt", locale)));
-                        multiResponse.SessionAttributes = new Dictionary<string, object>
-                        {
-                            [DisambiguationHelper.AttrMatches] = Newtonsoft.Json.JsonConvert.SerializeObject(matchInfos),
-                            [DisambiguationHelper.AttrIndex] = 0,
-                            [DisambiguationHelper.AttrType] = DisambiguationHelper.MediaTypeArtist
-                        };
+                        multiResponse.SessionAttributes = DisambiguationHelper.BuildAttributes(matchInfos, 0, DisambiguationHelper.MediaTypeArtist);
                         Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.ConversationalFlows.MarkOthersInactive(
                             multiResponse, Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.ConversationalFlows.DisambiguationKeys);
                         return multiResponse;

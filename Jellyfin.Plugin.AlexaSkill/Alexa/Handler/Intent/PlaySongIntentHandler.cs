@@ -9,7 +9,6 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
-using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
@@ -440,31 +439,21 @@ public class PlaySongIntentHandler : BaseHandler
     /// Song-name elicitation via Dialog.ElicitSlot (context-preserving, JF-413): the next
     /// utterance fills the song slot inside the PlaySongIntent dialog instead of falling
     /// through to general NLU, and an already-filled musician slot survives the
-    /// round-trip. Declares BOTH intent slots in updatedIntent (Amazon rejects partial
-    /// updatedIntent, live INVALID_RESPONSE 2026-08-28). PlaySongIntent is registered in
-    /// dialog.intents in all 17 locales (verified 2026-08-29). MarkOthersInactive with no
-    /// active keys (JF-398): the elicit owns no session state of its own (the dialog
-    /// lives Amazon-side), so any OTHER flow's stale state must not ride along.
+    /// round-trip. The shared builder declares BOTH intent slots in updatedIntent
+    /// (Amazon rejects partial updatedIntent, live INVALID_RESPONSE 2026-08-28).
+    /// PlaySongIntent is registered in dialog.intents in all 17 locales (verified
+    /// 2026-08-29). MarkOthersInactive with no active keys (JF-398): the elicit owns no
+    /// session state of its own (the dialog lives Amazon-side), so any OTHER flow's
+    /// stale state must not ride along.
     /// </summary>
     /// <param name="locale">The request locale, for the prompt string.</param>
     /// <returns>The elicitation response.</returns>
     private static SkillResponse BuildSongElicitResponse(string locale)
-    {
-        string prompt = ResponseStrings.Get("ElicitSongName", locale);
-        var response = new SkillResponse
-        {
-            Version = "1.0",
-            Response = new ResponseBody
-            {
-                ShouldEndSession = false,
-                OutputSpeech = new PlainTextOutputSpeech { Text = prompt },
-                Reprompt = new Reprompt(prompt),
-                Directives = new List<IDirective> { new ElicitSlotDirective(IntentNames.Slots.Song, IntentNames.PlaySong, new[] { IntentNames.Slots.Song, IntentNames.Slots.Musician }) }
-            }
-        };
-        Pipeline.ConversationalFlows.MarkOthersInactive(response);
-        return response;
-    }
+        => BuildElicitSlotResponse(
+            IntentNames.PlaySong,
+            IntentNames.Slots.Song,
+            new[] { IntentNames.Slots.Song, IntentNames.Slots.Musician },
+            ResponseStrings.Get("ElicitSongName", locale));
 
     // Alexa's NLU can misalign slot boundaries, causing carrier phrases like
     // "la canzone" to bleed into the slot value. Strip them before searching.

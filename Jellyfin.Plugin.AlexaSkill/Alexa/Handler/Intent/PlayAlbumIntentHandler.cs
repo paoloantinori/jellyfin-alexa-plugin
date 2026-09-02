@@ -9,7 +9,6 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
-using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -512,33 +511,22 @@ public class PlayAlbumIntentHandler : BaseHandler
     /// captured as the album slot and already-filled slots survive the round-trip. A plain
     /// Ask let follow-ups fall through to general NLU and lose the thread (on-device
     /// 2026-08-28 20:23: "quali ci sono" after the elicit surfaced unrelated
-    /// recently-added content). The updatedIntent declares BOTH intent slots: Amazon
-    /// rejects the directive otherwise (live INVALID_RESPONSE 2026-08-28 21:17: "All
-    /// slots must be defined when sending updated intent... Missing: album"). Requires
-    /// PlayAlbumIntent in dialog.intents with elicitationRequired=false (manual dialog
-    /// control, CLAUDE.md anti-pattern #9).
+    /// recently-added content). The shared builder declares BOTH intent slots in
+    /// updatedIntent (Amazon rejects the directive otherwise, live INVALID_RESPONSE
+    /// 2026-08-28 21:17: "All slots must be defined when sending updated intent...
+    /// Missing: album"). Requires PlayAlbumIntent in dialog.intents with
+    /// elicitationRequired=false (manual dialog control, CLAUDE.md anti-pattern #9).
+    /// JF-398 write-time mutual exclusion: the elicit owns no session state of its own
+    /// (the dialog lives Amazon-side), so no OTHER flow's stale state may ride along.
     /// </summary>
     /// <param name="locale">The request locale, for the prompt string.</param>
     /// <returns>The elicitation response.</returns>
     private static SkillResponse BuildAlbumElicitResponse(string locale)
-    {
-        string prompt = ResponseStrings.Get("ElicitAlbumName", locale);
-        var response = new SkillResponse
-        {
-            Version = "1.0",
-            Response = new ResponseBody
-            {
-                ShouldEndSession = false,
-                OutputSpeech = new PlainTextOutputSpeech { Text = prompt },
-                Reprompt = new Reprompt(prompt),
-                Directives = new List<IDirective> { new ElicitSlotDirective(IntentNames.Slots.Album, IntentNames.PlayAlbum, new[] { IntentNames.Slots.Album, IntentNames.Slots.Musician }) }
-            }
-        };
-        // JF-398 write-time mutual exclusion: the elicit owns no session state of its own
-        // (the dialog lives Amazon-side), so no OTHER flow's stale state may ride along.
-        Pipeline.ConversationalFlows.MarkOthersInactive(response);
-        return response;
-    }
+        => BuildElicitSlotResponse(
+            IntentNames.PlayAlbum,
+            IntentNames.Slots.Album,
+            new[] { IntentNames.Slots.Album, IntentNames.Slots.Musician },
+            ResponseStrings.Get("ElicitAlbumName", locale));
 
     /// <summary>
     /// Builds a MusicAlbum query scoped to the user's libraries (with library filtering).
