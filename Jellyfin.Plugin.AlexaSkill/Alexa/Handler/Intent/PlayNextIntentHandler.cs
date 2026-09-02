@@ -10,6 +10,7 @@ using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -181,6 +182,10 @@ public class PlayNextIntentHandler : BaseHandler
 
         BaseItem song = songs[0];
         InsertAfterCurrent(session, song.Id);
+
+        // JF-424.1: the insertion displaced the item that follows the current one, so
+        // any pre-computed next-track entry for this device is stale by definition.
+        NextTrackPrecomputeCache.Invalidate(context.System.Device.DeviceID);
 
         // If nothing is currently playing, start playback
         if (session.FullNowPlayingItem == null)

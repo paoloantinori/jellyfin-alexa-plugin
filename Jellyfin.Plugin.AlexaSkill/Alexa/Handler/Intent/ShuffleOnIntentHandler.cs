@@ -68,6 +68,10 @@ public class ShuffleOnIntentHandler : BaseHandler
         // always reflects the user's intent.
         _queueManager?.SetPlaybackOrder(deviceId, "Shuffle");
 
+        // JF-424.1: shuffle changes which item follows the current one, so any
+        // pre-computed sequential next-track entry for this device is stale.
+        Playback.NextTrackPrecomputeCache.Invalidate(deviceId);
+
         // Physically reorder the remaining queue (current item stays first) so the
         // effect does not depend on the indirect Jellyfin PlayState flag being read.
         if (_queueManager != null && tokenValid)

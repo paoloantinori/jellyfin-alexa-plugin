@@ -52,9 +52,9 @@ public class ShuffleIntentHandlerTests : IDisposable
     private static IntentRequest ShuffleRequest(string intentName) =>
         new() { Intent = new Intent { Name = intentName }, Locale = "en-US", RequestId = "test" };
 
-    private static Context ContextWithToken(string token)
+    private static Context ContextWithToken(string token, string deviceId = "test-device")
     {
-        Context c = TestHelpers.CreateTestContext();
+        Context c = TestHelpers.CreateTestContext(deviceId);
         c.AudioPlayer = new PlaybackState { Token = token, OffsetInMilliseconds = 0 };
         return c;
     }
@@ -215,5 +215,58 @@ public class ShuffleIntentHandlerTests : IDisposable
         Assert.Equal(ids, q.ItemIds);                  // original order restored
         Assert.Equal(1, q.CurrentIndex);               // guids[1] is at index 1 in the original order
         Assert.Equal(ids.IndexOf(playingNow.ToString()), q.CurrentIndex);
+    }
+
+    // JF-424.1: enabling shuffle changes which item follows the current one, so the
+    // device's pre-computed sequential next-track entry must be dropped.
+    [Fact]
+    public async Task ShuffleOn_InvalidatesPrecomputeCache()
+    {
+        DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+        Guid current = Guid.NewGuid();
+        Guid cachedNext = Guid.NewGuid();
+        string deviceId = "shuffle-jf4241-" + Guid.NewGuid().ToString("N");
+        mgr.SetQueue(deviceId, new List<string> { current.ToString(), Guid.NewGuid().ToString(), Guid.NewGuid().ToString(), Guid.NewGuid().ToString() }, 0);
+        NextTrackPrecomputeCache.Store(
+            deviceId, current.ToString(), cachedNext,
+            new MediaBrowser.Controller.Entities.Audio.Audio { Name = "Cached Next", Id = cachedNext }, "https://stream/next");
+
+        var handler = new ShuffleOnIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory, mgr);
+        await handler.HandleAsync(
+            ShuffleRequest(IntentNames.AmazonShuffleOn),
+            ContextWithToken(current.ToString(), deviceId),
+            TestHelpers.CreateTestUser(), NewSession(new[] { current }), default);
+
+        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, current.ToString(), out _, out _, out _));
+    }
+
+    // JF-424.1: restoring the original order on shuffle-off equally changes which item
+    // follows the current one (an entry pre-computed under shuffle order is stale).
+    [Fact]
+    public async Task ShuffleOff_InvalidatesPrecomputeCache()
+    {
+        DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+        Guid current = Guid.NewGuid();
+        Guid cachedNext = Guid.NewGuid();
+        string deviceId = "shuffle-jf4241-" + Guid.NewGuid().ToString("N");
+        List<string> original = new() { current.ToString(), cachedNext.ToString(), Guid.NewGuid().ToString(), Guid.NewGuid().ToString() };
+
+        // Known shuffled state: tail reordered, original order snapshotted.
+        DeviceQueue dq = mgr.GetOrCreateQueue(deviceId);
+        dq.ItemIds = new List<string> { current.ToString(), Guid.NewGuid().ToString(), Guid.NewGuid().ToString(), Guid.NewGuid().ToString() };
+        dq.OriginalItemIds = new List<string>(original);
+        dq.PlaybackOrder = "Shuffle";
+        dq.CurrentIndex = 0;
+        NextTrackPrecomputeCache.Store(
+            deviceId, current.ToString(), cachedNext,
+            new MediaBrowser.Controller.Entities.Audio.Audio { Name = "Cached Next", Id = cachedNext }, "https://stream/next");
+
+        var handler = new ShuffleOffIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory, mgr);
+        await handler.HandleAsync(
+            ShuffleRequest(IntentNames.AmazonShuffleOff),
+            ContextWithToken(current.ToString(), deviceId),
+            TestHelpers.CreateTestUser(), NewSession(new[] { current }), default);
+
+        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, current.ToString(), out _, out _, out _));
     }
 }

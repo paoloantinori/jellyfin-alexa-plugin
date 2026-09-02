@@ -73,6 +73,12 @@ public class ClearQueueIntentHandler : BaseHandler
         // Clear the persisted device queue as well
         _queueManager?.Clear(context.System.Device.DeviceID);
 
+        // JF-424.1: any pre-computed next-track entry for this device was computed
+        // against the queue that was just cleared; drop it so a later NearlyFinished
+        // for the still-playing item cannot serve it. (The successor check in
+        // PlaybackNearlyFinishedEventHandler's cache-hit path is the second defense.)
+        NextTrackPrecomputeCache.Invalidate(context.System.Device.DeviceID);
+
         Logger.LogInformation("ClearQueueIntent: queue cleared");
         return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("QueueCleared", locale)));
     }

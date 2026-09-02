@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -31,12 +32,13 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// next queue item instead of just a keep-alive ack.
 /// </summary>
 [Collection("Plugin")]
-public class PreEnqueueOnStartTests : PluginTestBase
+public class PreEnqueueOnStartTests : PluginTestBase, IDisposable
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly Mock<ILibraryManager> _libraryManagerMock;
     private readonly PluginConfiguration _config;
     private readonly ILoggerFactory _loggerFactory;
+    private readonly string _tempDir;
 
     public PreEnqueueOnStartTests()
     {
@@ -45,7 +47,29 @@ public class PreEnqueueOnStartTests : PluginTestBase
         _config = new PluginConfiguration();
         TestHelpers.SetServerAddress(_config, "https://test.example.com");
         _loggerFactory = LoggerFactory.Create(b => { });
+        _tempDir = Path.Combine(Path.GetTempPath(), $"precompute-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(_tempDir);
     }
+
+    public void Dispose()
+    {
+        try
+        {
+            if (Directory.Exists(_tempDir))
+            {
+                Directory.Delete(_tempDir, true);
+            }
+        }
+        catch (IOException)
+        {
+            // Best-effort temp cleanup only
+        }
+
+        GC.SuppressFinalize(this);
+    }
+
+    private DeviceQueueManager CreateQueueManager()
+        => new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
 
     private PlaybackStartedEventHandler CreateHandler()
     {
@@ -377,6 +401,144 @@ public class PreEnqueueOnStartTests : PluginTestBase
 
         // 4) NearlyFinished(trackB) must NOT get a hit (the live bug re-enqueued trackB here)
         Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, trackB.ToString(), out _, out _, out _));
+
+    }
+
+    // JF-424.1: the token is the BARE item GUID, so a token match identifies an ITEM,
+    // not a playback session. An entry stored against a queue that later changed (here:
+    // another item was inserted right after the current one, the PlayNext shape) must
+    // NOT be served: the cache-hit path re-checks that the cached item still follows
+    // the current item in the live session queue and falls through to full resolution.
+    [Fact]
+    public async Task PlaybackNearlyFinished_CacheHitButQueueChanged_ServesLiveSuccessorNotCachedNext()
+    {
+        _config.PreEnqueueOnStart = true;
+        var trackA = Guid.NewGuid();
+        var trackB = Guid.NewGuid();
+        var trackX = Guid.NewGuid();
+        SetupLibraryItem(trackB, "Track B");
+        SetupLibraryItem(trackX, "Track X");
+        var deviceId = "device-jf4241-" + Guid.NewGuid().ToString("N"); // unique per test: isolation without shared state
+        var handler = new PlaybackNearlyFinishedEventHandler(
+            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, new Mock<IUserManager>().Object, _loggerFactory);
+
+        // Stale entry: computed when B followed A. The live queue now has X between them.
+        NextTrackPrecomputeCache.Store(
+            deviceId, trackA.ToString(), trackB, new Audio { Name = "Track B", Id = trackB }, "https://stream/trackB");
+        var session = CreateSession(
+            new List<QueueItem> { new() { Id = trackA }, new() { Id = trackX }, new() { Id = trackB } },
+            trackA);
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateNearlyFinishedRequest(trackA.ToString()), CreateDeviceContext(trackA.ToString(), deviceId),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        // Full resolution served A's live successor X; the cached B was not served.
+        var play = (response.Response?.Directives ?? new List<IDirective>())
+            .OfType<AudioPlayerPlayDirective>().FirstOrDefault();
+        Assert.NotNull(play);
+        Assert.Equal(trackX.ToString(), play.AudioItem?.Stream?.Token);
+
+    }
+
+    // JF-424.1 incident replay (the task's failure scenario): queue [A,B];
+    // Started(A) stores entry(A->B); the user skips A (no NearlyFinished consumes it),
+    // clears the queue, and replays A as a single-item play (Started(A) then stores
+    // nothing: A is last in the 1-item queue). Within the TTL, NearlyFinished(A) still
+    // token-matches the stale entry; it must NOT enqueue B after a single-item play.
+    [Fact]
+    public async Task PlaybackNearlyFinished_AfterClearQueueAndSingleItemReplay_DoesNotServeStaleEntry()
+    {
+        _config.PreEnqueueOnStart = true;
+        var trackA = Guid.NewGuid();
+        var trackB = Guid.NewGuid();
+        SetupLibraryItem(trackB, "Track B");
+        var deviceId = "device-jf4241-" + Guid.NewGuid().ToString("N"); // unique per test: isolation without shared state
+        using DeviceQueueManager queueManager = CreateQueueManager();
+        queueManager.SetQueue(deviceId, new List<string> { trackA.ToString(), trackB.ToString() }, 0);
+        var queue = new List<QueueItem> { new() { Id = trackA }, new() { Id = trackB } };
+        var startedHandler = CreateHandler();
+        var nearlyFinishedHandler = new PlaybackNearlyFinishedEventHandler(
+            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, new Mock<IUserManager>().Object, _loggerFactory);
+
+        // 1) Started(A) on queue [A,B]: stores entry(A->B).
+        await startedHandler.HandleAsync(
+            CreateStartedRequest(trackA.ToString()), CreateDeviceContext(trackA.ToString(), deviceId),
+            TestHelpers.CreateTestUser(), CreateSession(queue, trackA), CancellationToken.None);
+
+        // 2) The user skips A (no NearlyFinished for A) and clears the queue.
+        var clearHandler = new ClearQueueIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory, queueManager);
+        await clearHandler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "ClearQueueIntent" }, Locale = "en-US", RequestId = "clear-req" },
+            CreateDeviceContext(trackA.ToString(), deviceId),
+            TestHelpers.CreateTestUser(), CreateSession(queue, trackA), CancellationToken.None);
+
+        // 3) Replay A as a single-item play: session queue [A], Started stores nothing.
+        var singleItemQueue = new List<QueueItem> { new() { Id = trackA } };
+        await startedHandler.HandleAsync(
+            CreateStartedRequest(trackA.ToString()), CreateDeviceContext(trackA.ToString(), deviceId),
+            TestHelpers.CreateTestUser(), CreateSession(singleItemQueue, trackA), CancellationToken.None);
+
+        // 4) NearlyFinished(A) token-matches the stale entry but must not serve B:
+        // the live queue [A] has no successor, so playback ends (PostPlay Stop default).
+        SkillResponse response = await nearlyFinishedHandler.HandleAsync(
+            CreateNearlyFinishedRequest(trackA.ToString()), CreateDeviceContext(trackA.ToString(), deviceId),
+            TestHelpers.CreateTestUser(), CreateSession(singleItemQueue, trackA), CancellationToken.None);
+
+        var play = (response.Response?.Directives ?? new List<IDirective>())
+            .OfType<AudioPlayerPlayDirective>().FirstOrDefault();
+        Assert.Null(play);
+
+    }
+
+    // JF-424.1: MoveTo failure (resolved next item absent from the device queue, which
+    // happens when the session queue was built by a play path that does not mirror it)
+    // must leave the recovery pointer untouched instead of dangling CurrentItemId at an
+    // item the queue does not contain. The enqueue itself still happens: the session
+    // queue is the authoritative resolution source. Covers both the cache-hit path
+    // (AC#5) and the full-resolution sibling branch, which share the defect shape.
+    [Theory]
+    [InlineData(true)]    // precompute cache entry present: cache-hit path
+    [InlineData(false)]   // no cache entry: full-resolution path
+    public async Task PlaybackNearlyFinished_MoveToFails_LeavesCurrentItemIdUnchanged(bool usePrecomputeEntry)
+    {
+        _config.PreEnqueueOnStart = true;
+        var trackA = Guid.NewGuid();
+        var trackB = Guid.NewGuid();
+        var otherX = Guid.NewGuid();
+        var otherY = Guid.NewGuid();
+        SetupLibraryItem(trackB, "Track B");
+        var deviceId = "device-jf4241-" + Guid.NewGuid().ToString("N"); // unique per test: isolation without shared state
+        using DeviceQueueManager queueManager = CreateQueueManager();
+
+        // Device queue holds unrelated items: MoveTo(trackB) will fail.
+        queueManager.SetQueue(deviceId, new List<string> { otherX.ToString(), otherY.ToString() }, 0);
+        string previousPointer = otherX.ToString();
+        queueManager.GetOrCreateQueue(deviceId).CurrentItemId = previousPointer;
+
+        if (usePrecomputeEntry)
+        {
+            NextTrackPrecomputeCache.Store(
+                deviceId, trackA.ToString(), trackB, new Audio { Name = "Track B", Id = trackB }, "https://stream/trackB");
+        }
+
+        var handler = new PlaybackNearlyFinishedEventHandler(
+            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, new Mock<IUserManager>().Object, _loggerFactory, queueManager);
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateNearlyFinishedRequest(trackA.ToString()), CreateDeviceContext(trackA.ToString(), deviceId),
+            TestHelpers.CreateTestUser(), CreateSession(new List<QueueItem> { new() { Id = trackA }, new() { Id = trackB } }, trackA),
+            CancellationToken.None);
+
+        // The next track is still enqueued (from the cache on the hit path, from the
+        // library on the full-resolution path)...
+        var play = (response.Response?.Directives ?? new List<IDirective>())
+            .OfType<AudioPlayerPlayDirective>().FirstOrDefault();
+        Assert.NotNull(play);
+        Assert.Equal(trackB.ToString(), play.AudioItem?.Stream?.Token);
+
+        // ...but the queue pointer was left exactly where it was.
+        Assert.Equal(previousPointer, queueManager.GetQueue(deviceId)!.CurrentItemId);
 
     }
 }

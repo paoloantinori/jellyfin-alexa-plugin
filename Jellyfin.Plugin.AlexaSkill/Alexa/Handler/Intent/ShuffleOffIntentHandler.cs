@@ -68,6 +68,10 @@ public class ShuffleOffIntentHandler : BaseHandler
         if (_queueManager != null)
         {
             _queueManager.RestoreOrder(deviceId);
+
+            // JF-424.1: restoring the original order changes which item follows the
+            // current one, so an entry pre-computed under the shuffle order is stale.
+            Playback.NextTrackPrecomputeCache.Invalidate(deviceId);
             if (tokenValid)
             {
                 // RestoreOrder reverts ItemIds to the original sequence, which can

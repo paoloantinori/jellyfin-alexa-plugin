@@ -108,25 +108,33 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
                     out Guid cachedNextId, out BaseItem? cachedItem, out string? cachedUrl)
                 && cachedItem != null && cachedUrl != null)
             {
-                Logger.LogInformation(
-                    "PlaybackNearlyFinished: cache hit, responding instantly with pre-computed next='{NextItem}' (no library lookups)",
-                    cachedItem.Name);
-
-                if (_queueManager != null)
+                // JF-424.1: the cache key (device) and its validation token (the bare
+                // item GUID) identify an ITEM, not a playback session, so an entry can
+                // outlive the queue it was computed from when the queue is cleared or
+                // changed mid-track. Serve only when the cached item is STILL the
+                // sequential successor of the current item in the live session queue,
+                // i.e. exactly what ResolveNextItemId below would produce; otherwise
+                // fall through to full resolution (which also handles PostPlay when the
+                // queue no longer has a successor).
+                if (CachedNextStillFollowsCurrent(session, context, cachedNextId))
                 {
-                    _queueManager.MoveTo(deviceId, cachedNextId.ToString());
-                    var queue = _queueManager.GetOrCreateQueue(deviceId);
-                    queue.CurrentItemId = cachedNextId.ToString();
-                    if (context.AudioPlayer != null)
-                    {
-                        queue.CurrentPositionTicks = TimeSpan.FromMilliseconds(context.AudioPlayer.OffsetInMilliseconds).Ticks;
-                    }
+                    Logger.LogInformation(
+                        "PlaybackNearlyFinished: cache hit, responding instantly with pre-computed next='{NextItem}' (no library lookups)",
+                        cachedItem.Name);
+
+                    UpdateRecoveryPointer(deviceId, cachedNextId.ToString(), context, cachedItem.Name);
+
+                    return BuildAudioPlayerResponse(PlayBehavior.Enqueue, cachedUrl, cachedNextId.ToString(), cachedItem, user, context);
                 }
 
-                return BuildAudioPlayerResponse(PlayBehavior.Enqueue, cachedUrl, cachedNextId.ToString(), cachedItem, user, context);
+                Logger.LogInformation(
+                    "PlaybackNearlyFinished: pre-computed next='{NextItem}' no longer follows the current item in the live queue (cleared or changed since PlaybackStarted); falling through to full resolution",
+                    cachedItem.Name);
             }
-
-            Logger.LogDebug("PlaybackNearlyFinished: PreEnqueueOnStart on but no cache hit, falling through to full resolution");
+            else
+            {
+                Logger.LogDebug("PlaybackNearlyFinished: PreEnqueueOnStart on but no cache hit, falling through to full resolution");
+            }
         }
 
         // Progressive queue building: fetch more items if we're approaching the end
@@ -194,21 +202,8 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
 
         string itemId = item.Id.ToString();
 
-        // Update the device queue pointer for crash recovery
-        if (_queueManager != null)
-        {
-            _queueManager.MoveTo(context.System?.Device?.DeviceID ?? string.Empty, itemId);
-
-            // Also update the current position for resume-after-pause accuracy.
-            // PlaybackNearlyFinished fires periodically, so this keeps the stored
-            // position reasonably fresh even if PlaybackStopped doesn't fire.
-            var queue = _queueManager.GetOrCreateQueue(context.System?.Device?.DeviceID ?? string.Empty);
-            queue.CurrentItemId = itemId;
-            if (context.AudioPlayer != null)
-            {
-                queue.CurrentPositionTicks = TimeSpan.FromMilliseconds(context.AudioPlayer.OffsetInMilliseconds).Ticks;
-            }
-        }
+        // Update the device queue pointer for crash recovery (guarded, JF-424.1).
+        UpdateRecoveryPointer(context.System?.Device?.DeviceID ?? string.Empty, itemId, context, itemNameForLog: null);
 
         // Use the optimized /stream?static=true endpoint for pre-fetched playback
         // (the original /universal endpoint adds an extra redirect hop)
@@ -241,28 +236,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         }
 
         // Find current position in the queue
-        Guid? currentItemId = session.FullNowPlayingItem?.Id;
-        if (currentItemId == null && context.AudioPlayer?.Token != null
-            && Guid.TryParse(context.AudioPlayer.Token, out Guid parsedToken))
-        {
-            currentItemId = parsedToken;
-        }
-
-        if (currentItemId == null)
-        {
-            return;
-        }
-
-        int currentIndex = -1;
-        for (int i = 0; i < session.NowPlayingQueue.Count; i++)
-        {
-            if (session.NowPlayingQueue[i].Id == currentItemId.Value)
-            {
-                currentIndex = i;
-                break;
-            }
-        }
-
+        int currentIndex = FindCurrentQueueIndex(session, context);
         if (currentIndex < 0)
         {
             return;
@@ -341,6 +315,99 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     }
 
     /// <summary>
+    /// Finds the currently playing item's position in the session queue, or -1 when
+    /// it cannot be located. Resolution order (the session's now-playing item first,
+    /// then the AudioPlayer token parsed as a bare item GUID) is shared by the
+    /// queue-continuation fetch, <see cref="ResolveNextItemId"/>, and the JF-424.1
+    /// precompute-cache validation below, so all three agree on "current item".
+    /// </summary>
+    /// <param name="session">The current Jellyfin session with play state.</param>
+    /// <param name="context">The Alexa context for current token.</param>
+    /// <returns>The zero-based queue index of the current item, or -1 if absent.</returns>
+    private int FindCurrentQueueIndex(SessionInfo session, Context context)
+    {
+        Guid? currentItemId = session.FullNowPlayingItem?.Id;
+        if (currentItemId == null && context.AudioPlayer?.Token != null
+            && Guid.TryParse(context.AudioPlayer.Token, out Guid parsedToken))
+        {
+            currentItemId = parsedToken;
+        }
+
+        if (currentItemId == null)
+        {
+            return -1;
+        }
+
+        for (int i = 0; i < session.NowPlayingQueue.Count; i++)
+        {
+            if (session.NowPlayingQueue[i].Id == currentItemId.Value)
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// JF-424.1: a precompute cache hit may only be served when the cached next item
+    /// is STILL the sequential successor of the current item in the live session queue.
+    /// The precompute key (device) and its validation token (the bare item GUID)
+    /// identify an item, not a playback session, so an entry can outlive the queue it
+    /// was computed from (cleared or changed mid-track). This re-check keeps the
+    /// served item identical to what <see cref="ResolveNextItemId"/> would produce,
+    /// at in-memory cost only.
+    /// </summary>
+    /// <param name="session">The current Jellyfin session with play state.</param>
+    /// <param name="context">The Alexa context for current token.</param>
+    /// <param name="cachedNextId">The next item ID taken from the precompute cache.</param>
+    /// <returns>True when the cached item is still the current item's queue successor.</returns>
+    private bool CachedNextStillFollowsCurrent(SessionInfo session, Context context, Guid cachedNextId)
+    {
+        int currentIndex = FindCurrentQueueIndex(session, context);
+        return currentIndex >= 0
+            && currentIndex + 1 < session.NowPlayingQueue.Count
+            && session.NowPlayingQueue[currentIndex + 1].Id == cachedNextId;
+    }
+
+    /// <summary>
+    /// Updates the device queue's crash-recovery pointer, shared by the precompute
+    /// cache-hit branch and the full-resolution branch. JF-424.1: the pointer moves
+    /// only when <see cref="DeviceQueueManager.MoveTo"/> actually moved; the item can
+    /// be absent from the device queue when the session queue was built by a play path
+    /// that does not mirror it, and a failed move must not leave CurrentItemId dangling
+    /// at an item the queue does not contain. The position is also refreshed for
+    /// resume-after-pause accuracy (NearlyFinished fires periodically).
+    /// </summary>
+    /// <param name="deviceId">The device whose queue pointer to update.</param>
+    /// <param name="itemId">The item that is now current.</param>
+    /// <param name="context">The Alexa context for the current playback offset.</param>
+    /// <param name="itemNameForLog">Optional item name for the failure debug log.</param>
+    private void UpdateRecoveryPointer(string deviceId, string itemId, Context context, string? itemNameForLog)
+    {
+        if (_queueManager == null)
+        {
+            return;
+        }
+
+        if (_queueManager.MoveTo(deviceId, itemId))
+        {
+            var queue = _queueManager.GetOrCreateQueue(deviceId);
+            queue.CurrentItemId = itemId;
+            if (context.AudioPlayer != null)
+            {
+                queue.CurrentPositionTicks = TimeSpan.FromMilliseconds(context.AudioPlayer.OffsetInMilliseconds).Ticks;
+            }
+        }
+        else
+        {
+            Logger.LogDebug(
+                "PlaybackNearlyFinished: item '{Item}' not in the device queue; pointer left untouched",
+                itemNameForLog ?? itemId);
+        }
+    }
+
+    /// <summary>
     /// Resolve the next item ID based on the current position in the queue,
     /// taking loop and shuffle modes into account.
     /// </summary>
@@ -364,28 +431,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         }
 
         // Find current position in the queue
-        Guid? currentItemId = session.FullNowPlayingItem?.Id;
-        if (currentItemId == null && context.AudioPlayer?.Token != null
-            && Guid.TryParse(context.AudioPlayer.Token, out Guid parsedToken))
-        {
-            currentItemId = parsedToken;
-        }
-
-        if (currentItemId == null)
-        {
-            return null;
-        }
-
-        int currentIndex = -1;
-        for (int i = 0; i < session.NowPlayingQueue.Count; i++)
-        {
-            if (session.NowPlayingQueue[i].Id == currentItemId.Value)
-            {
-                currentIndex = i;
-                break;
-            }
-        }
-
+        int currentIndex = FindCurrentQueueIndex(session, context);
         if (currentIndex < 0)
         {
             return null;
