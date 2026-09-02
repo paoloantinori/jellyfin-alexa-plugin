@@ -3,10 +3,10 @@ id: JF-456
 title: >-
   JF-455 simplify follow-ups: single decision point for library-exempt item
   kinds, uniform topParentIds convention, fused ResolveForUser
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-02 06:19'
-updated_date: '2026-09-02 14:31'
+updated_date: '2026-09-02 14:52'
 labels:
   - refactor
   - library-filter
@@ -35,8 +35,7 @@ Filed from the JF-455 /simplify pass (2026-09-02); three altitude findings delib
 - [ ] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 17 locales
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining
-- [ ] #11 or findings applied/tracked)
+- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
 ## Implementation Notes

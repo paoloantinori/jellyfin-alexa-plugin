@@ -92,6 +92,5 @@ E2E CLOSURE (22:0x-22:4x): full suite with live env = 44/56, all 12 failures wer
 - [x] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 17 locales
 - [x] #9 /simplify passed (no blocking cleanups remaining)
-- [x] #10 /code-review high passed (no blocking findings remaining
-- [ ] #11 or findings applied/tracked)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->

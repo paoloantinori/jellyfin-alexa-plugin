@@ -6,7 +6,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-08-23 05:57'
-updated_date: '2026-08-29 08:14'
+updated_date: '2026-09-02 16:49'
 labels:
   - testing
   - nlu
@@ -35,8 +35,7 @@ Plan: extend NLU fixtures locale by locale. Not all 11 are equal priority: pt-BR
 - [ ] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 17 locales
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining
-- [ ] #11 or findings applied/tracked)
+- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
 ## Implementation Notes
@@ -53,4 +52,6 @@ PROGRESS 2026-08-29 (device-free, JF-414 spillover): es-US.yaml and pt-BR.yaml f
 COMPLETION 2026-08-29 (device-free): fixture files created for the remaining live locales - es-US, pt-BR, nl-NL, hi-IN, ar-SA - each probe-verified against the pushed models BEFORE asserting (12/12 green live). NLU coverage now 16/17 locales; only ja-JP remains (vendor-disabled, SMAPI 404, manifest enablement needed - tracked in JF-414). Harness fixed: INVOCATION_PREFIX gained ar-SA/nl-NL/hi-IN (the English fallback misroutes Arabic). Two JF-406-class divergences found and documented in-file: es-US imperative 'Reproduce un album de queen' -> PlaySongIntent; ar-SA 'shughl album queen' bare -> PlayVideoIntent deterministically (4/4), correct with the Arabic invocation prefix. The 2026-08-23 note that pt/ja/hi/ar/nl were 'not active on the dev skill' is superseded: all but ja-JP are live and testable (verified by direct model reads and green runs).
 
 PER-USER NOTE for fixture extension: always probe-verify each utterance bare on profile-nlu BEFORE writing the expectation; the sample vocabulary alone does not predict routing (both divergences above are in forms present as samples).
+
+JF-450/451 follow-up (2026-09-02): SetReminderIntent is now declared in all 17 models; NLU fixtures gained routing entries for 11 locales + an e2e_it-IT routing entry, but es-US/pt-BR/nl-NL/hi-IN/ar-SA have no SetReminder fixture entries yet (their seeds lack SleepTimer entries too). Extend under this program using the existing probe-verify-first rule.
 <!-- SECTION:NOTES:END -->

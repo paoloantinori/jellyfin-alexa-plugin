@@ -59,6 +59,5 @@ Gates: gate-exempt-shaped (YAML fixtures only, no code); the live suite run IS t
 - [x] #7 E2E test added for new intent or handler logic
 - [x] #8 Locale response strings added to all 17 locales
 - [x] #9 /simplify passed (no blocking cleanups remaining)
-- [x] #10 /code-review high passed (no blocking findings remaining
-- [x] #11 or findings applied/tracked)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->

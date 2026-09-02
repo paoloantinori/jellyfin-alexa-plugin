@@ -3,9 +3,10 @@ id: JF-451
 title: >-
   Dead handlers: RepeatIntentHandler and SetReminderIntentHandler claim intents
   declared in no locale model (unreachable in production)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-02 02:50'
+updated_date: '2026-09-02 14:52'
 labels:
   - routing
   - dead-code
@@ -43,6 +44,5 @@ Decide per handler: add the intent to all 17 models (it-IT via the YAML template
 - [ ] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 17 locales
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining
-- [ ] #11 or findings applied/tracked)
+- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
