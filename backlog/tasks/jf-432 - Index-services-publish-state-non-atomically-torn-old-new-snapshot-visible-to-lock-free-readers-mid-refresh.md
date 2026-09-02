@@ -7,7 +7,7 @@ status: Done
 assignee:
   - zai
 created_date: '2026-09-01 06:06'
-updated_date: '2026-09-02 02:08'
+updated_date: '2026-09-02 02:18'
 labels:
   - code-review
   - correctness
@@ -33,6 +33,12 @@ The JF-419.3 code-review finding 7 (CONFIRMED, pre-existing, deliberately SKIPPE
 - [x] #3 No per-request allocation regression on the read path (snapshot reference reads only)
 - [x] #4 Tests stay green; add a regression test if feasible (a reader racing a refresh sees a consistent snapshot)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-02 DEPLOYED + VERIFIED (commit 0354e51 on minix; boot slower than usual because the container loads ~10 plugins, needed a 40x5s wait loop - the AlexaSkill plugin itself loaded clean at 04:15:34, config 1 user survived). Full regression matrix green through the new snapshot path: Soul Coughing plays, tier 1.5 beatles-live 17ms, song fallback 72, Koop most-tracks pick, FindSong elicitation. Both indexes loaded through the new single-snapshot publish (1149 artists / 12766 songs).
+<!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
