@@ -3,10 +3,10 @@ id: JF-454
 title: >-
   Pin the FindSong elicit directive shape + crossmedia_notfound_* session extras
   with tests (JF-430 F2/F4)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-02 04:00'
-updated_date: '2026-09-02 04:05'
+updated_date: '2026-09-02 05:07'
 labels:
   - test-coverage
   - dialog
@@ -38,3 +38,9 @@ Filed from the JF-430 simplify round (2026-09-02, findings F2/F4, flagged as cov
 - [ ] #10 /code-review high passed (no blocking findings remaining
 - [ ] #11 or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Both coverage gaps pinned, mutation-proven. F2: FirstInvocation_EmptyTitleKeywordsSlot_ElicitsKeywordsViaDialogDirective drives the handler through its public surface and pins the full elicit shape (directive, slotToElicit, updatedIntent slots, session-open, FindSongSessionData as a JSON string read back by the production reader into AwaitingKeywords, FindSongKeys activation excluding FindSongSessionData from removals). F4: the album offer-decline test pins the crossmedia_notfound_* writer (extraEntries) and the NoIntentHandler reader end to end; both Confirm-mode offer tests assert the query/type extras. Adversarial review: five production mutations (ternary flip, slot-list change, state change, wire-type change, extras removal) each caught by the named assertion; pristine code 115/115. Review P3 applied: the song decline test now also pins the songs-not-found string (mutation had shown it passing under a flipped ternary). Simplify applied: SetupAlbumMissArtistSubStrict + DeclineOfferAsync extracted (mirror the song helper), manual deserialization collapsed to the production reader + wire-type pin. One cosmetic P3 skipped with reason (unused query param mirrors the pre-existing song twin's convention). Suite 2858/0. Commits 9dcfeec + 832c9be.
+<!-- SECTION:FINAL_SUMMARY:END -->
