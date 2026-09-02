@@ -155,12 +155,26 @@ public class ArtistIndexServiceTests : PluginTestBase
     [Fact]
     public async Task StartAsync_SuccessfulLoad_DoesNotScheduleRetry()
     {
-        int callCount = 0;
-        var service = CreateServiceWithLoad(() =>
-        {
-            callCount++;
-            return new List<BaseItem> { new MusicArtist { Name = "Mina", Id = Guid.NewGuid() } };
-        });
+        // Count the artist load specifically: a successful load may also run the
+        // folderless-artist album join (JF-455), which is part of the same load, not a reload.
+        int artistLoadCount = 0;
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(
+                q => q.IncludeItemTypes.Contains(BaseItemKind.MusicArtist))))
+            .Returns(() =>
+            {
+                artistLoadCount++;
+                return new List<BaseItem> { new MusicArtist { Name = "Mina", Id = Guid.NewGuid() } };
+            });
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(
+                q => q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum))))
+            .Returns(new List<BaseItem>());
+        _libraryManagerMock
+            .Setup(l => l.GetItemById(It.IsAny<Guid>()))
+            .Returns((Guid id) => null as BaseItem);
+
+        var service = new ArtistIndexService(_libraryManagerMock.Object, _logger);
         try
         {
             await service.StartAsync(CancellationToken.None);
@@ -169,7 +183,7 @@ public class ArtistIndexServiceTests : PluginTestBase
             // Long enough for a wrongly-armed retry timer to fire at least twice
             await Task.Delay(150);
 
-            Assert.Equal(1, callCount); // no background reload after a successful load
+            Assert.Equal(1, artistLoadCount); // no background reload after a successful load
         }
         finally
         {
@@ -690,5 +704,225 @@ public class ArtistIndexServiceTests : PluginTestBase
         {
             service.Dispose();
         }
+    }
+
+    // --- JF-455: top-parent id space (walk stops at the AggregateFolder boundary) ---
+
+    /// <summary>
+    /// Maps GetItemList responses per item kind so the artist query and the album
+    /// join query can return different fixtures from the same mock.
+    /// </summary>
+    private void SetupKindQueries(List<BaseItem> artists, List<BaseItem>? albums = null)
+    {
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(
+                q => q.IncludeItemTypes.Contains(BaseItemKind.MusicArtist))))
+            .Returns(artists);
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(
+                q => q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum))))
+            .Returns(albums ?? new List<BaseItem>());
+    }
+
+    /// <summary>
+    /// Registers each chain node so GetItemById(id) resolves it: the JF-455 walk tests
+    /// all mock a parent chain ending in an AggregateFolder root.
+    /// </summary>
+    private void SetupParents(params BaseItem[] chain)
+    {
+        foreach (var node in chain)
+        {
+            _libraryManagerMock.Setup(l => l.GetItemById(node.Id)).Returns(node);
+        }
+    }
+
+    [Fact]
+    public async Task StartAsync_ParentChainAboveAggregateFolder_StopsAtPhysicalLibraryFolder()
+    {
+        // Live 10.11 hierarchy shape: artist -> physical Folder -> AggregateFolder root.
+        // The map value must be the PHYSICAL folder id (what LibraryFilter resolves),
+        // not the server-wide aggregate root id (a constant, useless as a filter).
+        var rootId = Guid.NewGuid();
+        var physicalFolderId = Guid.NewGuid();
+        var artist = new MusicArtist { Name = "Battisti", Id = Guid.NewGuid(), ParentId = physicalFolderId };
+
+        SetupKindQueries(new List<BaseItem> { artist });
+        SetupParents(
+            new Folder { Id = physicalFolderId, ParentId = rootId },
+            new AggregateFolder { Id = rootId });
+
+        var service = new ArtistIndexService(_libraryManagerMock.Object, _logger);
+        await service.StartAsync(CancellationToken.None);
+
+        var filtered = Assert.Single(service.GetArtists(new[] { physicalFolderId }));
+        Assert.Equal(artist.Id, filtered.Id);
+        Assert.Empty(service.GetArtists(new[] { rootId })); // the pre-fix behavior matched only the root
+    }
+
+    [Fact]
+    public async Task StartAsync_DeepChainAboveAggregateFolder_ResolvesPhysicalFolderNotRoot()
+    {
+        // Live 10.11 album hierarchy: album -> folder-artist MusicArtist -> physical
+        // Folder -> AggregateFolder root. The album's resolved top parent must be the
+        // PHYSICAL folder; the folderless artist's inherited scope carries the proof
+        // (it has no chain of its own, so its value can only come from the album walk).
+        var rootId = Guid.NewGuid();
+        var physicalFolderId = Guid.NewGuid();
+        var folderArtistId = Guid.NewGuid();
+        var folderless = new MusicArtist { Name = "Mina", Id = Guid.NewGuid() };
+        var album = new MusicAlbum
+        {
+            Name = "Città vuota",
+            Id = Guid.NewGuid(),
+            ParentId = folderArtistId,
+            AlbumArtists = new List<string> { "Mina" }
+        };
+
+        SetupKindQueries(new List<BaseItem> { folderless }, new List<BaseItem> { album });
+        SetupParents(
+            new MusicArtist { Name = "Mina", Id = folderArtistId, ParentId = physicalFolderId },
+            new Folder { Id = physicalFolderId, ParentId = rootId },
+            new AggregateFolder { Id = rootId });
+
+        var service = new ArtistIndexService(_libraryManagerMock.Object, _logger);
+        await service.StartAsync(CancellationToken.None);
+
+        var filtered = Assert.Single(service.GetArtists(new[] { physicalFolderId }));
+        Assert.Equal(folderless.Id, filtered.Id);
+        Assert.Empty(service.GetArtists(new[] { rootId })); // the pre-fix walk resolved the root here
+    }
+
+    [Fact]
+    public async Task StartAsync_FolderlessArtist_InheritsLibraryFromItsAlbum()
+    {
+        // Metadata-path MusicArtist (ParentId empty): the walk returns the artist's own
+        // id, which never matches a filter. The album join must let it inherit the
+        // album's physical library folder (mirrors Jellyfin's album-based artist scoping).
+        var rootId = Guid.NewGuid();
+        var physicalFolderId = Guid.NewGuid();
+        var folderless = new MusicArtist { Name = "Mina", Id = Guid.NewGuid() }; // no ParentId
+
+        var album = new MusicAlbum
+        {
+            Name = "Città vuota",
+            Id = Guid.NewGuid(),
+            ParentId = physicalFolderId,
+            AlbumArtists = new List<string> { "Mina" }
+        };
+
+        SetupKindQueries(new List<BaseItem> { folderless }, new List<BaseItem> { album });
+        SetupParents(
+            new Folder { Id = physicalFolderId, ParentId = rootId },
+            new AggregateFolder { Id = rootId });
+
+        var service = new ArtistIndexService(_libraryManagerMock.Object, _logger);
+        await service.StartAsync(CancellationToken.None);
+
+        // Physical-space filter matches (the union emitted by LibraryFilter.ResolveTopParentIds)
+        var filtered = Assert.Single(service.GetArtists(new[] { physicalFolderId }));
+        Assert.Equal(folderless.Id, filtered.Id);
+    }
+
+    [Fact]
+    public async Task StartAsync_FolderlessArtistWithoutAlbums_StaysUnmatched()
+    {
+        // An artist with no folder chain AND no albums keeps its own id: it matches no
+        // library filter (same as pre-fix), rather than inheriting a wrong library.
+        var physicalFolderId = Guid.NewGuid();
+        var folderless = new MusicArtist { Name = "Hermit", Id = Guid.NewGuid() };
+
+        SetupKindQueries(new List<BaseItem> { folderless }, new List<BaseItem>());
+
+        var service = new ArtistIndexService(_libraryManagerMock.Object, _logger);
+        await service.StartAsync(CancellationToken.None);
+
+        Assert.Single(service.GetArtists());
+        Assert.Empty(service.GetArtists(new[] { physicalFolderId }));
+    }
+
+    [Fact]
+    public async Task StartAsync_AlbumJoin_DoesNotOverwriteFolderDerivedEntry()
+    {
+        // Two artists named "Mina": one folder-derived (folderA), one folderless. The
+        // album join may only fill the folderless one; the folder-derived entry is more
+        // precise and must survive the join untouched.
+        var rootId = Guid.NewGuid();
+        var folderA = Guid.NewGuid();
+        var folderB = Guid.NewGuid();
+        var folderlessId = Guid.NewGuid();
+        var folderDerivedId = Guid.NewGuid();
+
+        var artists = new List<BaseItem>
+        {
+            new MusicArtist { Name = "Mina", Id = folderlessId },                              // self-mapped
+            new MusicArtist { Name = "Mina", Id = folderDerivedId, ParentId = folderA }       // folder-derived
+        };
+        var album = new MusicAlbum
+        {
+            Name = "Celentano duets",
+            Id = Guid.NewGuid(),
+            ParentId = folderB,
+            AlbumArtists = new List<string> { "Mina" }
+        };
+
+        SetupKindQueries(artists, new List<BaseItem> { album });
+        SetupParents(
+            new Folder { Id = folderA, ParentId = rootId },
+            new Folder { Id = folderB, ParentId = rootId },
+            new AggregateFolder { Id = rootId });
+
+        var service = new ArtistIndexService(_libraryManagerMock.Object, _logger);
+        await service.StartAsync(CancellationToken.None);
+
+        var inFolderA = Assert.Single(service.GetArtists(new[] { folderA }));
+        Assert.Equal(folderDerivedId, inFolderA.Id); // folder-derived entry preserved
+        var inFolderB = Assert.Single(service.GetArtists(new[] { folderB }));
+        Assert.Equal(folderlessId, inFolderB.Id);    // folderless one inherited the album's library
+    }
+
+    [Fact]
+    public async Task StartAsync_AllArtistsFolderDerived_SkipsAlbumQuery()
+    {
+        // The album join must stay bounded: when no artist is folderless, the extra
+        // MusicAlbum query never runs (one library query per load, as before).
+        var rootId = Guid.NewGuid();
+        var folderId = Guid.NewGuid();
+        var artist = new MusicArtist { Name = "Battisti", Id = Guid.NewGuid(), ParentId = folderId };
+
+        SetupKindQueries(new List<BaseItem> { artist });
+        SetupParents(
+            new Folder { Id = folderId, ParentId = rootId },
+            new AggregateFolder { Id = rootId });
+
+        var service = new ArtistIndexService(_libraryManagerMock.Object, _logger);
+        await service.StartAsync(CancellationToken.None);
+
+        _libraryManagerMock.Verify(
+            l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum))),
+            Times.Never);
+        _libraryManagerMock.Verify(
+            l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes.Contains(BaseItemKind.MusicArtist))),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task StartAsync_CyclicParentChain_Terminates()
+    {
+        // Cycle protection must survive the AggregateFolder boundary change: two folders
+        // pointing at each other must not hang the load.
+        var folderAId = Guid.NewGuid();
+        var folderBId = Guid.NewGuid();
+        var artist = new MusicArtist { Name = "Loop", Id = Guid.NewGuid(), ParentId = folderAId };
+
+        SetupKindQueries(new List<BaseItem> { artist });
+        SetupParents(
+            new Folder { Id = folderAId, ParentId = folderBId },
+            new Folder { Id = folderBId, ParentId = folderAId });
+
+        var service = new ArtistIndexService(_libraryManagerMock.Object, _logger);
+        await service.StartAsync(CancellationToken.None); // completing is the termination proof
+
+        Assert.True(service.IsReady);
+        Assert.Single(service.GetArtists());
     }
 }

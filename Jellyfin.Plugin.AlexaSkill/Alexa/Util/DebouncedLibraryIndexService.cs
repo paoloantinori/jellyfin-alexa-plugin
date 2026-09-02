@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Data.Enums;
+using MediaBrowser.Controller.Channels;
+using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using Microsoft.Extensions.Hosting;
@@ -283,26 +286,61 @@ public abstract class DebouncedLibraryIndexService : IHostedService, IDisposable
     }
 
     /// <summary>
-    /// Resolves the top-level parent folder ID for an item by walking up the parent
-    /// chain. Used by both indexes for per-user library filtering without DB queries.
+    /// Loads every item of a kind server-wide off the caller's thread. Shared by
+    /// both index loads and the artist index's album join.
+    /// </summary>
+    /// <param name="kind">The item kind to load.</param>
+    /// <param name="cancellationToken">Token to cancel the load.</param>
+    /// <returns>All items of the kind.</returns>
+    protected Task<IReadOnlyList<BaseItem>> QueryAllItemsAsync(BaseItemKind kind, CancellationToken cancellationToken)
+    {
+        var query = new InternalItemsQuery
+        {
+            Recursive = true,
+            IncludeItemTypes = new[] { kind },
+            DtoOptions = new DtoOptions(true)
+        };
+
+        return Task.Run(() => LibraryManager.GetItemList(query), cancellationToken);
+    }
+
+    /// <summary>
+    /// Resolves the library folder ID for an item by walking up the parent chain.
+    /// Used by both indexes for per-user library filtering without DB queries. The
+    /// stop condition has FULL parity with Jellyfin's own <c>BaseItem.IsTopParent</c>
+    /// boundary (all three edges: plugin folders and channels, live-tv views, and a
+    /// parent that is the server-wide <see cref="AggregateFolder"/> root, whose ID
+    /// cannot discriminate per library). This is the id space Jellyfin stores as the
+    /// TopParentId column and the library filter resolves to, so the index maps and
+    /// the filter agree for library-restricted users (JF-455). Returns the item's
+    /// own ID when the chain ends without a boundary node (folderless artists stay
+    /// self-mapped, the album join's signal).
     /// </summary>
     /// <param name="item">The item to resolve.</param>
-    /// <returns>The top-level ancestor's ID (the item's own ID when it has no parent).</returns>
+    /// <returns>The library folder ID (the item's own ID when it has no parent chain).</returns>
     protected Guid ResolveTopParentId(BaseItem item)
     {
         var seen = new HashSet<Guid>();
         BaseItem? current = item;
-        while (current != null && current.ParentId != Guid.Empty)
+        while (current != null)
         {
-            if (!seen.Add(current.Id))
+            BaseItem? parent = current.ParentId == Guid.Empty
+                ? null
+                : LibraryManager.GetItemById(current.ParentId);
+
+            // IsTopParent parity (BaseItem.cs, v10.11.x): the node itself is a
+            // boundary, or its parent is the server-wide aggregate root.
+            if (current is BasePluginFolder
+                || current is Channel
+                || (current is IHasCollectionType view && view.CollectionType == CollectionType.livetv)
+                || parent is AggregateFolder)
             {
-                break; // Cycle protection
+                return current.Id;
             }
 
-            var parent = LibraryManager.GetItemById(current.ParentId);
-            if (parent == null)
+            if (parent == null || !seen.Add(current.Id))
             {
-                break;
+                break; // Chain end or cycle protection
             }
 
             current = parent;

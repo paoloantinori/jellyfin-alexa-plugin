@@ -307,10 +307,11 @@ public class LibraryFilterIntegrationTests : PluginTestBase, IDisposable
         var capturedQuery = getCaptured();
         Assert.NotNull(capturedQuery);
         Assert.NotNull(capturedQuery.TopParentIds);
-        Assert.Single(capturedQuery.TopParentIds);
-        // The query should have the resolved physical folder ID, not the CollectionFolder ID
-        Assert.Equal(physicalId, capturedQuery.TopParentIds[0]);
-        Assert.NotEqual(cfId, capturedQuery.TopParentIds[0]);
+        // JF-455: the filter emits the union (physical + CollectionFolder ID); unit
+        // coverage of the resolution lives in ResolveTopParentIdsTests.
+        Assert.Equal(2, capturedQuery.TopParentIds.Length);
+        Assert.Contains(physicalId, capturedQuery.TopParentIds);
+        Assert.Contains(cfId, capturedQuery.TopParentIds);
     }
 
     // --- Multiple handlers consistency check ---

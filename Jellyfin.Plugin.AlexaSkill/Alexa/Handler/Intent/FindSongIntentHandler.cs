@@ -498,10 +498,9 @@ public class FindSongIntentHandler : BaseHandler
             // readiness contract). The JF-419.3 entry gate guarantees readiness here,
             // so a warming throw cannot occur mid-request; a null/disabled index
             // returns empty and the DB fallback below owns the query. The filter is
-            // RESOLVED to parent-chain roots: the index maps roots, GetAllowedLibraryIds
-            // returns collection-folder ids, and unresolved ids filter out every
-            // candidate for library-restricted users (review round, same fix as
-            // TrySongFallback).
+            // resolved to physical library folder ids (JF-455), the same id space the
+            // index maps hold; unresolved collection-folder ids would filter out every
+            // candidate for library-restricted users.
             Guid[]? allowedLibraryIds = GetAllowedLibraryIds(user);
             Guid[]? topParentIds = allowedLibraryIds != null
                 ? Util.LibraryFilter.ResolveTopParentIds(allowedLibraryIds, _libraryManager, Logger)

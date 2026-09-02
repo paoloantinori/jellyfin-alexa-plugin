@@ -277,8 +277,8 @@ public class PlaySongIntentHandler : BaseHandler
                 // JF-440: the ONE index lookup chain (was a private copy with its own
                 // readiness contract). The JF-419.3 entry gate guarantees readiness;
                 // null/disabled returns empty and the DB fallback below owns the query.
-                // The filter is RESOLVED to parent-chain roots (see FindSong's note:
-                // unresolved collection-folder ids filter out every candidate).
+                // The filter is resolved to physical library folder ids (JF-455), the
+                // same id space the index maps hold.
                 var keywordTokens = Util.KeywordMatcher.Tokenize(songQuery, locale);
                 Guid[]? songAllowed = GetAllowedLibraryIds(user);
                 Guid[]? songTopParents = songAllowed != null

@@ -119,9 +119,10 @@ public class SongNgramIndexService : DebouncedLibraryIndexService, ISongNgramInd
         // Filter by library access
         if (topParentIds != null && topParentIds.Length > 0)
         {
+            var allowed = topParentIds.ToHashSet();
             candidates = candidates.Where(s =>
                 topParentMap.TryGetValue(s.Id, out var parentId) &&
-                Array.IndexOf(topParentIds, parentId) >= 0).ToList();
+                allowed.Contains(parentId)).ToList();
         }
 
         if (candidates.Count == 0)
@@ -186,9 +187,10 @@ public class SongNgramIndexService : DebouncedLibraryIndexService, ISongNgramInd
         // Filter by library access
         if (topParentIds != null && topParentIds.Length > 0)
         {
+            var allowed = topParentIds.ToHashSet();
             candidates = candidates.Where(s =>
                 topParentMap.TryGetValue(s.Id, out var parentId) &&
-                Array.IndexOf(topParentIds, parentId) >= 0).ToList();
+                allowed.Contains(parentId)).ToList();
         }
 
         if (candidates.Count == 0)
@@ -238,9 +240,10 @@ public class SongNgramIndexService : DebouncedLibraryIndexService, ISongNgramInd
         // Filter by library access
         if (topParentIds != null && topParentIds.Length > 0)
         {
+            var allowed = topParentIds.ToHashSet();
             candidates = candidates.Where(s =>
                 topParentMap.TryGetValue(s.Id, out var parentId) &&
-                Array.IndexOf(topParentIds, parentId) >= 0).ToList();
+                allowed.Contains(parentId)).ToList();
         }
 
         if (candidates.Count == 0)
@@ -254,15 +257,7 @@ public class SongNgramIndexService : DebouncedLibraryIndexService, ISongNgramInd
     /// <inheritdoc />
     protected override async Task LoadAsync(CancellationToken cancellationToken)
     {
-        var query = new InternalItemsQuery
-        {
-            Recursive = true,
-            IncludeItemTypes = new[] { BaseItemKind.Audio },
-            DtoOptions = new DtoOptions(true)
-        };
-
-        IReadOnlyList<BaseItem> songs = await Task.Run(
-            () => LibraryManager.GetItemList(query), cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<BaseItem> songs = await QueryAllItemsAsync(BaseItemKind.Audio, cancellationToken).ConfigureAwait(false);
 
         // Build the token indexes (bigram, single-token, phonetic) and the
         // per-user library filter map
