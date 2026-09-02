@@ -840,10 +840,12 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         // Simulate the user's "no": feed the offer's session attributes into NoIntentHandler.
         var noResponse = await DeclineOfferAsync(offer);
 
-        // Decline must be the song not-found, ending the session, not "no more matches".
+        // Decline must be the song not-found, ending the session, not "no more matches"
+        // and not the album not-found (crossmedia_notfound_type selects the string).
         Assert.True(noResponse.Response?.ShouldEndSession);
         string speech = TestHelpers.GetSpeechText(noResponse);
         Assert.Contains("soul coffin", speech, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("songs", speech, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("more matches", speech, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Soul Coughing", speech);
     }
