@@ -34,7 +34,8 @@ public sealed class AudiobookPositionTracker : IDisposable
     private readonly ConcurrentDictionary<string, Timer> _persistTimers = new(StringComparer.Ordinal);
     private readonly string _dataFilePath;
     private readonly ILogger<AudiobookPositionTracker> _logger;
-    private bool _disposed;
+    private readonly object _persistLock = new();
+    private volatile bool _disposed;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AudiobookPositionTracker"/> class.
@@ -125,15 +126,31 @@ public sealed class AudiobookPositionTracker : IDisposable
 
     private void SchedulePersist()
     {
-        // Debounce: reset a single shared timer on each write; persist once after 3s of quiet.
-        _persistTimers.AddOrUpdate(
-            "persist",
-            _ => new Timer(_ => PersistToDisk(), null, PersistDebounce, Timeout.InfiniteTimeSpan),
-            (_, existing) =>
+        if (_disposed)
+        {
+            return;
+        }
+
+        lock (_persistLock)
+        {
+            // In-lock re-check: a segment request that passed the outer check
+            // before Dispose must not arm a timer after cleanup (same shape as
+            // DebouncedLibraryIndexService.ArmOneShot)
+            if (_disposed)
             {
-                existing.Change(PersistDebounce, Timeout.InfiniteTimeSpan);
-                return existing;
-            });
+                return;
+            }
+
+            // Debounce: reset a single shared timer on each write; persist once after 3s of quiet.
+            _persistTimers.AddOrUpdate(
+                "persist",
+                _ => new Timer(_ => PersistToDisk(), null, PersistDebounce, Timeout.InfiniteTimeSpan),
+                (_, existing) =>
+                {
+                    existing.Change(PersistDebounce, Timeout.InfiniteTimeSpan);
+                    return existing;
+                });
+        }
     }
 
     private void PersistToDisk()
@@ -199,14 +216,20 @@ public sealed class AudiobookPositionTracker : IDisposable
             return;
         }
 
+        // Set before taking the lock so a concurrent RecordSegment/Clear that
+        // passed the outer check cannot arm a timer after cleanup
         _disposed = true;
 
-        foreach (var kvp in _persistTimers)
+        lock (_persistLock)
         {
-            kvp.Value.Dispose();
+            foreach (var kvp in _persistTimers)
+            {
+                kvp.Value.Dispose();
+            }
+
+            _persistTimers.Clear();
         }
 
-        _persistTimers.Clear();
         PersistToDisk(); // final flush
     }
 }

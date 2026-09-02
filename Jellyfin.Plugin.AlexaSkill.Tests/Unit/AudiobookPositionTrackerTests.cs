@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Microsoft.Extensions.Logging;
 using Xunit;
@@ -115,6 +116,25 @@ public class AudiobookPositionTrackerTests : IDisposable
 
         // No stale .tmp must remain after Dispose
         Assert.False(File.Exists(dataFile + ".tmp"));
+    }
+
+    [Fact]
+    public void RecordSegment_AfterDispose_DoesNotRewriteFile()
+    {
+        _tracker.RecordSegment("book1", 5);
+        _tracker.Dispose();
+
+        string dataFile = Path.Combine(_tempDir, "audiobook-positions.json");
+        Assert.True(File.Exists(dataFile)); // Dispose flushed
+        File.Delete(dataFile);
+
+        // Arm-after-dispose race (JF-429): a segment request arriving after
+        // Dispose must not re-arm the persist timer and re-write the file
+        // after cleanup. Debounce is 3s, so 4s proves no timer ever fires.
+        _tracker.RecordSegment("book2", 7);
+        Thread.Sleep(TimeSpan.FromSeconds(4));
+
+        Assert.False(File.Exists(dataFile));
     }
 
     [Fact]

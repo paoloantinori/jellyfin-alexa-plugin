@@ -4,9 +4,11 @@ title: >-
   Playback debounce copies (AudiobookPositionTracker, DeviceQueueManager) still
   carry the arm-after-dispose race hardened in
   DebouncedLibraryIndexService.ArmOneShot
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - zai
 created_date: '2026-09-01 05:58'
+updated_date: '2026-09-02 02:42'
 labels:
   - code-review
   - hardening
@@ -30,6 +32,12 @@ Code-review finding (2026-09-01, JF-419.3 review round 1 finding 10, CONFIRMED):
 - [ ] #2 The ~10 unguarded SchedulePersist-style call sites are audited: each either routes through the hardened arm or gains the disposed guard
 - [ ] #3 Unit test reproduces the arm-after-dispose race for at least one of the two (timer callback invoked after Dispose leaves no pending work)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Simplify round 2026-09-02 (4 angle agents) disposition: applied the comment-precision fix in DeviceQueueManager (in-lock re-check covers Dispose only; Clear is covered by lock mutual exclusion). Skipped as out-of-scope under minimal diff: (a) AudiobookPositionTracker._persistTimers is a single fixed-key ConcurrentDictionary whose every access now sits inside _persistLock; a plain Timer? field would be strictly simpler and mirror the reference shape. Deferred cleanup, fold in only if the tracker is touched again. (b) Internal test hooks (FailedLoadRetryInterval style) on both debounce constants would cut the two new race tests' 7s of Thread.Sleep to ~100ms; rejected to avoid expanding API surface for tests only.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

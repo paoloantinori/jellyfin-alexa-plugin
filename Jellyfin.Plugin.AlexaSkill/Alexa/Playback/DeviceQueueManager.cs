@@ -29,7 +29,8 @@ public sealed class DeviceQueueManager : IDisposable
     private readonly ConcurrentDictionary<string, Timer> _debounceTimers = new(StringComparer.Ordinal);
     private readonly string _dataDirectory;
     private readonly ILogger<DeviceQueueManager> _logger;
-    private bool _disposed;
+    private readonly object _timerLock = new();
+    private volatile bool _disposed;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DeviceQueueManager"/> class.
@@ -417,10 +418,14 @@ public sealed class DeviceQueueManager : IDisposable
             _logger.LogWarning(ex, "Failed to delete queue file for device {DeviceId}", deviceId);
         }
 
-        // Dispose and remove debounce timer
-        if (_debounceTimers.TryRemove(deviceId, out Timer? timer))
+        // Dispose and remove the debounce timer under the arm lock so a
+        // concurrent SchedulePersistInternal cannot Change a timer being disposed here
+        lock (_timerLock)
         {
-            timer.Dispose();
+            if (_debounceTimers.TryRemove(deviceId, out Timer? timer))
+            {
+                timer.Dispose();
+            }
         }
 
         _logger.LogDebug("Queue cleared for device {DeviceId}", deviceId);
@@ -481,14 +486,31 @@ public sealed class DeviceQueueManager : IDisposable
 
     private void SchedulePersistInternal(string deviceId)
     {
-        _debounceTimers.AddOrUpdate(
-            deviceId,
-            _ => new Timer(_ => PersistDevice(deviceId), null, DebounceInterval, Timeout.InfiniteTimeSpan),
-            (_, existingTimer) =>
+        if (_disposed)
+        {
+            return;
+        }
+
+        lock (_timerLock)
+        {
+            // In-lock re-check: a queue write that passed the outer check
+            // before Dispose must not arm a timer after cleanup (same shape
+            // as DebouncedLibraryIndexService.ArmOneShot). Clear is covered by
+            // this same lock, which serializes it against timer arm and dispose.
+            if (_disposed)
             {
-                existingTimer.Change(DebounceInterval, Timeout.InfiniteTimeSpan);
-                return existingTimer;
-            });
+                return;
+            }
+
+            _debounceTimers.AddOrUpdate(
+                deviceId,
+                _ => new Timer(_ => PersistDevice(deviceId), null, DebounceInterval, Timeout.InfiniteTimeSpan),
+                (_, existingTimer) =>
+                {
+                    existingTimer.Change(DebounceInterval, Timeout.InfiniteTimeSpan);
+                    return existingTimer;
+                });
+        }
     }
 
     private void PersistDevice(string deviceId)
@@ -577,15 +599,20 @@ public sealed class DeviceQueueManager : IDisposable
             return;
         }
 
+        // Set before taking the lock so a concurrent queue write that passed
+        // the outer check cannot arm a timer after cleanup
         _disposed = true;
 
         PersistAll();
 
-        foreach (var kvp in _debounceTimers)
+        lock (_timerLock)
         {
-            kvp.Value.Dispose();
-        }
+            foreach (var kvp in _debounceTimers)
+            {
+                kvp.Value.Dispose();
+            }
 
-        _debounceTimers.Clear();
+            _debounceTimers.Clear();
+        }
     }
 }

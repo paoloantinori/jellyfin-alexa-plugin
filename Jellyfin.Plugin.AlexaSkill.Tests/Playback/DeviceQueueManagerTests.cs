@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Microsoft.Extensions.Logging;
@@ -364,6 +365,21 @@ public class DeviceQueueManagerTests : IDisposable
         Assert.Equal(1, restored.CurrentIndex);
         Assert.Equal("All", restored.RepeatMode);
         Assert.Equal("Shuffle", restored.PlaybackOrder);
+    }
+
+    [Fact]
+    public void SchedulePersist_AfterDispose_DoesNotWriteFile()
+    {
+        _manager.Dispose();
+
+        // Arm-after-dispose race (JF-429): a queue write arriving after
+        // Dispose must not arm the debounce timer and persist after cleanup.
+        // Debounce is 2s, so 3s proves no timer ever fires.
+        _manager.SetQueue("device-1", new List<string> { "item1" }, 0);
+        string file = Path.Combine(_tempDir, "queue_device-1.json");
+        Thread.Sleep(TimeSpan.FromSeconds(3));
+
+        Assert.False(File.Exists(file));
     }
 
     [Fact]
