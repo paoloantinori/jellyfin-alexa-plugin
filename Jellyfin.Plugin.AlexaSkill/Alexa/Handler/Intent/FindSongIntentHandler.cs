@@ -500,11 +500,8 @@ public class FindSongIntentHandler : BaseHandler
             // returns empty and the DB fallback below owns the query. The filter is
             // resolved to physical library folder ids (JF-455), the same id space the
             // index maps hold; unresolved collection-folder ids would filter out every
-            // candidate for library-restricted users.
-            Guid[]? allowedLibraryIds = GetAllowedLibraryIds(user);
-            Guid[]? topParentIds = allowedLibraryIds != null
-                ? Util.LibraryFilter.ResolveTopParentIds(allowedLibraryIds, _libraryManager, Logger)
-                : null;
+            // candidate for library-restricted users, and null means unrestricted.
+            Guid[]? topParentIds = Util.LibraryFilter.ResolveForUser(user, _libraryManager, Logger);
             Logger.LogDebug("FindSong: searching n-gram index (keywords={Keywords})", string.Join(" ", keywordTokens));
             scored = _songNgramIndex.SearchWithPhoneticFallback(keywordTokens, locale, topParentIds, _config.PhoneticSongSearchEnabled);
 

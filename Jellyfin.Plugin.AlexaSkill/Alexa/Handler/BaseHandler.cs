@@ -1161,16 +1161,13 @@ public abstract class BaseHandler
     }
 
     /// <summary>
-    /// Gets the allowed library IDs for a user, or null if all libraries are accessible.
-    /// Returns null when no restriction is configured (backward compatible default).
-    /// </summary>
-    protected static Guid[]? GetAllowedLibraryIds(Entities.User? user)
-        => Util.LibraryFilter.GetAllowedLibraryIds(user);
-
-    /// <summary>
     /// Applies per-user library filtering to a query by setting TopParentIds.
     /// Resolves CollectionFolder IDs to physical folder IDs for correct filtering.
-    /// No-op when the user has no library restrictions configured.
+    /// No-op when the user has no library restrictions configured, and when every
+    /// included kind lives outside any media library (playlists, live-TV channels:
+    /// Util.LibraryFilter.IsOutOfLibraryKind), where the filter could only return
+    /// zero rows. When the filter IS applied to a query that includes MusicArtist,
+    /// the items-by-name bypass is set automatically (Util.LibraryFilter, JF-456).
     /// </summary>
     protected static void ApplyLibraryFilter(InternalItemsQuery query, Entities.User? user, ILibraryManager libraryManager, ILogger? logger = null)
         => Util.LibraryFilter.ApplyLibraryFilter(query, user, libraryManager, logger);
@@ -1468,10 +1465,9 @@ public abstract class BaseHandler
     /// <param name="jellyfinUser">The Jellyfin user (for query scoping).</param>
     /// <param name="user">The plugin user (for threshold + library filter).</param>
     /// <param name="libraryManager">The library manager.</param>
-    /// <param name="itemTypes">The item types to search (e.g. Audio, MusicAlbum).</param>
+    /// <param name="itemTypes">The item types to search (e.g. Audio, MusicAlbum). Queries whose kinds are ALL out-of-library skip the TopParentIds filter (<see cref="Util.LibraryFilter.IsOutOfLibraryKind"/>, JF-456).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <param name="operationLabel">Label for logging.</param>
-    /// <param name="applyLibraryFilter">Pass false for item kinds that live outside media libraries (e.g. playlists): a TopParentIds filter excludes them entirely (JF-455).</param>
     /// <returns>The best match + score, or null if nothing above threshold.</returns>
     protected async Task<(BaseItem Item, int Score)?> SearchItemsFuzzyAsync(
         string query,
@@ -1483,8 +1479,7 @@ public abstract class BaseHandler
         string operationLabel = "FuzzyFallback",
         Guid[]? artistIds = null,
         int minQueryLength = 3,
-        MediaType[]? mediaTypes = null,
-        bool applyLibraryFilter = true)
+        MediaType[]? mediaTypes = null)
     {
         if (string.IsNullOrWhiteSpace(query) || query.Length < minQueryLength)
         {
@@ -1509,10 +1504,7 @@ public abstract class BaseHandler
             fallbackQuery.MediaTypes = mediaTypes;
         }
 
-        if (applyLibraryFilter)
-        {
-            ApplyLibraryFilter(fallbackQuery, user, libraryManager, Logger);
-        }
+        ApplyLibraryFilter(fallbackQuery, user, libraryManager, Logger);
 
         IReadOnlyList<BaseItem> allItems = await RetryAsync(
             () => libraryManager.GetItemList(fallbackQuery),
@@ -1890,6 +1882,47 @@ public abstract class BaseHandler
         };
 
         await SessionManager.OnPlaybackProgress(info, true).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Shared body of the loop-mode intents (LoopOn/LoopOff/LoopSongOn, JF-450):
+    /// attaches the given repeat mode to the currently playing item via
+    /// <see cref="SessionManager"/> progress reporting. The intent can arrive from
+    /// an open session with nothing playing: there is no item to attach the mode
+    /// to, so the localized no-media tell is returned instead of throwing.
+    /// </summary>
+    /// <param name="request">The skill request (locale source for the no-media tell).</param>
+    /// <param name="context">The context of the skill intent request (AudioPlayer token).</param>
+    /// <param name="session">The session instance to report progress on.</param>
+    /// <param name="mode">The repeat mode to apply.</param>
+    /// <param name="label">Log label identifying the calling intent.</param>
+    /// <returns>An empty response, or the no-media tell when nothing is playing.</returns>
+    protected async Task<SkillResponse> ApplyRepeatModeAsync(Request request, Context context, SessionInfo session, RepeatMode mode, string label)
+    {
+        PlaybackState? requestState = context.AudioPlayer;
+
+        Logger.LogDebug("{Label}: entered, token={Token}, offset={OffsetMs}ms", label, requestState?.Token, requestState?.OffsetInMilliseconds);
+
+        // The intent can arrive from an open session with nothing playing: there is
+        // no item to attach the repeat mode to.
+        if (requestState?.Token == null || !Guid.TryParse(requestState.Token, out Guid itemId))
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", GetLocale(request)));
+        }
+
+        long positionTicks = TimeSpan.FromMilliseconds(requestState.OffsetInMilliseconds).Ticks;
+        PlaybackProgressInfo info = new PlaybackProgressInfo
+        {
+            SessionId = session.Id,
+            ItemId = itemId,
+            PlaybackOrder = session.PlayState.PlaybackOrder,
+            PositionTicks = positionTicks,
+            RepeatMode = mode,
+        };
+
+        await SessionManager.OnPlaybackProgress(info, true).ConfigureAwait(false);
+
+        return ResponseBuilder.Empty();
     }
 
     /// <summary>
@@ -2601,13 +2634,10 @@ public abstract class BaseHandler
             return null;
         }
 
-        // The index's topParentMap holds PHYSICAL library folder ids; GetAllowedLibraryIds
-        // returns CONFIGURED collection-folder ids. ResolveTopParentIds emits the union of
-        // both id spaces, so the membership test matches the index maps (JF-439/JF-455).
-        Guid[]? allowedLibraryIds = GetAllowedLibraryIds(user);
-        Guid[]? topParentIds = allowedLibraryIds != null
-            ? LibraryFilter.ResolveTopParentIds(allowedLibraryIds, libraryManager, Logger)
-            : null;
+        // The index's topParentMap holds PHYSICAL library folder ids; ResolveForUser
+        // emits the union of both id spaces, so the membership test matches the index
+        // maps (JF-439/JF-455) and returns null when the user is unrestricted.
+        Guid[]? topParentIds = LibraryFilter.ResolveForUser(user, libraryManager, Logger);
 
         List<(BaseItem Item, double Score)> scored;
         try
@@ -2802,28 +2832,35 @@ public abstract class BaseHandler
             DtoOptions = new DtoOptions(true),
         };
 
-        // No ApplyLibraryFilter here: playlists are user-scoped, not library-scoped,
-        // and native Jellyfin playlists live outside any media library, so any library
-        // restriction excluded them all (JF-455). Trade-off: .m3u playlists stored
-        // inside an excluded library surface too. Visibility is NOT guaranteed by
-        // query.User on this path: GetItemsResult goes straight to the repository
-        // without the IsVisible post-filter GetItemList applies, so other users'
-        // private playlists can come back and must be filtered here (code-review
-        // P1, JF-455). The track resolver separately filters tracks per user.
+        // Playlists are user-scoped, not library-scoped: native Jellyfin playlists
+        // live outside any media library (the PlaylistsFolder), so the kind-aware
+        // ApplyLibraryFilter skips the TopParentIds filter for the all-Playlist kind
+        // set (JF-455; single decision point in LibraryFilter since JF-456). Trade-off:
+        // .m3u playlists stored inside an excluded library surface too. Visibility is
+        // NOT guaranteed by query.User on this path: GetItemsResult goes straight to
+        // the repository without the IsVisible post-filter GetItemList applies, so
+        // other users' private playlists can come back and must be filtered here
+        // (code-review P1, JF-455). The track resolver separately filters tracks per user.
+        ApplyLibraryFilter(query, user, libraryManager, Logger);
         Logger.LogDebug("PlayPlaylist: querying Jellyfin with searchTerm='{PlaylistName}', types=Playlist", playlistName);
         QueryResult<BaseItem> playlists = await RetryAsync(() => SafeGetItemsResult(libraryManager, query), "GetPlaylists", cancellationToken).ConfigureAwait(false);
         var visiblePlaylists = playlists.Items.Where(p => p.IsVisible(jellyfinUser)).ToList();
         if (visiblePlaylists.Count != playlists.Items.Count)
         {
             Logger.LogDebug("PlayPlaylist: filtered {HiddenCount} playlist(s) not visible to the user", playlists.Items.Count - visiblePlaylists.Count);
-            playlists = new QueryResult<BaseItem> { Items = visiblePlaylists, TotalRecordCount = visiblePlaylists.Count };
         }
+
+        // One meaning for TotalRecordCount: the count of visible playlists in Items.
+        // Rebuilding unconditionally keeps the filtered and unfiltered shapes identical
+        // (JF-456; the conditional rebuild left TotalRecordCount meaning the raw count
+        // whenever nothing was hidden).
+        playlists = new QueryResult<BaseItem> { Items = visiblePlaylists, TotalRecordCount = visiblePlaylists.Count };
 
         Logger.LogDebug("PlayPlaylist: Jellyfin returned {ResultCount} playlists", playlists.TotalRecordCount);
 
         if (playlists.TotalRecordCount == 0)
         {
-            var fuzzy = await SearchItemsFuzzyAsync(playlistName, jellyfinUser, user, libraryManager, new[] { BaseItemKind.Playlist }, cancellationToken, "PlayPlaylistFuzzyFallback", applyLibraryFilter: false).ConfigureAwait(false);
+            var fuzzy = await SearchItemsFuzzyAsync(playlistName, jellyfinUser, user, libraryManager, new[] { BaseItemKind.Playlist }, cancellationToken, "PlayPlaylistFuzzyFallback").ConfigureAwait(false);
             if (fuzzy != null)
             {
                 playlists = new QueryResult<BaseItem> { Items = new List<BaseItem> { fuzzy.Value.Item }, TotalRecordCount = 1 };

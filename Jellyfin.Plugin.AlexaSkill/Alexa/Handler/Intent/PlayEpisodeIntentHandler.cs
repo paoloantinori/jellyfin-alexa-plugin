@@ -72,8 +72,12 @@ public class PlayEpisodeIntentHandler : BaseHandler
 
         Logger.LogDebug("PlayEpisode: seriesName='{SeriesName}', season={Season}, episode={Episode}, locale={Locale}", seriesName, seasonRaw, episodeRaw, locale);
 
-        if (!int.TryParse(seasonRaw, CultureInfo.InvariantCulture, out int seasonNumber)
-            || !int.TryParse(episodeRaw, CultureInfo.InvariantCulture, out int episodeNumber))
+        // ItalianNumberWords parses digits (every locale) AND the Italian number
+        // words the it-IT model delivers for the ItalianNumber-typed season_number /
+        // episode_number slots ("stagione due" arrives as "due", not "2"; JF-451
+        // adoption).
+        if (!Util.ItalianNumberWords.TryParse(seasonRaw, out int seasonNumber)
+            || !Util.ItalianNumberWords.TryParse(episodeRaw, out int episodeNumber))
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchEpisodeNumber", locale));
         }

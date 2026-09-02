@@ -660,6 +660,45 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
+    public async Task HandleAsync_ColdDbPath_ArtistQueriesSetIncludeItemsByName()
+    {
+        // JF-456 (GH #22 residual 3): folderless artists carry NULL TopParentId, so a
+        // library-restricted DB artist query matches zero rows unless IncludeItemsByName
+        // activates the items-by-name bypass. Pins the INLINE DB tiers (the cold-index
+        // path this handler keeps, JF-382 duplication) the same way ArtistSearchTests
+        // pins the shared implementation.
+        SetupUserMock();
+        var libraryId = Guid.NewGuid();
+        var user = TestHelpers.CreateTestUser(allowedLibraryIds: new[] { libraryId.ToString() });
+        var artist = new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() };
+
+        int callCount = 0;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(() =>
+            {
+                callCount++;
+                return callCount == 1
+                    ? new List<BaseItem> { artist }
+                    : new List<BaseItem> { new Audio { Name = "Yesterday", Id = Guid.NewGuid() } };
+            });
+
+        var handler = CreateHandler(artistIndex: null); // cold: database path
+        var request = CreateIntentRequest(musician: "Beatles");
+
+        await handler.HandleAsync(request, CreateContext(), user, CreateSession(), CancellationToken.None);
+
+        _libraryManagerMock.Verify(
+            l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null
+                && q.IncludeItemTypes.Contains(Jellyfin.Data.Enums.BaseItemKind.MusicArtist)
+                && q.IncludeItemsByName == true
+                && q.TopParentIds != null
+                && q.TopParentIds.Contains(libraryId))),
+            Times.AtLeastOnce,
+            "cold-window artist queries must set IncludeItemsByName under the TopParentIds filter, or folderless artists match zero rows");
+    }
+
+    [Fact]
     public async Task HandleAsync_ArtistSongsQuery_DoesNotUseMediaTypesAudio()
     {
         // JF-358 perf invariant: the artist-songs query must NOT set MediaTypes=Audio
@@ -823,8 +862,7 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
     {
         // Arrange: user with library restriction so ResolveTopParentIds is invoked.
         var libraryId = Guid.NewGuid();
-        var user = TestHelpers.CreateTestUser();
-        user.AllowedLibraryIds = new List<string> { libraryId.ToString() };
+        var user = TestHelpers.CreateTestUser(allowedLibraryIds: new[] { libraryId.ToString() });
 
         // The CollectionFolder resolves to a physical folder.
         var physicalFolderId = Guid.NewGuid();
@@ -892,8 +930,7 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         // Arrange: user with 2 library restrictions
         var libraryId1 = Guid.NewGuid();
         var libraryId2 = Guid.NewGuid();
-        var user = TestHelpers.CreateTestUser();
-        user.AllowedLibraryIds = new List<string> { libraryId1.ToString(), libraryId2.ToString() };
+        var user = TestHelpers.CreateTestUser(allowedLibraryIds: new[] { libraryId1.ToString(), libraryId2.ToString() });
 
         var cf1 = new CollectionFolder { Id = libraryId1 };
         cf1.PhysicalLocationsList = new[] { "/media/music" };
@@ -945,8 +982,7 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
     public async Task HandleAsync_InMemoryPath_ResolveLibraryFilterOnce()
     {
         var libraryId = Guid.NewGuid();
-        var user = TestHelpers.CreateTestUser();
-        user.AllowedLibraryIds = new List<string> { libraryId.ToString() };
+        var user = TestHelpers.CreateTestUser(allowedLibraryIds: new[] { libraryId.ToString() });
 
         var cf = new CollectionFolder { Id = libraryId };
         cf.PhysicalLocationsList = new[] { "/data/media/music" };

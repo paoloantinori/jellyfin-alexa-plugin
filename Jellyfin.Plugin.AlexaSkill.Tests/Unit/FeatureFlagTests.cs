@@ -6,6 +6,7 @@ using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
+using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
@@ -481,7 +482,7 @@ public class AplVisualsFeatureFlagTests : PluginTestBase, IDisposable
 }
 
 /// <summary>
-/// Tests for BaseHandler library filtering methods (GetAllowedLibraryIds, ApplyLibraryFilter).
+/// Tests for library filtering (LibraryFilter.GetAllowedLibraryIds, ApplyLibraryFilter).
 /// </summary>
 public class LibraryFilterTests : IDisposable
 {
@@ -510,7 +511,7 @@ public class LibraryFilterTests : IDisposable
     {
         var user = new Entities.User { AllowedLibraryIds = null };
 
-        var result = _handler.TestGetAllowedLibraryIds(user);
+        var result = LibraryFilter.GetAllowedLibraryIds(user);
 
         Assert.Null(result);
     }
@@ -520,7 +521,7 @@ public class LibraryFilterTests : IDisposable
     {
         var user = new Entities.User { AllowedLibraryIds = new List<string>() };
 
-        var result = _handler.TestGetAllowedLibraryIds(user);
+        var result = LibraryFilter.GetAllowedLibraryIds(user);
 
         Assert.Null(result);
     }
@@ -532,7 +533,7 @@ public class LibraryFilterTests : IDisposable
         var id2 = Guid.NewGuid().ToString();
         var user = new Entities.User { AllowedLibraryIds = new List<string> { id1, id2 } };
 
-        var result = _handler.TestGetAllowedLibraryIds(user);
+        var result = LibraryFilter.GetAllowedLibraryIds(user);
 
         Assert.NotNull(result);
         Assert.Equal(2, result.Length);
@@ -549,7 +550,7 @@ public class LibraryFilterTests : IDisposable
             AllowedLibraryIds = new List<string> { "not-a-guid", validId, "also-invalid" }
         };
 
-        var result = _handler.TestGetAllowedLibraryIds(user);
+        var result = LibraryFilter.GetAllowedLibraryIds(user);
 
         Assert.NotNull(result);
         Assert.Single(result);
@@ -564,7 +565,7 @@ public class LibraryFilterTests : IDisposable
             AllowedLibraryIds = new List<string> { "bad", "also-bad" }
         };
 
-        var result = _handler.TestGetAllowedLibraryIds(user);
+        var result = LibraryFilter.GetAllowedLibraryIds(user);
 
         Assert.Null(result);
     }
@@ -601,6 +602,201 @@ public class LibraryFilterTests : IDisposable
         Assert.Empty(query.TopParentIds);
     }
 
+    // --- JF-456: kind-aware library exemption (single decision point) ---
+
+    [Fact]
+    public void ApplyLibraryFilter_SkipsTopParentIds_WhenAllKindsAreOutOfLibrary()
+    {
+        // GH #22 residuals: playlists and live-TV channels live outside every media
+        // library, so a TopParentIds filter can only exclude them entirely. The
+        // kind-aware ApplyLibraryFilter must skip the filter for all-exempt queries
+        // even when the user IS restricted.
+        var libId = Guid.NewGuid();
+        var user = new Entities.User { AllowedLibraryIds = new List<string> { libId.ToString() } };
+
+        var playlistQuery = new InternalItemsQuery
+        {
+            IncludeItemTypes = new[] { Jellyfin.Data.Enums.BaseItemKind.Playlist }
+        };
+        var channelQuery = new InternalItemsQuery
+        {
+            IncludeItemTypes = new[] { Jellyfin.Data.Enums.BaseItemKind.LiveTvChannel }
+        };
+
+        LibraryFilter.ApplyLibraryFilter(playlistQuery, user, _libraryManagerMock.Object);
+        LibraryFilter.ApplyLibraryFilter(channelQuery, user, _libraryManagerMock.Object);
+
+        Assert.Empty(playlistQuery.TopParentIds);
+        Assert.Empty(channelQuery.TopParentIds);
+    }
+
+    [Fact]
+    public void ApplyLibraryFilter_KeepsTopParentIds_ForMixedKinds()
+    {
+        // Mixed kind sets keep the filter: the in-library rows are the point of the
+        // query, and the out-of-library kinds need their own sibling query (the
+        // handler's job), not a silently dropped filter.
+        var libId = Guid.NewGuid();
+        var user = new Entities.User { AllowedLibraryIds = new List<string> { libId.ToString() } };
+        var query = new InternalItemsQuery
+        {
+            IncludeItemTypes = new[] { Jellyfin.Data.Enums.BaseItemKind.Audio, Jellyfin.Data.Enums.BaseItemKind.Playlist }
+        };
+
+        LibraryFilter.ApplyLibraryFilter(query, user, _libraryManagerMock.Object);
+
+        Assert.Contains(libId, query.TopParentIds);
+    }
+
+    [Fact]
+    public void ApplyLibraryFilter_KeepsTopParentIds_WhenNoKindFilter()
+    {
+        // A null/empty IncludeItemTypes means "all kinds" to Jellyfin; the filter applies.
+        var libId = Guid.NewGuid();
+        var user = new Entities.User { AllowedLibraryIds = new List<string> { libId.ToString() } };
+        var query = new InternalItemsQuery();
+
+        LibraryFilter.ApplyLibraryFilter(query, user, _libraryManagerMock.Object);
+
+        Assert.Contains(libId, query.TopParentIds);
+    }
+
+    // --- JF-456 deep fix (code-review round 2 item 1): automatic items-by-name bypass ---
+
+    [Fact]
+    public void ApplyLibraryFilter_SetsIncludeItemsByName_ForParametricMusicArtistKind()
+    {
+        // Regression for the BrowseLibrary miss: QueryItems builds IncludeItemTypes
+        // from a VARIABLE kind (SlotMappings maps the "artists" browse category to
+        // MusicArtist), a shape no per-site wiring can recognize by literal kind.
+        // The bypass must come from ApplyLibraryFilter itself.
+        var libId = Guid.NewGuid();
+        var user = new Entities.User { AllowedLibraryIds = new List<string> { libId.ToString() } };
+
+        Jellyfin.Data.Enums.BaseItemKind itemType = SlotMappings.BrowseCategoryToItemKind["artists"]!.Value;
+        var query = new InternalItemsQuery
+        {
+            IncludeItemTypes = new[] { itemType }
+        };
+
+        LibraryFilter.ApplyLibraryFilter(query, user, _libraryManagerMock.Object);
+
+        // Folderless artists carry NULL TopParentId: without the bypass a restricted
+        // DB artist query matches zero rows in the cold-index window.
+        Assert.True(query.IncludeItemsByName, "restricted MusicArtist queries must get the items-by-name bypass automatically");
+        Assert.Contains(libId, query.TopParentIds);
+    }
+
+    [Fact]
+    public void ApplyLibraryFilter_IncludeItemsByNameBypass_GatesAndOptOut()
+    {
+        var libId = Guid.NewGuid();
+        var user = new Entities.User { AllowedLibraryIds = new List<string> { libId.ToString() } };
+
+        // Non-artist kind: no bypass (Jellyfin only evaluates it for item-by-name types).
+        var albumQuery = new InternalItemsQuery
+        {
+            IncludeItemTypes = new[] { Jellyfin.Data.Enums.BaseItemKind.MusicAlbum }
+        };
+        LibraryFilter.ApplyLibraryFilter(albumQuery, user, _libraryManagerMock.Object);
+        Assert.False(albumQuery.IncludeItemsByName == true);
+
+        // Opt-out (the strict catalog surfaces): no bypass even for MusicArtist,
+        // but the TopParentIds scope is still applied.
+        var strictQuery = new InternalItemsQuery
+        {
+            IncludeItemTypes = new[] { Jellyfin.Data.Enums.BaseItemKind.MusicArtist }
+        };
+        LibraryFilter.ApplyLibraryFilter(strictQuery, user, _libraryManagerMock.Object, includeItemsByName: false);
+        Assert.False(strictQuery.IncludeItemsByName == true);
+        Assert.Contains(libId, strictQuery.TopParentIds);
+
+        // Unrestricted user: the filter is not applied, so the bypass stays unset
+        // (Jellyfin evaluates it only inside its TopParentIds branch).
+        var unrestrictedQuery = new InternalItemsQuery
+        {
+            IncludeItemTypes = new[] { Jellyfin.Data.Enums.BaseItemKind.MusicArtist }
+        };
+        LibraryFilter.ApplyLibraryFilter(unrestrictedQuery, new Entities.User { AllowedLibraryIds = null }, _libraryManagerMock.Object);
+        Assert.False(unrestrictedQuery.IncludeItemsByName == true);
+        Assert.Empty(unrestrictedQuery.TopParentIds);
+    }
+
+    [Fact]
+    public void ApplyLibraryFilter_PreResolvedScope_MirrorsBypassAndExemption()
+    {
+        // The pre-resolved overload (the hoisted-scope shape) must behave exactly
+        // like the user-resolving one: bypass for MusicArtist, exemption skip for
+        // an all-out-of-library kind set (code-review round 2 item 8).
+        var libId = Guid.NewGuid();
+
+        var artistQuery = new InternalItemsQuery
+        {
+            IncludeItemTypes = new[] { Jellyfin.Data.Enums.BaseItemKind.MusicArtist }
+        };
+        LibraryFilter.ApplyLibraryFilter(artistQuery, new[] { libId });
+        Assert.True(artistQuery.IncludeItemsByName);
+        Assert.Contains(libId, artistQuery.TopParentIds);
+
+        var artistOptOut = new InternalItemsQuery
+        {
+            IncludeItemTypes = new[] { Jellyfin.Data.Enums.BaseItemKind.MusicArtist }
+        };
+        LibraryFilter.ApplyLibraryFilter(artistOptOut, new[] { libId }, includeItemsByName: false);
+        Assert.False(artistOptOut.IncludeItemsByName == true);
+        Assert.Contains(libId, artistOptOut.TopParentIds);
+
+        var playlistQuery = new InternalItemsQuery
+        {
+            IncludeItemTypes = new[] { Jellyfin.Data.Enums.BaseItemKind.Playlist }
+        };
+        LibraryFilter.ApplyLibraryFilter(playlistQuery, new[] { libId });
+        Assert.Empty(playlistQuery.TopParentIds);
+
+        // Null scope (unrestricted): nothing applied.
+        var nullScopeQuery = new InternalItemsQuery
+        {
+            IncludeItemTypes = new[] { Jellyfin.Data.Enums.BaseItemKind.MusicArtist }
+        };
+        LibraryFilter.ApplyLibraryFilter(nullScopeQuery, null);
+        Assert.Empty(nullScopeQuery.TopParentIds);
+        Assert.False(nullScopeQuery.IncludeItemsByName == true);
+    }
+
+    [Fact]
+    public void IsOutOfLibraryKind_MatchesExactlyTheExemptKinds()
+    {
+        Assert.True(LibraryFilter.IsOutOfLibraryKind(Jellyfin.Data.Enums.BaseItemKind.Playlist));
+        Assert.True(LibraryFilter.IsOutOfLibraryKind(Jellyfin.Data.Enums.BaseItemKind.LiveTvChannel));
+        Assert.False(LibraryFilter.IsOutOfLibraryKind(Jellyfin.Data.Enums.BaseItemKind.Audio));
+        Assert.False(LibraryFilter.IsOutOfLibraryKind(Jellyfin.Data.Enums.BaseItemKind.MusicAlbum));
+        Assert.False(LibraryFilter.IsOutOfLibraryKind(Jellyfin.Data.Enums.BaseItemKind.MusicArtist));
+        Assert.False(LibraryFilter.IsOutOfLibraryKind(Jellyfin.Data.Enums.BaseItemKind.Movie));
+    }
+
+    // --- JF-456: fused ResolveForUser ---
+
+    [Fact]
+    public void ResolveForUser_ReturnsNull_WhenUnrestricted()
+    {
+        var result = LibraryFilter.ResolveForUser(
+            new Entities.User { AllowedLibraryIds = null }, _libraryManagerMock.Object);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ResolveForUser_ResolvesScope_WhenRestricted()
+    {
+        var libId = Guid.NewGuid();
+        var result = LibraryFilter.ResolveForUser(
+            new Entities.User { AllowedLibraryIds = new List<string> { libId.ToString() } },
+            _libraryManagerMock.Object);
+
+        Assert.NotNull(result);
+        Assert.Contains(libId, result);
+    }
+
     private class TestLibraryFilterHandler : BaseHandler
     {
         public TestLibraryFilterHandler(ISessionManager sessionManager, PluginConfiguration config, ILoggerFactory loggerFactory)
@@ -610,9 +806,6 @@ public class LibraryFilterTests : IDisposable
 
         public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
             => Task.FromResult(ResponseBuilder.Tell("test"));
-
-        public Guid[]? TestGetAllowedLibraryIds(Entities.User user)
-            => GetAllowedLibraryIds(user);
 
         public void TestApplyLibraryFilter(InternalItemsQuery query, Entities.User user, ILibraryManager libraryManager)
             => ApplyLibraryFilter(query, user, libraryManager);

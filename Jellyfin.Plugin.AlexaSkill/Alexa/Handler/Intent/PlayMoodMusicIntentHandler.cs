@@ -633,6 +633,9 @@ public class PlayMoodMusicIntentHandler : BaseHandler
                 Limit = 20,
                 DtoOptions = new DtoOptions(true)
             };
+
+            // Scope; the items-by-name bypass is automatic for the MusicArtist
+            // kind (LibraryFilter, JF-456).
             ApplyLibraryFilter(artistQuery, user, _libraryManager);
 
             IReadOnlyList<BaseItem> artists = await RetryAsync(

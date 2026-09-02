@@ -41,6 +41,16 @@ public class SearchMediaIntentHandler : BaseHandler
         BaseItemKind.AudioBook
     ];
 
+    // JF-456 (GH #22 residual): playlists live outside every media library, so under a
+    // library restriction they cannot ride the unified query (the TopParentIds filter
+    // would drop them). The kinds split once here, from LibraryFilter's single decision
+    // point, so the handler never hardcodes which kinds are exempt.
+    private static readonly BaseItemKind[] _libraryScopedPlayableTypes =
+        _playableTypes.Where(t => !Util.LibraryFilter.IsOutOfLibraryKind(t)).ToArray();
+
+    private static readonly BaseItemKind[] _outOfLibraryPlayableTypes =
+        _playableTypes.Where(Util.LibraryFilter.IsOutOfLibraryKind).ToArray();
+
     private const int ArtistFallbackThreshold = 3;
 
     private readonly ILibraryManager _libraryManager;
@@ -106,28 +116,22 @@ public class SearchMediaIntentHandler : BaseHandler
             return userError;
         }
 
+        // Library scope resolved ONCE per request, the ArtistSearch hoisted shape
+        // (code-review F6): one ResolveForUser shared by the primary, sibling, and
+        // artist-items queries instead of a resolution inside every ApplyLibraryFilter
+        // call. A null scope = unrestricted user; those keep the single unified query,
+        // which already returns out-of-library kinds, so no sibling query is needed.
+        Guid[]? topParentIds = Util.LibraryFilter.ResolveForUser(user, _libraryManager, Logger);
+        bool libraryRestricted = topParentIds != null;
+
         IReadOnlyList<BaseItem> results = await SearchWithAsrFallbackAsync(query,
-            searchTerm =>
-            {
-                var q = new InternalItemsQuery
-                {
-                    User = jellyfinUser,
-                    Recursive = true,
-                    SearchTerm = searchTerm,
-                    IncludeItemTypes = FilterByContentAccess(_playableTypes),
-                    Limit = Plugin.Instance?.Configuration?.MaxSearchResults ?? 20,
-                    OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
-                    DtoOptions = new DtoOptions(true)
-                };
-                ApplyLibraryFilter(q, user, _libraryManager);
-                return RetryAsync(() => _libraryManager.GetItemList(q), "UnifiedSearch", cancellationToken);
-            }).ConfigureAwait(false);
+            searchTerm => SearchPlayableKindsAsync(searchTerm, jellyfinUser, topParentIds, cancellationToken)).ConfigureAwait(false);
 
         Logger.LogDebug("SearchMedia: Jellyfin returned {ResultCount} results for query='{Query}'", results.Count, query);
 
         if (results.Count <= ArtistFallbackThreshold)
         {
-            IReadOnlyList<BaseItem> artistResults = await SearchByArtistNameAsync(query, jellyfinUser!, user, locale, cancellationToken).ConfigureAwait(false);
+            IReadOnlyList<BaseItem> artistResults = await SearchByArtistNameAsync(query, jellyfinUser!, user, topParentIds, locale, cancellationToken).ConfigureAwait(false);
             if (artistResults.Count > 0)
             {
                 Logger.LogInformation("Artist fallback for '{Query}': found {Count} items via artist lookup", query, artistResults.Count);
@@ -137,7 +141,17 @@ public class SearchMediaIntentHandler : BaseHandler
 
         if (results.Count == 0)
         {
-            var fuzzy = await SearchItemsFuzzyAsync(query, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.Audio, BaseItemKind.MusicAlbum, BaseItemKind.Movie, BaseItemKind.Episode, BaseItemKind.Series, BaseItemKind.Playlist, BaseItemKind.AudioBook }, cancellationToken, "SearchMediaFuzzyFallback").ConfigureAwait(false);
+            // Under a restriction the fuzzy pass runs per kind-scope too: the mixed
+            // array keeps the TopParentIds filter, so out-of-library kinds would again
+            // be invisible (JF-456). Each call's ApplyLibraryFilter decides via the
+            // kind-aware predicate, no flag at the call site.
+            BaseItemKind[] fuzzyTypes = libraryRestricted ? _libraryScopedPlayableTypes : _playableTypes;
+            var fuzzy = await SearchItemsFuzzyAsync(query, jellyfinUser, user, _libraryManager, fuzzyTypes, cancellationToken, "SearchMediaFuzzyFallback").ConfigureAwait(false);
+            if (fuzzy == null && libraryRestricted)
+            {
+                fuzzy = await SearchItemsFuzzyAsync(query, jellyfinUser, user, _libraryManager, _outOfLibraryPlayableTypes, cancellationToken, "SearchMediaFuzzyOutOfLibrary").ConfigureAwait(false);
+            }
+
             if (fuzzy != null)
             {
                 results = new List<BaseItem> { fuzzy.Value.Item };
@@ -192,10 +206,112 @@ public class SearchMediaIntentHandler : BaseHandler
         return response;
     }
 
+    /// <summary>
+    /// Runs the unified search term over the playable kinds. Unrestricted users get a
+    /// single query over <see cref="_playableTypes"/>. Restricted users get two: the
+    /// library-scoped kinds carry the TopParentIds filter, while the out-of-library
+    /// kinds (playlists) run as a sibling query whose all-exempt kind set makes
+    /// <see cref="Util.LibraryFilter.ApplyLibraryFilter(InternalItemsQuery, Guid[], bool)"/>
+    /// skip the filter; in one mixed query the filter would drop them (JF-456, GH
+    /// #22 residual). The sibling
+    /// runs only when the scoped query came back SHORT of its Limit: a full scoped
+    /// page cannot be improved by playlist rows, which the union cap below would
+    /// discard anyway, and skipping saves one DB roundtrip per attempt on the
+    /// ASR-variant miss paths inside the 8s window (code-review round 2 item 3).
+    /// Both queries live inside the ASR-variant wrapper, so a playlist-only hit on
+    /// the original term stops the variant retry.
+    /// </summary>
+    /// <param name="searchTerm">The search term (original or ASR variant).</param>
+    /// <param name="jellyfinUser">The Jellyfin user (for query scoping).</param>
+    /// <param name="topParentIds">Library scope resolved once per request, or null when unrestricted.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The combined results of both scopes, re-sorted and capped at the query Limit.</returns>
+    private async Task<IReadOnlyList<BaseItem>> SearchPlayableKindsAsync(
+        string searchTerm,
+        Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
+        Guid[]? topParentIds,
+        CancellationToken cancellationToken)
+    {
+        int limit = Plugin.Instance?.Configuration?.MaxSearchResults ?? 20;
+
+        InternalItemsQuery BuildQuery(BaseItemKind[] types) => new()
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            SearchTerm = searchTerm,
+            IncludeItemTypes = types,
+            Limit = limit,
+            OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
+            DtoOptions = new DtoOptions(true)
+        };
+
+        async Task<IReadOnlyList<BaseItem>> RunAsync(InternalItemsQuery q, string label) =>
+            await RetryAsync(() => _libraryManager.GetItemList(q), label, cancellationToken).ConfigureAwait(false);
+
+        if (topParentIds == null)
+        {
+            // Unrestricted: one unified query over all playable kinds (Playlist is
+            // always content-access-allowed, so the array is never empty here). A
+            // null scope means ApplyLibraryFilter would be a no-op; nothing to apply.
+            var unifiedQuery = BuildQuery(FilterByContentAccess(_playableTypes));
+            return await RunAsync(unifiedQuery, "UnifiedSearch").ConfigureAwait(false);
+        }
+
+        // Restricted: the out-of-library kinds run as a sibling query the kind-aware
+        // pre-resolved ApplyLibraryFilter leaves unfiltered. Sequential on purpose:
+        // RetryAsync executes the query synchronously on this thread, so WhenAll
+        // would add thread hops without parallelism (code-review F2).
+        var scopedTypes = FilterByContentAccess(_libraryScopedPlayableTypes);
+        IReadOnlyList<BaseItem> scoped = Array.Empty<BaseItem>();
+        if (scopedTypes.Length > 0)
+        {
+            var scopedQuery = BuildQuery(scopedTypes);
+            Util.LibraryFilter.ApplyLibraryFilter(scopedQuery, topParentIds);
+            scoped = await RunAsync(scopedQuery, "UnifiedSearch").ConfigureAwait(false);
+        }
+
+        // Saturation skip (code-review round 2 item 3): only query the sibling when
+        // the scoped page came back short of its Limit. scopedTypes.Length == 0
+        // leaves scoped empty (0 < limit), so the sibling still runs when it is the
+        // only permissible query (code-review F3).
+        if (scoped.Count < limit)
+        {
+            // An EMPTY IncludeItemTypes means "all kinds" to Jellyfin, so when every
+            // library-scoped kind is disabled by content access the sibling is the
+            // only permissible query; issuing the scoped query would bypass the
+            // content gating (code-review F3).
+            var outOfLibraryQuery = BuildQuery(FilterByContentAccess(_outOfLibraryPlayableTypes));
+            Util.LibraryFilter.ApplyLibraryFilter(outOfLibraryQuery, topParentIds);
+            IReadOnlyList<BaseItem> outOfLibrary = await RunAsync(outOfLibraryQuery, "UnifiedSearchOutOfLibrary").ConfigureAwait(false);
+
+            // Re-sort the union (client-side approximation of the server-side
+            // SortName ordering, via Name) so the combined list is not block-ordered
+            // and restricted users see the same candidate order as unrestricted
+            // ones (code-review F5), then re-cap at the same Limit so both user
+            // classes share first-pick semantics: without the cap a restricted user
+            // could see up to 2x Limit candidates (code-review F8).
+            // Divergence, deliberate and documented: client-side sorting by
+            // BaseItem.SortName is NOT available. The getter reads the server's
+            // static BaseItem.ConfigurationManager (SortRemoveWords/chunks) to
+            // rebuild the value, which is unset in off-host contexts and config-
+            // dependent in-process; Name is the stable projection every returned
+            // item carries. Server-side both queries order by the SortName column,
+            // which this approximates.
+            return scoped
+                .Concat(outOfLibrary)
+                .OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
+                .Take(limit)
+                .ToList();
+        }
+
+        return scoped;
+    }
+
     private async Task<IReadOnlyList<BaseItem>> SearchByArtistNameAsync(
         string query,
         Jellyfin.Database.Implementations.Entities.User jellyfinUser,
         Entities.User user,
+        Guid[]? topParentIds,
         string locale,
         CancellationToken cancellationToken)
     {
@@ -220,7 +336,8 @@ public class SearchMediaIntentHandler : BaseHandler
             OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
             DtoOptions = new DtoOptions(true)
         };
-        ApplyLibraryFilter(artistItemsQuery, user, _libraryManager);
+        // Pre-resolved scope hoisted in HandleAsync (code-review F6).
+        Util.LibraryFilter.ApplyLibraryFilter(artistItemsQuery, topParentIds);
 
         return await RetryAsync(
             () => _libraryManager.GetItemList(artistItemsQuery),

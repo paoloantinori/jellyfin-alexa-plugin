@@ -10,6 +10,7 @@ using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
+using MediaBrowser.Controller.Library;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.DynamicEntities;
@@ -24,6 +25,7 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
 {
     private readonly DynamicEntityBuilder _builder;
     private readonly PluginConfiguration _config;
+    private readonly ILibraryManager _libraryManager;
     private readonly ILogger<DynamicEntitiesInterceptor> _logger;
 
     /// <summary>
@@ -31,14 +33,17 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
     /// </summary>
     /// <param name="builder">The dynamic entity builder.</param>
     /// <param name="config">The plugin configuration for user resolution.</param>
+    /// <param name="libraryManager">Library manager for resolving the user's library scope.</param>
     /// <param name="logger">Logger instance.</param>
     public DynamicEntitiesInterceptor(
         DynamicEntityBuilder builder,
         PluginConfiguration config,
+        ILibraryManager libraryManager,
         ILogger<DynamicEntitiesInterceptor> logger)
     {
         _builder = builder;
         _config = config;
+        _libraryManager = libraryManager;
         _logger = logger;
     }
 
@@ -106,7 +111,7 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
             }
         }
 
-        var (jellyfinUserId, allowedLibraryIds) = ResolveUserWithLibraries(context);
+        var (jellyfinUserId, resolveScope) = ResolveUserWithLibraryScope(context);
         if (jellyfinUserId == Guid.Empty)
         {
             return Task.CompletedTask;
@@ -114,7 +119,7 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
 
         try
         {
-            DynamicEntitiesDirective? directive = _builder.Build(jellyfinUserId, context.Locale, allowedLibraryIds, includeSeries, includeAudiobooks, cancellationToken);
+            DynamicEntitiesDirective? directive = _builder.Build(jellyfinUserId, context.Locale, resolveScope, includeSeries, includeAudiobooks, cancellationToken);
 
             if (directive == null)
             {
@@ -132,7 +137,16 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
         return Task.CompletedTask;
     }
 
-    private (Guid UserId, Guid[]? AllowedLibraryIds) ResolveUserWithLibraries(RequestContext context)
+    /// <summary>
+    /// Resolves the session's plugin user id (cheap config lookups, needed for the
+    /// builder's cache key) plus a LAZY library-scope resolver: the resolution
+    /// itself (<see cref="LibraryFilter.ResolveForUser"/>) is deferred to the
+    /// builder's cache-miss branch so output-cache hits pay no scope resolution
+    /// (code-review round 2 item 4). When invoked, the resolver returns the FULLY
+    /// RESOLVED scope: raw collection-folder ids never escape it (JF-456). A null
+    /// resolver result = unrestricted user.
+    /// </summary>
+    private (Guid UserId, Func<Guid[]?>? ResolveScope) ResolveUserWithLibraryScope(RequestContext context)
     {
         // Voice-based identification takes priority (multi-user households)
         string? personId = context.AlexaContext?.System?.Person?.PersonId;
@@ -141,7 +155,7 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
             Entities.User? user = _config.GetUserByPersonId(personId);
             if (user != null)
             {
-                return (user.Id, LibraryFilter.GetAllowedLibraryIds(user));
+                return (user.Id, () => LibraryFilter.ResolveForUser(user, _libraryManager, _logger));
             }
         }
 
@@ -150,7 +164,7 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
         if (Guid.TryParse(accessToken, out Guid userId))
         {
             Entities.User? user = _config.GetUserById(userId);
-            return (userId, LibraryFilter.GetAllowedLibraryIds(user));
+            return (userId, () => LibraryFilter.ResolveForUser(user, _libraryManager, _logger));
         }
 
         _logger.LogDebug("Could not resolve Jellyfin user ID for dynamic entities");

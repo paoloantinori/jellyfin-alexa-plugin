@@ -116,14 +116,8 @@ public class SongNgramIndexService : DebouncedLibraryIndexService, ISongNgramInd
 
         var candidates = allSongs.Where(s => candidateIds.Contains(s.Id)).ToList();
 
-        // Filter by library access
-        if (topParentIds != null && topParentIds.Length > 0)
-        {
-            var allowed = topParentIds.ToHashSet();
-            candidates = candidates.Where(s =>
-                topParentMap.TryGetValue(s.Id, out var parentId) &&
-                allowed.Contains(parentId)).ToList();
-        }
+        // Filter by library access (shared predicate, JF-456)
+        candidates = FilterByLibraryScope(candidates, s => s.Id, topParentMap, topParentIds);
 
         if (candidates.Count == 0)
         {
@@ -184,14 +178,8 @@ public class SongNgramIndexService : DebouncedLibraryIndexService, ISongNgramInd
             return SearchBySingleTokens(snapshot, keywordTokens, locale, topParentIds);
         }
 
-        // Filter by library access
-        if (topParentIds != null && topParentIds.Length > 0)
-        {
-            var allowed = topParentIds.ToHashSet();
-            candidates = candidates.Where(s =>
-                topParentMap.TryGetValue(s.Id, out var parentId) &&
-                allowed.Contains(parentId)).ToList();
-        }
+        // Filter by library access (shared predicate, JF-456)
+        candidates = FilterByLibraryScope(candidates, s => s.Id, topParentMap, topParentIds);
 
         if (candidates.Count == 0)
         {
@@ -237,14 +225,8 @@ public class SongNgramIndexService : DebouncedLibraryIndexService, ISongNgramInd
 
         var candidates = allSongs.Where(s => candidateIds.Contains(s.Id)).ToList();
 
-        // Filter by library access
-        if (topParentIds != null && topParentIds.Length > 0)
-        {
-            var allowed = topParentIds.ToHashSet();
-            candidates = candidates.Where(s =>
-                topParentMap.TryGetValue(s.Id, out var parentId) &&
-                allowed.Contains(parentId)).ToList();
-        }
+        // Filter by library access (shared predicate, JF-456)
+        candidates = FilterByLibraryScope(candidates, s => s.Id, topParentMap, topParentIds);
 
         if (candidates.Count == 0)
         {
@@ -267,12 +249,17 @@ public class SongNgramIndexService : DebouncedLibraryIndexService, ISongNgramInd
         var phoneticTokenIndex = new Dictionary<string, List<BaseItem>>(songs.Count * 3);
         var topParentMap = new Dictionary<Guid, Guid>(songs.Count);
 
+        // Songs under one album share the identical parent chain, so the shared
+        // per-load memo collapses the walk to once per album instead of once per
+        // song (JF-456; rationale on ResolveTopParentIdMemoized).
+        var chainMemo = new Dictionary<Guid, Guid>();
+
         foreach (var song in songs)
         {
             string[] tokens = KeywordMatcher.Tokenize(song.Name, "en-US");
 
             entries.Add(song);
-            topParentMap[song.Id] = ResolveTopParentId(song);
+            topParentMap[song.Id] = ResolveTopParentIdMemoized(song, chainMemo);
 
             // Index bigrams (consecutive token pairs)
             for (int i = 0; i < tokens.Length - 1; i++)

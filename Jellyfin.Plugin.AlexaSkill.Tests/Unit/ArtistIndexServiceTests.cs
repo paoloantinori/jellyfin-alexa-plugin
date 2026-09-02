@@ -351,6 +351,57 @@ public class ArtistIndexServiceTests : PluginTestBase
         _libraryManagerMock.Raise(l => l.ItemAdded += null, _libraryManagerMock.Object, eventArgs);
     }
 
+    // --- JF-456: debounce max-pending cap ---
+
+    [Fact]
+    public async Task ContinuousLibraryEvents_EventuallyRefreshDespiteDebounce()
+    {
+        // A stream of qualifying events arriving faster than the debounce delay
+        // re-arms the timer forever; the max-pending cap must force a refresh
+        // anyway (box-set rip / watched-folder trickle shape, JF-456).
+        int callCount = 0;
+        var artists = new List<BaseItem> { new MusicArtist { Name = "A", Id = Guid.NewGuid() } };
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(() => { callCount++; return artists; });
+        _libraryManagerMock
+            .Setup(l => l.GetItemById(It.IsAny<Guid>()))
+            .Returns((Guid id) => null as BaseItem);
+
+        var service = new ArtistIndexService(_libraryManagerMock.Object, _logger);
+        service.RefreshDebounceInterval = TimeSpan.FromMilliseconds(250);
+        service.MaxDebouncePendingInterval = TimeSpan.FromMilliseconds(700);
+        try
+        {
+            await service.StartAsync(CancellationToken.None);
+            // Two loads per refresh: the artist query plus the folderless-artist album
+            // join (every artist is self-mapped here because GetItemById returns null).
+            int initialLoads = callCount;
+            Assert.True(initialLoads >= 1, "the startup load must have run");
+
+            // Events every 150ms: always faster than the 250ms debounce, so without
+            // the cap NO refresh can fire while the stream lasts (every event re-arms
+            // the timer; the check happens before the stream ends so a post-stream
+            // refresh cannot satisfy it vacuously).
+            bool firedDuringStream = false;
+            for (int i = 0; i < 12; i++)
+            {
+                _libraryManagerMock.Raise(
+                    l => l.ItemAdded += null,
+                    _libraryManagerMock.Object,
+                    new ItemChangeEventArgs { Item = new MusicArtist { Name = "New", Id = Guid.NewGuid() } });
+                await Task.Delay(150);
+                firedDuringStream |= callCount > initialLoads;
+            }
+
+            Assert.True(firedDuringStream, "the max-pending cap must force a refresh while the event stream continues");
+        }
+        finally
+        {
+            service.Dispose();
+        }
+    }
+
     [Fact]
     public async Task StartAsync_LargeLibrary_LoadsAllArtists()
     {

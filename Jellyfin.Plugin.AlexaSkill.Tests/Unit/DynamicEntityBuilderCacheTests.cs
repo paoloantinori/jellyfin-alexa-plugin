@@ -98,6 +98,37 @@ public class DynamicEntityBuilderCacheTests
     }
 
     [Fact]
+    public void Build_CacheHit_PaysNoScopeResolution()
+    {
+        // Code-review round 2 item 4: the scope resolver must run only on the
+        // cache-MISS branch. A cache hit returns the cached directive without
+        // invoking the resolver, so the interceptor's ResolveForUser work is
+        // skipped entirely for warm sessions.
+        var userId = Guid.NewGuid();
+        var artists = new List<BaseItem>
+        {
+            new MusicArtist { Name = "Queen", Id = Guid.NewGuid() }
+        };
+        SetupUserAndLibrary(userId, artists, []);
+
+        using var builder = CreateBuilder();
+        builder.InvalidateCache(); // Ensure clean state
+
+        int resolutions = 0;
+        Guid[]? ResolveScope()
+        {
+            resolutions++;
+            return null; // unrestricted scope; only the invocation count matters here
+        }
+
+        var result1 = builder.Build(userId, "it-IT", ResolveScope, CancellationToken.None);
+        var result2 = builder.Build(userId, "it-IT", ResolveScope, CancellationToken.None);
+
+        Assert.Same(result1, result2);
+        Assert.Equal(1, resolutions);
+    }
+
+    [Fact]
     public void Build_DifferentParameters_SeparateCacheEntries()
     {
         // Arrange

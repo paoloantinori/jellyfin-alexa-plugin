@@ -185,7 +185,12 @@ public class LibrarySyncService
             OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) }
         };
 
-        LibraryFilter.ApplyLibraryFilter(query, user, _libraryManager);
+        // STRICT scope, no items-by-name bypass (includeItemsByName: false): this
+        // feed becomes the persistent SMAPI catalog upload, so the bypass would let
+        // excluded-library artist names live on Amazon's side indefinitely, not
+        // just surface transiently in a cold-window search (JF-457). Rationale for
+        // the automatic bypass itself: LibraryFilter.ApplyItemsByNameBypass (JF-456).
+        LibraryFilter.ApplyLibraryFilter(query, user, _libraryManager, includeItemsByName: false);
 
         return _libraryManager.GetItemList(query);
     }

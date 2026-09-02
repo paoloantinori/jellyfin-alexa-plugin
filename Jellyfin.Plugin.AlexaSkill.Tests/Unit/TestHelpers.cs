@@ -24,9 +24,19 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 
 internal static class TestHelpers
 {
-    internal static Entities.User CreateTestUser(Guid? id = null, string invocationName = "test", string jellyfinToken = "test-token")
+    internal static Entities.User CreateTestUser(
+        Guid? id = null,
+        string invocationName = "test",
+        string jellyfinToken = "test-token",
+        IReadOnlyList<string>? allowedLibraryIds = null)
     {
-        return new Entities.User { Id = id ?? Guid.NewGuid(), InvocationName = invocationName, JellyfinToken = jellyfinToken };
+        return new Entities.User
+        {
+            Id = id ?? Guid.NewGuid(),
+            InvocationName = invocationName,
+            JellyfinToken = jellyfinToken,
+            AllowedLibraryIds = allowedLibraryIds?.ToList()
+        };
     }
 
     internal static DeviceToken CreateTestDeviceToken(

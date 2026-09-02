@@ -18,7 +18,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.DynamicEntities;
 
 /// <summary>
 /// Tests for per-user library filtering in DynamicEntityBuilder.Build.
-/// Verifies that the allowedLibraryIds parameter correctly filters the Jellyfin query.
+/// Verifies that the resolved topParentIds parameter correctly scopes the Jellyfin query.
 /// </summary>
 public class DynamicEntityBuilderFilterTests
 {
@@ -50,7 +50,7 @@ public class DynamicEntityBuilderFilterTests
     }
 
     [Fact]
-    public void Build_WithAllowedLibraryIds_PassesTopParentIdsToQuery()
+    public void Build_WithTopParentIds_PassesScopeToEveryQuery()
     {
         // Arrange
         var userId = Guid.NewGuid();
@@ -58,7 +58,7 @@ public class DynamicEntityBuilderFilterTests
 
         var libA = Guid.NewGuid();
         var libB = Guid.NewGuid();
-        var allowedLibraryIds = new Guid[] { libA, libB };
+        var topParentIds = new Guid[] { libA, libB };
 
         List<InternalItemsQuery> capturedQueries = new List<InternalItemsQuery>();
         _libraryManagerMock
@@ -69,14 +69,15 @@ public class DynamicEntityBuilderFilterTests
         var builder = CreateBuilder();
 
         // Act
-        builder.Build(userId, "it-IT", allowedLibraryIds, CancellationToken.None);
+        builder.Build(userId, "it-IT", () => topParentIds, CancellationToken.None);
 
-        // Assert: artist, album, and last-played queries should all have TopParentIds set
+        // Assert: artist, album, and last-played queries should all carry the scope.
+        // Membership, not exact length (JF-456 item 9): the resolved scope may union
+        // in physical folder ids.
         Assert.True(capturedQueries.Count >= 2, $"Expected at least 2 queries, got {capturedQueries.Count}");
         Assert.All(capturedQueries, q =>
         {
             Assert.NotNull(q.TopParentIds);
-            Assert.Equal(2, q.TopParentIds.Length);
             Assert.Contains(libA, q.TopParentIds);
             Assert.Contains(libB, q.TopParentIds);
         });
@@ -124,7 +125,7 @@ public class DynamicEntityBuilderFilterTests
         var builder = CreateBuilder();
 
         // Act
-        builder.Build(userId, "it-IT", Array.Empty<Guid>(), CancellationToken.None);
+        builder.Build(userId, "it-IT", () => Array.Empty<Guid>(), CancellationToken.None);
 
         // Assert
         Assert.True(capturedQueries.Count >= 2, $"Expected at least 2 queries, got {capturedQueries.Count}");

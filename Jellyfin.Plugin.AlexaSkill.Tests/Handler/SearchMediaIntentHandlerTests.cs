@@ -539,4 +539,168 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
         // With >3 results, artist fallback is NOT triggered → only 1 call to GetItemList
         _libraryManagerMock.Verify(l => l.GetItemList(It.IsAny<InternalItemsQuery>()), Times.Once());
     }
+
+    // --- JF-456: out-of-library kinds (playlists) stay searchable for restricted users (GH #22 residual) ---
+
+    private static Entities.User CreateRestrictedUser(Guid libraryId)
+    {
+        return TestHelpers.CreateTestUser(allowedLibraryIds: new[] { libraryId.ToString() });
+    }
+
+    [Fact]
+    public async Task HandleAsync_RestrictedUser_PlaylistFoundViaUnfilteredSiblingQuery()
+    {
+        // A library-restricted user searching for a playlist must still find it: the
+        // mixed unified query would drop it (TopParentIds excludes the PlaylistsFolder),
+        // so the out-of-library sibling query runs WITHOUT the filter (JF-456).
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(query: "road trip");
+        var context = CreateContext();
+        var libraryId = Guid.NewGuid();
+        var user = CreateRestrictedUser(libraryId);
+        var session = CreateSession();
+        SetupUserMock();
+
+        var playlist = new MediaBrowser.Controller.Playlists.Playlist
+        {
+            Name = "Road Trip",
+            Id = Guid.NewGuid()
+        };
+
+        var capturedQueries = new List<InternalItemsQuery>();
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => capturedQueries.Add(q))
+            .Returns((InternalItemsQuery q) =>
+                q.IncludeItemTypes.Length == 1 && q.IncludeItemTypes[0] == BaseItemKind.Playlist
+                    ? new List<BaseItem> { playlist }
+                    : new List<BaseItem>());
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // The playlist was found by the sibling query and auto-played as the single result
+        Assert.NotNull(response);
+        response.HasDirective<AudioPlayerPlayDirective>();
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Equal(playlist.Id, Assert.Single(session.NowPlayingQueue).Id);
+
+        // The playlist query carried no library filter; the library-scoped query did
+        var playlistQuery = Assert.Single(capturedQueries.Where(q =>
+            q.IncludeItemTypes.Length == 1 && q.IncludeItemTypes[0] == BaseItemKind.Playlist));
+        Assert.Empty(playlistQuery.TopParentIds);
+        Assert.Contains(capturedQueries, q =>
+            q.IncludeItemTypes.Contains(BaseItemKind.Audio)
+            && q.TopParentIds?.Contains(libraryId) == true);
+    }
+
+    [Fact]
+    public async Task HandleAsync_RestrictedUser_FuzzyMiss_FallsBackToOutOfLibraryKinds()
+    {
+        // When neither the scoped primary nor the scoped fuzzy pass matches, the
+        // out-of-library fuzzy pass still runs (the old mixed fuzzy array would have
+        // hidden the playlist behind the TopParentIds filter, JF-456).
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(query: "road trip playlist");
+        var context = CreateContext();
+        var libraryId = Guid.NewGuid();
+        var user = CreateRestrictedUser(libraryId);
+        var session = CreateSession();
+        SetupUserMock();
+
+        var playlist = new MediaBrowser.Controller.Playlists.Playlist
+        {
+            Name = "Road Trip Playlist",
+            Id = Guid.NewGuid()
+        };
+
+        var capturedQueries = new List<InternalItemsQuery>();
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => capturedQueries.Add(q))
+            .Returns((InternalItemsQuery q) =>
+                // Only the FUZZY playlist query matches (SearchTerm null): the primary
+                // sibling and every scoped query miss, forcing the fuzzy chain.
+                q.IncludeItemTypes.Length == 1
+                    && q.IncludeItemTypes[0] == BaseItemKind.Playlist
+                    && string.IsNullOrEmpty(q.SearchTerm)
+                    ? new List<BaseItem> { playlist }
+                    : new List<BaseItem>());
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        response.HasDirective<AudioPlayerPlayDirective>();
+
+        // The fuzzy out-of-library query ran unfiltered and found the playlist
+        var fuzzyPlaylistQuery = Assert.Single(capturedQueries.Where(q =>
+            q.IncludeItemTypes.Length == 1
+            && q.IncludeItemTypes[0] == BaseItemKind.Playlist
+            && string.IsNullOrEmpty(q.SearchTerm)));
+        Assert.Empty(fuzzyPlaylistQuery.TopParentIds);
+    }
+
+    [Fact]
+    public async Task HandleAsync_UnrestrictedUser_SingleUnifiedQuery_IncludesPlaylistKind()
+    {
+        // Unrestricted users keep the single unified query: the playlist kind rides it
+        // with no TopParentIds set, and no sibling query is issued (JF-456).
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(query: "test");
+        var context = CreateContext();
+        var user = CreateUser(); // unrestricted
+        var session = CreateSession();
+        SetupUserMock();
+
+        var capturedQueries = new List<InternalItemsQuery>();
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => capturedQueries.Add(q))
+            .Returns(new List<BaseItem>());
+
+        await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.Contains(capturedQueries, q =>
+            q.IncludeItemTypes.Contains(BaseItemKind.Playlist)
+            && q.IncludeItemTypes.Contains(BaseItemKind.Audio)
+            && q.TopParentIds.Length == 0);
+        Assert.DoesNotContain(capturedQueries, q =>
+            q.IncludeItemTypes.Length == 1 && q.IncludeItemTypes[0] == BaseItemKind.Playlist);
+    }
+
+    [Fact]
+    public async Task HandleAsync_RestrictedUser_SiblingQuerySkipped_WhenScopedPageSaturatesLimit()
+    {
+        // Saturation skip (code-review round 2 item 3): a scoped page that came
+        // back AT its Limit cannot be improved by the playlist sibling, whose rows
+        // the union cap would discard anyway, so the sibling must not be issued:
+        // one DB roundtrip saved per attempt on the miss paths inside the 8s window.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(query: "song");
+        var context = CreateContext();
+        var libraryId = Guid.NewGuid();
+        var user = CreateRestrictedUser(libraryId);
+        var session = CreateSession();
+        SetupUserMock();
+
+        int limit = global::Jellyfin.Plugin.AlexaSkill.Plugin.Instance?.Configuration?.MaxSearchResults ?? 20;
+        var fullPage = Enumerable.Range(0, limit)
+            .Select(i => new Audio { Name = $"Item {i:000}", Id = Guid.NewGuid() })
+            .ToList<BaseItem>();
+
+        var capturedQueries = new List<InternalItemsQuery>();
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => capturedQueries.Add(q))
+            .Returns((InternalItemsQuery q) =>
+                q.IncludeItemTypes.Contains(BaseItemKind.Playlist)
+                    ? new List<BaseItem>() // sibling must never be reached
+                    : fullPage);
+
+        await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // The scoped query ran, carried the restriction, and returned a full page.
+        Assert.Contains(capturedQueries, q =>
+            q.IncludeItemTypes.Contains(BaseItemKind.Audio)
+            && q.TopParentIds?.Contains(libraryId) == true);
+        // No playlist-only sibling query was issued (no primary one, and none from
+        // the fuzzy chain either: results were non-empty so the chain never ran).
+        Assert.DoesNotContain(capturedQueries, q =>
+            q.IncludeItemTypes.Length == 1 && q.IncludeItemTypes[0] == BaseItemKind.Playlist);
+    }
 }

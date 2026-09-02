@@ -91,13 +91,13 @@ public class LibrarySyncServiceTests
 
         // Assert
         // SyncUserLibraryAsync makes two parallel calls to SyncCatalogAsync (artists + albums).
-        // Both should have TopParentIds set.
+        // Both should have TopParentIds set. Membership, not exact length: the
+        // resolution may union in physical folder ids (JF-456 item 9).
         Assert.Equal(2, capturedQueries.Count);
         Assert.All(capturedQueries, q =>
         {
             Assert.NotNull(q.TopParentIds);
-            Assert.Single(q.TopParentIds);
-            Assert.Equal(musicLibId, q.TopParentIds[0]);
+            Assert.Contains(musicLibId, q.TopParentIds);
         });
     }
 

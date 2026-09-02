@@ -571,6 +571,46 @@ public class ArtistSearchTests
         global::Jellyfin.Plugin.AlexaSkill.Alexa.Util.IndexWarmingGate.EnsureReady(Mock.Of<ISongNgramIndex>(i => i.IsReady == false && i.IsDisabled == true));
     }
 
+    [Fact]
+    public async Task SearchAsync_DbTiers_SetIncludeItemsByName()
+    {
+        // JF-456 (GH #22 residual 3): Jellyfin stores TopParentId NULL for folderless
+        // artists, so a library-restricted DB artist query matches zero rows unless
+        // IncludeItemsByName activates the items-by-name bypass. Every DB tier must set it.
+        var lm = new Mock<ILibraryManager>();
+        lm.Setup(l => l.GetItemById(It.IsAny<Guid>())).Returns((BaseItem?)null);
+        var user = new Jellyfin.Plugin.AlexaSkill.Entities.User
+        {
+            AllowedLibraryIds = new List<string> { Guid.NewGuid().ToString() }
+        };
+
+        var queries = new List<InternalItemsQuery>();
+        Task<IReadOnlyList<BaseItem>> DbQuery(InternalItemsQuery q, CancellationToken t)
+        {
+            queries.Add(q);
+            return Task.FromResult<IReadOnlyList<BaseItem>>(Array.Empty<BaseItem>());
+        }
+
+        await ArtistSearch.SearchAsync(
+            "metallica",
+            user: user,
+            libraryManager: lm.Object,
+            artistIndex: null, // force the database path
+            logger: Logger,
+            dbQuery: DbQuery,
+            locale: "en-US",
+            cancellationToken: CancellationToken.None);
+
+        // tier 1 (SearchTerm) + tier 2 (prefix; single-word query skips tier 3) + tier 4 (contains)
+        Assert.True(queries.Count >= 2, $"expected at least the SearchTerm and prefix tiers, got {queries.Count}");
+        Assert.All(queries, q =>
+        {
+            Assert.True(q.IncludeItemsByName, "every DB artist tier must set IncludeItemsByName");
+            Assert.Single(q.IncludeItemTypes);
+            Assert.Equal(Jellyfin.Data.Enums.BaseItemKind.MusicArtist, q.IncludeItemTypes[0]);
+        });
+    }
+
     private static Task<IReadOnlyList<BaseItem>> NotCalled(
         InternalItemsQuery q, CancellationToken t) =>
         throw new InvalidOperationException("In-memory path must not hit the database");

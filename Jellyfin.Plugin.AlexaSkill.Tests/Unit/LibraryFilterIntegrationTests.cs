@@ -95,6 +95,23 @@ public class LibraryFilterIntegrationTests : PluginTestBase, IDisposable
         return () => captured;
     }
 
+    /// <summary>
+    /// Like <see cref="CaptureQueryViaLibraryManager"/> but keeps EVERY query: handlers
+    /// that issue more than one (SearchMedia's out-of-library sibling under a
+    /// restriction, JF-456) must be asserted per query, not on the last one.
+    /// </summary>
+    private Func<List<InternalItemsQuery>> CaptureAllQueriesViaLibraryManager()
+    {
+        var captured = new List<InternalItemsQuery>();
+
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => captured.Add(q))
+            .Returns(new List<BaseItem>());
+
+        return () => captured;
+    }
+
     private SessionInfo CreateSession()
     {
         return TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
@@ -143,7 +160,6 @@ public class LibraryFilterIntegrationTests : PluginTestBase, IDisposable
         var capturedQuery = getCaptured();
         Assert.NotNull(capturedQuery);
         Assert.NotNull(capturedQuery.TopParentIds);
-        Assert.Equal(2, capturedQuery.TopParentIds.Length);
         Assert.Contains(libId1, capturedQuery.TopParentIds);
         Assert.Contains(libId2, capturedQuery.TopParentIds);
     }
@@ -184,7 +200,7 @@ public class LibraryFilterIntegrationTests : PluginTestBase, IDisposable
             .Setup(lm => lm.GetItemById(libId))
             .Returns(new Folder { Id = libId });
 
-        var getCaptured = CaptureQueryViaLibraryManager();
+        var getCaptured = CaptureAllQueriesViaLibraryManager();
 
         var handler = new SearchMediaIntentHandler(
             _sessionManagerMock.Object, _config,
@@ -204,11 +220,11 @@ public class LibraryFilterIntegrationTests : PluginTestBase, IDisposable
             },
             CreateContext(), user, CreateSession(), CancellationToken.None);
 
-        var capturedQuery = getCaptured();
-        Assert.NotNull(capturedQuery);
-        Assert.NotNull(capturedQuery.TopParentIds);
-        Assert.Single(capturedQuery.TopParentIds);
-        Assert.Equal(libId, capturedQuery.TopParentIds[0]);
+        // The library-scoped queries carry the restriction (membership, not exact
+        // length, JF-456 item 9). The empty-mocked library makes the handler fall
+        // through artist-fallback tiers, so several filtered queries are expected;
+        // the out-of-library sibling assertion lives in the focused JF-456 tests.
+        Assert.Contains(getCaptured(), q => q.TopParentIds?.Contains(libId) == true);
     }
 
     // --- PlayFavoritesIntentHandler ---
@@ -237,8 +253,7 @@ public class LibraryFilterIntegrationTests : PluginTestBase, IDisposable
         var capturedQuery = getCaptured();
         Assert.NotNull(capturedQuery);
         Assert.NotNull(capturedQuery.TopParentIds);
-        Assert.Single(capturedQuery.TopParentIds);
-        Assert.Equal(libId, capturedQuery.TopParentIds[0]);
+        Assert.Contains(libId, capturedQuery.TopParentIds);
     }
 
     // --- PlayLastAddedIntentHandler ---
@@ -267,8 +282,7 @@ public class LibraryFilterIntegrationTests : PluginTestBase, IDisposable
         var capturedQuery = getCaptured();
         Assert.NotNull(capturedQuery);
         Assert.NotNull(capturedQuery.TopParentIds);
-        Assert.Single(capturedQuery.TopParentIds);
-        Assert.Equal(libId, capturedQuery.TopParentIds[0]);
+        Assert.Contains(libId, capturedQuery.TopParentIds);
     }
 
     // --- CollectionFolder resolution ---
@@ -410,7 +424,7 @@ public class LibraryFilterIntegrationTests : PluginTestBase, IDisposable
             .Setup(lm => lm.GetItemById(libId3))
             .Returns(new Folder { Id = libId3 });
 
-        var getCaptured = CaptureQueryViaLibraryManager();
+        var getCaptured = CaptureAllQueriesViaLibraryManager();
 
         var handler = new SearchMediaIntentHandler(
             _sessionManagerMock.Object, _config,
@@ -430,13 +444,13 @@ public class LibraryFilterIntegrationTests : PluginTestBase, IDisposable
             },
             CreateContext(), user, CreateSession(), CancellationToken.None);
 
-        var capturedQuery = getCaptured();
-        Assert.NotNull(capturedQuery);
-        Assert.NotNull(capturedQuery.TopParentIds);
-        Assert.Equal(3, capturedQuery.TopParentIds.Length);
-        Assert.Contains(libId1, capturedQuery.TopParentIds);
-        Assert.Contains(libId2, capturedQuery.TopParentIds);
-        Assert.Contains(libId3, capturedQuery.TopParentIds);
+        // Membership, not exact length (JF-456 item 9); several queries carry the
+        // scope because the empty-mocked library makes the handler fall through its
+        // artist-fallback tiers.
+        Assert.Contains(getCaptured(), q =>
+            q.TopParentIds?.Contains(libId1) == true
+            && q.TopParentIds.Contains(libId2)
+            && q.TopParentIds.Contains(libId3));
     }
 
     // --- Empty AllowedLibraryIds treated as unrestricted ---

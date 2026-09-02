@@ -278,12 +278,9 @@ public class PlaySongIntentHandler : BaseHandler
                 // readiness contract). The JF-419.3 entry gate guarantees readiness;
                 // null/disabled returns empty and the DB fallback below owns the query.
                 // The filter is resolved to physical library folder ids (JF-455), the
-                // same id space the index maps hold.
+                // same id space the index maps hold; null means unrestricted.
                 var keywordTokens = Util.KeywordMatcher.Tokenize(songQuery, locale);
-                Guid[]? songAllowed = GetAllowedLibraryIds(user);
-                Guid[]? songTopParents = songAllowed != null
-                    ? Util.LibraryFilter.ResolveTopParentIds(songAllowed, _libraryManager, Logger)
-                    : null;
+                Guid[]? songTopParents = Util.LibraryFilter.ResolveForUser(user, _libraryManager, Logger);
                 var scoredByIndex = _songNgramIndex.SearchWithPhoneticFallback(keywordTokens, locale, songTopParents, _config.PhoneticSongSearchEnabled);
                 if (scoredByIndex.Count > 0)
                 {

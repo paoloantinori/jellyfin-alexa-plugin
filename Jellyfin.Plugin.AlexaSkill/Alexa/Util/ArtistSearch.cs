@@ -240,13 +240,14 @@ internal static class ArtistSearch
 
         IReadOnlyList<BaseItem> artists;
 
+        // Resolve the library scope ONCE for both branches (E4 hoist): the in-memory
+        // read and every database tier below consume the same value, so no tier
+        // re-resolves it (ResolveForUser is cached, but one call is still cheaper).
+        Guid[]? topParentIds = LibraryFilter.ResolveForUser(user, libraryManager, logger);
+
         if (artistIndex?.IsReady == true)
         {
             searchSource = "InMemory";
-            var allowedLibraryIds = LibraryFilter.GetAllowedLibraryIds(user);
-            Guid[]? topParentIds = allowedLibraryIds != null
-                ? LibraryFilter.ResolveTopParentIds(allowedLibraryIds, libraryManager)
-                : null;
             var allArtists = artistIndex.GetArtists(topParentIds);
 
             // Tier 1: name contains query, with the JF-381 coincidental-containment gate.
@@ -367,7 +368,10 @@ internal static class ArtistSearch
         }
         else
         {
-            // Database fallback
+            // Database fallback. Scope assignment; the items-by-name bypass fires
+            // automatically inside ApplyLibraryFilter for the MusicArtist kind (the
+            // full rationale, folderless artists vs the TopParentIds filter, lives
+            // in LibraryFilter.ApplyItemsByNameBypass).
             var query = new InternalItemsQuery()
             {
                 Recursive = true,
@@ -375,7 +379,7 @@ internal static class ArtistSearch
                 IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
                 DtoOptions = new DtoOptions(true)
             };
-            LibraryFilter.ApplyLibraryFilter(query, user, libraryManager);
+            LibraryFilter.ApplyLibraryFilter(query, topParentIds);
 
             // JF-381 gate on the raw database results too: SearchTerm matching can surface
             // coincidental substrings, and unlike the in-memory path there is no later
@@ -395,7 +399,7 @@ internal static class ArtistSearch
             if (artists.Count == 0)
             {
                 tierSw.Restart();
-                artists = await PrefixSearchAsync(firstWord, musician, user, libraryManager, dbQuery, cancellationToken).ConfigureAwait(false);
+                artists = await PrefixSearchAsync(firstWord, musician, user, topParentIds, dbQuery, cancellationToken).ConfigureAwait(false);
                 tierSw.Stop();
                 tierReached = 2;
                 logger.LogInformation(
@@ -407,7 +411,7 @@ internal static class ArtistSearch
             if (artists.Count == 0 && !string.Equals(firstWord, musician, StringComparison.Ordinal))
             {
                 tierSw.Restart();
-                artists = await PrefixSearchAsync(musician, musician, user, libraryManager, dbQuery, cancellationToken).ConfigureAwait(false);
+                artists = await PrefixSearchAsync(musician, musician, user, topParentIds, dbQuery, cancellationToken).ConfigureAwait(false);
                 tierSw.Stop();
                 tierReached = 3;
                 logger.LogInformation(
@@ -419,7 +423,7 @@ internal static class ArtistSearch
             if (artists.Count == 0)
             {
                 tierSw.Restart();
-                artists = await ContainsSearchAsync(musician, user, libraryManager, dbQuery, cancellationToken).ConfigureAwait(false);
+                artists = await ContainsSearchAsync(musician, user, topParentIds, dbQuery, cancellationToken).ConfigureAwait(false);
                 tierSw.Stop();
                 tierReached = 4;
                 logger.LogInformation(
@@ -437,7 +441,7 @@ internal static class ArtistSearch
     }
 
     private static async Task<IReadOnlyList<BaseItem>> PrefixSearchAsync(
-        string prefix, string musician, Entities.User? user, ILibraryManager libraryManager,
+        string prefix, string musician, Entities.User? user, Guid[]? topParentIds,
         Func<InternalItemsQuery, CancellationToken, Task<IReadOnlyList<BaseItem>>> dbQuery,
         CancellationToken cancellationToken)
     {
@@ -448,7 +452,7 @@ internal static class ArtistSearch
             IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
             DtoOptions = new DtoOptions(true)
         };
-        LibraryFilter.ApplyLibraryFilter(query, user, libraryManager);
+        LibraryFilter.ApplyLibraryFilter(query, topParentIds);
 
         IReadOnlyList<BaseItem> results = await dbQuery(query, cancellationToken).ConfigureAwait(false);
         BaseItem? fuzzy = FuzzyMatch(musician, results, user, null);
@@ -456,7 +460,7 @@ internal static class ArtistSearch
     }
 
     private static async Task<IReadOnlyList<BaseItem>> ContainsSearchAsync(
-        string searchTerm, Entities.User? user, ILibraryManager libraryManager,
+        string searchTerm, Entities.User? user, Guid[]? topParentIds,
         Func<InternalItemsQuery, CancellationToken, Task<IReadOnlyList<BaseItem>>> dbQuery,
         CancellationToken cancellationToken)
     {
@@ -467,7 +471,7 @@ internal static class ArtistSearch
             IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
             DtoOptions = new DtoOptions(true)
         };
-        LibraryFilter.ApplyLibraryFilter(query, user, libraryManager);
+        LibraryFilter.ApplyLibraryFilter(query, topParentIds);
 
         IReadOnlyList<BaseItem> results = await dbQuery(query, cancellationToken).ConfigureAwait(false);
 

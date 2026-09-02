@@ -44,6 +44,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
         return new DynamicEntitiesInterceptor(
             _builderMock.Object,
             _config,
+            Mock.Of<MediaBrowser.Controller.Library.ILibraryManager>(),
             _loggerFactory.CreateLogger<DynamicEntitiesInterceptor>());
     }
 
@@ -85,7 +86,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
 
         // Should not have called builder (intent name is "none", not TV or book context)
         _builderMock.Verify(
-            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Guid[]>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
+            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -96,7 +97,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
         var directive = new DynamicEntitiesDirective();
 
         _builderMock
-            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Guid[]>(), false, false, It.IsAny<CancellationToken>()))
+            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>()))
             .Returns(directive);
 
         var interceptor = CreateInterceptor();
@@ -124,7 +125,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
         var directive = new DynamicEntitiesDirective();
 
         _builderMock
-            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Guid[]>(), false, false, It.IsAny<CancellationToken>()))
+            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>()))
             .Returns(directive);
 
         var interceptor = CreateInterceptor();
@@ -151,7 +152,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
     {
         var userId = Guid.NewGuid();
         _builderMock
-            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Guid[]>(), false, false, It.IsAny<CancellationToken>()))
+            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>()))
             .Returns((DynamicEntitiesDirective?)null);
 
         var interceptor = CreateInterceptor();
@@ -189,7 +190,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
         await interceptor.ProcessAsync(ctx, CancellationToken.None);
 
         _builderMock.Verify(
-            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Guid[]>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
+            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -208,7 +209,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
 
         var directive = new DynamicEntitiesDirective();
         _builderMock
-            .Setup(b => b.Build(testUserId, It.IsAny<string>(), It.IsAny<Guid[]>(), false, false, It.IsAny<CancellationToken>()))
+            .Setup(b => b.Build(testUserId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>()))
             .Returns(directive);
 
         var interceptor = CreateInterceptor();
@@ -227,7 +228,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
         await interceptor.ProcessAsync(ctx, CancellationToken.None);
 
         _builderMock.Verify(
-            b => b.Build(testUserId, It.IsAny<string>(), It.IsAny<Guid[]>(), false, false, It.IsAny<CancellationToken>()),
+            b => b.Build(testUserId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -258,7 +259,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
     {
         var userId = Guid.NewGuid();
         _builderMock
-            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Guid[]>(), false, false, It.IsAny<CancellationToken>()))
+            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>()))
             .Throws(new InvalidOperationException("test failure"));
 
         var interceptor = CreateInterceptor();
@@ -284,7 +285,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
     {
         var userId = Guid.NewGuid();
         _builderMock
-            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Guid[]>(), false, false, It.IsAny<CancellationToken>()))
+            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>()))
             .Throws(new OperationCanceledException());
 
         var interceptor = CreateInterceptor();
@@ -333,7 +334,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
         await interceptor.ProcessAsync(ctx, CancellationToken.None);
 
         _builderMock.Verify(
-            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Guid[]>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
+            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
             Times.Never);
 
         Assert.Single(ctx.Response.Response.Directives);
@@ -359,7 +360,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
         await interceptor.ProcessAsync(ctx, CancellationToken.None);
 
         _builderMock.Verify(
-            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Guid[]>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
+            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
             Times.Never);
 
         Assert.Single(ctx.Response.Response.Directives);
@@ -373,7 +374,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
         var directive = new DynamicEntitiesDirective();
 
         _builderMock
-            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Guid[]>(), false, false, It.IsAny<CancellationToken>()))
+            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>()))
             .Returns(directive);
 
         var interceptor = CreateInterceptor();
@@ -392,7 +393,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
         await interceptor.ProcessAsync(ctx, CancellationToken.None);
 
         _builderMock.Verify(
-            b => b.Build(userId, It.IsAny<string>(), It.IsAny<Guid[]>(), false, false, It.IsAny<CancellationToken>()),
+            b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>()),
             Times.Once);
 
         Assert.NotNull(ctx.Response.Response.Directives);
@@ -406,7 +407,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
         var directive = new DynamicEntitiesDirective();
 
         _builderMock
-            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Guid[]>(), true, false, It.IsAny<CancellationToken>()))
+            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), true, false, It.IsAny<CancellationToken>()))
             .Returns(directive);
 
         var interceptor = CreateInterceptor();
@@ -429,7 +430,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
         await interceptor.ProcessAsync(ctx, CancellationToken.None);
 
         _builderMock.Verify(
-            b => b.Build(userId, It.IsAny<string>(), It.IsAny<Guid[]>(), true, false, It.IsAny<CancellationToken>()),
+            b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), true, false, It.IsAny<CancellationToken>()),
             Times.Once);
         Assert.Contains(directive, ctx.Response!.Response.Directives!);
     }
@@ -441,7 +442,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
         var directive = new DynamicEntitiesDirective();
 
         _builderMock
-            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Guid[]>(), false, true, It.IsAny<CancellationToken>()))
+            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, true, It.IsAny<CancellationToken>()))
             .Returns(directive);
 
         var interceptor = CreateInterceptor();
@@ -464,7 +465,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
         await interceptor.ProcessAsync(ctx, CancellationToken.None);
 
         _builderMock.Verify(
-            b => b.Build(userId, It.IsAny<string>(), It.IsAny<Guid[]>(), false, true, It.IsAny<CancellationToken>()),
+            b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, true, It.IsAny<CancellationToken>()),
             Times.Once);
         Assert.Contains(directive, ctx.Response!.Response.Directives!);
     }
@@ -484,7 +485,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
         await interceptor.ProcessAsync(ctx, CancellationToken.None);
 
         _builderMock.Verify(
-            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Guid[]>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
+            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -501,7 +502,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
         // playback-control intents carry no slot to resolve, so they must always skip.
         var userId = Guid.NewGuid();
         _builderMock
-            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Guid[]>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .Returns(new DynamicEntitiesDirective());
 
         var interceptor = CreateInterceptor();
@@ -524,7 +525,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
         await interceptor.ProcessAsync(ctx, CancellationToken.None);
 
         _builderMock.Verify(
-            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Guid[]>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
+            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 }

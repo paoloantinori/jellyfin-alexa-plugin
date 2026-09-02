@@ -103,7 +103,10 @@ public class GoToChapterIntentHandler : BaseHandler
 
         int targetIndex;
 
-        if (!string.IsNullOrEmpty(chapterNumberSlot) && int.TryParse(chapterNumberSlot, out int requestedChapter))
+        // ItalianNumberWords parses digits (every locale) AND the Italian number
+        // words the it-IT model delivers for the ItalianNumber-typed chapter_number
+        // slot ("capitolo tre" arrives as "tre", not "3"; JF-451 adoption).
+        if (!string.IsNullOrEmpty(chapterNumberSlot) && Util.ItalianNumberWords.TryParse(chapterNumberSlot, out int requestedChapter))
         {
             // "Go to chapter 5" — 1-based from user perspective
             targetIndex = requestedChapter - 1;

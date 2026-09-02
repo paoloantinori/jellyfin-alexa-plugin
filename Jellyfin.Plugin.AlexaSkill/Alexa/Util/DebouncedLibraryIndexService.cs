@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
@@ -28,6 +30,16 @@ public abstract class DebouncedLibraryIndexService : IHostedService, IDisposable
     private const int FailedLoadRetrySeconds = 30;
 
     /// <summary>
+    /// JF-456: hard ceiling on how long a stream of qualifying events can postpone the
+    /// debounced refresh. Every event re-arms the 5s timer, so a sub-5s event stream
+    /// (a box-set rip, a watched-folder trickle; MusicAlbum events widen the cadence
+    /// since the artist scope map depends on them) would postpone the refresh, and the
+    /// data it carries, until the stream pauses. Once this much time has passed since
+    /// the FIRST pending event, the refresh fires regardless.
+    /// </summary>
+    internal const int MaxDebouncePendingSeconds = 30;
+
+    /// <summary>
     /// Give-up threshold (review round 1 finding 2): after this many consecutive
     /// failed loads the index is disabled instead of retried forever, so handlers
     /// degrade to their database paths instead of an endless warming refusal.
@@ -38,10 +50,26 @@ public abstract class DebouncedLibraryIndexService : IHostedService, IDisposable
     private readonly object _debounceLock = new();
     private Timer? _debounceTimer;
     private Timer? _retryTimer;
+    private long _debounceWindowStart;
     private volatile bool _isReady;
     private volatile bool _isDisabled;
     private int _consecutiveLoadFailures;
     private volatile bool _disposed;
+
+    /// <summary>
+    /// Stored window-closer delegate: passing it to <see cref="ArmOneShot"/> reuses
+    /// one allocation instead of a fresh closure per library event (an event-heavy
+    /// library change re-arms the debounce repeatedly).
+    /// </summary>
+    private readonly Action _closeDebounceWindow;
+
+    /// <summary>
+    /// Lazily built log labels (interpolated once, not per event). Built on first
+    /// use rather than in the constructor because they read the virtual
+    /// <see cref="IndexName"/>, which must not be called from the base constructor.
+    /// </summary>
+    private string? _debounceErrorLabel;
+    private string? _retryErrorLabel;
 
     /// <summary>Library manager for the load query and change events.</summary>
     protected ILibraryManager LibraryManager { get; }
@@ -85,6 +113,18 @@ public abstract class DebouncedLibraryIndexService : IHostedService, IDisposable
     internal TimeSpan FailedLoadRetryInterval { get; set; } = TimeSpan.FromSeconds(FailedLoadRetrySeconds);
 
     /// <summary>
+    /// Debounce delay re-armed by every qualifying library event. Internal test hook
+    /// (same pattern as <see cref="FailedLoadRetryInterval"/>).
+    /// </summary>
+    internal TimeSpan RefreshDebounceInterval { get; set; } = TimeSpan.FromSeconds(RefreshDebounceSeconds);
+
+    /// <summary>
+    /// <see cref="MaxDebouncePendingSeconds"/> as a timespan; internal test hook so the
+    /// pending cap can be exercised in milliseconds.
+    /// </summary>
+    internal TimeSpan MaxDebouncePendingInterval { get; set; } = TimeSpan.FromSeconds(MaxDebouncePendingSeconds);
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="DebouncedLibraryIndexService"/> class
     /// and subscribes to library change events.
     /// </summary>
@@ -94,6 +134,7 @@ public abstract class DebouncedLibraryIndexService : IHostedService, IDisposable
     {
         LibraryManager = libraryManager;
         Logger = logger;
+        _closeDebounceWindow = CloseDebounceWindow;
         LibraryManager.ItemAdded += OnLibraryChanged;
         LibraryManager.ItemRemoved += OnLibraryChanged;
     }
@@ -187,10 +228,51 @@ public abstract class DebouncedLibraryIndexService : IHostedService, IDisposable
     }
 
     private void ScheduleRefresh()
-        => ArmOneShot(
-            ref _debounceTimer,
-            TimeSpan.FromSeconds(RefreshDebounceSeconds),
-            $"Debounced {IndexName} index refresh failed");
+    {
+        lock (_debounceLock)
+        {
+            // No disposed re-check needed here: ArmOneShot re-checks under this same
+            // (reentrant) lock, so an event that raced Dispose still cannot arm a
+            // timer after cleanup.
+
+            // JF-456 max-pending cap: anchor the window at the FIRST pending event,
+            // then never re-arm further out than the cap. Without it, an event every
+            // <RefreshDebounceSeconds> postpones the refresh indefinitely.
+            long now = Stopwatch.GetTimestamp();
+            long start = _debounceWindowStart != 0 ? _debounceWindowStart : now;
+            _debounceWindowStart = start;
+
+            TimeSpan capRemaining = MaxDebouncePendingInterval - Stopwatch.GetElapsedTime(start, now);
+            TimeSpan delay = capRemaining < RefreshDebounceInterval
+                ? (capRemaining > TimeSpan.Zero ? capRemaining : TimeSpan.Zero)
+                : RefreshDebounceInterval;
+
+            ArmOneShot(
+                ref _debounceTimer,
+                delay,
+                _debounceErrorLabel ??= $"Debounced {IndexName} index refresh failed",
+                onFired: _closeDebounceWindow);
+        }
+    }
+
+    /// <summary>
+    /// Closes the pending debounce window (idempotent). Runs from the debounce
+    /// timer callback on a ThreadPool thread, OUTSIDE the arming lock in
+    /// <see cref="ArmOneShot"/> (that lock guards timer creation, never callback
+    /// execution), so taking <see cref="_debounceLock"/> here cannot self-deadlock;
+    /// Monitor is reentrant anyway for a same-thread caller. The lock is required
+    /// for the anchor write: <see cref="ScheduleRefresh"/>'s read-anchor-write runs
+    /// under the same lock, and an unlocked close interleaving between its read and
+    /// write would re-publish the stale anchor after the window closed, firing a
+    /// redundant immediate refresh on the next event (code-review round 2 item 6).
+    /// </summary>
+    private void CloseDebounceWindow()
+    {
+        lock (_debounceLock)
+        {
+            _debounceWindowStart = 0;
+        }
+    }
 
     /// <summary>
     /// Arms (or re-arms) a one-shot timer whose callback runs one refresh. The single
@@ -198,7 +280,11 @@ public abstract class DebouncedLibraryIndexService : IHostedService, IDisposable
     /// dispose-race guard and the callback error handling live once (review round 1
     /// finding 10: the two blocks were structurally identical copies).
     /// </summary>
-    private void ArmOneShot(ref Timer? timer, TimeSpan delay, string errorLabel)
+    /// <param name="timer">The timer field to arm.</param>
+    /// <param name="delay">Delay before the callback fires.</param>
+    /// <param name="errorLabel">Log label when the refresh throws.</param>
+    /// <param name="onFired">Optional callback run BEFORE the refresh (the debounce uses it to close its pending window).</param>
+    private void ArmOneShot(ref Timer? timer, TimeSpan delay, string errorLabel, Action? onFired = null)
     {
         lock (_debounceLock)
         {
@@ -213,6 +299,7 @@ public abstract class DebouncedLibraryIndexService : IHostedService, IDisposable
             timer = new Timer(
                 async _ =>
                 {
+                    onFired?.Invoke();
                     try
                     {
                         await RefreshAsync(CancellationToken.None).ConfigureAwait(false);
@@ -246,7 +333,7 @@ public abstract class DebouncedLibraryIndexService : IHostedService, IDisposable
         ArmOneShot(
             ref _retryTimer,
             FailedLoadRetryInterval,
-            $"{IndexName} index retry load failed");
+            _retryErrorLabel ??= $"{IndexName} index retry load failed");
     }
 
     private void DisarmRetryTimer()
@@ -305,6 +392,49 @@ public abstract class DebouncedLibraryIndexService : IHostedService, IDisposable
     }
 
     /// <summary>
+    /// Shared library-membership filter for the in-memory index read paths (artist
+    /// list + all three song n-gram search blocks, previously four copies of the same
+    /// TryGetValue+Contains predicate, JF-456). An item passes when the top parent
+    /// recorded for it in the snapshot's map is among the caller-resolved
+    /// <c>topParentIds</c> (<see cref="LibraryFilter.ResolveForUser"/> id space);
+    /// items missing from the map fail closed; a null/empty scope passes everything.
+    /// </summary>
+    /// <typeparam name="T">The item type.</typeparam>
+    /// <param name="items">Candidate items.</param>
+    /// <param name="idSelector">Extracts the item id used in the parent map.</param>
+    /// <param name="topParentMap">The snapshot's item-id → top-parent map.</param>
+    /// <param name="topParentIds">Allowed top parents, or null/empty for unrestricted.</param>
+    /// <returns>The items inside the user's library scope.</returns>
+    protected static List<T> FilterByLibraryScope<T>(
+        IEnumerable<T> items,
+        Func<T, Guid> idSelector,
+        IReadOnlyDictionary<Guid, Guid> topParentMap,
+        Guid[]? topParentIds)
+    {
+        if (topParentIds == null || topParentIds.Length == 0)
+        {
+            // Zero-copy when the caller already holds a List (the unrestricted
+            // GetArtists hot path returns the snapshot list as-is).
+            return items as List<T> ?? items.ToList();
+        }
+
+        // Span scan instead of a HashSet: the typical scope is 2-6 ids, where the
+        // allocation-free linear Contains beats building a set (which only wins
+        // past roughly 8-10 ids).
+        ReadOnlySpan<Guid> allowed = topParentIds.AsSpan();
+        var result = new List<T>();
+        foreach (T item in items)
+        {
+            if (topParentMap.TryGetValue(idSelector(item), out Guid parentId) && allowed.Contains(parentId))
+            {
+                result.Add(item);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Resolves the library folder ID for an item by walking up the parent chain.
     /// Used by both indexes for per-user library filtering without DB queries. The
     /// stop condition has FULL parity with Jellyfin's own <c>BaseItem.IsTopParent</c>
@@ -355,5 +485,32 @@ public abstract class DebouncedLibraryIndexService : IHostedService, IDisposable
         // artist) this is the item's own id, the self-map signal the album join
         // keys on (code-review F6 contract, JF-455).
         return current?.Id ?? item.Id;
+    }
+
+    /// <summary>
+    /// Per-load memoized wrapper around <see cref="ResolveTopParentId"/>: items
+    /// sharing a parent (artists under one folder, songs under one album) share the
+    /// identical chain, so the walk (a GetItemById per hop) runs once per parent
+    /// instead of once per item (JF-456; for the song index this cuts the walk count
+    /// by roughly the album size, ~10x). Only NON-self results are cached: a walk
+    /// that returns the item's own id (folderless item, or a parent chain that
+    /// bottoms out at this very item) is per-item, not per-parent, and caching it
+    /// would hand the first such item's id to its siblings (code-review F4).
+    /// </summary>
+    /// <param name="item">The item to resolve.</param>
+    /// <param name="chainMemo">The per-load memo (caller-owned; one dictionary per load).</param>
+    /// <returns>The library folder ID (the memoized or freshly walked value).</returns>
+    protected Guid ResolveTopParentIdMemoized(BaseItem item, Dictionary<Guid, Guid> chainMemo)
+    {
+        if (!chainMemo.TryGetValue(item.ParentId, out Guid topParent))
+        {
+            topParent = ResolveTopParentId(item);
+            if (item.ParentId != Guid.Empty && topParent != item.Id)
+            {
+                chainMemo[item.ParentId] = topParent;
+            }
+        }
+
+        return topParent;
     }
 }

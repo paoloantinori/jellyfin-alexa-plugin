@@ -200,7 +200,6 @@ public class PlayArtistSongsIntentHandler : BaseHandler
 
         // Pre-resolve library filter once for the entire request.
         // Used by both the in-memory and database paths, plus the final artist-songs query.
-        Guid[]? allowedLibraryIds = null;
         Guid[]? topParentIds = null;
 
         IReadOnlyList<BaseItem> artists;
@@ -210,10 +209,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         {
             // In-memory search: resolve library filter once, search the pre-loaded index
             searchSource = "InMemory";
-            allowedLibraryIds = GetAllowedLibraryIds(user);
-            topParentIds = allowedLibraryIds != null
-                ? Util.LibraryFilter.ResolveTopParentIds(allowedLibraryIds, _libraryManager, Logger)
-                : null;
+            topParentIds = Util.LibraryFilter.ResolveForUser(user, _libraryManager, Logger);
             var allArtists = _artistIndex.GetArtists(topParentIds);
             // JF-420 efficiency: reuse this list in the auto-selection check below
             // instead of calling GetArtists again (re-filters + re-allocates for
@@ -341,10 +337,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         {
             // Fallback: database queries when in-memory index is not yet loaded
             // Resolve library filter once and reuse across all fallback tiers.
-            allowedLibraryIds = GetAllowedLibraryIds(user);
-            topParentIds = allowedLibraryIds != null
-                ? Util.LibraryFilter.ResolveTopParentIds(allowedLibraryIds, _libraryManager, Logger)
-                : null;
+            topParentIds = Util.LibraryFilter.ResolveForUser(user, _libraryManager, Logger);
 
             if (mode == SearchResponseMode.Fast)
             {
@@ -357,9 +350,11 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                             Recursive = true,
                             SearchTerm = searchTerm,
                             IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
-                            TopParentIds = topParentIds!,
                             DtoOptions = new DtoOptions(true)
                         };
+                        // Scope; the items-by-name bypass is automatic for the
+                        // MusicArtist kind (LibraryFilter, JF-456).
+                        Util.LibraryFilter.ApplyLibraryFilter(q, topParentIds);
                         return RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", cancellationToken);
                     }, mode).ConfigureAwait(false);
 
@@ -386,9 +381,11 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                             Recursive = true,
                             SearchTerm = searchTerm,
                             IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
-                            TopParentIds = topParentIds!,
                             DtoOptions = new DtoOptions(true)
                         };
+                        // Scope; the items-by-name bypass is automatic for the
+                        // MusicArtist kind (LibraryFilter, JF-456).
+                        Util.LibraryFilter.ApplyLibraryFilter(q, topParentIds);
                         return RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", cancellationToken);
                     }).ConfigureAwait(false);
 
@@ -769,9 +766,11 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         {
             Recursive = true,
             IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
-            TopParentIds = topParentIds!,
             DtoOptions = new DtoOptions(true)
         };
+        // Scope; the items-by-name bypass is automatic for the MusicArtist kind
+        // (LibraryFilter, JF-456).
+        Util.LibraryFilter.ApplyLibraryFilter(query, topParentIds);
         configure(query);
 
         IReadOnlyList<BaseItem> results = await RetryAsync(

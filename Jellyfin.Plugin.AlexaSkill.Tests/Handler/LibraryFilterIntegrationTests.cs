@@ -136,15 +136,15 @@ public class LibraryFilterIntegrationTests : PluginTestBase
         // Act
         await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
-        // Assert
+        // Assert (membership, not exact length: ResolveTopParentIds may union in
+        // physical folder ids, JF-456 item 9)
         Assert.NotNull(capturedQuery);
         Assert.NotNull(capturedQuery.TopParentIds);
-        Assert.Single(capturedQuery.TopParentIds);
-        Assert.Equal(musicLibId, capturedQuery.TopParentIds[0]);
+        Assert.Contains(musicLibId, capturedQuery.TopParentIds);
     }
 
     [Fact]
-    public async Task SearchMediaHandler_WithAllowedLibraryIds_SetsTopParentIdsOnQuery()
+    public async Task SearchMediaHandler_WithAllowedLibraryIds_SetsTopParentIdsOnLibraryScopedQuery()
     {
         // Arrange
         var musicLibId = Guid.NewGuid();
@@ -162,21 +162,25 @@ public class LibraryFilterIntegrationTests : PluginTestBase
             Name = "Star Wars",
             Id = Guid.NewGuid()
         };
-        InternalItemsQuery? capturedQuery = null;
+        var capturedQueries = new List<InternalItemsQuery>();
 
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Callback<InternalItemsQuery>(q => capturedQuery = q)
+            .Callback<InternalItemsQuery>(q => capturedQueries.Add(q))
             .Returns(new List<BaseItem> { movie });
 
         // Act
         await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
-        // Assert
-        Assert.NotNull(capturedQuery);
-        Assert.NotNull(capturedQuery.TopParentIds);
-        Assert.Equal(2, capturedQuery.TopParentIds.Length);
-        Assert.Contains(musicLibId, capturedQuery.TopParentIds);
-        Assert.Contains(movieLibId, capturedQuery.TopParentIds);
+        // Assert: at least one library-scoped query carries the restriction (the
+        // movie result keeps the count above the artist-fallback threshold; membership,
+        // not exact length, JF-456 item 9). The out-of-library sibling (playlists,
+        // JF-456) must NOT carry TopParentIds.
+        Assert.Contains(capturedQueries, q =>
+            q.TopParentIds?.Contains(musicLibId) == true
+            && q.TopParentIds.Contains(movieLibId));
+        Assert.Contains(capturedQueries, q =>
+            q.IncludeItemTypes.Contains(Jellyfin.Data.Enums.BaseItemKind.Playlist)
+            && (q.TopParentIds == null || q.TopParentIds.Length == 0));
     }
 
     [Fact]

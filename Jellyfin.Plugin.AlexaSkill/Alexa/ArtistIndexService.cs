@@ -62,15 +62,7 @@ public class ArtistIndexService : DebouncedLibraryIndexService, IArtistIndex
     {
         // Capture once: the artist list and the parent map must come from the same publish
         var snapshot = _snapshot;
-
-        if (topParentIds == null || topParentIds.Length == 0)
-        {
-            return snapshot.Artists;
-        }
-
-        var map = snapshot.TopParentMap;
-        var allowed = topParentIds.ToHashSet();
-        return snapshot.Artists.Where(a => map.TryGetValue(a.Id, out var parentId) && allowed.Contains(parentId)).ToList();
+        return FilterByLibraryScope(snapshot.Artists, a => a.Id, snapshot.TopParentMap, topParentIds);
     }
 
     /// <inheritdoc />
@@ -78,12 +70,14 @@ public class ArtistIndexService : DebouncedLibraryIndexService, IArtistIndex
     {
         IReadOnlyList<BaseItem> artists = await QueryAllItemsAsync(BaseItemKind.MusicArtist, cancellationToken).ConfigureAwait(false);
 
-        // Pre-compute top parent IDs for library filtering
+        // Pre-compute top parent IDs for library filtering via the shared per-load
+        // chain memo (rationale on ResolveTopParentIdMemoized).
         var topParentMap = new Dictionary<Guid, Guid>(artists.Count);
         var selfMappedArtists = new List<BaseItem>();
+        var chainMemo = new Dictionary<Guid, Guid>();
         foreach (var artist in artists)
         {
-            var topParent = ResolveTopParentId(artist);
+            Guid topParent = ResolveTopParentIdMemoized(artist, chainMemo);
             topParentMap[artist.Id] = topParent;
             if (topParent == artist.Id)
             {
@@ -139,20 +133,26 @@ public class ArtistIndexService : DebouncedLibraryIndexService, IArtistIndex
         List<BaseItem> selfMappedArtists,
         CancellationToken cancellationToken)
     {
-        var byName = selfMappedArtists
+        // Materialize the named list once (JF-456): it is both the empty-check and the
+        // joinable count, so the count can never drift from the lookup's Where filter
+        // it used to be re-derived from.
+        var namedArtists = selfMappedArtists
             .Where(a => !string.IsNullOrWhiteSpace(a.Name))
-            .ToLookup(a => a.Name!, a => a.Id, StringComparer.OrdinalIgnoreCase);
+            .ToList();
 
         // All self-mapped artists have blank names: nothing joinable, skip the
         // full-catalog album query entirely (code-review F10, JF-455).
-        if (byName.Count == 0)
+        if (namedArtists.Count == 0)
         {
             return 0;
         }
 
+        var byName = namedArtists
+            .ToLookup(a => a.Name!, a => a.Id, StringComparer.OrdinalIgnoreCase);
+
         IReadOnlyList<BaseItem> albums = await QueryAllItemsAsync(BaseItemKind.MusicAlbum, cancellationToken).ConfigureAwait(false);
 
-        int joinable = byName.Sum(group => group.Count());
+        int joinable = namedArtists.Count;
         int scoped = 0;
 
         void ScopeArtists(string? artistName, Guid albumTopParent)

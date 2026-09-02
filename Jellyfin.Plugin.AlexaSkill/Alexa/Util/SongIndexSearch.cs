@@ -25,7 +25,7 @@ internal static class SongIndexSearch
     /// <param name="index">The song n-gram index (null in minimal setups: empty result).</param>
     /// <param name="keywordTokens">The tokenized query.</param>
     /// <param name="locale">The request locale.</param>
-    /// <param name="topParentIds">Resolved library filter (see LibraryFilter.ResolveTopParentIds).</param>
+    /// <param name="topParentIds">Resolved library scope (see LibraryFilter.ResolveForUser, the canonical entry).</param>
     /// <param name="phoneticEnabled">Whether the phonetic fallback stage may run.</param>
     /// <returns>Scored candidates, best first; empty when neither stage matched.</returns>
     internal static List<(BaseItem Item, double Score)> SearchWithPhoneticFallback(

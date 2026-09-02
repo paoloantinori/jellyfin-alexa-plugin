@@ -278,4 +278,36 @@ public class PlayChannelIntentHandlerTests : PluginTestBase
 
         response.HasDirective<VideoAppLaunchDirective>();
     }
+
+    // --- JF-456: live-TV channels live outside every media library, so a library
+    // restriction must not filter their query (GH #22 residual) ---
+
+    [Fact]
+    public async Task Handle_RestrictedUser_ChannelQuerySkipsLibraryFilter()
+    {
+        var libraryId = Guid.NewGuid();
+        var user = TestHelpers.CreateTestUser(allowedLibraryIds: new[] { libraryId.ToString() });
+
+        var channel = CreateTestChannel("CNN", Guid.NewGuid());
+        InternalItemsQuery? capturedQuery = null;
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => capturedQuery = q)
+            .Returns(new List<BaseItem> { channel });
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreatePlayChannelRequest("CNN"),
+            CreateContext(),
+            user,
+            CreateSession(), CancellationToken.None);
+
+        // The channel was found and launches via VideoApp despite the restriction
+        response.HasDirective<VideoAppLaunchDirective>();
+
+        // The channel query carried no TopParentIds (LiveTvChannel is out-of-library)
+        Assert.NotNull(capturedQuery);
+        Assert.Contains(Jellyfin.Data.Enums.BaseItemKind.LiveTvChannel, capturedQuery.IncludeItemTypes);
+        Assert.Empty(capturedQuery.TopParentIds);
+    }
 }

@@ -91,10 +91,10 @@ public class DynamicEntityBuilder : IDisposable
     public virtual DynamicEntitiesDirective? Build(
         Guid jellyfinUserId,
         string locale,
-        Guid[]? allowedLibraryIds,
+        Func<Guid[]?>? resolveScope,
         CancellationToken cancellationToken)
     {
-        return Build(jellyfinUserId, locale, allowedLibraryIds, includeSeries: false, includeAudiobooks: false, cancellationToken);
+        return Build(jellyfinUserId, locale, resolveScope, includeSeries: false, includeAudiobooks: false, cancellationToken);
     }
 
     /// <summary>
@@ -102,11 +102,17 @@ public class DynamicEntityBuilder : IDisposable
     /// Optionally includes series or audiobook entities based on conversation context.
     /// Always reserves 5 slots for last-played items.
     /// Results are cached for 2 minutes; cache is invalidated on library changes.
+    /// The library scope arrives as a resolver invoked ONLY after the output-cache
+    /// check misses, so cache hits pay no scope resolution (code-review round 2
+    /// item 4). Inside the miss branch the resolver's result must be the FULLY
+    /// RESOLVED scope (<see cref="LibraryFilter.ResolveForUser"/>, physical unioned
+    /// with CollectionFolder ids; null = unrestricted), never raw collection-folder
+    /// ids (JF-456).
     /// </summary>
     public virtual DynamicEntitiesDirective? Build(
         Guid jellyfinUserId,
         string locale,
-        Guid[]? allowedLibraryIds,
+        Func<Guid[]?>? resolveScope,
         bool includeSeries,
         bool includeAudiobooks,
         CancellationToken cancellationToken)
@@ -117,6 +123,8 @@ public class DynamicEntityBuilder : IDisposable
             _logger.LogDebug("Dynamic entities cache hit for user {UserId}", jellyfinUserId);
             return cached.Directive;
         }
+
+        Guid[]? topParentIds = resolveScope?.Invoke();
 
         EvictExpiredOutputCacheEntries();
 
@@ -133,9 +141,6 @@ public class DynamicEntityBuilder : IDisposable
         bool booksEnabled = config?.BooksEnabled != false;
 
         int budget = MaxTotalValueCount;
-        Guid[]? topParentIds = allowedLibraryIds != null
-            ? LibraryFilter.ResolveTopParentIds(allowedLibraryIds, _libraryManager)
-            : null;
 
         // Reserve budget for last-played items (5 slots)
         int baseBudget = budget - LastPlayedCount;
@@ -476,10 +481,14 @@ public class DynamicEntityBuilder : IDisposable
             OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) }
         };
 
-        if (topParentIds != null)
-        {
-            query.TopParentIds = topParentIds;
-        }
+        // STRICT scope, no items-by-name bypass (includeItemsByName: false): these
+        // values are injected into every new session, so the bypass would speak
+        // excluded-library artist names to restricted users persistently, not just
+        // transiently in a cold-window search (JF-457). Inert for the
+        // non-item-by-name kinds anyway (Jellyfin evaluates the bypass only when an
+        // item-by-name type is included in the query). Bypass rationale:
+        // LibraryFilter.ApplyItemsByNameBypass (JF-456).
+        LibraryFilter.ApplyLibraryFilter(query, topParentIds, includeItemsByName: false);
 
         IReadOnlyList<BaseItem> items = _libraryManager.GetItemList(query);
 
