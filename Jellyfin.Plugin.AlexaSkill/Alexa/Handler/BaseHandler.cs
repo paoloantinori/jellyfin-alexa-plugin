@@ -2802,12 +2802,23 @@ public abstract class BaseHandler
             DtoOptions = new DtoOptions(true),
         };
 
-        // No ApplyLibraryFilter here: playlists are user-scoped, not library-scoped
-        // (query.User gates visibility), and native Jellyfin playlists live outside any
-        // media library, so any library restriction excluded them all (JF-455). Trade-off:
-        // .m3u playlists stored inside an excluded library surface too.
+        // No ApplyLibraryFilter here: playlists are user-scoped, not library-scoped,
+        // and native Jellyfin playlists live outside any media library, so any library
+        // restriction excluded them all (JF-455). Trade-off: .m3u playlists stored
+        // inside an excluded library surface too. Visibility is NOT guaranteed by
+        // query.User on this path: GetItemsResult goes straight to the repository
+        // without the IsVisible post-filter GetItemList applies, so other users'
+        // private playlists can come back and must be filtered here (code-review
+        // P1, JF-455). The track resolver separately filters tracks per user.
         Logger.LogDebug("PlayPlaylist: querying Jellyfin with searchTerm='{PlaylistName}', types=Playlist", playlistName);
         QueryResult<BaseItem> playlists = await RetryAsync(() => SafeGetItemsResult(libraryManager, query), "GetPlaylists", cancellationToken).ConfigureAwait(false);
+        var visiblePlaylists = playlists.Items.Where(p => p.IsVisible(jellyfinUser)).ToList();
+        if (visiblePlaylists.Count != playlists.Items.Count)
+        {
+            Logger.LogDebug("PlayPlaylist: filtered {HiddenCount} playlist(s) not visible to the user", playlists.Items.Count - visiblePlaylists.Count);
+            playlists = new QueryResult<BaseItem> { Items = visiblePlaylists, TotalRecordCount = visiblePlaylists.Count };
+        }
+
         Logger.LogDebug("PlayPlaylist: Jellyfin returned {ResultCount} playlists", playlists.TotalRecordCount);
 
         if (playlists.TotalRecordCount == 0)

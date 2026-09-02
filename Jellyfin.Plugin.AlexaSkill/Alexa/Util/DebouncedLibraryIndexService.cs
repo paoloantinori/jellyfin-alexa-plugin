@@ -312,12 +312,14 @@ public abstract class DebouncedLibraryIndexService : IHostedService, IDisposable
     /// parent that is the server-wide <see cref="AggregateFolder"/> root, whose ID
     /// cannot discriminate per library). This is the id space Jellyfin stores as the
     /// TopParentId column and the library filter resolves to, so the index maps and
-    /// the filter agree for library-restricted users (JF-455). Returns the item's
-    /// own ID when the chain ends without a boundary node (folderless artists stay
-    /// self-mapped, the album join's signal).
+    /// the filter agree for library-restricted users (JF-455). When the chain ends
+    /// without a boundary node the LAST reached node's ID is returned: the top
+    /// folder's ID for a chain that tops out at a parentless folder, or the item's
+    /// own ID when it has no chain at all (folderless artists stay self-mapped,
+    /// the album join's signal).
     /// </summary>
     /// <param name="item">The item to resolve.</param>
-    /// <returns>The library folder ID (the item's own ID when it has no parent chain).</returns>
+    /// <returns>The library folder ID (the last reached node's ID when no boundary is hit).</returns>
     protected Guid ResolveTopParentId(BaseItem item)
     {
         var seen = new HashSet<Guid>();
@@ -346,6 +348,12 @@ public abstract class DebouncedLibraryIndexService : IHostedService, IDisposable
             current = parent;
         }
 
+        // Chain ended without a boundary node (parentless top folder, stale parent
+        // id, or cycle): return the LAST REACHED node's id. For a chain that
+        // naturally tops out at a parentless folder this is that folder's id (the
+        // library root in that shape); for an item with no chain at all (folderless
+        // artist) this is the item's own id, the self-map signal the album join
+        // keys on (code-review F6 contract, JF-455).
         return current?.Id ?? item.Id;
     }
 }

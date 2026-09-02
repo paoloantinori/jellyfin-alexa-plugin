@@ -35,7 +35,11 @@ public class ArtistIndexService : DebouncedLibraryIndexService, IArtistIndex
     protected override string IndexName => "artist";
 
     /// <inheritdoc />
-    protected override bool ShouldRefreshOn(ItemChangeEventArgs eventArgs) => eventArgs.Item is MusicArtist;
+    // MusicAlbum too: the library-scope map depends on album data (the folderless-
+    // artist join), and an album-only change fires no MusicArtist event (the artist
+    // already exists), so without this a new first album would leave the artist
+    // unfindable for restricted users until a restart (code-review F3, JF-455).
+    protected override bool ShouldRefreshOn(ItemChangeEventArgs eventArgs) => eventArgs.Item is MusicArtist or MusicAlbum;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ArtistIndexService"/> class.
@@ -139,6 +143,13 @@ public class ArtistIndexService : DebouncedLibraryIndexService, IArtistIndex
             .Where(a => !string.IsNullOrWhiteSpace(a.Name))
             .ToLookup(a => a.Name!, a => a.Id, StringComparer.OrdinalIgnoreCase);
 
+        // All self-mapped artists have blank names: nothing joinable, skip the
+        // full-catalog album query entirely (code-review F10, JF-455).
+        if (byName.Count == 0)
+        {
+            return 0;
+        }
+
         IReadOnlyList<BaseItem> albums = await QueryAllItemsAsync(BaseItemKind.MusicAlbum, cancellationToken).ConfigureAwait(false);
 
         int joinable = byName.Sum(group => group.Count());
@@ -183,6 +194,15 @@ public class ArtistIndexService : DebouncedLibraryIndexService, IArtistIndex
             {
                 albumTopParent = ResolveTopParentId(musicAlbum);
                 parentMemo[musicAlbum.ParentId] = albumTopParent;
+            }
+
+            // An album that resolves to its OWN id carries no library scope (stale
+            // parent id that no longer resolves). Skip it WITHOUT consuming the
+            // one-shot guard, so a later healthy album can still scope the artist
+            // (code-review F4, JF-455).
+            if (albumTopParent == musicAlbum.Id)
+            {
+                continue;
             }
 
             foreach (var artistName in musicAlbum.AlbumArtists)
