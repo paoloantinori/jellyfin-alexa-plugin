@@ -159,6 +159,21 @@ public class SetReminderIntentHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_WithItalianWordDuration_AttemptsReminderCreation()
+    {
+        // it-IT types duration_minutes as ItalianNumber, so the spoken "trenta"
+        // arrives as a word (JF-451 review finding: the relative path was dead).
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(durationMinutes: "trenta");
+        var context = CreateContext();
+
+        var response = await handler.HandleAsync(request, context, CreateUser(), CreateSession(), CancellationToken.None);
+
+        string output = TestHelpers.GetSpeechText(response);
+        Assert.DoesNotContain("When should I remind you", output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task HandleAsync_WithTimeSlot_AttemptsReminderCreation()
     {
         var handler = CreateHandler();

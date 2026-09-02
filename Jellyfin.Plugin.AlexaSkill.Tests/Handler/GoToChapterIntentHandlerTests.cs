@@ -6,6 +6,7 @@ using global::Alexa.NET;
 using global::Alexa.NET.Request;
 using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
+using global::Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -173,6 +174,45 @@ public class GoToChapterIntentHandlerTests : PluginTestBase
 
         Assert.NotNull(response);
         Assert.NotEmpty(response.Response.Directives);
+    }
+
+    [Fact]
+    public async Task HandleAsync_GoToChapterWordNumber_ItalianParsesLikeDigit()
+    {
+        // JF-451 adoption: the it-IT model types chapter_number as the custom
+        // ItalianNumber slot, so a spoken chapter number arrives as a WORD ("tre"),
+        // which bare int.TryParse cannot read. The word form must seek to the same
+        // position as the digit form.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(chapterNumber: "tre");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        var audioItem = new Audio { Name = "Audiobook", Id = Guid.NewGuid() };
+        session.FullNowPlayingItem = audioItem;
+
+        var chapters = new List<ChapterInfo>
+        {
+            new() { Name = "Chapter 1", StartPositionTicks = 0 },
+            new() { Name = "Chapter 2", StartPositionTicks = TimeSpan.FromMinutes(10).Ticks },
+            new() { Name = "Chapter 3", StartPositionTicks = TimeSpan.FromMinutes(20).Ticks },
+            new() { Name = "Chapter 4", StartPositionTicks = TimeSpan.FromMinutes(30).Ticks },
+        };
+
+        _chapterManagerMock.Setup(c => c.GetChapters(audioItem.Id))
+            .Returns(chapters);
+
+        _libraryManagerMock.Setup(l => l.GetItemById(audioItem.Id))
+            .Returns(audioItem);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        var playDirective = Assert.IsType<AudioPlayerPlayDirective>(
+            Assert.Single(response.Response.Directives!, d => d is AudioPlayerPlayDirective));
+        // Chapter 3 starts at 20 minutes: the word "tre" resolved exactly like "3".
+        Assert.Equal((int)TimeSpan.FromMinutes(20).TotalMilliseconds, playDirective.AudioItem.Stream.OffsetInMilliseconds);
     }
 
     [Fact]

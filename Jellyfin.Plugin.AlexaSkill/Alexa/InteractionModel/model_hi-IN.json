@@ -518,6 +518,25 @@
         ]
       },
       {
+        "name": "SetReminderIntent",
+        "slots": [
+          {
+            "name": "duration_minutes",
+            "type": "AMAZON.NUMBER"
+          },
+          {
+            "name": "reminder_time",
+            "type": "AMAZON.TIME"
+          }
+        ],
+        "samples": [
+          "{duration_minutes} मिनट में मुझे याद दिलाओ",
+          "{duration_minutes} मिनट का रिमाइंडर सेट करो",
+          "{reminder_time} पर मुझे याद दिलाओ",
+          "{reminder_time} का रिमाइंडर सेट करो"
+        ]
+      },
+      {
         "name": "PlayMoodMusicIntent",
         "slots": [
           {

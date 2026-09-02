@@ -510,6 +510,25 @@
         ]
       },
       {
+        "name": "SetReminderIntent",
+        "slots": [
+          {
+            "name": "duration_minutes",
+            "type": "AMAZON.NUMBER"
+          },
+          {
+            "name": "reminder_time",
+            "type": "AMAZON.TIME"
+          }
+        ],
+        "samples": [
+          "ذكرني بعد {duration_minutes} دقيقة",
+          "اضبط منبها بعد {duration_minutes} دقيقة",
+          "ذكرني الساعة {reminder_time}",
+          "اضبط منبها الساعة {reminder_time}"
+        ]
+      },
+      {
         "name": "PlayMoodMusicIntent",
         "slots": [
           {

@@ -1,3 +1,8 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+
 namespace Jellyfin.Plugin.AlexaSkill.Alexa;
 
 /// <summary>
@@ -30,7 +35,18 @@ internal static class IntentNames
     public const string Recommend = "RecommendIntent";
     public const string SleepTimer = "SleepTimerIntent";
     public const string PlayEpisode = "PlayEpisodeIntent";
+
+    // JF-450 loop-mode vocabulary: de-DE, fr-FR, fr-CA and it-IT declare the custom
+    // loop intents instead of the AMAZON.LoopOn/LoopOff built-ins the other locales
+    // use (locale vocabulary: "Ripeti la canzone", "Répète la chanson", "Lied
+    // wiederholen"), so the loop handlers' CanHandle accepts BOTH names per mode:
+    // LoopAllOnIntent pairs with AMAZON.LoopOnIntent (repeat-all),
+    // LoopAllOffIntent with AMAZON.LoopOffIntent (repeat-none), and
+    // RepeatSingleOnIntent is the repeat-one sibling of LoopSongOnIntent.
     public const string LoopSongOn = "LoopSongOnIntent";
+    public const string RepeatSingleOn = "RepeatSingleOnIntent";
+    public const string LoopAllOn = "LoopAllOnIntent";
+    public const string LoopAllOff = "LoopAllOffIntent";
     public const string AddToQueue = "AddToQueueIntent";
     public const string PlayNext = "PlayNextIntent";
     public const string ClearQueue = "ClearQueueIntent";
@@ -71,6 +87,29 @@ internal static class IntentNames
     /// Request type for the proactive events subscription changed callback.
     /// </summary>
     public const string ProactiveSubscriptionChanged = "AlexaSkillEvent.ProactiveSubscriptionChanged";
+
+    /// <summary>
+    /// Every intent-name string constant declared on this class, custom and AMAZON
+    /// built-ins alike, excluding <see cref="ProactiveSubscriptionChanged"/> (a
+    /// request type, not an intent name). Reflection-derived so a derived list
+    /// cannot drift from the constants (the simulator's hand-maintained copy had
+    /// already lost FindSongIntent, JF-456).
+    /// </summary>
+    internal static IReadOnlyList<string> AllIntentNames { get; } =
+        typeof(IntentNames)
+            .GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
+            .Where(f => f.FieldType == typeof(string) && f.Name != nameof(ProactiveSubscriptionChanged))
+            .Select(f => (string?)f.GetValue(null))
+            .OfType<string>()
+            .ToList();
+
+    /// <summary>
+    /// The custom (non-AMAZON.*) intent names only: the handler-owned vocabulary.
+    /// </summary>
+    internal static IReadOnlyList<string> AllCustomIntentNames { get; } =
+        AllIntentNames
+            .Where(n => !n.StartsWith("AMAZON.", StringComparison.Ordinal))
+            .ToList();
 
     /// <summary>Alexa slot name constants used across handlers.</summary>
     public static class Slots

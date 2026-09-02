@@ -568,6 +568,25 @@
         ]
       },
       {
+        "name": "SetReminderIntent",
+        "slots": [
+          {
+            "name": "duration_minutes",
+            "type": "AMAZON.NUMBER"
+          },
+          {
+            "name": "reminder_time",
+            "type": "AMAZON.TIME"
+          }
+        ],
+        "samples": [
+          "me lembre em {duration_minutes} minutos",
+          "crie um lembrete de {duration_minutes} minutos",
+          "me lembre às {reminder_time}",
+          "crie um lembrete para as {reminder_time}"
+        ]
+      },
+      {
         "name": "PlayMoodMusicIntent",
         "slots": [
           {

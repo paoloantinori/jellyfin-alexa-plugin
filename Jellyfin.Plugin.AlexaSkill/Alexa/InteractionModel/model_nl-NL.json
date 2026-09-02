@@ -552,6 +552,25 @@
         ]
       },
       {
+        "name": "SetReminderIntent",
+        "slots": [
+          {
+            "name": "duration_minutes",
+            "type": "AMAZON.NUMBER"
+          },
+          {
+            "name": "reminder_time",
+            "type": "AMAZON.TIME"
+          }
+        ],
+        "samples": [
+          "herinner me over {duration_minutes} minuten",
+          "stel een herinnering in voor {duration_minutes} minuten",
+          "herinner me om {reminder_time}",
+          "zet een herinnering op {reminder_time}"
+        ]
+      },
+      {
         "name": "PlayMoodMusicIntent",
         "slots": [
           {

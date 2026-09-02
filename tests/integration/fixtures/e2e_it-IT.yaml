@@ -327,3 +327,13 @@ tests:
     expected_intent: FindSongIntent
     expected_slots: {}
     expected_response_type: any
+
+  # --- SetReminder: routes to the reminder intent (JF-451) ---
+  # The Reminders API call fails under simulate-skill (no real reminder consent
+  # token), so the handler answers with its error/permission tell; the assertion
+  # is the ROUTING plus a spoken response, not a created reminder.
+  - utterance: "ricordami tra trenta minuti"
+    expected_intent: SetReminderIntent
+    expected_slots:
+      duration_minutes: {}
+    expected_response_type: any

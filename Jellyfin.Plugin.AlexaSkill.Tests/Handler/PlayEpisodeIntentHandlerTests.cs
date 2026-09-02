@@ -241,6 +241,46 @@ public class PlayEpisodeIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
+    public async Task HandleAsync_ItalianNumberWordSeasonAndEpisode_ParsesLikeDigits()
+    {
+        // JF-451 adoption: the it-IT model types season_number and episode_number as
+        // the custom ItalianNumber slot, so spoken numbers arrive as WORDS ("due",
+        // "dieci"), which bare int.TryParse rejects with DidNotCatchEpisodeNumber.
+        // The word forms must resolve the episode exactly like "2"/"10".
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(seriesName: "The Office", seasonNumber: "due", episodeNumber: "dieci");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var series = new global::MediaBrowser.Controller.Entities.TV.Series { Name = "The Office", Id = Guid.NewGuid() };
+        var episode = new global::MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Fun Run",
+            Id = Guid.NewGuid(),
+            ParentIndexNumber = 2,
+            IndexNumber = 10,
+            SeriesId = series.Id
+        };
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Series))))
+            .Returns(new List<BaseItem> { series });
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Episode))))
+            .Returns(new List<BaseItem> { episode });
+
+        _libraryManagerMock.Setup(l => l.GetItemById(episode.Id))
+            .Returns(episode);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        response.HasDirective<VideoAppLaunchDirective>();
+    }
+
+    [Fact]
     public async Task HandleAsync_DialogStarted_ElicitsSeriesName()
     {
         var handler = CreateHandler();

@@ -405,6 +405,25 @@
         ]
       },
       {
+        "name": "SetReminderIntent",
+        "samples": [
+          "Ricordami tra {duration_minutes} minuti",
+          "Imposta un promemoria tra {duration_minutes} minuti",
+          "Ricordami alle {reminder_time}",
+          "Imposta un promemoria per le {reminder_time}"
+        ],
+        "slots": [
+          {
+            "name": "duration_minutes",
+            "type": "ItalianNumber"
+          },
+          {
+            "name": "reminder_time",
+            "type": "AMAZON.TIME"
+          }
+        ]
+      },
+      {
         "name": "PlayMoodMusicIntent",
         "samples": [
           "Musica {mood}",

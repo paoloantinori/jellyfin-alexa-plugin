@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Threading.Tasks;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
@@ -28,13 +27,6 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class DispatchRoutingTests : PluginTestBase
 {
-    /// <summary>
-    /// Intents a handler's CanHandle claims that are absent from IntentNames (so the
-    /// name-constant enumeration misses them). JF-451 finding: also absent from every
-    /// locale model, so they are unreachable in production. When JF-451 is fixed,
-    /// update this set and the notInModelAllowlist below.
-    /// </summary>
-    private static readonly string[] HandledButUndeclaredIntents = { "AMAZON.RepeatIntent" };
 
     [Fact]
     public void Handlers_Registered_FallbackLast_OthersAlphabetical()
@@ -135,21 +127,13 @@ public class DispatchRoutingTests : PluginTestBase
 
     // Every CUSTOM intent declared in ANY embedded interaction model has a registered
     // handler owner. Catches model drift: an intent in a model with no handler routes
-    // to the controller's CouldNotUnderstand tell at runtime.
+    // to the controller's CouldNotUnderstand tell at runtime. No allowlist: a custom
+    // intent this skill publishes must be answerable (the JF-450 loop intents were the
+    // last exceptions and are now claimed by the loop handlers).
     [Fact]
     public void EveryModelCustomIntent_HasARegisteredOwner()
     {
         using var harness = new DispatchHarness();
-
-        // JF-450 findings (filed): loop/repeat vocabulary declared in 4 locales with
-        // no claiming handler. Remove entries as they are fixed so the test enforces
-        // the fixed state.
-        var unhandledAllowlist = new HashSet<string>(StringComparer.Ordinal)
-        {
-            "LoopAllOffIntent",
-            "LoopAllOnIntent",
-            "RepeatSingleOnIntent"
-        };
 
         foreach ((string locale, string intentName) in ModelIntents)
         {
@@ -158,23 +142,10 @@ public class DispatchRoutingTests : PluginTestBase
                 continue; // Built-ins may be unhandled by design.
             }
 
-            if (unhandledAllowlist.Contains(intentName))
-            {
-                continue;
-            }
-
             bool claimed = harness.Handlers.Any(h => h.CanHandle(IntentProbe(intentName)));
             Assert.True(claimed,
                 $"Locale {locale} declares intent '{intentName}' but no handler claims it");
         }
-
-        // Staleness guard: an allowlist entry that has been fixed must be removed.
-        var stillUnhandled = unhandledAllowlist
-            .Where(name => harness.Handlers.Any(h => h.CanHandle(IntentProbe(name))))
-            .ToList();
-        Assert.True(stillUnhandled.Count == 0,
-            "These allowlisted model intents are now claimed by a handler; " +
-            "remove them from unhandledAllowlist: " + string.Join(", ", stillUnhandled));
     }
 
     // Reverse check: every handler-claimed intent appears in at least one embedded
@@ -187,16 +158,15 @@ public class DispatchRoutingTests : PluginTestBase
             ModelIntents.Select(m => m.IntentName),
             StringComparer.Ordinal);
 
-        // JF-451 findings (filed), kept explicit so a fix flips the test: PlayIntent
-        // (handler stays reachable via the hardware PlaybackController Play button,
-        // but the intent NAME is declared in no model), SetReminderIntent and
-        // AMAZON.RepeatIntent (both dead: no model declares them).
+        // The one documented exception: PlayIntent's handler stays reachable via the
+        // hardware PlaybackController Play button, but the intent NAME is declared in
+        // no model (JF-451). SetReminderIntent is declared in all 17 models since
+        // JF-451; AMAZON.RepeatIntent's handler was deleted (now-playing is
+        // MediaInfoIntent's job).
         var notInModelAllowlist = new HashSet<string>(
-            new[] { "PlayIntent", "SetReminderIntent" }.Concat(HandledButUndeclaredIntents),
-            StringComparer.Ordinal);
+            new[] { "PlayIntent" }, StringComparer.Ordinal);
 
         var claimed = EnumerateIntentNameConstants()
-            .Concat(HandledButUndeclaredIntents)
             .ToHashSet(StringComparer.Ordinal);
 
         var missing = claimed
@@ -205,25 +175,14 @@ public class DispatchRoutingTests : PluginTestBase
         Assert.True(missing.Count == 0,
             "Handler-claimed intents not declared in any model: " + string.Join(", ", missing));
 
-        // Staleness guard: an allowlisted intent that a model now declares (or an
-        // undeclared-but-handled name that gained model coverage) must be removed.
+        // Staleness guard: an allowlisted intent that a model now declares must be
+        // removed.
         var stale = notInModelAllowlist
             .Where(n => modelIntentSet.Contains(n))
             .ToList();
         Assert.True(stale.Count == 0,
             "These allowlisted intents are now declared in a model; " +
             "remove them from notInModelAllowlist: " + string.Join(", ", stale));
-
-        // Staleness guard on HandledButUndeclaredIntents: every entry must still be
-        // claimed by a handler. When JF-451 deletes the dead handlers, this fires and
-        // the entry is removed instead of lingering silently.
-        using var harness = new DispatchHarness();
-        var unclaimed = HandledButUndeclaredIntents
-            .Where(n => harness.Handlers.All(h => !h.CanHandle(IntentProbe(n))))
-            .ToList();
-        Assert.True(unclaimed.Count == 0,
-            "These HandledButUndeclaredIntents entries are no longer claimed by any " +
-            "handler; remove them: " + string.Join(", ", unclaimed));
     }
 
     // Dead-code detector: every REGISTERED handler fires CanHandle for at least one
@@ -368,14 +327,12 @@ public class DispatchRoutingTests : PluginTestBase
     /// <summary>
     /// Enumerates all string constants declared on IntentNames (intent names and
     /// AMAZON.* built-ins), excluding ProactiveSubscriptionChanged (a request type,
-    /// not an intent name).
+    /// not an intent name). Delegates to the production-side reflection property so
+    /// the enumeration logic exists once (the simulator's known-intent list reads
+    /// the same source).
     /// </summary>
     private static IEnumerable<string> EnumerateIntentNameConstants()
-        => typeof(IntentNames)
-            .GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
-            .Where(f => f.FieldType == typeof(string) && f.Name != nameof(IntentNames.ProactiveSubscriptionChanged))
-            .Select(f => (string?)f.GetValue(null))
-            .OfType<string>();
+        => IntentNames.AllIntentNames;
 
     /// <summary>
     /// (locale, intent name) for every intent declared in every embedded locale
@@ -414,10 +371,9 @@ public class DispatchRoutingTests : PluginTestBase
     /// <summary>
     /// Builds the probe set covering every request shape the handler ecosystem must
     /// handle: all IntentNames constants, every intent declared in any embedded model
-    /// (both directions of model drift get probed), built-ins handlers claim that
-    /// IntentNames misses, and every non-intent request type. Extend this when a new
-    /// request shape appears; the dead-code detector fails with the handler name
-    /// until a probe covers it.
+    /// (both directions of model drift get probed), and every non-intent request type.
+    /// Extend this when a new request shape appears; the dead-code detector fails with
+    /// the handler name until a probe covers it.
     /// </summary>
     private static List<Request> BuildAllProbes()
     {
@@ -425,7 +381,6 @@ public class DispatchRoutingTests : PluginTestBase
 
         var intentNames = EnumerateIntentNameConstants()
             .Concat(ModelIntents.Select(m => m.IntentName))
-            .Concat(HandledButUndeclaredIntents)
             .ToHashSet(StringComparer.Ordinal);
 
         foreach (string intentName in intentNames)

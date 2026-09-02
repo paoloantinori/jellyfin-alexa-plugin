@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Response;
+using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Microsoft.AspNetCore.Authorization;
@@ -56,7 +57,11 @@ public class SimulatorController : ControllerBase
     }
 
     /// <summary>
-    /// Get the list of available intent names that can be tested.
+    /// Get the list of available intent names that can be tested. Derived from the
+    /// IntentNames constants by reflection, custom intents and AMAZON built-ins
+    /// alike (so the list cannot drift when a new intent constant is added; the
+    /// hand-copied 14-string built-in tail was a drift hazard, code-review round 2
+    /// item 7).
     /// </summary>
     /// <returns>A JSON array of intent names.</returns>
     [HttpGet("Intents")]
@@ -68,8 +73,6 @@ public class SimulatorController : ControllerBase
             return NotFound(new { error = "Simulator is disabled. Enable it in plugin configuration." });
         }
 
-        // Collect intent names from handlers by inspecting what intents they declare via CanHandle.
-        // Instead of reflection, return a curated list from the known intent names.
         var intentNames = GetKnownIntentNames();
         return new JsonResult(new { intents = intentNames });
     }
@@ -276,70 +279,13 @@ public class SimulatorController : ControllerBase
     }
 
     /// <summary>
-    /// Return the known list of intent names that can be simulated.
+    /// Return the known list of intent names that can be simulated:
+    /// <see cref="IntentNames.AllIntentNames"/> (reflection-derived, custom intents
+    /// plus the AMAZON.* built-ins) sorted for display.
     /// </summary>
     /// <returns>A sorted list of intent name strings.</returns>
     private static List<string> GetKnownIntentNames()
-    {
-        return new List<string>
-        {
-            // Custom intents
-            "MarkFavoriteIntent",
-            "UnmarkFavoriteIntent",
-            "MediaInfoIntent",
-            "PlayFavoritesIntent",
-            "PlayAlbumIntent",
-            "PlayArtistSongsIntent",
-            "PlayChannelIntent",
-            "PlayIntent",
-            "PlayLastAddedIntent",
-            "PlayPlaylistIntent",
-            "PlaySongIntent",
-            "PlayVideoIntent",
-            "PlayRandomIntent",
-            "PlayByGenreIntent",
-            "PlayByDecadeIntent",
-            "PlayMoodMusicIntent",
-            "ContinueWatchingIntent",
-            "GoToChapterIntent",
-            "InProgressMediaListIntent",
-            "BrowseLibraryIntent",
-            "RecommendIntent",
-            "SleepTimerIntent",
-            "PlayEpisodeIntent",
-            "LoopSongOnIntent",
-            "AddToQueueIntent",
-            "PlayNextIntent",
-            "ClearQueueIntent",
-            "ListQueueIntent",
-            "PlayRadioIntent",
-            "TurnRadioOnIntent",
-            "TurnRadioOffIntent",
-            "LearnMyVoiceIntent",
-            "WhoAmIIntent",
-            "QueryArtistLibraryIntent",
-            "PlayPodcastIntent",
-            "SearchMediaIntent",
-            "SetReminderIntent",
-            "QueryRecentlyAddedIntent",
-
-            // Built-in Amazon intents
-            "AMAZON.FallbackIntent",
-            "AMAZON.LoopOffIntent",
-            "AMAZON.LoopOnIntent",
-            "AMAZON.NextIntent",
-            "AMAZON.PauseIntent",
-            "AMAZON.StopIntent",
-            "AMAZON.CancelIntent",
-            "AMAZON.PreviousIntent",
-            "AMAZON.ResumeIntent",
-            "AMAZON.ShuffleOffIntent",
-            "AMAZON.ShuffleOnIntent",
-            "AMAZON.StartOverIntent",
-            "AMAZON.YesIntent",
-            "AMAZON.NoIntent"
-        };
-    }
+        => IntentNames.AllIntentNames.OrderBy(n => n, StringComparer.Ordinal).ToList();
 }
 
 /// <summary>

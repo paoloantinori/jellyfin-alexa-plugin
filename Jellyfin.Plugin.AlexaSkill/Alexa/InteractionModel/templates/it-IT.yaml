@@ -324,6 +324,21 @@ explicit_intents:
     slots:
       - name: duration_minutes
         type: ItalianNumber
+  SetReminderIntent:
+    samples:
+      - Ricordami tra {duration_minutes} minuti
+      - Imposta un promemoria tra {duration_minutes} minuti
+      - Ricordami alle {reminder_time}
+      - Imposta un promemoria per le {reminder_time}
+    slots:
+      # duration_minutes MUST keep the same type as SleepTimerIntent's slot of the
+      # same name (slot-name/type consistency is validated per locale). ItalianNumber
+      # values are word forms ("trenta"); SetReminderIntentHandler decodes them via
+      # ItalianNumberWords. SleepTimerIntentHandler still int.Parse-only (JF-272).
+      - name: duration_minutes
+        type: ItalianNumber
+      - name: reminder_time
+        type: AMAZON.TIME
   PlayMoodMusicIntent:
     samples:
       - Musica {mood}

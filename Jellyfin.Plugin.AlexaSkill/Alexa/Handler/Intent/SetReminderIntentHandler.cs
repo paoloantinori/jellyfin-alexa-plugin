@@ -9,6 +9,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
@@ -84,7 +85,9 @@ public class SetReminderIntentHandler : BaseHandler
         Reminder reminder;
         try
         {
-            if (!string.IsNullOrEmpty(durationText) && int.TryParse(durationText, NumberStyles.Integer, CultureInfo.InvariantCulture, out int minutes))
+            // duration_minutes is AMAZON.NUMBER in 16 locales ("30") but the custom
+            // ItalianNumber type in it-IT, where the spoken "trenta" arrives as a word.
+            if (ItalianNumberWords.TryParse(durationText, out int minutes))
             {
                 relativeMinutes = minutes;
                 reminder = BuildRelativeReminder(minutes, spokenText, locale);

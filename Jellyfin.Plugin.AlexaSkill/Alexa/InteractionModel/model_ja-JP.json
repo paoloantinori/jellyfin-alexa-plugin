@@ -494,6 +494,25 @@
         ]
       },
       {
+        "name": "SetReminderIntent",
+        "slots": [
+          {
+            "name": "duration_minutes",
+            "type": "AMAZON.NUMBER"
+          },
+          {
+            "name": "reminder_time",
+            "type": "AMAZON.TIME"
+          }
+        ],
+        "samples": [
+          "{duration_minutes} 分後にリマインドして",
+          "{duration_minutes} 分のリマインダーを設定して",
+          "{reminder_time} にリマインドして",
+          "{reminder_time} のリマインダーを設定して"
+        ]
+      },
+      {
         "name": "PlayMoodMusicIntent",
         "slots": [
           {

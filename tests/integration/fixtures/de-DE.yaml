@@ -317,6 +317,19 @@ tests:
     expected_slots:
       duration_minutes: {}
 
+  # ------------------------------------------------------------------------
+  # SetReminderIntent (duration_minutes / reminder_time), JF-451
+  # ------------------------------------------------------------------------
+  - utterance: "erinnere mich in dreißig minuten"
+    expected_intent: SetReminderIntent
+    expected_slots:
+      duration_minutes: {}
+
+  - utterance: "erinnere mich um acht uhr"
+    expected_intent: SetReminderIntent
+    expected_slots:
+      reminder_time: {}
+
   # -------------------------------------------------------------------------
   # 24. PlayMoodMusicIntent (mood)
   # -------------------------------------------------------------------------
