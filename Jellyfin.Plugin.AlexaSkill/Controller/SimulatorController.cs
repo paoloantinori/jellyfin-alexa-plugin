@@ -110,16 +110,9 @@ public class SimulatorController : ControllerBase
             // Build a synthetic SkillRequest in Alexa format
             var skillRequest = BuildSkillRequest(request.IntentName, request.Slots, locale, deviceId, user.Id);
 
-            // Find the matching handler
-            BaseHandler? matchingHandler = null;
-            foreach (BaseHandler h in _handlers)
-            {
-                if (h.CanHandle(skillRequest.Request))
-                {
-                    matchingHandler = h;
-                    break;
-                }
-            }
+            // Same selection semantics as the live endpoint. The synthetic request never
+            // carries FindSongSessionData, so the force-route branch cannot fire here.
+            BaseHandler? matchingHandler = HandlerSelector.Select(_handlers, skillRequest).Handler;
 
             if (matchingHandler == null)
             {

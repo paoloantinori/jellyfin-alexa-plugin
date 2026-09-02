@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.IO;
@@ -108,22 +109,7 @@ public class Registrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<ILiveTvStreamResolver, LiveTvStreamResolver>();
 
         // Intent / event / error handlers — auto-discovered from this assembly
-        Type[] allTypes;
-        try
-        {
-            allTypes = typeof(BaseHandler).Assembly.GetTypes();
-        }
-        catch (ReflectionTypeLoadException ex)
-        {
-            allTypes = ex.Types.Where(t => t is not null).ToArray()!;
-        }
-
-        var handlerTypes = allTypes
-            .Where(t => t.IsClass && !t.IsAbstract && t.IsSubclassOf(typeof(BaseHandler)))
-            .OrderBy(t => t.Name == nameof(FallbackIntentHandler) ? 1 : 0)
-            .ThenBy(t => t.Name);
-
-        foreach (var handlerType in handlerTypes)
+        foreach (var handlerType in RegisteredHandlerTypes())
         {
             serviceCollection.AddSingleton(typeof(BaseHandler), handlerType);
         }
@@ -142,5 +128,32 @@ public class Registrator : IPluginServiceRegistrator
 
         // Request pipeline
         serviceCollection.AddSingleton<RequestPipeline>();
+    }
+
+    /// <summary>
+    /// Enumerates the intent/event/error handler types in dispatch registration order:
+    /// FallbackIntentHandler last (so it never preempts a specific handler), everything
+    /// else alphabetical by type name. The controller's first-CanHandle-wins dispatch
+    /// iterates this order; the routing test harness reuses the same enumeration
+    /// instead of mirroring it (JF-452).
+    /// </summary>
+    /// <returns>The handler types in registration order.</returns>
+    internal static IReadOnlyList<Type> RegisteredHandlerTypes()
+    {
+        Type[] allTypes;
+        try
+        {
+            allTypes = typeof(BaseHandler).Assembly.GetTypes();
+        }
+        catch (ReflectionTypeLoadException ex)
+        {
+            allTypes = ex.Types.Where(t => t is not null).ToArray()!;
+        }
+
+        return allTypes
+            .Where(t => t.IsClass && !t.IsAbstract && t.IsSubclassOf(typeof(BaseHandler)))
+            .OrderBy(t => t.Name == nameof(FallbackIntentHandler) ? 1 : 0)
+            .ThenBy(t => t.Name)
+            .ToList();
     }
 }

@@ -90,11 +90,11 @@ public class DispatchRoutingTests : PluginTestBase
     [Fact]
     public void FindSongSessionKey_PinnedToWireFormatLiteral()
     {
-        // Pins the WRITER side and the harness mirror to the wire-format literal
+        // Pins the constant AND the harness literal to the wire-format literal
         // "FindSongSessionData" (the key Alexa echoes back in session attributes; it
-        // must never change). The controller force-route READER still matches the raw
-        // literal (AlexaSkillController:414) and is not pinned here; adopting the
-        // constant there is tracked as JF-452.
+        // must never change). The production force-route reader (HandlerSelector, used
+        // by the controller and this harness) matches on the constant, so both pins
+        // plus the shared selection path make a rename impossible to miss.
         Assert.Equal("FindSongSessionData", FindSongIntentHandler.SessionDataKey);
         Assert.Equal("FindSongSessionData", DispatchHarness.FindSongSessionKey);
     }

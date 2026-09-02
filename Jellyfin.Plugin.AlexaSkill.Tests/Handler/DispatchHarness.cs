@@ -10,10 +10,10 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
-using Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
+using Jellyfin.Plugin.AlexaSkill.EntryPoints;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
@@ -30,8 +30,12 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// See DispatchRoutingTests for coverage.
 /// </summary>
 /// <remarks>
-/// Registration-order semantics are sourced from EntryPoints/Registrator.cs lines 110-129.
-/// Force-route logic is sourced from Controller/AlexaSkillController.cs lines 410-431.
+/// Handler enumeration and selection are the PRODUCTION units: this harness calls
+/// <see cref="Registrator.RegisteredHandlerTypes"/> and
+/// <see cref="HandlerSelector.Select(IEnumerable{BaseHandler}, SkillRequest)"/>, the
+/// same units AlexaSkillController dispatches through (JF-452), so a controller-side
+/// routing edit cannot stay green here. Only handler construction is harness-local
+/// (reflection + dependency overrides).
 /// Execution (<see cref="DispatchAsync"/>) is handler-level only: the real RequestPipeline
 /// runs (which owns the warming-exception translation), but with NO request/response
 /// interceptors, NO 6-second timeout token, and NO controller error envelope; those live
@@ -40,9 +44,11 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 public sealed class DispatchHarness : IDisposable
 {
     /// <summary>
-    /// The session-attribute key the controller force-route matches. Deliberately the
-    /// LITERAL, mirroring AlexaSkillController (which does not reference the handler
-    /// constant); DispatchRoutingTests pins the literal to the handler constant.
+    /// The session-attribute key the production force-route matches, held as the
+    /// wire-format LITERAL. Production selection (HandlerSelector, used by both the
+    /// controller and this harness) reads FindSongIntentHandler.SessionDataKey;
+    /// DispatchRoutingTests pins this literal to that constant so the wire format
+    /// cannot drift.
     /// </summary>
     internal const string FindSongSessionKey = "FindSongSessionData";
 
@@ -80,27 +86,12 @@ public sealed class DispatchHarness : IDisposable
     public ILoggerFactory LoggerFactory { get; }
 
     /// <summary>
-    /// Enumerates handler types in registration order (same discovery as Registrator).
-    /// Mirrors Registrator.cs lines 110-129.
+    /// Enumerates handler types in registration order. Delegates to the production
+    /// enumeration (<see cref="Registrator.RegisteredHandlerTypes"/>) so the harness
+    /// order cannot drift from DI registration order (JF-452).
     /// </summary>
     public static IReadOnlyList<Type> RegisteredHandlerTypes()
-    {
-        Type[] allTypes;
-        try
-        {
-            allTypes = typeof(BaseHandler).Assembly.GetTypes();
-        }
-        catch (ReflectionTypeLoadException ex)
-        {
-            allTypes = ex.Types.Where(t => t is not null).ToArray()!;
-        }
-
-        return allTypes
-            .Where(t => t.IsClass && !t.IsAbstract && t.IsSubclassOf(typeof(BaseHandler)))
-            .OrderBy(t => t.Name == nameof(FallbackIntentHandler) ? 1 : 0)
-            .ThenBy(t => t.Name)
-            .ToList();
-    }
+        => Registrator.RegisteredHandlerTypes();
 
     /// <summary>
     /// All registered handlers, constructed in registration order.
@@ -134,44 +125,17 @@ public sealed class DispatchHarness : IDisposable
     }
 
     /// <summary>
-    /// Selects the handler for the given request using the controller's routing logic
-    /// (force-route + CanHandle loop). Does NOT execute the handler.
+    /// Selects the handler for the given request via the PRODUCTION selection unit
+    /// (<see cref="HandlerSelector.Select(IEnumerable{BaseHandler}, SkillRequest)"/>,
+    /// the same path AlexaSkillController routes through: force-route + CanHandle
+    /// loop). Does NOT execute the handler.
     /// </summary>
     /// <param name="request">The skill request containing Request, Context, and Session.</param>
     /// <returns>The routing decision: selected handler, whether force-routed, and null response.</returns>
     public RoutingDecision Select(SkillRequest request)
     {
-        // Mirror of AlexaSkillController.HandleIntentRequest lines 410-440.
-        // The controller answers ResponseBuilder.Empty() for a null Request before this
-        // block; unhandled is the harness equivalent.
-        if (request.Request == null)
-        {
-            return new RoutingDecision(null, false, null);
-        }
-
-        // Force-route for an active FindSong multi-turn dialog (IntentRequest only).
-        if (request.Request is IntentRequest
-            && request.Session?.Attributes != null
-            && request.Session.Attributes.ContainsKey(FindSongSessionKey))
-        {
-            var findSongHandler = Handlers.OfType<FindSongIntentHandler>().FirstOrDefault();
-            if (findSongHandler != null)
-            {
-                return new RoutingDecision(findSongHandler, ForceRouted: true, null);
-            }
-        }
-
-        // CanHandle loop in registration order.
-        foreach (BaseHandler h in Handlers)
-        {
-            if (h.CanHandle(request.Request))
-            {
-                return new RoutingDecision(h, ForceRouted: false, null);
-            }
-        }
-
-        // No handler claims the request; the controller speaks CouldNotUnderstand here.
-        return new RoutingDecision(null, false, null);
+        HandlerSelection selection = HandlerSelector.Select(Handlers, request);
+        return new RoutingDecision(selection.Handler, selection.ForceRouted);
     }
 
     /// <summary>

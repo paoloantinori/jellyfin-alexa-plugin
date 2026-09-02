@@ -13,7 +13,6 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
-using Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
@@ -50,10 +49,6 @@ public class AlexaSkillController : ControllerBase
     private readonly RequestCounters _counters;
     private readonly RequestPipeline _pipeline;
     private readonly IEnumerable<BaseHandler> _handlers;
-
-    // Lazy-cached handler references used for session-aware routing.
-    private FindSongIntentHandler? _findSongHandler;
-    private readonly object _handlerCacheLock = new();
 
     private readonly CsrfTokenHandler _csrfTokenHandler;
 
@@ -399,49 +394,27 @@ public class AlexaSkillController : ControllerBase
 
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(6));
 
-                // Session-aware routing: if a FindSong multi-turn dialog is active,
-                // always route to FindSongIntentHandler regardless of what intent Alexa's
-                // NLU assigned. Short replies like "family" often get misrouted by NLU
-                // (e.g. to ShowMoreIntent or BrowseLibraryIntent) when the user is in
-                // a multi-turn FindSong conversation. IntentRequests only: a
-                // SessionEndedRequest arriving with FindSong attributes must fall through
-                // to SessionEndedRequestHandler (FindSongIntentHandler casts to
-                // IntentRequest and crashed with InvalidCastException, live 2026-08-21).
+                // Routing selection (FindSong session force-route + first-CanHandle-wins
+                // in registration order) lives in HandlerSelector, shared with the
+                // routing test harness. intentName is still needed for the routing logs.
                 string intentName = req.Request is IntentRequest intentReq ? intentReq.Intent?.Name ?? "null" : "n/a";
 
-                if (req.Request is IntentRequest
-                    && req.Session?.Attributes != null
-                    && req.Session.Attributes.ContainsKey("FindSongSessionData"))
-                {
-                    var findSongHandler = _findSongHandler;
-                    if (findSongHandler == null)
-                    {
-                        lock (_handlerCacheLock)
-                        {
-                            findSongHandler = _findSongHandler ??= _handlers.OfType<FindSongIntentHandler>().FirstOrDefault();
-                        }
-                    }
+                HandlerSelection selection = HandlerSelector.Select(_handlers, req);
 
-                    if (findSongHandler != null)
-                    {
-                        _logger.LogDebug("Routing to FindSongIntentHandler due to active FindSong session (NLU intent was {Intent})", intentName);
-                        SkillResponse findSongResponse = await _pipeline.ExecuteAsync(findSongHandler, req.Request, req.Context, req.Session, cts.Token).ConfigureAwait(false);
-                        return SkillResponseContent(findSongResponse);
-                    }
+                if (selection.Handler is not BaseHandler selectedHandler)
+                {
+                    string locale = BaseHandler.GetLocalePublic(req.Request);
+                    _logger.LogWarning("Unhandled skill request: {RequestType} intent={IntentName} locale={Locale}", req.Request.Type, intentName, locale);
+                    return SkillResponseContent(ResponseBuilder.Tell(ResponseStrings.Get("CouldNotUnderstand", locale)));
                 }
 
-                foreach (BaseHandler h in _handlers)
+                if (selection.ForceRouted)
                 {
-                    if (h.CanHandle(req.Request))
-                    {
-                        SkillResponse skillResponse = await _pipeline.ExecuteAsync(h, req.Request, req.Context, req.Session, cts.Token).ConfigureAwait(false);
-                        return SkillResponseContent(skillResponse);
-                    }
+                    _logger.LogDebug("Routing to FindSongIntentHandler due to active FindSong session (NLU intent was {Intent})", intentName);
                 }
 
-                string locale = BaseHandler.GetLocalePublic(req.Request);
-                _logger.LogWarning("Unhandled skill request: {RequestType} intent={IntentName} locale={Locale}", req.Request.Type, intentName, locale);
-                return SkillResponseContent(ResponseBuilder.Tell(ResponseStrings.Get("CouldNotUnderstand", locale)));
+                SkillResponse skillResponse = await _pipeline.ExecuteAsync(selectedHandler, req.Request, req.Context, req.Session, cts.Token).ConfigureAwait(false);
+                return SkillResponseContent(skillResponse);
             }
         }
         catch (OperationCanceledException)
