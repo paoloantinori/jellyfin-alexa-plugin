@@ -34,7 +34,10 @@ public interface ISongNgramIndex
     /// </summary>
     /// <param name="keywordTokens">Pre-tokenized user keywords.</param>
     /// <param name="locale">Locale string for tokenization and scoring.</param>
-    /// <param name="topParentIds">Optional library folder IDs to filter by.</param>
+    /// <param name="topParentIds">Optional PHYSICAL library folder IDs to filter by. Must be
+    /// <c>LibraryFilter.ResolveTopParentIds</c> output, never raw <c>GetAllowedLibraryIds</c>
+    /// CollectionFolder IDs: the index's map is keyed by physical IDs, and raw IDs match
+    /// nothing, so a restricted user silently gets zero results (JF-455).</param>
     /// <returns>Ranked list of (Item, Score) tuples, sorted by score descending.</returns>
     List<(BaseItem Item, double Score)> Search(string[] keywordTokens, string locale, Guid[]? topParentIds = null);
 
@@ -47,7 +50,8 @@ public interface ISongNgramIndex
     /// </summary>
     /// <param name="keywordTokens">Pre-tokenized user keywords.</param>
     /// <param name="locale">Locale string for tokenization and scoring.</param>
-    /// <param name="topParentIds">Optional library folder IDs to filter by.</param>
+    /// <param name="topParentIds">Optional PHYSICAL library folder IDs to filter by (see
+    /// <see cref="Search"/>: resolved IDs only, never raw CollectionFolder IDs).</param>
     /// <returns>Ranked list of (Item, Score) tuples with phonetic penalty applied.</returns>
     List<(BaseItem Item, double Score)> SearchPhonetic(string[] keywordTokens, string locale, Guid[]? topParentIds = null);
 }

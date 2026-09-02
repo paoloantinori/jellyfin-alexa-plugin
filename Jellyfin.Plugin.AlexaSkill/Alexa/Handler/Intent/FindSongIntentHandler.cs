@@ -426,27 +426,35 @@ public class FindSongIntentHandler : BaseHandler
         }
         else
         {
-            // Try n-gram index first (O(1) lookup), fall back to DB query if unavailable
-            Guid[]? topParentIds = GetAllowedLibraryIds(user);
+            // Try n-gram index first (O(1) lookup), fall back to DB query if unavailable.
+            // ONE readiness guard for both index stages: the filter is resolved to
+            // physical library folder ids (JF-455), the same id space the index's
+            // top-parent map holds; unresolved collection-folder ids match nothing in
+            // the map, so the n-gram stage silently missed for library-restricted
+            // users and every query paid the slower DB fallback. Resolving inside the
+            // guard keeps the cold path free of the work AND guarantees the phonetic
+            // stage can never run with an unresolved (null) filter if readiness
+            // flips between two separate checks.
             if (_songNgramIndex is { IsReady: true })
             {
+                Guid[]? allowedLibraryIds = GetAllowedLibraryIds(user);
+                Guid[]? topParentIds = allowedLibraryIds != null
+                    ? Util.LibraryFilter.ResolveTopParentIds(allowedLibraryIds, _libraryManager, Logger)
+                    : null;
+
                 Logger.LogDebug("FindSong: searching n-gram index (keywords={Keywords})", string.Join(" ", keywordTokens));
                 scored = _songNgramIndex.Search(keywordTokens, locale, topParentIds);
+
+                if (scored.Count == 0 && _config.PhoneticSongSearchEnabled)
+                {
+                    // Phonetic fallback: try Double Metaphone matching when exact token match misses.
+                    Logger.LogDebug("FindSong: exact match miss, trying phonetic search (keywords={Keywords})", string.Join(" ", keywordTokens));
+                    scored = _songNgramIndex.SearchPhonetic(keywordTokens, locale, topParentIds);
+                }
             }
             else
             {
                 scored = new List<(BaseItem, double)>();
-            }
-
-            if (scored.Count == 0)
-            {
-                // Phonetic fallback: try Double Metaphone matching when exact token match misses.
-                // Only activates when feature flag is enabled and the n-gram index is available.
-                if (_config.PhoneticSongSearchEnabled && _songNgramIndex is { IsReady: true })
-                {
-                    Logger.LogDebug("FindSong: exact match miss, trying phonetic search (keywords={Keywords})", string.Join(" ", keywordTokens));
-                    scored = _songNgramIndex.SearchPhonetic(keywordTokens, locale, topParentIds);
-                }
             }
 
             if (scored.Count == 0)

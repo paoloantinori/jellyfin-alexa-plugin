@@ -1379,6 +1379,7 @@ public abstract class BaseHandler
     /// <param name="itemTypes">The item types to search (e.g. Audio, MusicAlbum).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <param name="operationLabel">Label for logging.</param>
+    /// <param name="applyLibraryFilter">Pass false for item kinds that live outside media libraries (e.g. playlists): a TopParentIds filter excludes them entirely (JF-455).</param>
     /// <returns>The best match + score, or null if nothing above threshold.</returns>
     protected async Task<(BaseItem Item, int Score)?> SearchItemsFuzzyAsync(
         string query,
@@ -1390,7 +1391,8 @@ public abstract class BaseHandler
         string operationLabel = "FuzzyFallback",
         Guid[]? artistIds = null,
         int minQueryLength = 3,
-        MediaType[]? mediaTypes = null)
+        MediaType[]? mediaTypes = null,
+        bool applyLibraryFilter = true)
     {
         if (string.IsNullOrWhiteSpace(query) || query.Length < minQueryLength)
         {
@@ -1414,7 +1416,11 @@ public abstract class BaseHandler
         {
             fallbackQuery.MediaTypes = mediaTypes;
         }
-        ApplyLibraryFilter(fallbackQuery, user, libraryManager, Logger);
+
+        if (applyLibraryFilter)
+        {
+            ApplyLibraryFilter(fallbackQuery, user, libraryManager, Logger);
+        }
 
         IReadOnlyList<BaseItem> allItems = await RetryAsync(
             () => libraryManager.GetItemList(fallbackQuery),
@@ -2573,15 +2579,32 @@ public abstract class BaseHandler
             IncludeItemTypes = new[] { BaseItemKind.Playlist },
             DtoOptions = new DtoOptions(true),
         };
-        ApplyLibraryFilter(query, user, libraryManager);
 
+        // No ApplyLibraryFilter here: playlists are user-scoped, not library-scoped,
+        // and native Jellyfin playlists live outside any media library, so any library
+        // restriction excluded them all (JF-455). Trade-off: .m3u playlists stored
+        // inside an excluded library surface too. The server-side gate is Jellyfin's
+        // own AddUserToQuery (run by GetItemsResult because query.User is set): it
+        // derives TopParentIds from the user's Jellyfin view set, which includes the
+        // playlists folder, so do not read the empty TopParentIds as "unfiltered".
+        // That gate does NOT cover PRIVATE playlists: GetItemsResult goes straight
+        // to the repository without the IsVisible post-filter GetItemList applies,
+        // so other users' private playlists can come back and must be filtered here.
+        // The track resolver separately filters tracks per user.
         Logger.LogDebug("PlayPlaylist: querying Jellyfin with searchTerm='{PlaylistName}', types=Playlist", playlistName);
         QueryResult<BaseItem> playlists = await RetryAsync(() => SafeGetItemsResult(libraryManager, query), "GetPlaylists", cancellationToken).ConfigureAwait(false);
+        var visiblePlaylists = playlists.Items.Where(p => p.IsVisible(jellyfinUser)).ToList();
+        if (visiblePlaylists.Count != playlists.Items.Count)
+        {
+            Logger.LogDebug("PlayPlaylist: filtered {HiddenCount} playlist(s) not visible to the user", playlists.Items.Count - visiblePlaylists.Count);
+            playlists = new QueryResult<BaseItem> { Items = visiblePlaylists, TotalRecordCount = visiblePlaylists.Count };
+        }
+
         Logger.LogDebug("PlayPlaylist: Jellyfin returned {ResultCount} playlists", playlists.TotalRecordCount);
 
         if (playlists.TotalRecordCount == 0)
         {
-            var fuzzy = await SearchItemsFuzzyAsync(playlistName, jellyfinUser, user, libraryManager, new[] { BaseItemKind.Playlist }, cancellationToken, "PlayPlaylistFuzzyFallback").ConfigureAwait(false);
+            var fuzzy = await SearchItemsFuzzyAsync(playlistName, jellyfinUser, user, libraryManager, new[] { BaseItemKind.Playlist }, cancellationToken, "PlayPlaylistFuzzyFallback", applyLibraryFilter: false).ConfigureAwait(false);
             if (fuzzy != null)
             {
                 playlists = new QueryResult<BaseItem> { Items = new List<BaseItem> { fuzzy.Value.Item }, TotalRecordCount = 1 };

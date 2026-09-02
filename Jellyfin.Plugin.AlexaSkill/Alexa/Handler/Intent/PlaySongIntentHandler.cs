@@ -242,8 +242,15 @@ public class PlaySongIntentHandler : BaseHandler
             }
             else if (_songNgramIndex is { IsReady: true })
             {
+                // The filter is resolved to physical library folder ids (JF-455), the
+                // same id space the index's top-parent map holds; raw
+                // collection-folder ids match nothing in the map, so the n-gram stage
+                // silently missed for library-restricted users.
                 var keywordTokens = Util.KeywordMatcher.Tokenize(songQuery, locale);
-                Guid[]? topParentIds = GetAllowedLibraryIds(user);
+                Guid[]? songAllowed = GetAllowedLibraryIds(user);
+                Guid[]? topParentIds = songAllowed != null
+                    ? Util.LibraryFilter.ResolveTopParentIds(songAllowed, _libraryManager, Logger)
+                    : null;
                 var scoredByIndex = _songNgramIndex.Search(keywordTokens, locale, topParentIds);
                 if (scoredByIndex.Count == 0 && _config.PhoneticSongSearchEnabled)
                 {

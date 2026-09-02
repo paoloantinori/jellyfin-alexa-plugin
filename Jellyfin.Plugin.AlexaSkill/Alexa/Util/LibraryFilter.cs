@@ -4,7 +4,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using Microsoft.Extensions.Logging;
@@ -55,16 +54,19 @@ public static class LibraryFilter
     }
 
     /// <summary>
-    /// Resolves CollectionFolder IDs to their physical top-level folder IDs.
-    /// Jellyfin's <see cref="InternalItemsQuery.TopParentIds"/> expects physical folder
-    /// IDs (the actual media folders), not the virtual <see cref="CollectionFolder"/> IDs
-    /// that the config UI stores from <c>/Library/MediaFolders</c>.
+    /// Resolves CollectionFolder IDs to their physical top-level folder IDs and returns
+    /// the UNION with the original CollectionFolder IDs (deduplicated). The plugin's
+    /// in-memory index maps are keyed by physical folder IDs (the parent walk stops at
+    /// the AggregateFolder boundary), and Jellyfin's database accepts both id spaces
+    /// for <see cref="InternalItemsQuery.TopParentIds"/> (verified on 10.11.11, where
+    /// no row carries a CollectionFolder id as TopParentId, so the CF half is inert
+    /// there and kept only as a defensive fallback for servers with other layouts).
     /// Results are cached until <see cref="InvalidateCache"/> is called.
     /// </summary>
     /// <param name="collectionFolderIds">CollectionFolder GUIDs from plugin config.</param>
     /// <param name="libraryManager">Jellyfin library manager for resolving folders.</param>
     /// <param name="logger">Optional logger for cache hit/miss diagnostics.</param>
-    /// <returns>Physical folder GUIDs suitable for TopParentIds, or the originals if resolution fails.</returns>
+    /// <returns>Physical folder GUIDs unioned with the original CollectionFolder GUIDs.</returns>
     public static Guid[] ResolveTopParentIds(Guid[] collectionFolderIds, ILibraryManager libraryManager, ILogger? logger = null)
     {
         if (collectionFolderIds.Length == 0)
@@ -80,16 +82,17 @@ public static class LibraryFilter
         }
 
         var sw = System.Diagnostics.Stopwatch.StartNew();
+        // Collect only the resolved physical folder IDs: the union with the inputs
+        // below re-adds every configured id (CollectionFolder fallback included), so
+        // unresolved inputs need no per-id fallback branch.
         var resolved = new List<Guid>();
         foreach (var id in collectionFolderIds)
         {
-            var item = libraryManager.GetItemById(id);
-            if (item is CollectionFolder cf)
+            if (libraryManager.GetItemById(id) is CollectionFolder cf)
             {
                 // CollectionFolder stores physical paths (e.g. /data/media/video/cartoni)
                 // in PhysicalLocationsList. We resolve each path to its Folder item to
                 // get the physical folder ID that items actually use as TopParentId.
-                int before = resolved.Count;
                 var locations = cf.PhysicalLocationsList;
                 if (locations != null && locations.Any())
                 {
@@ -102,20 +105,11 @@ public static class LibraryFilter
                         }
                     }
                 }
-
-                if (resolved.Count == before)
-                {
-                    resolved.Add(id);
-                }
-            }
-            else
-            {
-                resolved.Add(id);
             }
         }
 
         sw.Stop();
-        Guid[] result = resolved.Count > 0 ? resolved.ToArray() : collectionFolderIds;
+        Guid[] result = resolved.Concat(collectionFolderIds).Distinct().ToArray();
         _topParentCache[cacheKey] = result;
         logger?.LogDebug("LibraryFilter: cache miss, resolved {InputCount} → {OutputCount} top parents in {Ms}ms", collectionFolderIds.Length, result.Length, sw.ElapsedMilliseconds);
         return result;

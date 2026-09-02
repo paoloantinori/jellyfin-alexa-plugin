@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
+using MediaBrowser.Controller.Channels;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
@@ -94,9 +95,10 @@ public class SongNgramIndexService : ISongNgramIndex, IHostedService, IDisposabl
         // Filter by library access
         if (topParentIds != null && topParentIds.Length > 0)
         {
+            var allowed = topParentIds.ToHashSet();
             candidates = candidates.Where(e =>
                 topParentMap.TryGetValue(e.Song.Id, out var parentId) &&
-                Array.IndexOf(topParentIds, parentId) >= 0).ToList();
+                allowed.Contains(parentId)).ToList();
         }
 
         if (candidates.Count == 0)
@@ -182,9 +184,10 @@ public class SongNgramIndexService : ISongNgramIndex, IHostedService, IDisposabl
         // Filter by library access
         if (topParentIds != null && topParentIds.Length > 0)
         {
+            var allowed = topParentIds.ToHashSet();
             candidates = candidates.Where(e =>
                 topParentMap.TryGetValue(e.Song.Id, out var parentId) &&
-                Array.IndexOf(topParentIds, parentId) >= 0).ToList();
+                allowed.Contains(parentId)).ToList();
         }
 
         if (candidates.Count == 0)
@@ -231,9 +234,10 @@ public class SongNgramIndexService : ISongNgramIndex, IHostedService, IDisposabl
         // Filter by library access
         if (topParentIds != null && topParentIds.Length > 0)
         {
+            var allowed = topParentIds.ToHashSet();
             candidates = candidates.Where(e =>
                 topParentMap.TryGetValue(e.Song.Id, out var parentId) &&
-                Array.IndexOf(topParentIds, parentId) >= 0).ToList();
+                allowed.Contains(parentId)).ToList();
         }
 
         if (candidates.Count == 0)
@@ -332,29 +336,54 @@ public class SongNgramIndexService : ISongNgramIndex, IHostedService, IDisposabl
     }
 
     /// <summary>
-    /// Resolves the top-level parent folder ID for a song by walking up the parent chain.
-    /// Used for per-user library filtering without DB queries.
+    /// Resolves the library folder ID for an item by walking up the parent chain.
+    /// Used for per-user library filtering without DB queries. The stop condition has
+    /// FULL parity with Jellyfin's own <c>BaseItem.IsTopParent</c> boundary (all three
+    /// edges: plugin folders and channels, live-tv views, and a parent that is the
+    /// server-wide <see cref="AggregateFolder"/> root, whose ID cannot discriminate per
+    /// library). This is the id space Jellyfin stores as the TopParentId column and the
+    /// library filter resolves to, so the index maps and the filter agree for
+    /// library-restricted users (JF-455). When the chain ends without a boundary node
+    /// the LAST reached node's ID is returned: the top folder's ID for a chain that
+    /// tops out at a parentless folder, or the item's own ID when it has no chain at
+    /// all. Kept identical to ArtistIndexService's copy: the shared base class that
+    /// single-sources this walk on main does not exist at this tag.
     /// </summary>
+    /// <param name="item">The item to resolve.</param>
+    /// <returns>The library folder ID (the last reached node's ID when no boundary is hit).</returns>
     private Guid ResolveTopParentId(BaseItem item)
     {
         var seen = new HashSet<Guid>();
         BaseItem? current = item;
-        while (current != null && current.ParentId != Guid.Empty)
+        while (current != null)
         {
-            if (!seen.Add(current.Id))
+            BaseItem? parent = current.ParentId == Guid.Empty
+                ? null
+                : _libraryManager.GetItemById(current.ParentId);
+
+            // IsTopParent parity (BaseItem.cs, v10.11.x): the node itself is a
+            // boundary, or its parent is the server-wide aggregate root.
+            if (current is BasePluginFolder
+                || current is Channel
+                || (current is IHasCollectionType view && view.CollectionType == CollectionType.livetv)
+                || parent is AggregateFolder)
             {
-                break; // Cycle protection
+                return current.Id;
             }
 
-            var parent = _libraryManager.GetItemById(current.ParentId);
-            if (parent == null)
+            if (parent == null || !seen.Add(current.Id))
             {
-                break;
+                break; // Chain end or cycle protection
             }
 
             current = parent;
         }
 
+        // Chain ended without a boundary node (parentless top folder, stale parent
+        // id, or cycle): return the LAST REACHED node's id. For a chain that
+        // naturally tops out at a parentless folder this is that folder's id (the
+        // library root in that shape); for an item with no chain at all this is
+        // the item's own id.
         return current?.Id ?? item.Id;
     }
 

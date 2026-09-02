@@ -620,8 +620,11 @@ public class LibraryFilterTests : IDisposable
 }
 
 /// <summary>
-/// Tests for LibraryFilter.ResolveTopParentIds — the CollectionFolder → physical folder
-/// resolution that is critical for per-user library filtering to work correctly.
+/// Tests for LibraryFilter.ResolveTopParentIds, the CollectionFolder to physical
+/// folder resolution that is critical for per-user library filtering to work correctly.
+/// Since JF-455 the result is the UNION of resolved physical folder IDs and the original
+/// CollectionFolder IDs: the plugin's in-memory index maps are keyed by physical IDs
+/// while Jellyfin's DB accepts both id spaces for TopParentIds.
 /// </summary>
 public class ResolveTopParentIdsTests
 {
@@ -665,9 +668,10 @@ public class ResolveTopParentIdsTests
 
         var result = LibraryFilter.ResolveTopParentIds(new[] { cfId }, lmMock.Object);
 
-        Assert.Single(result);
-        Assert.Equal(physicalId, result[0]);
-        Assert.NotEqual(cfId, result[0]);
+        // JF-455: physical folder ID + the original CollectionFolder ID (union)
+        Assert.Equal(2, result.Length);
+        Assert.Contains(physicalId, result);
+        Assert.Contains(cfId, result);
     }
 
     [Fact]
@@ -690,9 +694,11 @@ public class ResolveTopParentIdsTests
 
         var result = LibraryFilter.ResolveTopParentIds(new[] { cfId }, lmMock.Object);
 
-        Assert.Equal(2, result.Length);
+        // Both physical folder IDs plus the CollectionFolder ID from the union
+        Assert.Equal(3, result.Length);
         Assert.Contains(physId1, result);
         Assert.Contains(physId2, result);
+        Assert.Contains(cfId, result);
     }
 
     [Fact]
@@ -761,9 +767,11 @@ public class ResolveTopParentIdsTests
 
         var result = LibraryFilter.ResolveTopParentIds(new[] { cfId, directFolderId }, lmMock.Object);
 
-        Assert.Equal(2, result.Length);
-        Assert.Equal(physicalId, result[0]); // resolved from CollectionFolder
-        Assert.Equal(directFolderId, result[1]); // passed through directly
+        // Physical resolution + direct passthrough + the CollectionFolder ID from the union
+        Assert.Equal(3, result.Length);
+        Assert.Contains(physicalId, result); // resolved from CollectionFolder
+        Assert.Contains(directFolderId, result); // passed through directly
+        Assert.Contains(cfId, result); // union keeps the original CollectionFolder ID
     }
 
     [Fact]
@@ -787,9 +795,11 @@ public class ResolveTopParentIdsTests
 
         var result = LibraryFilter.ResolveTopParentIds(new[] { cfId1, cfId2 }, lmMock.Object);
 
-        Assert.Equal(2, result.Length);
-        Assert.Equal(physId1, result[0]); // resolved from first CollectionFolder
-        Assert.Equal(cfId2, result[1]); // fallback for second with empty locations
+        // Physical resolution + fallback id + both CollectionFolder IDs from the union
+        Assert.Equal(3, result.Length);
+        Assert.Contains(physId1, result); // resolved from first CollectionFolder
+        Assert.Contains(cfId2, result); // fallback for second with empty locations
+        Assert.Contains(cfId1, result); // union keeps the first CollectionFolder ID too
     }
 }
 
