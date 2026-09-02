@@ -7,7 +7,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-02 00:14'
-updated_date: '2026-09-02 00:35'
+updated_date: '2026-09-02 22:00'
 labels:
   - code-review
   - playback
@@ -43,6 +43,10 @@ Follow-ups from the JF-425 code-review round (2026-09-02, 7 CONFIRMED): the supe
 
 <!-- SECTION:NOTES:BEGIN -->
 2026-09-02 additions from the review-round fix agent (relayed same-turn): (a) fold the displacement classification INTO RecordStop (taking raw token + queue) so the invariant is structural, not a three-handler caller-side protocol - skipped while the mechanism was under active review, natural first step here; (b) the composite sleep-token format has THREE owners (mint SleepTimerIntentHandler:~132, suffix parse PlaybackNearlyFinishedEventHandler:~83, prefix parse PlaybackFailedEventHandler.ParseItemId) - one shared StreamToken codec should migrate all sites; (c) SIBLING of the fixed Guid crash: PlaybackFinishedEventHandler:~71, PlaybackStoppedEventHandler:~105, PlaybackStartedEventHandler:~84 still call new Guid(req.Token) on the same composite tokens - a sleep-timer track that finishes/stops/starts kills those handlers before RecordStop and before the keep-alive ack (the same INVALID_RESPONSE class).
+
+JF-424.1 worker observations (2026-09-02): (1) PlaybackStoppedEventHandler ~:130 still writes queue.CurrentItemId = req.Token unconditionally, the same dangling-pointer shape fixed in PlaybackNearlyFinished's cache-hit branch, but intentional there (resume-after-pause position store) and pre-existing; worth covering in this task's displacement/trust sweep. (2) The precompute cache-hit gate reads session.PlayState for shuffle/repeat while ResolvePlaybackOrder prefers the device queue: a device queue marked Shuffle with stale session PlayState could let the gate pass a stale-order serve (mitigated by the shuffle handlers now invalidating on toggle); same queue-state-trust family.
+
+review-local gate (2026-09-02, score 75, below reporting threshold but real): the JF-424.1 cache-hit validation resolves the current item FullNowPlayingItem-FIRST (FindCurrentQueueIndex) while the STORE side (PlaybackStartedEventHandler.TryPrecomputeNext) resolves token-only; when a start report failed and session.FullNowPlayingItem still holds the PREVIOUS queue item Z, the validation computes Z's successor (=A, the playing track), rejects the cached B, falls through to full resolution which ALSO resolves Z and enqueues A after itself (JF-409 self-reenqueue class); pre-JF-424.1 the unconditional cache hit served B correctly in this state. Fix direction: resolve token-first when a cache entry exists (match the store side).
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done

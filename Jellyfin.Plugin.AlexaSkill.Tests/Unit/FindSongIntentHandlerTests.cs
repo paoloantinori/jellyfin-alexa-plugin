@@ -128,9 +128,9 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
     }
 
     [Theory]
-    [InlineData("stop")]
-    [InlineData("basta")]
-    public async Task CapturedCancelWord_WithOpenFlow_EndsFlowWithTell(string cancelWord)
+    [InlineData("stop", "en-US")]
+    [InlineData("basta", "it-IT")]
+    public async Task CapturedCancelWord_WithOpenFlow_EndsFlowWithTell(string cancelWord, string locale)
     {
         // Escape hatch from the elicitation trap, gated on an OPEN FindSong flow (an open
         // elicit always persists FindSongSessionData) + dialogState IN_PROGRESS (JF-423,
@@ -139,7 +139,8 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // here as keywords with the dialog in progress instead of routing to
         // AMAZON.Stop/CancelIntent (observed via simulate-skill and the console
         // 2026-08-28: "stop"/"ferma" fed the keywords and the FindSong session never
-        // ended, hijacking every subsequent utterance).
+        // ended, hijacking every subsequent utterance). JF-444: the vocabulary is
+        // locale-keyed, so the word and the request locale must match.
         SetupJellyfinUser();
         var user = CreateTestUser();
         var session = CreateSession();
@@ -156,6 +157,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         {
             ["titleKeywords"] = cancelWord
         });
+        request.Locale = locale;
         request.DialogState = "IN_PROGRESS";
 
         SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, attrs, CancellationToken.None);
@@ -171,12 +173,12 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
     {
         // JF-423: the hatch additionally requires dialogState IN_PROGRESS. A mid-flow
         // request whose dialog is NOT in progress (a full-utterance remount like
-        // "trova la canzone basta" matching the intent's slotted samples) is a
+        // "find the song stop" matching the intent's slotted samples) is a
         // legitimate search for a song titled like a cancel word (session attributes
         // still present from the open flow), and must search and play, not cancel.
         var artistId = Guid.NewGuid();
         SetupJellyfinUser();
-        SetupSongSearch(new List<BaseItem> { CreateAudioItem(Guid.NewGuid(), "Basta") });
+        SetupSongSearch(new List<BaseItem> { CreateAudioItem(Guid.NewGuid(), "Stop") });
 
         var user = CreateTestUser();
         var session = CreateSession();
@@ -189,7 +191,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
         var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
         {
-            ["titleKeywords"] = "basta"
+            ["titleKeywords"] = "stop"
         });
         request.DialogState = "STARTED";
 
@@ -223,11 +225,12 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         {
             ["musician"] = "annulla"
         });
+        request.Locale = "it-IT";
         request.DialogState = "IN_PROGRESS";
 
         SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, attrs, CancellationToken.None);
 
-        string cancelled = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("FindSongCancelled", "en-US");
+        string cancelled = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("FindSongCancelled", "it-IT");
         Assert.Equal(cancelled, TestHelpers.GetSpeechText(response));
         Assert.True(response.Response.ShouldEndSession != false, "musician-slot cancel word must end the session");
         Assert.True(response.Response.Directives?.Any(d => d.Type == "Dialog.ElicitSlot") != true, "musician-slot cancel word must not re-elicit");

@@ -175,7 +175,7 @@ public class FindSongIntentHandler : BaseHandler
         {
             bool stopOrCancelIntent = intentRequest.Intent.Name is "AMAZON.StopIntent" or "AMAZON.CancelIntent";
             if (stopOrCancelIntent
-                || (Util.CancelWords.IsDialogInProgress(intentRequest) && Util.CancelWords.AnySlotIsCancelWord(intentRequest)))
+                || (Util.CancelWords.IsDialogInProgress(intentRequest) && Util.CancelWords.AnySlotIsCancelWord(intentRequest, locale)))
             {
                 Logger.LogInformation("FindSong: cancel during open flow (intent={Intent}, dialogState={DialogState}), ending flow", intentRequest.Intent.Name, intentRequest.DialogState);
                 return ResponseBuilder.Tell(ResponseStrings.Get("FindSongCancelled", locale));

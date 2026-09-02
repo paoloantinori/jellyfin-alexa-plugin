@@ -4,9 +4,10 @@ title: >-
   CancelWords covers only it/en of 17 locales: bare localized cancel words
   during open elicits loop the elicitation trap in 11 locales (locale-keyed
   vocabulary + profile-nlu vetting)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-01 22:27'
+updated_date: '2026-09-02 20:36'
 labels:
   - code-review
   - i18n

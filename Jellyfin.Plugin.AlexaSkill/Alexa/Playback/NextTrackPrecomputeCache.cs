@@ -16,7 +16,14 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 /// stored while track A was playing can never be served for track B (JF-409: a stale
 /// entry re-enqueued the currently playing track on itself). Entries are single-shot:
 /// a successful TryGet consumes them, so one precomputed transition can only ever be
-/// served once.
+/// served once. Because the token is the BARE item GUID, a token match identifies an
+/// item, not a playback session: the consumer (PlaybackNearlyFinishedEventHandler)
+/// re-validates a served entry against the live session queue, and the
+/// successor-DISPLACING paths call <see cref="Invalidate"/> (JF-424.1): ClearQueue,
+/// PlayNext and ShuffleOn/ShuffleOff change which item follows the current one without
+/// changing the current token, so the entry must be dropped eagerly. Pure appends
+/// (e.g. AddToQueue at the tail) do not displace the successor of the currently playing
+/// item and need no Invalidate; the serve-time successor check covers them.
 /// </summary>
 internal static class NextTrackPrecomputeCache
 {

@@ -150,7 +150,7 @@ public class PlaySongIntentHandler : BaseHandler
         // (code-review 2026-08-29). Runs BEFORE the warming gate so an open flow still
         // cancels during the cold-start window (JF-419.2 contract, review round 2).
         if (Util.CancelWords.IsDialogInProgress(intentRequest)
-            && Util.CancelWords.AnySlotIsCancelWord(intentRequest))
+            && Util.CancelWords.AnySlotIsCancelWord(intentRequest, locale))
         {
             Logger.LogInformation("PlaySong: captured cancel word during open elicit (song='{Song}'), ending flow", songQuery);
             return ResponseBuilder.Tell(ResponseStrings.Get("FindSongCancelled", locale));
