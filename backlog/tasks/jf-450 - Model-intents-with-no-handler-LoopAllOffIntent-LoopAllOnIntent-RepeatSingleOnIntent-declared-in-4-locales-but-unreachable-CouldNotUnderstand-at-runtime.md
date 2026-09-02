@@ -4,10 +4,10 @@ title: >-
   Model intents with no handler:
   LoopAllOffIntent/LoopAllOnIntent/RepeatSingleOnIntent declared in 4 locales
   but unreachable (CouldNotUnderstand at runtime)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-02 02:50'
-updated_date: '2026-09-02 14:52'
+updated_date: '2026-09-02 19:36'
 labels:
   - interaction-model
   - routing
@@ -45,3 +45,9 @@ When fixed, remove the three entries from the unhandledAllowlist in Jellyfin.Plu
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed with the implement-holders decision, all evidence-based. The three orphaned intents (LoopAllOn/LoopAllOff/RepeatSingleOn) came from a May 2024 model-only localization contribution; JF-438 (the day before) actively curated RepeatSingleOn samples that WIN NLU selection, proving users hit CouldNotUnderstand on live vocabulary, so removal would have orphaned it. The existing loop handlers claim the aliases via the FindSong dual-name idiom (LoopAllOn->RepeatAll, LoopAllOff->RepeatNone, RepeatSingleOn->RepeatOne), deliberately NOT extended to the other 13 locales where the AMAZON.Loop built-ins plus LoopSongOn already cover the semantics (adding them would recreate the JF-438 collision class). Review hardening: the three handlers' shared body collapsed into one BaseHandler.ApplyRepeatModeAsync helper, and the previously latent unguarded new Guid(Token) crash on no-audio-context loop requests (reachable in every locale via the built-ins) now answers the NoMediaPlaying tell. Models unchanged for JF-450 (no deploy needed for this half). Commit 5b8c49d7.
+<!-- SECTION:FINAL_SUMMARY:END -->

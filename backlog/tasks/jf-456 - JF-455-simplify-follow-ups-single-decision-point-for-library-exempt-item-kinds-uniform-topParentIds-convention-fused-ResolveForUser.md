@@ -3,10 +3,10 @@ id: JF-456
 title: >-
   JF-455 simplify follow-ups: single decision point for library-exempt item
   kinds, uniform topParentIds convention, fused ResolveForUser
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-02 06:19'
-updated_date: '2026-09-02 14:52'
+updated_date: '2026-09-02 19:36'
 labels:
   - refactor
   - library-filter
@@ -55,3 +55,9 @@ JF-455 code-review (high, formal) findings fixed in-commit: playlist privacy P1 
 
 0.12.1 port review (release branch) items valid for main too: (a) the debounce timer resets on every qualifying event and MusicAlbum events now widen the cadence (the scope map depends on them), so a sub-5s album event stream (box-set rip, watched-folder trickle) postpones the refresh and the new scope map until the stream pauses; fix is a max-pending cap on the debounce; (b) BuildPlaylistPlayResponseAsync conditionally rebuilds the QueryResult only when something was filtered, leaving TotalRecordCount with two meanings on one variable; an unconditional rebuild is simpler; (c) joinable = byName.Sum(group => group.Count()) re-derives the named-self-mapped count through LINQ that must stay in lockstep with the lookup's Where filter; materializing the named list once is drift-proof. The port's join exception-isolation and one-guard filter resolution are NOT needed on main (failed-load retry and SearchWithPhoneticFallback already cover them).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+All items landed plus the two review rounds' findings. LibraryFilter is now the single decision point for BOTH library-scope questions: IsOutOfLibraryKind exempts Playlist/LiveTvChannel from TopParentIds (closes GH #22 residuals: SearchMedia playlist search and PlayChannel for restricted users), and the items-by-name bypass sets itself automatically whenever the filter hits a query explicitly including MusicArtist (closes the cold-window residual, including the parametric kind site BrowseLibrary that per-site wiring missed; found by the formal code-review round 2). Steady-state catalog surfaces (LibrarySyncService, DynamicEntityBuilder) opt out to avoid persisting excluded-library names (JF-457 tracks the remaining transient search trade-off). ResolveForUser fused at all sites; membership predicate single-sourced with span scan; 30s debounce max-pending cap with lock-disciplined window close; shared chain memo across both index loads (~10x fewer walks on song load); SearchMedia scope hoist + sibling saturation skip + union re-sort/re-cap; lazy scope resolution for dynamic entities after the cache check. Formal code-review (high) returned 10 confirmed findings: all applied in commits d02b9300 or tracked (JF-457, JF-458). Suite 2910/0, Release 0 warnings, validators PASS. Commits 5b8c49d7 (shared with JF-450/451 files) + d02b9300.
+<!-- SECTION:FINAL_SUMMARY:END -->

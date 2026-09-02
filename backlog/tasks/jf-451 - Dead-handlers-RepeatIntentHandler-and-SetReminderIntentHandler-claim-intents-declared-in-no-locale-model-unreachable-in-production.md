@@ -3,10 +3,10 @@ id: JF-451
 title: >-
   Dead handlers: RepeatIntentHandler and SetReminderIntentHandler claim intents
   declared in no locale model (unreachable in production)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-02 02:50'
-updated_date: '2026-09-02 14:52'
+updated_date: '2026-09-02 19:36'
 labels:
   - routing
   - dead-code
@@ -46,3 +46,9 @@ Decide per handler: add the intent to all 17 models (it-IT via the YAML template
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Both dead handlers resolved by opposite, evidence-based decisions. SetReminderIntent: the feature was fully built (handler, 17-locale strings, manifest permission, Alexa.NET.Reminders, unit tests) with only the model declaration missing, so it is now declared in ALL 17 models with duration_minutes (AMAZON.NUMBER, ItalianNumber in it-IT) + reminder_time (AMAZON.TIME); no message slot (AMAZON.SearchQuery cannot coexist, anti-pattern #2). The review found it-IT word numbers could never int.TryParse, so the new ItalianNumberWords parser (mirror-guarded: a test enumerates the embedded it-IT model's slot values and asserts each parses) is adopted by SetReminder AND the two other ItalianNumber consumers the review surfaced (GoToChapter chapter_number, PlayEpisode season/episode numbers). RepeatIntentHandler: DELETED; it was a semantic hijack (built-in repeat-that answered with now-playing info, MediaInfo's job) and declaring it would collide with the curated fr 'Répète' and it-IT Ripeti families; zero test references. NLU fixtures gained SetReminder routing entries in 11 locales plus an e2e it-IT routing entry (en-US e2e entry removed as unreliable per the documented simulate-skill limitation); 5 locales' fixture entries deferred to JF-400. Simulator list now derived from IntentNames (fixes pre-existing drift: FindSong was missing). MODEL DEPLOY REQUIRED (all 17 locales changed). Commit 5b8c49d7. Follow-ups on JF-272 (SleepTimer word numbers) and JF-400 (fixture gaps).
+<!-- SECTION:FINAL_SUMMARY:END -->
