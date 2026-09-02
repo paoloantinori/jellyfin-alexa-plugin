@@ -3,9 +3,10 @@ id: JF-454
 title: >-
   Pin the FindSong elicit directive shape + crossmedia_notfound_* session extras
   with tests (JF-430 F2/F4)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-02 04:00'
+updated_date: '2026-09-02 04:05'
 labels:
   - test-coverage
   - dialog

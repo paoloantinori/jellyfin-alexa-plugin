@@ -332,6 +332,56 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
     }
 
     [Fact]
+    public async Task FirstInvocation_EmptyTitleKeywordsSlot_ElicitsKeywordsViaDialogDirective()
+    {
+        // JF-454 (F2): pin the directive shape produced by FindSong's private elicit
+        // wrapper (the one carrying FindSongSessionData attrs + FindSongKeys activation).
+        // PlaySong's and PlayAlbum's elicits are shape-pinned (EmptyMusicianSlotTests,
+        // PlayAlbumIntentHandlerTests); FindSong's wrapper had no directive-shape test,
+        // so a regression here would only surface on-device as a broken multi-turn flow.
+        SetupJellyfinUser();
+        var user = CreateTestUser();
+        var session = CreateSession();
+
+        var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
+        {
+            ["titleKeywords"] = string.Empty
+        });
+
+        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, null, CancellationToken.None);
+
+        // The elicit is a multi-turn capture: the session must stay open.
+        Assert.False(response.Response.ShouldEndSession);
+
+        // Directive shape: Dialog.ElicitSlot targeting the titleKeywords slot on
+        // FindSongIntent, with updatedIntent declaring the slot (Amazon rejects a
+        // partial updatedIntent, live INVALID_RESPONSE 2026-08-28).
+        var elicit = response.Response.Directives?.FirstOrDefault(d => d.Type == "Dialog.ElicitSlot")
+            as Jellyfin.Plugin.AlexaSkill.Alexa.Directive.ElicitSlotDirective;
+        Assert.NotNull(elicit);
+        Assert.Equal("titleKeywords", elicit.SlotToElicit);
+        Assert.Equal("FindSongIntent", elicit.UpdatedIntent.Name);
+        Assert.Equal(new[] { "titleKeywords" }, elicit.UpdatedIntent.Slots.Keys.OrderBy(k => k).ToArray());
+
+        // FindSongSessionData lands in session attributes as a JSON string (the wire
+        // storage type), and the handler's own reader (the next-turn consumer) must
+        // read the state back.
+        Assert.NotNull(response.SessionAttributes);
+        Assert.IsType<string>(response.SessionAttributes["FindSongSessionData"]);
+        Assert.Equal(FindSongState.AwaitingKeywords, FindSongIntentHandler.ReadSessionData(response.SessionAttributes)?.State);
+
+        // FindSongKeys activation (JF-398): every OTHER flow's session keys are marked
+        // for removal while FindSongSessionData itself is not, so the elicit's flow is
+        // the only live conversational state after the interceptor merge.
+        Assert.True(response.SessionAttributes.ContainsKey(Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.SessionAttributeRemoval.MarkerKey),
+            "elicit must mark other flows inactive");
+        var removals = Assert.IsAssignableFrom<IEnumerable<object>>(
+            response.SessionAttributes[Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.SessionAttributeRemoval.MarkerKey]);
+        Assert.Contains("disambig_matches", removals.Select(r => r.ToString()));
+        Assert.DoesNotContain("FindSongSessionData", removals.Select(r => r.ToString()));
+    }
+
+    [Fact]
     public async Task FirstInvocation_WithBothSlots_SkipsToAwaitingKeywords()
     {
         SetupJellyfinUser();

@@ -670,6 +670,45 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
             });
     }
 
+    /// <summary>
+    /// Album-search mirror of <see cref="SetupSongMissArtistSubStrict"/>: the album
+    /// search misses, the artist search returns the plausible-but-sub-strict artist,
+    /// and the artist songs fallback returns the artist's songs.
+    /// </summary>
+    private void SetupAlbumMissArtistSubStrict(string query, string artistName, Guid artistId, params Audio[] artistSongs)
+    {
+        SetupUserMock();
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                // Album search: empty (no such album)
+                if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))
+                    return new List<BaseItem>();
+
+                // Artist search: the plausible-but-sub-strict artist
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                    return new List<BaseItem> { new MusicArtist { Name = artistName, Id = artistId } };
+
+                // Artist songs fallback: ArtistIds + Audio
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0)
+                    return new List<BaseItem>(artistSongs);
+
+                return new List<BaseItem>();
+            });
+    }
+
+    /// <summary>
+    /// Simulates the user answering "no" to a cross-media offer: feeds the offer's
+    /// session attributes into NoIntentHandler.
+    /// </summary>
+    private Task<SkillResponse> DeclineOfferAsync(SkillResponse offer)
+    {
+        var noHandler = new NoIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+        var noRequest = new IntentRequest { Intent = new Intent { Name = IntentNames.AmazonNo }, Locale = "en-US", RequestId = "no-req" };
+        return noHandler.HandleAsync(
+            noRequest, CreateContext(), CreateUser(), CreateSession(), offer.SessionAttributes, CancellationToken.None);
+    }
+
     [Fact]
     public async Task JF363_PlaySong_SubStrict_Confirm_OffersArtistAsk()
     {
@@ -691,6 +730,12 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         Assert.NotNull(response.SessionAttributes);
         Assert.True(response.SessionAttributes.ContainsKey("disambig_matches"));
         Assert.Equal("artist", response.SessionAttributes["disambig_type"]);
+        // JF-454 (F4): the offer must also land the JF-363 decline keys (the original
+        // not-found query and its media type) via BuildAttributes' extraEntries, so
+        // NoIntentHandler's "no" answers with the clean song not-found instead of the
+        // generic "no more matches".
+        Assert.Equal("soul coffin", response.SessionAttributes?["crossmedia_notfound_query"]);
+        Assert.Equal("song", response.SessionAttributes?["crossmedia_notfound_type"]);
     }
 
     [Fact]
@@ -739,21 +784,7 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
     {
         var artistId = Guid.NewGuid();
         var song = new Audio { Name = "The Idiot Kings", Id = Guid.NewGuid() };
-        SetupUserMock();
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns<InternalItemsQuery>(q =>
-            {
-                // Album search: empty
-                if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))
-                    return new List<BaseItem>();
-                // Artist search
-                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
-                    return new List<BaseItem> { new MusicArtist { Name = "Soul Coughing", Id = artistId } };
-                // Artist songs fallback
-                if (q.ArtistIds != null && q.ArtistIds.Length > 0)
-                    return new List<BaseItem> { song };
-                return new List<BaseItem>();
-            });
+        SetupAlbumMissArtistSubStrict("soul coffin", "Soul Coughing", artistId, song);
 
         _config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Confirm;
 
@@ -765,6 +796,10 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         Assert.True(response.Response?.Directives == null || response.Response.Directives.Count == 0);
         Assert.Contains("Soul Coughing", TestHelpers.GetSpeechText(response));
         Assert.Equal("artist", response.SessionAttributes?["disambig_type"]);
+        // JF-454 (F4): same decline keys on the album offer, carrying the album media
+        // type for NoIntentHandler's decline branch.
+        Assert.Equal("soul coffin", response.SessionAttributes?["crossmedia_notfound_query"]);
+        Assert.Equal("album", response.SessionAttributes?["crossmedia_notfound_type"]);
     }
 
     [Fact]
@@ -803,15 +838,45 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
             CreateSongIntent("soul coffin"), CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
 
         // Simulate the user's "no": feed the offer's session attributes into NoIntentHandler.
-        var noHandler = new NoIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory);
-        var noRequest = new IntentRequest { Intent = new Intent { Name = IntentNames.AmazonNo }, Locale = "en-US", RequestId = "no-req" };
-        var noResponse = await noHandler.HandleAsync(
-            noRequest, CreateContext(), CreateUser(), CreateSession(), offer.SessionAttributes, CancellationToken.None);
+        var noResponse = await DeclineOfferAsync(offer);
 
         // Decline must be the song not-found, ending the session, not "no more matches".
         Assert.True(noResponse.Response?.ShouldEndSession);
         string speech = TestHelpers.GetSpeechText(noResponse);
         Assert.Contains("soul coffin", speech, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("more matches", speech, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Soul Coughing", speech);
+    }
+
+    [Fact]
+    public async Task JF363_PlayAlbum_OfferDeclined_NoIntent_ReturnsCleanAlbumNotFound()
+    {
+        // JF-454 (F4): companion to the PlaySong decline test above, pinning the ALBUM
+        // branch of the crossmedia_notfound_* reader (NoIntentHandler): a "no" to an
+        // album offer must speak the album not-found, never the generic "no more
+        // matches" and never the offered artist.
+        var artistId = Guid.NewGuid();
+        var song = new Audio { Name = "The Idiot Kings", Id = Guid.NewGuid() };
+        SetupAlbumMissArtistSubStrict("soul coffin", "Soul Coughing", artistId, song);
+
+        _config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Confirm;
+
+        var handler = CreateAlbumHandler();
+        var offer = await handler.HandleAsync(
+            CreateAlbumIntent("soul coffin"), CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+
+        // Precondition: the album offer carries the decline keys (asserted directly in
+        // JF363_PlayAlbum_SubStrict_Confirm_OffersArtistAsk).
+        Assert.Equal("album", offer.SessionAttributes?["crossmedia_notfound_type"]);
+
+        // Simulate the user's "no": feed the offer's session attributes into NoIntentHandler.
+        var noResponse = await DeclineOfferAsync(offer);
+
+        // Decline must be the ALBUM not-found, ending the session.
+        Assert.True(noResponse.Response?.ShouldEndSession);
+        string speech = TestHelpers.GetSpeechText(noResponse);
+        Assert.Contains("soul coffin", speech, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("albums", speech, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("more matches", speech, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Soul Coughing", speech);
     }
