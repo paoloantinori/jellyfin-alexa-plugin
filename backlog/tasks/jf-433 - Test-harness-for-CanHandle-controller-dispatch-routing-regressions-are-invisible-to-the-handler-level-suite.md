@@ -3,11 +3,11 @@ id: JF-433
 title: >-
   Test harness for CanHandle/controller dispatch: routing regressions are
   invisible to the handler-level suite
-status: In Progress
+status: Done
 assignee:
   - zai
 created_date: '2026-09-01 06:06'
-updated_date: '2026-09-02 03:11'
+updated_date: '2026-09-02 04:01'
 labels:
   - test-infrastructure
   - routing
@@ -44,6 +44,12 @@ Findings surfaced by the harness on first run, both filed: JF-450 (LoopAllOffInt
 
 Verification: dotnet test full suite 2857 passed / 0 failed (baseline 2841 + 14 new + 2 from concurrent work in the tree). /simplify run via 4 parallel reviewers; findings applied (dead members removed, real-Registrator mirror added, literal-vs-constant pin, allowlist staleness guards, locale-carrying failure messages, probe dedup). Code-review skill intentionally not run per the task brief.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Delivered the routing-level test harness: DispatchHarness (reflection over the plugin assembly with the exact Registrator filter/ordering, so no edits when a handler is added; parameter-type-driven default factory for all 67 handlers; Select mirroring the controller force-route + first-CanHandle-wins loop; DispatchAsync through the real RequestPipeline with interceptors/timeout/error-envelope documented out of scope) + 13 DispatchRoutingTests (real-Registrator descriptor mirror against a real ServiceCollection, single-owner matrix over all IntentNames constants, bidirectional model drift checks with staleness-guarded allowlists, dead-code detector over the full probe set, the 2026-08-21 InvalidCastException force-route mirror, hardware Play tie, warming tell through full dispatch). Found two real defects on first run, both filed: JF-450 (LoopAllOff/LoopAllOn/RepeatSingleOn declared in 4 locale models, no claiming handler) and JF-451 (RepeatIntentHandler + SetReminderIntentHandler dead, zero model declarations). Zero production changes. Gates: agent /simplify 4-angle pass applied (real-Registrator mirror added - the strongest pin, literal+const sync pin, null-Request guard, staleness guards); orchestrator code-review high found 5 P3s - 4 applied (overclaiming test renamed+scoped, HandledButUndeclaredIntents staleness guard, tautology reframed, vacuous count test deleted), 1 pre-existing filed as JF-453; orchestrator /simplify applied memoized ModelIntents + shared CreatePlayCommand, landed the mirror-depth gap on JF-452. Suite 2856/0 (was 2843 baseline). Commits d8799bc + 25d67fa. Reviewer observation: the Simulator endpoint lacks the force-route, so these tests are the only automated guard for that layer.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

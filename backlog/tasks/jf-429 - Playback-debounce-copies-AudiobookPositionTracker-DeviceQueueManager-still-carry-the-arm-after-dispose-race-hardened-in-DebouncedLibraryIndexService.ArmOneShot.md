@@ -4,11 +4,11 @@ title: >-
   Playback debounce copies (AudiobookPositionTracker, DeviceQueueManager) still
   carry the arm-after-dispose race hardened in
   DebouncedLibraryIndexService.ArmOneShot
-status: In Progress
+status: Done
 assignee:
   - zai
 created_date: '2026-09-01 05:58'
-updated_date: '2026-09-02 02:42'
+updated_date: '2026-09-02 04:00'
 labels:
   - code-review
   - hardening
@@ -38,6 +38,12 @@ Code-review finding (2026-09-01, JF-419.3 review round 1 finding 10, CONFIRMED):
 <!-- SECTION:NOTES:BEGIN -->
 Simplify round 2026-09-02 (4 angle agents) disposition: applied the comment-precision fix in DeviceQueueManager (in-lock re-check covers Dispose only; Clear is covered by lock mutual exclusion). Skipped as out-of-scope under minimal diff: (a) AudiobookPositionTracker._persistTimers is a single fixed-key ConcurrentDictionary whose every access now sits inside _persistLock; a plain Timer? field would be strictly simpler and mirror the reference shape. Deferred cleanup, fold in only if the tracker is touched again. (b) Internal test hooks (FailedLoadRetryInterval style) on both debounce constants would cut the two new race tests' 7s of Thread.Sleep to ~100ms; rejected to avoid expanding API surface for tests only.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Hardened both playback debounce copies (AudiobookPositionTracker, DeviceQueueManager) by porting the ArmOneShot dispose-safe shape from DebouncedLibraryIndexService: volatile _disposed with outer check, in-lock re-check under new _persistLock/_timerLock, timers disposed under lock, and Clear(deviceId) removing+disposing the device timer under the same lock. All 12 call sites audited and routed. Red-proven tests (post-dispose RecordSegment/SetQueue no longer rewrite files; verified failing on the pre-hardening shape via stash-revert). Gates: agent /simplify 4-angle pass applied; orchestrator code-review high found no P1/P2 (three pre-existing P3 residuals tracked as JF-449, filed same turn); orchestrator /simplify pass landed follow-ups on JF-449 (teardown divergence, shared helper, injectable debounce). Suite 2856/0, Release 0 warnings. Commit 3d571e4 + simplify amendment 25d67fa.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
