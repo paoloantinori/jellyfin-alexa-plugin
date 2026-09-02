@@ -4,9 +4,10 @@ title: >-
   Library restriction breaks artist search entirely: TopParentMap id-space
   mismatch (walk ends at AggregateFolder root / artist self) vs physical-folder
   filter ids (GH issue #22)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-02 05:40'
+updated_date: '2026-09-02 11:11'
 labels:
   - bug
   - library-filter
@@ -54,3 +55,9 @@ TESTS: unit-test the walk with a mocked chain ending at an AggregateFolder; unit
 - [ ] #10 /code-review high passed (no blocking findings remaining
 - [ ] #11 or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fixed, reviewed at high effort, live-verified. Root cause: with any per-user AllowedLibraryIds restriction the in-memory TopParentMap lived in a different id space than the filter (walk terminated at the AggregateFolder root or the artist's own id; filter emits physical folder ids) -> zero intersection -> every artist unfindable; the playlist query's TopParentIds excluded native playlists. Fix: walk with full IsTopParent parity (verified against v10.11.11 source + live DB); folderless artists (1063/1149 live) inherit their library via one MusicAlbum query joined by artist NAME; ResolveTopParentIds emits the physical+CF union; playlist query drops the library filter with an IsVisible post-filter. The formal code-review pass (9 confirmed findings) caught a privacy regression in my first playlist fix (GetItemsResult skips IsVisible; other users' private playlists could surface) plus join staleness (album-only changes never refreshed; stale-parent albums consumed the one-shot guard) - all fixed in commit 7ef15c3; remaining findings (SearchMedia primary site, PlayChannel, DB-tier IncludeItemsByName, predicate single-sourcing, latent test fragility) tracked on JF-456. Live verification with the restriction set: battisti tier1 results=3 (reporter's bug gone), folderless 24 grana plays (album join), song search hits the in-memory stage again, playlist found+plays (one specific m3u says empty pre-existing, same unrestricted), unrestricted regression clean, zero errors, config restored. Suite 2866/0 (8 new tests, 4 mutation-proven), Release 0 warnings. Commits 9cdcde9 + 7ef15c3. GH issue #22: diagnosis comment posted; 0.12.1 release carries the fix.
+<!-- SECTION:FINAL_SUMMARY:END -->
