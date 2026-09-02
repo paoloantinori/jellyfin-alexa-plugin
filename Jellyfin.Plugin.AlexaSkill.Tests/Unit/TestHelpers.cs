@@ -48,14 +48,14 @@ internal static class TestHelpers
         return new SessionInfo(sessionManager, loggerFactory.CreateLogger<SessionInfo>());
     }
 
-    internal static Context CreateTestContext()
+    internal static Context CreateTestContext(string deviceId = "test-device")
     {
         return new Context
         {
             System = new global::Alexa.NET.Request.AlexaSystem
             {
                 User = new global::Alexa.NET.Request.User { AccessToken = Guid.NewGuid().ToString() },
-                Device = new Device { DeviceID = "test-device" }
+                Device = new Device { DeviceID = deviceId }
             }
         };
     }

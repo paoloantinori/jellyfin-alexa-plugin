@@ -87,18 +87,10 @@ public class PlaybackStoppedEventHandler : BaseHandler
         // Detect displacement events: when a new AudioPlayer.Play replaces the current track,
         // Alexa sends PlaybackStopped for the OLD item with a near-zero offset from the new
         // track's start. This would overwrite the real saved position of the old item.
-        bool isDisplacement = false;
         var queue = _queueManager.GetOrCreateQueue(device);
-        string? expectedItemId = null;
-        if (queue.CurrentIndex >= 0 && queue.CurrentIndex < queue.ItemIds.Count)
+        bool isDisplacement = PlaybackReportOrdering.IsDisplacementStop(queue, req.Token, out string? expectedItemId);
+        if (isDisplacement)
         {
-            expectedItemId = queue.ItemIds[queue.CurrentIndex];
-        }
-
-        if (!string.IsNullOrEmpty(expectedItemId) &&
-            !string.Equals(expectedItemId, req.Token, StringComparison.OrdinalIgnoreCase))
-        {
-            isDisplacement = true;
             Logger.LogWarning(
                 "PlaybackStopped: displacement detected — stopped item={StoppedToken} but queue expects={QueueToken}. " +
                 "Saving with offset=0 to avoid overwriting real progress.",
@@ -117,6 +109,13 @@ public class PlaybackStoppedEventHandler : BaseHandler
         Logger.LogDebug(
             "PlaybackStopped: saving to server — item={Token}, offsetMs={OffsetMs}, ticks={Ticks}, sessionId={SessionId}, displacement={IsDisplacement}",
             req.Token, req.OffsetInMilliseconds, playbackStopInfo.PositionTicks, session.Id, isDisplacement);
+
+        // JF-425: register BEFORE reporting so any still in-flight playback-start report is
+        // already superseded. Displacement stops do not register (see PlaybackReportOrdering).
+        if (!isDisplacement)
+        {
+            PlaybackReportOrdering.RecordStop(device, playbackStopInfo);
+        }
 
         await SessionManager.OnPlaybackStopped(playbackStopInfo).ConfigureAwait(false);
 

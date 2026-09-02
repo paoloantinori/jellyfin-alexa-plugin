@@ -71,6 +71,7 @@ public class PlaybackStartedEventHandler : BaseHandler
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         AudioPlayerRequest req = (AudioPlayerRequest)request;
+        string deviceId = context.System?.Device?.DeviceID ?? string.Empty;
 
         Logger.LogDebug(
             "PlaybackStarted: item={Token}, offset={OffsetMs}ms, sessionId={SessionId}",
@@ -92,21 +93,24 @@ public class PlaybackStartedEventHandler : BaseHandler
         // Alexa's ~8s window and surfacing as INVALID_RESPONSE "Qualcosa è andato storto"),
         // and nothing in the keep-alive ack depends on its result. Elapsed time is logged
         // (warning above SlowReportMs) so future stalls localize to this call immediately.
-        RunFireAndForget(ReportPlaybackStartAsync(playbackStartInfo), "PlaybackStartReport");
+        // JF-425: fire-and-forget removed start-vs-stop ordering, so the generation is
+        // opened BEFORE dispatch and the report corrects itself if a stop supersedes it
+        // mid-flight (see PlaybackReportOrdering).
+        PlaybackReportOrdering.BeginStart(deviceId);
+        RunFireAndForget(ReportPlaybackStartAsync(playbackStartInfo, deviceId), "PlaybackStartReport");
 
         // JF-393 diagnostic interaction logging: record playback start so later control
         // intents can report elapsed time since start (JF-392 data collection).
         if (InteractionDiagnostics.IsEnabled(user, _config))
         {
-            string diagDevice = context.System?.Device?.DeviceID ?? string.Empty;
-            InteractionDiagnostics.RecordPlaybackStarted(diagDevice);
+            InteractionDiagnostics.RecordPlaybackStarted(deviceId);
             Logger.LogInformation(
                 "[diag] playback started: device={DeviceId} item={Token} sincePlayRequest={SinceRequest}s playIntent={PlayIntent} playSessionNew={PlaySessionNew}",
-                diagDevice,
+                deviceId,
                 req.Token,
-                InteractionDiagnostics.SincePlayRequest(diagDevice)?.ToString("F1", CultureInfo.InvariantCulture) ?? "n/a",
-                InteractionDiagnostics.LastPlayIntent(diagDevice) ?? "n/a",
-                InteractionDiagnostics.LastPlaySessionNew(diagDevice)?.ToString() ?? "n/a");
+                InteractionDiagnostics.SincePlayRequest(deviceId)?.ToString("F1", CultureInfo.InvariantCulture) ?? "n/a",
+                InteractionDiagnostics.LastPlayIntent(deviceId) ?? "n/a",
+                InteractionDiagnostics.LastPlaySessionNew(deviceId)?.ToString() ?? "n/a");
         }
 
         // JF-390 PreEnqueueOnStart (pre-compute): resolve the next track EARLY so
@@ -116,7 +120,7 @@ public class PlaybackStartedEventHandler : BaseHandler
         // we only cache the resolution result.
         if (_config.PreEnqueueOnStart && _libraryManager != null)
         {
-            TryPrecomputeNext(req.Token, session, user, context);
+            TryPrecomputeNext(req.Token, session, user, deviceId);
         }
 
         // JF-299: return a keep-alive ack (shouldEndSession=null). Amazon REJECTS
@@ -135,9 +139,14 @@ public class PlaybackStartedEventHandler : BaseHandler
     /// synchronous prefix, up to the first await inside OnPlaybackStart, executes before
     /// HandleAsync returns). Exceptions are swallowed after logging: a failed report must
     /// not surface to the user (the next playback event re-reports position anyway).
+    /// JF-425: the server's session write lands inside OnPlaybackStart after an internal
+    /// await, so this report can complete long after a later stop already cleared the
+    /// session. When that happens the superseding stop is re-issued to clear the
+    /// resurrected Playing state (zombie position card, MediaInfo, resume fallback).
     /// </summary>
     /// <param name="playbackStartInfo">The playback-start report to send.</param>
-    private async Task ReportPlaybackStartAsync(PlaybackStartInfo playbackStartInfo)
+    /// <param name="deviceId">The Alexa device ID (per-device ordering key).</param>
+    private async Task ReportPlaybackStartAsync(PlaybackStartInfo playbackStartInfo, string deviceId)
     {
         try
         {
@@ -157,10 +166,19 @@ public class PlaybackStartedEventHandler : BaseHandler
                     "PlaybackStarted: server playback-start report completed in {ElapsedMs}ms",
                     stopwatch.ElapsedMilliseconds);
             }
+
+            PlaybackStopInfo? supersedingStop = PlaybackReportOrdering.GetSupersedingStop(deviceId);
+            if (supersedingStop is not null)
+            {
+                Logger.LogWarning(
+                    "PlaybackStarted: report for item {Token} completed after a newer playback stop (superseded while in flight); re-issuing the stop to clear the session (JF-425)",
+                    playbackStartInfo.ItemId);
+                await SessionManager.OnPlaybackStopped(supersedingStop).ConfigureAwait(false);
+            }
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "PlaybackStarted: server playback-start report failed for item {Token}", playbackStartInfo.ItemId);
+            Logger.LogError(ex, "PlaybackStarted: server playback-start report (or its ordering correction) failed for item {Token}", playbackStartInfo.ItemId);
         }
     }
 
@@ -172,7 +190,7 @@ public class PlaybackStartedEventHandler : BaseHandler
     /// Deliberately sequential-only: shuffle, repeat, and radio/PostPlay resolution
     /// remain in NearlyFinished as the authoritative resolver.
     /// </summary>
-    private void TryPrecomputeNext(string currentToken, SessionInfo session, Entities.User user, Context context)
+    private void TryPrecomputeNext(string currentToken, SessionInfo session, Entities.User user, string deviceId)
     {
         if (session.NowPlayingQueue.Count == 0 || !Guid.TryParse(currentToken, out Guid currentId))
         {
@@ -202,7 +220,6 @@ public class PlaybackStartedEventHandler : BaseHandler
         }
 
         string streamUrl = GetStreamUrl(nextId.ToString(), user);
-        string deviceId = context.System?.Device?.DeviceID ?? string.Empty;
 
         NextTrackPrecomputeCache.Store(deviceId, currentToken, nextId, item, streamUrl);
         Logger.LogInformation(
