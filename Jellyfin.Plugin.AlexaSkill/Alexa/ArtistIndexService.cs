@@ -193,7 +193,19 @@ public class ArtistIndexService : DebouncedLibraryIndexService, IArtistIndex
             if (!parentMemo.TryGetValue(musicAlbum.ParentId, out var albumTopParent))
             {
                 albumTopParent = ResolveTopParentId(musicAlbum);
-                parentMemo[musicAlbum.ParentId] = albumTopParent;
+
+                // Cache only REAL scopes. A walk that resolved to this album's own
+                // id is a stale parent: caching that value would hand a SIBLING
+                // album under the same dead parent this album's id as its "top
+                // parent"; the sibling would pass the stale check below (the cached
+                // id is not the sibling's own id), consume the one-shot guard, and
+                // scope the artist to an album id in no library's id space. Left
+                // uncached, every stale sibling re-walks one hop and self-detects
+                // (0.12.1 port review, backported).
+                if (albumTopParent != musicAlbum.Id)
+                {
+                    parentMemo[musicAlbum.ParentId] = albumTopParent;
+                }
             }
 
             // An album that resolves to its OWN id carries no library scope (stale

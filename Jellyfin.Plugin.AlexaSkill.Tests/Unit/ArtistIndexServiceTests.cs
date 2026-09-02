@@ -881,6 +881,69 @@ public class ArtistIndexServiceTests : PluginTestBase
     }
 
     [Fact]
+    public async Task StartAsync_StaleOrParentlessAlbums_SkippedWithoutConsumingJoin()
+    {
+        // Album A is parentless (ParentId empty); albums B1 and B2 are siblings under
+        // the SAME dead parent id (the walk returns each album's OWN id, the
+        // stale-parent shape). All three carry no library scope and must be skipped
+        // WITHOUT consuming the one-shot write guard, so the healthy album C can
+        // still scope the artist. The sibling pair pins the per-parent memo: a memo
+        // that cached B1's self-resolved id would hand it to B2 as a "scope", B2
+        // would pass the stale check (B1's id != B2's id) and consume the guard
+        // with an album id in no library's id space (0.12.1 port).
+        var rootId = Guid.NewGuid();
+        var folderC = Guid.NewGuid();
+        var deadParentId = Guid.NewGuid();
+        var folderlessId = Guid.NewGuid();
+        var folderless = new MusicArtist { Name = "Mina", Id = folderlessId };
+
+        var parentlessAlbum = new MusicAlbum
+        {
+            Name = "Orphan",
+            Id = Guid.NewGuid(),
+            AlbumArtists = new List<string> { "Mina" }
+        };
+        var staleAlbum1 = new MusicAlbum
+        {
+            Name = "Stale 1",
+            Id = Guid.NewGuid(),
+            ParentId = deadParentId, // deliberately NOT registered in SetupParents
+            AlbumArtists = new List<string> { "Mina" }
+        };
+        var staleAlbum2 = new MusicAlbum
+        {
+            Name = "Stale 2",
+            Id = Guid.NewGuid(),
+            ParentId = deadParentId, // sibling under the same dead parent
+            AlbumArtists = new List<string> { "Mina" }
+        };
+        var healthyAlbum = new MusicAlbum
+        {
+            Name = "Città vuota",
+            Id = Guid.NewGuid(),
+            ParentId = folderC,
+            AlbumArtists = new List<string> { "Mina" }
+        };
+
+        SetupKindQueries(
+            new List<BaseItem> { folderless },
+            new List<BaseItem> { parentlessAlbum, staleAlbum1, staleAlbum2, healthyAlbum });
+        SetupParents(
+            new Folder { Id = folderC, ParentId = rootId },
+            new AggregateFolder { Id = rootId });
+
+        var service = new ArtistIndexService(_libraryManagerMock.Object, _logger);
+        await service.StartAsync(CancellationToken.None);
+
+        // The published snapshot's TopParentMap must carry the HEALTHY album's
+        // library folder: the garbage candidates neither consumed the one-shot
+        // guard nor wrote a bogus scope into the map.
+        Assert.Equal(folderC, service.CurrentSnapshot.TopParentMap[folderlessId]);
+        var scoped = Assert.Single(service.GetArtists(new[] { folderC }));
+        Assert.Equal(folderlessId, scoped.Id);
+    }
+
+    [Fact]
     public async Task StartAsync_AllArtistsFolderDerived_SkipsAlbumQuery()
     {
         // The album join must stay bounded: when no artist is folderless, the extra

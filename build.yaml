@@ -1,7 +1,7 @@
 ---
 name: Alexa Skill
 guid: c5df7de0-8777-4b3c-a70d-5c3dae359c9e
-version: 0.12.0.0
+version: 0.12.1.0
 targetAbi: 10.11.0.0
 framework: net9.0
 overview: Alexa skill plugin for Jellyfin
@@ -20,4 +20,4 @@ artifacts:
   - Amazon.Lambda.Serialization.Json.dll
   - Jellyfin.Plugin.AlexaSkill.dll
   - Refit.dll
-changelog: "Song search is now much more forgiving on every front: titles stored with abbreviations (\"Decatur St.\") are found when you say the full word (\"Decatur Street\"), a single misheard word no longer blocks an otherwise correct request, and the right song now ranks first instead of a coincidental match (e.g. \"Decatur St.\" beats \"St. Gregory\" when you said \"street\"). The skill asks for confirmation instead of silently playing a loosely-matching artist, no longer fails with \"something went wrong\" when a dialog prompt and background updates collide, no longer crashes when you abandon a song-search conversation, and \"Alexa, stop\" now works even after starting playback from an interactive session. New troubleshooting guides cover reverse-proxy/Cloudflare setups, the missing seek bar, follow-me behavior and more."
+changelog: "Fixes artist and playlist playback for users who restrict the skill to specific libraries: with a per-user library restriction configured, every artist request returned no results and playlists could not be found at all. Asking for an artist, a playlist or a song now behaves the same with or without library restrictions. Playlist requests no longer apply the library filter, since playlists live outside libraries. Song search by name is also faster again for restricted users: it was silently falling back to the slower library-wide search path."
