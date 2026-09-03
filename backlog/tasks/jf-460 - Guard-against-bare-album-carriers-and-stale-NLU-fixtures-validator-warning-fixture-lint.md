@@ -3,10 +3,10 @@ id: JF-460
 title: >-
   Guard against bare album carriers and stale NLU fixtures (validator warning +
   fixture lint)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-03 05:32'
-updated_date: '2026-09-03 06:44'
+updated_date: '2026-09-03 07:29'
 labels: []
 dependencies: []
 references:
@@ -45,3 +45,19 @@ Acceptance criteria:
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Both guards implemented in scripts/validate_interaction_models.py (commit 7da19466, single-file code change + CI job dependency + CLAUDE.md note).
+
+1. Check #10 (validate_single_model, warning-level): flags PlayAlbumIntent samples containing {album} whose carrier (placeholders stripped, _lint_normalize'd) lacks the locale's media noun, only when the album slot type read from the model is an AMAZON.* free-text type. it-IT's catalog-backed AlbumName is exempt automatically (no hardcoded locale list; the 'it' noun-table gap is documented as deliberate belt-and-braces with the slot-type exemption). Noun table ALBUM_CARRIER_NOUNS pinned to CLAUDE.md anti-pattern #11 with a same-commit drift comment.
+
+2. lint_fixture_carriers (Phase 3, warning-level): for fixture tests expecting PlayAlbumIntent, warns when the utterance matches no current sample via subsequence-of-fragments containment. Scoped to PlayAlbumIntent deliberately (song-intent fixtures intentionally exercise NLU generalization, documented in-code).
+
+Hardening applied from the code-review pass: pip install pyyaml added to the validate-models CI job (the lint was silently inert there: the runner image ships no PyYAML, and the sibling validate-build-yaml job already installs it); the all-clear line can no longer print after a SKIP (lint returns None on not-run); malformed fixture entries (non-string utterance, non-list tests) no longer crash the advisory validator; --verbose is now a real flag (the summary previously hinted at a nonexistent flag while capping at 20 warnings; Phase 1 warnings were invisible beyond the cap).
+
+Verification: 90-warning baseline unchanged and exit 0; four controls reproduced independently by the orchestrator (injected 'Spiele {album}' fires exactly one warning; a case/whitespace nouned variant stays silent; it-IT with real AlbumName stays silent with an injected bare sample; the pre-JF-459 fr-CA fixture warns on exactly 'Lis la musique de the beatles'; current fixtures all clean). Suite 3056/3056; locales/versions validators PASS; NLU dry-run unchanged; ci.yml valid YAML. No deploy needed (repo-side script only, no DLL change).
+
+Gates: /simplify (4 parallel angle agents; applied the --verbose fix, unified normalization, hoists, scope notes; skips documented with reasons); code-review via pr-review-toolkit:code-reviewer (3 findings P2@88 + P3@85 x2, all applied same-turn; below-threshold notes: verbose double-print cosmetic, noun-table substring coupling documented as deliberate).
+<!-- SECTION:FINAL_SUMMARY:END -->
