@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-03 13:49'
+updated_date: '2026-09-03 14:03'
 labels: []
 dependencies: []
 references:
@@ -45,3 +46,9 @@ Acceptance criteria:
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+POST-DEPLOY EVIDENCE (JF-441 closure, 2026-09-03 16:01 model): the JF-441 secondary sample addition did NOT fix the slot fill. 'un album chiamato surfer rosa' with the sample now deployed fills musician='surfer rosa' (album empty; the same statistical-filler theft as the out-of-catalog shape, now on an IN-CATALOG title), and 'un disco chiamato surfer rosa' selects NO intent at all. Scope of this task is therefore the chiamato-family FILL problem across ALL shapes (c'e/un/cerca/un disco), Amazon-side weighting versus sample presence; intent selection is intact on the album and c'e forms. Consider handler-side value normalization (strip a leading 'chiamato/chiamata' from the album slot, locale-aware) more seriously: the model layer is evidenced insufficient.
+<!-- SECTION:NOTES:END -->
