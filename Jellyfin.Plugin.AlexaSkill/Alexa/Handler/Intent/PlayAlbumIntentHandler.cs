@@ -168,11 +168,20 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         // JF-411/JF-427: album resolved from the artist filter when no title was given.
         BaseItem? resolvedAlbum = null;
+        BaseItem? matchedArtist = null;
+
+        // JF-448 (review F2), set inside the musician block so album-only requests
+        // pay nothing: pin ONE index snapshot for the search AND the JF-471
+        // acceptance gate below, so the phonetic codes the gate reads belong to the
+        // same publish the chain searched (SearchAsync's own Pin is idempotent on a
+        // view; Pin degrades to live reads when the implementation cannot pin).
+        IArtistIndex? pinnedArtistIndex = null;
         if (!string.IsNullOrWhiteSpace(musician))
         {
+            pinnedArtistIndex = _artistIndex.Pin();
             Logger.LogDebug("PlayAlbum: searching for artist filter='{Musician}'", musician);
             IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
-                musician, user, _libraryManager, _artistIndex, Logger,
+                musician, user, _libraryManager, pinnedArtistIndex, Logger,
                 (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
                 locale, cancellationToken).ConfigureAwait(false);
 
@@ -183,6 +192,7 @@ public class PlayAlbumIntentHandler : BaseHandler
                 return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByArtist", locale, musician));
             }
 
+            matchedArtist = artists[0];
             matchedArtistName = artists[0].Name;
             foreach (BaseItem artist in artists)
             {
@@ -196,6 +206,34 @@ public class PlayAlbumIntentHandler : BaseHandler
         // albums and play it.
         if (string.IsNullOrWhiteSpace(album) && artistsIds.Count > 0)
         {
+            // JF-471 judgment layer (live 2026-09-03 corr=38498471): Amazon entity
+            // resolution stole the album span of "riproduci album dark side of the
+            // moon" into the musician slot (JF-469, not fixable at the model), the
+            // search chain's JF-437 word-coverage tier matched the band "Dark Dark
+            // Dark" (name word "dark" inside the query's {dark, side, moon}) at
+            // honest fuzzy score 42 with NO phonetic collision, and the skill
+            // silently played that band's album. The word-coverage tier is a free
+            // pass (no score bar), and unlike PlayArtistSongs this path had no
+            // downstream judgment. The gate re-scores the match through the SAME
+            // matcher overload and threshold the fuzzy tiers use, so every match
+            // the tiers themselves accepted still auto-plays (exact/containment
+            // "pink floyd", ASR truncation "crash" -> "Crash Test Dummies",
+            // qualifier queries "miles davis live", and the JF-381 phonetic
+            // accent-drift class "cup" -> "Koop"); only the below-threshold free
+            // pass is refused. Per the JF-363 band semantics a score below the
+            // normal threshold is the always-not-found band, so the refusal is the
+            // clean NotFoundAlbumByArtist (spoken with the user's own words), not an
+            // offer. Scoped to the album-by-artist resolution: an album TITLE
+            // present keeps today's behavior unchanged.
+            if (matchedArtist != null
+                && !PassesArtistMatchAcceptance(matchedArtist, musician!, user, pinnedArtistIndex, out int acceptanceScore))
+            {
+                Logger.LogInformation(
+                    "PlayAlbum: artist match '{Artist}' for musician='{Musician}' fails the fuzzy/phonetic tier acceptance (word-coverage free pass, score={Score} below {Threshold}), refusing the album-by-artist auto-play (JF-471)",
+                    matchedArtist.Name, musician, acceptanceScore, FuzzyMatcher.GetDefaultThreshold(user));
+                return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByArtist", locale, musician!));
+            }
+
             InternalItemsQuery artistAlbumQuery = BuildAlbumQuery(_libraryManager, jellyfinUser, user, searchTerm: null, artistIds: artistsIds.ToArray(), albumArtistsOnly: true);
 
             // JF-427: explicit deterministic order; the query previously had NO OrderBy, so the

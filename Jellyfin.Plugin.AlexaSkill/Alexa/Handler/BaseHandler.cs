@@ -2847,6 +2847,84 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// JF-471: decision-point acceptance for an artist handed back by
+    /// <see cref="Util.ArtistSearch.SearchAsync"/> on a path that AUTO-PLAYS an album
+    /// (PlayAlbum's album-by-artist resolution). The fuzzy tiers police their own
+    /// results (tier-1 containment scores at least ContainmentScore by construction;
+    /// tiers 2-4 accept only through <see cref="FuzzyMatcher"/> with the user's
+    /// threshold, phonetic bonus, and the JF-381 collision floor), but the JF-437
+    /// word-coverage tier (1.5) is a free pass: it returns any artist whose name
+    /// word-set is a subset of the query's content words with NO score requirement.
+    /// A judgment-less caller then silently plays an unrelated artist's album (live
+    /// 2026-09-03 corr=38498471: the album span of "riproduci album dark side of the
+    /// moon" was stolen into the musician slot by Amazon entity resolution (JF-469),
+    /// tier 1.5 matched the band "Dark Dark Dark" (name word "dark" inside the
+    /// query's {dark, side, moon}) at honest score 42 with NO phonetic collision,
+    /// and the skill played that band's album with no announcement). PlayArtistSongs
+    /// judges tier results downstream (JF-377 downgrade, JF-420 gate); this helper
+    /// gives the album path the equivalent decision-point predicate.
+    /// <para>
+    /// The check IS the matcher, never a handler-side re-implementation of its
+    /// semantics (the JF-420.3 lesson: private copies of matcher scoring drifted by
+    /// 30+ points). Same overload, same threshold, same phonetic lookup the tiers
+    /// use, so everything the fuzzy tiers themselves accepted still passes:
+    /// containment/exact ("pink floyd"), ASR truncation ("crash" ->
+    /// "Crash Test Dummies"), qualifier queries ("miles davis live"), and the JF-381
+    /// phonetic accent-drift class ("cup" -> "Koop", length-banded collision floored
+    /// above ContainmentScore).
+    /// </para>
+    /// <para>
+    /// Two documented corners (JF-471 review): (1) the bar is the USER's threshold,
+    /// and tier-1 containment matches were never threshold-gated before, so a user
+    /// who sets FuzzyMatchThreshold above ContainmentScore (90) now sees containment
+    /// matches refused HERE while PlayArtistSongs still auto-plays them (its bars
+    /// are fixed constants); that is the user's own bar being respected, JF-363
+    /// semantics. (2) In the disabled-index corner (IsReady false after
+    /// MaxLoadAttempts) the chain takes the database branch whose tiers score with
+    /// the PLAIN overload while this gate scores with the phonetic one; the
+    /// divergence is fail-open only (the phonetic overload computes the identical
+    /// PartialRatio plus an optional boost), so the gate can never refuse a match
+    /// the plain tiers accepted.
+    /// </para>
+    /// </summary>
+    /// <param name="artist">The chain's representative match (the first result).</param>
+    /// <param name="query">The raw query the chain searched (the musician slot value).</param>
+    /// <param name="user">The skill user (fuzzy threshold override).</param>
+    /// <param name="artistIndex">The PINNED index view the search ran on, so the
+    /// phonetic codes come from the SAME snapshot (JF-448); null degrades to the
+    /// plain text overload, mirroring the database search path.</param>
+    /// <returns>True when the match independently survives the fuzzy/phonetic
+    /// acceptance the tiers themselves enforce. <paramref name="score"/> carries the
+    /// acceptance score (0 when the matcher's length band excluded the candidate) for
+    /// decision-point triage logs.</returns>
+    protected bool PassesArtistMatchAcceptance(
+        BaseItem artist,
+        string query,
+        Entities.User? user,
+        IArtistIndex? artistIndex,
+        out int score)
+    {
+        int threshold = FuzzyMatcher.GetDefaultThreshold(user);
+
+        if (artistIndex != null)
+        {
+            var pinned = artistIndex;
+            var scored = FuzzyMatcher.FindBestMatchWithScore(
+                query,
+                new[] { artist },
+                a => a.Name!,
+                a => a.Id,
+                id => pinned.TryGetPhoneticCode(id, out var codes) ? codes : null);
+            score = scored.HasValue ? scored.Value.Score : 0;
+            return score >= threshold;
+        }
+
+        var plainScored = FuzzyMatcher.FindBestMatchWithScore(query, new[] { artist }, a => a.Name!);
+        score = plainScored.HasValue ? plainScored.Value.Score : 0;
+        return score >= threshold;
+    }
+
+    /// <summary>
     /// Entity fallback for greedy <c>AMAZON.SearchQuery</c> intents that misroute an
     /// artist query (e.g. it-IT "di miles davis" captured as a mood). Strips locale
     /// stop-words via <see cref="KeywordMatcher.Tokenize"/> (all 11 language prefixes of

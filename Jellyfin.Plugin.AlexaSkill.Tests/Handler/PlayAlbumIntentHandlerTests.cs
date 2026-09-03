@@ -12,6 +12,7 @@ using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Entities;
@@ -827,6 +828,260 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
 
         Assert.NotNull(response);
         Assert.Null(response.Response.OutputSpeech);
+        var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.NotNull(playDirective);
+    }
+
+    // -----------------------------------------------------------------------
+    // JF-471: judgment layer on the album-by-artist path. Device incident
+    // 2026-09-03 (corr=38498471): "riproduci album dark side of the moon" arrived
+    // with album=EMPTY and musician='dark side of the moon' (the JF-469 Amazon
+    // slot theft); the search chain's JF-437 word-coverage tier matched the band
+    // 'Dark Dark Dark' (name word 'dark' inside the query's {dark, side, moon})
+    // and the skill silently played that band's album 'In Your Dreams'.
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Builds a ready in-memory artist index over the given artists with REAL
+    /// DoubleMetaphone codes (mirroring ArtistIndexService, which computes
+    /// DoubleMetaphone.Encode(artist.Name) at build time), so the search chain
+    /// runs its genuine tier semantics instead of an invented mock shape.
+    /// </summary>
+    private static FakeArtistIndex BuildPhoneticArtistIndex(params BaseItem[] artists)
+    {
+        var codes = new Dictionary<Guid, (string Primary, string? Alternate)>();
+        foreach (BaseItem artist in artists)
+        {
+            codes[artist.Id] = DoubleMetaphone.Encode(artist.Name!);
+        }
+
+        return new FakeArtistIndex(artists, codes);
+    }
+
+    /// <summary>
+    /// The chain-side mechanism, pinned at the unit level: the word-coverage tier
+    /// (1.5) returns 'Dark Dark Dark' for 'dark side of the moon' as a SUBSET free
+    /// pass (no score bar), the honest fuzzy score is far below the acceptance
+    /// threshold, and the phonetic codes do NOT collide. This is why the JF-471 gate
+    /// lives at the handler's decision point rather than in ArtistSearch (recall
+    /// layer; the tier's subset matches stay reachable for callers WITH downstream
+    /// judgment).
+    /// </summary>
+    [Fact]
+    public void ArtistSearch_WordCoverage_FreePassOnStolenAlbumSpan()
+    {
+        var artist = new MusicArtist { Name = "Dark Dark Dark", Id = Guid.NewGuid() };
+
+        List<BaseItem> coverage = ArtistSearch.WordCoverageCandidates(
+            "dark side of the moon", new[] { artist }, "it-IT");
+
+        Assert.Single(coverage);
+        Assert.Equal("Dark Dark Dark", coverage[0].Name);
+        Assert.True(
+            FuzzyMatcher.Score("dark side of the moon", "Dark Dark Dark") < FuzzyMatcher.DefaultThreshold,
+            "the honest fuzzy score must be below the acceptance threshold for the free-pass classification");
+        var queryCodes = DoubleMetaphone.Encode("dark side of the moon");
+        var nameCodes = DoubleMetaphone.Encode("Dark Dark Dark");
+        Assert.False(
+            FuzzyMatcher.PhoneticCodesMatch(queryCodes.Primary, queryCodes.Alternate, nameCodes.Primary, nameCodes.Alternate),
+            "the match must not be a phonetic code collision for the free-pass classification");
+    }
+
+    /// <summary>
+    /// JF-471 failing-state pin, post-fix assertion: the album-by-artist path must
+    /// NOT silently auto-play an unrelated artist's album when the musician slot
+    /// carries a stolen album span that only the word-coverage free pass matched.
+    /// Pre-fix behavior (probe, 2026-09-03): 'In Your Dreams' auto-played with NO
+    /// announcement (fuzzyAlbumAnnouncement is only set on the album-name fuzzy
+    /// fallback, and AnnounceAudioPlays defaults off).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_MusicianOnly_StolenAlbumSpanFreePassArtist_DoesNotAutoPlay()
+    {
+        var artist = new MusicArtist { Name = "Dark Dark Dark", Id = Guid.NewGuid() };
+        var neighbor = new MusicArtist { Name = "Pink Floyd", Id = Guid.NewGuid() };
+        var index = BuildPhoneticArtistIndex(artist, neighbor);
+        var handler = new PlayAlbumIntentHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory,
+            _queueManager,
+            index);
+        var request = CreateIntentRequest(musician: "dark side of the moon");
+        _fx.SetupUserMock();
+
+        var (album, albumTracks) = MakeRelease("In Your Dreams", 2011, 10, "In Your Dreams First");
+        SetupIndefiniteAlbumCatalog(
+            artist,
+            new List<BaseItem> { album },
+            albumTracks,
+            new Dictionary<Guid, BaseItem> { [album.Id] = albumTracks[0] });
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.Null(playDirective);
+        // Clean not-found in the user's own words (the same string the zero-result
+        // path speaks), not a prompt and not a silent substitution.
+        Assert.True(response.Response.ShouldEndSession);
+        Assert.Contains("dark side of the moon", TestHelpers.GetSpeechText(response));
+    }
+
+    /// <summary>
+    /// JF-471 legit-flow pin (byte-identical requirement): a real artist in the
+    /// musician slot auto-plays its album exactly as before the gate. The chain
+    /// accepts 'pink floyd' at tier 1 (contains) and the gate re-scores it at 100,
+    /// so the resolution block is untouched.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_MusicianOnly_RealArtistMatch_StillAutoPlays()
+    {
+        var artist = new MusicArtist { Name = "Pink Floyd", Id = Guid.NewGuid() };
+        var index = BuildPhoneticArtistIndex(artist);
+        var handler = new PlayAlbumIntentHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory,
+            _queueManager,
+            index);
+        var request = CreateIntentRequest(musician: "pink floyd");
+        _fx.SetupUserMock();
+
+        var (album, albumTracks) = MakeRelease("The Dark Side of the Moon", 1973, 10, "Speak to Me");
+        SetupIndefiniteAlbumCatalog(
+            artist,
+            new List<BaseItem> { album },
+            albumTracks,
+            new Dictionary<Guid, BaseItem> { [album.Id] = albumTracks[0] });
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.NotNull(playDirective);
+        Assert.Equal(albumTracks[0].Id.ToString(), playDirective!.AudioItem.Stream.Token);
+        // Byte-identical shape: session-ending play, no announcement (AnnounceAudioPlays
+        // is off by default and no substitution happened).
+        Assert.True(response.Response.ShouldEndSession);
+        Assert.Null(response.Response.OutputSpeech);
+    }
+
+    /// <summary>
+    /// JF-471 no-regression pin: the JF-381 phonetic accent-drift class ('cup' for
+    /// 'Koop', both Double Metaphone KP) must keep auto-playing on the album-by-artist
+    /// path. The gate's phonetic arm mirrors the matcher's own acceptance (the
+    /// length-banded collision floor), so the flagship feature survives the guard.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_MusicianOnly_PhoneticAccentDrift_StillAutoPlays()
+    {
+        var artist = new MusicArtist { Name = "Koop", Id = Guid.NewGuid() };
+        var index = BuildPhoneticArtistIndex(artist);
+        var handler = new PlayAlbumIntentHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory,
+            _queueManager,
+            index);
+        var request = CreateIntentRequest(musician: "cup");
+        _fx.SetupUserMock();
+
+        var (album, albumTracks) = MakeRelease("Waltz for Koop", 1997, 10, "Baby");
+        SetupIndefiniteAlbumCatalog(
+            artist,
+            new List<BaseItem> { album },
+            albumTracks,
+            new Dictionary<Guid, BaseItem> { [album.Id] = albumTracks[0] });
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.NotNull(playDirective);
+        Assert.Equal(albumTracks[0].Id.ToString(), playDirective!.AudioItem.Stream.Token);
+    }
+
+    /// <summary>
+    /// JF-471 no-regression pin: the JF-437 qualifier-query class ('miles davis
+    /// live' -> 'Miles Davis', a word-coverage tier match whose name is CONTAINED in
+    /// the query and therefore scores ContainmentScore) must keep auto-playing; the
+    /// gate only refuses the below-threshold free pass, not the tier's intended class.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_MusicianOnly_QualifierQuery_StillAutoPlays()
+    {
+        var artist = new MusicArtist { Name = "Miles Davis", Id = Guid.NewGuid() };
+        var index = BuildPhoneticArtistIndex(artist);
+        var handler = new PlayAlbumIntentHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory,
+            _queueManager,
+            index);
+        var request = CreateIntentRequest(musician: "miles davis live");
+        _fx.SetupUserMock();
+
+        var (album, albumTracks) = MakeRelease("Kind of Blue", 1959, 5, "So What");
+        SetupIndefiniteAlbumCatalog(
+            artist,
+            new List<BaseItem> { album },
+            albumTracks,
+            new Dictionary<Guid, BaseItem> { [album.Id] = albumTracks[0] });
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.NotNull(playDirective);
+        Assert.Equal(albumTracks[0].Id.ToString(), playDirective!.AudioItem.Stream.Token);
+    }
+
+    /// <summary>
+    /// JF-471 scope pin: the gate lives in the album-by-artist resolution (album slot
+    /// EMPTY). When an album TITLE is present, a weak musician match keeps today's
+    /// behavior (the artist ids only filter the album-title query); widening the gate
+    /// to the album-titled path would change behavior this test does not sanction.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_AlbumTitlePresent_WeakMusicianMatch_KeepsTodayBehavior()
+    {
+        var artist = new MusicArtist { Name = "Dark Dark Dark", Id = Guid.NewGuid() };
+        var index = BuildPhoneticArtistIndex(artist);
+        var handler = new PlayAlbumIntentHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory,
+            _queueManager,
+            index);
+        var request = CreateIntentRequest(album: "in your dreams", musician: "dark side of the moon");
+        _fx.SetupUserMock();
+
+        var (album, albumTracks) = MakeRelease("In Your Dreams", 2011, 10, "In Your Dreams First");
+        SetupIndefiniteAlbumCatalog(
+            artist,
+            new List<BaseItem> { album },
+            albumTracks,
+            new Dictionary<Guid, BaseItem> { [album.Id] = albumTracks[0] });
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
         var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
         Assert.NotNull(playDirective);
     }
