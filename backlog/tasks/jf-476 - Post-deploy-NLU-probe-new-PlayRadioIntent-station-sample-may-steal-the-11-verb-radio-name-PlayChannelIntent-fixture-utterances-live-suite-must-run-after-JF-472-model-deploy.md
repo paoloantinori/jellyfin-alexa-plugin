@@ -4,9 +4,10 @@ title: >-
   Post-deploy NLU probe: new PlayRadioIntent station sample may steal the 11
   "<verb> radio <name>" PlayChannelIntent fixture utterances (live suite must
   run after JF-472 model deploy)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-03 16:39'
+updated_date: '2026-09-03 16:48'
 labels: []
 dependencies: []
 references:
@@ -30,6 +31,12 @@ Found by the JF-472 final code review. JF-472 adds the first slotted sample to P
 - [ ] #3 The probe matrix in the JF-472 task description is closed out with these rows
 - [ ] #4 Dry-run (--dry-run) still passes after any fixture edits
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+OBLIGATION DISCHARGED post-deploy (2026-09-03, all-locales rebuild via the new locale:'*' sentinel, 17 pushed / 12 active succeeded / 0 failed): the five probe rows all still route to PlayChannelIntent against the live models: en-US 'Play radio jazz fm', it-IT 'Riproduci radio rtl', fr-FR 'Lis la radio jazz fm', de-DE 'Spiele Radio jazz fm', es-ES 'Pon la radio jazz fm'. The new PlayRadioIntent station sample steals nothing. The bare genre forms ('suona jazz') still route to PlayRadioIntent as expected (Amazon-side, documented) but now receive the coherent station elicit instead of the out-of-context Tell, and 'riproduci radio' still routes PlayRadioIntent (the slot-less primary path; with something playing it starts radio mode unchanged). No fixture updates needed. Closing as verified-no-steal; the live NLU suite run covering these rows remains part of the next routine suite pass.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

@@ -4,10 +4,10 @@ title: >-
   Bare genre forms stolen by PlayRadioIntent with empty slot
   (suona/riproduci/metti jazz); radio handler answers out-of-context instead of
   prompting for the slot
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-03 15:40'
-updated_date: '2026-09-03 15:51'
+updated_date: '2026-09-03 16:49'
 labels: []
 dependencies: []
 references:
@@ -48,3 +48,19 @@ Acceptance criteria:
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented, deployed, and live-verified (commit 9a625ae7; models live via the all-locales sentinel rebuild).
+
+Investigation found the intent had ZERO slots and NO dialog registration in any locale: 'empty station slot' was the state of EVERY invocation. Fix: optional station slot (AMAZON.SearchQuery, single-slot intent so the coexistence rule holds), Dialog.ElicitSlot registration in all 17 locales (anti-pattern #9), one noun-carrying slotted sample per locale, RadioAskStation in all 17 locale files. Handler: slot empty AND nothing playing -> the elicitation Ask (verified live: 'Quale stazione radio vuoi ascoltare?', session open, Dialog directive present); something playing -> the slot-less 'riproduci radio' primary path unchanged (pinned by test, and probe-verified still routing correctly); captured cancel word during the open elicit ends the flow (JF-423 hatch, the exact PlaySong predicate). The documented deviation from the initial spec (conditional rather than unconditional elicit) was correct and is pinned by tests.
+
+Deploy order honored: DLL first, then the locale:'*' all-locales rebuild (models embed from the DLL; the brief silent-ignore window is documented). Live matrix: elicit fires with nothing playing; 'suona jazz' (still misrouted Amazon-side, as expected) now receives the coherent prompt instead of the out-of-context Tell; the five JF-476 channel rows all still route PlayChannelIntent (probed en-US/it-IT/fr-FR/de-DE/es-ES: no steal).
+
+Suite 3101/3101 (5 new tests, 1 superseded, 2 flag-test assertions updated), Release 0 warnings, validators at the exact 90-warning baseline, locales no gaps, dry-run unchanged. VOICE_COMMANDS Play Radio rows synced (26 additions; the review then caught 8 phantoms/case-duplicates left in the it-IT row, removed by ground truth, JF-475's scope).
+
+Follow-ups filed: JF-474 (station dead-end: ask-answer-refuse; station-to-genre-radio recommended), JF-475 (phantom doc debt, scope enlarged by the sync), JF-476 (post-deploy probe obligation, DISCHARGED same-day with all five rows clear).
+
+Device re-verification items for Paolo: 'suona jazz' idle -> the station question; answer 'ferma' -> clean cancel; answer 'jazz' -> known dead-end (JF-474); 'riproduci radio' while playing -> radio mode unchanged.
+<!-- SECTION:FINAL_SUMMARY:END -->

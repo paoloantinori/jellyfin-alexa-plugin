@@ -3,10 +3,10 @@ id: JF-471
 title: >-
   Wrong album plays on device: musician-slot theft + phonetic artist match on
   PlayAlbum's album-by-artist path (dark side of the moon -> Dark Dark Dark)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-03 15:39'
-updated_date: '2026-09-03 15:51'
+updated_date: '2026-09-03 16:48'
 labels: []
 dependencies: []
 references:
@@ -45,3 +45,15 @@ Acceptance criteria:
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented, deployed, and live-verified (commit 3fb45c4a).
+
+Mechanism probe REFUTED the task's phonetic hypothesis with a pinned pre-fix test: the winner was the JF-437 word-coverage tier (the only unbarred tier), 'Dark Dark Dark' tokenizing to 'dark' as a subset of the query's {dark, side, moon}, honest fuzzy score 42, NO Double Metaphone collision (TRKS vs TRKT). Fix: BaseHandler.PassesArtistMatchAcceptance, a decision-point gate that re-scores the chain's match through the matcher itself (same overload, threshold source, and phonetic lookup the tiers use, over the same pinned index snapshot, JF-448 pattern): below the acceptance bar the album-by-artist path refuses with the clean NotFoundAlbumByArtist. Every legit class pinned auto-playing unchanged (containment/exact, ASR truncation, qualifier queries, the JF-381 phonetic flagship cup->Koop); the album-title-present path pinned byte-identical (scope test).
+
+Live verification on minix post-deploy: simulator PlayAlbumIntent musician='dark side of the moon' now answers 'Spiacente, non ho trovato nessun album dell'artista dark side of the moon' (the device bug closed); the pink floyd control still auto-plays. Suite 3101/3101 (6 tests, both-arm mutation-verified), Release 0 warnings, validators baseline.
+
+Review: pr-review-toolkit:code-reviewer, zero P1/P2; two P3@85 fidelity corners documented in the helper doc (user threshold above 90 refusing containment per JF-363 semantics; disabled-index fail-open divergence). Residual gap filed as JF-473 (single-word containment parity with the JF-377 downgrade on PlayArtistSongs). Device re-verification item for Paolo: 'riproduci album dark side of the moon' must not-found cleanly; 'riproduci l'album dei pink floyd' unchanged.
+<!-- SECTION:FINAL_SUMMARY:END -->
