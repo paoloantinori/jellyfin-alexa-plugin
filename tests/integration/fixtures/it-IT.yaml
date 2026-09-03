@@ -45,13 +45,19 @@ tests:
     expected_slots: {}
 
   # JF-439: the coin-flip state of the musician-shaped title region. Pins the
-  # CURRENT routing (PlayArtistSongs with musician slot) so a future model edit
-  # that re-flips it flags here for triage; the handler fallback serves the song
-  # either way (unit-proven in PlayArtistSongsIntentHandlerTests).
+  # CURRENT routing so a future model edit that re-flips it flags here for
+  # triage; the handler fallback serves the song either way (unit-proven in
+  # PlayArtistSongsIntentHandlerTests).
+  # JF-470 (2026-09-03): the coin flipped AGAIN, now to PlaySongIntent with the
+  # literal 'canzone' bleeding into the song slot ('canzone sugar free jazz').
+  # Probe-verified 3/3 deterministic against the live model (catalogs AlbumName
+  # v523 / JellyfinArtist v517). No repo commit in the 09-01..09-03 window
+  # touched this carrier region (JF-438 removed only RepeatSingle Suona+clitic
+  # samples; JF-450/451 added SetReminderIntent): Amazon-side statistical shift.
   - utterance: "suona la canzone sugar free jazz"
-    expected_intent: PlayArtistSongsIntent
+    expected_intent: PlaySongIntent
     expected_slots:
-      musician: {}
+      song: {}
 
   # -------------------------------------------------------------------------
   # 4. PlayChannelIntent (channel)
@@ -69,11 +75,20 @@ tests:
   # -------------------------------------------------------------------------
   # 5. PlayVideoIntent (title)
   # Note: PlayVideoIntent is dominated by PlaySongIntent (6 vs 64 samples).
-  # All "verb + title" patterns resolve to PlaySongIntent, which is fine
+  # "verb + title" patterns used to resolve to PlaySongIntent, which was fine
   # since the skill handler determines content type from Jellyfin search.
+  # JF-470 (2026-09-03): bare 'Riproduci/suona star wars' now selects
+  # PlayNextIntent (song slot filled): Amazon's NLU matches the PlayNext
+  # 'riproduci {song} dopo' / 'suona {song} dopo' family with the trailing
+  # 'dopo' dropped. PlaySong has NO bare 'Riproduci {song}' sample (only
+  # song_noun carriers), so nothing was removed to cause this; the same class
+  # is documented at 'Suona bohemian rhapsody' in section 23. Probe-verified
+  # 3/3 deterministic. UX cost: enqueue-as-next instead of play-now; adding a
+  # bare song carrier would recreate the JF-418 collision family, so the pin
+  # documents reality rather than endorsing it.
   # -------------------------------------------------------------------------
   - utterance: "Riproduci star wars"
-    expected_intent: PlaySongIntent
+    expected_intent: PlayNextIntent
     expected_slots:
       song: {}
 
@@ -97,7 +112,12 @@ tests:
   #   'suona/metti/pleia pulp fiction'  -> PlayArtistSongsIntent, musician='pulp fiction'
   #   'suona/metti/pleia star wars'     -> PlaySongIntent, song='star wars' (the
   #                                        pre-JF-418 documented class; the handler
-  #                                        resolves content type from Jellyfin search)
+  #                                        resolves content type from Jellyfin search).
+  #                                        JF-470 (2026-09-03): 'suona star wars'
+  #                                        shifted to PlayNextIntent (the
+  #                                        '{song} dopo' statistical steal, same
+  #                                        class as 'Riproduci star wars' above);
+  #                                        pin updated below, 3/3 deterministic.
   #   'suona/metti/pleia breaking bad', 'suona stranger things' -> no selectedIntent
   #                                        (SeriesName catalog resolution pulls
   #                                        PlayEpisodeIntent into the competition)
@@ -121,8 +141,10 @@ tests:
     expected_slots:
       musician: {}
 
+  # JF-470 (2026-09-03): PlayNextIntent steal ('suona {song} dopo' family,
+  # trailing word dropped by Amazon's matcher); probe-verified 3/3.
   - utterance: "suona star wars"
-    expected_intent: PlaySongIntent
+    expected_intent: PlayNextIntent
     expected_slots:
       song: {}
 
@@ -535,7 +557,24 @@ tests:
   # -------------------------------------------------------------------------
   # 24. PlayAlbumIntent (album, musician)
   # -------------------------------------------------------------------------
+  # JF-470 (2026-09-03): 'Riproduci album {album}' is a VERBATIM PlayAlbum
+  # sample, yet for this title the NLU selects PlayArtistSongsIntent with
+  # musician absorbing the span (consideredIntents[0] is PlayAlbumIntent while
+  # the selection lands elsewhere: the JF-441/JF-469 entity-weighting family,
+  # Amazon-side). Title-statistics dependent, not purely catalog membership:
+  # 'thriller' keeps PlayAlbumIntent (companion entry below) while in-catalog
+  # 'surfer rosa' loses the same way (both probed 3/3). Pin updated to the
+  # verified routing; a future flip re-flags here.
   - utterance: "Riproduci album dark side of the moon"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  # JF-470 companion guard: the album-noun carrier itself must keep working
+  # when the title is anchored by the STATIC AlbumName model seed (thriller is
+  # NOT in the Jellyfin library, so the library-synced catalog does not carry
+  # it; the ER match comes from the seed values). Probe-verified 3/3.
+  - utterance: "Riproduci album thriller"
     expected_intent: PlayAlbumIntent
     expected_slots:
       album: {}

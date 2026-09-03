@@ -235,9 +235,16 @@ tests:
     expected_response_type: any
 
   # --- Play album ---
-  # "thriller" triggers Amazon-side competition (video/music associations); use a less
-  # ambiguous album name that routes cleanly to PlayAlbumIntent.
-  - utterance: "riproduci album jazz cafe"
+  # JF-470 (2026-09-03): 'riproduci album jazz cafe' now ties at Amazon's NLU (no
+  # selectedIntent, 2/2; the phrase reads as generic music-with-coffee). CAVEAT
+  # (JF-470 review + follow-up probes): thriller is NOT in the Jellyfin library (the
+  # ER anchor is the STATIC AlbumName seed baked into the model, not the
+  # library-synced catalog), so the full chain fuzzy-plays Girl Talk's 'Night Ripper'
+  # (verified on the live simulator): this entry pins ROUTING only, not exact-album
+  # playback. A clean-routing LIBRARY album was sought (article and bare carriers
+  # across many titles, 2026-09-03) and none exists in the current Amazon landscape
+  # (every shape ties or steals the slot): re-triage when the landscape shifts.
+  - utterance: "riproduci album thriller"
     expected_intent: PlayAlbumIntent
     expected_slots:
       album: {}
