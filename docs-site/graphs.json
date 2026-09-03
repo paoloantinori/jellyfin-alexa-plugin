@@ -37,7 +37,7 @@
           },
           {
             "id": "Browse",
-            "label": "BrowseLibraryIntent\nتصفح {browse_category}",
+            "label": "BrowseLibraryIntent\nتصفح {browse_category}\nما {browse_category} لدي",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -422,7 +422,7 @@
           },
           {
             "id": "Browse",
-            "label": "BrowseLibraryIntent\ndurchsuche {browse_category}",
+            "label": "BrowseLibraryIntent\ndurchsuche {browse_category}\nwelche {browse_category} gibt es",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -807,7 +807,7 @@
           },
           {
             "id": "Browse",
-            "label": "BrowseLibraryIntent\nbrowse {browse_category}",
+            "label": "BrowseLibraryIntent\nbrowse {browse_category}\nwhat {browse_category} do i have",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -1192,7 +1192,7 @@
           },
           {
             "id": "Browse",
-            "label": "BrowseLibraryIntent\nbrowse {browse_category}",
+            "label": "BrowseLibraryIntent\nbrowse {browse_category}\nwhat {browse_category} do i have",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -1577,7 +1577,7 @@
           },
           {
             "id": "Browse",
-            "label": "BrowseLibraryIntent\nbrowse {browse_category}",
+            "label": "BrowseLibraryIntent\nbrowse {browse_category}\nwhat {browse_category} do i have",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -1962,7 +1962,7 @@
           },
           {
             "id": "Browse",
-            "label": "BrowseLibraryIntent\nbrowse {browse_category}",
+            "label": "BrowseLibraryIntent\nbrowse {browse_category}\nwhat {browse_category} do i have",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -2347,7 +2347,7 @@
           },
           {
             "id": "Browse",
-            "label": "BrowseLibraryIntent\nbrowse {browse_category}",
+            "label": "BrowseLibraryIntent\nbrowse {browse_category}\nwhat {browse_category} do i have",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -2732,7 +2732,7 @@
           },
           {
             "id": "Browse",
-            "label": "BrowseLibraryIntent\nexplorar {browse_category}",
+            "label": "BrowseLibraryIntent\nexplorar {browse_category}\nqué {browse_category} hay",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -3117,7 +3117,7 @@
           },
           {
             "id": "Browse",
-            "label": "BrowseLibraryIntent\nexplorar {browse_category}",
+            "label": "BrowseLibraryIntent\nexplorar {browse_category}\nqué {browse_category} hay",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -3502,7 +3502,7 @@
           },
           {
             "id": "Browse",
-            "label": "BrowseLibraryIntent\nexplorar {browse_category}",
+            "label": "BrowseLibraryIntent\nexplorar {browse_category}\nqué {browse_category} hay",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -3887,7 +3887,7 @@
           },
           {
             "id": "Browse",
-            "label": "BrowseLibraryIntent\nparcourir {browse_category}",
+            "label": "BrowseLibraryIntent\nparcourir {browse_category}\nquels {browse_category} y a-t-il",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -4272,7 +4272,7 @@
           },
           {
             "id": "Browse",
-            "label": "BrowseLibraryIntent\nparcourir {browse_category}",
+            "label": "BrowseLibraryIntent\nparcourir {browse_category}\nquels {browse_category} y a-t-il",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -4657,7 +4657,7 @@
           },
           {
             "id": "Browse",
-            "label": "BrowseLibraryIntent\n{browse_category} ब्राउज़ करो",
+            "label": "BrowseLibraryIntent\n{browse_category} ब्राउज़ करो\nमेरे पास कौन से {browse_category} हैं",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -5042,7 +5042,7 @@
           },
           {
             "id": "Browse",
-            "label": "BrowseLibraryIntent\nSfoglia {browse_category}",
+            "label": "BrowseLibraryIntent\nSfoglia {browse_category}\nquali {browse_category} abbiamo",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -5427,7 +5427,7 @@
           },
           {
             "id": "Browse",
-            "label": "BrowseLibraryIntent\n{browse_category} をブラウズして",
+            "label": "BrowseLibraryIntent\n{browse_category} をブラウズして\nどんな {browse_category} がある",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -5812,7 +5812,7 @@
           },
           {
             "id": "Browse",
-            "label": "BrowseLibraryIntent\nbrowse {browse_category}",
+            "label": "BrowseLibraryIntent\nbrowse {browse_category}\nwelke {browse_category} zijn er",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -6197,7 +6197,7 @@
           },
           {
             "id": "Browse",
-            "label": "BrowseLibraryIntent\nnavegar {browse_category}",
+            "label": "BrowseLibraryIntent\nnavegar {browse_category}\nquais {browse_category} existem",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -13338,6 +13338,12 @@
           },
           {
             "source": "Idle",
+            "target": "PlayVideo",
+            "label": "Ich möchte {title} sehen",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
             "target": "PlayRandom",
             "label": "Spiele etwas zufälliges",
             "style": "solid"
@@ -13681,6 +13687,18 @@
             "source": "Idle",
             "target": "PlayVideo",
             "label": "Play the video {title}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayVideo",
+            "label": "watch {title}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayVideo",
+            "label": "I want to watch {title}",
             "style": "solid"
           },
           {
@@ -14034,6 +14052,18 @@
             "source": "Idle",
             "target": "PlayVideo",
             "label": "Play the video {title}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayVideo",
+            "label": "watch {title}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayVideo",
+            "label": "I want to watch {title}",
             "style": "solid"
           },
           {
@@ -14740,6 +14770,18 @@
             "source": "Idle",
             "target": "PlayVideo",
             "label": "Play the video {title}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayVideo",
+            "label": "watch {title}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayVideo",
+            "label": "I want to watch {title}",
             "style": "solid"
           },
           {
@@ -16509,6 +16551,12 @@
           },
           {
             "source": "Idle",
+            "target": "PlayVideo",
+            "label": "Je veux regarder {title}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
             "target": "PlayRandom",
             "label": "Joue quelque chose au hasard",
             "style": "solid"
@@ -16858,6 +16906,12 @@
             "source": "Idle",
             "target": "PlayVideo",
             "label": "Lis la vidéo {title}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayVideo",
+            "label": "Je veux regarder {title}",
             "style": "solid"
           },
           {
@@ -17560,6 +17614,12 @@
             "source": "Idle",
             "target": "PlayVideo",
             "label": "Riproduci {title}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayVideo",
+            "label": "voglio guardare {title}",
             "style": "solid"
           },
           {
@@ -18899,6 +18959,12 @@
           {
             "id": "Channel",
             "label": "PlayChannelIntent\nتشغيل قناة راديو إنترنت"
+          },
+          {
+            "id": "AutoPlay",
+            "label": "PostPlay AutoPlay\nAuto-queue similar tracks",
+            "fill": "#00BCD4",
+            "textColor": "#fff"
           }
         ],
         "edges": [
@@ -19105,6 +19171,18 @@
             "target": "Playing",
             "label": "",
             "style": "solid"
+          },
+          {
+            "source": "Playing",
+            "target": "AutoPlay",
+            "label": "Queue exhausted",
+            "style": "solid"
+          },
+          {
+            "source": "AutoPlay",
+            "target": "RadioActive",
+            "label": "Enable radio mode",
+            "style": "solid"
           }
         ]
       },
@@ -19208,6 +19286,12 @@
           {
             "id": "Channel",
             "label": "PlayChannelIntent\nInternet-Radiokanal abspielen"
+          },
+          {
+            "id": "AutoPlay",
+            "label": "PostPlay AutoPlay\nAuto-queue similar tracks",
+            "fill": "#00BCD4",
+            "textColor": "#fff"
           }
         ],
         "edges": [
@@ -19414,6 +19498,18 @@
             "target": "Playing",
             "label": "",
             "style": "solid"
+          },
+          {
+            "source": "Playing",
+            "target": "AutoPlay",
+            "label": "Queue exhausted",
+            "style": "solid"
+          },
+          {
+            "source": "AutoPlay",
+            "target": "RadioActive",
+            "label": "Enable radio mode",
+            "style": "solid"
           }
         ]
       },
@@ -19517,6 +19613,12 @@
           {
             "id": "Channel",
             "label": "PlayChannelIntent\nPlay internet radio channel"
+          },
+          {
+            "id": "AutoPlay",
+            "label": "PostPlay AutoPlay\nAuto-queue similar tracks",
+            "fill": "#00BCD4",
+            "textColor": "#fff"
           }
         ],
         "edges": [
@@ -19722,6 +19824,18 @@
             "source": "Channel",
             "target": "Playing",
             "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "Playing",
+            "target": "AutoPlay",
+            "label": "Queue exhausted",
+            "style": "solid"
+          },
+          {
+            "source": "AutoPlay",
+            "target": "RadioActive",
+            "label": "Enable radio mode",
             "style": "solid"
           }
         ]
@@ -19826,6 +19940,12 @@
           {
             "id": "Channel",
             "label": "PlayChannelIntent\nPlay internet radio channel"
+          },
+          {
+            "id": "AutoPlay",
+            "label": "PostPlay AutoPlay\nAuto-queue similar tracks",
+            "fill": "#00BCD4",
+            "textColor": "#fff"
           }
         ],
         "edges": [
@@ -20031,6 +20151,18 @@
             "source": "Channel",
             "target": "Playing",
             "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "Playing",
+            "target": "AutoPlay",
+            "label": "Queue exhausted",
+            "style": "solid"
+          },
+          {
+            "source": "AutoPlay",
+            "target": "RadioActive",
+            "label": "Enable radio mode",
             "style": "solid"
           }
         ]
@@ -20135,6 +20267,12 @@
           {
             "id": "Channel",
             "label": "PlayChannelIntent\nPlay internet radio channel"
+          },
+          {
+            "id": "AutoPlay",
+            "label": "PostPlay AutoPlay\nAuto-queue similar tracks",
+            "fill": "#00BCD4",
+            "textColor": "#fff"
           }
         ],
         "edges": [
@@ -20340,6 +20478,18 @@
             "source": "Channel",
             "target": "Playing",
             "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "Playing",
+            "target": "AutoPlay",
+            "label": "Queue exhausted",
+            "style": "solid"
+          },
+          {
+            "source": "AutoPlay",
+            "target": "RadioActive",
+            "label": "Enable radio mode",
             "style": "solid"
           }
         ]
@@ -20444,6 +20594,12 @@
           {
             "id": "Channel",
             "label": "PlayChannelIntent\nPlay internet radio channel"
+          },
+          {
+            "id": "AutoPlay",
+            "label": "PostPlay AutoPlay\nAuto-queue similar tracks",
+            "fill": "#00BCD4",
+            "textColor": "#fff"
           }
         ],
         "edges": [
@@ -20649,6 +20805,18 @@
             "source": "Channel",
             "target": "Playing",
             "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "Playing",
+            "target": "AutoPlay",
+            "label": "Queue exhausted",
+            "style": "solid"
+          },
+          {
+            "source": "AutoPlay",
+            "target": "RadioActive",
+            "label": "Enable radio mode",
             "style": "solid"
           }
         ]
@@ -20753,6 +20921,12 @@
           {
             "id": "Channel",
             "label": "PlayChannelIntent\nPlay internet radio channel"
+          },
+          {
+            "id": "AutoPlay",
+            "label": "PostPlay AutoPlay\nAuto-queue similar tracks",
+            "fill": "#00BCD4",
+            "textColor": "#fff"
           }
         ],
         "edges": [
@@ -20959,6 +21133,18 @@
             "target": "Playing",
             "label": "",
             "style": "solid"
+          },
+          {
+            "source": "Playing",
+            "target": "AutoPlay",
+            "label": "Queue exhausted",
+            "style": "solid"
+          },
+          {
+            "source": "AutoPlay",
+            "target": "RadioActive",
+            "label": "Enable radio mode",
+            "style": "solid"
           }
         ]
       },
@@ -21062,6 +21248,12 @@
           {
             "id": "Channel",
             "label": "PlayChannelIntent\nReproducir canal de radio internet"
+          },
+          {
+            "id": "AutoPlay",
+            "label": "PostPlay AutoPlay\nAuto-queue similar tracks",
+            "fill": "#00BCD4",
+            "textColor": "#fff"
           }
         ],
         "edges": [
@@ -21267,6 +21459,18 @@
             "source": "Channel",
             "target": "Playing",
             "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "Playing",
+            "target": "AutoPlay",
+            "label": "Queue exhausted",
+            "style": "solid"
+          },
+          {
+            "source": "AutoPlay",
+            "target": "RadioActive",
+            "label": "Enable radio mode",
             "style": "solid"
           }
         ]
@@ -21371,6 +21575,12 @@
           {
             "id": "Channel",
             "label": "PlayChannelIntent\nReproducir canal de radio internet"
+          },
+          {
+            "id": "AutoPlay",
+            "label": "PostPlay AutoPlay\nAuto-queue similar tracks",
+            "fill": "#00BCD4",
+            "textColor": "#fff"
           }
         ],
         "edges": [
@@ -21576,6 +21786,18 @@
             "source": "Channel",
             "target": "Playing",
             "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "Playing",
+            "target": "AutoPlay",
+            "label": "Queue exhausted",
+            "style": "solid"
+          },
+          {
+            "source": "AutoPlay",
+            "target": "RadioActive",
+            "label": "Enable radio mode",
             "style": "solid"
           }
         ]
@@ -21680,6 +21902,12 @@
           {
             "id": "Channel",
             "label": "PlayChannelIntent\nReproducir canal de radio internet"
+          },
+          {
+            "id": "AutoPlay",
+            "label": "PostPlay AutoPlay\nAuto-queue similar tracks",
+            "fill": "#00BCD4",
+            "textColor": "#fff"
           }
         ],
         "edges": [
@@ -21886,6 +22114,18 @@
             "target": "Playing",
             "label": "",
             "style": "solid"
+          },
+          {
+            "source": "Playing",
+            "target": "AutoPlay",
+            "label": "Queue exhausted",
+            "style": "solid"
+          },
+          {
+            "source": "AutoPlay",
+            "target": "RadioActive",
+            "label": "Enable radio mode",
+            "style": "solid"
           }
         ]
       },
@@ -21989,6 +22229,12 @@
           {
             "id": "Channel",
             "label": "PlayChannelIntent\nLire une chaîne radio internet"
+          },
+          {
+            "id": "AutoPlay",
+            "label": "PostPlay AutoPlay\nAuto-queue similar tracks",
+            "fill": "#00BCD4",
+            "textColor": "#fff"
           }
         ],
         "edges": [
@@ -22194,6 +22440,18 @@
             "source": "Channel",
             "target": "Playing",
             "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "Playing",
+            "target": "AutoPlay",
+            "label": "Queue exhausted",
+            "style": "solid"
+          },
+          {
+            "source": "AutoPlay",
+            "target": "RadioActive",
+            "label": "Enable radio mode",
             "style": "solid"
           }
         ]
@@ -22298,6 +22556,12 @@
           {
             "id": "Channel",
             "label": "PlayChannelIntent\nLire une chaîne radio internet"
+          },
+          {
+            "id": "AutoPlay",
+            "label": "PostPlay AutoPlay\nAuto-queue similar tracks",
+            "fill": "#00BCD4",
+            "textColor": "#fff"
           }
         ],
         "edges": [
@@ -22504,6 +22768,18 @@
             "target": "Playing",
             "label": "",
             "style": "solid"
+          },
+          {
+            "source": "Playing",
+            "target": "AutoPlay",
+            "label": "Queue exhausted",
+            "style": "solid"
+          },
+          {
+            "source": "AutoPlay",
+            "target": "RadioActive",
+            "label": "Enable radio mode",
+            "style": "solid"
           }
         ]
       },
@@ -22607,6 +22883,12 @@
           {
             "id": "Channel",
             "label": "PlayChannelIntent\nइंटरनेट रेडियो चैनल चलाओ"
+          },
+          {
+            "id": "AutoPlay",
+            "label": "PostPlay AutoPlay\nAuto-queue similar tracks",
+            "fill": "#00BCD4",
+            "textColor": "#fff"
           }
         ],
         "edges": [
@@ -22813,6 +23095,18 @@
             "target": "Playing",
             "label": "",
             "style": "solid"
+          },
+          {
+            "source": "Playing",
+            "target": "AutoPlay",
+            "label": "Queue exhausted",
+            "style": "solid"
+          },
+          {
+            "source": "AutoPlay",
+            "target": "RadioActive",
+            "label": "Enable radio mode",
+            "style": "solid"
           }
         ]
       },
@@ -22916,6 +23210,12 @@
           {
             "id": "Channel",
             "label": "PlayChannelIntent\nRiproduci canale radio internet"
+          },
+          {
+            "id": "AutoPlay",
+            "label": "PostPlay AutoPlay\nAuto-queue similar tracks",
+            "fill": "#00BCD4",
+            "textColor": "#fff"
           }
         ],
         "edges": [
@@ -23122,6 +23422,18 @@
             "target": "Playing",
             "label": "",
             "style": "solid"
+          },
+          {
+            "source": "Playing",
+            "target": "AutoPlay",
+            "label": "Queue exhausted",
+            "style": "solid"
+          },
+          {
+            "source": "AutoPlay",
+            "target": "RadioActive",
+            "label": "Enable radio mode",
+            "style": "solid"
           }
         ]
       },
@@ -23225,6 +23537,12 @@
           {
             "id": "Channel",
             "label": "PlayChannelIntent\nインターネットラジオチャンネル再生"
+          },
+          {
+            "id": "AutoPlay",
+            "label": "PostPlay AutoPlay\nAuto-queue similar tracks",
+            "fill": "#00BCD4",
+            "textColor": "#fff"
           }
         ],
         "edges": [
@@ -23431,6 +23749,18 @@
             "target": "Playing",
             "label": "",
             "style": "solid"
+          },
+          {
+            "source": "Playing",
+            "target": "AutoPlay",
+            "label": "Queue exhausted",
+            "style": "solid"
+          },
+          {
+            "source": "AutoPlay",
+            "target": "RadioActive",
+            "label": "Enable radio mode",
+            "style": "solid"
           }
         ]
       },
@@ -23534,6 +23864,12 @@
           {
             "id": "Channel",
             "label": "PlayChannelIntent\nInternetradiokanaal afspelen"
+          },
+          {
+            "id": "AutoPlay",
+            "label": "PostPlay AutoPlay\nAuto-queue similar tracks",
+            "fill": "#00BCD4",
+            "textColor": "#fff"
           }
         ],
         "edges": [
@@ -23740,6 +24076,18 @@
             "target": "Playing",
             "label": "",
             "style": "solid"
+          },
+          {
+            "source": "Playing",
+            "target": "AutoPlay",
+            "label": "Queue exhausted",
+            "style": "solid"
+          },
+          {
+            "source": "AutoPlay",
+            "target": "RadioActive",
+            "label": "Enable radio mode",
+            "style": "solid"
           }
         ]
       },
@@ -23843,6 +24191,12 @@
           {
             "id": "Channel",
             "label": "PlayChannelIntent\nReproduzir canal de rádio internet"
+          },
+          {
+            "id": "AutoPlay",
+            "label": "PostPlay AutoPlay\nAuto-queue similar tracks",
+            "fill": "#00BCD4",
+            "textColor": "#fff"
           }
         ],
         "edges": [
@@ -24048,6 +24402,18 @@
             "source": "Channel",
             "target": "Playing",
             "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "Playing",
+            "target": "AutoPlay",
+            "label": "Queue exhausted",
+            "style": "solid"
+          },
+          {
+            "source": "AutoPlay",
+            "target": "RadioActive",
+            "label": "Enable radio mode",
             "style": "solid"
           }
         ]

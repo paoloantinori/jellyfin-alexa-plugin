@@ -2,7 +2,7 @@
 
 ```mermaid
 graph TD
-    Idle["アイドル"] --> Browse["BrowseLibraryIntent<br/>{browse_category} をブラウズして<br/>どんな {browse_category} がある"]]
+    Idle["アイドル"] --> Browse["BrowseLibraryIntent<br/>{browse_category} をブラウズして<br/>どんな {browse_category} がある"]
 
     Browse -->|"アーティストをブラウズ"| Artists["アーティスト一覧"]
     Browse -->|"アルバムをブラウズ"| Albums["アルバム一覧"]

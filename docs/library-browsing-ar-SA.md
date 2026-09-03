@@ -2,7 +2,7 @@
 
 ```mermaid
 graph TD
-    Idle["خامل"] --> Browse["BrowseLibraryIntent<br/>تصفح {browse_category}<br/>ما {browse_category} لدي"]]
+    Idle["خامل"] --> Browse["BrowseLibraryIntent<br/>تصفح {browse_category}<br/>ما {browse_category} لدي"]
 
     Browse -->|"تصفح الفنانين"| Artists["قائمة الفنانين"]
     Browse -->|"تصفح الألبومات"| Albums["قائمة الألبومات"]

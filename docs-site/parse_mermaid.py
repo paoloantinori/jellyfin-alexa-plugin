@@ -13,8 +13,15 @@ LOCALES = [
     'ja-JP','nl-NL','pt-BR'
 ]
 
-def parse_mermaid(text):
-    """Parse a Mermaid graph definition into nodes and edges."""
+def parse_mermaid(text, warnings=None):
+    """Parse a Mermaid graph definition into nodes and edges.
+
+    `warnings`, when a list, collects edge endpoints that fail to resolve and
+    are not curly-brace node refs (the known {diamond} limitation below; a
+    curly brace INSIDE a square-bracket label still warns, which is how the
+    JF-462 stray-bracket typo class is caught). An unresolved non-curly
+    endpoint means the md line carries syntax this parser would drop.
+    """
     nodes = {}
     edges = []
 
@@ -65,8 +72,19 @@ def parse_mermaid(text):
                     src_raw, tgt_raw = m.groups()
                     label = ''
 
-                src_id, src_label = parse_node_ref(src_raw.strip())
-                tgt_id, tgt_label = parse_node_ref(tgt_raw.strip())
+                src_raw = src_raw.strip()
+                tgt_raw = tgt_raw.strip()
+                src_id, src_label = parse_node_ref(src_raw)
+                tgt_id, tgt_label = parse_node_ref(tgt_raw)
+
+                if warnings is not None:
+                    for raw, ref_id in ((src_raw, src_id), (tgt_raw, tgt_id)):
+                        # Exempt only true curly refs (NodeId{"label"}); a curly
+                        # brace INSIDE a square-bracket label (the Browse lines
+                        # carry {browse_category}) must still warn when resolution
+                        # fails, or the ec417c59 stray-bracket class stays silent.
+                        if ref_id is None and not re.match(r'^\w+\{"', raw):
+                            warnings.append(line)
 
                 if src_id:
                     if src_id not in nodes:
@@ -99,7 +117,14 @@ def parse_mermaid(text):
 
 
 def parse_node_ref(text):
-    """Parse a node reference like 'NodeId["Label"]' or just 'NodeId'."""
+    """Parse a node reference like 'NodeId["Label"]' or just 'NodeId'.
+
+    Curly-brace refs (decision diamonds, NodeId{"Label"}) deliberately return
+    (None, None): the committed graphs.json carries null targets for those
+    edges in search-disambiguation and session-management, and resolving them
+    would churn 34 diagrams that are otherwise in sync. Do not "fix" this
+    without regenerating and reviewing all 17 locales of both categories.
+    """
     # With label: NodeId["Label text"]
     m = re.match(r'^(\w+)\["([^"]*)"\]$', text)
     if m:
@@ -146,7 +171,10 @@ def main():
         title = title_m.group(1) if title_m else base
 
         mermaid_src = m.group(1).strip()
-        nodes, edges = parse_mermaid(mermaid_src)
+        unresolved = []
+        nodes, edges = parse_mermaid(mermaid_src, unresolved)
+        for line in unresolved:
+            print(f'WARNING {dtype}/{locale}: dropped edge endpoint in: {line}')
 
         if dtype not in diagrams:
             diagrams[dtype] = {}

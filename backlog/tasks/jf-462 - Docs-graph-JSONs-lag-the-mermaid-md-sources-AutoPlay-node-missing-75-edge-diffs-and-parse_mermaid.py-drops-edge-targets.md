@@ -3,9 +3,10 @@ id: JF-462
 title: >-
   Docs graph JSONs lag the mermaid md sources (AutoPlay node missing, 75 edge
   diffs) and parse_mermaid.py drops edge targets
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-03 06:03'
+updated_date: '2026-09-03 10:28'
 labels: []
 dependencies: []
 references:

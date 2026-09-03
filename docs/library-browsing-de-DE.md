@@ -2,7 +2,7 @@
 
 ```mermaid
 graph TD
-    Idle["Leerlauf"] --> Browse["BrowseLibraryIntent<br/>durchsuche {browse_category}<br/>welche {browse_category} gibt es"]]
+    Idle["Leerlauf"] --> Browse["BrowseLibraryIntent<br/>durchsuche {browse_category}<br/>welche {browse_category} gibt es"]
 
     Browse -->|"durchsuche Künstler"| Artists["Künstlerliste"]
     Browse -->|"durchsuche Alben"| Albums["Albenliste"]
