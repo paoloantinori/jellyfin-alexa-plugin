@@ -117,15 +117,8 @@
       {
         "name": "PlayAlbumIntent",
         "samples": [
-          "{album} を再生して",
           "アルバム {album} を再生して",
-          "{musician} の {album} を再生して",
           "アルバム {album} {musician} を再生して",
-          "{album} を聴かせて",
-          "{musician} の {album} を聴かせて",
-          "{album} を流して",
-          "{album} を聞きたい",
-          "ストリーム {album}",
           "{musician} のアルバムを再生して",
           "{musician} のアルバムを聴かせて"
         ],

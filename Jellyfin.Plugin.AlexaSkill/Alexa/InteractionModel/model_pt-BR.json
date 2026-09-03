@@ -127,20 +127,10 @@
       {
         "name": "PlayAlbumIntent",
         "samples": [
-          "tocar {album}",
           "tocar o álbum {album}",
           "tocar álbum {album}",
-          "tocar {album} de {musician}",
           "tocar o álbum {album} de {musician}",
-          "ouvir {album}",
           "ouvir o álbum {album}",
-          "ouvir {album} de {musician}",
-          "colocar {album}",
-          "quero ouvir {album}",
-          "pode tocar {album}",
-          "começar a tocar {album}",
-          "me dá {album}",
-          "stream {album}",
           "um álbum de {musician}",
           "tocar um álbum de {musician}",
           "ouvir um álbum de {musician}"

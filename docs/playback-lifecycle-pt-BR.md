@@ -5,7 +5,7 @@ graph TD
     Launch["Alexa, abrir jellyfin player"] --> Idle["Inativo / Pronto"]
 
     Idle -->|"tocar músicas de {musician}"| PlayArtist["PlayArtistSongsIntent"]
-    Idle -->|"tocar {album}"| PlayAlbum["PlayAlbumIntent"]
+    Idle -->|"tocar o álbum {album}"| PlayAlbum["PlayAlbumIntent"]
     Idle -->|"tocar {song}"| PlaySong["PlaySongIntent"]
     Idle -->|"tocar a playlist {playlist}"| PlayPlaylist["PlayPlaylistIntent"]
     Idle -->|"tocar {book}"| PlayBook["PlayBookIntent"]

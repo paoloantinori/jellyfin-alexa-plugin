@@ -5,7 +5,7 @@ graph TD
     Launch["Alexa, jellyfin player を開いて"] --> Idle["アイドル / 待機中"]
 
     Idle -->|"{musician} の曲を再生して"| PlayArtist["PlayArtistSongsIntent"]
-    Idle -->|"{album} を再生して"| PlayAlbum["PlayAlbumIntent"]
+    Idle -->|"アルバム {album} を再生して"| PlayAlbum["PlayAlbumIntent"]
     Idle -->|"{song} を再生して"| PlaySong["PlaySongIntent"]
     Idle -->|"プレイリスト {playlist} を再生して"| PlayPlaylist["PlayPlaylistIntent"]
     Idle -->|"play {book}"| PlayBook["PlayBookIntent"]

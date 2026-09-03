@@ -75,6 +75,17 @@ tests:
       album: {}
       musician: {}
 
+  # JF-459 trimmed the bare album carriers; this slot pins the noun-carrying
+  # "Mets le disque {album}" form (probe-verified 2026-09-03). The old fr-CA
+  # greedy-capture divergence case ("Lis la musique de the beatles", which fr-CA
+  # routed to PlayAlbumIntent and fr-FR to PlaySongIntent, profile-nlu 2026-08-23)
+  # lost its carrier to the trim; the divergence itself is recorded in the
+  # JF-406 per-locale NLU divergence task.
+  - utterance: "Mets le disque abbey road"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+
   # -------------------------------------------------------------------------
   # 7. PlayVideoIntent (title)
   # -------------------------------------------------------------------------
@@ -90,19 +101,6 @@ tests:
     expected_intent: PlayArtistSongsIntent
     expected_slots:
       musician: {}
-
-  # NLU routes "Lis la musique de the beatles" to PlaySongIntent because
-  # PlaySongIntent's "Lis {song}" pattern greedily captures everything after "Lis".
-  # PlayArtistSongsIntent has "Lis la musique de {musician}" but can't win the
-  # disambiguation against 21 "Lis"-prefixed PlaySongIntent samples.
-  # fr-CA diverges from fr-FR on this greedy-capture case (Amazon per-locale NLU
-  # difference with identical models): fr-CA picks PlayAlbumIntent, fr-FR PlaySongIntent.
-  # Expectation records verified fr-CA behavior (profile-nlu 2026-08-23).
-  - utterance: "Lis la musique de the beatles"
-    expected_intent: PlayAlbumIntent
-    expected_slots:
-      album: "la musique"
-      musician: "the beatles"
 
   # -------------------------------------------------------------------------
   # 9. PlayLastAddedIntent (media_type)
@@ -382,11 +380,6 @@ tests:
   # -------------------------------------------------------------------------
   # FindSongIntent conversational search (JF-399 sample enrichment)
   # -------------------------------------------------------------------------
-  - utterance: "trouve une chanson qui s appelle belle"
-    expected_intent: FindSongIntent
-    expected_slots:
-      titleKeywords: "belle"
-
   - utterance: "trouve une chanson qui s appelle belle"
     expected_intent: FindSongIntent
     expected_slots:

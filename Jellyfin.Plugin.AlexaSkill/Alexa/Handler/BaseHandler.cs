@@ -3052,9 +3052,10 @@ public abstract class BaseHandler
     /// JF-345: song-to-album cascade. In the 16 free-text locales PlayAlbum's album slot
     /// is an <c>AMAZON.MusicRecording</c>-style free-text type (only it-IT has the
     /// catalog-backed AlbumName type), so a bare "play abbey road" routes to PlaySong,
-    /// misses, and dead-ends in a song not-found (guaranteed in the five English
-    /// locales where PR #15 removed the bare carriers; a coin flip in the other 11,
-    /// which still ship them). This gate recovers that recall: on a confirmed song miss (the
+    /// misses, and dead-ends in a song not-found (deterministic in all 16 since the bare
+    /// album carriers were trimmed: PR #15 for the five English locales, JF-459 for the
+    /// other 11; before those trims the 11 were a routing coin flip). This gate recovers
+    /// that recall: on a confirmed song miss (the
     /// caller only reaches it after its own song search AND the artist cascade both
     /// missed) it runs a bounded album search and plays a strong match with a
     /// FoundAlbumInstead announcement.

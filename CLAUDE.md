@@ -529,6 +529,45 @@ PlayAlbumIntent.album type: AlbumName  →  AMAZON.MusicRecording
 
 **Verified 2026-07-12**: changing `PlayAlbumIntent.album` from `AlbumName` to `AMAZON.MusicRecording` did make "jazz cafe" route one-shot (profile-nlu confirmed), but it was the wrong direction — reverted. The `album_noun` article fix (adding `"l'album"`, `"il disco"` forms to the it-IT vocabulary) is correct and kept; it fixes routing for in-catalog albums on all article forms.
 
+### 11. Bare Album Carriers on Free-Text Album Slots (PR #15 + JF-459, all 16 free-text locales)
+
+**NEVER add a PlayAlbumIntent sample whose carrier does not name the media** (`play {album}`, `Spiele {album}`, `Lis {album}`, `{album} を再生して`, `stream {album}`) in a locale whose `album` slot is free-text. That is every locale EXCEPT it-IT (it-IT's slot is the catalog-backed `AlbumName`, a different architecture where the catalog, not the carrier, constrains matching). A bare carrier makes PlayAlbumIntent greedily compete with PlaySongIntent for every "verb + title" utterance, turning album-vs-song routing into a per-locale coin flip. PR #15 (commit 135de9c8) trimmed the 5 English models; JF-459 (2026-09-03) trimmed the other 11 free-text locales. Recall does NOT depend on the bare carriers: the song-to-album cascade (JF-345, `TryAlbumFallbackAsync`) recovers the album AFTER a confirmed song miss. Indefinite forms that name the media (`ein Album von {musician}`) are fine.
+
+```
+# WRONG (all removed): "play {album}" / "Spiele {album}" / "stream {album}" / "{album} を再生して"
+# RIGHT: every carrier names the media noun:
+#   en: play the album {album}, play album {album}, play the record {album}
+#   de: Spiele das Album {album}, Spiele die Platte {album}
+#   es: Reproduce el álbum {album}, Pon el disco {album}
+#   fr: Lis l'album {album}, Mets le disque {album}
+#   it-IT: every sample is built through the album_noun placeholder (YAML template)
+```
+
+**Detection** (strip placeholders first: `{album}` itself contains "album", so a naive grep always passes):
+
+```bash
+python3 - <<'PY'
+import json, glob, re
+NOUNS = {'en': ['lbum', 'record'], 'de': ['lbum', 'Platte'], 'es': ['lbum', 'disco'],
+         'fr': ['lbum', 'disque'], 'pt': ['lbum'], 'nl': ['lbum'], 'ar': ['لبوم'],
+         'ja': ['アルバム'], 'hi': ['एल्बम']}
+for f in sorted(glob.glob('Jellyfin.Plugin.AlexaSkill/Alexa/InteractionModel/model_*.json')):
+    loc = f[-10:-5]
+    if loc == 'it-IT':
+        continue  # catalog-backed AlbumName slot, different architecture
+    nouns = NOUNS[loc[:2]]
+    d = json.load(open(f)); m = d.get('interactionModel', d)
+    for i in m['languageModel']['intents']:
+        if i['name'] == 'PlayAlbumIntent':
+            for s in i.get('samples', []):
+                carrier = re.sub(r'\{[^}]*\}', '', s)
+                if '{album}' in s and not any(n in carrier for n in nouns):
+                    print(f'{loc}: BARE CARRIER: {s}')
+PY
+```
+
+**When PlayAlbumIntent samples change in ANY locale, update the mirrors or they go stale** (they went stale twice: PR #15 orphaned the 5 English rows, JF-459 initially orphaned 11 more): `VOICE_COMMANDS.md` (hand-maintained utterance tables), `docs/playback-lifecycle-<locale>.md` (the `Idle -->|"<sample>"| PlayAlbum` edge label), `docs/graphs.json` + `docs-site/graphs.json` (identical mirrors; do a targeted label replacement, do NOT re-run `parse_mermaid.py`: its output differs from the committed JSONs in BOTH directions, it nulls out the resolved edge targets the committed files carry while also lagging the md sources in other categories, so a full regen churns unrelated diagrams; JF-303 set the scoped-regen precedent), `docs-site/data.json` (embedded mermaid strings), and `tests/integration/fixtures/<locale>.yaml` (an NLU expectation referencing a removed sample goes stale silently: profile-nlu still routes via other samples, so only the live suite fails, never the dry-run).
+
 ## Release
 
 The CI workflow (`release-build.yml`) handles building, testing, zipping, creating the GitHub release, computing the manifest checksum, and committing the updated manifest back to main. It triggers on tag push.

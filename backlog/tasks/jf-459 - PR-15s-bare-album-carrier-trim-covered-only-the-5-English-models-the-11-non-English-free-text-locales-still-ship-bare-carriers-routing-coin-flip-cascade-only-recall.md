@@ -4,9 +4,10 @@ title: >-
   PR #15's bare-album-carrier trim covered only the 5 English models; the 11
   non-English free-text locales still ship bare carriers (routing coin flip +
   cascade-only recall)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-03 04:28'
+updated_date: '2026-09-03 04:44'
 labels:
   - interaction-model
   - i18n

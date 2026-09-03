@@ -126,19 +126,11 @@
       {
         "name": "PlayAlbumIntent",
         "samples": [
-          "شغل {album}",
           "شغل الألبوم {album}",
           "شغل ألبوم {album}",
-          "شغل {album} لـ {musician}",
           "شغل الألبوم {album} لـ {musician}",
           "شغل ألبوم {album} لـ {musician}",
-          "استمع إلى {album}",
           "استمع إلى الألبوم {album}",
-          "استمع إلى {album} لـ {musician}",
-          "أريد سماع {album}",
-          "أريد سماع {album} لـ {musician}",
-          "هل يمكنك تشغيل {album}",
-          "ابدأ تشغيل {album}",
           "شغل ألبوم {musician}",
           "استمع إلى ألبوم {musician}"
         ],

@@ -122,17 +122,9 @@
       {
         "name": "PlayAlbumIntent",
         "samples": [
-          "{album} चलाओ",
           "एल्बम {album} चलाओ",
-          "{musician} का {album} चलाओ",
           "एल्बम {album} {musician} का चलाओ",
-          "{album} सुनो",
           "एल्बम {album} सुनो",
-          "{musician} का {album} सुनो",
-          "{album} लगाओ",
-          "मैं {album} सुनना चाहता हूँ",
-          "क्या तुम {album} चला सकते हो",
-          "{album} शुरू करो",
           "{musician} का एल्बम चलाओ",
           "{musician} का एल्बम सुनो"
         ],

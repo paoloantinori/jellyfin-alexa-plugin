@@ -126,19 +126,10 @@
       {
         "name": "PlayAlbumIntent",
         "samples": [
-          "speel {album}",
           "speel het album {album}",
           "speel album {album}",
-          "speel {album} van {musician}",
           "speel het album {album} van {musician}",
-          "luister naar {album}",
           "luister naar het album {album}",
-          "luister naar {album} van {musician}",
-          "zet {album} op",
-          "ik wil {album} horen",
-          "kun je {album} afspelen",
-          "start {album}",
-          "stream {album}",
           "een album van {musician}",
           "speel een album van {musician}",
           "luister naar een album van {musician}"

@@ -12954,7 +12954,7 @@
           {
             "source": "Idle",
             "target": "PlayAlbum",
-            "label": "شغل {album}",
+            "label": "شغل الألبوم {album}",
             "style": "solid"
           },
           {
@@ -13303,7 +13303,7 @@
           {
             "source": "Idle",
             "target": "PlayAlbum",
-            "label": "Spiele {album}",
+            "label": "Spiele das Album {album}",
             "style": "solid"
           },
           {
@@ -15415,7 +15415,7 @@
           {
             "source": "Idle",
             "target": "PlayAlbum",
-            "label": "Reproduce {album}",
+            "label": "Reproduce el álbum {album}",
             "style": "solid"
           },
           {
@@ -15768,7 +15768,7 @@
           {
             "source": "Idle",
             "target": "PlayAlbum",
-            "label": "Reproduce {album}",
+            "label": "Reproduce el álbum {album}",
             "style": "solid"
           },
           {
@@ -16121,7 +16121,7 @@
           {
             "source": "Idle",
             "target": "PlayAlbum",
-            "label": "Reproduce {album}",
+            "label": "Reproduce el álbum {album}",
             "style": "solid"
           },
           {
@@ -16474,7 +16474,7 @@
           {
             "source": "Idle",
             "target": "PlayAlbum",
-            "label": "Lis {album}",
+            "label": "Lis l'album {album}",
             "style": "solid"
           },
           {
@@ -16827,7 +16827,7 @@
           {
             "source": "Idle",
             "target": "PlayAlbum",
-            "label": "Lis {album}",
+            "label": "Lis l'album {album}",
             "style": "solid"
           },
           {
@@ -17180,7 +17180,7 @@
           {
             "source": "Idle",
             "target": "PlayAlbum",
-            "label": "{album} चलाओ",
+            "label": "एल्बम {album} चलाओ",
             "style": "solid"
           },
           {
@@ -17876,7 +17876,7 @@
           {
             "source": "Idle",
             "target": "PlayAlbum",
-            "label": "{album} を再生して",
+            "label": "アルバム {album} を再生して",
             "style": "solid"
           },
           {
@@ -18229,7 +18229,7 @@
           {
             "source": "Idle",
             "target": "PlayAlbum",
-            "label": "speel {album}",
+            "label": "speel het album {album}",
             "style": "solid"
           },
           {
@@ -18582,7 +18582,7 @@
           {
             "source": "Idle",
             "target": "PlayAlbum",
-            "label": "tocar {album}",
+            "label": "tocar o álbum {album}",
             "style": "solid"
           },
           {
