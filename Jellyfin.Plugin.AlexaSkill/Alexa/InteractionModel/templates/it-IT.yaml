@@ -869,6 +869,13 @@ templates:
       - "un album del gruppo {musician}"
       - "c'e un album chiamato {album}"
       - "c'e un disco chiamato {album}"
+      # JF-441: bare indefinite chiamato forms. Without these the fill boundary
+      # drifts and the literal bleeds into the slot (profile-nlu: "un album
+      # chiamato surfer rosa" -> album "chiamato surfer rosa", even for
+      # in-catalog titles); anchoring the carrier gives the no-c'e shape the
+      # same boundary the c'e pair already has.
+      - "un album chiamato {album}"
+      - "un disco chiamato {album}"
       - "Fai suonare l'album {album}"
       - "Fai suonare il disco {album}"
     slots:
