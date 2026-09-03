@@ -254,7 +254,6 @@ public class PlaybackFinishedPostPlayTests : PluginTestBase, IDisposable
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly PluginConfiguration _config;
     private readonly ILoggerFactory _loggerFactory;
-    private readonly DeviceQueueManager _queueManager;
     private readonly Guid _userId = Guid.NewGuid();
     private const string DeviceId = "test-device";
 
@@ -263,15 +262,13 @@ public class PlaybackFinishedPostPlayTests : PluginTestBase, IDisposable
         _sessionManagerMock = new Mock<ISessionManager>();
         _config = new PluginConfiguration();
         _loggerFactory = LoggerFactory.Create(b => { });
-        _queueManager = new DeviceQueueManager(
-            System.IO.Path.GetTempPath(), new Mock<ILogger<DeviceQueueManager>>().Object);
         TestHelpers.EnsurePluginInstance(_config, _loggerFactory, cfg => { }, "pf-postplay-test");
     }
 
     public void Dispose() => _loggerFactory.Dispose();
 
     private PlaybackFinishedEventHandler CreateHandler()
-        => new(_sessionManagerMock.Object, _config, _loggerFactory, _queueManager);
+        => new(_sessionManagerMock.Object, _config, _loggerFactory);
 
     [Fact]
     public async Task QueueExhausted_EndsSession()

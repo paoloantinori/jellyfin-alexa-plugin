@@ -441,6 +441,52 @@ public class PreEnqueueOnStartTests : PluginTestBase, IDisposable
 
     }
 
+    // JF-447 review follow-up on JF-424.1: the cache-hit validation must resolve the
+    // current item TOKEN-FIRST, matching the STORE side (TryPrecomputeNext resolves the
+    // token alone). When A's start report FAILED and session.FullNowPlayingItem still
+    // holds the PREVIOUS queue item Z, the FullNowPlayingItem-first validation computed
+    // Z's successor (= A, the playing track itself), rejected the cached entry(B), and
+    // the full-resolution fall-through ALSO resolved Z and enqueued A after itself (the
+    // JF-409 self-reenqueue class). Pre-JF-424.1 the unconditional cache hit served B
+    // correctly in this state; the token-first resolution restores that.
+    [Fact]
+    public async Task PlaybackNearlyFinished_StaleFullNowPlayingItem_ServesCachedSuccessor()
+    {
+        _config.PreEnqueueOnStart = true;
+        var trackZ = Guid.NewGuid();
+        var trackA = Guid.NewGuid();
+        var trackB = Guid.NewGuid();
+        SetupLibraryItem(trackB, "Track B");
+        var deviceId = "device-jf447-" + Guid.NewGuid().ToString("N"); // unique per test: isolation without shared state
+        var handler = new PlaybackNearlyFinishedEventHandler(
+            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, new Mock<IUserManager>().Object, _loggerFactory);
+
+        // Entry(A->B) was stored by Started(A). The session now holds the STALE
+        // now-playing item Z (A's start report failed before the session write landed),
+        // while the AudioPlayer token correctly names A.
+        NextTrackPrecomputeCache.Store(
+            deviceId, trackA.ToString(), trackB, new Audio { Name = "Track B", Id = trackB }, "https://stream/trackB");
+        var session = CreateSession(
+            new List<QueueItem> { new() { Id = trackZ }, new() { Id = trackA }, new() { Id = trackB } },
+            trackZ);
+
+        // Track A is deliberately NOT in the library: if the validation resolved Z
+        // (FullNowPlayingItem-first), the fall-through would resolve Z's successor A and
+        // fail the item lookup (no play directive); the token-first validation serves
+        // the cached B.
+        _libraryManagerMock.Setup(l => l.GetItemById(trackA)).Returns((MediaBrowser.Controller.Entities.BaseItem?)null);
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateNearlyFinishedRequest(trackA.ToString()), CreateDeviceContext(trackA.ToString(), deviceId),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        var play = (response.Response?.Directives ?? new List<IDirective>())
+            .OfType<AudioPlayerPlayDirective>().FirstOrDefault();
+        Assert.NotNull(play);
+        Assert.Equal(trackB.ToString(), play.AudioItem?.Stream?.Token);
+
+    }
+
     // JF-424.1 incident replay (the task's failure scenario): queue [A,B];
     // Started(A) stores entry(A->B); the user skips A (no NearlyFinished consumes it),
     // clears the queue, and replays A as a single-item play (Started(A) then stores

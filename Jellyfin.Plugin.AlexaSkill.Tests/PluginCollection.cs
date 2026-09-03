@@ -13,9 +13,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests;
 /// <summary>
 /// Resets all shared static state in the constructor.
 /// Inherit from this class in every test class that references Plugin.Instance,
-/// QueueContinuationStore, RadioModeState, or other static singletons
-/// — whether directly or indirectly through BaseHandler methods (FilterByContentAccess,
-/// IfFeatureDisabled, ApplyLibraryFilter).
+/// QueueContinuationStore, RadioModeState, or other static singletons, whether directly
+/// or indirectly through BaseHandler methods (FilterByContentAccess, IfFeatureDisabled,
+/// ApplyLibraryFilter).
 ///
 /// This ensures each test class starts from a clean known-good state even though
 /// tests run sequentially (not in parallel).
@@ -27,6 +27,12 @@ public abstract class PluginTestBase
         Plugin.ResetInstance();
         QueueContinuationStore.Clear();
         RadioModeState.Clear();
+        // JF-447: the report-ordering guard keys its displacement classification on
+        // static per-device state (the latest started item); without the reset, a
+        // Started fired by one test would make a Stopped for a different item in a
+        // LATER test classify as a displacement and skip the registration that later
+        // test exercises.
+        Jellyfin.Plugin.AlexaSkill.Alexa.Playback.PlaybackReportOrdering.Clear();
     }
 }
 

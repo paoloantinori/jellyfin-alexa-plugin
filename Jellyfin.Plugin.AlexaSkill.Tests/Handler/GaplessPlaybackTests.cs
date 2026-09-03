@@ -755,7 +755,7 @@ public class GaplessPlaybackTests : PluginTestBase, IDisposable
         };
 
         // Create a token with an expired sleep deadline (1 tick past epoch = definitely expired)
-        string sleepToken = $"{trackId}|sleep:{DateTimeOffset.UtcNow.AddSeconds(-10).UtcTicks}";
+        string sleepToken = StreamTokenCodec.MintSleepTimerToken(trackId, DateTimeOffset.UtcNow.AddSeconds(-10).UtcTicks);
         var context = CreateContext(sleepToken);
 
         var response = await handler.HandleAsync(
@@ -786,7 +786,7 @@ public class GaplessPlaybackTests : PluginTestBase, IDisposable
         };
 
         // Deadline far in the future
-        string sleepToken = $"{trackId}|sleep:{DateTimeOffset.UtcNow.AddHours(1).UtcTicks}";
+        string sleepToken = StreamTokenCodec.MintSleepTimerToken(trackId, DateTimeOffset.UtcNow.AddHours(1).UtcTicks);
         var context = CreateContext(sleepToken);
 
         _libraryManagerMock.Setup(l => l.GetItemById(nextId)).Returns(nextTrack);

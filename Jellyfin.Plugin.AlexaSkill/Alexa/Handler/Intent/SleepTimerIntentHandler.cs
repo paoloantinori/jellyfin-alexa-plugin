@@ -9,6 +9,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
@@ -87,6 +88,18 @@ public class SleepTimerIntentHandler : BaseHandler
 
         string itemId = context.AudioPlayer?.Token ?? session.FullNowPlayingItem.Id.ToString();
 
+        // The item id is CANONICALIZED through the shared StreamTokenCodec before use
+        // (JF-447: the format's one owner; the event handlers parse it with the same
+        // codec). During sleep playback the current token already carries a sleep
+        // suffix, and using the RAW token would put a composite id into the stream URL
+        // path (unmatchable) and into the replay Token (the old deadline would persist
+        // and the sleep would still fire after a cancel; re-arming used to stack a
+        // second suffix whose deadline parse then failed). Both the cancel replay and
+        // the re-arm mint below build from the CLEAN id.
+        Guid itemGuid = StreamTokenCodec.TryGetItemId(itemId, out Guid parsed)
+            ? parsed
+            : Guid.TryParse(itemId, out Guid bare) ? bare : Guid.Empty;
+
         int offsetInMilliseconds = 0;
         if (context.AudioPlayer != null && context.AudioPlayer.OffsetInMilliseconds > 0)
         {
@@ -100,6 +113,15 @@ public class SleepTimerIntentHandler : BaseHandler
         // Cancel mode: duration <= 0 replays without a sleep deadline.
         if (durationMinutes <= 0)
         {
+            // No-token tell: an unparseable token (and no id left to fall back to)
+            // must not mint a replay directive from Guid.Empty, whose stream URL
+            // would point at nothing (review finding on the cancel branch).
+            if (itemGuid == Guid.Empty)
+            {
+                Logger.LogDebug("SleepTimer: cancel mode found no parseable item id in token={Token}, returning Tell", itemId);
+                return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale)));
+            }
+
             Logger.LogDebug("SleepTimer: cancel mode (durationMinutes={DurationMinutes}), replaying without deadline", durationMinutes);
             var cancelDirective = new AudioPlayerPlayDirective
             {
@@ -108,8 +130,12 @@ public class SleepTimerIntentHandler : BaseHandler
                 {
                     Stream = new AudioItemStream
                     {
-                        Url = GetStreamUrl(itemId, user),
-                        Token = itemId,
+                        // The canonicalized GUID feeds the stream URL (a composite id
+                        // in the URL path is unmatchable), and the replay Token is the
+                        // CLEAN id string with NO sleep suffix: a cancel replays with
+                        // no deadline, so PlaybackNearlyFinished sees nothing to enforce.
+                        Url = GetStreamUrl(itemGuid.ToString(), user),
+                        Token = itemGuid.ToString(),
                         OffsetInMilliseconds = offsetInMilliseconds
                     }
                 }
@@ -127,9 +153,13 @@ public class SleepTimerIntentHandler : BaseHandler
             });
         }
 
-        // Encode the sleep deadline into the token.
+        // Encode the sleep deadline into the token through the shared StreamTokenCodec
+        // (JF-447: the format's one owner; the event handlers parse it with the same
+        // codec), from the CLEAN id canonicalized above (minting from a suffixed id
+        // would stack a second suffix whose deadline parse then fails).
         long deadlineTicks = DateTimeOffset.UtcNow.AddMinutes(durationMinutes).UtcTicks;
-        string token = $"{itemId}|sleep:{deadlineTicks.ToString(CultureInfo.InvariantCulture)}";
+
+        string token = StreamTokenCodec.MintSleepTimerToken(itemGuid, deadlineTicks);
 
         Logger.LogDebug("SleepTimer: setting {DurationMinutes} minute timer, token={Token}", durationMinutes, token);
 
@@ -140,7 +170,10 @@ public class SleepTimerIntentHandler : BaseHandler
             {
                 Stream = new AudioItemStream
                 {
-                    Url = GetStreamUrl(itemId, user),
+                    // The canonicalized GUID also feeds the stream URL: during sleep
+                    // playback the raw token carries the sleep suffix, which would put a
+                    // composite id into the URL path (the same re-arm defect family).
+                    Url = GetStreamUrl(itemGuid.ToString(), user),
                     Token = token,
                     OffsetInMilliseconds = offsetInMilliseconds
                 }

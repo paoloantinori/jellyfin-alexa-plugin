@@ -7,7 +7,6 @@ using global::Alexa.NET.Request;
 using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
-using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Session;
@@ -26,14 +25,11 @@ public class StructuredLoggingTests : PluginTestBase
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly PluginConfiguration _config;
-    private readonly DeviceQueueManager _queueManager;
 
     public StructuredLoggingTests()
     {
         _sessionManagerMock = new Mock<ISessionManager>();
         _config = new PluginConfiguration();
-        _queueManager = new DeviceQueueManager(
-            System.IO.Path.GetTempPath(), new Mock<ILogger<DeviceQueueManager>>().Object);
     }
 
     /// <summary>
@@ -123,7 +119,7 @@ public class StructuredLoggingTests : PluginTestBase
     public async Task PlaybackFailed_LogsStructuredErrorContext()
     {
         var factory = CreateCapturingLoggerFactory();
-        var handler = new PlaybackFailedEventHandler(_sessionManagerMock.Object, _config, factory, _queueManager);
+        var handler = new PlaybackFailedEventHandler(_sessionManagerMock.Object, _config, factory);
 
         var tokenId = Guid.NewGuid().ToString();
         var request = new AudioPlayerRequest
@@ -149,7 +145,7 @@ public class StructuredLoggingTests : PluginTestBase
     public async Task PlaybackFailed_ContainsNamedTemplateParameters()
     {
         var factory = CreateCapturingLoggerFactory();
-        var handler = new PlaybackFailedEventHandler(_sessionManagerMock.Object, _config, factory, _queueManager);
+        var handler = new PlaybackFailedEventHandler(_sessionManagerMock.Object, _config, factory);
 
         var guidToken = Guid.NewGuid();
         var request = new AudioPlayerRequest

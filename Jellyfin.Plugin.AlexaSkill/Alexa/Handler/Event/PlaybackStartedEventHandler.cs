@@ -10,6 +10,7 @@ using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Diagnostics;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
@@ -71,17 +72,24 @@ public class PlaybackStartedEventHandler : BaseHandler
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         AudioPlayerRequest req = (AudioPlayerRequest)request;
-        string deviceId = context.System?.Device?.DeviceID ?? string.Empty;
+        string deviceId = context.GetDeviceId();
 
         Logger.LogDebug(
             "PlaybackStarted: item={Token}, offset={OffsetMs}ms, sessionId={SessionId}",
             req.Token, req.OffsetInMilliseconds, session.Id);
 
+        // JF-447: sleep-timer streams carry composite tokens ("{guid}|sleep:{ticks}");
+        // the raw new Guid(token) threw FormatException on them, killing this handler
+        // before the ordering generation opened and before the keep-alive ack Amazon
+        // requires. Unparseable tokens report Guid.Empty (Jellyfin treats an empty item
+        // as "no now-playing item") instead of crashing the event.
+        StreamTokenCodec.TryGetItemId(req.Token, out Guid startItemId);
+
         long startTicks = TimeSpan.FromMilliseconds(req.OffsetInMilliseconds).Ticks;
         PlaybackStartInfo playbackStartInfo = new PlaybackStartInfo
         {
             SessionId = session.Id,
-            ItemId = new Guid(req.Token),
+            ItemId = startItemId,
             PlaybackOrder = session.PlayState.PlaybackOrder,
             RepeatMode = session.PlayState.RepeatMode,
             PositionTicks = startTicks,
@@ -93,11 +101,11 @@ public class PlaybackStartedEventHandler : BaseHandler
         // Alexa's ~8s window and surfacing as INVALID_RESPONSE "Qualcosa è andato storto"),
         // and nothing in the keep-alive ack depends on its result. Elapsed time is logged
         // (warning above SlowReportMs) so future stalls localize to this call immediately.
-        // JF-425: fire-and-forget removed start-vs-stop ordering, so the generation is
-        // opened BEFORE dispatch and the report corrects itself if a stop supersedes it
-        // mid-flight (see PlaybackReportOrdering).
-        PlaybackReportOrdering.BeginStart(deviceId);
-        RunFireAndForget(ReportPlaybackStartAsync(playbackStartInfo, deviceId), "PlaybackStartReport");
+        // JF-425/JF-447: fire-and-forget removed start-vs-stop ordering, so the generation
+        // is opened BEFORE dispatch and the report corrects itself if a stop or a newer
+        // start supersedes it mid-flight (see PlaybackReportOrdering).
+        long generation = PlaybackReportOrdering.BeginStart(deviceId, playbackStartInfo);
+        RunFireAndForget(ReportPlaybackStartAsync(playbackStartInfo, deviceId, generation), "PlaybackStartReport");
 
         // JF-393 diagnostic interaction logging: record playback start so later control
         // intents can report elapsed time since start (JF-392 data collection).
@@ -140,14 +148,15 @@ public class PlaybackStartedEventHandler : BaseHandler
     /// HandleAsync returns). Exceptions are swallowed after logging: a failed report must
     /// not surface to the user (the next playback event re-reports position anyway).
     /// JF-425: the server's session write lands inside OnPlaybackStart after an internal
-    /// await, so this report can complete long after a later stop already cleared the
-    /// session. When that happens the superseding stop is re-issued to clear the
-    /// resurrected Playing state (zombie position card, MediaInfo, resume fallback).
+    /// await, so this report can complete long after a later report already changed the
+    /// session; the correction below restores the ordering invariant.
     /// </summary>
     /// <param name="playbackStartInfo">The playback-start report to send.</param>
     /// <param name="deviceId">The Alexa device ID (per-device ordering key).</param>
-    private async Task ReportPlaybackStartAsync(PlaybackStartInfo playbackStartInfo, string deviceId)
+    /// <param name="generation">The start generation captured at dispatch (supersession check).</param>
+    private async Task ReportPlaybackStartAsync(PlaybackStartInfo playbackStartInfo, string deviceId, long generation)
     {
+        PlaybackReportOrdering.TrackStartReportDispatched();
         try
         {
             Stopwatch stopwatch = Stopwatch.StartNew();
@@ -167,19 +176,110 @@ public class PlaybackStartedEventHandler : BaseHandler
                     stopwatch.ElapsedMilliseconds);
             }
 
-            PlaybackStopInfo? supersedingStop = PlaybackReportOrdering.GetSupersedingStop(deviceId);
-            if (supersedingStop is not null)
-            {
-                Logger.LogWarning(
-                    "PlaybackStarted: report for item {Token} completed after a newer playback stop (superseded while in flight); re-issuing the stop to clear the session (JF-425)",
-                    playbackStartInfo.ItemId);
-                await SessionManager.OnPlaybackStopped(supersedingStop).ConfigureAwait(false);
-            }
+            await RunStartReportCorrectionAsync(playbackStartInfo, deviceId, generation).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "PlaybackStarted: server playback-start report (or its ordering correction) failed for item {Token}", playbackStartInfo.ItemId);
         }
+        finally
+        {
+            PlaybackReportOrdering.TrackStartReportSettled();
+        }
+    }
+
+    /// <summary>
+    /// Bounds the stop-to-stop handoffs inside <see cref="RunStartReportCorrectionAsync"/>:
+    /// when a correcting report keeps finding its awaited registration replaced by a newer
+    /// stop, it gives up after this many hops instead of chasing an unbounded chain.
+    /// </summary>
+    private const int MaxCorrectionHandoffs = 3;
+
+    /// <summary>
+    /// Corrects the session state after this (possibly stale) start report's write landed.
+    /// Covers the JF-447 residual interleavings on top of the original JF-425 scenario:
+    /// - start-vs-start (F3): a newer generation means a newer start owns the session and
+    ///   this report's write clobbered its entry; restore it with an automated progress
+    ///   report (a start report is never replayed: Jellyfin increments PlayCount per user
+    ///   in OnPlaybackStart).
+    /// - double-stop (F5): the pending stop's own report may still be in flight; wait for
+    ///   it before re-issuing so the two OnPlaybackStopped calls never run concurrently
+    ///   (duplicate SaveUserData transactions and activity entries).
+    /// - correction re-validation (F6): every await (the wait above, and the corrective
+    ///   stop itself) re-checks the generation; a start that began mid-correction had its
+    ///   entry cleared by the stop's write and is restored.
+    /// </summary>
+    /// <param name="playbackStartInfo">The start report that just completed.</param>
+    /// <param name="deviceId">The Alexa device ID (per-device ordering key).</param>
+    /// <param name="generation">The generation this report was dispatched under.</param>
+    private async Task RunStartReportCorrectionAsync(PlaybackStartInfo playbackStartInfo, string deviceId, long generation)
+    {
+        for (int handoff = 0; handoff < MaxCorrectionHandoffs; handoff++)
+        {
+            PlaybackReportOrdering.StopRegistration? pending = PlaybackReportOrdering.GetPendingStop(deviceId);
+            if (pending is null)
+            {
+                // No stop supersedes this report. A newer generation means a newer start's
+                // entry was clobbered by this report's stale write (start-vs-start, F3).
+                if (PlaybackReportOrdering.GetCurrentGeneration(deviceId) != generation)
+                {
+                    await PlaybackReportOrdering.RestoreCurrentStartAsync(
+                        SessionManager, deviceId, Logger, "stale start report clobbered a newer start").ConfigureAwait(false);
+                }
+
+                return;
+            }
+
+            // Double-stop (F5): wait for the recorded stop's own report to settle before
+            // re-issuing, so the correction is always sequential to the original.
+            if (!pending.ReportCompleted.IsCompleted)
+            {
+                PlaybackReportOrdering.TrackCorrectionWaitBegun();
+                try
+                {
+                    await pending.ReportCompleted.ConfigureAwait(false);
+                }
+                finally
+                {
+                    PlaybackReportOrdering.TrackCorrectionWaitEnded();
+                }
+            }
+
+            // Re-validation (F6): a newer start began while we waited; its entry must be
+            // restored and the stop must NOT be replayed over it.
+            if (PlaybackReportOrdering.GetCurrentGeneration(deviceId) != generation)
+            {
+                await PlaybackReportOrdering.RestoreCurrentStartAsync(
+                    SessionManager, deviceId, Logger, "pending stop superseded by a newer start").ConfigureAwait(false);
+                return;
+            }
+
+            // A newer stop replaced the awaited registration before it settled: hand the
+            // correction duty to the new registration (bounded by MaxCorrectionHandoffs).
+            if (!PlaybackReportOrdering.IsPendingStop(deviceId, pending))
+            {
+                continue;
+            }
+
+            Logger.LogWarning(
+                "PlaybackStarted: report for item {Token} completed after a newer playback stop (superseded while in flight); re-issuing the stop to clear the session (JF-425)",
+                playbackStartInfo.ItemId);
+            await SessionManager.OnPlaybackStopped(pending.Info).ConfigureAwait(false);
+
+            // Re-validation after the corrective stop's own await (F6): a start that began
+            // while the correction was in flight had its entry cleared by the stop's write.
+            if (PlaybackReportOrdering.GetCurrentGeneration(deviceId) != generation)
+            {
+                await PlaybackReportOrdering.RestoreCurrentStartAsync(
+                    SessionManager, deviceId, Logger, "corrective stop cleared a newer start").ConfigureAwait(false);
+            }
+
+            return;
+        }
+
+        Logger.LogDebug(
+            "PlaybackStarted: correction for item {Token} handed off {Handoffs} times without settling; giving up (bounded, JF-447)",
+            playbackStartInfo.ItemId, MaxCorrectionHandoffs);
     }
 
     /// <summary>
@@ -192,21 +292,15 @@ public class PlaybackStartedEventHandler : BaseHandler
     /// </summary>
     private void TryPrecomputeNext(string currentToken, SessionInfo session, Entities.User user, string deviceId)
     {
-        if (session.NowPlayingQueue.Count == 0 || !Guid.TryParse(currentToken, out Guid currentId))
+        // JF-447: composite sleep-timer tokens parse through the shared codec so a
+        // sleep-timer track still gets its next track precomputed (the bare
+        // Guid.TryParse rejected the "|sleep:" suffix outright).
+        if (session.NowPlayingQueue.Count == 0 || !StreamTokenCodec.TryGetItemId(currentToken, out Guid currentId))
         {
             return;
         }
 
-        int currentIndex = -1;
-        for (int i = 0; i < session.NowPlayingQueue.Count; i++)
-        {
-            if (session.NowPlayingQueue[i].Id == currentId)
-            {
-                currentIndex = i;
-                break;
-            }
-        }
-
+        int currentIndex = SessionQueue.IndexOfQueueItem(session, currentId);
         if (currentIndex < 0 || currentIndex + 1 >= session.NowPlayingQueue.Count)
         {
             return;

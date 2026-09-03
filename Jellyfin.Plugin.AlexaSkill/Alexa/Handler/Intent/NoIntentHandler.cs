@@ -95,7 +95,7 @@ public class NoIntentHandler : BaseHandler
             && typeObj is string notFoundType)
         {
             Logger.LogDebug("NoIntent: declining cross-media artist suggestion (type={Type}, query='{Query}')", notFoundType, notFoundQuery);
-            string notFoundKey = notFoundType == "album" ? "NotFoundAlbumByName" : "NotFoundSongByName";
+            string notFoundKey = notFoundType == DisambiguationHelper.MediaTypeAlbum ? "NotFoundAlbumByName" : "NotFoundSongByName";
             return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get(notFoundKey, locale, notFoundQuery)));
         }
 

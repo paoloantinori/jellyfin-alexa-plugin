@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using global::Alexa.NET;
@@ -158,5 +159,39 @@ public class SleepTimerIntentHandlerTests : PluginTestBase
 
         Assert.NotNull(response);
         Assert.NotEmpty(response.Response.Directives);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ZeroDuration_MidSleepCompositeToken_ReplaysWithCleanIdAndNoDeadline()
+    {
+        // JF-447 review finding (cancel branch): during sleep playback the AudioPlayer
+        // token carries the sleep suffix. The cancel replay must be built from the CLEAN
+        // id: a composite id in the stream URL path is unmatchable, and a composite
+        // replay Token would carry the old deadline so the sleep would still fire after
+        // the cancel.
+        Guid songId = Guid.NewGuid();
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(durationMinutes: "0");
+        var context = CreateContext();
+        context.AudioPlayer = new PlaybackState
+        {
+            Token = $"{songId}|sleep:{DateTimeOffset.UtcNow.AddMinutes(30).UtcTicks}",
+            OffsetInMilliseconds = 90_000
+        };
+        var user = CreateUser();
+        var session = CreateSession();
+
+        var audioItem = new Audio { Name = "Test Song", Id = songId };
+        session.FullNowPlayingItem = audioItem;
+        session.PlayState = new PlayerStateInfo { PositionTicks = TimeSpan.FromMinutes(1).Ticks };
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        var directive = Assert.Single(response.Response!.Directives.OfType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>());
+        Assert.Equal(songId.ToString(), directive.AudioItem.Stream.Token);
+        Assert.DoesNotContain("|sleep:", directive.AudioItem.Stream.Token, StringComparison.Ordinal);
+        Assert.Contains(songId.ToString(), directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.DoesNotContain("|sleep:", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.Equal(90_000, directive.AudioItem.Stream.OffsetInMilliseconds);
     }
 }

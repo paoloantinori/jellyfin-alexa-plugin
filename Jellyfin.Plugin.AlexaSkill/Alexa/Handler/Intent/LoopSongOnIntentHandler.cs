@@ -43,6 +43,11 @@ public class LoopSongOnIntentHandler : BaseHandler
     /// <param name="session">The session instance.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>Empty response.</returns>
+    /// Ordering note (JF-447): this progress write is AWAITED inside its own request
+    /// path, so a later stop cannot overtake it mid-write; that is why loop toggles are
+    /// exempt from PlaybackReportOrdering registration (unlike the fire-and-forget
+    /// playback-start reports, JF-425). Do not move it to a fire-and-forget task
+    /// without registering it there.
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
         => ApplyRepeatModeAsync(request, context, session, RepeatMode.RepeatOne, "LoopSongOn");
 }

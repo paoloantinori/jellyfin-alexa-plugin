@@ -9,6 +9,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -74,36 +75,38 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     /// <returns>A task representing the async operation.</returns>
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
-        // Check for sleep timer deadline encoded in the current token
+        // Check for sleep timer deadline encoded in the current token (parsed by the
+        // shared StreamTokenCodec, the one owner of the suffix format, JF-447)
         string? currentToken = context.AudioPlayer?.Token;
+        string deviceId = context.GetDeviceId();
         Logger.LogDebug(
             "PlaybackNearlyFinished: currentToken={Token}, offset={OffsetMs}ms",
             currentToken, context.AudioPlayer?.OffsetInMilliseconds);
 
-        if (!string.IsNullOrEmpty(currentToken) && currentToken.Contains("|sleep:", StringComparison.Ordinal))
+        if (StreamTokenCodec.TryGetSleepDeadlineUtcTicks(currentToken, out long deadlineTicks)
+            && DateTimeOffset.UtcNow.UtcTicks >= deadlineTicks)
         {
-            int sleepIdx = currentToken.IndexOf("|sleep:", StringComparison.Ordinal);
-            string deadlineStr = currentToken[(sleepIdx + "|sleep:".Length)..];
-            if (long.TryParse(deadlineStr, out long deadlineTicks))
-            {
-                if (DateTimeOffset.UtcNow.UtcTicks >= deadlineTicks)
-                {
-                    Logger.LogInformation("Sleep timer expired, stopping playback");
-                    return BuildKeepAliveResponse();
-                }
-            }
+            Logger.LogInformation("Sleep timer expired, stopping playback");
+            return BuildKeepAliveResponse();
         }
 
         // JF-390 PreEnqueueOnStart (pre-compute): check the cache for a pre-resolved
         // next track (computed by PlaybackStarted when the current track began). On a
         // hit, skip the library lookups entirely and respond instantly. Only applies
         // to sequential playback (no shuffle, no repeat); other modes fall through
-        // to the full resolution below.
+        // to the full resolution below. The playback order in this gate is the
+        // AUTHORITATIVE one (per-device queue via ResolvePlaybackOrder, JF-447 trust
+        // sweep), not the session PlayState: a device queue marked Shuffle with a stale
+        // session PlayState could otherwise pass the gate and serve a stale-order
+        // precomputed entry that the full resolution below would never produce. Repeat
+        // mode stays on the session PlayState because the resolution below reads the
+        // same source for it.
+        var (resolvedOrder, resolvedReshuffled) = ResolvePlaybackOrder(session, context);
+
         if (_config.PreEnqueueOnStart
             && (session.PlayState?.RepeatMode ?? RepeatMode.RepeatNone) == RepeatMode.RepeatNone
-            && (session.PlayState?.PlaybackOrder ?? PlaybackOrder.Default) == PlaybackOrder.Default)
+            && resolvedOrder == PlaybackOrder.Default)
         {
-            string deviceId = context.System?.Device?.DeviceID ?? string.Empty;
             if (NextTrackPrecomputeCache.TryGet(deviceId, currentToken ?? string.Empty,
                     out Guid cachedNextId, out BaseItem? cachedItem, out string? cachedUrl)
                 && cachedItem != null && cachedUrl != null)
@@ -141,7 +144,6 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         TryFetchContinuationBatch(session, context);
 
         Guid? nextItemId = ResolveNextItemId(session, context);
-        var (resolvedOrder, resolvedReshuffled) = ResolvePlaybackOrder(session, context);
 
         Logger.LogDebug(
             "PlaybackNearlyFinished: resolved next item={NextItemId}, loop={LoopMode}, shuffle={Shuffle} (reshuffledQueue={Reshuffled})",
@@ -151,7 +153,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             resolvedReshuffled);
 
         // If no next item and radio mode is on, auto-populate similar tracks
-        if (nextItemId == null && RadioModeState.IsEnabled(session.UserId, context.System?.Device?.DeviceID ?? string.Empty))
+        if (nextItemId == null && RadioModeState.IsEnabled(session.UserId, deviceId))
         {
             nextItemId = await AutoPopulateRadioTracks(session, cancellationToken).ConfigureAwait(false);
         }
@@ -159,12 +161,12 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         if (nextItemId == null)
         {
             // Clean up continuation state when queue is exhausted
-            QueueContinuationStore.Remove(session.UserId, context.System?.Device?.DeviceID ?? string.Empty);
+            QueueContinuationStore.Remove(session.UserId, deviceId);
 
             // PostPlay only when radio mode is NOT active.
             // Radio mode handles its own continuation; PostPlay is for single-track
             // playback that reaches queue exhaustion without radio.
-            bool radioActive = RadioModeState.IsEnabled(session.UserId, context.System?.Device?.DeviceID ?? string.Empty);
+            bool radioActive = RadioModeState.IsEnabled(session.UserId, deviceId);
             if (!radioActive)
             {
                 var postPlayMode = GetPostPlayBehavior(user);
@@ -203,7 +205,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         string itemId = item.Id.ToString();
 
         // Update the device queue pointer for crash recovery (guarded, JF-424.1).
-        UpdateRecoveryPointer(context.System?.Device?.DeviceID ?? string.Empty, itemId, context, itemNameForLog: null);
+        UpdateRecoveryPointer(deviceId, itemId, context, itemNameForLog: null);
 
         // Use the optimized /stream?static=true endpoint for pre-fetched playback
         // (the original /universal endpoint adds an extra redirect hop)
@@ -229,7 +231,8 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     /// <param name="context">The Alexa context for device identification.</param>
     private void TryFetchContinuationBatch(SessionInfo session, Context context)
     {
-        QueueContinuation? continuation = QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID);
+        string deviceId = context.GetDeviceId();
+        QueueContinuation? continuation = QueueContinuationStore.Get(session.UserId, deviceId);
         if (continuation == null)
         {
             return;
@@ -259,7 +262,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         if (newItems.Count == 0)
         {
             // No more items to fetch, remove continuation state
-            QueueContinuationStore.Remove(session.UserId, context.System?.Device?.DeviceID ?? string.Empty);
+            QueueContinuationStore.Remove(session.UserId, deviceId);
             return;
         }
 
@@ -285,7 +288,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         // Remove continuation if we've fetched everything
         if (continuation.StartIndex >= continuation.TotalCount)
         {
-            QueueContinuationStore.Remove(session.UserId, context.System?.Device?.DeviceID ?? string.Empty);
+            QueueContinuationStore.Remove(session.UserId, deviceId);
         }
     }
 
@@ -302,7 +305,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     /// <returns>The resolved playback order and whether the queue was reshuffled.</returns>
     private (PlaybackOrder Order, bool Reshuffled) ResolvePlaybackOrder(SessionInfo session, Context context)
     {
-        Playback.DeviceQueue? deviceQueue = _queueManager?.GetQueue(context.System.Device.DeviceID);
+        Playback.DeviceQueue? deviceQueue = _queueManager?.GetQueue(context.GetDeviceId());
         if (deviceQueue == null)
         {
             return (session.PlayState?.PlaybackOrder ?? PlaybackOrder.Default, false);
@@ -318,8 +321,10 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     /// Finds the currently playing item's position in the session queue, or -1 when
     /// it cannot be located. Resolution order (the session's now-playing item first,
     /// then the AudioPlayer token parsed as a bare item GUID) is shared by the
-    /// queue-continuation fetch, <see cref="ResolveNextItemId"/>, and the JF-424.1
-    /// precompute-cache validation below, so all three agree on "current item".
+    /// queue-continuation fetch and <see cref="ResolveNextItemId"/>, so both agree on
+    /// "current item". The JF-424.1 precompute-cache validation deliberately resolves
+    /// TOKEN-FIRST instead (see <see cref="CachedNextStillFollowsCurrent"/>) to match
+    /// the store side.
     /// </summary>
     /// <param name="session">The current Jellyfin session with play state.</param>
     /// <param name="context">The Alexa context for current token.</param>
@@ -333,20 +338,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             currentItemId = parsedToken;
         }
 
-        if (currentItemId == null)
-        {
-            return -1;
-        }
-
-        for (int i = 0; i < session.NowPlayingQueue.Count; i++)
-        {
-            if (session.NowPlayingQueue[i].Id == currentItemId.Value)
-            {
-                return i;
-            }
-        }
-
-        return -1;
+        return currentItemId == null ? -1 : SessionQueue.IndexOfQueueItem(session, currentItemId.Value);
     }
 
     /// <summary>
@@ -355,8 +347,21 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     /// The precompute key (device) and its validation token (the bare item GUID)
     /// identify an item, not a playback session, so an entry can outlive the queue it
     /// was computed from (cleared or changed mid-track). This re-check keeps the
-    /// served item identical to what <see cref="ResolveNextItemId"/> would produce,
-    /// at in-memory cost only.
+    /// served item identical to what <see cref="ResolveNextItemId"/> would produce
+    /// WHEN THE SESSION'S NOW-PLAYING ITEM AGREES WITH THE TOKEN: this validation
+    /// resolves the current item TOKEN-FIRST (matching the store side, see below),
+    /// while ResolveNextItemId resolves FullNowPlayingItem-first
+    /// (<see cref="FindCurrentQueueIndex"/>); the two disagree exactly when a start
+    /// report failed and the session still holds the previous queue item, at in-memory
+    /// cost only.
+    /// JF-447 (review follow-up): the current item resolves TOKEN-FIRST, matching the
+    /// STORE side (<see cref="PlaybackStartedEventHandler.TryPrecomputeNext"/> resolves
+    /// the token alone). The FullNowPlayingItem-first order used by
+    /// <see cref="FindCurrentQueueIndex"/> made the validation disagree with the store
+    /// when a start report failed and the session still held the PREVIOUS queue item:
+    /// the validation computed that item's successor (the playing track itself),
+    /// rejected the cached entry, and the fall-through enqueued the playing track after
+    /// itself (the JF-409 self-reenqueue class).
     /// </summary>
     /// <param name="session">The current Jellyfin session with play state.</param>
     /// <param name="context">The Alexa context for current token.</param>
@@ -364,7 +369,15 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     /// <returns>True when the cached item is still the current item's queue successor.</returns>
     private bool CachedNextStillFollowsCurrent(SessionInfo session, Context context, Guid cachedNextId)
     {
-        int currentIndex = FindCurrentQueueIndex(session, context);
+        // A matched cache entry implies the token parsed at store time, and TryGet
+        // matched the tokens by string equality, so the token parses here too
+        // (composite sleep tokens included, via the shared codec).
+        if (!StreamTokenCodec.TryGetItemId(context.AudioPlayer?.Token, out Guid currentItemId))
+        {
+            return false;
+        }
+
+        int currentIndex = SessionQueue.IndexOfQueueItem(session, currentItemId);
         return currentIndex >= 0
             && currentIndex + 1 < session.NowPlayingQueue.Count
             && session.NowPlayingQueue[currentIndex + 1].Id == cachedNextId;
@@ -603,7 +616,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         if (firstNewId != null)
         {
             session.NowPlayingQueue = queue;
-            RadioModeState.Enable(session.UserId, context.System.Device.DeviceID);
+            RadioModeState.Enable(session.UserId, context.GetDeviceId());
             Logger.LogInformation("PostPlay AutoPlay: added {Count} similar tracks, radio mode enabled", addedCount);
         }
 
