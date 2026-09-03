@@ -3,10 +3,10 @@ id: JF-448
 title: >-
   JF-431/432 follow-ups: cross-snapshot artist window, generic snapshot base,
   freezing, 4-copy predicate, test/table/local hygiene
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-02 01:46'
-updated_date: '2026-09-03 01:53'
+updated_date: '2026-09-03 03:17'
 labels:
   - code-review
   - follow-up-family
@@ -35,6 +35,12 @@ Follow-ups from the JF-431/JF-432 code-review round (2026-09-02). Of the 9 findi
 - [ ] #6 F8 measurement-table duplication: JF-431 numbers live in the inline comment AND the task file; constraint + one-line pointer in code, numbers in one place
 - [ ] #7 F9 vestigial locals: 5 of 7 single-use unwrap aliases in Search/SearchPhonetic/SearchBySingleTokens/GetArtists; read snapshot.X at the use site
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+All seven ACs resolved. AC#1 (the live-correctness item): IArtistIndex.CaptureSnapshot() returns a read view pinned to one published snapshot (SnapshotView: snapshot + readiness captured, idempotent); ArtistSearch.SearchAsync, BaseHandler.TryEntityFallbackAsync (including its post-chain phonetic confirm - the third compose window, beyond the two the AC cited), and the PlayArtistSongs inline chain (incl. the JF-420 gate and fast auto-play) pin once and resolve artist list AND phonetic codes from the same publish; ArtistIndexExtensions.Pin ([NotNullIfNotNull], ?? index degrade for loose mocks) centralizes the policy; a mid-search-publish chain test proves the pin discriminates (sabotage-verified: without the pin the cup-for-Koop phonetic floor is lost). AC#2: DebouncedLibraryIndexService<TSnapshot> generic companion owns the volatile field + Empty + internal CurrentSnapshot + protected Publish (a subclass cannot write the field except through Publish; JF-432's invariant made mechanical; DI and both ctors unchanged; snapshot records public by CS0060 force but ctors internal). AC#3: construction-time freezing (defensively copied arrays + FrozenDictionary for every map incl. inner per-token lists); pinned by the frozen-against-loader-locals test; the structural one-field test preserved via the shared AssertSingleSnapshotField helper. AC#4: ALREADY DONE by JF-456's FilterByLibraryScope (verified: all four sites call it; credited there). AC#5: shared helper next to PluginTestBase; domain-specific pairs stay concrete. AC#6: measurement table single-homed in the JF-431 task notes, constraint + pointer in code. AC#7: all five cited aliases inlined. Review gate (5 reviewers + scorer): no finding >= 80; five score-50 items applied or recorded (sub-ms pin-before-gate window on TryEntityFallback - conservative direction, first-load instant; JF-420 gate disabled-index-recovery delta; ctor-ordering nuance - unreachable; AC#4 credit; redundant directive removed). Suite 3047/0, Release 0 warnings. Commit 5a8d6e34.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
