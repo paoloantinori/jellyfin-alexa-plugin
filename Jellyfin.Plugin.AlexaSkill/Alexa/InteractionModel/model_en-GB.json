@@ -795,7 +795,12 @@
       },
       {
         "name": "PlayRadioIntent",
-        "slots": [],
+        "slots": [
+          {
+            "name": "station",
+            "type": "AMAZON.SearchQuery"
+          }
+        ],
         "samples": [
           "play radio",
           "play radio mode",
@@ -804,7 +809,8 @@
           "keep playing similar music",
           "play similar songs",
           "start a radio station",
-          "play songs like this"
+          "play songs like this",
+          "play the radio station {station}"
         ]
       },
       {
@@ -1611,6 +1617,18 @@
           {
             "name": "musician",
             "type": "AMAZON.Musician",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "PlayRadioIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "station",
+            "type": "AMAZON.SearchQuery",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

@@ -98,6 +98,7 @@
   "QueueEmpty": "Deine Warteschlange ist leer.",
   "QueueList": "Als Naechstes: {0}",
   "DidNotCatchQueueItem": "Was möchtest du zur Warteschlange hinzufuegen?",
+  "RadioAskStation": "Welchen Radiosender möchtest du hören?",
   "RadioNothingPlaying": "Es wird gerade nichts abgespielt. Spiele zuerst ein Lied und sag dann Radio starten.",
   "RadioNotAudio": "Der Radiomodus funktioniert nur mit Musik. Spiele zuerst ein Lied.",
   "RadioNoSimilar": "Ich konnte keine aehnlichen Titel in deiner Bibliothek finden.",

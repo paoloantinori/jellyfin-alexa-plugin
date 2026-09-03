@@ -319,10 +319,11 @@ public class HandlerFeatureFlagTests : PluginTestBase, IDisposable
             CreateContext(), TestHelpers.CreateTestUser(), session, CancellationToken.None);
 
         Assert.NotNull(response);
-        // With radio enabled but nothing playing, should get the "nothing playing" message,
-        // NOT the feature disabled message.
+        // With radio enabled, nothing playing, and an empty station slot, the handler
+        // proceeds normally into the JF-472 station elicit, NOT the feature disabled
+        // message.
         var text = TestHelpers.GetSpeechText(response);
-        Assert.Contains("nothing", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("station", text, StringComparison.OrdinalIgnoreCase);
     }
 }
 

@@ -553,6 +553,10 @@ explicit_intents:
       - suona brani simili
       - continua con musica simile
       - metti musica simile
+      - riproduci la stazione radio {station}
+    slots:
+      - name: station
+        type: AMAZON.SearchQuery
   QueryRecentlyAddedIntent:
     samples:
       - cosa c'è di nuovo
@@ -992,5 +996,12 @@ dialog:
           elicitationRequired: false
         - name: musician
           type: AMAZON.Musician
+          confirmationRequired: false
+          elicitationRequired: false
+    - name: PlayRadioIntent
+      confirmationRequired: false
+      slots:
+        - name: station
+          type: AMAZON.SearchQuery
           confirmationRequired: false
           elicitationRequired: false

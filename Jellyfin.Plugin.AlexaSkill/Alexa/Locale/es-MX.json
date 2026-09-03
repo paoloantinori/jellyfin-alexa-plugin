@@ -104,6 +104,7 @@
   "QueueCleared": "Cola vaciada.",
   "QueueEmpty": "Tu cola está vacía.",
   "QueueList": "A continuación: {0}",
+  "RadioAskStation": "¿Qué estación de radio quieres escuchar?",
   "RadioNothingPlaying": "No se está reproduciendo nada ahora. Reproduce una canción primero, luego di reproducir radio.",
   "RadioNotAudio": "El modo radio solo funciona con música. Intenta reproducir una canción primero.",
   "RadioNoSimilar": "No pude encontrar canciones similares en tu biblioteca.",

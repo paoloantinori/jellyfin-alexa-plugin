@@ -98,6 +98,7 @@
   "QueueEmpty": "Je wachtrij is leeg.",
   "QueueList": "Hierna: {0}",
   "DidNotCatchQueueItem": "Wat wil je toevoegen aan de wachtrij?",
+  "RadioAskStation": "Welk radiostation wil je beluisteren?",
   "RadioNothingPlaying": "Er wordt momenteel niets afgespeeld. Speel eerst een nummer en zeg dan speel radio.",
   "RadioNotAudio": "Radiomodus werkt alleen met muziek. Probeer eerst een nummer af te spelen.",
   "RadioNoSimilar": "Ik kon geen vergelijkbare nummers vinden in je bibliotheek.",

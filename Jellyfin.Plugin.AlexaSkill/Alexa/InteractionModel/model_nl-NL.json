@@ -649,7 +649,14 @@
           "blijf vergelijkbare muziek afspelen",
           "speel vergelijkbare nummers",
           "start een radiostation",
-          "speel nummers zoals deze"
+          "speel nummers zoals deze",
+          "start het radiostation {station}"
+        ],
+        "slots": [
+          {
+            "name": "station",
+            "type": "AMAZON.SearchQuery"
+          }
         ]
       },
       {
@@ -1474,6 +1481,18 @@
         "slots": [
           {
             "name": "playlist",
+            "type": "AMAZON.SearchQuery",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "PlayRadioIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "station",
             "type": "AMAZON.SearchQuery",
             "confirmationRequired": false,
             "elicitationRequired": false

@@ -584,7 +584,14 @@
           "ラジオをスタートして",
           "似たような音楽を再生して",
           "似た曲を再生して",
-          "ラジオステーションを始めて"
+          "ラジオステーションを始めて",
+          "ラジオステーション {station} を再生して"
+        ],
+        "slots": [
+          {
+            "name": "station",
+            "type": "AMAZON.SearchQuery"
+          }
         ]
       },
       {
@@ -1369,6 +1376,18 @@
         "slots": [
           {
             "name": "playlist",
+            "type": "AMAZON.SearchQuery",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "PlayRadioIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "station",
             "type": "AMAZON.SearchQuery",
             "confirmationRequired": false,
             "elicitationRequired": false

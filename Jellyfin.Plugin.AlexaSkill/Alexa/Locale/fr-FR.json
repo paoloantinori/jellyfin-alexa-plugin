@@ -98,6 +98,7 @@
   "QueueEmpty": "Votre file d'attente est vide.",
   "QueueList": "À suivre : {0}",
   "DidNotCatchQueueItem": "Que souhaitez-vous ajouter à votre file d'attente ?",
+  "RadioAskStation": "Quelle station de radio aimeriez-vous écouter ?",
   "RadioNothingPlaying": "Rien n'est en cours de lecture. Jouez une chanson d'abord, puis dites jouer la radio.",
   "RadioNotAudio": "Le mode radio fonctionne uniquement avec la musique. Essayez de lire une chanson d'abord.",
   "RadioNoSimilar": "Je n'ai pas trouvé de morceaux similaires dans votre bibliothèque.",

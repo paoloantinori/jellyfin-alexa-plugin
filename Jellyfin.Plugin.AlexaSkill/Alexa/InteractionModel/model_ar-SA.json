@@ -598,7 +598,14 @@
           "ابدأ الراديو",
           "شغل موسيقى مشابهة",
           "شغل أغانٍ مشابهة",
-          "ابدأ محطة راديو"
+          "ابدأ محطة راديو",
+          "شغل محطة الراديو {station}"
+        ],
+        "slots": [
+          {
+            "name": "station",
+            "type": "AMAZON.SearchQuery"
+          }
         ]
       },
       {
@@ -1386,6 +1393,18 @@
         "slots": [
           {
             "name": "playlist",
+            "type": "AMAZON.SearchQuery",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "PlayRadioIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "station",
             "type": "AMAZON.SearchQuery",
             "confirmationRequired": false,
             "elicitationRequired": false

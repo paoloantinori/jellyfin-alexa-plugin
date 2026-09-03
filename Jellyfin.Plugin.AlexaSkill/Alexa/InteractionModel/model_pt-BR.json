@@ -667,7 +667,14 @@
           "continuar tocando música similar",
           "tocar músicas parecidas",
           "iniciar uma estação de rádio",
-          "tocar músicas como esta"
+          "tocar músicas como esta",
+          "Toque a estação de rádio {station}"
+        ],
+        "slots": [
+          {
+            "name": "station",
+            "type": "AMAZON.SearchQuery"
+          }
         ]
       },
       {
@@ -1502,6 +1509,18 @@
         "slots": [
           {
             "name": "playlist",
+            "type": "AMAZON.SearchQuery",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "PlayRadioIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "station",
             "type": "AMAZON.SearchQuery",
             "confirmationRequired": false,
             "elicitationRequired": false

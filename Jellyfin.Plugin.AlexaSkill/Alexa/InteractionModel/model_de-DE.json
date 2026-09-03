@@ -689,7 +689,12 @@
       },
       {
         "name": "PlayRadioIntent",
-        "slots": [],
+        "slots": [
+          {
+            "name": "station",
+            "type": "AMAZON.SearchQuery"
+          }
+        ],
         "samples": [
           "Spiele Radio",
           "Starte Radio",
@@ -698,7 +703,8 @@
           "Spiele ähnliche Lieder",
           "Starte einen Radiosender",
           "Weiter mit ähnlicher Musik",
-          "Spiele Lieder wie dieses"
+          "Spiele Lieder wie dieses",
+          "Spiele den Radiosender {station}"
         ]
       },
       {
@@ -1569,6 +1575,18 @@
           {
             "name": "musician",
             "type": "AMAZON.Musician",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "PlayRadioIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "station",
+            "type": "AMAZON.SearchQuery",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

@@ -98,6 +98,7 @@
   "QueueEmpty": "Sua fila está vazia.",
   "QueueList": "A seguir: {0}",
   "DidNotCatchQueueItem": "O que você gostaria de adicionar à fila?",
+  "RadioAskStation": "Qual estação de rádio você gostaria de ouvir?",
   "RadioNothingPlaying": "Nada está tocando no momento. Toque uma música primeiro, depois diga tocar rádio.",
   "RadioNotAudio": "O modo rádio só funciona com música. Tente tocar uma música primeiro.",
   "RadioNoSimilar": "Não consegui encontrar faixas similares na sua biblioteca.",

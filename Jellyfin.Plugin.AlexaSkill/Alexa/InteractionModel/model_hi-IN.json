@@ -608,7 +608,14 @@
           "ऐसा ही और चलाओ",
           "समान म्यूज़िक चलाते रहो",
           "समान गाने चलाओ",
-          "रेडियो स्टेशन शुरू करो"
+          "रेडियो स्टेशन शुरू करो",
+          "रेडियो स्टेशन {station} चलाओ"
+        ],
+        "slots": [
+          {
+            "name": "station",
+            "type": "AMAZON.SearchQuery"
+          }
         ]
       },
       {
@@ -1405,6 +1412,18 @@
         "slots": [
           {
             "name": "playlist",
+            "type": "AMAZON.SearchQuery",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "PlayRadioIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "station",
             "type": "AMAZON.SearchQuery",
             "confirmationRequired": false,
             "elicitationRequired": false

@@ -98,6 +98,7 @@
   "QueueEmpty": "Your queue is empty.",
   "QueueList": "Up next: {0}",
   "DidNotCatchQueueItem": "What would you like to add to your queue?",
+  "RadioAskStation": "Which radio station would you like to listen to?",
   "RadioNothingPlaying": "Nothing is currently playing. Play a song first, then say play radio.",
   "RadioNotAudio": "Radio mode only works with music. Try playing a song first.",
   "RadioNoSimilar": "I couldn't find any similar tracks in your library.",

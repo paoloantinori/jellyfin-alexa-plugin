@@ -148,6 +148,7 @@
   "RadioModeOn": "Radio mode is now on. I'll keep playing similar music when your queue runs out.",
   "RadioNoSimilar": "I couldn't find any similar tracks in your library.",
   "RadioNotAudio": "Radio mode only works with music. Try playing a song first.",
+  "RadioAskStation": "Which radio station would you like to listen to?",
   "RadioNothingPlaying": "Nothing is currently playing. Play a song first, then say play radio.",
   "RadioStarted": "Radio mode on. Found {0} similar tracks.",
   "RecommendPlaying": "Here's a recommendation for you: playing {0}",
