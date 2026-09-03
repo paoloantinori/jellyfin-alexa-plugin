@@ -11,14 +11,34 @@ Catches the failure modes that have caused broken models in the past:
   - Intents with zero sample utterances
   - Duplicate sample utterances within an intent
 
-Exit code: 0 if all checks pass, 1 if any error found.
+WARNING-level checks (never affect the exit code; the CI validate-models job is
+advisory and a false positive here must not break it):
+  - Bare album carriers: a PlayAlbumIntent sample whose carrier text does not
+    name the media noun, in locales whose album slot is an AMAZON.* free-text
+    type (CLAUDE.md anti-pattern #11; the catalog-backed AlbumName architecture
+    of it-IT is skipped automatically via the slot type, not a locale list).
+  - Stale NLU fixtures: a PlayAlbumIntent fixture utterance whose carrier shape
+    matches no current sample of that intent in that locale (heuristic; caught
+    the JF-459 case where a fixture referenced a deleted sample and only a
+    manual profile-nlu probe noticed). Guards the fixtures mirror only; the
+    other sample mirrors (VOICE_COMMANDS.md, docs/, docs-site/) stay manual
+    (CLAUDE.md anti-pattern #11 lists them all).
+
+Exit code: 0 if all checks pass, 1 if any error found. Warnings alone exit 0.
+--verbose prints every warning instead of the first 20.
 """
 
 import json
+import re
 import sys
 from pathlib import Path
 
 MODELS_DIR = Path(__file__).resolve().parent.parent / "Jellyfin.Plugin.AlexaSkill" / "Alexa" / "InteractionModel"
+
+FIXTURES_DIR = Path(__file__).resolve().parent.parent / "tests" / "integration" / "fixtures"
+
+# Slot placeholder span in a sample utterance, e.g. '{album}' in "play the album {album}".
+SLOT_PLACEHOLDER_RE = re.compile(r"\{[^}]*\}")
 
 # Intents that are expected to exist in all locales
 # (Amazon built-in intents may vary, so we only check custom intents)
@@ -82,6 +102,24 @@ SLOTLESS_INTENTS = {
     "FollowMeIntent",
 }
 
+# Media nouns a PlayAlbumIntent carrier must name, keyed by language prefix.
+# SOURCE OF TRUTH: CLAUDE.md "Interaction Model Anti-Patterns" #11 (bare album
+# carriers); if that table changes, change this one in the same commit. The
+# truncated stems ('lbum', 'لبوم') intentionally match both plain and
+# accented/case variants ('album', 'Album', 'álbum', 'ألبوم') without needing
+# unicode accent folding; matching is case-insensitive.
+ALBUM_CARRIER_NOUNS: dict[str, list[str]] = {
+    "en": ["lbum", "record"],
+    "de": ["lbum", "Platte"],
+    "es": ["lbum", "disco"],
+    "fr": ["lbum", "disque"],
+    "pt": ["lbum"],
+    "nl": ["lbum"],
+    "ar": ["لبوم"],
+    "ja": ["アルバム"],
+    "hi": ["एल्बम"],
+}
+
 
 def load_model(path: Path) -> dict | None:
     """Load and return the languageModel from a model file, or None on parse error."""
@@ -98,6 +136,11 @@ def load_model(path: Path) -> dict | None:
         return None
 
     return lm
+
+
+def intent_by_name(lm: dict, name: str) -> dict | None:
+    """Return the intent dict with this name, or None if the locale lacks it."""
+    return next((i for i in lm.get("intents", []) if i.get("name") == name), None)
 
 
 def validate_single_model(locale: str, lm: dict) -> tuple[list[str], list[str]]:
@@ -203,6 +246,38 @@ def validate_single_model(locale: str, lm: dict) -> tuple[list[str], list[str]]:
                 f"for English and German locales (de-DE)"
             )
 
+    # 10. Bare album carriers (WARNING, CLAUDE.md anti-pattern #11): a
+    # PlayAlbumIntent sample whose carrier (placeholders stripped) does not name
+    # the media makes PlayAlbumIntent greedily compete with PlaySongIntent on
+    # free-text album slots. Only applies when the album slot is an AMAZON.*
+    # free-text type (read from the model itself): a catalog-backed custom type
+    # such as it-IT's AlbumName constrains matching via the catalog instead, so
+    # its carriers are exempt. Locales whose language prefix has no noun table
+    # entry (currently 'it') are also skipped: CLAUDE.md #11 defines no nouns
+    # for the catalog-backed locale, and inventing them here would drift from
+    # the documented source. Placeholders are stripped BEFORE the noun check
+    # because '{album}' itself contains the noun and would defeat detection.
+    nouns = ALBUM_CARRIER_NOUNS.get(locale.split("-")[0])
+    intent = intent_by_name(lm, "PlayAlbumIntent")
+    if intent and nouns:
+        album_type = next(
+            (s.get("type") for s in intent.get("slots", []) if s.get("name") == "album"),
+            None,
+        )
+        if album_type and album_type.startswith("AMAZON."):
+            # Same carrier normalization as the fixture lint (_lint_normalize:
+            # lowercase + whitespace collapse), so the two checks cannot drift.
+            lowered_nouns = [n.lower() for n in nouns]
+            for sample in intent.get("samples", []):
+                if "{album}" not in sample:
+                    continue
+                carrier = _lint_normalize(SLOT_PLACEHOLDER_RE.sub("", sample))
+                if not any(n in carrier for n in lowered_nouns):
+                    warnings.append(
+                        f"{prefix} PlayAlbumIntent bare album carrier "
+                        f"(CLAUDE.md anti-pattern #11): '{sample}'"
+                    )
+
     return errors, warnings
 
 
@@ -273,7 +348,113 @@ def validate_slot_types_cross_locale(all_models: dict[str, dict]) -> list[str]:
     return errors
 
 
+# Intents the fixture lint covers. Scoped to the concrete JF-459 case; extend
+# only with intents whose fixtures are known to be sample-shaped (the lint is a
+# heuristic, not an oracle; see lint_fixture_carriers).
+FIXTURE_LINT_INTENTS = {"PlayAlbumIntent"}
+
+
+def _lint_normalize(text: str) -> str:
+    """Lowercase and collapse whitespace so sample/utterance comparison is shape-only."""
+    return re.sub(r"\s+", " ", text.lower()).strip()
+
+
+def _sample_fragments(sample: str) -> list[str]:
+    """Literal (non-placeholder) fragments of a sample, in order, normalized."""
+    return [_lint_normalize(part) for part in SLOT_PLACEHOLDER_RE.split(sample) if part.strip()]
+
+
+def _fragments_in_order(text: str, fragments: list[str]) -> bool:
+    """True when every fragment appears in text (already _lint_normalize'd), in order.
+
+    Subsequence-of-fragments containment: the sample 'Lis l'album {album} de {musician}'
+    requires the literal spans 'lis l'album' and 'de' to appear in the utterance in that
+    order (the placeholder spans absorb whatever sits between them). A sample with no
+    literal fragments (a bare '{album}') matches every utterance: lenient by design,
+    this is a warning heuristic, never a gate.
+    """
+    pos = 0
+    for fragment in fragments:
+        idx = text.find(fragment, pos)
+        if idx < 0:
+            return False
+        pos = idx + len(fragment)
+    return True
+
+
+def lint_fixture_carriers(all_models: dict[str, dict], fixtures_dir: Path = FIXTURES_DIR) -> list[str] | None:
+    """WARNING lint: NLU fixture utterances that no current sample covers.
+
+    Returns the warning list, or None when the lint did NOT run (PyYAML
+    missing, fixtures directory absent), so the caller cannot mistake a
+    skip for an all-clear.
+
+    HEURISTIC, NOT AN ORACLE: profile-nlu legitimately routes utterances that are
+    not literal samples (NLU generalization), so a warning means "no current
+    sample shares this carrier shape", which is a stale-fixture smell rather
+    than a broken test, and never a failure. The concrete case (JF-459): trimming bare
+    album carriers deleted 'Lis {album} de {musician}' while fixture
+    'Lis la musique de the beatles' still expected PlayAlbumIntent; profile-nlu
+    kept routing it via other samples, so only a manual probe caught the drift.
+    """
+    warnings: list[str] = []
+    if not fixtures_dir.is_dir():
+        print("  SKIP: fixtures directory not found:", fixtures_dir)
+        return None
+    try:
+        import yaml
+    except ImportError:
+        print("  SKIP: PyYAML not installed, fixture lint not run")
+        return None
+
+    for locale, lm in sorted(all_models.items()):
+        fixture_path = fixtures_dir / f"{locale}.yaml"
+        if not fixture_path.is_file():
+            continue
+        try:
+            data = yaml.safe_load(fixture_path.read_text())
+        except yaml.YAMLError as e:
+            print(f"  SKIP: [{locale}] fixture is not parseable YAML: {e}")
+            continue
+        if not isinstance(data, dict):
+            print(f"  SKIP: [{locale}] fixture is not a YAML mapping")
+            continue
+        tests = data.get("tests")
+        if not isinstance(tests, list):
+            print(f"  SKIP: [{locale}] fixture 'tests' is not a list")
+            continue
+        # Depends only on the locale's samples, not on the fixture tests: hoist
+        # it out of the per-test loop.
+        lint_fragments: dict[str, list[list[str]]] = {}
+        for intent_name in FIXTURE_LINT_INTENTS:
+            intent = intent_by_name(lm, intent_name)
+            if intent and intent.get("samples"):
+                lint_fragments[intent_name] = [_sample_fragments(s) for s in intent["samples"]]
+        for test in tests:
+            # Malformed entries must not crash the advisory validator.
+            if not isinstance(test, dict):
+                continue
+            intent_name = test.get("expected_intent")
+            if not isinstance(intent_name, str) or not intent_name:
+                continue
+            fragment_lists = lint_fragments.get(intent_name)
+            if not fragment_lists:
+                continue
+            utterance = test.get("utterance")
+            if not isinstance(utterance, str) or not utterance:
+                continue
+            text = _lint_normalize(utterance)
+            if not any(_fragments_in_order(text, fragments) for fragments in fragment_lists):
+                warnings.append(
+                    f"  [{locale}] fixture utterance '{utterance}' matches no "
+                    f"{intent_name} sample carrier (possible stale fixture)"
+                )
+
+    return warnings
+
+
 def main() -> int:
+    verbose = "--verbose" in sys.argv[1:]
     model_files = sorted(MODELS_DIR.glob("model_*.json"))
     if not model_files:
         print("FAIL: No model_*.json files found in", MODELS_DIR)
@@ -296,6 +477,9 @@ def main() -> int:
         all_errors.extend(errors)
         all_warnings.extend(warnings)
         all_models[locale] = lm
+        if verbose:
+            for w in warnings:
+                print(f"  WARN: {w}")
 
         parts = []
         if errors:
@@ -320,13 +504,28 @@ def main() -> int:
             for e in cross_warnings + type_warnings:
                 print(f"  WARN: {e}")
 
+    # Phase 3: NLU fixture carrier lint (heuristic warning check)
+    if all_models:
+        print("\nNLU fixture carrier lint:")
+        fixture_warnings = lint_fixture_carriers(all_models)
+        if fixture_warnings is None:
+            pass  # skipped: the SKIP line above says why, never print all-clear
+        else:
+            all_warnings.extend(fixture_warnings)
+            if fixture_warnings:
+                for w in fixture_warnings:
+                    print(f"  WARN: {w}")
+            else:
+                print("  All linted fixture utterances match a current sample carrier")
+
     # Summary
     print(f"\n{'='*60}")
     if all_warnings:
-        print(f"WARN: {len(all_warnings)} warning(s) (pre-existing issues, not blockers):")
-        for w in all_warnings[:20]:
+        print(f"WARN: {len(all_warnings)} warning(s) (non-blocking):")
+        shown = all_warnings if verbose else all_warnings[:20]
+        for w in shown:
             print(w)
-        if len(all_warnings) > 20:
+        if not verbose and len(all_warnings) > 20:
             print(f"  ... and {len(all_warnings) - 20} more warnings")
 
     if all_errors:
@@ -337,7 +536,8 @@ def main() -> int:
 
     print("PASS: All interaction models are structurally valid")
     if all_warnings:
-        print(f"  ({len(all_warnings)} warnings — run with --verbose to see all)")
+        hint = "" if verbose else "; run with --verbose to see all"
+        print(f"  ({len(all_warnings)} warnings{hint})")
     return 0
 
 

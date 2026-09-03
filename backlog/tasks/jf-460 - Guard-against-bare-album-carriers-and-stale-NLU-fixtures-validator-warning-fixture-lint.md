@@ -3,9 +3,10 @@ id: JF-460
 title: >-
   Guard against bare album carriers and stale NLU fixtures (validator warning +
   fixture lint)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-03 05:32'
+updated_date: '2026-09-03 06:44'
 labels: []
 dependencies: []
 references:

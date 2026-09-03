@@ -566,6 +566,8 @@ for f in sorted(glob.glob('Jellyfin.Plugin.AlexaSkill/Alexa/InteractionModel/mod
 PY
 ```
 
+The same detection runs as warning check #10 in `scripts/validate_interaction_models.py` (JF-460), with the noun table pinned to this section as the source of truth. It is warning-level BY DESIGN: the CI validate-models job is advisory and a false positive must not break it. If that job is ever promoted to blocking, revisit the check's severity in the same change.
+
 **When PlayAlbumIntent samples change in ANY locale, update the mirrors or they go stale** (they went stale twice: PR #15 orphaned the 5 English rows, JF-459 initially orphaned 11 more): `VOICE_COMMANDS.md` (hand-maintained utterance tables), `docs/playback-lifecycle-<locale>.md` (the `Idle -->|"<sample>"| PlayAlbum` edge label), `docs/graphs.json` + `docs-site/graphs.json` (identical mirrors; do a targeted label replacement, do NOT re-run `parse_mermaid.py`: its output differs from the committed JSONs in BOTH directions, it nulls out the resolved edge targets the committed files carry while also lagging the md sources in other categories, so a full regen churns unrelated diagrams; JF-303 set the scoped-regen precedent), `docs-site/data.json` (embedded mermaid strings), and `tests/integration/fixtures/<locale>.yaml` (an NLU expectation referencing a removed sample goes stale silently: profile-nlu still routes via other samples, so only the live suite fails, never the dry-run).
 
 ## Release
