@@ -538,6 +538,9 @@ public class ConfigurationController : ControllerBase
         if (req.TryGetValue("AnnounceAudioPlays", out var announceAudioToken) && announceAudioToken.Type == JTokenType.Boolean)
         { config.AnnounceAudioPlays = announceAudioToken.Value<bool>(); updated = true; }
 
+        if (req.TryGetValue("AnnounceCrossMediaSubstitution", out var announceCrossMediaToken) && announceCrossMediaToken.Type == JTokenType.Boolean)
+        { config.AnnounceCrossMediaSubstitution = announceCrossMediaToken.Value<bool>(); updated = true; }
+
         if (req.TryGetValue("DefaultDiagnosticInteractionLogging", out var diagLoggingToken) && diagLoggingToken.Type == JTokenType.Boolean)
         { config.DefaultDiagnosticInteractionLogging = diagLoggingToken.Value<bool>(); updated = true; }
 

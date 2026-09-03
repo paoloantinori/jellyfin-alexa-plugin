@@ -18,7 +18,6 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
-using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
 using SortOrder = Jellyfin.Database.Implementations.Enums.SortOrder;
 
@@ -34,12 +33,6 @@ public class PlayAlbumIntentHandler : BaseHandler
     private readonly IUserDataManager _userDataManager;
     private readonly DeviceQueueManager? _queueManager;
     private readonly IArtistIndex? _artistIndex;
-
-    /// <summary>
-    /// Minimum album-query length to attempt the full-catalog fuzzy fallback. Shorter
-    /// queries (e.g. "red", "aria") produce too many substring false positives.
-    /// </summary>
-    private const int MinFuzzyAlbumQueryLength = 4;
 
     /// <summary>
     /// JF-443: cap on the albums whose track counts are queried on the indefinite
@@ -193,7 +186,7 @@ public class PlayAlbumIntentHandler : BaseHandler
         // albums and play it.
         if (string.IsNullOrWhiteSpace(album) && artistsIds.Count > 0)
         {
-            InternalItemsQuery artistAlbumQuery = BuildAlbumQuery(jellyfinUser, user, searchTerm: null, artistIds: artistsIds.ToArray(), albumArtistsOnly: true);
+            InternalItemsQuery artistAlbumQuery = BuildAlbumQuery(_libraryManager, jellyfinUser, user, searchTerm: null, artistIds: artistsIds.ToArray(), albumArtistsOnly: true);
 
             // JF-427: explicit deterministic order; the query previously had NO OrderBy, so the
             // pick was an arbitrary database row that could change after an unrelated rescan. The
@@ -250,7 +243,7 @@ public class PlayAlbumIntentHandler : BaseHandler
         }
         else
         {
-            var albumSearchQuery = BuildAlbumQuery(jellyfinUser, user, album, artistsIds.ToArray());
+            var albumSearchQuery = BuildAlbumQuery(_libraryManager, jellyfinUser, user, album, artistsIds.ToArray());
 
             Logger.LogDebug("PlayAlbum: querying Jellyfin with searchTerm='{Album}', artistIds={ArtistIdsCount}, types=MusicAlbum", album, artistsIds.Count);
             albums = await RetryAsync(
@@ -276,7 +269,7 @@ public class PlayAlbumIntentHandler : BaseHandler
             // Min-length guard: very short queries produce too many substring false
             // positives across a full-catalog scan (e.g. "red", "aria") — skip them.
             Logger.LogDebug("PlayAlbum: exact search miss, trying fuzzy fallback for '{Query}'", album);
-            var phoneticAlbumQuery = BuildAlbumQuery(jellyfinUser, user, searchTerm: null, artistIds: null);
+            var phoneticAlbumQuery = BuildAlbumQuery(_libraryManager, jellyfinUser, user, searchTerm: null, artistIds: null);
             // JF-446 (finding 5): the full-catalog scan reads only a.Name downstream;
             // use the cheap DTO shape instead of materializing images/userdata/
             // current-program for every album in the library.
@@ -366,114 +359,26 @@ public class PlayAlbumIntentHandler : BaseHandler
             albums = new List<BaseItem> { albums[0] };
         }
 
-        // Get the first page of album tracks for fast time-to-audio.
-        // Remaining tracks will be fetched on demand by PlaybackNearlyFinished.
-        Logger.LogDebug("PlayAlbum: querying tracks for album='{AlbumName}' (id={AlbumId})", albums[0].Name, albums[0].Id);
-        QueryResult<BaseItem> albumResult = await RetryAsync(
-            () => SafeGetItemsResult(_libraryManager, new InternalItemsQuery()
-            {
-                User = jellyfinUser,
-                Recursive = true,
-                ParentId = albums[0].Id,
-                IncludeItemTypes = new[] { BaseItemKind.Audio },
-                DtoOptions = new DtoOptions(true),
-                OrderBy = QueueContinuationFetcher.AlbumTrackOrder,
-                Limit = ProgressiveQueueConstants.GetInitialFetchSize()
-            }),
-            "GetAlbumTracks",
+        // First track page for fast time-to-audio; remaining tracks are fetched on
+        // demand by PlaybackNearlyFinished. JF-345: the play flow lives in
+        // BaseHandler (BuildAlbumPlayResponseAsync) so the song-to-album cascade
+        // plays albums with the SAME queue semantics as a direct album request.
+        return await BuildAlbumPlayResponseAsync(
+            albums[0],
+            jellyfinUser!,
+            user,
+            session,
+            context,
+            locale,
+            _libraryManager,
+            _userDataManager,
+            _queueManager,
+            "PlayAlbum",
+            // If the album came from the fuzzy fallback (exact search missed), speak the
+            // matched name so the user knows what's playing (same mechanism as the
+            // artist fallback's announcement in BuildArtistSongsResponseAsync, JF-339).
+            announcement: fuzzyAlbumAnnouncement,
             cancellationToken).ConfigureAwait(false);
-        Logger.LogDebug("PlayAlbum: Jellyfin returned {TrackCount} tracks (total={TotalCount})", albumResult.Items.Count, albumResult.TotalRecordCount);
-        if (albumResult.TotalRecordCount == 0)
-        {
-            // Tolerant fallback: for split / multi-disc / malformed-folder albums, the
-            // folder-based ParentId query can return 0 even when the tracks exist (the
-            // track's Album metadata still links them). Query by album membership, which
-            // ignores folder structure. Verified on the malformed "Jazz Cafe" album:
-            // ParentId+Recursive returns 0, AlbumIds returns all tracks. JF-338.
-            Logger.LogDebug("PlayAlbum: folder-based track query returned 0, retrying by AlbumIds for '{Name}'", albums[0].Name);
-            albumResult = await RetryAsync(
-                () => SafeGetItemsResult(_libraryManager, new InternalItemsQuery()
-                {
-                    User = jellyfinUser,
-                    Recursive = true,
-                    AlbumIds = new[] { albums[0].Id },
-                    IncludeItemTypes = new[] { BaseItemKind.Audio },
-                    DtoOptions = new DtoOptions(true),
-                    OrderBy = QueueContinuationFetcher.AlbumTrackOrder,
-                    Limit = ProgressiveQueueConstants.GetInitialFetchSize()
-                }),
-                "GetAlbumTracksByAlbumIds",
-                cancellationToken).ConfigureAwait(false);
-            Logger.LogDebug("PlayAlbum: AlbumIds fallback returned {TrackCount} tracks (total={TotalCount})", albumResult.Items.Count, albumResult.TotalRecordCount);
-        }
-
-        if (albumResult.TotalRecordCount == 0)
-        {
-            return ResponseBuilder.Tell(ResponseStrings.Get("NoSongsInAlbum", locale, album));
-        }
-
-        IReadOnlyList<BaseItem> albumItems = albumResult.Items;
-
-        // Check for existing queue position from server-side progress
-        (int startIndex, _) = FindResumeTrackIndex(
-            albumItems, jellyfinUser!, _userDataManager, resumePosition: false);
-
-        if (startIndex > 0)
-        {
-            Logger.LogInformation(
-                "PlayAlbum: resuming queue from track {Index} ({Name})",
-                startIndex, albumItems[startIndex].Name);
-        }
-
-        List<QueueItem> queueItems = new List<QueueItem>();
-        for (int i = startIndex; i < albumItems.Count; i++)
-        {
-            queueItems.Add(new QueueItem { Id = albumItems[i].Id });
-        }
-
-        session.NowPlayingQueue = queueItems;
-        session.FullNowPlayingItem = albumItems[startIndex];
-
-        // Persist queue to device storage for crash recovery
-        _queueManager?.SetQueue(
-            context.System.Device.DeviceID,
-            albumItems.Skip(startIndex).Select(i => i.Id.ToString()).ToList(),
-            0);
-
-        // Store continuation info so PlaybackNearlyFinished can fetch the rest.
-        // StartIndex uses the original page size because the database offset is
-        // independent of the resume slice.
-        if (albumResult.TotalRecordCount > albumResult.Items.Count)
-        {
-            QueueContinuationStore.Set(
-                session.UserId,
-                context.System.Device.DeviceID,
-                new QueueContinuation
-                {
-                    SourceType = "Album",
-                    ParentId = albums[0].Id,
-                    StartIndex = albumResult.Items.Count,
-                    TotalCount = albumResult.TotalRecordCount,
-                    UserId = jellyfinUser!.Id
-                });
-        }
-
-        string item_id = albumItems[startIndex].Id.ToString();
-
-        Logger.LogDebug(
-            "PlayAlbum: returning AudioPlayer, itemId={ItemId}, album='{AlbumName}', startIndex={StartIndex}, queueSize={QueueSize}",
-            item_id, albums[0].Name, startIndex, queueItems.Count);
-        SkillResponse albumResponse = BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, albumItems[startIndex], user, context, announceLocale: locale);
-
-        // If the album came from the fuzzy fallback (exact search missed), speak the
-        // matched name so the user knows what's playing — same mechanism as the
-        // artist fallback's announcement in BuildArtistSongsResponseAsync (JF-339).
-        if (!string.IsNullOrWhiteSpace(fuzzyAlbumAnnouncement))
-        {
-            albumResponse.Response.OutputSpeech = new PlainTextOutputSpeech { Text = fuzzyAlbumAnnouncement };
-        }
-
-        return albumResponse;
     }
 
     /// <summary>
@@ -498,43 +403,6 @@ public class PlayAlbumIntentHandler : BaseHandler
             IntentNames.Slots.Album,
             new[] { IntentNames.Slots.Album, IntentNames.Slots.Musician },
             ResponseStrings.Get("ElicitAlbumName", locale));
-
-    /// <summary>
-    /// Builds a MusicAlbum query scoped to the user's libraries (with library filtering).
-    /// Pass a search term for the exact lookup, or null for the broad fuzzy-fallback scan.
-    /// </summary>
-    private InternalItemsQuery BuildAlbumQuery(Jellyfin.Database.Implementations.Entities.User? jellyfinUser, Jellyfin.Plugin.AlexaSkill.Entities.User user, string? searchTerm, Guid[]? artistIds, bool albumArtistsOnly = false)
-    {
-        var q = new InternalItemsQuery
-        {
-            User = jellyfinUser,
-            Recursive = true,
-            IncludeItemTypes = new[] { BaseItemKind.MusicAlbum },
-            DtoOptions = new DtoOptions(true)
-        };
-        if (!string.IsNullOrWhiteSpace(searchTerm))
-        {
-            q.SearchTerm = searchTerm;
-        }
-
-        if (artistIds is { Length: > 0 })
-        {
-            if (albumArtistsOnly)
-            {
-                // AlbumArtistIds matches albums BY the artist; ArtistIds would also match
-                // compilations merely CONTAINING a track by them (live finding: "un disco
-                // dei Koop" resolved to a compilation featuring Koop, not Koop's album).
-                q.AlbumArtistIds = artistIds;
-            }
-            else
-            {
-                q.ArtistIds = artistIds;
-            }
-        }
-
-        ApplyLibraryFilter(q, user, _libraryManager);
-        return q;
-    }
 
     /// <summary>
     /// JF-427/JF-443: track counts per album ID, from COUNT-only queries. Each query reads
@@ -602,15 +470,6 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         return counts;
     }
-
-    /// <summary>
-    /// The cheap DTO shape for queries that read only names/ids (JF-443/JF-446): no
-    /// images, no userdata, no current program. Fresh instance per call (DtoOptions is
-    /// mutable; a shared instance could be mutated through one query and leak into
-    /// another).
-    /// </summary>
-    /// <returns>A minimal DtoOptions.</returns>
-    private static DtoOptions CheapDtoOptions() => new DtoOptions(false) { EnableImages = false, EnableUserData = false, AddCurrentProgram = false };
 
     /// <summary>
     /// Builds a COUNT-only track query for <see cref="GetAlbumTrackCountsAsync"/>: Limit=0

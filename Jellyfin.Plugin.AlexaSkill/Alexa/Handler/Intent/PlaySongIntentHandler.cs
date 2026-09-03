@@ -314,6 +314,23 @@ public class PlaySongIntentHandler : BaseHandler
                 return artistFallback;
             }
 
+            // JF-345: song-to-album cascade, AFTER the artist cascade (see
+            // TryAlbumFallbackAsync for the precedence rationale: a bare "play abbey
+            // road" finds no artist, so the album tier recovers it here, while a bare
+            // "play metallica" still plays the artist above and never reaches this
+            // tier). Bare album titles route to PlaySong in the free-text locales
+            // (guaranteed in the five English locales PR #15 trimmed the carriers
+            // from; a coin flip in the other 11, which still ship them) and used
+            // to dead-end in the song not-found below.
+            SkillResponse? albumFallback = await TryAlbumFallbackAsync(
+                songQuery, jellyfinUser!, user, session, context, locale,
+                _libraryManager, _userDataManager, _queueManager,
+                "PlaySong", cancellationToken).ConfigureAwait(false);
+            if (albumFallback != null)
+            {
+                return albumFallback;
+            }
+
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByName", locale, songQuery));
         }
 

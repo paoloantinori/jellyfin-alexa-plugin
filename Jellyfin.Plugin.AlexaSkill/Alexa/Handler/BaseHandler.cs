@@ -78,6 +78,46 @@ public abstract class BaseHandler
     protected const int CrossMediaArtistMaxWords = 2;
 
     /// <summary>
+    /// JF-345: minimum fuzzy-match score for the song-to-album cascade (a bare
+    /// "play abbey road" in the free-text locales routes to PlaySong, misses,
+    /// and used to dead-end in a song not-found). Containment-grade (equal to
+    /// <see cref="FuzzyMatcher.ContainmentScore"/>), deliberately STRICTER than the
+    /// artist cascade's <see cref="CrossMediaArtistThreshold"/> because song/album
+    /// name overlap is far more common than artist/mood overlap: only a near-exact
+    /// album name substitutes. Apply via
+    /// <c>Math.Max(FuzzyMatcher.GetDefaultThreshold(user), CrossMediaAlbumThreshold)</c>
+    /// so a user who raised FuzzyMatchThreshold is still respected.
+    /// </summary>
+    protected const int CrossMediaAlbumThreshold = 90;
+
+    /// <summary>
+    /// Shared word-count guard for BOTH cross-media fallback gates (artist and album):
+    /// tokenizes the slot text with the locale stop-word set and rejects queries whose
+    /// content words exceed <see cref="CrossMediaArtistMaxWords"/> (a long query is a
+    /// poor artist AND a poor album guess; JF-295's original rationale, JF-446 consolidation,
+    /// JF-345 extension to the album gate).
+    /// </summary>
+    /// <param name="slotText">The raw slot text.</param>
+    /// <param name="locale">The request locale (stop-word set selection).</param>
+    /// <param name="fallbackNoun">The fallback noun for the skip log ("artist"/"album").</param>
+    /// <param name="logLabel">Log label.</param>
+    /// <param name="tokens">The content-word tokens when the guard passes.</param>
+    /// <returns>True when the query is short enough to attempt the fallback.</returns>
+    protected bool PassesCrossMediaWordGuard(string slotText, string locale, string fallbackNoun, string logLabel, out string[] tokens)
+    {
+        tokens = Util.KeywordMatcher.Tokenize(slotText, locale);
+        if (tokens.Length == 0 || tokens.Length > CrossMediaArtistMaxWords)
+        {
+            Logger.LogDebug(
+                "{Label}: skipping {Noun} fallback, {Count} content words in '{Query}' (guard {Max})",
+                logLabel, fallbackNoun, tokens.Length, slotText, CrossMediaArtistMaxWords);
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// JF-439: minimum KeywordMatcher score for the inverse cross-media song
     /// fallback to auto-play (the BaseHandler home since JF-440). Live calibration
     /// (minix, 12766 songs): the WRONG half-coverage phonetic hit ('rolling
@@ -2609,12 +2649,24 @@ public abstract class BaseHandler
             logLabel, itemId, startIndex, queueItems.Count);
         SkillResponse response = BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, sortedItems[startIndex], user, context, announceLocale: locale);
 
+        ApplyAnnouncement(response, announcement);
+
+        return response;
+    }
+
+    /// <summary>
+    /// Overrides a play response's speech with the given announcement (JF-345: the
+    /// ONE override site; was a triplicated 3-liner across the artist/album/song play
+    /// builders). No-op for a null/whitespace announcement.
+    /// </summary>
+    /// <param name="response">The play response to speak over.</param>
+    /// <param name="announcement">The announcement text, or null to keep the default speech.</param>
+    protected static void ApplyAnnouncement(SkillResponse response, string? announcement)
+    {
         if (!string.IsNullOrWhiteSpace(announcement))
         {
             response.Response.OutputSpeech = new PlainTextOutputSpeech { Text = announcement };
         }
-
-        return response;
     }
 
     /// <summary>
@@ -2649,10 +2701,7 @@ public abstract class BaseHandler
         string itemId = song.Id.ToString();
         SkillResponse response = BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, song, user, context, announceLocale: locale);
-        if (!string.IsNullOrWhiteSpace(announcement))
-        {
-            response.Response.OutputSpeech = new PlainTextOutputSpeech { Text = announcement };
-        }
+        ApplyAnnouncement(response, announcement);
 
         return response;
     }
@@ -2733,7 +2782,11 @@ public abstract class BaseHandler
 
         return BuildSingleSongResponse(
             song, user, session, context, locale,
-            announcement: ResponseStrings.Get("FoundSongInstead", locale, song.Name));
+            // JF-345: the third cross-media substitution announcement joins the flag
+            // (an artist-intent request served a song is the same substitution class).
+            announcement: _config.AnnounceCrossMediaSubstitution
+                ? ResponseStrings.Get("FoundSongInstead", locale, song.Name)
+                : null);
     }
 
     /// <summary>
@@ -2787,24 +2840,12 @@ public abstract class BaseHandler
             "{Label}: no results found, trying artist fallback with query='{Query}'",
             logLabel, slotText);
 
-        var tokens = KeywordMatcher.Tokenize(slotText, locale);
-        if (tokens.Length == 0)
+        if (!PassesCrossMediaWordGuard(slotText, locale, fallbackNoun: "artist", logLabel, out var tokens))
         {
             return null;
         }
 
         string cleaned = string.Join(' ', tokens);
-
-        // A long slot is a poor artist query and a wrong-artist false positive is worse
-        // than a clean not-found (CrossMediaArtistMaxWords, shared by every caller of
-        // this gate since the JF-446 consolidation).
-        if (tokens.Length > CrossMediaArtistMaxWords)
-        {
-            Logger.LogDebug(
-                "{Label}: skipping artist fallback for {WordCount}-word query '{Query}' (max {Max})",
-                logLabel, tokens.Length, cleaned, CrossMediaArtistMaxWords);
-            return null;
-        }
 
         // JF-448 (review F2): pin the artist index once for this fallback so the search
         // chain below and the phonetic confirm after it read the SAME publish (a
@@ -2928,8 +2969,369 @@ public abstract class BaseHandler
             userDataManager,
             queueManager,
             logLabel,
-            announcement: ResponseStrings.Get("FoundArtistInstead", locale, bestItem.Name),
+            // JF-345: the cross-media substitution announcement (which artist is
+            // playing instead of what was asked) is opt-out; the substitution itself
+            // always plays. Same flag as the song-to-album cascade's announcement.
+            announcement: _config.AnnounceCrossMediaSubstitution
+                ? ResponseStrings.Get("FoundArtistInstead", locale, bestItem.Name)
+                : null,
             cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Minimum album-query length to attempt the bounded fuzzy album tier. Shorter
+    /// queries (e.g. "red", "aria") produce too many substring false positives. Shared
+    /// by PlayAlbum's own fuzzy fallback and the JF-345 song-to-album cascade.
+    /// </summary>
+    protected const int MinFuzzyAlbumQueryLength = 4;
+
+    /// <summary>
+    /// The cheap DTO shape for queries that read only names/ids (JF-443/JF-446): no
+    /// images, no userdata, no current program. Fresh instance per call (DtoOptions is
+    /// mutable; a shared instance could be mutated through one query and leak into
+    /// another). Shared by PlayAlbum's fuzzy fallback and the JF-345 song-to-album
+    /// cascade.
+    /// </summary>
+    /// <returns>A minimal DtoOptions.</returns>
+    protected static DtoOptions CheapDtoOptions() => new DtoOptions(false) { EnableImages = false, EnableUserData = false, AddCurrentProgram = false };
+
+    /// <summary>
+    /// Builds a MusicAlbum query scoped to the user's libraries (with library
+    /// filtering). Pass a search term for the exact indexed lookup, or null for the
+    /// broad fuzzy-fallback scan. THE ONE album query shape (JF-345): PlayAlbum's own
+    /// search and the song-to-album cascade build the same query so the cascade can
+    /// never widen into a differently-shaped scan.
+    /// </summary>
+    /// <param name="libraryManager">Library manager for the library-scope filter.</param>
+    /// <param name="jellyfinUser">The Jellyfin user for the query.</param>
+    /// <param name="user">The plugin user whose library filter applies.</param>
+    /// <param name="searchTerm">The exact-lookup search term, or null for the fuzzy scan.</param>
+    /// <param name="artistIds">Optional artist scoping (AlbumArtistIds when <paramref name="albumArtistsOnly"/> is set).</param>
+    /// <param name="albumArtistsOnly">True to match albums BY the artist (AlbumArtistIds) instead of also compilations containing them (ArtistIds).</param>
+    /// <returns>The album query.</returns>
+    protected InternalItemsQuery BuildAlbumQuery(
+        ILibraryManager libraryManager,
+        JellyfinUser? jellyfinUser,
+        Entities.User user,
+        string? searchTerm,
+        Guid[]? artistIds,
+        bool albumArtistsOnly = false)
+    {
+        var q = new InternalItemsQuery
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            IncludeItemTypes = new[] { BaseItemKind.MusicAlbum },
+            DtoOptions = new DtoOptions(true)
+        };
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            q.SearchTerm = searchTerm;
+        }
+
+        if (artistIds is { Length: > 0 })
+        {
+            if (albumArtistsOnly)
+            {
+                // AlbumArtistIds matches albums BY the artist; ArtistIds would also match
+                // compilations merely CONTAINING a track by them (live finding: "un disco
+                // dei Koop" resolved to a compilation featuring Koop, not Koop's album).
+                q.AlbumArtistIds = artistIds;
+            }
+            else
+            {
+                q.ArtistIds = artistIds;
+            }
+        }
+
+        ApplyLibraryFilter(q, user, libraryManager);
+        return q;
+    }
+
+    /// <summary>
+    /// JF-345: song-to-album cascade. In the 16 free-text locales PlayAlbum's album slot
+    /// is an <c>AMAZON.MusicRecording</c>-style free-text type (only it-IT has the
+    /// catalog-backed AlbumName type), so a bare "play abbey road" routes to PlaySong,
+    /// misses, and dead-ends in a song not-found (guaranteed in the five English
+    /// locales where PR #15 removed the bare carriers; a coin flip in the other 11,
+    /// which still ship them). This gate recovers that recall: on a confirmed song miss (the
+    /// caller only reaches it after its own song search AND the artist cascade both
+    /// missed) it runs a bounded album search and plays a strong match with a
+    /// FoundAlbumInstead announcement.
+    ///
+    /// PRECEDENCE (deliberate): song first (caller contract), then the ARTIST cascade,
+    /// then this album tier. The album tier only sees queries where no artist matched at
+    /// all. Album-before-artist was considered and rejected: self-titled albums are
+    /// ubiquitous ("play metallica" would flip from today's correct artist playback to
+    /// the single album named Metallica), and the artist gate is itself strict
+    /// (>= max(normal, 85), phonetic floor 91), so when it fires it is not a weaker
+    /// signal than an exact album name. Consequence: when a sub-strict artist match
+    /// lands in the JF-363 Confirm band the artist offer wins and the album is never
+    /// consulted; the offer is announced and declinable, so that overlap is acceptable.
+    ///
+    /// Gating (stricter than the artist cascade, per the task contract): the shared
+    /// 2-content-word tokenized guard (<see cref="CrossMediaArtistMaxWords"/>), then
+    /// <c>Math.Max(normal, CrossMediaAlbumThreshold=90)</c> (containment-grade; song and
+    /// album names overlap far more than artists and moods), then the JF-408
+    /// interior-containment rejection. Non-phonetic and unpinned by design: no album
+    /// phonetic index exists and PlayAlbum's own fuzzy fallback is likewise non-phonetic
+    /// (the album-path precedent). Bounded queries only (the f5c701c lesson): the
+    /// indexed SearchTerm tier, then at most ONE cheap-DTO album-catalog scan (the same
+    /// bounded shape PlayAlbum's own fuzzy fallback ships), never an Audio-catalog scan.
+    /// </summary>
+    /// <param name="slotText">The raw slot text that missed (e.g. the song slot value).</param>
+    /// <param name="jellyfinUser">The Jellyfin user for queries.</param>
+    /// <param name="user">The plugin user (threshold override, library filter).</param>
+    /// <param name="session">The Jellyfin session receiving the queue.</param>
+    /// <param name="context">The Alexa context (device id for crash-recovery persistence).</param>
+    /// <param name="locale">The locale for response strings.</param>
+    /// <param name="libraryManager">Library manager for queries.</param>
+    /// <param name="userDataManager">User data manager for the resume-track lookup.</param>
+    /// <param name="queueManager">Optional per-device queue manager for crash recovery.</param>
+    /// <param name="logLabel">Label for log messages.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The album play response with the announcement, or null when no album clears the bar (caller falls through to its own not-found).</returns>
+    protected async Task<SkillResponse?> TryAlbumFallbackAsync(
+        string slotText,
+        JellyfinUser jellyfinUser,
+        Entities.User user,
+        SessionInfo session,
+        Context context,
+        string locale,
+        ILibraryManager libraryManager,
+        IUserDataManager userDataManager,
+        Playback.DeviceQueueManager? queueManager,
+        string logLabel,
+        CancellationToken cancellationToken)
+    {
+        if (!PassesCrossMediaWordGuard(slotText, locale, fallbackNoun: "album", logLabel, out _))
+        {
+            return null;
+        }
+
+        // The query is the RAW trimmed slot text, deliberately NOT the stop-word-
+        // stripped token join the artist gate uses: album titles are rarely article-
+        // prefixed, and both the SearchTerm index and full-name fuzzy favor raw text.
+        string query = slotText.Trim();
+
+        // Tier 1 (indexed): exact SearchTerm over MusicAlbum, the same query PlayAlbum's
+        // primary search runs.
+        IReadOnlyList<BaseItem> candidates = await RetryAsync(
+            () => libraryManager.GetItemList(BuildAlbumQuery(libraryManager, jellyfinUser, user, query, artistIds: null)),
+            logLabel + ":GetAlbumsFallbackExact",
+            cancellationToken).ConfigureAwait(false);
+
+        // Tier 2 (bounded fuzzy): only on an exact miss, one cheap-DTO scan of the album
+        // catalog (hundreds of rows, not the Audio catalog's thousands; JF-446 shape).
+        if (candidates.Count == 0 && query.Length >= MinFuzzyAlbumQueryLength)
+        {
+            var fuzzyQuery = BuildAlbumQuery(libraryManager, jellyfinUser, user, searchTerm: null, artistIds: null);
+            fuzzyQuery.DtoOptions = CheapDtoOptions();
+            candidates = await RetryAsync(
+                () => libraryManager.GetItemList(fuzzyQuery),
+                logLabel + ":GetAlbumsFallbackFuzzy",
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        if (candidates.Count == 0)
+        {
+            return null;
+        }
+
+        // Single best over the tier's candidates (same decision shape as the artist
+        // gate: a cross-media guess must never disambiguate among multiple guesses;
+        // same-name candidates are picked arbitrarily, the JF-341 class PlayAlbum's
+        // own fuzzy path documents).
+        var best = FuzzyMatcher.FindBestMatchWithScore(query, candidates, a => a.Name);
+        if (best is not { } match)
+        {
+            return null;
+        }
+
+        int threshold = Math.Max(FuzzyMatcher.GetDefaultThreshold(user), CrossMediaAlbumThreshold);
+        if (match.Score < threshold)
+        {
+            Logger.LogDebug(
+                "{Label}: album fallback score={Score} below threshold={Threshold} for query='{Query}', not substituting",
+                logLabel, match.Score, threshold, query);
+            return null;
+        }
+
+        if (Util.ArtistSearch.IsInteriorContainment(query, match.Item.Name))
+        {
+            // JF-408: the match exists only inside other words of the query (live
+            // precedent: album "O" via the 'o' in "walls for cup"). The recall layer
+            // returned the candidate; the substitution decision must not act on it.
+            Logger.LogInformation(
+                "{Label}: album fallback match '{Name}' score={Score} for query='{Query}' is interior containment, not substituting (JF-408)",
+                logLabel, match.Item.Name, match.Score, query);
+            return null;
+        }
+
+        Logger.LogInformation(
+            "{Label}: album fallback found '{AlbumName}' score={Score} for query='{Query}' (threshold={Threshold})",
+            logLabel, match.Item.Name, match.Score, query, threshold);
+
+        return await BuildAlbumPlayResponseAsync(
+            match.Item,
+            jellyfinUser,
+            user,
+            session,
+            context,
+            locale,
+            libraryManager,
+            userDataManager,
+            queueManager,
+            logLabel,
+            // JF-345: the substitution announcement is opt-out; the album still plays
+            // when the flag is off, it just starts silently.
+            announcement: _config.AnnounceCrossMediaSubstitution
+                ? ResponseStrings.Get("FoundAlbumInstead", locale, match.Item.Name)
+                : null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// JF-345: the ONE album play flow (was inline in PlayAlbumIntentHandler; extracted
+    /// so the song-to-album cascade plays albums with the SAME queue semantics as a
+    /// direct album request). Fetches the first track page by ParentId with the JF-338
+    /// AlbumIds retry for malformed/split albums, applies the resume-track index,
+    /// persists the session queue and the crash-recovery queue, stores the progressive
+    /// continuation for the remaining tracks, and lets the optional announcement
+    /// override the speech.
+    /// </summary>
+    /// <param name="album">The album to play.</param>
+    /// <param name="jellyfinUser">The Jellyfin user for queries and resume data.</param>
+    /// <param name="user">The plugin user (stream URL token).</param>
+    /// <param name="session">The Jellyfin session receiving the queue.</param>
+    /// <param name="context">The Alexa context (device id for crash-recovery persistence).</param>
+    /// <param name="locale">The locale for response strings.</param>
+    /// <param name="libraryManager">Library manager for track queries.</param>
+    /// <param name="userDataManager">User data manager for the resume-track lookup.</param>
+    /// <param name="queueManager">Optional per-device queue manager for crash recovery.</param>
+    /// <param name="logLabel">Label for log messages.</param>
+    /// <param name="announcement">Optional spoken announcement replacing the default speech.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>An AudioPlayer response for the album's first (resume-aware) track, or a localized tell when the album has no playable tracks.</returns>
+    protected async Task<SkillResponse> BuildAlbumPlayResponseAsync(
+        BaseItem album,
+        JellyfinUser jellyfinUser,
+        Entities.User user,
+        SessionInfo session,
+        Context context,
+        string locale,
+        ILibraryManager libraryManager,
+        IUserDataManager userDataManager,
+        Playback.DeviceQueueManager? queueManager,
+        string logLabel,
+        string? announcement = null,
+        CancellationToken cancellationToken = default)
+    {
+        // Get the first page of album tracks for fast time-to-audio.
+        // Remaining tracks will be fetched on demand by PlaybackNearlyFinished.
+        Logger.LogDebug("{Label}: querying tracks for album='{AlbumName}' (id={AlbumId})", logLabel, album.Name, album.Id);
+        QueryResult<BaseItem> albumResult = await RetryAsync(
+            () => SafeGetItemsResult(libraryManager, new InternalItemsQuery()
+            {
+                User = jellyfinUser,
+                Recursive = true,
+                ParentId = album.Id,
+                IncludeItemTypes = new[] { BaseItemKind.Audio },
+                DtoOptions = new DtoOptions(true),
+                OrderBy = QueueContinuationFetcher.AlbumTrackOrder,
+                Limit = ProgressiveQueueConstants.GetInitialFetchSize()
+            }),
+            logLabel + ":GetAlbumTracks",
+            cancellationToken).ConfigureAwait(false);
+        Logger.LogDebug("{Label}: Jellyfin returned {TrackCount} tracks (total={TotalCount})", logLabel, albumResult.Items.Count, albumResult.TotalRecordCount);
+        if (albumResult.TotalRecordCount == 0)
+        {
+            // Tolerant fallback: for split / multi-disc / malformed-folder albums, the
+            // folder-based ParentId query can return 0 even when the tracks exist (the
+            // track's Album metadata still links them). Query by album membership, which
+            // ignores folder structure. Verified on the malformed "Jazz Cafe" album:
+            // ParentId+Recursive returns 0, AlbumIds returns all tracks. JF-338.
+            Logger.LogDebug("{Label}: folder-based track query returned 0, retrying by AlbumIds for '{Name}'", logLabel, album.Name);
+            albumResult = await RetryAsync(
+                () => SafeGetItemsResult(libraryManager, new InternalItemsQuery()
+                {
+                    User = jellyfinUser,
+                    Recursive = true,
+                    AlbumIds = new[] { album.Id },
+                    IncludeItemTypes = new[] { BaseItemKind.Audio },
+                    DtoOptions = new DtoOptions(true),
+                    OrderBy = QueueContinuationFetcher.AlbumTrackOrder,
+                    Limit = ProgressiveQueueConstants.GetInitialFetchSize()
+                }),
+                logLabel + ":GetAlbumTracksByAlbumIds",
+                cancellationToken).ConfigureAwait(false);
+            Logger.LogDebug("{Label}: AlbumIds fallback returned {TrackCount} tracks (total={TotalCount})", logLabel, albumResult.Items.Count, albumResult.TotalRecordCount);
+        }
+
+        if (albumResult.TotalRecordCount == 0)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("NoSongsInAlbum", locale, album.Name));
+        }
+
+        IReadOnlyList<BaseItem> albumItems = albumResult.Items;
+
+        // Check for existing queue position from server-side progress
+        (int startIndex, _) = FindResumeTrackIndex(
+            albumItems, jellyfinUser, userDataManager, resumePosition: false);
+
+        if (startIndex > 0)
+        {
+            Logger.LogInformation(
+                "{Label}: resuming queue from track {Index} ({Name})",
+                logLabel, startIndex, albumItems[startIndex].Name);
+        }
+
+        List<QueueItem> queueItems = new List<QueueItem>();
+        for (int i = startIndex; i < albumItems.Count; i++)
+        {
+            queueItems.Add(new QueueItem { Id = albumItems[i].Id });
+        }
+
+        session.NowPlayingQueue = queueItems;
+        session.FullNowPlayingItem = albumItems[startIndex];
+
+        // Persist queue to device storage for crash recovery
+        queueManager?.SetQueue(
+            context.System.Device.DeviceID,
+            albumItems.Skip(startIndex).Select(i => i.Id.ToString()).ToList(),
+            0);
+
+        // Store continuation info so PlaybackNearlyFinished can fetch the rest.
+        // StartIndex uses the original page size because the database offset is
+        // independent of the resume slice.
+        if (albumResult.TotalRecordCount > albumResult.Items.Count)
+        {
+            QueueContinuationStore.Set(
+                session.UserId,
+                context.System.Device.DeviceID,
+                new QueueContinuation
+                {
+                    SourceType = "Album",
+                    ParentId = album.Id,
+                    StartIndex = albumResult.Items.Count,
+                    TotalCount = albumResult.TotalRecordCount,
+                    UserId = jellyfinUser.Id
+                });
+        }
+
+        string item_id = albumItems[startIndex].Id.ToString();
+
+        Logger.LogDebug(
+            "{Label}: returning AudioPlayer, itemId={ItemId}, album='{AlbumName}', startIndex={StartIndex}, queueSize={QueueSize}",
+            logLabel, item_id, album.Name, startIndex, queueItems.Count);
+        SkillResponse albumResponse = BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, albumItems[startIndex], user, context, announceLocale: locale);
+
+        // The caller may pass an announcement (fuzzy name correction in PlayAlbum,
+        // cross-media substitution in the JF-345 cascade) so the user knows what is
+        // playing instead of what was asked (JF-339).
+        ApplyAnnouncement(albumResponse, announcement);
+
+        return albumResponse;
     }
 
     /// <summary>

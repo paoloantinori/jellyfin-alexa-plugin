@@ -180,6 +180,10 @@
                                 <div class="fieldDescription checkboxFieldDescription">Also speak the track name when music starts (songs/albums/artists). Off by default for fast, silent music starts; turn on if you want every track announced. Example: when on, the skill says "Now playing [song name]" before playing. Per-user overrides take precedence.</div>
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="AnnounceCrossMediaSubstitution" /> <span>Announce Cross-Media Substitutions</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">When a music request finds no song but an album or artist matches instead (or an artist request is served a matching song), say which one is playing before playback starts. Example: "play abbey road" with no song by that name plays the album and says "I found the album Abbey Road." When off, the substitution still plays but starts silently.</div>
+                            </div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="PauseAnnouncePosition" /> <span>Announce Position on Pause</span></label>
                                 <div class="fieldDescription checkboxFieldDescription">When paused, speak the current playback position. Example: "Paused at 2:15 of 4:30". Requires Seek Controls to be enabled. When off, pause is silent.</div>
                             </div>
@@ -515,7 +519,7 @@
                     // Feature flags
                     ["RadioModeEnabled", "PodcastsEnabled", "LiveTvEnabled", "SleepTimerEnabled",
                      "QueueManagementEnabled", "BrowseLibraryEnabled", "RecommendationsEnabled",
-                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "DefaultAnnounceNowPlaying","AnnounceAudioPlays","CatalogSyncLocales","AsrCompoundWordFixEnabled", "SeekEnabled", "PauseAnnouncePosition",
+                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "DefaultAnnounceNowPlaying","AnnounceAudioPlays","AnnounceCrossMediaSubstitution","CatalogSyncLocales","AsrCompoundWordFixEnabled", "SeekEnabled", "PauseAnnouncePosition",
                      "ShuffleArtistSongs", "NativeControlsForAudio", "NativeControlsForBooks"].forEach(function(f) {
                         document.querySelector("#" + f).checked = config[f] !== false;
                     });
@@ -1305,7 +1309,7 @@
 
                     ["RadioModeEnabled", "PodcastsEnabled", "LiveTvEnabled", "SleepTimerEnabled",
                      "QueueManagementEnabled", "BrowseLibraryEnabled", "RecommendationsEnabled",
-                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "DefaultAnnounceNowPlaying","AnnounceAudioPlays","CatalogSyncLocales","AsrCompoundWordFixEnabled", "SeekEnabled", "PauseAnnouncePosition",
+                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "DefaultAnnounceNowPlaying","AnnounceAudioPlays","AnnounceCrossMediaSubstitution","CatalogSyncLocales","AsrCompoundWordFixEnabled", "SeekEnabled", "PauseAnnouncePosition",
                      "ShuffleArtistSongs", "NativeControlsForAudio", "NativeControlsForBooks"].forEach(function(f) {
                         config[f] = document.querySelector("#" + f).checked;
                     });

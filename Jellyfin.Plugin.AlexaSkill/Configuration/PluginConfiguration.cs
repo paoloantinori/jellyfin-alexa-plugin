@@ -158,6 +158,19 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool AsrCompoundWordFixEnabled { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether cross-media substitutions are ANNOUNCED
+    /// (JF-345): when a music request finds no song but an album (the song-to-album
+    /// cascade) or no song/album but an artist (the cross-media artist fallback)
+    /// matches instead, speak which one is playing ("I found the album X." /
+    /// "I found the artist X."). When off, the substitution still plays; it just starts
+    /// silently. Default true: a silent media-type swap is confusing on voice-only
+    /// devices. NOT related to AnnounceAudioPlays (the per-track "Now playing X"
+    /// announce) and NOT applied to PlayAlbum's same-media fuzzy name correction
+    /// (JF-339), which corrects a misspoken name rather than substituting a media type.
+    /// </summary>
+    public bool AnnounceCrossMediaSubstitution { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets the global default for diagnostic interaction logging (JF-393): one
     /// "[diag]" log line per Alexa request/playback event with elapsed times since playback
     /// start. Used to collect data on intermittent voice-routing failures (JF-392 'alexa
