@@ -409,6 +409,16 @@ public class PlayMoodMusicIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchMood", locale));
         }
 
+        // JF-467: primary-path music gate (shared contract on IfMediaTypeDisabled).
+        // Placed AFTER the empty-mood prompt and BEFORE the warming gate, so a
+        // disabled request never waits on index warming and issues no library query;
+        // this also covers the SearchByArtistGenreAsync tier.
+        SkillResponse? musicDisabled = IfMediaTypeDisabled(c => c.MusicEnabled, request);
+        if (musicDisabled != null)
+        {
+            return musicDisabled;
+        }
+
         // JF-419 cold-start: the mood->genre queries hit the same cold database the
         // artist index loading proxies, and the artist fallback (TryEntityFallbackAsync)
         // throws at the choke point mid-handler; gate before the announcement.

@@ -29,11 +29,14 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// artists, TryAlbumFallbackAsync for albums) play music, so the global music flag
 /// (PluginConfiguration.MusicEnabled, global-only: no per-user override exists) must
 /// gate them at the SHARED entry. With music disabled, a genre miss (PlayByGenre,
-/// JF-463), a mood miss (PlayMoodMusic), and a song miss (PlaySong's album cascade)
-/// fall through to their own not-found: no AudioPlayer directive and no fallback
-/// query issued. With music enabled, the JF-463 behavior is unchanged (the artist
-/// still plays). The library mocks always ARM the would-be hit, so the disabled-flag
-/// tests prove the gate stops the path, not that the library was empty.
+/// JF-463) falls through to its own not-found: no AudioPlayer directive and no
+/// fallback query issued. With music enabled, the JF-463 behavior is unchanged (the
+/// artist still plays). The library mocks always ARM the would-be hit, so the
+/// disabled-flag tests prove the gate stops the path, not that the library was empty.
+/// JF-467 superseded the full-handler mood/song miss tests this file carried
+/// (PlayMoodMusic and PlaySong are now gated at ENTRY, before any query); the
+/// primary-path coverage lives in MusicPrimaryPathGateTests, and the shared gates
+/// are pinned here directly via the probe handlers.
 /// </summary>
 [Collection("Plugin")]
 public class CrossMediaFallbackMusicGateTests : PluginTestBase, IDisposable
@@ -90,7 +93,7 @@ public class CrossMediaFallbackMusicGateTests : PluginTestBase, IDisposable
         ArmArtist("Abbey Road");
         var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
 
-        var probe = new GateProbeHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+        var probe = new SharedGateProbeHandler(_sessionManagerMock.Object, _config, _loggerFactory);
         SkillResponse? result = await probe.CallTryEntityFallbackAsync(
             "abbey road", jellyfinUser, CreateUser(), CreateSession(), CreateContext(), "en-US",
             _libraryManagerMock.Object, _userDataManagerMock.Object, "gate probe", CancellationToken.None);
@@ -120,27 +123,8 @@ public class CrossMediaFallbackMusicGateTests : PluginTestBase, IDisposable
         Assert.Empty(_queries.Where(q => q.IncludeItemTypes?.Contains(BaseItemKind.MusicArtist) == true));
     }
 
-    // Caller 2 (predates JF-463): music disabled + mood miss falls through to
-    // NotFoundMood. The mood handler's own genre-scoped artist query
-    // (SearchByArtistGenreAsync, MusicArtist WITH Genres) still runs before the
-    // fallback; the assertion separates it from the fallback's NAME-search shape
-    // (MusicArtist without Genres), which the gate must prevent.
-    [Fact]
-    public async Task MoodMiss_MusicDisabled_FallsThroughToMoodNotFound()
-    {
-        DisableMusic();
-        SetupUserMock();
-        ArmArtist("Relaxing");
-
-        var handler = CreateMoodHandler();
-        SkillResponse response = await handler.HandleAsync(
-            CreateMoodIntent("relaxing"), CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
-
-        Assert.Null(TestHelpers.GetPlayDirective(response));
-        string speech = TestHelpers.GetSpeechText(response);
-        Assert.Contains("relaxing", speech, StringComparison.OrdinalIgnoreCase);
-        Assert.Empty(ArtistSearchQueries());
-    }
+    // Caller 2 (mood, predates JF-463) was SUPERSEDED by the JF-467 entry gate on
+    // PlayMoodMusic; its coverage lives in MusicPrimaryPathGateTests.
 
     // Control (JF-463 behavior unchanged): music enabled + genre miss + artist
     // exists still plays the artist. Runs under a wired Plugin.Instance (unlike the
@@ -175,66 +159,29 @@ public class CrossMediaFallbackMusicGateTests : PluginTestBase, IDisposable
         return new IntentRequest { Intent = intent, Locale = locale, RequestId = "test-req" };
     }
 
-    private static IntentRequest CreateMoodIntent(string mood, string locale = "en-US")
-    {
-        var intent = new Intent { Name = IntentNames.PlayMoodMusic };
-        intent.Slots = new Dictionary<string, Slot>
-        {
-            ["mood"] = new Slot { Name = "mood", Value = mood }
-        };
-        return new IntentRequest { Intent = intent, Locale = locale, RequestId = "test-req" };
-    }
-
     // The album cascade (TryAlbumFallbackAsync, JF-345) carries the same leak the
     // JF-464 /simplify pass found: its payoff is playing an album of music and its
-    // queries skip FilterByContentAccess. Music disabled + song miss (artist cascade
-    // also empty) must fall through to the song not-found with NO MusicAlbum query.
+    // queries skip FilterByContentAccess. Music disabled means the cascade returns
+    // null BEFORE any library query is issued. JF-467 note: the old full-handler
+    // driver (a PlaySong song miss) can no longer reach the cascade with music
+    // disabled because PlaySong is gated at entry; the probe pins the shared gate
+    // directly instead, so every current and future caller inherits it.
     [Fact]
-    public async Task SongMiss_MusicDisabled_DoesNotCascadeToAlbum()
+    public async Task AlbumCascade_MusicDisabled_ReturnsNullWithoutAnyQuery()
     {
         DisableMusic();
-        SetupUserMock();
         _albumSearchResults = new List<BaseItem> { new MusicAlbum { Name = "Abbey Road", Id = Guid.NewGuid() } };
 
-        var handler = CreateSongHandler();
-        SkillResponse response = await handler.HandleAsync(
-            CreateSongIntent("abbey road"), CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+        var probe = new SharedGateProbeHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+        SkillResponse? result = await probe.CallTryAlbumFallbackAsync(
+            "abbey road", CreateUserJellyfin(), CreateUser(), CreateSession(), CreateContext(), "en-US",
+            _libraryManagerMock.Object, _userDataManagerMock.Object, "album gate probe", CancellationToken.None);
 
-        Assert.Null(TestHelpers.GetPlayDirective(response));
-        string speech = TestHelpers.GetSpeechText(response);
-        Assert.Contains("abbey road", speech, StringComparison.OrdinalIgnoreCase);
-        Assert.Empty(_queries.Where(q => q.IncludeItemTypes?.Contains(BaseItemKind.MusicAlbum) == true));
+        Assert.Null(result);
+        Assert.Empty(_queries);
     }
-
-    private static IntentRequest CreateSongIntent(string song)
-    {
-        var intent = new Intent { Name = IntentNames.PlaySong };
-        intent.Slots = new Dictionary<string, Slot>
-        {
-            ["song"] = new Slot { Name = "song", Value = song }
-        };
-        return new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req" };
-    }
-
-    private PlaySongIntentHandler CreateSongHandler()
-        => new(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
 
     private PlayByGenreIntentHandler CreateGenreHandler()
-        => new(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
-
-    private PlayMoodMusicIntentHandler CreateMoodHandler()
         => new(
             _sessionManagerMock.Object,
             _config,
@@ -246,23 +193,14 @@ public class CrossMediaFallbackMusicGateTests : PluginTestBase, IDisposable
     private static Context CreateContext() => TestHelpers.CreateTestContext();
     private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
     private static Entities.User CreateUser() => TestHelpers.CreateTestUser();
+    private static Jellyfin.Database.Implementations.Entities.User CreateUserJellyfin()
+        => new("testuser", "test", "test");
 
     private void SetupUserMock()
     {
         _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(CreateUserJellyfin());
     }
-
-    /// <summary>
-    /// The fallback's artist NAME-search queries (MusicArtist without a Genres
-    /// filter); SearchByArtistGenreAsync's genre-scoped MusicArtist queries are the
-    /// mood handler's own pre-fallback path and are deliberately not counted.
-    /// </summary>
-    private List<InternalItemsQuery> ArtistSearchQueries()
-        => _queries
-            .Where(q => q.IncludeItemTypes?.Contains(BaseItemKind.MusicArtist) == true
-                && (q.Genres == null || q.Genres.Count == 0))
-            .ToList();
 
     /// <summary>
     /// Disables the global music flag on both references. BOTH writes are
@@ -333,37 +271,5 @@ public class CrossMediaFallbackMusicGateTests : PluginTestBase, IDisposable
         }
 
         return new List<BaseItem>();
-    }
-
-    /// <summary>
-    /// Minimal concrete handler exposing the protected shared gate for direct
-    /// testing (same pattern as ContentAccessTests' TestMediaTypeHandler).
-    /// </summary>
-    private sealed class GateProbeHandler : BaseHandler
-    {
-        public GateProbeHandler(ISessionManager sessionManager, PluginConfiguration config, ILoggerFactory loggerFactory)
-            : base(sessionManager, config, loggerFactory)
-        {
-        }
-
-        public override bool CanHandle(Request request) => true;
-
-        public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
-            => Task.FromResult(ResponseBuilder.Tell("test"));
-
-        public Task<SkillResponse?> CallTryEntityFallbackAsync(
-            string slotText,
-            Jellyfin.Database.Implementations.Entities.User jellyfinUser,
-            Entities.User user,
-            SessionInfo session,
-            Context context,
-            string locale,
-            ILibraryManager libraryManager,
-            IUserDataManager userDataManager,
-            string logLabel,
-            CancellationToken cancellationToken)
-            => TryEntityFallbackAsync(
-                slotText, jellyfinUser, user, session, context, locale,
-                libraryManager, userDataManager, null, null, logLabel, cancellationToken);
     }
 }

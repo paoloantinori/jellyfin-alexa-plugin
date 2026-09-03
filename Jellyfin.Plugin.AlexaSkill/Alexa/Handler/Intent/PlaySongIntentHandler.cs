@@ -177,6 +177,18 @@ public class PlaySongIntentHandler : BaseHandler
             return BuildSongElicitResponse(locale);
         }
 
+        // JF-467: primary-path music gate (shared contract on IfMediaTypeDisabled).
+        // Placement here is forced by two constraints: the warming gate must stay
+        // before the slot elicitation (enabled cold-start behavior is unchanged) and
+        // the music gate must stay after it (empty-slot prompt precedence), so a
+        // disabled+valid-slot request during the cold window can surface the warming
+        // message once; once warm, the disabled response is immediate.
+        SkillResponse? musicDisabled = IfMediaTypeDisabled(c => c.MusicEnabled, request);
+        if (musicDisabled != null)
+        {
+            return musicDisabled;
+        }
+
         songQuery = StripSongCarrierPhrase(songQuery);
 
         RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));

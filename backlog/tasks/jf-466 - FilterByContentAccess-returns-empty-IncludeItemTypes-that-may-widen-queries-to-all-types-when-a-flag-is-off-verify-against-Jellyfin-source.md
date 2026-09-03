@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-03 08:38'
+updated_date: '2026-09-03 10:00'
 labels: []
 dependencies: []
 references:
@@ -43,3 +44,9 @@ Acceptance criteria:
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+EVIDENCE STRENGTHENED (JF-467 worker, 2026-09-03): two concrete call sites assign FilterByContentAccess's possibly-empty result directly to IncludeItemTypes: PlayByGenreIntentHandler ~:116 and PlayRandomIntentHandler ~:199. SearchMediaIntentHandler's own in-code comment already documents that an empty IncludeItemTypes means 'all kinds' to Jellyfin, so with music disabled those two queries run UNFILTERED by kind and can return non-audio items. The Jellyfin-source verification step is still mandatory (confirm the translator behavior at the running version), but the plugin-side call sites to audit are now identified.
+<!-- SECTION:NOTES:END -->

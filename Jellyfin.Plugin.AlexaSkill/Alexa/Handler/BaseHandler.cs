@@ -1181,7 +1181,13 @@ public abstract class BaseHandler
 
     /// <summary>
     /// Checks if a media type category is disabled and returns a localized response.
-    /// Use in handlers that target a specific media type.
+    /// Use in handlers whose whole payoff is one media type (JF-467 gates the music-only
+    /// handlers PlaySong/PlayAlbum/FindSong/PlayMoodMusic at entry this way): place the
+    /// call AFTER the empty-slot prompt (a disabled user with no slot still gets the
+    /// slot prompt) and BEFORE the first library query and the "searching" announcement.
+    /// Reads Plugin.Instance live, so a standard config API replacement takes effect
+    /// without a restart. Logs the disable at Information itself: callers need no
+    /// second log line (the IfFeatureDisabled call sites follow the same bare idiom).
     /// </summary>
     protected SkillResponse? IfMediaTypeDisabled(Func<PluginConfiguration, bool> isEnabled, Request request)
     {
@@ -1199,6 +1205,17 @@ public abstract class BaseHandler
 
         return null;
     }
+
+    /// <summary>
+    /// Live read of the global music flag (global-only: no per-user override exists).
+    /// Reads Plugin.Instance.Configuration FIRST so a standard-API configuration
+    /// replacement takes effect without a restart (same read source as
+    /// <see cref="IfMediaTypeDisabled"/> and <see cref="FilterByContentAccess"/>,
+    /// JF-467 alignment); falls back to the injected configuration only when the
+    /// plugin instance is absent (off-host unit tests), where
+    /// <see cref="IfMediaTypeDisabled"/> instead returns null (allow).
+    /// </summary>
+    protected bool IsMusicEnabled => (Plugin.Instance?.Configuration ?? _config).MusicEnabled;
 
     /// <summary>
     /// Applies per-user library filtering to a query by setting TopParentIds.
@@ -2845,8 +2862,10 @@ public abstract class BaseHandler
 
         // JF-464: the fallback's whole payoff is playing music (artist songs), and its
         // artist queries skip FilterByContentAccess, so the global music flag must gate
-        // it HERE at the shared entry rather than in any caller's wiring.
-        if (!_config.MusicEnabled)
+        // it HERE at the shared entry rather than in any caller's wiring. JF-467: the
+        // read is the LIVE Plugin.Instance configuration (IsMusicEnabled), so a
+        // standard-API configuration replacement takes effect without a restart.
+        if (!IsMusicEnabled)
         {
             Logger.LogInformation(
                 "{Label}: artist fallback skipped, music is disabled via configuration, query='{Query}'",
@@ -3126,7 +3145,8 @@ public abstract class BaseHandler
         // whole payoff is playing an album of music, and its queries skip
         // FilterByContentAccess, so the global flag must gate it here (null is the
         // shared no-match contract; the caller falls through to its own not-found).
-        if (!_config.MusicEnabled)
+        // JF-467: reads the LIVE Plugin.Instance configuration (IsMusicEnabled).
+        if (!IsMusicEnabled)
         {
             Logger.LogInformation(
                 "{Label}: album fallback skipped, music is disabled via configuration, query='{Query}'",

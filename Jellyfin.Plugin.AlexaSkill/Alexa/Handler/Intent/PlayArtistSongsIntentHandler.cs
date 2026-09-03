@@ -179,6 +179,16 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchArtistName", locale));
         }
 
+        // JF-467: primary-path music gate (shared contract on IfMediaTypeDisabled).
+        // Placed AFTER the empty-musician prompt and BEFORE the warming gate, so a
+        // disabled request never waits on index warming and issues no library query
+        // (found ungated by the final review pass; same class as the other four).
+        SkillResponse? musicDisabled = IfMediaTypeDisabled(c => c.MusicEnabled, request);
+        if (musicDisabled != null)
+        {
+            return musicDisabled;
+        }
+
         // The inline JF-382 search copy bypasses SearchAsync, so apply the same
         // artist gate here AFTER slot validation (a slot-less utterance still gets
         // DidNotCatch) but BEFORE the "searching" progressive response.

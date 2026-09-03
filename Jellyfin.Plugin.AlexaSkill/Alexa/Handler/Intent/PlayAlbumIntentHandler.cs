@@ -145,6 +145,16 @@ public class PlayAlbumIntentHandler : BaseHandler
             return BuildAlbumElicitResponse(locale);
         }
 
+        // JF-467: primary-path music gate (shared contract on IfMediaTypeDisabled;
+        // after the both-slots-empty elicitation so the musician-only JF-411 path is
+        // also gated). Placement is forced by the same two constraints as the
+        // PlaySong gate: see its note for the transient disabled+cold interaction.
+        SkillResponse? musicDisabled = IfMediaTypeDisabled(c => c.MusicEnabled, request);
+        if (musicDisabled != null)
+        {
+            return musicDisabled;
+        }
+
         RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
 
         var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);

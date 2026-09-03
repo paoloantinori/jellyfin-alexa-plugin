@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
 using Alexa.NET.Request;
@@ -10,6 +11,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Entities;
 using Jellyfin.Plugin.AlexaSkill.Lwa;
@@ -293,4 +295,54 @@ internal sealed class FakeArtistIndex : IArtistIndex
     // The fake's state is fixed per instance, so it is already pinned: capture is the
     // identity (the same contract ArtistIndexService.SnapshotView honors).
     public IArtistIndex CaptureSnapshot() => this;
+}
+
+/// <summary>
+/// JF-467: the ONE shared-gate probe handler. History: a private copy lived in
+/// CrossMediaFallbackMusicGateTests at HEAD and was hoisted here (plus the album
+/// cascade accessor) so MusicPrimaryPathGateTests could share it. Minimal concrete
+/// BaseHandler exposing the protected shared cross-media gates for direct testing
+/// (same pattern as ContentAccessTests' TestMediaTypeHandler).
+/// </summary>
+internal sealed class SharedGateProbeHandler : BaseHandler
+{
+    public SharedGateProbeHandler(ISessionManager sessionManager, PluginConfiguration config, ILoggerFactory loggerFactory)
+        : base(sessionManager, config, loggerFactory)
+    {
+    }
+
+    public override bool CanHandle(Request request) => true;
+
+    public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
+        => Task.FromResult(ResponseBuilder.Tell("test"));
+
+    public Task<SkillResponse?> CallTryEntityFallbackAsync(
+        string slotText,
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser,
+        Entities.User user,
+        SessionInfo session,
+        Context context,
+        string locale,
+        ILibraryManager libraryManager,
+        IUserDataManager userDataManager,
+        string logLabel,
+        CancellationToken cancellationToken)
+        => TryEntityFallbackAsync(
+            slotText, jellyfinUser, user, session, context, locale,
+            libraryManager, userDataManager, null, null, logLabel, cancellationToken);
+
+    public Task<SkillResponse?> CallTryAlbumFallbackAsync(
+        string slotText,
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser,
+        Entities.User user,
+        SessionInfo session,
+        Context context,
+        string locale,
+        ILibraryManager libraryManager,
+        IUserDataManager userDataManager,
+        string logLabel,
+        CancellationToken cancellationToken)
+        => TryAlbumFallbackAsync(
+            slotText, jellyfinUser, user, session, context, locale,
+            libraryManager, userDataManager, null, logLabel, cancellationToken);
 }

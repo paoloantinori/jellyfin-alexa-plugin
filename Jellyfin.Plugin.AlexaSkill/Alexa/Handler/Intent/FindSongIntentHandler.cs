@@ -190,6 +190,25 @@ public class FindSongIntentHandler : BaseHandler
             }
         }
 
+        // JF-467: primary-path music gate (shared contract on IfMediaTypeDisabled):
+        // every SEARCHING turn is gated. The one exempt turn is the BARE first
+        // invocation (no session state AND no musician/titleKeywords value), which
+        // still elicits the keywords prompt, mirroring the empty-slot precedence the
+        // other three gated entries use. Placed AFTER the cancel hatch (an open flow
+        // still cancels first) and BEFORE the warming gate, so a disabled request
+        // never waits on index warming and issues no library query.
+        bool bareFirstInvocation = sessionData == null
+            && GetSlotValue(intentRequest, IntentNames.Slots.Musician) == null
+            && GetSlotValue(intentRequest, IntentNames.Slots.TitleKeywords) == null;
+        if (!bareFirstInvocation)
+        {
+            SkillResponse? musicDisabled = IfMediaTypeDisabled(c => c.MusicEnabled, request);
+            if (musicDisabled != null)
+            {
+                return musicDisabled;
+            }
+        }
+
         // JF-419.3: this handler's PRIMARY resource is the song n-gram index (the
         // keywords path); artist paths are covered by the ArtistSearch choke point.
         // Placed AFTER the cancel hatch: an open flow must still cancel during warming.

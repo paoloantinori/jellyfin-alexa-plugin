@@ -4,10 +4,10 @@ title: >-
   MusicEnabled not enforced on primary paths of
   PlaySong/PlayAlbum/FindSong/PlayMoodMusic (fallback slice closed by JF-464,
   primaries still open)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-03 08:38'
-updated_date: '2026-09-03 09:03'
+updated_date: '2026-09-03 09:38'
 labels: []
 dependencies: []
 references:
