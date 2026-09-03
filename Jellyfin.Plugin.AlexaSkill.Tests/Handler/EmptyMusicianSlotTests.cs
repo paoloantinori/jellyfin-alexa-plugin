@@ -32,44 +32,28 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class EmptyMusicianSlotTests : PluginTestBase
 {
-    private readonly Mock<ISessionManager> _sessionManagerMock;
-    private readonly Mock<ILibraryManager> _libraryManagerMock;
-    private readonly Mock<IUserManager> _userManagerMock;
-    private readonly Mock<IUserDataManager> _userDataManagerMock;
-    private readonly PluginConfiguration _config;
-    private readonly ILoggerFactory _loggerFactory;
-
-    public EmptyMusicianSlotTests()
-    {
-        _sessionManagerMock = new Mock<ISessionManager>();
-        _libraryManagerMock = new Mock<ILibraryManager>();
-        _userManagerMock = new Mock<IUserManager>();
-        _userDataManagerMock = new Mock<IUserDataManager>();
-        _config = new PluginConfiguration { AsrCompoundWordFixEnabled = false };
-        TestHelpers.SetServerAddress(_config, "https://test.example.com");
-        _loggerFactory = LoggerFactory.Create(b => { });
-    }
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture(configure: c => c.AsrCompoundWordFixEnabled = false);
 
     private PlaySongIntentHandler CreateSongHandler()
     {
         return new PlaySongIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
     }
 
     private PlayAlbumIntentHandler CreateAlbumHandler()
     {
         return new PlayAlbumIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
     }
 
     private static IntentRequest CreateSongIntentRequest(string song, string? musician)
@@ -113,9 +97,9 @@ public class EmptyMusicianSlotTests : PluginTestBase
         var handler = CreateSongHandler();
         var request = CreateSongIntentRequest("ferma", null);
         request.DialogState = "IN_PROGRESS";
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -130,9 +114,9 @@ public class EmptyMusicianSlotTests : PluginTestBase
         var handler = CreateSongHandler();
         var request = CreateSongIntentRequest("stop", null);
         request.DialogState = "STARTED";
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -151,9 +135,9 @@ public class EmptyMusicianSlotTests : PluginTestBase
             ["album"] = new Slot { Name = "album", Value = "ferma" }
         };
         var request = new IntentRequest { Intent = intent, Locale = "it-IT", RequestId = "test-req", DialogState = "IN_PROGRESS" };
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -172,9 +156,9 @@ public class EmptyMusicianSlotTests : PluginTestBase
         var handler = CreateSongHandler();
         var request = CreateSongIntentRequest(string.Empty, "basta");
         request.DialogState = "STARTED";
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -192,12 +176,12 @@ public class EmptyMusicianSlotTests : PluginTestBase
         var handler = CreateAlbumHandler();
         var request = CreateAlbumIntentRequest(string.Empty, "basta");
         request.DialogState = "STARTED";
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var artist = new MusicArtist { Name = "Basta", Id = Guid.NewGuid() };
         var album = new MusicAlbum { Name = "Basta Debut", Id = Guid.NewGuid() };
         var track = new Audio { Name = "Title Track", Id = Guid.NewGuid() };
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns((InternalItemsQuery q) =>
             {
                 if (q.IncludeItemTypes?.Contains(BaseItemKind.MusicArtist) == true)
@@ -207,12 +191,12 @@ public class EmptyMusicianSlotTests : PluginTestBase
 
                 return new List<BaseItem> { album };
             });
-        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
             .Returns(new QueryResult<BaseItem> { Items = new[] { track }, TotalRecordCount = 1 });
 
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -221,8 +205,6 @@ public class EmptyMusicianSlotTests : PluginTestBase
         var playDirective = response.Response.Directives?.FirstOrDefault(d => d is global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective);
         Assert.NotNull(playDirective);
     }
-
-    private static Context CreateContext() => TestHelpers.CreateTestContext();
 
     [Fact]
     public async Task PlaySong_EmptySongSlot_ElicitsSongViaDialogDirective()
@@ -236,9 +218,9 @@ public class EmptyMusicianSlotTests : PluginTestBase
         // slots (Amazon rejects partial updatedIntent, live INVALID_RESPONSE 2026-08-28).
         var handler = CreateSongHandler();
         var request = CreateSongIntentRequest(string.Empty, null);
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -255,16 +237,6 @@ public class EmptyMusicianSlotTests : PluginTestBase
         Assert.True(response.SessionAttributes.ContainsKey(Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.SessionAttributeRemoval.MarkerKey), "elicit must mark other flows inactive");
     }
 
-    private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
-
-    private static Entities.User CreateUser() => TestHelpers.CreateTestUser();
-
-    private void SetupUserMock()
-    {
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
-    }
-
     // ── PlaySongIntentHandler ──────────────────────────────────────────────
 
     [Fact]
@@ -273,10 +245,10 @@ public class EmptyMusicianSlotTests : PluginTestBase
         // Simulates: "di mettere the idiot kings dei" → song="the idiot kings", musician=""
         var song = new Audio { Name = "The Idiot Kings", Id = Guid.NewGuid() };
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         int callCount = 0;
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(() =>
             {
                 callCount++;
@@ -286,9 +258,9 @@ public class EmptyMusicianSlotTests : PluginTestBase
 
         var handler = CreateSongHandler();
         var request = CreateSongIntentRequest("the idiot kings", musician: "");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -305,16 +277,16 @@ public class EmptyMusicianSlotTests : PluginTestBase
     {
         var song = new Audio { Name = "The Idiot Kings", Id = Guid.NewGuid() };
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { song });
 
         var handler = CreateSongHandler();
         var request = CreateSongIntentRequest("the idiot kings", musician: "   ");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -328,16 +300,16 @@ public class EmptyMusicianSlotTests : PluginTestBase
         // Slot not present at all — baseline case, should already work
         var song = new Audio { Name = "The Idiot Kings", Id = Guid.NewGuid() };
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { song });
 
         var handler = CreateSongHandler();
         var request = CreateSongIntentRequest("the idiot kings", musician: null);
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -352,10 +324,10 @@ public class EmptyMusicianSlotTests : PluginTestBase
         var artist = new MusicArtist { Name = "Soul Coughing", Id = Guid.NewGuid() };
         var song = new Audio { Name = "The Idiot Kings", Id = Guid.NewGuid() };
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         int callCount = 0;
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(() =>
             {
                 callCount++;
@@ -368,9 +340,9 @@ public class EmptyMusicianSlotTests : PluginTestBase
 
         var handler = CreateSongHandler();
         var request = CreateSongIntentRequest("the idiot kings", musician: "soul coughing");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -384,16 +356,16 @@ public class EmptyMusicianSlotTests : PluginTestBase
     public async Task PlaySong_EmptyMusicianSlot_NotFound_ReportsSongNotFound()
     {
         // Empty musician slot + song not found → "song not found" (not "artist not found")
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
 
         var handler = CreateSongHandler();
         var request = CreateSongIntentRequest("nonexistent song", musician: "");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -411,24 +383,24 @@ public class EmptyMusicianSlotTests : PluginTestBase
         var album = new MusicAlbum { Name = "Ruby Vroom", Id = Guid.NewGuid() };
         var track = new Audio { Name = "Is Chicago", Id = Guid.NewGuid() };
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         int callCount = 0;
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(() =>
             {
                 callCount++;
                 return new List<BaseItem> { album };
             });
 
-        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
             .Returns(new QueryResult<BaseItem>(new List<BaseItem> { track }));
 
         var handler = CreateAlbumHandler();
         var request = CreateAlbumIntentRequest("ruby vroom", musician: "");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -444,10 +416,10 @@ public class EmptyMusicianSlotTests : PluginTestBase
         var album = new MusicAlbum { Name = "Ruby Vroom", Id = Guid.NewGuid() };
         var track = new Audio { Name = "Is Chicago", Id = Guid.NewGuid() };
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         int callCount = 0;
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(() =>
             {
                 callCount++;
@@ -458,14 +430,14 @@ public class EmptyMusicianSlotTests : PluginTestBase
                 };
             });
 
-        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
             .Returns(new QueryResult<BaseItem>(new List<BaseItem> { track }));
 
         var handler = CreateAlbumHandler();
         var request = CreateAlbumIntentRequest("ruby vroom", musician: "soul coughing");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -477,16 +449,16 @@ public class EmptyMusicianSlotTests : PluginTestBase
     [Fact]
     public async Task PlayAlbum_EmptyMusicianSlot_NotFound_ReportsAlbumNotFound()
     {
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
 
         var handler = CreateAlbumHandler();
         var request = CreateAlbumIntentRequest("nonexistent album", musician: "");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 

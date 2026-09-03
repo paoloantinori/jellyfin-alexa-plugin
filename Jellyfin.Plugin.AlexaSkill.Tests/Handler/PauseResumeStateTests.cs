@@ -31,12 +31,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class PauseResumeStateTests : PluginTestBase, IDisposable
 {
-    private readonly Mock<ISessionManager> _sessionManagerMock;
-    private readonly Mock<ILibraryManager> _libraryManagerMock;
-    private readonly Mock<IUserManager> _userManagerMock;
-    private readonly Mock<IUserDataManager> _userDataManagerMock;
-    private readonly PluginConfiguration _config;
-    private readonly ILoggerFactory _loggerFactory;
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture("http://localhost:8096");
     private readonly string _tempDir;
     private readonly DeviceQueueManager _queueManager;
     private static readonly string DeviceId = "test-device";
@@ -44,21 +39,15 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
 
     public PauseResumeStateTests()
     {
-        _sessionManagerMock = new Mock<ISessionManager>();
-        _libraryManagerMock = new Mock<ILibraryManager>();
-        _userManagerMock = new Mock<IUserManager>();
-        _userDataManagerMock = new Mock<IUserDataManager>();
-        _config = new PluginConfiguration { ServerAddress = "http://localhost:8096" };
-        _loggerFactory = LoggerFactory.Create(b => { });
         _tempDir = Path.Combine(Path.GetTempPath(), "pause-resume-tests-" + Guid.NewGuid());
         Directory.CreateDirectory(_tempDir);
-        var queueLogger = _loggerFactory.CreateLogger<DeviceQueueManager>();
+        var queueLogger = _fx.LoggerFactory.CreateLogger<DeviceQueueManager>();
         _queueManager = new DeviceQueueManager(_tempDir, queueLogger);
 
         // Ensure Plugin.Instance is available for BuildAudioPlayerResponse (APL checks)
         TestHelpers.EnsurePluginInstance(
-            _config,
-            _loggerFactory,
+            _fx.Config,
+            _fx.LoggerFactory,
             c => { },
             "pause-resume-tests");
     }
@@ -83,7 +72,7 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
 
     private SessionInfo CreateSessionWithNowPlaying(string itemId)
     {
-        var session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+        var session = TestHelpers.CreateTestSession(_fx.SessionManager.Object, _fx.LoggerFactory);
         session.PlayState = new PlayerStateInfo();
 
         // Create a mock audio item as the now-playing item
@@ -159,8 +148,8 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
     public async Task PlaybackStopped_SavesPositionToDeviceQueue()
     {
         var handler = new PlaybackStoppedEventHandler(
-            _sessionManagerMock.Object, _config, _loggerFactory, _queueManager,
-            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object);
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory, _queueManager,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object);
 
         long offsetMs = 30000; // 30 seconds
         var request = CreateStoppedRequest(TestItemId, offsetMs);
@@ -178,8 +167,8 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
     public async Task PlaybackStopped_WithZeroOffset_StillSavesItemId()
     {
         var handler = new PlaybackStoppedEventHandler(
-            _sessionManagerMock.Object, _config, _loggerFactory, _queueManager,
-            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object);
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory, _queueManager,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object);
 
         var request = CreateStoppedRequest(TestItemId, 0);
         var context = CreateContext();
@@ -196,8 +185,8 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
     public async Task PlaybackStopped_WithoutQueueManager_DoesNotThrow()
     {
         var handler = new PlaybackStoppedEventHandler(
-            _sessionManagerMock.Object, _config, _loggerFactory, _queueManager,
-            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object);
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory, _queueManager,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object);
 
         var request = CreateStoppedRequest(TestItemId, 5000);
         var context = CreateContext();
@@ -220,8 +209,8 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
         queue.CurrentPositionTicks = TimeSpan.FromSeconds(60).Ticks;
 
         var handler = new ResumeIntentHandler(
-            _sessionManagerMock.Object, _config, _loggerFactory,
-            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object,
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object,
             _queueManager);
 
         // AudioPlayer context has offset = 10s, should prefer that over DeviceQueue's 60s
@@ -253,8 +242,8 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
         queue.CurrentPositionTicks = TimeSpan.FromSeconds(45).Ticks;
 
         var handler = new ResumeIntentHandler(
-            _sessionManagerMock.Object, _config, _loggerFactory,
-            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object,
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object,
             _queueManager);
 
         // AudioPlayer context has token but offset = 0 (cleared after pause)
@@ -286,8 +275,8 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
         queue.CurrentPositionTicks = TimeSpan.FromSeconds(45).Ticks;
 
         var handler = new ResumeIntentHandler(
-            _sessionManagerMock.Object, _config, _loggerFactory,
-            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object,
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object,
             _queueManager);
 
         // AudioPlayer context has a different token and offset = 0
@@ -314,8 +303,8 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
     public async Task ResumeIntent_WithoutQueueManager_WorksNormally()
     {
         var handler = new ResumeIntentHandler(
-            _sessionManagerMock.Object, _config, _loggerFactory,
-            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object);
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object);
 
         var context = CreateContext(audioPlayerToken: TestItemId, audioPlayerOffset: 5000);
         var session = CreateSessionWithNowPlaying(TestItemId);
@@ -336,12 +325,12 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
     public async Task ResumeIntent_ReturnsNoMedia_WhenSessionHasNoNowPlayingItem()
     {
         var handler = new ResumeIntentHandler(
-            _sessionManagerMock.Object, _config, _loggerFactory,
-            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object,
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object,
             _queueManager);
 
         var context = CreateContext();
-        var session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+        var session = TestHelpers.CreateTestSession(_fx.SessionManager.Object, _fx.LoggerFactory);
         session.PlayState = new PlayerStateInfo();
         // FullNowPlayingItem is null by default
 
@@ -361,8 +350,8 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
     public async Task ResumeIntent_ReturnsEmpty_WhenAlreadyPlaying()
     {
         var handler = new ResumeIntentHandler(
-            _sessionManagerMock.Object, _config, _loggerFactory,
-            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object,
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object,
             _queueManager);
 
         var context = CreateContext(audioPlayerToken: TestItemId, audioPlayerOffset: 1000);
@@ -387,11 +376,11 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
     public async Task StopThenResume_PreservesPosition_ViaDeviceQueue()
     {
         var stoppedHandler = new PlaybackStoppedEventHandler(
-            _sessionManagerMock.Object, _config, _loggerFactory, _queueManager,
-            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object);
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory, _queueManager,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object);
         var resumeHandler = new ResumeIntentHandler(
-            _sessionManagerMock.Object, _config, _loggerFactory,
-            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object,
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object,
             _queueManager);
 
         // Simulate playback stopped at 45 seconds
@@ -432,8 +421,8 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
     public async Task ResumeIntent_UsesReplaceAllPlayBehavior()
     {
         var handler = new ResumeIntentHandler(
-            _sessionManagerMock.Object, _config, _loggerFactory,
-            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object,
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object,
             _queueManager);
 
         var context = CreateContext(audioPlayerToken: TestItemId, audioPlayerOffset: 10000);
@@ -455,8 +444,8 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
     public void ResumeIntent_CanHandle_PlaybackControllerPlayCommand()
     {
         var handler = new ResumeIntentHandler(
-            _sessionManagerMock.Object, _config, _loggerFactory,
-            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object);
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object);
 
         // PlaybackControllerRequest.PlaybackRequestType is read-only;
         // deserialize from JSON to set it (TestHelpers.CreatePlayCommand)
@@ -469,8 +458,8 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
     public void ResumeIntent_CannotHandle_PlaybackControllerPauseCommand()
     {
         var handler = new ResumeIntentHandler(
-            _sessionManagerMock.Object, _config, _loggerFactory,
-            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object);
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object);
 
         var json = @"{""requestId"":""test"",""type"":""PlaybackController.PauseCommandIssued"",""timestamp"":""2024-01-01T00:00:00Z"",""locale"":""en-US"",""playbackRequestMethod"":""PAUSE""}";
         var request = Newtonsoft.Json.JsonConvert.DeserializeObject<PlaybackControllerRequest>(json);
@@ -491,7 +480,7 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
         _queueManager.PersistAll();
 
         // Create a new DeviceQueueManager with the same data directory
-        var queueLogger2 = _loggerFactory.CreateLogger<DeviceQueueManager>();
+        var queueLogger2 = _fx.LoggerFactory.CreateLogger<DeviceQueueManager>();
         using var queueManager2 = new DeviceQueueManager(_tempDir, queueLogger2);
 
         var restored = queueManager2.GetOrCreateQueue(DeviceId);
@@ -505,15 +494,15 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
     public async Task ResumeIntent_AnnouncePositionEnabled_AnnouncesPosition()
     {
         var user = TestHelpers.CreateTestUser();
-        _config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
+        _fx.Config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
         {
             Id = user.Id,
             AnnouncePositionOnResume = true
         });
 
         var handler = new ResumeIntentHandler(
-            _sessionManagerMock.Object, _config, _loggerFactory,
-            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object,
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object,
             _queueManager);
 
         var context = CreateContext(audioPlayerToken: TestItemId, audioPlayerOffset: 90000); // 1m 30s
@@ -534,15 +523,15 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
     public async Task ResumeIntent_AnnouncePositionDisabled_NoAnnouncement()
     {
         var user = TestHelpers.CreateTestUser();
-        _config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
+        _fx.Config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
         {
             Id = user.Id,
             AnnouncePositionOnResume = false
         });
 
         var handler = new ResumeIntentHandler(
-            _sessionManagerMock.Object, _config, _loggerFactory,
-            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object,
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object,
             _queueManager);
 
         var context = CreateContext(audioPlayerToken: TestItemId, audioPlayerOffset: 90000);
@@ -560,15 +549,15 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
     public async Task ResumeIntent_AnnouncePositionEnabled_ZeroOffset_NoAnnouncement()
     {
         var user = TestHelpers.CreateTestUser();
-        _config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
+        _fx.Config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
         {
             Id = user.Id,
             AnnouncePositionOnResume = true
         });
 
         var handler = new ResumeIntentHandler(
-            _sessionManagerMock.Object, _config, _loggerFactory,
-            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object,
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object,
             _queueManager);
 
         var context = CreateContext(audioPlayerToken: TestItemId, audioPlayerOffset: 0);
@@ -590,8 +579,8 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
         var user = TestHelpers.CreateTestUser();
 
         var handler = new ResumeIntentHandler(
-            _sessionManagerMock.Object, _config, _loggerFactory,
-            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object,
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object,
             _queueManager);
 
         var context = CreateContext(audioPlayerToken: TestItemId, audioPlayerOffset: 90000);

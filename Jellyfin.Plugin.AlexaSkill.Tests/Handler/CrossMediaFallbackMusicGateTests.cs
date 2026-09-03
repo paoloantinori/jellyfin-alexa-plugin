@@ -41,12 +41,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class CrossMediaFallbackMusicGateTests : PluginTestBase, IDisposable
 {
-    private readonly Mock<ISessionManager> _sessionManagerMock;
-    private readonly Mock<ILibraryManager> _libraryManagerMock;
-    private readonly Mock<IUserManager> _userManagerMock;
-    private readonly Mock<IUserDataManager> _userDataManagerMock;
-    private readonly PluginConfiguration _config;
-    private readonly ILoggerFactory _loggerFactory;
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture();
     private readonly List<InternalItemsQuery> _queries = new();
 
     // What the artist search (MusicArtist, no Genres) and the artist songs query
@@ -59,21 +54,14 @@ public class CrossMediaFallbackMusicGateTests : PluginTestBase, IDisposable
 
     public CrossMediaFallbackMusicGateTests()
     {
-        _sessionManagerMock = new Mock<ISessionManager>();
-        _libraryManagerMock = new Mock<ILibraryManager>();
-        _userManagerMock = new Mock<IUserManager>();
-        _userDataManagerMock = new Mock<IUserDataManager>();
-        _config = new PluginConfiguration();
-        TestHelpers.SetServerAddress(_config, "https://test.example.com");
-        _loggerFactory = LoggerFactory.Create(b => { });
         TestHelpers.EnsurePluginInstance(
-            _config, _loggerFactory,
-            c => c.MusicEnabled = _config.MusicEnabled,
+            _fx.Config, _fx.LoggerFactory,
+            c => c.MusicEnabled = _fx.Config.MusicEnabled,
             "alexa-crossmedia-music-gate-test");
 
         // Record every issued query: the disabled-flag assertions below prove the
         // artist search never RUNS, not merely that it returned nothing.
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 _queries.Add(q);
@@ -81,7 +69,7 @@ public class CrossMediaFallbackMusicGateTests : PluginTestBase, IDisposable
             });
     }
 
-    public void Dispose() => _loggerFactory.Dispose();
+    public void Dispose() => _fx.LoggerFactory.Dispose();
 
     // Shared gate, pinned directly with no caller wiring (probe handler pattern):
     // music disabled means TryEntityFallbackAsync returns null BEFORE any library
@@ -93,10 +81,10 @@ public class CrossMediaFallbackMusicGateTests : PluginTestBase, IDisposable
         ArmArtist("Abbey Road");
         var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
 
-        var probe = new SharedGateProbeHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+        var probe = new SharedGateProbeHandler(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory);
         SkillResponse? result = await probe.CallTryEntityFallbackAsync(
-            "abbey road", jellyfinUser, CreateUser(), CreateSession(), CreateContext(), "en-US",
-            _libraryManagerMock.Object, _userDataManagerMock.Object, "gate probe", CancellationToken.None);
+            "abbey road", jellyfinUser, _fx.CreateUser(), _fx.CreateSession(), _fx.CreateContext(), "en-US",
+            _fx.LibraryManager.Object, _fx.UserDataManager.Object, "gate probe", CancellationToken.None);
 
         Assert.Null(result);
         Assert.Empty(_queries);
@@ -113,7 +101,7 @@ public class CrossMediaFallbackMusicGateTests : PluginTestBase, IDisposable
 
         var handler = CreateGenreHandler();
         SkillResponse response = await handler.HandleAsync(
-            CreateGenreIntent("abbey road"), CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+            CreateGenreIntent("abbey road"), _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         Assert.Null(TestHelpers.GetPlayDirective(response));
         string speech = TestHelpers.GetSpeechText(response);
@@ -137,9 +125,9 @@ public class CrossMediaFallbackMusicGateTests : PluginTestBase, IDisposable
         ArmArtist("Abbey Road");
 
         var handler = CreateGenreHandler();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
         SkillResponse response = await handler.HandleAsync(
-            CreateGenreIntent("abbey road"), CreateContext(), CreateUser(), session, CancellationToken.None);
+            CreateGenreIntent("abbey road"), _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
 
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.NotNull(session.NowPlayingQueue);
@@ -172,10 +160,10 @@ public class CrossMediaFallbackMusicGateTests : PluginTestBase, IDisposable
         DisableMusic();
         _albumSearchResults = new List<BaseItem> { new MusicAlbum { Name = "Abbey Road", Id = Guid.NewGuid() } };
 
-        var probe = new SharedGateProbeHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+        var probe = new SharedGateProbeHandler(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory);
         SkillResponse? result = await probe.CallTryAlbumFallbackAsync(
-            "abbey road", CreateUserJellyfin(), CreateUser(), CreateSession(), CreateContext(), "en-US",
-            _libraryManagerMock.Object, _userDataManagerMock.Object, "album gate probe", CancellationToken.None);
+            "abbey road", CreateUserJellyfin(), _fx.CreateUser(), _fx.CreateSession(), _fx.CreateContext(), "en-US",
+            _fx.LibraryManager.Object, _fx.UserDataManager.Object, "album gate probe", CancellationToken.None);
 
         Assert.Null(result);
         Assert.Empty(_queries);
@@ -183,22 +171,19 @@ public class CrossMediaFallbackMusicGateTests : PluginTestBase, IDisposable
 
     private PlayByGenreIntentHandler CreateGenreHandler()
         => new(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
 
-    private static Context CreateContext() => TestHelpers.CreateTestContext();
-    private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
-    private static Entities.User CreateUser() => TestHelpers.CreateTestUser();
     private static Jellyfin.Database.Implementations.Entities.User CreateUserJellyfin()
         => new("testuser", "test", "test");
 
     private void SetupUserMock()
     {
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
+        _fx.UserManager.Setup(u => u.GetUserById(It.IsAny<Guid>()))
             .Returns(CreateUserJellyfin());
     }
 
@@ -206,11 +191,11 @@ public class CrossMediaFallbackMusicGateTests : PluginTestBase, IDisposable
     /// Disables the global music flag on both references. BOTH writes are
     /// load-bearing: when EnsurePluginInstance created the Plugin the two configs
     /// are the same object, but when an instance pre-existed they differ (the gate
-    /// reads the injected _config, other paths read Plugin.Instance.Configuration).
+    /// reads the injected _fx.Config, other paths read Plugin.Instance.Configuration).
     /// </summary>
     private void DisableMusic()
     {
-        _config.MusicEnabled = false;
+        _fx.Config.MusicEnabled = false;
         Plugin.Instance!.Configuration.MusicEnabled = false;
     }
 

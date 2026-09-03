@@ -298,6 +298,64 @@ internal sealed class FakeArtistIndex : IArtistIndex
 }
 
 /// <summary>
+/// JF-465: the ONE handler-test fixture (the six standard mocks + config +
+/// logger factory, and the SetupUserMock/CreateSession/CreateContext/CreateUser
+/// builders). History: the block was copy-pasted across ~33 handler test classes
+/// (seed: PlayByGenreFallbackTests vs PlayByGenreIntentHandlerTests, near
+/// line-for-line) so every optional-ctor-dep edit touched every copy. Test classes
+/// hold one instance and compose it, keeping their handler-specific CreateHandler
+/// ctor call local. Handler subsets beyond these six mocks (extra indexes, queue
+/// managers) stay as local fields in the owning test class.
+/// </summary>
+internal sealed class HandlerTestFixture
+{
+    internal Mock<ISessionManager> SessionManager { get; }
+    internal Mock<ILibraryManager> LibraryManager { get; }
+    internal Mock<IUserManager> UserManager { get; }
+    internal Mock<IUserDataManager> UserDataManager { get; }
+    internal PluginConfiguration Config { get; }
+    internal ILoggerFactory LoggerFactory { get; }
+
+    /// <summary>
+    /// <paramref name="serverAddress"/> defaults to the shared test address; the few
+    /// suites that pin localhost pass it explicitly, and passing null leaves the
+    /// address untouched (the no-address suites). <paramref name="configure"/> runs
+    /// BEFORE the address is set so a suite can pin any other flag it needs.
+    /// </summary>
+    internal HandlerTestFixture(
+        string? serverAddress = "https://test.example.com",
+        Action<PluginConfiguration>? configure = null)
+    {
+        SessionManager = new Mock<ISessionManager>();
+        LibraryManager = new Mock<ILibraryManager>();
+        UserManager = new Mock<IUserManager>();
+        UserDataManager = new Mock<IUserDataManager>();
+        Config = new PluginConfiguration();
+        configure?.Invoke(Config);
+        if (serverAddress != null)
+        {
+            TestHelpers.SetServerAddress(Config, serverAddress);
+        }
+
+        LoggerFactory = Microsoft.Extensions.Logging.LoggerFactory.Create(b => { });
+    }
+
+    /// <summary>
+    /// The standard GetUserById stub: a Jellyfin user named "testuser", so
+    /// ResolveJellyfinUser-style paths have someone to resolve.
+    /// </summary>
+    internal void SetupUserMock()
+        => UserManager.Setup(u => u.GetUserById(It.IsAny<Guid>()))
+            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+
+    internal SessionInfo CreateSession() => TestHelpers.CreateTestSession(SessionManager.Object, LoggerFactory);
+
+    internal Context CreateContext() => TestHelpers.CreateTestContext();
+
+    internal Entities.User CreateUser() => TestHelpers.CreateTestUser();
+}
+
+/// <summary>
 /// JF-467: the ONE shared-gate probe handler. History: a private copy lived in
 /// CrossMediaFallbackMusicGateTests at HEAD and was hoisted here (plus the album
 /// cascade accessor) so MusicPrimaryPathGateTests could share it. Minimal concrete

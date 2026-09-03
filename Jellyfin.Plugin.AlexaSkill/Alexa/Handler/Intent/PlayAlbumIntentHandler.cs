@@ -116,10 +116,10 @@ public class PlayAlbumIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("FindSongCancelled", locale));
         }
 
-        // JF-419 cold-start: the album queries hit the same cold database the artist
-        // index loading proxies (deliberately coarse: album paths have no in-memory
-        // index of their own to gate on).
-        Util.IndexWarmingGate.EnsureReady(_artistIndex);
+        // Layer-1 gate (GuardIndexReady), deliberately coarse: album paths have no
+        // in-memory index of their own to gate on, so the artist index stands in for
+        // the shared cold database.
+        GuardIndexReady(_artistIndex);
 
         // Elicit via Dialog.ElicitSlot so the session stays in the PlayAlbumIntent
         // dialog (the user's next utterance fills the slot; already-filled slots

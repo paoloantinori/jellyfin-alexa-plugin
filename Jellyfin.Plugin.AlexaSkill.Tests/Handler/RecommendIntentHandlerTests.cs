@@ -25,33 +25,17 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class RecommendIntentHandlerTests : PluginTestBase
 {
-    private readonly Mock<ISessionManager> _sessionManagerMock;
-    private readonly Mock<ILibraryManager> _libraryManagerMock;
-    private readonly Mock<IUserManager> _userManagerMock;
-    private readonly Mock<IUserDataManager> _userDataManagerMock;
-    private readonly PluginConfiguration _config;
-    private readonly ILoggerFactory _loggerFactory;
-
-    public RecommendIntentHandlerTests()
-    {
-        _sessionManagerMock = new Mock<ISessionManager>();
-        _libraryManagerMock = new Mock<ILibraryManager>();
-        _userManagerMock = new Mock<IUserManager>();
-        _userDataManagerMock = new Mock<IUserDataManager>();
-        _config = new PluginConfiguration();
-        TestHelpers.SetServerAddress(_config, "https://test.example.com");
-        _loggerFactory = LoggerFactory.Create(b => { });
-    }
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture();
 
     private RecommendIntentHandler CreateHandler()
     {
         return new RecommendIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
     }
 
     private static IntentRequest CreateIntentRequest(string? mediaType = null)
@@ -65,27 +49,6 @@ public class RecommendIntentHandlerTests : PluginTestBase
         }
 
         return new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req" };
-    }
-
-    private static Context CreateContext()
-    {
-        return TestHelpers.CreateTestContext();
-    }
-
-    private SessionInfo CreateSession()
-    {
-        return TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
-    }
-
-    private static Entities.User CreateUser()
-    {
-        return TestHelpers.CreateTestUser();
-    }
-
-    private void SetupUserMock()
-    {
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
     }
 
     [Fact]
@@ -115,18 +78,18 @@ public class RecommendIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest();
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         // No played items
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IsPlayed == true)))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IsPlayed == true)))
             .Returns(new List<BaseItem>());
 
         // No unplayed items either
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IsPlayed == false || q.IsPlayed == null)))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IsPlayed == false || q.IsPlayed == null)))
             .Returns(new List<BaseItem>());
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -140,24 +103,24 @@ public class RecommendIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest();
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var playedItem = new Audio { Name = "Played Song", Id = Guid.NewGuid() };
         playedItem.Genres = new[] { "Rock", "Pop" };
 
         var recommendedItem = new Audio { Name = "New Rock Song", Id = Guid.NewGuid() };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IsPlayed == true)))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IsPlayed == true)))
             .Returns(new List<BaseItem> { playedItem });
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IsPlayed == false || q.IsPlayed == null)))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IsPlayed == false || q.IsPlayed == null)))
             .Returns(new List<BaseItem> { recommendedItem });
 
-        _libraryManagerMock.Setup(l => l.GetItemById(recommendedItem.Id))
+        _fx.LibraryManager.Setup(l => l.GetItemById(recommendedItem.Id))
             .Returns(recommendedItem);
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -170,13 +133,13 @@ public class RecommendIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(mediaType: "music");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -190,11 +153,11 @@ public class RecommendIntentHandlerTests : PluginTestBase
         var handler = CreateHandler();
         // No media_type slot provided (slotless utterance)
         var request = CreateIntentRequest();
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var playedItem = new Audio { Name = "Played Song", Id = Guid.NewGuid() };
         playedItem.Genres = new[] { "Rock" };
@@ -203,14 +166,14 @@ public class RecommendIntentHandlerTests : PluginTestBase
 
         // Track what item types were queried in the played-items query
         Jellyfin.Data.Enums.BaseItemKind[]? queriedTypes = null;
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IsPlayed == true)))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IsPlayed == true)))
             .Callback<InternalItemsQuery>(q => queriedTypes = q.IncludeItemTypes)
             .Returns(new List<BaseItem> { playedItem });
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IsPlayed == false || q.IsPlayed == null)))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IsPlayed == false || q.IsPlayed == null)))
             .Returns(new List<BaseItem> { recommendedItem });
 
-        _libraryManagerMock.Setup(l => l.GetItemById(recommendedItem.Id))
+        _fx.LibraryManager.Setup(l => l.GetItemById(recommendedItem.Id))
             .Returns(recommendedItem);
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -228,22 +191,22 @@ public class RecommendIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest();
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var playedItem = new Audio { Name = "Everything", Id = Guid.NewGuid() };
         playedItem.Genres = new[] { "Rock" };
 
         // Played items found, but no unplayed items in those genres
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IsPlayed == true)))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IsPlayed == true)))
             .Returns(new List<BaseItem> { playedItem });
 
         // First call for genre-based recs returns empty, second fallback also empty
         int callCount = 0;
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IsPlayed == false || q.IsPlayed == null)))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IsPlayed == false || q.IsPlayed == null)))
             .Callback<InternalItemsQuery>(q => callCount++)
             .Returns(new List<BaseItem>());
 

@@ -32,30 +32,19 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 [Collection("Plugin")]
 public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 {
-    private readonly Mock<ISessionManager> _sessionManagerMock;
-    private readonly Mock<ILibraryManager> _libraryManagerMock;
-    private readonly Mock<IUserManager> _userManagerMock;
-    private readonly Mock<IUserDataManager> _userDataManagerMock;
-    private readonly PluginConfiguration _config;
-    private readonly ILoggerFactory _loggerFactory;
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture(null, configure: c => c.AsrCompoundWordFixEnabled = false);
     private readonly FindSongIntentHandler _handler;
     private readonly Guid _userId = Guid.NewGuid();
 
     public FindSongIntentHandlerTests()
     {
-        _sessionManagerMock = new Mock<ISessionManager>();
-        _libraryManagerMock = new Mock<ILibraryManager>();
-        _userManagerMock = new Mock<IUserManager>();
-        _userDataManagerMock = new Mock<IUserDataManager>();
-        _config = new PluginConfiguration { AsrCompoundWordFixEnabled = false };
-        _loggerFactory = LoggerFactory.Create(b => { });
         _handler = new FindSongIntentHandler(
-            _sessionManagerMock.Object, _config,
-            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory);
-        TestHelpers.EnsurePluginInstance(_config, _loggerFactory, cfg => { }, "findsong-test");
+            _fx.SessionManager.Object, _fx.Config,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory);
+        TestHelpers.EnsurePluginInstance(_fx.Config, _fx.LoggerFactory, cfg => { }, "findsong-test");
     }
 
-    public void Dispose() => _loggerFactory.Dispose();
+    public void Dispose() => _fx.LoggerFactory.Dispose();
 
     // ========== CanHandle ==========
 
@@ -105,14 +94,14 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         SetupJellyfinUser();
         SetupArtistSearch(Guid.NewGuid(), "Pink Floyd");
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
         var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
         {
             ["musician"] = "Pink Floyd"
         });
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, null, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, null, CancellationToken.None);
 
         // Should prompt for keywords (Ask = ShouldEndSession=false)
         Assert.False(response.Response.ShouldEndSession);
@@ -143,7 +132,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // locale-keyed, so the word and the request locale must match.
         SetupJellyfinUser();
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
         var attrs = new Dictionary<string, object>
         {
             ["FindSongSessionData"] = JsonConvert.SerializeObject(new FindSongSessionData
@@ -160,7 +149,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         request.Locale = locale;
         request.DialogState = "IN_PROGRESS";
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, attrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, attrs, CancellationToken.None);
 
         Assert.True(response.Response.ShouldEndSession != false, "cancel word during open flow must end the session");
         var speech = (response.Response.OutputSpeech as PlainTextOutputSpeech)?.Text ?? string.Empty;
@@ -183,7 +172,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         SetupSongSearch(new List<BaseItem> { CreateAudioItem(Guid.NewGuid(), "Stop") });
 
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
         var attrs = BuildSessionAttributes(new FindSongSessionData
         {
             State = FindSongState.AwaitingKeywords,
@@ -197,7 +186,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         });
         request.DialogState = "STARTED";
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, attrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, attrs, CancellationToken.None);
 
         string speech = TestHelpers.GetSpeechText(response);
         Assert.Contains("I found", speech);
@@ -218,7 +207,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // the realistic sibling-misroute state is STARTED, covered below (JF-445).
         SetupJellyfinUser();
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
         var attrs = BuildSessionAttributes(new FindSongSessionData
         {
             State = FindSongState.AwaitingArtist,
@@ -232,7 +221,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         request.Locale = "it-IT";
         request.DialogState = "IN_PROGRESS";
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, attrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, attrs, CancellationToken.None);
 
         string cancelled = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("FindSongCancelled", "it-IT");
         Assert.Equal(cancelled, TestHelpers.GetSpeechText(response));
@@ -253,7 +242,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // slot while the FindSong flow is open.
         SetupJellyfinUser();
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
         var attrs = BuildSessionAttributes(new FindSongSessionData
         {
             State = FindSongState.AwaitingArtist,
@@ -267,7 +256,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         request.Locale = "it-IT";
         request.DialogState = "STARTED";
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, attrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, attrs, CancellationToken.None);
 
         string cancelled = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("FindSongCancelled", "it-IT");
         Assert.Equal(cancelled, TestHelpers.GetSpeechText(response));
@@ -284,7 +273,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         SetupJellyfinUser();
         SetupArtistSearchEmpty();
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
         var attrs = BuildSessionAttributes(new FindSongSessionData
         {
             State = FindSongState.AwaitingArtist,
@@ -298,7 +287,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         request.Locale = "it-IT";
         request.DialogState = "STARTED";
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, attrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, attrs, CancellationToken.None);
 
         string cancelled = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("FindSongCancelled", "it-IT");
         Assert.NotEqual(cancelled, TestHelpers.GetSpeechText(response));
@@ -321,7 +310,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // CancelWordArtist_FirstInvocation_NoOpenFlow_StillSearches below.
         SetupJellyfinUser();
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
         var attrs = BuildSessionAttributes(new FindSongSessionData
         {
             State = FindSongState.AwaitingArtist,
@@ -335,7 +324,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         request.Locale = "it-IT";
         request.DialogState = "STARTED";
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, attrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, attrs, CancellationToken.None);
 
         string cancelled = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("FindSongCancelled", "it-IT");
         Assert.Equal(cancelled, TestHelpers.GetSpeechText(response));
@@ -356,7 +345,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         SetupJellyfinUser();
         SetupArtistSearch(artistId, "Basta");
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
         var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
         {
@@ -365,7 +354,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         request.Locale = "it-IT";
         request.DialogState = "STARTED";
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, null, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, null, CancellationToken.None);
 
         string cancelled = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("FindSongCancelled", "it-IT");
         Assert.NotEqual(cancelled, TestHelpers.GetSpeechText(response));
@@ -384,14 +373,14 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // ("trova la canzone stop") must still run the normal flow, not cancel.
         SetupJellyfinUser();
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
         var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
         {
             ["titleKeywords"] = "stop"
         });
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, null, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, null, CancellationToken.None);
 
         // Normal first-invocation flow: keywords collected, artist elicited, no cancel.
         Assert.False(response.Response.ShouldEndSession);
@@ -411,7 +400,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // cancel signal or the hijack survives through this routing regime.
         SetupJellyfinUser();
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
         var attrs = new Dictionary<string, object>
         {
             ["FindSongSessionData"] = JsonConvert.SerializeObject(new FindSongSessionData
@@ -423,7 +412,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
         var request = CreateIntentRequest("AMAZON.StopIntent");
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, attrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, attrs, CancellationToken.None);
 
         Assert.True(response.Response.ShouldEndSession != false, "force-routed StopIntent during open flow must end the session");
         var speech = (response.Response.OutputSpeech as PlainTextOutputSpeech)?.Text ?? string.Empty;
@@ -435,14 +424,14 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
     {
         SetupJellyfinUser();
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
         var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
         {
             ["titleKeywords"] = "comfortably numb"
         });
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, null, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, null, CancellationToken.None);
 
         // Should prompt for artist
         Assert.False(response.Response.ShouldEndSession);
@@ -459,11 +448,11 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
     {
         SetupJellyfinUser();
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
         var request = CreateIntentRequest("FindSongIntent");
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, null, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, null, CancellationToken.None);
 
         // Should prompt for keywords
         Assert.False(response.Response.ShouldEndSession);
@@ -484,14 +473,14 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // so a regression here would only surface on-device as a broken multi-turn flow.
         SetupJellyfinUser();
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
         var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
         {
             ["titleKeywords"] = string.Empty
         });
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, null, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, null, CancellationToken.None);
 
         // The elicit is a multi-turn capture: the session must stay open.
         Assert.False(response.Response.ShouldEndSession);
@@ -530,7 +519,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         SetupJellyfinUser();
         SetupArtistSearch(Guid.NewGuid(), "Pink Floyd");
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
         var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
         {
@@ -538,7 +527,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
             ["titleKeywords"] = "wish you were here"
         });
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, null, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, null, CancellationToken.None);
 
         // Musician slot is prioritized → AwaitingKeywords
         Assert.False(response.Response.ShouldEndSession);
@@ -557,7 +546,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
     {
         SetupJellyfinUser();
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
         // Set up existing session data in AwaitingKeywords state with artist
         var existingData = new FindSongSessionData
@@ -573,7 +562,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
             ["titleKeywords"] = "the a an of"
         });
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, sessionAttrs, CancellationToken.None);
 
         Assert.False(response.Response.ShouldEndSession);
         string speech = TestHelpers.GetSpeechText(response);
@@ -591,7 +580,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         SetupSongSearch(new List<BaseItem> { CreateAudioItem(songId, "Wish You Were Here") });
 
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
         var existingData = new FindSongSessionData
         {
@@ -606,7 +595,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
             ["titleKeywords"] = "wish you were here"
         });
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, sessionAttrs, CancellationToken.None);
 
         // Single match → auto-play with ShouldEndSession=true
         Assert.True(response.Response.ShouldEndSession);
@@ -626,7 +615,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
         // Live repro shape: NameContains pre-filter misses ("street" not a substring of
         // "Decatur St."), but the artist HAS the song.
-        _libraryManagerMock.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 bool isAudioByArtist = q.ArtistIds != null && q.ArtistIds.Length > 0
@@ -645,7 +634,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
             });
 
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
         var existingData = new FindSongSessionData
         {
             State = FindSongState.AwaitingKeywords,
@@ -659,7 +648,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
             ["titleKeywords"] = "street"
         });
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, sessionAttrs, CancellationToken.None);
 
         // Single match found via the unfiltered retry + abbreviation canonicalization:
         // auto-plays (ShouldEndSession=true) instead of "Non ho trovato nulla".
@@ -676,7 +665,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         var artistId = Guid.NewGuid();
         SetupJellyfinUser();
 
-        _libraryManagerMock.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 bool isAudioByArtist = q.ArtistIds != null && q.ArtistIds.Length > 0
@@ -690,7 +679,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
             });
 
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
         var existingData = new FindSongSessionData
         {
             State = FindSongState.AwaitingKeywords,
@@ -704,7 +693,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
             ["titleKeywords"] = "cater street"
         });
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, sessionAttrs, CancellationToken.None);
 
         // Found via the phonetic stage: auto-plays instead of "Non ho trovato nulla".
         Assert.True(response.Response.ShouldEndSession);
@@ -718,7 +707,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         var artistId = Guid.NewGuid();
         SetupJellyfinUser();
 
-        _libraryManagerMock.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 bool isAudioByArtist = q.ArtistIds != null && q.ArtistIds.Length > 0
@@ -732,7 +721,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
             });
 
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
         var existingData = new FindSongSessionData
         {
             State = FindSongState.AwaitingKeywords,
@@ -746,7 +735,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
             ["titleKeywords"] = "xyzzyfoo"
         });
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, sessionAttrs, CancellationToken.None);
 
         // Not found: no AudioPlayer directive.
         Assert.True(response.Response?.Directives == null || response.Response.Directives.All(d => d.Type != "AudioPlayer.Play"));
@@ -761,7 +750,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         SetupArtistSearchEmpty();
 
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
         var existingData = new FindSongSessionData
         {
@@ -775,7 +764,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
             ["musician"] = "xyzzyfoo nonexistent"
         });
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, sessionAttrs, CancellationToken.None);
 
         Assert.False(response.Response.ShouldEndSession);
         string speech = TestHelpers.GetSpeechText(response);
@@ -798,7 +787,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         SetupSongSearch(new List<BaseItem> { CreateAudioItem(songId, "Comfortably Numb") });
 
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
         var existingData = new FindSongSessionData
         {
@@ -812,7 +801,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
             ["musician"] = "Pink Floyd"
         });
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, sessionAttrs, CancellationToken.None);
 
         // Should have found the song and auto-played
         Assert.True(response.Response.ShouldEndSession);
@@ -830,7 +819,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         SetupSongSearch(new List<BaseItem>());
 
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
         var existingData = new FindSongSessionData
         {
@@ -845,7 +834,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
             ["titleKeywords"] = "nonexistent song"
         });
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, sessionAttrs, CancellationToken.None);
 
         Assert.False(response.Response.ShouldEndSession);
         string speech = TestHelpers.GetSpeechText(response);
@@ -865,7 +854,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         var song = CreateAudioItem(Guid.NewGuid(), "So What");
 
         SetupJellyfinUser();
-        _libraryManagerMock.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 bool isArtist = q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist);
@@ -885,7 +874,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
             });
 
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
         var existingData = new FindSongSessionData { State = FindSongState.AwaitingKeywords };
         var sessionAttrs = BuildSessionAttributes(existingData);
         var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
@@ -893,7 +882,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
             ["titleKeywords"] = "miles davis"
         });
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, sessionAttrs, CancellationToken.None);
 
         // Cross-media fallback played the artist, not a re-prompt.
         Assert.True(response.Response?.Directives?.Any(d => d.Type == "AudioPlayer.Play") == true);
@@ -916,7 +905,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         SetupSongSearch(songs);
 
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
         var existingData = new FindSongSessionData
         {
@@ -931,7 +920,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
             ["titleKeywords"] = "hey"
         });
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, sessionAttrs, CancellationToken.None);
 
         // Disambiguation → ShouldEndSession=false
         Assert.False(response.Response.ShouldEndSession);
@@ -962,7 +951,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         SetupSongSearch(new List<BaseItem> { first, second });
 
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
         var sessionAttrs = BuildSessionAttributes(new FindSongSessionData
         {
             State = FindSongState.AwaitingKeywords,
@@ -975,7 +964,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
             ["titleKeywords"] = "hey jude"
         });
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, sessionAttrs, CancellationToken.None);
 
         // Prompt, not silent auto-play: the session stays open in Disambiguating with
         // ONE candidate and no playback starts.
@@ -1003,7 +992,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         SetupSongSearch(new List<BaseItem> { CreateAudioItem(Guid.NewGuid(), "Hey Jude") });
 
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
         var sessionAttrs = BuildSessionAttributes(new FindSongSessionData
         {
             State = FindSongState.AwaitingKeywords,
@@ -1016,7 +1005,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
             ["titleKeywords"] = "hey jude"
         });
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, sessionAttrs, CancellationToken.None);
 
         Assert.True(response.Response?.Directives?.Any(d => d.Type == "AudioPlayer.Play") == true,
             "a true single candidate must auto-play");
@@ -1032,10 +1021,10 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         var songId = Guid.NewGuid();
         var song = CreateAudioItem(songId, "Hey Jude");
         SetupJellyfinUser();
-        _libraryManagerMock.Setup(lm => lm.GetItemById(songId)).Returns(song);
+        _fx.LibraryManager.Setup(lm => lm.GetItemById(songId)).Returns(song);
 
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
         var existingData = new FindSongSessionData
         {
@@ -1053,7 +1042,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
             ["titleKeywords"] = "1"
         });
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, sessionAttrs, CancellationToken.None);
 
         // Playback → ShouldEndSession=true
         Assert.True(response.Response.ShouldEndSession);
@@ -1065,10 +1054,10 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         var songId = Guid.NewGuid();
         var song = CreateAudioItem(songId, "Hey There");
         SetupJellyfinUser();
-        _libraryManagerMock.Setup(lm => lm.GetItemById(songId)).Returns(song);
+        _fx.LibraryManager.Setup(lm => lm.GetItemById(songId)).Returns(song);
 
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
         var existingData = new FindSongSessionData
         {
@@ -1086,7 +1075,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
             ["titleKeywords"] = "two"
         });
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, sessionAttrs, CancellationToken.None);
 
         // Playback → ShouldEndSession=true
         Assert.True(response.Response.ShouldEndSession);
@@ -1098,10 +1087,10 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         var songId = Guid.NewGuid();
         var song = CreateAudioItem(songId, "Hey Jude");
         SetupJellyfinUser();
-        _libraryManagerMock.Setup(lm => lm.GetItemById(songId)).Returns(song);
+        _fx.LibraryManager.Setup(lm => lm.GetItemById(songId)).Returns(song);
 
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
         var existingData = new FindSongSessionData
         {
@@ -1119,7 +1108,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
             ["titleKeywords"] = "jude"
         });
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, sessionAttrs, CancellationToken.None);
 
         // Playback → ShouldEndSession=true
         Assert.True(response.Response.ShouldEndSession);
@@ -1130,7 +1119,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
     {
         SetupJellyfinUser();
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
         var existingData = new FindSongSessionData
         {
@@ -1148,7 +1137,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
             ["titleKeywords"] = "something completely different"
         });
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, sessionAttrs, CancellationToken.None);
 
         // Invalid pick → ShouldEndSession=false, keep Disambiguating state
         Assert.False(response.Response.ShouldEndSession);
@@ -1165,7 +1154,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
     {
         SetupJellyfinUser();
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
         var existingData = new FindSongSessionData
         {
@@ -1179,7 +1168,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
         var request = CreateIntentRequest("FindSongIntent");
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, sessionAttrs, CancellationToken.None);
 
         Assert.False(response.Response.ShouldEndSession);
         string speech = TestHelpers.GetSpeechText(response);
@@ -1384,7 +1373,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         SetupSongSearch(new List<BaseItem> { CreateAudioItem(songId, "Family") });
 
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
         var existingData = new FindSongSessionData
         {
@@ -1400,7 +1389,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
             ["showMoreSlot"] = "family"
         });
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, sessionAttrs, CancellationToken.None);
 
         // Should have found the song and auto-played (single match)
         Assert.True(response.Response.ShouldEndSession);
@@ -1412,7 +1401,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // ShowMoreIntent with no slots at all — can't extract keywords
         SetupJellyfinUser();
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
         var existingData = new FindSongSessionData
         {
@@ -1424,7 +1413,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // ShowMoreIntent with no slots
         var request = CreateIntentRequest("ShowMoreIntent");
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, sessionAttrs, CancellationToken.None);
 
         // Can't extract keywords → should re-prompt
         Assert.False(response.Response.ShouldEndSession);
@@ -1449,7 +1438,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         SetupSongSearch(new List<BaseItem> { CreateAudioItem(songId, "Family") });
 
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
         var existingData = new FindSongSessionData
         {
@@ -1465,7 +1454,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
             ["browse_category"] = "family"
         });
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, sessionAttrs, CancellationToken.None);
 
         // Should have found the song and auto-played
         Assert.True(response.Response.ShouldEndSession);
@@ -1483,7 +1472,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         SetupSongSearch(new List<BaseItem> { CreateAudioItem(songId, "Family") });
 
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
         var existingData = new FindSongSessionData
         {
@@ -1497,7 +1486,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
             ["someSlot"] = "Beirut"
         });
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, sessionAttrs, CancellationToken.None);
 
         // Should have found the artist and song, then auto-played
         Assert.True(response.Response.ShouldEndSession);
@@ -1546,7 +1535,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         SetupSongSearch(songs);
 
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
         // No artist, only keywords
         var existingData = new FindSongSessionData
@@ -1561,7 +1550,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
             ["titleKeywords"] = "love"
         });
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, sessionAttrs, CancellationToken.None);
 
         // Too many results → ask for artist
         Assert.False(response.Response.ShouldEndSession);
@@ -1594,18 +1583,14 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         };
     }
 
-    private static Context CreateContext() => TestHelpers.CreateTestContext();
-
-    private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
-
     private Entities.User CreateTestUser() => TestHelpers.CreateTestUser(_userId);
 
     private void SetupJellyfinUser()
     {
         var jellyfinUser = new JellyfinUser("testuser", "test", "test") { Id = _userId };
-        _userManagerMock.Setup(um => um.GetUserById(_userId)).Returns(jellyfinUser);
+        _fx.UserManager.Setup(um => um.GetUserById(_userId)).Returns(jellyfinUser);
         // Also handle any Guid for ResolveJellyfinUser
-        _userManagerMock.Setup(um => um.GetUserById(It.IsAny<Guid>())).Returns(jellyfinUser);
+        _fx.UserManager.Setup(um => um.GetUserById(It.IsAny<Guid>())).Returns(jellyfinUser);
     }
 
     private void SetupArtistSearch(Guid artistId, string artistName)
@@ -1614,14 +1599,14 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         typeof(BaseItem).GetProperty("Id")!.SetValue(artist, artistId);
         typeof(BaseItem).GetProperty("Name")!.SetValue(artist, artistName);
 
-        _libraryManagerMock
+        _fx.LibraryManager
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { artist }.AsReadOnly());
     }
 
     private void SetupArtistSearchEmpty()
     {
-        _libraryManagerMock
+        _fx.LibraryManager
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>().AsReadOnly());
     }
@@ -1631,7 +1616,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // First call returns artists, subsequent calls return songs.
         // We use a call counter to differentiate.
         int callCount = 0;
-        _libraryManagerMock
+        _fx.LibraryManager
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(() =>
             {
@@ -1644,7 +1629,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         foreach (var song in songs)
         {
             var id = song.Id;
-            _libraryManagerMock.Setup(lm => lm.GetItemById(id)).Returns(song);
+            _fx.LibraryManager.Setup(lm => lm.GetItemById(id)).Returns(song);
         }
     }
 
@@ -1702,14 +1687,14 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
     private async Task<SkillResponse> DisambiguateWithInput(string input, string locale = "en-US")
     {
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
         var attrs = DisambiguatingAttrs(CreateTestCandidates(3));
         var request = CreateIntentRequest("AMAZON.FallbackIntent", new Dictionary<string, string?>
         {
             ["titleKeywords"] = input
         });
         request.Locale = locale;
-        return await _handler.HandleAsync(request, CreateContext(), user, session, attrs, CancellationToken.None);
+        return await _handler.HandleAsync(request, _fx.CreateContext(), user, session, attrs, CancellationToken.None);
     }
 
     [Theory]
@@ -1740,7 +1725,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
     public async Task Disambiguating_SingleTokenNo_ExitsEvenWhenTitleContainsIt()
     {
         var user = CreateTestUser();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
         var candidates = new List<FindSongCandidate>
         {
             new(Guid.NewGuid(), "No Surprises", null, 95),
@@ -1753,7 +1738,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         });
         request.Locale = "en-US";
 
-        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, attrs, CancellationToken.None);
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, attrs, CancellationToken.None);
 
         Assert.True(response.Response.ShouldEndSession);
         string abandoned = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("FindSongDisambigAbandoned", "en-US");

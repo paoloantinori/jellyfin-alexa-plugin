@@ -32,33 +32,17 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
 {
-    private readonly Mock<ISessionManager> _sessionManagerMock;
-    private readonly Mock<ILibraryManager> _libraryManagerMock;
-    private readonly Mock<IUserManager> _userManagerMock;
-    private readonly Mock<IUserDataManager> _userDataManagerMock;
-    private readonly PluginConfiguration _config;
-    private readonly ILoggerFactory _loggerFactory;
-
-    public PlaySongGenericMusicWordFallbackTests()
-    {
-        _sessionManagerMock = new Mock<ISessionManager>();
-        _libraryManagerMock = new Mock<ILibraryManager>();
-        _userManagerMock = new Mock<IUserManager>();
-        _userDataManagerMock = new Mock<IUserDataManager>();
-        _config = new PluginConfiguration();
-        TestHelpers.SetServerAddress(_config, "https://test.example.com");
-        _loggerFactory = LoggerFactory.Create(b => { });
-    }
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture();
 
     private PlaySongIntentHandler CreateHandler()
     {
         return new PlaySongIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
     }
 
     private static IntentRequest CreateIntentWithBothSlots(string song, string musician)
@@ -72,16 +56,6 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
         return new IntentRequest { Intent = intent, Locale = "it-IT", RequestId = "test-req" };
     }
 
-    private static Context CreateContext() => TestHelpers.CreateTestContext();
-    private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
-    private static Entities.User CreateUser() => TestHelpers.CreateTestUser();
-
-    private void SetupUserMock()
-    {
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
-    }
-
     [Fact]
     public async Task GenericMusicWord_Musica_FallsBackToArtistSongs()
     {
@@ -89,11 +63,11 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
         var song1 = new Audio { Name = "Don't Know Why", Id = Guid.NewGuid() };
         var song2 = new Audio { Name = "Come Away With Me", Id = Guid.NewGuid() };
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         // Track queries in order: artist search → song search → artist songs fallback
         var queries = new List<InternalItemsQuery>();
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Callback<InternalItemsQuery>(q => queries.Add(q))
             .Returns<InternalItemsQuery>(q =>
             {
@@ -114,9 +88,9 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
 
         var handler = CreateHandler();
         var request = CreateIntentWithBothSlots("musica", "norah jones");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -136,9 +110,9 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
         var artistId = Guid.NewGuid();
         var song = new Audio { Name = "Yesterday", Id = Guid.NewGuid() };
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
@@ -156,9 +130,9 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
         var handler = CreateHandler();
         var request = CreateIntentWithBothSlots("music", "beatles");
         request.Locale = "en-US";
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -172,9 +146,9 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
     public async Task NonGenericSongWord_DoesNotFallback_ReturnsNotFound()
     {
         var artistId = Guid.NewGuid();
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
@@ -186,9 +160,9 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
 
         var handler = CreateHandler();
         var request = CreateIntentWithBothSlots("sunrise", "norah jones");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -202,16 +176,16 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
     [Fact]
     public async Task GenericMusicWord_NoArtistFound_ReturnsNotFoundByArtist()
     {
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
 
         var handler = CreateHandler();
         var request = CreateIntentWithBothSlots("musica", "unknown artist");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -224,9 +198,9 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
     public async Task GenericMusicWord_NoArtistSongs_ReturnsNoSongsForArtist()
     {
         var artistId = Guid.NewGuid();
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
@@ -238,9 +212,9 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
 
         var handler = CreateHandler();
         var request = CreateIntentWithBothSlots("musica", "norah jones");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -333,9 +307,9 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
             songs.Add(new Audio { Name = $"Song {i}", Id = Guid.NewGuid() });
         }
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
@@ -352,9 +326,9 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
 
         var handler = CreateHandler();
         var request = CreateIntentWithBothSlots("musica", "norah jones");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 

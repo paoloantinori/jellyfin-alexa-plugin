@@ -32,44 +32,28 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class CrossMediaTypeFallbackTests : PluginTestBase
 {
-    private readonly Mock<ISessionManager> _sessionManagerMock;
-    private readonly Mock<ILibraryManager> _libraryManagerMock;
-    private readonly Mock<IUserManager> _userManagerMock;
-    private readonly Mock<IUserDataManager> _userDataManagerMock;
-    private readonly PluginConfiguration _config;
-    private readonly ILoggerFactory _loggerFactory;
-
-    public CrossMediaTypeFallbackTests()
-    {
-        _sessionManagerMock = new Mock<ISessionManager>();
-        _libraryManagerMock = new Mock<ILibraryManager>();
-        _userManagerMock = new Mock<IUserManager>();
-        _userDataManagerMock = new Mock<IUserDataManager>();
-        _config = new PluginConfiguration();
-        TestHelpers.SetServerAddress(_config, "https://test.example.com");
-        _loggerFactory = LoggerFactory.Create(b => { });
-    }
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture();
 
     private PlaySongIntentHandler CreateSongHandler()
     {
         return new PlaySongIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
     }
 
     private PlayAlbumIntentHandler CreateAlbumHandler(IArtistIndex? artistIndex = null)
     {
         return new PlayAlbumIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory,
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory,
             artistIndex: artistIndex);
     }
 
@@ -101,16 +85,6 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         return new IntentRequest { Intent = intent, Locale = locale, RequestId = "test-req" };
     }
 
-    private static Context CreateContext() => TestHelpers.CreateTestContext();
-    private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
-    private static Entities.User CreateUser() => TestHelpers.CreateTestUser();
-
-    private void SetupUserMock()
-    {
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
-    }
-
     // ============================================================
     // PlaySongIntentHandler cross-media-type fallback tests
     // ============================================================
@@ -122,9 +96,9 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         var song1 = new Audio { Name = "Last Nite", Id = Guid.NewGuid() };
         var song2 = new Audio { Name = "Someday", Id = Guid.NewGuid() };
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 // Song search: returns empty (no song titled "the strokes")
@@ -144,9 +118,9 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
 
         var handler = CreateSongHandler();
         var request = CreateSongIntent("the strokes"); // no musician slot
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -167,16 +141,16 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
     [Fact]
     public async Task PlaySong_NoSongs_NoMusician_NoArtist_ReturnsNotFound()
     {
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
 
         var handler = CreateSongHandler();
         var request = CreateSongIntent("xyzzyfoo"); // no musician slot
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -194,9 +168,9 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         // artist "Lamb" at score 75. A clean "song not found" is better than a
         // wrong artist. Even though the mock returns a plausible artist, the
         // word-count gate must short-circuit before the artist search.
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 // Song search: empty (no such song)
@@ -213,9 +187,9 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
 
         var handler = CreateSongHandler();
         var request = CreateSongIntent("la ballata del genesio"); // 4 words, no musician slot
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -233,10 +207,10 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
     {
         // Companion to the above: verify the word-count gate skips the artist
         // DB query entirely (no MusicArtist query should be issued).
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         bool artistQueryIssued = false;
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))
@@ -254,9 +228,9 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         var handler = CreateSongHandler();
         // 3 words — above the 2-word gate
         var request = CreateSongIntent("ballata del genesio");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -274,9 +248,9 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         var artistId = Guid.NewGuid();
         var song1 = new Audio { Name = "Last Nite", Id = Guid.NewGuid() };
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 // Song search: empty
@@ -296,9 +270,9 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
 
         var handler = CreateSongHandler();
         var request = CreateSongIntent("strokes"); // single word, no musician slot
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -315,9 +289,9 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
     public async Task PlaySong_SongsFound_NoFallbackTriggered()
     {
         var songId = Guid.NewGuid();
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 // Song search: returns a match
@@ -329,9 +303,9 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
 
         var handler = CreateSongHandler();
         var request = CreateSongIntent("reptilia"); // no musician slot
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -352,10 +326,10 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
     {
         // When musician slot IS filled, the cross-media-type fallback should NOT trigger
         // because the user explicitly specified "play song X by artist Y".
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var artistId = Guid.NewGuid();
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 // Artist search for musician slot
@@ -371,9 +345,9 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
 
         var handler = CreateSongHandler();
         var request = CreateSongIntent("unknown song", "the strokes"); // musician slot is filled
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -387,9 +361,9 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
     public async Task PlaySong_NoSongs_ArtistFound_ButNoArtistSongs_ReturnsNoSongsForArtist()
     {
         var artistId = Guid.NewGuid();
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 // Song search: empty
@@ -409,9 +383,9 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
 
         var handler = CreateSongHandler();
         var request = CreateSongIntent("empty artist");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -432,9 +406,9 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         var song1 = new Audio { Name = "Is This It", Id = Guid.NewGuid() };
         var song2 = new Audio { Name = "The Modern Age", Id = Guid.NewGuid() };
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 // Album search: returns empty
@@ -454,9 +428,9 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
 
         var handler = CreateAlbumHandler();
         var request = CreateAlbumIntent("the strokes"); // no musician slot
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -477,16 +451,16 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
     [Fact]
     public async Task PlayAlbum_NoAlbums_NoMusician_NoArtist_ReturnsNotFound()
     {
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
 
         var handler = CreateAlbumHandler();
         var request = CreateAlbumIntent("xyzzyfoo");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -503,9 +477,9 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         // does NOT contain the "FoundArtistInstead" announcement.
         var albumId = Guid.NewGuid();
         var trackId = Guid.NewGuid();
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 // Album search: returns a match
@@ -521,15 +495,15 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
 
         // The handler uses SafeGetItemsResult for album tracks which calls GetItemsResult internally.
         // Mock it to return a single track.
-        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
             .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>(
                 new List<BaseItem> { new Audio { Name = "Is This It", Id = trackId } }));
 
         var handler = CreateAlbumHandler();
         var request = CreateAlbumIntent("is this it");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -547,10 +521,10 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
     public async Task PlayAlbum_NoAlbums_WithMusicianSlot_NoFallback()
     {
         // When musician slot IS filled, cross-media-type fallback should NOT trigger
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var artistId = Guid.NewGuid();
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 // Artist search for musician slot
@@ -566,9 +540,9 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
 
         var handler = CreateAlbumHandler();
         var request = CreateAlbumIntent("unknown album", "the strokes"); // musician slot is filled
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -586,9 +560,9 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         // AND speaks the matched album name so voice-only devices know what's playing.
         var albumId = Guid.NewGuid();
         var trackId = Guid.NewGuid();
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 bool isAlbumQuery = q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum);
@@ -614,15 +588,15 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
                 return new List<BaseItem>();
             });
 
-        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
             .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>(
                 new List<BaseItem> { new Audio { Name = "Deep in It", Id = trackId } }));
 
         var handler = CreateAlbumHandler();
         var request = CreateAlbumIntent("jazz caffè"); // accent variant → exact miss, fuzzy hit
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -651,8 +625,8 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
     /// </summary>
     private void SetupSongMissArtistSubStrict(string query, string artistName, Guid artistId, params Audio[] artistSongs)
     {
-        SetupUserMock();
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.SetupUserMock();
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 // Song search: empty (no such song)
@@ -678,8 +652,8 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
     /// </summary>
     private void SetupAlbumMissArtistSubStrict(string query, string artistName, Guid artistId, params Audio[] artistSongs)
     {
-        SetupUserMock();
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.SetupUserMock();
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 // Album search: empty (no such album)
@@ -704,10 +678,10 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
     /// </summary>
     private Task<SkillResponse> DeclineOfferAsync(SkillResponse offer)
     {
-        var noHandler = new NoIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+        var noHandler = new NoIntentHandler(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory);
         var noRequest = new IntentRequest { Intent = new Intent { Name = IntentNames.AmazonNo }, Locale = "en-US", RequestId = "no-req" };
         return noHandler.HandleAsync(
-            noRequest, CreateContext(), CreateUser(), CreateSession(), offer.SessionAttributes, CancellationToken.None);
+            noRequest, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), offer.SessionAttributes, CancellationToken.None);
     }
 
     [Fact]
@@ -717,11 +691,11 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         var song = new Audio { Name = "The Idiot Kings", Id = Guid.NewGuid() };
         SetupSongMissArtistSubStrict("soul coffin", "Soul Coughing", artistId, song);
 
-        _config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Confirm;
+        _fx.Config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Confirm;
 
         var handler = CreateSongHandler();
         var response = await handler.HandleAsync(
-            CreateSongIntent("soul coffin"), CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+            CreateSongIntent("soul coffin"), _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         // Confirm mode: Ask (session stays open), no playback yet, carries the artist in disambig state.
         Assert.True(response.Response?.ShouldEndSession != true);
@@ -746,11 +720,11 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         var song = new Audio { Name = "The Idiot Kings", Id = Guid.NewGuid() };
         SetupSongMissArtistSubStrict("soul coffin", "Soul Coughing", artistId, song);
 
-        _config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.AutoServe;
+        _fx.Config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.AutoServe;
 
         var handler = CreateSongHandler();
         var response = await handler.HandleAsync(
-            CreateSongIntent("soul coffin"), CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+            CreateSongIntent("soul coffin"), _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         // AutoServe: plays the artist (audio directive), with FoundArtistInstead announcement.
         Assert.NotNull(response.Response?.Directives);
@@ -766,11 +740,11 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         var song = new Audio { Name = "The Idiot Kings", Id = Guid.NewGuid() };
         SetupSongMissArtistSubStrict("soul coffin", "Soul Coughing", artistId, song);
 
-        _config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Off;
+        _fx.Config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Off;
 
         var handler = CreateSongHandler();
         var response = await handler.HandleAsync(
-            CreateSongIntent("soul coffin"), CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+            CreateSongIntent("soul coffin"), _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         // Off: clean not-found Tell, no offer, no play.
         Assert.True(response.Response?.ShouldEndSession);
@@ -787,11 +761,11 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         var song = new Audio { Name = "The Idiot Kings", Id = Guid.NewGuid() };
         SetupAlbumMissArtistSubStrict("soul coffin", "Soul Coughing", artistId, song);
 
-        _config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Confirm;
+        _fx.Config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Confirm;
 
         var handler = CreateAlbumHandler();
         var response = await handler.HandleAsync(
-            CreateAlbumIntent("soul coffin"), CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+            CreateAlbumIntent("soul coffin"), _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         Assert.True(response.Response?.ShouldEndSession != true);
         Assert.True(response.Response?.Directives == null || response.Response.Directives.Count == 0);
@@ -811,13 +785,13 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         var song = new Audio { Name = "The Idiot Kings", Id = Guid.NewGuid() };
         SetupSongMissArtistSubStrict("soul coffin", "Soul Coughing", artistId, song);
 
-        _config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Off;
-        var user = CreateUser();
+        _fx.Config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Off;
+        var user = _fx.CreateUser();
         user.CrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Confirm;
 
         var handler = CreateSongHandler();
         var response = await handler.HandleAsync(
-            CreateSongIntent("soul coffin"), CreateContext(), user, CreateSession(), CancellationToken.None);
+            CreateSongIntent("soul coffin"), _fx.CreateContext(), user, _fx.CreateSession(), CancellationToken.None);
 
         Assert.True(response.Response?.ShouldEndSession != true);
         Assert.Contains("Soul Coughing", TestHelpers.GetSpeechText(response));
@@ -832,11 +806,11 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         var song = new Audio { Name = "The Idiot Kings", Id = Guid.NewGuid() };
         SetupSongMissArtistSubStrict("soul coffin", "Soul Coughing", artistId, song);
 
-        _config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Confirm;
+        _fx.Config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Confirm;
 
         var handler = CreateSongHandler();
         var offer = await handler.HandleAsync(
-            CreateSongIntent("soul coffin"), CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+            CreateSongIntent("soul coffin"), _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         // Simulate the user's "no": feed the offer's session attributes into NoIntentHandler.
         var noResponse = await DeclineOfferAsync(offer);
@@ -862,11 +836,11 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         var song = new Audio { Name = "The Idiot Kings", Id = Guid.NewGuid() };
         SetupAlbumMissArtistSubStrict("soul coffin", "Soul Coughing", artistId, song);
 
-        _config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Confirm;
+        _fx.Config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Confirm;
 
         var handler = CreateAlbumHandler();
         var offer = await handler.HandleAsync(
-            CreateAlbumIntent("soul coffin"), CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+            CreateAlbumIntent("soul coffin"), _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         // Precondition: the album offer carries the decline keys (asserted directly in
         // JF363_PlayAlbum_SubStrict_Confirm_OffersArtistAsk).
@@ -891,8 +865,8 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         // (word-count gate), so no spurious offer on long song titles.
         var artistId = Guid.NewGuid();
         var song = new Audio { Name = "The Idiot Kings", Id = Guid.NewGuid() };
-        SetupUserMock();
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.SetupUserMock();
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))
@@ -904,11 +878,11 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
                 return new List<BaseItem>();
             });
 
-        _config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Confirm;
+        _fx.Config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Confirm;
 
         var handler = CreateSongHandler();
         var response = await handler.HandleAsync(
-            CreateSongIntent("la ballata del genesio"), CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+            CreateSongIntent("la ballata del genesio"), _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         // 4-word query: word-count gate fires before any offer; clean not-found, no disambig state.
         Assert.True(response.Response?.ShouldEndSession);
@@ -936,9 +910,9 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         var song1 = new Audio { Name = "Wish You Were Here", Id = Guid.NewGuid() };
         var song2 = new Audio { Name = "Time", Id = Guid.NewGuid() };
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 // Every album query (exact search and fuzzy full-catalog scan): miss
@@ -966,10 +940,10 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         // Mid-dialog shape: the answer to the elicit arrives with dialogState IN_PROGRESS.
         var request = CreateAlbumIntent("di pink floyd", locale: "it-IT");
         request.DialogState = "IN_PROGRESS";
-        var context = CreateContext();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var session = _fx.CreateSession();
 
-        SkillResponse response = await handler.HandleAsync(request, context, CreateUser(), session, CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, context, _fx.CreateUser(), session, CancellationToken.None);
 
         // The artist's music plays (not NotFoundAlbumByName)
         Assert.NotNull(response.Response?.Directives);
@@ -987,10 +961,10 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         // "la ballata del grande koop" tokenizes to [ballata, grande, koop] = 3 tokens,
         // so the artist fallback is skipped entirely (no artist query issued) and the
         // clean album not-found is returned.
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         bool artistQueryIssued = false;
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
@@ -1004,9 +978,9 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
 
         var handler = CreateAlbumHandler();
         var request = CreateAlbumIntent("la ballata del grande koop", locale: "it-IT");
-        var context = CreateContext();
+        var context = _fx.CreateContext();
 
-        SkillResponse response = await handler.HandleAsync(request, context, CreateUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, context, _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         Assert.False(artistQueryIssued, "the tokenized word-count gate must skip the artist search for a >2-content-word answer");
         Assert.True(response.Response?.Directives == null || response.Response.Directives.Count == 0);
@@ -1022,9 +996,9 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         var artistId = Guid.NewGuid();
         var song1 = new Audio { Name = "Waltz for Koop", Id = Guid.NewGuid() };
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 // Song search (SearchTerm): miss
@@ -1050,9 +1024,9 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
 
         var handler = CreateSongHandler();
         var request = CreateSongIntent("di koop", locale: "it-IT");
-        var context = CreateContext();
+        var context = _fx.CreateContext();
 
-        SkillResponse response = await handler.HandleAsync(request, context, CreateUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, context, _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response.Response?.Directives);
         Assert.NotEmpty(response.Response.Directives);
@@ -1071,7 +1045,7 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         var artistId = Guid.NewGuid();
         var song1 = new Audio { Name = "Waltz for Koop", Id = Guid.NewGuid() };
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var koop = new MusicArtist { Name = "Koop", Id = artistId };
         var codes = DoubleMetaphone.Encode("Koop");
@@ -1079,7 +1053,7 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
             new[] { koop },
             new Dictionary<Guid, (string Primary, string? Alternate)> { [artistId] = codes });
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
@@ -1097,9 +1071,9 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
 
         var handler = CreateAlbumHandler(index);
         var request = CreateAlbumIntent("cup"); // 3 chars: below MinFuzzyAlbumQueryLength, no album fuzzy scan
-        var context = CreateContext();
+        var context = _fx.CreateContext();
 
-        SkillResponse response = await handler.HandleAsync(request, context, CreateUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, context, _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response.Response?.Directives);
         Assert.NotEmpty(response.Response.Directives);
@@ -1126,12 +1100,12 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         var song = new Audio { Name = "Highway to Hell", Id = Guid.NewGuid() };
         SetupSongMissArtistSubStrict("ac dc", "AC/DC", artistId, song);
 
-        _config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Confirm;
+        _fx.Config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Confirm;
 
         var handler = CreateSongHandler();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
         var response = await handler.HandleAsync(
-            CreateSongIntent("ac dc"), CreateContext(), CreateUser(), session, CancellationToken.None);
+            CreateSongIntent("ac dc"), _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
 
         // The band's Confirm offer, NOT the valve's auto-play: session stays open,
         // no playback directive, the artist is offered for yes/no.
@@ -1156,9 +1130,9 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         // gate rejects and the clean song not-found stands. This pin exists to catch
         // threshold changes: any future lowering of normalThreshold re-opens JF-295
         // and must fail here first.
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 // Song search: empty (no such song)
@@ -1174,10 +1148,10 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
 
         var handler = CreateSongHandler();
         var request = CreateSongIntent("la ballata del genesio", locale: "it-IT");
-        var context = CreateContext();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var session = _fx.CreateSession();
 
-        SkillResponse response = await handler.HandleAsync(request, context, CreateUser(), session, CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, context, _fx.CreateUser(), session, CancellationToken.None);
 
         // Clean "song not found": no playback, no Lamb, empty queue.
         Assert.True(response.Response?.Directives == null || response.Response.Directives.Count == 0);

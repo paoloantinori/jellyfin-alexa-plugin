@@ -28,35 +28,23 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class PlayArtistSongsIntentHandlerTests : PluginTestBase
 {
-    private readonly Mock<ISessionManager> _sessionManagerMock;
-    private readonly Mock<ILibraryManager> _libraryManagerMock;
-    private readonly Mock<IUserManager> _userManagerMock;
-    private readonly Mock<IUserDataManager> _userDataManagerMock;
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture(configure: c => c.AsrCompoundWordFixEnabled = false);
     private readonly Mock<IArtistIndex> _artistIndexMock;
-    private readonly PluginConfiguration _config;
-    private readonly ILoggerFactory _loggerFactory;
 
     public PlayArtistSongsIntentHandlerTests()
     {
-        _sessionManagerMock = new Mock<ISessionManager>();
-        _libraryManagerMock = new Mock<ILibraryManager>();
-        _userManagerMock = new Mock<IUserManager>();
-        _userDataManagerMock = new Mock<IUserDataManager>();
         _artistIndexMock = new Mock<IArtistIndex>();
-        _config = new PluginConfiguration { AsrCompoundWordFixEnabled = false };
-        TestHelpers.SetServerAddress(_config, "https://test.example.com");
-        _loggerFactory = LoggerFactory.Create(b => { });
     }
 
     private PlayArtistSongsIntentHandler CreateHandler(IArtistIndex? artistIndex = null, ISongNgramIndex? songNgramIndex = null)
     {
         return new PlayArtistSongsIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory,
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory,
             artistIndex,
             songNgramIndex);
     }
@@ -74,21 +62,9 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         return new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req" };
     }
 
-    private static Context CreateContext() => TestHelpers.CreateTestContext();
-
-    private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
-
-    private static Entities.User CreateUser() => TestHelpers.CreateTestUser();
-
-    private void SetupUserMock()
-    {
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
-    }
-
     private void SetupSongResult(params Audio[] songs)
     {
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
             .Returns(songs.ToList<BaseItem>());
     }
 
@@ -113,16 +89,16 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(allArtists);
         var beatlesSong = new Audio { Name = "Yesterday", Id = Guid.NewGuid() };
         var eaglesSong = new Audio { Name = "Hotel California", Id = Guid.NewGuid() };
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
             .Returns((InternalItemsQuery q) => q.ArtistIds.Contains(theBeatles.Id)
                 ? new List<BaseItem> { beatlesSong }
                 : new List<BaseItem> { eaglesSong });
 
         var handler = CreateHandler(_artistIndexMock.Object);
         var request = CreateIntentRequest(musician: "beatles live");
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response);
         Assert.True(response.Response.ShouldEndSession, "must auto-play, not prompt");
@@ -151,16 +127,16 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(allArtists);
         var davisSong = new Audio { Name = "So What", Id = Guid.NewGuid() };
         var milesSong = new Audio { Name = "Blue Moods", Id = Guid.NewGuid() };
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
             .Returns((InternalItemsQuery q) => q.ArtistIds.Contains(milesDavis.Id)
                 ? new List<BaseItem> { davisSong }
                 : new List<BaseItem> { milesSong });
 
         var handler = CreateHandler(_artistIndexMock.Object);
         var request = CreateIntentRequest(musician: "miles davis live");
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response);
         Assert.True(response.Response.ShouldEndSession, "must auto-play, not prompt");
@@ -187,16 +163,16 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(allArtists);
         var coughingSong = new Audio { Name = "Sugar Free Jazz", Id = Guid.NewGuid() };
         var soulSong = new Audio { Name = "Soul Song", Id = Guid.NewGuid() };
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
             .Returns((InternalItemsQuery q) => q.ArtistIds.Contains(soulCoughing.Id)
                 ? new List<BaseItem> { coughingSong }
                 : new List<BaseItem> { soulSong });
 
         var handler = CreateHandler(_artistIndexMock.Object);
         var request = CreateIntentRequest(musician: "soul coughin");
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         var play = response.Response.Directives?.FirstOrDefault(d => d.Type == "AudioPlayer.Play");
         Assert.NotNull(play);
@@ -225,9 +201,9 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
 
         var handler = CreateHandler(_artistIndexMock.Object, songIndex);
         var request = CreateIntentRequest(musician: "sugar free jazz");
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response);
         Assert.True(response.Response.ShouldEndSession);
@@ -252,9 +228,9 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         var song = new Audio { Name = "Like a Rolling Stone", Id = Guid.NewGuid() };
         var handler = CreateHandler(_artistIndexMock.Object, new TestHelpers.FakeSongIndex((song, 34))); // phonetic half-coverage score
         var request = CreateIntentRequest(musician: "rolling stones");
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         var speech = TestHelpers.GetSpeechText(response);
         Assert.Contains("rolling stones", speech, StringComparison.OrdinalIgnoreCase); // NotFoundArtist wording
@@ -272,9 +248,9 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
 
         var handler = CreateHandler(_artistIndexMock.Object, new TestHelpers.FakeSongIndex());
         var request = CreateIntentRequest(musician: "blue marble dreams");
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         var speech = TestHelpers.GetSpeechText(response);
         Assert.Contains("blue marble dreams", speech, StringComparison.OrdinalIgnoreCase);
@@ -299,9 +275,9 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
 
         var handler = CreateHandler(_artistIndexMock.Object, warming.Object);
         var request = CreateIntentRequest(musician: "sugar free jazz");
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         var speech = TestHelpers.GetSpeechText(response);
         Assert.Contains("sugar free jazz", speech, StringComparison.OrdinalIgnoreCase); // NotFoundArtist, not SkillWarmingUp
@@ -327,9 +303,9 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
 
         var handler = CreateHandler(_artistIndexMock.Object);
         var request = CreateIntentRequest(musician: "beatles live");
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response);
         Assert.False(response.Response.ShouldEndSession, "ambiguous case must prompt");
@@ -362,16 +338,16 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(allArtists);
         var pinkFloydSong = new Audio { Name = "Comfortably Numb", Id = Guid.NewGuid() };
         var floydSong = new Audio { Name = "Floyd Song", Id = Guid.NewGuid() };
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
             .Returns((InternalItemsQuery q) => q.ArtistIds.Contains(pinkFloyd.Id)
                 ? new List<BaseItem> { pinkFloydSong }
                 : new List<BaseItem> { floydSong });
 
         var handler = CreateHandler(_artistIndexMock.Object);
         var request = CreateIntentRequest(musician: "P!nk floyd");
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response);
         Assert.True(response.Response.ShouldEndSession, "must auto-play, not prompt");
@@ -405,9 +381,9 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
 
         var handler = CreateHandler(_artistIndexMock.Object);
         var request = CreateIntentRequest(musician: "beatles live");
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response);
         Assert.False(response.Response.ShouldEndSession, "phantom-margin case must disambiguate, not auto-select 'Live'");
@@ -445,16 +421,16 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         _artistIndexMock.Setup(i => i.IsReady).Returns(true);
         _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(allArtists);
 
-        SetupUserMock();
+        _fx.SetupUserMock();
         SetupSongResult(
             new Audio { Name = "Yesterday", Id = Guid.NewGuid() },
             new Audio { Name = "Let It Be", Id = Guid.NewGuid() });
 
         var handler = CreateHandler(_artistIndexMock.Object);
         var request = CreateIntentRequest(musician: "Beatles");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -462,7 +438,7 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         Assert.NotNull(response.Response?.Directives);
         // Verify the index was queried, not the DB
         _artistIndexMock.Verify(i => i.GetArtists(It.IsAny<Guid[]?>()), Times.Once);
-        _libraryManagerMock.Verify(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == Jellyfin.Data.Enums.BaseItemKind.MusicArtist))), Times.Never);
+        _fx.LibraryManager.Verify(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == Jellyfin.Data.Enums.BaseItemKind.MusicArtist))), Times.Never);
         Assert.True(response.Response.ShouldEndSession);
     }
 
@@ -479,14 +455,14 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
 
         _artistIndexMock.Setup(i => i.IsReady).Returns(true);
         _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(allArtists);
-        SetupUserMock();
+        _fx.SetupUserMock();
         SetupSongResult(new Audio { Name = "Comfortably Numb", Id = Guid.NewGuid() });
 
         var handler = CreateHandler(_artistIndexMock.Object);
         var request = CreateIntentRequest(musician: "P!nk floyd");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -511,14 +487,14 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
 
         _artistIndexMock.Setup(i => i.IsReady).Returns(true);
         _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(allArtists);
-        SetupUserMock();
+        _fx.SetupUserMock();
         SetupSongResult(new Audio { Name = "Smells Like Teen Spirit", Id = Guid.NewGuid() });
 
         var handler = CreateHandler(_artistIndexMock.Object);
         var request = CreateIntentRequest(musician: "nirvana unplugged");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -542,14 +518,14 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
 
         _artistIndexMock.Setup(i => i.IsReady).Returns(true);
         _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(allArtists);
-        SetupUserMock();
+        _fx.SetupUserMock();
         SetupSongResult(new Audio { Name = "Comfortably Numb", Id = Guid.NewGuid() });
 
         var handler = CreateHandler(_artistIndexMock.Object);
         var request = CreateIntentRequest(musician: "pink floyd");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -576,14 +552,14 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
 
         _artistIndexMock.Setup(i => i.IsReady).Returns(true);
         _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(allArtists);
-        SetupUserMock();
+        _fx.SetupUserMock();
         SetupSongResult(new Audio { Name = "Circles", Id = Guid.NewGuid() });
 
         var handler = CreateHandler(_artistIndexMock.Object);
         var request = CreateIntentRequest(musician: "Soul Coughing");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -607,19 +583,19 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         // index is NULL (no index service configured, e.g. minimal test setups).
         _artistIndexMock.Setup(i => i.IsReady).Returns(false);
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var handler = CreateHandler(_artistIndexMock.Object);
         var request = CreateIntentRequest(musician: "Beatles");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         await Assert.ThrowsAsync<SkillWarmingUpException>(() =>
             handler.HandleAsync(request, context, user, session, CancellationToken.None));
 
         // The throw fires before any search: the DB is never queried
-        _libraryManagerMock.Verify(l => l.GetItemList(It.IsAny<InternalItemsQuery>()), Times.Never);
+        _fx.LibraryManager.Verify(l => l.GetItemList(It.IsAny<InternalItemsQuery>()), Times.Never);
     }
 
     [Fact]
@@ -631,11 +607,11 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         // thousands of items and intermittently NRE inside UserDataManager.GetUserData ->
         // RetryAsync burns the 8s Alexa budget -> INVALID_RESPONSE. IncludeItemTypes filters
         // correctly and returns only the artist's songs.
-        SetupUserMock();
+        _fx.SetupUserMock();
         var artist = new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() };
 
         int callCount = 0;
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(() =>
             {
                 callCount++;
@@ -647,11 +623,11 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         var handler = CreateHandler(artistIndex: null);
         var request = CreateIntentRequest(musician: "Beatles");
 
-        await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+        await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         // The SECOND GetItemList call is the artist-songs query (the first resolves the artist).
         // It must request Audio via IncludeItemTypes, and must NOT rely on MediaTypes alone.
-        _libraryManagerMock.Verify(
+        _fx.LibraryManager.Verify(
             l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
                 q.ArtistIds != null && q.ArtistIds.Length > 0
                 && q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(Jellyfin.Data.Enums.BaseItemKind.Audio))),
@@ -667,13 +643,13 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         // activates the items-by-name bypass. Pins the INLINE DB tiers (the cold-index
         // path this handler keeps, JF-382 duplication) the same way ArtistSearchTests
         // pins the shared implementation.
-        SetupUserMock();
+        _fx.SetupUserMock();
         var libraryId = Guid.NewGuid();
         var user = TestHelpers.CreateTestUser(allowedLibraryIds: new[] { libraryId.ToString() });
         var artist = new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() };
 
         int callCount = 0;
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(() =>
             {
                 callCount++;
@@ -685,9 +661,9 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         var handler = CreateHandler(artistIndex: null); // cold: database path
         var request = CreateIntentRequest(musician: "Beatles");
 
-        await handler.HandleAsync(request, CreateContext(), user, CreateSession(), CancellationToken.None);
+        await handler.HandleAsync(request, _fx.CreateContext(), user, _fx.CreateSession(), CancellationToken.None);
 
-        _libraryManagerMock.Verify(
+        _fx.LibraryManager.Verify(
             l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
                 q.IncludeItemTypes != null
                 && q.IncludeItemTypes.Contains(Jellyfin.Data.Enums.BaseItemKind.MusicArtist)
@@ -703,11 +679,11 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
     {
         // JF-358 perf invariant: the artist-songs query must NOT set MediaTypes=Audio
         // (which returns the full library on Jellyfin 10.11.11). Only IncludeItemTypes filters.
-        SetupUserMock();
+        _fx.SetupUserMock();
         var artist = new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() };
 
         int callCount = 0;
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(() =>
             {
                 callCount++;
@@ -719,10 +695,10 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         var handler = CreateHandler(artistIndex: null);
         var request = CreateIntentRequest(musician: "Beatles");
 
-        await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+        await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         // The artist-songs query (2nd call) must NOT have MediaTypes=Audio set.
-        _libraryManagerMock.Verify(
+        _fx.LibraryManager.Verify(
             l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
                 q.ArtistIds != null && q.ArtistIds.Length > 0
                 && (q.MediaTypes == null || q.MediaTypes.Length == 0))),
@@ -733,11 +709,11 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
     [Fact]
     public async Task HandleAsync_NoArtistIndex_FallsBackToDatabase()
     {
-        SetupUserMock();
+        _fx.SetupUserMock();
         var artist = new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() };
 
         int callCount = 0;
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(() =>
             {
                 callCount++;
@@ -750,14 +726,14 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
 
         var handler = CreateHandler(artistIndex: null);
         var request = CreateIntentRequest(musician: "Beatles");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
         Assert.NotNull(response);
-        _libraryManagerMock.Verify(l => l.GetItemList(It.IsAny<InternalItemsQuery>()), Times.AtLeastOnce);
+        _fx.LibraryManager.Verify(l => l.GetItemList(It.IsAny<InternalItemsQuery>()), Times.AtLeastOnce);
         Assert.True(response.Response.ShouldEndSession);
     }
 
@@ -770,14 +746,14 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         _artistIndexMock.Setup(i => i.IsReady).Returns(true);
         _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(allArtists);
 
-        SetupUserMock();
+        _fx.SetupUserMock();
         SetupSongResult(new Audio { Name = "Screenwriter's Blues", Id = Guid.NewGuid() });
 
         var handler = CreateHandler(_artistIndexMock.Object);
         var request = CreateIntentRequest(musician: "soul coughin"); // misspelling
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -791,9 +767,9 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest();
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -809,13 +785,13 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         _artistIndexMock.Setup(i => i.IsReady).Returns(true);
         _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(new List<BaseItem>());
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var handler = CreateHandler(_artistIndexMock.Object);
         var request = CreateIntentRequest(musician: "Unknown");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -834,15 +810,15 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         _artistIndexMock.Setup(i => i.IsReady).Returns(true);
         _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(allArtists);
 
-        SetupUserMock();
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
+        _fx.SetupUserMock();
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
             .Returns(new List<BaseItem>());
 
         var handler = CreateHandler(_artistIndexMock.Object);
         var request = CreateIntentRequest(musician: "Empty Artist");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -871,16 +847,16 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
 
         var physicalFolder = new Folder { Id = physicalFolderId };
 
-        _libraryManagerMock.Setup(l => l.GetItemById(libraryId))
+        _fx.LibraryManager.Setup(l => l.GetItemById(libraryId))
             .Returns(cf);
-        _libraryManagerMock.Setup(l => l.FindByPath("/data/media/music", true))
+        _fx.LibraryManager.Setup(l => l.FindByPath("/data/media/music", true))
             .Returns(physicalFolder);
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         // No artist found in first 3 tiers, found in 4th tier -- forces all 4 tiers + artist songs query.
         int getItemListCallCount = 0;
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(() =>
             {
                 getItemListCallCount++;
@@ -892,7 +868,7 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
                 return new List<BaseItem>();
             });
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
             .Returns(new List<BaseItem>
             {
                 new Audio { Name = "Test Song", Id = Guid.NewGuid() }
@@ -900,8 +876,8 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
 
         var handler = CreateHandler(artistIndex: null);
         var request = CreateIntentRequest(musician: "xyzzyfoo");
-        var context = CreateContext();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var session = _fx.CreateSession();
 
         // Act
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -913,7 +889,7 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         // GetItemById (used by ResolveTopParentIds) should be called exactly once,
         // not once per query tier. Before the optimization it would be called 5 times
         // (SearchTerm + PrefixFirstWord + PrefixFull + Contains + ArtistSongs).
-        _libraryManagerMock.Verify(
+        _fx.LibraryManager.Verify(
             l => l.GetItemById(libraryId),
             Times.Once,
             "Library filter should be resolved exactly once per request, not once per query tier");
@@ -940,19 +916,19 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         var folder1 = new Folder { Id = Guid.NewGuid() };
         var folder2 = new Folder { Id = Guid.NewGuid() };
 
-        _libraryManagerMock.Setup(l => l.GetItemById(libraryId1)).Returns(cf1);
-        _libraryManagerMock.Setup(l => l.GetItemById(libraryId2)).Returns(cf2);
-        _libraryManagerMock.Setup(l => l.FindByPath("/media/music", true)).Returns(folder1);
-        _libraryManagerMock.Setup(l => l.FindByPath("/media/jazz", true)).Returns(folder2);
+        _fx.LibraryManager.Setup(l => l.GetItemById(libraryId1)).Returns(cf1);
+        _fx.LibraryManager.Setup(l => l.GetItemById(libraryId2)).Returns(cf2);
+        _fx.LibraryManager.Setup(l => l.FindByPath("/media/music", true)).Returns(folder1);
+        _fx.LibraryManager.Setup(l => l.FindByPath("/media/jazz", true)).Returns(folder2);
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         // Return an artist on the first tier
         var artist = new MusicArtist { Name = "Pink Floyd", Id = Guid.NewGuid() };
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { artist });
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
             .Returns(new List<BaseItem>
             {
                 new Audio { Name = "Comfortably Numb", Id = Guid.NewGuid() }
@@ -960,8 +936,8 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
 
         var handler = CreateHandler(artistIndex: null);
         var request = CreateIntentRequest(musician: "Pink Floyd");
-        var context = CreateContext();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var session = _fx.CreateSession();
 
         // Act
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -970,8 +946,8 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         Assert.NotNull(response);
 
         // GetItemById should be called exactly twice (once per library ID), not 2*N per query
-        _libraryManagerMock.Verify(l => l.GetItemById(libraryId1), Times.Once);
-        _libraryManagerMock.Verify(l => l.GetItemById(libraryId2), Times.Once);
+        _fx.LibraryManager.Verify(l => l.GetItemById(libraryId1), Times.Once);
+        _fx.LibraryManager.Verify(l => l.GetItemById(libraryId2), Times.Once);
         Assert.True(response.Response.ShouldEndSession);
     }
 
@@ -988,17 +964,17 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         cf.PhysicalLocationsList = new[] { "/data/media/music" };
         var physicalFolder = new Folder { Id = Guid.NewGuid() };
 
-        _libraryManagerMock.Setup(l => l.GetItemById(libraryId))
+        _fx.LibraryManager.Setup(l => l.GetItemById(libraryId))
             .Returns(cf);
-        _libraryManagerMock.Setup(l => l.FindByPath("/data/media/music", true))
+        _fx.LibraryManager.Setup(l => l.FindByPath("/data/media/music", true))
             .Returns(physicalFolder);
 
         _artistIndexMock.Setup(i => i.IsReady).Returns(true);
         _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>()))
             .Returns(new List<BaseItem> { new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() } });
 
-        SetupUserMock();
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
+        _fx.SetupUserMock();
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
             .Returns(new List<BaseItem>
             {
                 new Audio { Name = "Yesterday", Id = Guid.NewGuid() }
@@ -1006,8 +982,8 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
 
         var handler = CreateHandler(_artistIndexMock.Object);
         var request = CreateIntentRequest(musician: "Beatles");
-        var context = CreateContext();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -1015,7 +991,7 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
 
         // In-memory path resolves the filter once for artist search and reuses it for songs query.
         // GetItemById is called exactly once (for the single pre-resolution).
-        _libraryManagerMock.Verify(
+        _fx.LibraryManager.Verify(
             l => l.GetItemById(libraryId),
             Times.Once,
             "In-memory path should resolve library filter exactly once");
@@ -1025,14 +1001,14 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
     [Fact]
     public async Task HandleAsync_ShuffleArtistSongsOff_BuildsPopularityOrderQueue()
     {
-        _config.ShuffleArtistSongs = false;
+        _fx.Config.ShuffleArtistSongs = false;
 
         var artist = new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() };
         _artistIndexMock.Setup(i => i.IsReady).Returns(true);
         _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>()))
             .Returns(new List<BaseItem> { artist });
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var songs = new[]
         {
@@ -1044,9 +1020,9 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
 
         var handler = CreateHandler(_artistIndexMock.Object);
         var request = CreateIntentRequest(musician: "Beatles");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -1062,14 +1038,14 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
     [Fact]
     public async Task HandleAsync_ShuffleArtistSongsOn_RandomizesQueueOrder()
     {
-        _config.ShuffleArtistSongs = true;
+        _fx.Config.ShuffleArtistSongs = true;
 
         var artist = new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() };
         _artistIndexMock.Setup(i => i.IsReady).Returns(true);
         _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>()))
             .Returns(new List<BaseItem> { artist });
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         // Use enough songs that a shuffle is statistically certain to differ from original order
         var songs = Enumerable.Range(0, 20)
@@ -1079,9 +1055,9 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
 
         var handler = CreateHandler(_artistIndexMock.Object);
         var request = CreateIntentRequest(musician: "Beatles");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 

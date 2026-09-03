@@ -32,44 +32,28 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class LibraryFilterIntegrationTests : PluginTestBase
 {
-    private readonly Mock<ISessionManager> _sessionManagerMock;
-    private readonly Mock<ILibraryManager> _libraryManagerMock;
-    private readonly Mock<IUserManager> _userManagerMock;
-    private readonly Mock<IUserDataManager> _userDataManagerMock;
-    private readonly PluginConfiguration _config;
-    private readonly ILoggerFactory _loggerFactory;
-
-    public LibraryFilterIntegrationTests()
-    {
-        _sessionManagerMock = new Mock<ISessionManager>();
-        _libraryManagerMock = new Mock<ILibraryManager>();
-        _userManagerMock = new Mock<IUserManager>();
-        _userDataManagerMock = new Mock<IUserDataManager>();
-        _config = new PluginConfiguration { AsrCompoundWordFixEnabled = false };
-        TestHelpers.SetServerAddress(_config, "https://test.example.com");
-        _loggerFactory = LoggerFactory.Create(b => { });
-    }
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture(configure: c => c.AsrCompoundWordFixEnabled = false);
 
     private PlaySongIntentHandler CreatePlaySongHandler()
     {
         return new PlaySongIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
     }
 
     private SearchMediaIntentHandler CreateSearchMediaHandler()
     {
         return new SearchMediaIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
     }
 
     private static IntentRequest CreatePlaySongRequest(string song = "Test Song")
@@ -92,10 +76,6 @@ public class LibraryFilterIntegrationTests : PluginTestBase
         return new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req" };
     }
 
-    private static Context CreateContext() => TestHelpers.CreateTestContext();
-
-    private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
-
     private static Entities.User CreateUserWithLibraries(List<string>? allowedLibraryIds)
     {
         return new Entities.User
@@ -107,12 +87,6 @@ public class LibraryFilterIntegrationTests : PluginTestBase
         };
     }
 
-    private void SetupUserMock()
-    {
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
-    }
-
     [Fact]
     public async Task PlaySongHandler_WithAllowedLibraryIds_SetsTopParentIdsOnQuery()
     {
@@ -121,15 +95,15 @@ public class LibraryFilterIntegrationTests : PluginTestBase
         var user = CreateUserWithLibraries(new List<string> { musicLibId.ToString() });
         var handler = CreatePlaySongHandler();
         var request = CreatePlaySongRequest("Bohemian Rhapsody");
-        var context = CreateContext();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var audio = new Audio { Name = "Bohemian Rhapsody", Id = Guid.NewGuid() };
         InternalItemsQuery? capturedQuery = null;
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Callback<InternalItemsQuery>(q => capturedQuery = q)
             .Returns(new List<BaseItem> { audio });
 
@@ -152,10 +126,10 @@ public class LibraryFilterIntegrationTests : PluginTestBase
         var user = CreateUserWithLibraries(new List<string> { musicLibId.ToString(), movieLibId.ToString() });
         var handler = CreateSearchMediaHandler();
         var request = CreateSearchMediaRequest("Star Wars");
-        var context = CreateContext();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var movie = new MediaBrowser.Controller.Entities.Movies.Movie
         {
@@ -164,7 +138,7 @@ public class LibraryFilterIntegrationTests : PluginTestBase
         };
         var capturedQueries = new List<InternalItemsQuery>();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Callback<InternalItemsQuery>(q => capturedQueries.Add(q))
             .Returns(new List<BaseItem> { movie });
 
@@ -190,13 +164,13 @@ public class LibraryFilterIntegrationTests : PluginTestBase
         var user = CreateUserWithLibraries(null);
         var handler = CreatePlaySongHandler();
         var request = CreatePlaySongRequest("Test Song");
-        var context = CreateContext();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         InternalItemsQuery? capturedQuery = null;
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Callback<InternalItemsQuery>(q => capturedQuery = q)
             .Returns(new List<BaseItem>());
 
@@ -215,13 +189,13 @@ public class LibraryFilterIntegrationTests : PluginTestBase
         var user = CreateUserWithLibraries(new List<string>());
         var handler = CreatePlaySongHandler();
         var request = CreatePlaySongRequest("Test Song");
-        var context = CreateContext();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         InternalItemsQuery? capturedQuery = null;
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Callback<InternalItemsQuery>(q => capturedQuery = q)
             .Returns(new List<BaseItem>());
 

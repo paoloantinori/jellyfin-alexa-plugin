@@ -38,38 +38,16 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class PlaySongAlbumFallbackTests : PluginTestBase
 {
-    private readonly Mock<ISessionManager> _sessionManagerMock;
-    private readonly Mock<ILibraryManager> _libraryManagerMock;
-    private readonly Mock<IUserManager> _userManagerMock;
-    private readonly Mock<IUserDataManager> _userDataManagerMock;
-    private readonly PluginConfiguration _config;
-    private readonly ILoggerFactory _loggerFactory;
-
-    public PlaySongAlbumFallbackTests()
-    {
-        _sessionManagerMock = new Mock<ISessionManager>();
-        _libraryManagerMock = new Mock<ILibraryManager>();
-        _userManagerMock = new Mock<IUserManager>();
-        _userDataManagerMock = new Mock<IUserDataManager>();
-        _config = new PluginConfiguration();
-        TestHelpers.SetServerAddress(_config, "https://test.example.com");
-        _loggerFactory = LoggerFactory.Create(b => { });
-    }
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture();
 
     private PlaySongIntentHandler CreateSongHandler()
         => new(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
-
-    private void SetupUserMock()
-    {
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
-    }
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
 
     private static IntentRequest CreateSongIntent(string song)
     {
@@ -81,10 +59,6 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
         return new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req" };
     }
 
-    private static Context CreateContext() => TestHelpers.CreateTestContext();
-    private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
-    private static Entities.User CreateUser() => TestHelpers.CreateTestUser();
-
     /// <summary>
     /// Mocks the library so the song search and the artist cascade both miss while the
     /// album cascade finds <paramref name="exactAlbums"/> via the indexed SearchTerm
@@ -92,7 +66,7 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
     /// </summary>
     private void SetupMissWithAlbums(List<BaseItem> exactAlbums, List<BaseItem> fuzzyAlbums, List<InternalItemsQuery> queries)
     {
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 queries.Add(q);
@@ -127,7 +101,7 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
 
     private void SetupAlbumTracks(MusicAlbum album, List<BaseItem> tracks)
     {
-        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 Guid playKey = q.ParentId != Guid.Empty
@@ -156,7 +130,7 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
     [Fact]
     public async Task PlaySong_SongMiss_ArtistMiss_AlbumExists_PlaysAlbumWithAnnouncement()
     {
-        SetupUserMock();
+        _fx.SetupUserMock();
         var (album, tracks) = MakeAlbum("Abbey Road", 3);
         var queries = new List<InternalItemsQuery>();
         SetupMissWithAlbums(new List<BaseItem> { album }, new List<BaseItem>(), queries);
@@ -164,9 +138,9 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
 
         var handler = CreateSongHandler();
         var request = CreateSongIntent("abbey road");
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), session, CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
 
         // Plays the album (AudioPlayer directive + the album's tracks in the queue).
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
@@ -185,11 +159,11 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
     [Fact]
     public async Task PlaySong_SongHit_DoesNotSubstituteAlbum()
     {
-        SetupUserMock();
+        _fx.SetupUserMock();
         var song = new Audio { Name = "Thriller", Id = Guid.NewGuid() };
         var queries = new List<InternalItemsQuery>();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 queries.Add(q);
@@ -200,9 +174,9 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
 
         var handler = CreateSongHandler();
         var request = CreateSongIntent("thriller");
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), session, CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
 
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.Equal(song.Id, session.FullNowPlayingItem?.Id);
@@ -215,7 +189,7 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
     [Fact]
     public async Task PlaySong_AlbumBelowThreshold_NoSubstitution()
     {
-        SetupUserMock();
+        _fx.SetupUserMock();
         var (album, tracks) = MakeAlbum("Abbey Road", 3);
         var queries = new List<InternalItemsQuery>();
         // Exact tier misses; the fuzzy scan returns an unrelated album whose best
@@ -225,9 +199,9 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
 
         var handler = CreateSongHandler();
         var request = CreateSongIntent("qqqzzz plugh");
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), session, CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
 
         Assert.Null(TestHelpers.GetPlayDirective(response));
         Assert.True(session.NowPlayingQueue == null || session.NowPlayingQueue.Count == 0);
@@ -240,8 +214,8 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
     [Fact]
     public async Task PlaySong_AnnouncementOff_PlaysAlbumSilently()
     {
-        SetupUserMock();
-        _config.AnnounceCrossMediaSubstitution = false;
+        _fx.SetupUserMock();
+        _fx.Config.AnnounceCrossMediaSubstitution = false;
         var (album, tracks) = MakeAlbum("Abbey Road", 3);
         var queries = new List<InternalItemsQuery>();
         SetupMissWithAlbums(new List<BaseItem> { album }, new List<BaseItem>(), queries);
@@ -249,9 +223,9 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
 
         var handler = CreateSongHandler();
         var request = CreateSongIntent("abbey road");
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), session, CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
 
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.Equal(3, session.NowPlayingQueue?.Count);
@@ -264,8 +238,8 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
     [Fact]
     public async Task PlaySong_AnnouncementOff_ArtistFallbackStillPlaysSilently()
     {
-        SetupUserMock();
-        _config.AnnounceCrossMediaSubstitution = false;
+        _fx.SetupUserMock();
+        _fx.Config.AnnounceCrossMediaSubstitution = false;
         var artistId = Guid.NewGuid();
         var artistSongs = new List<BaseItem>
         {
@@ -273,7 +247,7 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
             new Audio { Name = "Someday", Id = Guid.NewGuid() }
         };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 if (q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicArtist))
@@ -292,7 +266,7 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
         var handler = CreateSongHandler();
         var request = CreateSongIntent("the strokes");
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
         string? speech = TestHelpers.GetSpeechTextOrNull(response);
@@ -306,7 +280,7 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
     [Fact]
     public async Task PlaySong_AlbumCascade_UsesOnlyBoundedQueries()
     {
-        SetupUserMock();
+        _fx.SetupUserMock();
         var (album, tracks) = MakeAlbum("Abbey Road", 3);
         var queries = new List<InternalItemsQuery>();
         SetupMissWithAlbums(new List<BaseItem>(), new List<BaseItem> { album }, queries);
@@ -315,7 +289,7 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
         var handler = CreateSongHandler();
         var request = CreateSongIntent("abbey roade"); // exact album tier misses, fuzzy tier finds it
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
 
         var albumQueries = queries.Where(q => q.IncludeItemTypes?.Contains(BaseItemKind.MusicAlbum) == true).ToList();
@@ -357,11 +331,11 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
     [Fact]
     public async Task PlaySong_ArtistFound_AlbumCascadeNotQueried()
     {
-        SetupUserMock();
+        _fx.SetupUserMock();
         var artistId = Guid.NewGuid();
         var queries = new List<InternalItemsQuery>();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 queries.Add(q);
@@ -380,9 +354,9 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
 
         var handler = CreateSongHandler();
         var request = CreateSongIntent("metallica");
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), session, CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
 
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.Contains("Metallica", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
@@ -395,7 +369,7 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
     [Fact]
     public async Task PlaySong_MultiWordQuery_SkipsAlbumCascade()
     {
-        SetupUserMock();
+        _fx.SetupUserMock();
         var (album, tracks) = MakeAlbum("The Dark Side of the Moon", 3);
         var queries = new List<InternalItemsQuery>();
         SetupMissWithAlbums(new List<BaseItem> { album }, new List<BaseItem> { album }, queries);
@@ -404,7 +378,7 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
         var handler = CreateSongHandler();
         var request = CreateSongIntent("the dark side of the moon");
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         Assert.Null(TestHelpers.GetPlayDirective(response));
         Assert.DoesNotContain(queries, q => q.IncludeItemTypes?.Contains(BaseItemKind.MusicAlbum) == true);
@@ -416,7 +390,7 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
     [Fact]
     public async Task PlaySong_InteriorContainmentAlbum_NotSubstituted()
     {
-        SetupUserMock();
+        _fx.SetupUserMock();
         var album = new MusicAlbum { Name = "O", Id = Guid.NewGuid() };
         var queries = new List<InternalItemsQuery>();
         SetupMissWithAlbums(new List<BaseItem>(), new List<BaseItem> { album }, queries);
@@ -425,7 +399,7 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
         var handler = CreateSongHandler();
         var request = CreateSongIntent("walls for cup");
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         Assert.Null(TestHelpers.GetPlayDirective(response));
         string speech = TestHelpers.GetSpeechText(response);

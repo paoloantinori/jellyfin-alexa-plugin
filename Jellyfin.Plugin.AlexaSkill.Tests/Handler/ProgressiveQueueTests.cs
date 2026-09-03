@@ -40,24 +40,12 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class ProgressiveQueueTests : PluginTestBase, IDisposable
 {
-    private readonly Mock<ISessionManager> _sessionManagerMock;
-    private readonly PluginConfiguration _config;
-    private readonly ILoggerFactory _loggerFactory;
-    private readonly Mock<ILibraryManager> _libraryManagerMock;
-    private readonly Mock<IUserManager> _userManagerMock;
-    private readonly Mock<IUserDataManager> _userDataManagerMock;
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture("http://localhost:8096", configure: c => c.AsrCompoundWordFixEnabled = false);
 
     private static readonly string DeviceId = "test-device";
 
     public ProgressiveQueueTests()
     {
-        _sessionManagerMock = new Mock<ISessionManager>();
-        _config = new PluginConfiguration { ServerAddress = "http://localhost:8096", AsrCompoundWordFixEnabled = false };
-        _loggerFactory = LoggerFactory.Create(b => { });
-        _libraryManagerMock = new Mock<ILibraryManager>();
-        _userManagerMock = new Mock<IUserManager>();
-        _userDataManagerMock = new Mock<IUserDataManager>();
-
         QueueContinuationStore.Remove(Guid.Empty, DeviceId);
         RadioModeState.Disable(Guid.Empty, DeviceId);
     }
@@ -71,7 +59,7 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
 
     private SessionInfo CreateSession()
     {
-        var session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+        var session = TestHelpers.CreateTestSession(_fx.SessionManager.Object, _fx.LoggerFactory);
         session.PlayState = new PlayerStateInfo();
         return session;
     }
@@ -156,17 +144,11 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
     private PlaybackNearlyFinishedEventHandler CreatePlaybackHandler()
     {
         return new PlaybackNearlyFinishedEventHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _loggerFactory);
-    }
-
-    private void SetupUserMock()
-    {
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.LoggerFactory);
     }
 
     // =====================================================================
@@ -256,7 +238,7 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
     {
         var handler = CreatePlaybackHandler();
         var session = CreateSession();
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         // Create initial queue with 3 items (less than prefetch threshold + 2)
         var track1Id = Guid.NewGuid();
@@ -291,14 +273,14 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
         var track4 = new Audio { Id = track4Id, Name = "Track 4" };
         var track5 = new Audio { Id = track5Id, Name = "Track 5" };
 
-        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
             .Returns(new QueryResult<BaseItem>
             {
                 Items = new List<BaseItem> { track4, track5 },
                 TotalRecordCount = 2
             });
 
-        _libraryManagerMock.Setup(l => l.GetItemById(track2Id))
+        _fx.LibraryManager.Setup(l => l.GetItemById(track2Id))
             .Returns(new Audio { Id = track2Id, Name = "Track 2" });
 
         var response = await handler.HandleAsync(
@@ -336,7 +318,7 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
             new() { Id = track2Id }
         };
 
-        _libraryManagerMock.Setup(l => l.GetItemById(track2Id))
+        _fx.LibraryManager.Setup(l => l.GetItemById(track2Id))
             .Returns(new Audio { Id = track2Id, Name = "Track 2" });
 
         var response = await handler.HandleAsync(
@@ -359,7 +341,7 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
     {
         var handler = CreatePlaybackHandler();
         var session = CreateSession();
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var track1Id = Guid.NewGuid();
 
@@ -398,7 +380,7 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
     {
         var handler = CreatePlaybackHandler();
         var session = CreateSession();
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         // Create a queue with many items remaining
         var tracks = Enumerable.Range(0, 10)
@@ -421,7 +403,7 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
         };
         QueueContinuationStore.Set(session.UserId, deviceId, continuation);
 
-        _libraryManagerMock.Setup(l => l.GetItemById(tracks[1]))
+        _fx.LibraryManager.Setup(l => l.GetItemById(tracks[1]))
             .Returns(new Audio { Id = tracks[1], Name = "Track 2" });
 
         var response = await handler.HandleAsync(
@@ -435,7 +417,7 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
         Assert.Equal(10, session.NowPlayingQueue.Count);
 
         // GetItemsResult should NOT have been called
-        _libraryManagerMock.Verify(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()), Times.Never);
+        _fx.LibraryManager.Verify(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()), Times.Never);
 
         // Next track should be returned normally
         var directive = response.Response.Directives.OfType<AudioPlayerPlayDirective>().FirstOrDefault();
@@ -454,15 +436,15 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
     public async Task PlayAlbum_FetchesOnlyInitialPage()
     {
         var handler = new PlayAlbumIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
 
         var session = CreateSession();
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var albumId = Guid.NewGuid();
         var album = new MediaBrowser.Controller.Entities.Audio.MusicAlbum
@@ -477,11 +459,11 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
             .ToList();
 
         // Mock: album search returns one result
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum))))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum))))
             .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { album });
 
         // Mock: album track query returns first page (5 items) with total count 20
-        _libraryManagerMock.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q => q.ParentId == albumId)))
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q => q.ParentId == albumId)))
             .Returns(new QueryResult<BaseItem>
             {
                 Items = allTracks.Take(ProgressiveQueueConstants.GetInitialFetchSize()).Cast<BaseItem>().ToList(),
@@ -517,15 +499,15 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
     public async Task PlayAlbum_SmallLibrary_NoContinuationStored()
     {
         var handler = new PlayAlbumIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
 
         var session = CreateSession();
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var albumId = Guid.NewGuid();
         var album = new MediaBrowser.Controller.Entities.Audio.MusicAlbum
@@ -539,10 +521,10 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
             .Select(i => new Audio { Id = Guid.NewGuid(), Name = $"Track {i + 1}" })
             .ToList();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum))))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum))))
             .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { album });
 
-        _libraryManagerMock.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q => q.ParentId == albumId)))
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q => q.ParentId == albumId)))
             .Returns(new QueryResult<BaseItem>
             {
                 Items = tracks.Cast<MediaBrowser.Controller.Entities.BaseItem>().ToList(),
@@ -569,15 +551,15 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
     public async Task PlayArtistSongs_FetchesOnlyInitialPage()
     {
         var handler = new PlayArtistSongsIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
 
         var session = CreateSession();
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var artistId = Guid.NewGuid();
         var artist = new MediaBrowser.Controller.Entities.Audio.MusicArtist
@@ -592,15 +574,15 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
             .ToList();
 
         // Mock: artist search
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicArtist))))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicArtist))))
             .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { artist });
 
         // Mock: artist songs query with limit (uses GetItemList to avoid Jellyfin NRE)
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Contains(artistId))))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Contains(artistId))))
             .Returns(allTracks.Take(ProgressiveQueueConstants.GetInitialFetchSize()).Cast<MediaBrowser.Controller.Entities.BaseItem>().ToList());
 
         // Mock: no favorites
-        _userDataManagerMock.Setup(u => u.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<MediaBrowser.Controller.Entities.BaseItem>()))
+        _fx.UserDataManager.Setup(u => u.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<MediaBrowser.Controller.Entities.BaseItem>()))
             .Returns((UserItemData?)null);
 
         var request = CreateArtistSongsIntent("Test Artist");
@@ -630,15 +612,15 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
     public async Task PlayArtistSongs_FullPrefixFallback_MatchesMultiWordArtist()
     {
         var handler = new PlayArtistSongsIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
 
         var session = CreateSession();
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var artistId = Guid.NewGuid();
         var artist = new MediaBrowser.Controller.Entities.Audio.MusicArtist
@@ -653,27 +635,27 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
         };
 
         // Mock: SearchTerm query returns empty (exact match fails)
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
             q.SearchTerm == "Kidz Bop" && q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicArtist))))
             .Returns(new List<MediaBrowser.Controller.Entities.BaseItem>());
 
         // Mock: first-word prefix query ("Kidz") returns empty
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
             q.NameStartsWith == "Kidz" && q.SearchTerm == null)))
             .Returns(new List<MediaBrowser.Controller.Entities.BaseItem>());
 
         // Mock: full-prefix query ("Kidz Bop") returns the artist
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
             q.NameStartsWith == "Kidz Bop" && q.SearchTerm == null)))
             .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { artist });
 
         // Mock: artist songs query (uses GetItemList to avoid Jellyfin NRE)
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
             q.ArtistIds != null && q.ArtistIds.Contains(artistId))))
             .Returns(tracks.Cast<MediaBrowser.Controller.Entities.BaseItem>().ToList());
 
         // Mock: no favorites
-        _userDataManagerMock.Setup(u => u.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<MediaBrowser.Controller.Entities.BaseItem>()))
+        _fx.UserDataManager.Setup(u => u.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<MediaBrowser.Controller.Entities.BaseItem>()))
             .Returns((UserItemData?)null);
 
         var request = CreateArtistSongsIntent("Kidz Bop");
@@ -729,7 +711,7 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
     {
         var handler = CreatePlaybackHandler();
         var session = CreateSession();
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         // Initial queue: 3 items, playing track 1
         var track1Id = Guid.NewGuid();
@@ -764,10 +746,10 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
             .Select(i => new Audio { Id = Guid.NewGuid(), Name = $"Continuation {i}" })
             .ToList();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(continuationTracks.ToList<BaseItem>());
 
-        _libraryManagerMock.Setup(l => l.GetItemById(track2Id))
+        _fx.LibraryManager.Setup(l => l.GetItemById(track2Id))
             .Returns(new Audio { Id = track2Id, Name = "Track 2" });
 
         await handler.HandleAsync(
@@ -809,7 +791,7 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
     {
         var handler = CreatePlaybackHandler();
         var session = CreateSession();
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var track1Id = Guid.NewGuid();
         var track2Id = Guid.NewGuid();
@@ -847,10 +829,10 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
             new() { Id = Guid.NewGuid(), Name = "E" }
         };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(contTracks.Cast<BaseItem>().ToList());
 
-        _libraryManagerMock.Setup(l => l.GetItemById(track2Id))
+        _fx.LibraryManager.Setup(l => l.GetItemById(track2Id))
             .Returns(new Audio { Id = track2Id, Name = "Track 2" });
 
         await handler.HandleAsync(
@@ -909,7 +891,7 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
         // The handler caches the fully-resolved track list at first-play; the fetcher must
         // slice that cache per batch (NOT re-resolve via GetManageableItems), advancing
         // StartIndex, and return empty once StartIndex reaches TotalCount.
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         List<BaseItem> tracks = Enumerable.Range(0, 10)
             .Select(i => (BaseItem)new Audio { Id = Guid.NewGuid(), Name = $"Track {i}" })
@@ -927,33 +909,33 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
             CachedTracks = tracks
         };
 
-        ILogger logger = _loggerFactory.CreateLogger("PlaylistContinuationTest");
+        ILogger logger = _fx.LoggerFactory.CreateLogger("PlaylistContinuationTest");
 
         // Batch 1: first 4
         IReadOnlyList<BaseItem> batch1 = QueueContinuationFetcher.FetchNextBatch(
-            continuation, _libraryManagerMock.Object, _userManagerMock.Object, logger);
+            continuation, _fx.LibraryManager.Object, _fx.UserManager.Object, logger);
         Assert.Equal(ids.GetRange(0, 4), batch1.Select(b => b.Id).ToList());
         Assert.Equal(4, continuation.StartIndex);
 
         // Batch 2: next 4
         IReadOnlyList<BaseItem> batch2 = QueueContinuationFetcher.FetchNextBatch(
-            continuation, _libraryManagerMock.Object, _userManagerMock.Object, logger);
+            continuation, _fx.LibraryManager.Object, _fx.UserManager.Object, logger);
         Assert.Equal(ids.GetRange(4, 4), batch2.Select(b => b.Id).ToList());
         Assert.Equal(8, continuation.StartIndex);
 
         // Batch 3: remaining 2
         IReadOnlyList<BaseItem> batch3 = QueueContinuationFetcher.FetchNextBatch(
-            continuation, _libraryManagerMock.Object, _userManagerMock.Object, logger);
+            continuation, _fx.LibraryManager.Object, _fx.UserManager.Object, logger);
         Assert.Equal(ids.GetRange(8, 2), batch3.Select(b => b.Id).ToList());
         Assert.Equal(10, continuation.StartIndex);
 
         // Batch 4: exhausted -> empty (StartIndex >= TotalCount short-circuit)
         IReadOnlyList<BaseItem> batch4 = QueueContinuationFetcher.FetchNextBatch(
-            continuation, _libraryManagerMock.Object, _userManagerMock.Object, logger);
+            continuation, _fx.LibraryManager.Object, _fx.UserManager.Object, logger);
         Assert.Empty(batch4);
 
         // The cached path must NOT touch the library manager at all (no re-resolution).
-        _libraryManagerMock.Verify(
+        _fx.LibraryManager.Verify(
             lm => lm.GetItemById(It.IsAny<Guid>()),
             Times.Never,
             "cached playlist continuation must not re-resolve via the library manager");
@@ -966,7 +948,7 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
     [Fact]
     public void QueueContinuation_AlbumFetch_AppliesDiscThenTrackOrder()
     {
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var continuation = new QueueContinuation
         {
@@ -981,7 +963,7 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
         InternalItemsQuery? captured = null;
 
         // Non-zero total so the fetcher uses the primary ParentId query (not the AlbumIds fallback).
-        _libraryManagerMock
+        _fx.LibraryManager
             .Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
             .Callback<InternalItemsQuery>(q => captured = q)
             .Returns(new QueryResult<BaseItem>
@@ -990,8 +972,8 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
                 TotalRecordCount = 30
             });
 
-        ILogger logger = _loggerFactory.CreateLogger("AlbumOrderTest");
-        QueueContinuationFetcher.FetchNextBatch(continuation, _libraryManagerMock.Object, _userManagerMock.Object, logger);
+        ILogger logger = _fx.LoggerFactory.CreateLogger("AlbumOrderTest");
+        QueueContinuationFetcher.FetchNextBatch(continuation, _fx.LibraryManager.Object, _fx.UserManager.Object, logger);
 
         Assert.NotNull(captured);
         // Literal (not the constant) pins AlbumTrackOrder's value — a corrupted constant fails here.
@@ -1004,15 +986,15 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
     public async Task PlayAlbum_TrackQuery_OrdersByDiscThenTrack()
     {
         var handler = new PlayAlbumIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
 
         var session = CreateSession();
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var albumId = Guid.NewGuid();
         var album = new MediaBrowser.Controller.Entities.Audio.MusicAlbum
@@ -1021,11 +1003,11 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
             Name = "Multi-Disc Album"
         };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum))))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum))))
             .Returns(new List<BaseItem> { album });
 
         InternalItemsQuery? capturedTrackQuery = null;
-        _libraryManagerMock
+        _fx.LibraryManager
             .Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q => q.ParentId == albumId)))
             .Callback<InternalItemsQuery>(q => capturedTrackQuery = q)
             .Returns(new QueryResult<BaseItem>
@@ -1049,7 +1031,7 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
     public void QueueContinuation_AlbumIdsFallback_AppliesDiscThenTrackOrder()
     {
         // AlbumIds fallback (primary returns 0) must also carry the disc/track OrderBy.
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var albumId = Guid.NewGuid();
         var continuation = new QueueContinuation
@@ -1065,12 +1047,12 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
         InternalItemsQuery? capturedFallback = null;
 
         // Primary ParentId query returns 0 -> triggers the AlbumIds fallback.
-        _libraryManagerMock
+        _fx.LibraryManager
             .Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q => q.AlbumIds == null || q.AlbumIds.Length == 0)))
             .Returns(new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 });
 
         // AlbumIds fallback returns tracks; capture its query.
-        _libraryManagerMock
+        _fx.LibraryManager
             .Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q => q.AlbumIds != null && q.AlbumIds.Contains(albumId))))
             .Callback<InternalItemsQuery>(q => capturedFallback = q)
             .Returns(new QueryResult<BaseItem>
@@ -1079,8 +1061,8 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
                 TotalRecordCount = 30
             });
 
-        ILogger logger = _loggerFactory.CreateLogger("AlbumIdsFallbackOrderTest");
-        QueueContinuationFetcher.FetchNextBatch(continuation, _libraryManagerMock.Object, _userManagerMock.Object, logger);
+        ILogger logger = _fx.LoggerFactory.CreateLogger("AlbumIdsFallbackOrderTest");
+        QueueContinuationFetcher.FetchNextBatch(continuation, _fx.LibraryManager.Object, _fx.UserManager.Object, logger);
 
         Assert.NotNull(capturedFallback);
         Assert.Equal(
@@ -1093,15 +1075,15 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
     {
         // Verifies the handler preserves the DB's disc/track order into the queue (no reshuffle).
         var handler = new PlayAlbumIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
 
         var session = CreateSession();
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var albumId = Guid.NewGuid();
         var album = new MediaBrowser.Controller.Entities.Audio.MusicAlbum
@@ -1118,10 +1100,10 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
         var d2t2 = new Audio { Id = Guid.NewGuid(), Name = "D2 T2", ParentIndexNumber = 2, IndexNumber = 2 };
         var ordered = new List<BaseItem> { d1t1, d1t2, d2t1, d2t2 };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum))))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum))))
             .Returns(new List<BaseItem> { album });
 
-        _libraryManagerMock.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q => q.ParentId == albumId)))
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q => q.ParentId == albumId)))
             .Returns(new QueryResult<BaseItem> { Items = ordered, TotalRecordCount = ordered.Count });
 
         var context = CreateContext();

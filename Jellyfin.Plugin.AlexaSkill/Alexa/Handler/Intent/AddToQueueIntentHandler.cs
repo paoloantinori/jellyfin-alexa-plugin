@@ -84,14 +84,13 @@ public class AddToQueueIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchQueueItem", locale));
         }
 
-        // JF-419.3 per-path gates, before the "searching" announcement: the song
-        // query is an unbounded Audio SearchTerm scan, gated on the song index (the
-        // DB-heavy full-catalog load whose cold window it proxies); a named artist
-        // additionally gates on the artist index (targeted path).
-        Util.IndexWarmingGate.EnsureReady(_songNgramIndex);
+        // Per-path routing (gate = GuardIndexReady): the song gate first (the
+        // unbounded Audio SearchTerm scan), then the artist gate when a musician
+        // is named (targeted path).
+        GuardIndexReady(_songNgramIndex);
         if (!string.IsNullOrWhiteSpace(musicianQuery))
         {
-            Util.IndexWarmingGate.EnsureReady(_artistIndex);
+            GuardIndexReady(_artistIndex);
         }
 
         RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));

@@ -29,38 +29,26 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class PlayAlbumIntentHandlerTests : PluginTestBase
 {
-    private readonly Mock<ISessionManager> _sessionManagerMock;
-    private readonly Mock<ILibraryManager> _libraryManagerMock;
-    private readonly Mock<IUserManager> _userManagerMock;
-    private readonly Mock<IUserDataManager> _userDataManagerMock;
-    private readonly PluginConfiguration _config;
-    private readonly ILoggerFactory _loggerFactory;
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture();
     private readonly DeviceQueueManager _queueManager;
 
     public PlayAlbumIntentHandlerTests()
     {
-        _sessionManagerMock = new Mock<ISessionManager>();
-        _libraryManagerMock = new Mock<ILibraryManager>();
-        _userManagerMock = new Mock<IUserManager>();
-        _userDataManagerMock = new Mock<IUserDataManager>();
-        _config = new PluginConfiguration();
-        TestHelpers.SetServerAddress(_config, "https://test.example.com");
-        _loggerFactory = LoggerFactory.Create(b => { });
         var queueLogger = new Mock<ILogger<DeviceQueueManager>>();
         _queueManager = new DeviceQueueManager(System.IO.Path.GetTempPath(), queueLogger.Object);
 
-        TestHelpers.EnsurePluginInstance(_config, _loggerFactory, c => { }, "playalbum-tests");
+        TestHelpers.EnsurePluginInstance(_fx.Config, _fx.LoggerFactory, c => { }, "playalbum-tests");
     }
 
     private PlayAlbumIntentHandler CreateHandler()
     {
         return new PlayAlbumIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory,
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory,
             _queueManager);
     }
 
@@ -82,24 +70,16 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         return new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req" };
     }
 
-    private static Context CreateContext() => TestHelpers.CreateTestContext();
-
     private SessionInfo CreateSession()
     {
-        var session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+        var session = TestHelpers.CreateTestSession(_fx.SessionManager.Object, _fx.LoggerFactory);
         session.DeviceId = "test-device";
         return session;
     }
 
-    private void SetupUserMock()
-    {
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
-    }
-
     private void SetupAlbumsAndTracks(List<BaseItem> albums, QueryResult<BaseItem>? tracks = null, List<InternalItemsQuery>? queries = null)
     {
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns((InternalItemsQuery q) =>
             {
                 queries?.Add(q);
@@ -107,7 +87,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
             });
         if (tracks != null)
         {
-            _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
                 .Returns(tracks);
         }
     }
@@ -159,7 +139,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
     {
         var albumNameById = artistAlbums.ToDictionary(a => a.Id, a => a.Name);
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns((InternalItemsQuery q) =>
             {
                 queries?.Add(q);
@@ -176,7 +156,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
                 return new List<BaseItem>();
             });
 
-        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
             .Returns((InternalItemsQuery q) =>
             {
                 queries?.Add(q);
@@ -207,12 +187,12 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
             });
     }
 
-    private static async Task<string> GetPlayedTrackTokenAsync(
+    private async Task<string> GetPlayedTrackTokenAsync(
         PlayAlbumIntentHandler handler,
         IntentRequest request,
         SessionInfo session)
     {
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), session, CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), session, CancellationToken.None);
         Assert.NotNull(response);
         var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
         Assert.NotNull(playDirective);
@@ -258,7 +238,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         // album) and a 2-track single.
         var handler = CreateHandler();
         var request = CreateIntentRequest(musician: "koop");
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var artist = new MusicArtist { Name = "Koop", Id = Guid.NewGuid() };
         var (liveAlbum, liveTracks) = MakeRelease("BBC Sessions", 1998, 10, "Live First");
@@ -299,7 +279,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         // pick. Same album set, every insertion order, same album played.
         var handler = CreateHandler();
         var request = CreateIntentRequest(musician: "koop");
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var artist = new MusicArtist { Name = "Koop", Id = Guid.NewGuid() };
         var (liveAlbum, liveTracks) = MakeRelease("BBC Sessions", 1998, 10, "Live First");
@@ -327,7 +307,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         // JF-427 policy tie-break 1: equal track counts fall to the newest ProductionYear.
         var handler = CreateHandler();
         var request = CreateIntentRequest(musician: "koop");
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var artist = new MusicArtist { Name = "Koop", Id = Guid.NewGuid() };
         var (older, olderTracks) = MakeRelease("Older Album", 1995, 10, "Older First");
@@ -354,7 +334,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         // pick stays deterministic even when the first two keys tie.
         var handler = CreateHandler();
         var request = CreateIntentRequest(musician: "koop");
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var artist = new MusicArtist { Name = "Koop", Id = Guid.NewGuid() };
         var (zebra, zebraTracks) = MakeRelease("Zebra Album", 2000, 5, "Zebra First");
@@ -387,7 +367,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         // link and must STILL outrank the newer 10-track live album.
         var handler = CreateHandler();
         var request = CreateIntentRequest(musician: "koop");
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var artist = new MusicArtist { Name = "Koop", Id = Guid.NewGuid() };
         var (studio, studioTracks) = MakeRelease("Studio Album", 1995, 12, "Studio First", rawAlbumTag: "Studio Album (Disc 1)");
@@ -436,7 +416,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         // outrank the well-formed newer 10-track live album.
         var handler = CreateHandler();
         var request = CreateIntentRequest(musician: "koop");
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var artist = new MusicArtist { Name = "Koop", Id = Guid.NewGuid() };
         var (studio, studioTracks) = MakeRelease("Studio Album", 1995, 12, "Studio First", breakParentLink: true);
@@ -481,7 +461,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         // every Audio row of the artist's catalog).
         var handler = CreateHandler();
         var request = CreateIntentRequest(musician: "koop");
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var artist = new MusicArtist { Name = "Koop", Id = Guid.NewGuid() };
         var artistAlbums = new List<BaseItem>();
@@ -523,13 +503,13 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         // prompt the user (AskFirstMatch), not silently auto-play the best-scoring one.
         var handler = CreateHandler();
         var request = CreateIntentRequest(album: "hits");
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var album1 = new MusicAlbum { Name = "Greatest Hits", Id = Guid.NewGuid() };
         var album2 = new MusicAlbum { Name = "Biggest Hits", Id = Guid.NewGuid() };
         SetupAlbumsAndTracks(new List<BaseItem> { album1, album2 });
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response);
         // AskFirstMatch keeps the session open + does NOT auto-play.
@@ -546,7 +526,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         user.FuzzyMatchBehavior = FuzzyMatchBehavior.AutoPlay;
         var handler = CreateHandler();
         var request = CreateIntentRequest(album: "hits");
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var album1 = new MusicAlbum { Name = "Greatest Hits", Id = Guid.NewGuid() };
         var album2 = new MusicAlbum { Name = "Biggest Hits", Id = Guid.NewGuid() };
@@ -555,7 +535,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
             new List<BaseItem> { album1, album2 },
             new QueryResult<BaseItem> { Items = new[] { track }, TotalRecordCount = 1 });
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), user, CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), user, CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response);
         var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
@@ -569,7 +549,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         // -- a "Jazz Cafe or Jazz Cafe?" prompt would be useless.
         var handler = CreateHandler();
         var request = CreateIntentRequest(album: "jazz cafe");
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var album1 = new MusicAlbum { Name = "Jazz Cafe", Id = Guid.NewGuid() };
         var album2 = new MusicAlbum { Name = "Jazz Cafe", Id = Guid.NewGuid() };
@@ -578,7 +558,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
             new List<BaseItem> { album1, album2 },
             new QueryResult<BaseItem> { Items = new[] { track }, TotalRecordCount = 1 });
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response);
         var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
@@ -591,7 +571,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         // Regression guard (AC#5): single-match albums still auto-play.
         var handler = CreateHandler();
         var request = CreateIntentRequest(album: "the album");
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var album = new MusicAlbum { Name = "The Album", Id = Guid.NewGuid() };
         var track = new Audio { Name = "Track 1", Id = Guid.NewGuid() };
@@ -599,7 +579,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
             new List<BaseItem> { album },
             new QueryResult<BaseItem> { Items = new[] { track }, TotalRecordCount = 1 });
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response);
         var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
@@ -615,16 +595,16 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         // layer; the auto-play decision must reject an interior-only containment.
         var handler = CreateHandler();
         var request = CreateIntentRequest(album: "walls for cup");
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         // Exact search (SearchTerm set) must miss; the fuzzy fallback's full-catalog scan
         // (SearchTerm null) returns the degenerate 1-char album.
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns((InternalItemsQuery q) => q.SearchTerm == null
                 ? new List<BaseItem> { new MusicAlbum { Name = "O", Id = Guid.NewGuid() } }
                 : new List<BaseItem>());
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response);
         var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
@@ -642,13 +622,13 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         // over Koop's own album.
         var handler = CreateHandler();
         var request = CreateIntentRequest(musician: "koop");
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var artist = new MusicArtist { Name = "Koop", Id = Guid.NewGuid() };
         var album = new MusicAlbum { Name = "Waltz for Koop", Id = Guid.NewGuid() };
         var track = new Audio { Name = "Baby", Id = Guid.NewGuid() };
         var queries = new List<InternalItemsQuery>();
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns((InternalItemsQuery q) =>
             {
                 queries.Add(q);
@@ -659,10 +639,10 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
 
                 return new List<BaseItem> { album };
             });
-        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
             .Returns(new QueryResult<BaseItem> { Items = new[] { track }, TotalRecordCount = 1 });
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response);
         var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
@@ -687,9 +667,9 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         // NotFoundAlbumByArtist for an album that exists.
         var handler = CreateHandler();
         var request = CreateIntentRequest();
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response);
         Assert.False(response.Response.ShouldEndSession);
@@ -717,7 +697,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         // as the musician, ArtistSearch found nothing, and the user got a terminal
         // NotFoundAlbumByArtist.
         var handler = CreateHandler();
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var answer = CreateIntentRequest(album: "the dark side of the moon");
         answer.DialogState = "IN_PROGRESS";
@@ -748,7 +728,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         var handler = CreateHandler();
         var request = CreateIntentRequest(musician: "queen");
         request.DialogState = "IN_PROGRESS";
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var artist = new MusicArtist { Name = "Queen", Id = Guid.NewGuid() };
         var (album, albumTracks) = MakeRelease("A Night at the Opera", 1975, 1, "Bohemian Rhapsody");
@@ -760,7 +740,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
             new Dictionary<Guid, BaseItem> { [album.Id] = albumTracks[0] },
             queries);
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response);
         var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
@@ -782,11 +762,11 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         // toggle (DefaultAnnounceNowPlaying) on, a music play must stay silent unless the separate
         // AnnounceAudioPlays flag is opted in. This guards "no behavior change for existing users"
         // on the most frequent play paths.
-        _config.DefaultAnnounceNowPlaying = true; // video/book toggle on
-        _config.AnnounceAudioPlays = false; // audio opt-in default
+        _fx.Config.DefaultAnnounceNowPlaying = true; // video/book toggle on
+        _fx.Config.AnnounceAudioPlays = false; // audio opt-in default
         var handler = CreateHandler();
         var request = CreateIntentRequest(album: "the album");
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var album = new MusicAlbum { Name = "The Album", Id = Guid.NewGuid() };
         var track = new Audio { Name = "Track 1", Id = Guid.NewGuid() };
@@ -794,7 +774,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
             new List<BaseItem> { album },
             new QueryResult<BaseItem> { Items = new[] { track }, TotalRecordCount = 1 });
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response);
         Assert.Null(response.Response.OutputSpeech);
@@ -807,10 +787,10 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
     {
         // When the user opts into audio announces (AnnounceAudioPlays = true), a successful
         // album play attaches the now-playing announce to OutputSpeech.
-        _config.AnnounceAudioPlays = true;
+        _fx.Config.AnnounceAudioPlays = true;
         var handler = CreateHandler();
         var request = CreateIntentRequest(album: "the album");
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var album = new MusicAlbum { Name = "The Album", Id = Guid.NewGuid() };
         var track = new Audio { Name = "Track 1", Id = Guid.NewGuid() };
@@ -818,7 +798,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
             new List<BaseItem> { album },
             new QueryResult<BaseItem> { Items = new[] { track }, TotalRecordCount = 1 });
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response);
         Assert.NotNull(response.Response.OutputSpeech);
@@ -832,10 +812,10 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
     {
         // With AnnounceAudioPlays explicitly off, the launch is silent (no OutputSpeech)
         // but playback still starts (AudioPlayer.Play directive present).
-        _config.AnnounceAudioPlays = false;
+        _fx.Config.AnnounceAudioPlays = false;
         var handler = CreateHandler();
         var request = CreateIntentRequest(album: "the album");
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var album = new MusicAlbum { Name = "The Album", Id = Guid.NewGuid() };
         var track = new Audio { Name = "Track 1", Id = Guid.NewGuid() };
@@ -843,7 +823,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
             new List<BaseItem> { album },
             new QueryResult<BaseItem> { Items = new[] { track }, TotalRecordCount = 1 });
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response);
         Assert.Null(response.Response.OutputSpeech);

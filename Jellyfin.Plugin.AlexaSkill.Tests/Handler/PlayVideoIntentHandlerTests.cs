@@ -25,39 +25,25 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class PlayVideoIntentHandlerTests : PluginTestBase
 {
-    private readonly Mock<ISessionManager> _sessionManagerMock;
-    private readonly Mock<ILibraryManager> _libraryManagerMock;
-    private readonly Mock<IUserManager> _userManagerMock;
-    private readonly Mock<IUserDataManager> _userDataManagerMock;
-    private readonly PluginConfiguration _config;
-    private readonly ILoggerFactory _loggerFactory;
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture("http://localhost:8096");
 
     public PlayVideoIntentHandlerTests()
     {
-        _sessionManagerMock = new Mock<ISessionManager>();
-        _libraryManagerMock = new Mock<ILibraryManager>();
-        _userManagerMock = new Mock<IUserManager>();
-        _userDataManagerMock = new Mock<IUserDataManager>();
-        _userManagerMock
+        _fx.UserManager
             .Setup(um => um.GetUserById(It.IsAny<Guid>()))
             .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
-        _config = new PluginConfiguration();
-        TestHelpers.SetServerAddress(_config, "http://localhost:8096");
-        _loggerFactory = LoggerFactory.Create(b => { });
     }
 
     private PlayVideoIntentHandler CreateHandler()
     {
         return new PlayVideoIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
     }
-
-    private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
 
     private static IntentRequest CreatePlayVideoRequest(string? title = "The Matrix")
     {
@@ -76,8 +62,6 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
             }
         };
     }
-
-    private static Context CreateContext() => TestHelpers.CreateTestContext();
 
     private static BaseItem CreateTestItem(string name, Guid? id = null)
     {
@@ -110,7 +94,7 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
             }
         };
 
-        var response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+        var response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), _fx.CreateSession(), CancellationToken.None);
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
 
         Assert.Contains("didn't catch", speech.Text);
@@ -122,9 +106,9 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
         var handler = CreateHandler();
         var response = await handler.HandleAsync(
             CreatePlayVideoRequest(""),
-            CreateContext(),
+            _fx.CreateContext(),
             TestHelpers.CreateTestUser(),
-            CreateSession(), CancellationToken.None);
+            _fx.CreateSession(), CancellationToken.None);
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
 
         Assert.Contains("didn't catch", speech.Text);
@@ -133,16 +117,16 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
     [Fact]
     public async Task Handle_NoResults_ReturnsNotFound()
     {
-        _libraryManagerMock
+        _fx.LibraryManager
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
 
         var handler = CreateHandler();
         var response = await handler.HandleAsync(
             CreatePlayVideoRequest("Unknown Movie"),
-            CreateContext(),
+            _fx.CreateContext(),
             TestHelpers.CreateTestUser(),
-            CreateSession(), CancellationToken.None);
+            _fx.CreateSession(), CancellationToken.None);
 
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
         Assert.Contains("couldn't find", speech.Text);
@@ -153,16 +137,16 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
     {
         var movie = CreateTestItem("The Matrix");
 
-        _libraryManagerMock
+        _fx.LibraryManager
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { movie });
 
         var handler = CreateHandler();
         var response = await handler.HandleAsync(
             CreatePlayVideoRequest("The Matrix"),
-            CreateContext(),
+            _fx.CreateContext(),
             TestHelpers.CreateTestUser(),
-            CreateSession(), CancellationToken.None);
+            _fx.CreateSession(), CancellationToken.None);
 
         // JF-349: a fresh video launch (no resume position) now announces the title instead of
         // launching silently, matching PlayRandom/PlayEpisode. Resume-position launches still use
@@ -181,16 +165,16 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
         var movie1 = CreateTestItem("Inception");
         var movie2 = CreateTestItem("Interstellar");
 
-        _libraryManagerMock
+        _fx.LibraryManager
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { movie1, movie2 });
 
         var handler = CreateHandler();
         var response = await handler.HandleAsync(
             CreatePlayVideoRequest("Nolan"),
-            CreateContext(),
+            _fx.CreateContext(),
             TestHelpers.CreateTestUser(),
-            CreateSession(), CancellationToken.None);
+            _fx.CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response.Response.OutputSpeech);
         Assert.False(response.Response.ShouldEndSession);
@@ -212,9 +196,9 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
         var handler = CreateHandler();
         var response = await handler.HandleAsync(
             CreatePlayVideoRequest(null),
-            CreateContext(),
+            _fx.CreateContext(),
             TestHelpers.CreateTestUser(),
-            CreateSession(), CancellationToken.None);
+            _fx.CreateSession(), CancellationToken.None);
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
 
         Assert.Contains("didn't catch", speech.Text);
@@ -228,9 +212,9 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
         var handler = CreateHandler();
         var response = await handler.HandleAsync(
             CreatePlayVideoRequest(title),
-            CreateContext(),
+            _fx.CreateContext(),
             TestHelpers.CreateTestUser(),
-            CreateSession(), CancellationToken.None);
+            _fx.CreateSession(), CancellationToken.None);
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
 
         Assert.Contains("didn't catch", speech.Text);
@@ -242,16 +226,16 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
         var id = Guid.NewGuid();
         var movie = CreateTestItem("The Matrix", id);
 
-        _libraryManagerMock
+        _fx.LibraryManager
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { movie });
 
         var handler = CreateHandler();
         var response = await handler.HandleAsync(
             CreatePlayVideoRequest("The Matrix"),
-            CreateContext(),
+            _fx.CreateContext(),
             TestHelpers.CreateTestUser(),
-            CreateSession(), CancellationToken.None);
+            _fx.CreateSession(), CancellationToken.None);
 
         var directive = response.HasDirective<VideoAppLaunchDirective>();
         Assert.NotNull(directive.VideoItem);
@@ -266,14 +250,14 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
     {
         var id = Guid.NewGuid();
         var movie = CreateTestItem("The Matrix", id);
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
-        _libraryManagerMock
+        _fx.LibraryManager
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { movie });
 
         var handler = CreateHandler();
-        await handler.HandleAsync(CreatePlayVideoRequest("The Matrix"), CreateContext(), TestHelpers.CreateTestUser(), session, CancellationToken.None);
+        await handler.HandleAsync(CreatePlayVideoRequest("The Matrix"), _fx.CreateContext(), TestHelpers.CreateTestUser(), session, CancellationToken.None);
 
         Assert.NotNull(session.NowPlayingQueue);
         Assert.Single(session.NowPlayingQueue);
@@ -294,16 +278,16 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
     {
         var movie = CreateTestItem("Test Video");
 
-        _libraryManagerMock
+        _fx.LibraryManager
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { movie });
 
         var handler = CreateHandler();
         var response = await handler.HandleAsync(
             CreatePlayVideoRequest("Test Video"),
-            CreateContext(),
+            _fx.CreateContext(),
             TestHelpers.CreateTestUser(),
-            CreateSession(), CancellationToken.None);
+            _fx.CreateSession(), CancellationToken.None);
 
         // VideoApp.Launch must NOT include shouldEndSession — Alexa rejects it
         Assert.Null(response.Response.ShouldEndSession);

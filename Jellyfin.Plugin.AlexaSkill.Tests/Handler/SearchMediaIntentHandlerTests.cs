@@ -28,34 +28,17 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class SearchMediaIntentHandlerTests : PluginTestBase
 {
-    private readonly Mock<ISessionManager> _sessionManagerMock;
-    private readonly Mock<ILibraryManager> _libraryManagerMock;
-    private readonly Mock<IUserManager> _userManagerMock;
-    private readonly Mock<IUserDataManager> _userDataManagerMock;
-    private readonly PluginConfiguration _config;
-    private readonly ILoggerFactory _loggerFactory;
-
-    public SearchMediaIntentHandlerTests()
-    {
-        _sessionManagerMock = new Mock<ISessionManager>();
-        _libraryManagerMock = new Mock<ILibraryManager>();
-        _userManagerMock = new Mock<IUserManager>();
-        _userDataManagerMock = new Mock<IUserDataManager>();
-        _config = new PluginConfiguration();
-        _config.AsrCompoundWordFixEnabled = false;
-        TestHelpers.SetServerAddress(_config, "https://test.example.com");
-        _loggerFactory = LoggerFactory.Create(b => { });
-    }
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture(configure: c => c.AsrCompoundWordFixEnabled = false);
 
     private SearchMediaIntentHandler CreateHandler()
     {
         return new SearchMediaIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
     }
 
     private static IntentRequest CreateIntentRequest(string? query = null)
@@ -69,27 +52,6 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
         }
 
         return new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req" };
-    }
-
-    private static Context CreateContext()
-    {
-        return TestHelpers.CreateTestContext();
-    }
-
-    private SessionInfo CreateSession()
-    {
-        return TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
-    }
-
-    private static Entities.User CreateUser()
-    {
-        return TestHelpers.CreateTestUser();
-    }
-
-    private void SetupUserMock()
-    {
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
     }
 
     [Fact]
@@ -128,9 +90,9 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest();
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -144,12 +106,12 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(query: "nonexistent");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.SetupUserMock();
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -164,11 +126,11 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(query: "Bohemian Rhapsody");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var audio = new Audio
         {
@@ -176,7 +138,7 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
             Id = Guid.NewGuid()
         };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audio });
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -193,11 +155,11 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(query: "Inception");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var movie = new global::MediaBrowser.Controller.Entities.Movies.Movie
         {
@@ -205,7 +167,7 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
             Id = Guid.NewGuid()
         };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { movie });
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -231,19 +193,19 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
         // (matching PlayVideo), not "Now playing".
         var handler = CreateHandler();
         var request = CreateIntentRequest(query: "Inception");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
-        SetupUserMock();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+        _fx.SetupUserMock();
 
         var movie = new global::MediaBrowser.Controller.Entities.Movies.Movie
         {
             Name = "Inception",
             Id = Guid.NewGuid()
         };
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { movie });
-        _userDataManagerMock.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
+        _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
             .Returns(new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = TimeSpan.FromMinutes(45).Ticks });
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -261,11 +223,11 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(query: "Star Wars");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var item1 = new Audio
         {
@@ -279,7 +241,7 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
             Id = Guid.NewGuid()
         };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { item1, item2 });
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -295,11 +257,11 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(query: "Test Song");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var audio = new Audio
         {
@@ -307,7 +269,7 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
             Id = Guid.NewGuid()
         };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audio });
 
         await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -323,11 +285,11 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(query: "Test");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var audioId = Guid.NewGuid();
         var audio1 = new Audio
@@ -341,7 +303,7 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
             Id = audioId
         };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audio1, audio2 });
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -356,15 +318,15 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(query: "Test");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         InternalItemsQuery? capturedQuery = null;
         int callCount = 0;
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Callback<InternalItemsQuery>(q => { if (++callCount == 1) capturedQuery = q; })
             .Returns(new List<BaseItem>());
 
@@ -384,17 +346,17 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(query: "Soul Coughing");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
-        SetupUserMock();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+        _fx.SetupUserMock();
 
         var artist = new MusicArtist { Name = "Soul Coughing", Id = Guid.NewGuid() };
         var song1 = new Audio { Name = "Circles", Id = Guid.NewGuid() };
         var song2 = new Audio { Name = "Screenwriter's Blues", Id = Guid.NewGuid() };
 
         int callCount = 0;
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(() =>
             {
                 callCount++;
@@ -421,13 +383,13 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(query: "nonexistent");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
-        SetupUserMock();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+        _fx.SetupUserMock();
 
         int callCount = 0;
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(() =>
             {
                 callCount++;
@@ -451,17 +413,17 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(query: "Soul Coughing");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
-        SetupUserMock();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+        _fx.SetupUserMock();
 
         var titleResult = new Audio { Name = "Lust in Phaze", Id = Guid.NewGuid() };
         var artist = new MusicArtist { Name = "Soul Coughing", Id = Guid.NewGuid() };
         var artistSong = new Audio { Name = "Circles", Id = Guid.NewGuid() };
 
         int callCount = 0;
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(() =>
             {
                 callCount++;
@@ -487,17 +449,17 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(query: "nonexistent artist");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
-        SetupUserMock();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+        _fx.SetupUserMock();
 
         // Items whose names won't fuzzy-match the query "nonexistent artist"
         var song1 = new Audio { Name = "Alpha Track", Id = Guid.NewGuid() };
         var song2 = new Audio { Name = "Beta Track", Id = Guid.NewGuid() };
 
         int callCount = 0;
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(() =>
             {
                 callCount++;
@@ -522,22 +484,22 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(query: "test");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
-        SetupUserMock();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+        _fx.SetupUserMock();
 
         var items = Enumerable.Range(0, 5)
             .Select(i => new Audio { Name = $"Song {i}", Id = Guid.NewGuid() })
             .ToList<BaseItem>();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(items);
 
         await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
         // With >3 results, artist fallback is NOT triggered → only 1 call to GetItemList
-        _libraryManagerMock.Verify(l => l.GetItemList(It.IsAny<InternalItemsQuery>()), Times.Once());
+        _fx.LibraryManager.Verify(l => l.GetItemList(It.IsAny<InternalItemsQuery>()), Times.Once());
     }
 
     // --- JF-456: out-of-library kinds (playlists) stay searchable for restricted users (GH #22 residual) ---
@@ -555,11 +517,11 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
         // so the out-of-library sibling query runs WITHOUT the filter (JF-456).
         var handler = CreateHandler();
         var request = CreateIntentRequest(query: "road trip");
-        var context = CreateContext();
+        var context = _fx.CreateContext();
         var libraryId = Guid.NewGuid();
         var user = CreateRestrictedUser(libraryId);
-        var session = CreateSession();
-        SetupUserMock();
+        var session = _fx.CreateSession();
+        _fx.SetupUserMock();
 
         var playlist = new MediaBrowser.Controller.Playlists.Playlist
         {
@@ -568,7 +530,7 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
         };
 
         var capturedQueries = new List<InternalItemsQuery>();
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Callback<InternalItemsQuery>(q => capturedQueries.Add(q))
             .Returns((InternalItemsQuery q) =>
                 q.IncludeItemTypes.Length == 1 && q.IncludeItemTypes[0] == BaseItemKind.Playlist
@@ -600,11 +562,11 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
         // hidden the playlist behind the TopParentIds filter, JF-456).
         var handler = CreateHandler();
         var request = CreateIntentRequest(query: "road trip playlist");
-        var context = CreateContext();
+        var context = _fx.CreateContext();
         var libraryId = Guid.NewGuid();
         var user = CreateRestrictedUser(libraryId);
-        var session = CreateSession();
-        SetupUserMock();
+        var session = _fx.CreateSession();
+        _fx.SetupUserMock();
 
         var playlist = new MediaBrowser.Controller.Playlists.Playlist
         {
@@ -613,7 +575,7 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
         };
 
         var capturedQueries = new List<InternalItemsQuery>();
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Callback<InternalItemsQuery>(q => capturedQueries.Add(q))
             .Returns((InternalItemsQuery q) =>
                 // Only the FUZZY playlist query matches (SearchTerm null): the primary
@@ -644,13 +606,13 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
         // with no TopParentIds set, and no sibling query is issued (JF-456).
         var handler = CreateHandler();
         var request = CreateIntentRequest(query: "test");
-        var context = CreateContext();
-        var user = CreateUser(); // unrestricted
-        var session = CreateSession();
-        SetupUserMock();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser(); // unrestricted
+        var session = _fx.CreateSession();
+        _fx.SetupUserMock();
 
         var capturedQueries = new List<InternalItemsQuery>();
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Callback<InternalItemsQuery>(q => capturedQueries.Add(q))
             .Returns(new List<BaseItem>());
 
@@ -673,11 +635,11 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
         // one DB roundtrip saved per attempt on the miss paths inside the 8s window.
         var handler = CreateHandler();
         var request = CreateIntentRequest(query: "song");
-        var context = CreateContext();
+        var context = _fx.CreateContext();
         var libraryId = Guid.NewGuid();
         var user = CreateRestrictedUser(libraryId);
-        var session = CreateSession();
-        SetupUserMock();
+        var session = _fx.CreateSession();
+        _fx.SetupUserMock();
 
         int limit = global::Jellyfin.Plugin.AlexaSkill.Plugin.Instance?.Configuration?.MaxSearchResults ?? 20;
         var fullPage = Enumerable.Range(0, limit)
@@ -685,7 +647,7 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
             .ToList<BaseItem>();
 
         var capturedQueries = new List<InternalItemsQuery>();
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Callback<InternalItemsQuery>(q => capturedQueries.Add(q))
             .Returns((InternalItemsQuery q) =>
                 q.IncludeItemTypes.Contains(BaseItemKind.Playlist)

@@ -31,23 +31,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class ListTruncationTests : PluginTestBase
 {
-    private readonly Mock<ISessionManager> _sessionManagerMock;
-    private readonly Mock<ILibraryManager> _libraryManagerMock;
-    private readonly Mock<IUserManager> _userManagerMock;
-    private readonly Mock<IUserDataManager> _userDataManagerMock;
-    private readonly PluginConfiguration _config;
-    private readonly ILoggerFactory _loggerFactory;
-
-    public ListTruncationTests()
-    {
-        _sessionManagerMock = new Mock<ISessionManager>();
-        _libraryManagerMock = new Mock<ILibraryManager>();
-        _userManagerMock = new Mock<IUserManager>();
-        _userDataManagerMock = new Mock<IUserDataManager>();
-        _config = new PluginConfiguration();
-        TestHelpers.SetServerAddress(_config, "https://test.example.com");
-        _loggerFactory = LoggerFactory.Create(b => { });
-    }
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture();
 
     private static void EnsureVisualsEnabled()
     {
@@ -64,17 +48,6 @@ public class ListTruncationTests : PluginTestBase
                 c.MusicEnabled = true;
             },
             "alexa-list-truncation-test");
-    }
-
-    private SessionInfo CreateSession()
-        => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
-
-    private static Entities.User CreateUser() => TestHelpers.CreateTestUser();
-
-    private void SetupUserMock()
-    {
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
     }
 
     private static List<Audio> CreateAudioItems(int count)
@@ -96,8 +69,8 @@ public class ListTruncationTests : PluginTestBase
     public async Task BrowseLibrary_ManyItems_UsesPartialKeyAndKeepsSessionOpen()
     {
         var handler = new BrowseLibraryIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
-            _userManagerMock.Object, _loggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object,
+            _fx.UserManager.Object, _fx.LoggerFactory);
 
         var request = new IntentRequest
         {
@@ -114,10 +87,10 @@ public class ListTruncationTests : PluginTestBase
         };
 
         var context = TestHelpers.CreateContextWithoutApl();
-        var user = CreateUser();
-        var session = CreateSession();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         // 8 items exceeds voice limit (5), triggers partial key
         var artists = new List<BaseItem>();
@@ -126,7 +99,7 @@ public class ListTruncationTests : PluginTestBase
             artists.Add(new MusicArtist { Name = $"Artist {i + 1}", Id = Guid.NewGuid() });
         }
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(artists);
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -152,8 +125,8 @@ public class ListTruncationTests : PluginTestBase
     public async Task BrowseLibrary_FewItems_UsesFullKeyAndEndsSession()
     {
         var handler = new BrowseLibraryIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
-            _userManagerMock.Object, _loggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object,
+            _fx.UserManager.Object, _fx.LoggerFactory);
 
         var request = new IntentRequest
         {
@@ -170,10 +143,10 @@ public class ListTruncationTests : PluginTestBase
         };
 
         var context = TestHelpers.CreateContextWithoutApl();
-        var user = CreateUser();
-        var session = CreateSession();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         // 3 items fits within voice limit
         var artists = new List<BaseItem>
@@ -183,7 +156,7 @@ public class ListTruncationTests : PluginTestBase
             new MusicArtist { Name = "Artist 3", Id = Guid.NewGuid() },
         };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(artists);
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -207,8 +180,8 @@ public class ListTruncationTests : PluginTestBase
     public async Task QueryArtistLibrary_ManyTracks_UsesPartialKeyAndKeepsSessionOpen()
     {
         var handler = new QueryArtistLibraryIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
-            _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object,
+            _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory);
 
         var request = new IntentRequest
         {
@@ -225,16 +198,16 @@ public class ListTruncationTests : PluginTestBase
         };
 
         var context = TestHelpers.CreateContextWithoutApl();
-        var user = CreateUser();
-        var session = CreateSession();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var artist = new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() };
         var tracks = CreateAudioItems(10);
 
         int callCount = 0;
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(() =>
             {
                 callCount++;
@@ -263,8 +236,8 @@ public class ListTruncationTests : PluginTestBase
     public async Task QueryArtistLibrary_FewTracks_UsesFullKeyAndKeepsSessionOpen()
     {
         var handler = new QueryArtistLibraryIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
-            _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object,
+            _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory);
 
         var request = new IntentRequest
         {
@@ -281,16 +254,16 @@ public class ListTruncationTests : PluginTestBase
         };
 
         var context = TestHelpers.CreateContextWithoutApl();
-        var user = CreateUser();
-        var session = CreateSession();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var artist = new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() };
         var tracks = CreateAudioItems(3);
 
         int callCount = 0;
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(() =>
             {
                 callCount++;
@@ -317,8 +290,8 @@ public class ListTruncationTests : PluginTestBase
         EnsureVisualsEnabled();
 
         var handler = new QueryArtistLibraryIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
-            _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object,
+            _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory);
 
         var request = new IntentRequest
         {
@@ -335,16 +308,16 @@ public class ListTruncationTests : PluginTestBase
         };
 
         var context = TestHelpers.CreateContextWithApl();
-        var user = CreateUser();
-        var session = CreateSession();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var artist = new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() };
         var tracks = CreateAudioItems(10);
 
         int callCount = 0;
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(() =>
             {
                 callCount++;
@@ -371,8 +344,8 @@ public class ListTruncationTests : PluginTestBase
     public async Task InProgressMedia_ManyItems_UsesPartialKeyAndKeepsSessionOpen()
     {
         var handler = new InProgressMediaListIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
-            _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object,
+            _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory);
 
         var request = new IntentRequest
         {
@@ -382,17 +355,17 @@ public class ListTruncationTests : PluginTestBase
         };
 
         var context = TestHelpers.CreateContextWithoutApl();
-        var user = CreateUser();
-        var session = CreateSession();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         // 8 items with progress
         var items = CreateAudioItems(8);
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(items);
 
-        _userDataManagerMock.Setup(u => u.GetUserData(
+        _fx.UserDataManager.Setup(u => u.GetUserData(
                 It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
             .Returns(new UserItemData
             {
@@ -422,8 +395,8 @@ public class ListTruncationTests : PluginTestBase
     public async Task InProgressMedia_FewItems_UsesFullKeyAndKeepsSessionOpen()
     {
         var handler = new InProgressMediaListIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
-            _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object,
+            _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory);
 
         var request = new IntentRequest
         {
@@ -433,16 +406,16 @@ public class ListTruncationTests : PluginTestBase
         };
 
         var context = TestHelpers.CreateContextWithoutApl();
-        var user = CreateUser();
-        var session = CreateSession();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var items = CreateAudioItems(3);
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(items);
 
-        _userDataManagerMock.Setup(u => u.GetUserData(
+        _fx.UserDataManager.Setup(u => u.GetUserData(
                 It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
             .Returns(new UserItemData
             {
@@ -467,8 +440,8 @@ public class ListTruncationTests : PluginTestBase
     public async Task InProgressMedia_ExactlyFiveItems_NoTruncation()
     {
         var handler = new InProgressMediaListIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
-            _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object,
+            _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory);
 
         var request = new IntentRequest
         {
@@ -478,16 +451,16 @@ public class ListTruncationTests : PluginTestBase
         };
 
         var context = TestHelpers.CreateContextWithoutApl();
-        var user = CreateUser();
-        var session = CreateSession();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var items = CreateAudioItems(5);
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(items);
 
-        _userDataManagerMock.Setup(u => u.GetUserData(
+        _fx.UserDataManager.Setup(u => u.GetUserData(
                 It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
             .Returns(new UserItemData
             {
@@ -516,9 +489,9 @@ public class ListTruncationTests : PluginTestBase
     public async Task ListQueue_ManyUpcoming_UsesPartialKeyAndKeepsSessionOpen()
     {
         var handler = new ListQueueIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _loggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.LoggerFactory);
 
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
         var currentId = Guid.NewGuid();
         var queueIds = new List<Guid> { currentId };
@@ -537,7 +510,7 @@ public class ListTruncationTests : PluginTestBase
 
         foreach (var audio in audioItems)
         {
-            _libraryManagerMock.Setup(l => l.GetItemById(audio.Id))
+            _fx.LibraryManager.Setup(l => l.GetItemById(audio.Id))
                 .Returns(audio);
         }
 
@@ -549,7 +522,7 @@ public class ListTruncationTests : PluginTestBase
         };
 
         SkillResponse response = await handler.HandleAsync(
-            request, TestHelpers.CreateContextWithoutApl(), CreateUser(), session, CancellationToken.None);
+            request, TestHelpers.CreateContextWithoutApl(), _fx.CreateUser(), session, CancellationToken.None);
 
         Assert.NotNull(response);
         string speech = TestHelpers.GetSpeechText(response);
@@ -570,9 +543,9 @@ public class ListTruncationTests : PluginTestBase
     public async Task ListQueue_FewUpcoming_UsesFullKeyAndEndsSession()
     {
         var handler = new ListQueueIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _loggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.LoggerFactory);
 
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
         var currentId = Guid.NewGuid();
         var nextId = Guid.NewGuid();
@@ -583,7 +556,7 @@ public class ListTruncationTests : PluginTestBase
             new() { Id = nextId }
         };
 
-        _libraryManagerMock.Setup(l => l.GetItemById(nextId))
+        _fx.LibraryManager.Setup(l => l.GetItemById(nextId))
             .Returns(new Audio { Id = nextId, Name = "Next Song" });
 
         var request = new IntentRequest
@@ -594,7 +567,7 @@ public class ListTruncationTests : PluginTestBase
         };
 
         SkillResponse response = await handler.HandleAsync(
-            request, TestHelpers.CreateContextWithoutApl(), CreateUser(), session, CancellationToken.None);
+            request, TestHelpers.CreateContextWithoutApl(), _fx.CreateUser(), session, CancellationToken.None);
 
         Assert.NotNull(response);
         string speech = TestHelpers.GetSpeechText(response);
@@ -607,9 +580,9 @@ public class ListTruncationTests : PluginTestBase
     public async Task ListQueue_ExactlyFiveUpcoming_NoTruncation()
     {
         var handler = new ListQueueIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _loggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.LoggerFactory);
 
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
         var currentId = Guid.NewGuid();
         var queueIds = new List<Guid> { currentId };
@@ -627,7 +600,7 @@ public class ListTruncationTests : PluginTestBase
 
         foreach (var audio in audioItems)
         {
-            _libraryManagerMock.Setup(l => l.GetItemById(audio.Id))
+            _fx.LibraryManager.Setup(l => l.GetItemById(audio.Id))
                 .Returns(audio);
         }
 
@@ -639,7 +612,7 @@ public class ListTruncationTests : PluginTestBase
         };
 
         SkillResponse response = await handler.HandleAsync(
-            request, TestHelpers.CreateContextWithoutApl(), CreateUser(), session, CancellationToken.None);
+            request, TestHelpers.CreateContextWithoutApl(), _fx.CreateUser(), session, CancellationToken.None);
 
         Assert.NotNull(response);
         string speech = TestHelpers.GetSpeechText(response);
@@ -656,8 +629,8 @@ public class ListTruncationTests : PluginTestBase
     public async Task RecentlyAdded_ManyItems_KeepsSessionOpenWithShowMore()
     {
         var handler = new QueryRecentlyAddedIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
-            _userManagerMock.Object, _loggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object,
+            _fx.UserManager.Object, _fx.LoggerFactory);
 
         var request = new IntentRequest
         {
@@ -667,10 +640,10 @@ public class ListTruncationTests : PluginTestBase
         };
 
         var context = TestHelpers.CreateContextWithoutApl();
-        var user = CreateUser();
-        var session = CreateSession();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         // 8 items exceeds voice limit
         var items = new List<BaseItem>();
@@ -684,7 +657,7 @@ public class ListTruncationTests : PluginTestBase
             });
         }
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(items);
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -708,8 +681,8 @@ public class ListTruncationTests : PluginTestBase
     public async Task RecentlyAdded_FewItems_KeepsSessionOpen()
     {
         var handler = new QueryRecentlyAddedIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
-            _userManagerMock.Object, _loggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object,
+            _fx.UserManager.Object, _fx.LoggerFactory);
 
         var request = new IntentRequest
         {
@@ -719,10 +692,10 @@ public class ListTruncationTests : PluginTestBase
         };
 
         var context = TestHelpers.CreateContextWithoutApl();
-        var user = CreateUser();
-        var session = CreateSession();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var items = new List<BaseItem>
         {
@@ -730,7 +703,7 @@ public class ListTruncationTests : PluginTestBase
             new Movie { Name = "New Movie", Id = Guid.NewGuid() }
         };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(items);
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -749,8 +722,8 @@ public class ListTruncationTests : PluginTestBase
     public async Task RecentlyAdded_ExactlyFiveItems_NoTruncation()
     {
         var handler = new QueryRecentlyAddedIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
-            _userManagerMock.Object, _loggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object,
+            _fx.UserManager.Object, _fx.LoggerFactory);
 
         var request = new IntentRequest
         {
@@ -760,10 +733,10 @@ public class ListTruncationTests : PluginTestBase
         };
 
         var context = TestHelpers.CreateContextWithoutApl();
-        var user = CreateUser();
-        var session = CreateSession();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var items = new List<BaseItem>();
         for (int i = 0; i < 5; i++)
@@ -771,7 +744,7 @@ public class ListTruncationTests : PluginTestBase
             items.Add(new Audio { Name = $"Item {i + 1}", Id = Guid.NewGuid() });
         }
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(items);
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -791,8 +764,8 @@ public class ListTruncationTests : PluginTestBase
         EnsureVisualsEnabled();
 
         var handler = new QueryRecentlyAddedIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
-            _userManagerMock.Object, _loggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object,
+            _fx.UserManager.Object, _fx.LoggerFactory);
 
         var request = new IntentRequest
         {
@@ -802,10 +775,10 @@ public class ListTruncationTests : PluginTestBase
         };
 
         var context = TestHelpers.CreateContextWithApl();
-        var user = CreateUser();
-        var session = CreateSession();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var items = new List<BaseItem>();
         for (int i = 0; i < 8; i++)
@@ -813,7 +786,7 @@ public class ListTruncationTests : PluginTestBase
             items.Add(new Audio { Name = $"Item {i + 1}", Id = Guid.NewGuid() });
         }
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(items);
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -832,11 +805,11 @@ public class ListTruncationTests : PluginTestBase
     [Fact]
     public async Task BrowseLibrary_ConfigMaxBrowseResults_RespectedInQuery()
     {
-        _config.MaxBrowseResults = 25;
+        _fx.Config.MaxBrowseResults = 25;
 
         var handler = new BrowseLibraryIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
-            _userManagerMock.Object, _loggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object,
+            _fx.UserManager.Object, _fx.LoggerFactory);
 
         var request = new IntentRequest
         {
@@ -853,13 +826,13 @@ public class ListTruncationTests : PluginTestBase
         };
 
         var context = TestHelpers.CreateContextWithoutApl();
-        var user = CreateUser();
-        var session = CreateSession();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         InternalItemsQuery? capturedQuery = null;
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Callback<InternalItemsQuery>(q => capturedQuery = q)
             .Returns(new List<BaseItem>());
 

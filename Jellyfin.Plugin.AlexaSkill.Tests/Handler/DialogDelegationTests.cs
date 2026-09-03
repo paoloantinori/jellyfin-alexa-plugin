@@ -26,33 +26,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class DialogDelegationTests : PluginTestBase
 {
-    private readonly Mock<ISessionManager> _sessionManagerMock;
-    private readonly Mock<ILibraryManager> _libraryManagerMock;
-    private readonly Mock<IUserManager> _userManagerMock;
-    private readonly Mock<IUserDataManager> _userDataManagerMock;
-    private readonly PluginConfiguration _config;
-    private readonly ILoggerFactory _loggerFactory;
-
-    public DialogDelegationTests()
-    {
-        _sessionManagerMock = new Mock<ISessionManager>();
-        _libraryManagerMock = new Mock<ILibraryManager>();
-        _userManagerMock = new Mock<IUserManager>();
-        _userDataManagerMock = new Mock<IUserDataManager>();
-        _config = new PluginConfiguration { AsrCompoundWordFixEnabled = false };
-        TestHelpers.SetServerAddress(_config, "https://test.example.com");
-        _loggerFactory = LoggerFactory.Create(b => { });
-    }
-
-    private static Context CreateContext() => TestHelpers.CreateTestContext();
-    private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
-    private static Entities.User CreateUser() => TestHelpers.CreateTestUser();
-
-    private void SetupUserMock()
-    {
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
-    }
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture(configure: c => c.AsrCompoundWordFixEnabled = false);
 
     private static IntentRequest CreateIntentRequest(string intentName, string? dialogState, Dictionary<string, string?>? slots = null)
     {
@@ -91,11 +65,11 @@ public class DialogDelegationTests : PluginTestBase
     public async Task PlaySong_MissingSlot_ElicitsSongName()
     {
         var handler = new PlaySongIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory);
         var request = CreateIntentRequest(IntentNames.PlaySong, "STARTED");
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), session, CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
 
         Assert.NotNull(response);
         Assert.False(response.Response.ShouldEndSession);
@@ -107,16 +81,16 @@ public class DialogDelegationTests : PluginTestBase
     public async Task PlaySong_WithSlots_ProcessesNormally()
     {
         var handler = new PlaySongIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory);
         var request = CreateIntentRequest(IntentNames.PlaySong, "COMPLETED",
             new Dictionary<string, string> { { "song", "Bohemian Rhapsody" }, { "musician", "Queen" } });
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.SetupUserMock();
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), session, CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
 
         Assert.NotNull(response);
         Assert.DoesNotContain(response.Response.Directives ?? new List<IDirective>(), d => d.Type == "Dialog.Delegate");
@@ -126,11 +100,11 @@ public class DialogDelegationTests : PluginTestBase
     public async Task PlayAlbum_MissingSlot_ElicitsAlbumName()
     {
         var handler = new PlayAlbumIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory);
         var request = CreateIntentRequest(IntentNames.PlayAlbum, "STARTED");
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), session, CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
 
         Assert.NotNull(response);
         Assert.False(response.Response.ShouldEndSession);
@@ -142,29 +116,29 @@ public class DialogDelegationTests : PluginTestBase
     public async Task PlayAlbum_WithPartialSlots_ResolvesAlbumByArtist_NoDelegation()
     {
         var handler = new PlayAlbumIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory);
         // Album slot missing even though musician is provided: JF-422 routes this into
         // the album-by-artist resolution (play without a title) instead of eliciting.
         var request = CreateIntentRequest(IntentNames.PlayAlbum, "IN_PROGRESS",
             new Dictionary<string, string> { { "musician", "Queen" } });
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
         var artist = new MusicArtist { Name = "Queen", Id = Guid.NewGuid() };
         var album = new MusicAlbum { Name = "A Night at the Opera", Id = Guid.NewGuid() };
         var track = new Audio { Name = "Bohemian Rhapsody", Id = Guid.NewGuid() };
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns((InternalItemsQuery q) => q.IncludeItemTypes?.Contains(BaseItemKind.MusicArtist) == true
                 ? new List<BaseItem> { artist }
                 : new List<BaseItem> { album });
-        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
             .Returns(new QueryResult<BaseItem>
             {
                 Items = new[] { track },
                 TotalRecordCount = 1
             });
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), session, CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
 
         Assert.NotNull(response);
         Assert.DoesNotContain(response.Response.Directives ?? new List<IDirective>(), d => d.Type == "Dialog.Delegate");
@@ -175,7 +149,7 @@ public class DialogDelegationTests : PluginTestBase
     public async Task PlayEpisode_DoesNotDelegate()
     {
         var handler = new PlayEpisodeIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.LoggerFactory);
         var request = CreateIntentRequest(IntentNames.PlayEpisode, "COMPLETED",
             new Dictionary<string, string>
             {
@@ -183,13 +157,13 @@ public class DialogDelegationTests : PluginTestBase
                 { "season_number", "4" },
                 { "episode_number", "10" }
             });
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.SetupUserMock();
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), session, CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
 
         Assert.NotNull(response);
         Assert.DoesNotContain(response.Response.Directives ?? new List<IDirective>(), d => d.Type == "Dialog.Delegate");
@@ -199,11 +173,11 @@ public class DialogDelegationTests : PluginTestBase
     public async Task PlaySong_NullDialogState_ElicitsSongName()
     {
         var handler = new PlaySongIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory);
         var request = CreateIntentRequest(IntentNames.PlaySong, null);
-        var session = CreateSession();
+        var session = _fx.CreateSession();
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), session, CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
 
         Assert.NotNull(response);
         Assert.False(response.Response.ShouldEndSession);

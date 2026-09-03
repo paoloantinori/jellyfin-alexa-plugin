@@ -28,39 +28,27 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class PlayBookIntentHandlerTests : PluginTestBase
 {
-    private readonly Mock<ISessionManager> _sessionManagerMock;
-    private readonly Mock<ILibraryManager> _libraryManagerMock;
-    private readonly Mock<IUserManager> _userManagerMock;
-    private readonly Mock<IUserDataManager> _userDataManagerMock;
-    private readonly PluginConfiguration _config;
-    private readonly ILoggerFactory _loggerFactory;
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture();
     private readonly DeviceQueueManager _queueManager;
 
     public PlayBookIntentHandlerTests()
     {
-        _sessionManagerMock = new Mock<ISessionManager>();
-        _libraryManagerMock = new Mock<ILibraryManager>();
-        _userManagerMock = new Mock<IUserManager>();
-        _userDataManagerMock = new Mock<IUserDataManager>();
-        _config = new PluginConfiguration();
-        TestHelpers.SetServerAddress(_config, "https://test.example.com");
-        _loggerFactory = LoggerFactory.Create(b => { });
         var queueLogger = new Mock<ILogger<DeviceQueueManager>>();
         _queueManager = new DeviceQueueManager(System.IO.Path.GetTempPath(), queueLogger.Object);
 
         TestHelpers.EnsurePluginInstance(
-            _config, _loggerFactory, c => { }, "playbook-tests");
+            _fx.Config, _fx.LoggerFactory, c => { }, "playbook-tests");
     }
 
     private PlayBookIntentHandler CreateHandler()
     {
         return new PlayBookIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory,
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory,
             _queueManager);
     }
 
@@ -77,27 +65,11 @@ public class PlayBookIntentHandlerTests : PluginTestBase
         return new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req" };
     }
 
-    private static Context CreateContext()
-    {
-        return TestHelpers.CreateTestContext();
-    }
-
     private SessionInfo CreateSession()
     {
-        var session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+        var session = TestHelpers.CreateTestSession(_fx.SessionManager.Object, _fx.LoggerFactory);
         session.DeviceId = "test-device";
         return session;
-    }
-
-    private static Entities.User CreateUser()
-    {
-        return TestHelpers.CreateTestUser();
-    }
-
-    private void SetupUserMock()
-    {
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
     }
 
     [Fact]
@@ -128,8 +100,8 @@ public class PlayBookIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest();
-        var context = CreateContext();
-        var user = CreateUser();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
         var session = CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -146,12 +118,12 @@ public class PlayBookIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(bookName: "Nonexistent Book");
-        var context = CreateContext();
-        var user = CreateUser();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
         var session = CreateSession();
 
-        SetupUserMock();
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.SetupUserMock();
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -170,8 +142,8 @@ public class PlayBookIntentHandlerTests : PluginTestBase
         {
             var handler = CreateHandler();
             var request = CreateIntentRequest(bookName: "The Hobbit");
-            var context = CreateContext();
-            var user = CreateUser();
+            var context = _fx.CreateContext();
+            var user = _fx.CreateUser();
             var session = CreateSession();
 
             SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -192,11 +164,11 @@ public class PlayBookIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(bookName: "The Hobbit");
-        var context = CreateContext();
-        var user = CreateUser();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
         var session = CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var bookItem = new Audio
         {
@@ -204,7 +176,7 @@ public class PlayBookIntentHandlerTests : PluginTestBase
             Id = Guid.NewGuid()
         };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
                 q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
             .Returns(new List<BaseItem> { bookItem });
 
@@ -214,7 +186,7 @@ public class PlayBookIntentHandlerTests : PluginTestBase
             Id = Guid.NewGuid()
         };
 
-        _libraryManagerMock.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q =>
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q =>
                 q.ParentId == bookItem.Id)))
             .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>
             {
@@ -236,22 +208,22 @@ public class PlayBookIntentHandlerTests : PluginTestBase
     {
         // F2: a fresh-start audiobook via VideoApp (NativeControlsForBooks, no resume position)
         // must announce the book title instead of launching silently.
-        _config.NativeControlsForBooks = true;
+        _fx.Config.NativeControlsForBooks = true;
         var handler = CreateHandler();
         var request = CreateIntentRequest(bookName: "The Hobbit");
-        var context = CreateContext();
-        var user = CreateUser();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
         var session = CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var bookItem = new Audio { Name = "The Hobbit", Id = Guid.NewGuid() };
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
                 q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
             .Returns(new List<BaseItem> { bookItem });
 
         var trackItem = new Audio { Name = "Chapter 1", Id = Guid.NewGuid() };
-        _libraryManagerMock.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q =>
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q =>
                 q.ParentId == bookItem.Id)))
             .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>
             {
@@ -275,11 +247,11 @@ public class PlayBookIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(bookName: "Empty Book");
-        var context = CreateContext();
-        var user = CreateUser();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
         var session = CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         // Use a Folder-based item (not Audio) so MediaType != Audio,
         // triggering the "no content" path after our single-file audiobook fix.
@@ -289,11 +261,11 @@ public class PlayBookIntentHandlerTests : PluginTestBase
             Id = Guid.NewGuid()
         };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
                 q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
             .Returns(new List<BaseItem> { bookItem });
 
-        _libraryManagerMock.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q =>
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q =>
                 q.ParentId == bookItem.Id)))
             .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>
             {

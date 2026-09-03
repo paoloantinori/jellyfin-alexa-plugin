@@ -40,31 +40,19 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class MusicPrimaryPathGateTests : PluginTestBase, IDisposable
 {
-    private readonly Mock<ISessionManager> _sessionManagerMock;
-    private readonly Mock<ILibraryManager> _libraryManagerMock;
-    private readonly Mock<IUserManager> _userManagerMock;
-    private readonly Mock<IUserDataManager> _userDataManagerMock;
-    private readonly PluginConfiguration _config;
-    private readonly ILoggerFactory _loggerFactory;
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture();
     private readonly List<InternalItemsQuery> _queries = new();
 
     public MusicPrimaryPathGateTests()
     {
-        _sessionManagerMock = new Mock<ISessionManager>();
-        _libraryManagerMock = new Mock<ILibraryManager>();
-        _userManagerMock = new Mock<IUserManager>();
-        _userDataManagerMock = new Mock<IUserDataManager>();
-        _config = new PluginConfiguration();
-        TestHelpers.SetServerAddress(_config, "https://test.example.com");
-        _loggerFactory = LoggerFactory.Create(b => { });
         TestHelpers.EnsurePluginInstance(
-            _config, _loggerFactory,
-            c => c.MusicEnabled = _config.MusicEnabled,
+            _fx.Config, _fx.LoggerFactory,
+            c => c.MusicEnabled = _fx.Config.MusicEnabled,
             "alexa-music-primary-gate-test");
 
         // Record every issued query: the disabled-flag assertions prove the whole
         // path never RUNS, not merely that it returned nothing.
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 _queries.Add(q);
@@ -72,7 +60,7 @@ public class MusicPrimaryPathGateTests : PluginTestBase, IDisposable
             });
     }
 
-    public void Dispose() => _loggerFactory.Dispose();
+    public void Dispose() => _fx.LoggerFactory.Dispose();
 
     // Handler 1: PlaySong. The armed song (Audio + SearchTerm) would play on the
     // first query if the gate let the path run.
@@ -85,7 +73,7 @@ public class MusicPrimaryPathGateTests : PluginTestBase, IDisposable
         var handler = CreateSongHandler();
         SkillResponse response = await handler.HandleAsync(
             CreateIntent(IntentNames.PlaySong, ("song", "bohemian rhapsody")),
-            CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+            _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         AssertDisabledTell(response);
         Assert.Empty(_queries);
@@ -102,7 +90,7 @@ public class MusicPrimaryPathGateTests : PluginTestBase, IDisposable
         var handler = CreateAlbumHandler();
         SkillResponse response = await handler.HandleAsync(
             CreateIntent(IntentNames.PlayAlbum, ("album", "dark side of the moon")),
-            CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+            _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         AssertDisabledTell(response);
         Assert.Empty(_queries);
@@ -120,7 +108,7 @@ public class MusicPrimaryPathGateTests : PluginTestBase, IDisposable
         var handler = CreateFindSongHandler();
         SkillResponse response = await handler.HandleAsync(
             CreateIntent(IntentNames.FindSongIntent, ("titleKeywords", "bohemian rhapsody")),
-            CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+            _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         AssertDisabledTell(response);
         Assert.Empty(_queries);
@@ -138,7 +126,7 @@ public class MusicPrimaryPathGateTests : PluginTestBase, IDisposable
         var handler = CreateFindSongHandler();
         SkillResponse response = await handler.HandleAsync(
             CreateIntent(IntentNames.FindSongIntent),
-            CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+            _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         TestHelpers.AssertSessionOpen(response);
         Assert.Null(TestHelpers.GetPlayDirective(response));
@@ -156,15 +144,15 @@ public class MusicPrimaryPathGateTests : PluginTestBase, IDisposable
         SetupUserMock();
 
         var handler = new PlayArtistSongsIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
         SkillResponse response = await handler.HandleAsync(
             CreateIntent(IntentNames.PlayArtistSongs, ("musician", "pink floyd")),
-            CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+            _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         AssertDisabledTell(response);
         Assert.Empty(_queries);
@@ -183,7 +171,7 @@ public class MusicPrimaryPathGateTests : PluginTestBase, IDisposable
         var handler = CreateMoodHandler();
         SkillResponse response = await handler.HandleAsync(
             CreateIntent(IntentNames.PlayMoodMusic, ("mood", "relaxing")),
-            CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+            _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         AssertDisabledTell(response);
         Assert.Empty(_queries);
@@ -199,7 +187,7 @@ public class MusicPrimaryPathGateTests : PluginTestBase, IDisposable
         var handler = CreateSongHandler();
         SkillResponse response = await handler.HandleAsync(
             CreateIntent(IntentNames.PlaySong, ("song", "bohemian rhapsody")),
-            CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+            _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.NotEmpty(_queries);
@@ -208,7 +196,7 @@ public class MusicPrimaryPathGateTests : PluginTestBase, IDisposable
     // Read-source alignment (JF-467, binding implementation note): the handler's
     // INJECTED configuration still says music enabled, but the LIVE
     // Plugin.Instance configuration (what a standard-API configuration
-    // replacement mutates; handlers are DI singletons that capture _config once)
+    // replacement mutates; handlers are DI singletons that capture _fx.Config once)
     // says disabled. The entry gate must read the live one and fire.
     // BasePlugin.Configuration's setter is private (verified via reflection), so
     // the "replaced object" is simulated as a distinct configuration object that
@@ -224,7 +212,7 @@ public class MusicPrimaryPathGateTests : PluginTestBase, IDisposable
         var handler = CreateSongHandler(staleConfig);
         SkillResponse response = await handler.HandleAsync(
             CreateIntent(IntentNames.PlaySong, ("song", "bohemian rhapsody")),
-            CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+            _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         AssertDisabledTell(response);
         Assert.Empty(_queries);
@@ -232,7 +220,7 @@ public class MusicPrimaryPathGateTests : PluginTestBase, IDisposable
 
     // Read-source alignment, JF-464 shared gate: TryEntityFallbackAsync reads the
     // same live source (BaseHandler.IsMusicEnabled) after the JF-467 switch, not
-    // the injected copy. Old code (injected _config, music enabled here) would
+    // the injected copy. Old code (injected _fx.Config, music enabled here) would
     // have run the artist search; the live read stops it with zero queries.
     [Fact]
     public async Task SharedFallbackGate_ReadsLivePluginConfig_NotInjectedCopy()
@@ -241,10 +229,10 @@ public class MusicPrimaryPathGateTests : PluginTestBase, IDisposable
         var staleConfig = new PluginConfiguration();
         TestHelpers.SetServerAddress(staleConfig, "https://test.example.com");
 
-        var probe = new SharedGateProbeHandler(_sessionManagerMock.Object, staleConfig, _loggerFactory);
+        var probe = new SharedGateProbeHandler(_fx.SessionManager.Object, staleConfig, _fx.LoggerFactory);
         SkillResponse? result = await probe.CallTryEntityFallbackAsync(
-            "abbey road", CreateUserJellyfin(), CreateUser(), CreateSession(), CreateContext(), "en-US",
-            _libraryManagerMock.Object, _userDataManagerMock.Object, "read-source probe", CancellationToken.None);
+            "abbey road", CreateUserJellyfin(), _fx.CreateUser(), _fx.CreateSession(), _fx.CreateContext(), "en-US",
+            _fx.LibraryManager.Object, _fx.UserDataManager.Object, "read-source probe", CancellationToken.None);
 
         Assert.Null(result);
         Assert.Empty(_queries);
@@ -260,10 +248,10 @@ public class MusicPrimaryPathGateTests : PluginTestBase, IDisposable
         var injected = new PluginConfiguration { MusicEnabled = false };
         TestHelpers.SetServerAddress(injected, "https://test.example.com");
 
-        var probe = new SharedGateProbeHandler(_sessionManagerMock.Object, injected, _loggerFactory);
+        var probe = new SharedGateProbeHandler(_fx.SessionManager.Object, injected, _fx.LoggerFactory);
         SkillResponse? result = await probe.CallTryEntityFallbackAsync(
-            "abbey road", CreateUserJellyfin(), CreateUser(), CreateSession(), CreateContext(), "en-US",
-            _libraryManagerMock.Object, _userDataManagerMock.Object, "fallback probe", CancellationToken.None);
+            "abbey road", CreateUserJellyfin(), _fx.CreateUser(), _fx.CreateSession(), _fx.CreateContext(), "en-US",
+            _fx.LibraryManager.Object, _fx.UserDataManager.Object, "fallback probe", CancellationToken.None);
 
         Assert.Null(result);
         Assert.Empty(_queries);
@@ -286,49 +274,46 @@ public class MusicPrimaryPathGateTests : PluginTestBase, IDisposable
 
     private PlaySongIntentHandler CreateSongHandler(PluginConfiguration? config = null)
         => new(
-            _sessionManagerMock.Object,
-            config ?? _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
+            _fx.SessionManager.Object,
+            config ?? _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
 
     private PlayAlbumIntentHandler CreateAlbumHandler()
         => new(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
 
     private FindSongIntentHandler CreateFindSongHandler()
         => new(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
 
     private PlayMoodMusicIntentHandler CreateMoodHandler()
         => new(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
 
-    private static Context CreateContext() => TestHelpers.CreateTestContext();
-    private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
-    private static Entities.User CreateUser() => TestHelpers.CreateTestUser();
     private static Jellyfin.Database.Implementations.Entities.User CreateUserJellyfin()
         => new("testuser", "test", "test");
 
     private void SetupUserMock()
     {
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
+        _fx.UserManager.Setup(u => u.GetUserById(It.IsAny<Guid>()))
             .Returns(CreateUserJellyfin());
     }
 
@@ -339,7 +324,7 @@ public class MusicPrimaryPathGateTests : PluginTestBase, IDisposable
     /// </summary>
     private void DisableMusic()
     {
-        _config.MusicEnabled = false;
+        _fx.Config.MusicEnabled = false;
         Plugin.Instance!.Configuration.MusicEnabled = false;
     }
 

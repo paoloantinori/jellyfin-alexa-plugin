@@ -3,9 +3,10 @@ id: JF-465
 title: >-
   Consolidate duplicated handler test fixtures and the 10-copy warming-gate
   preamble
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-03 08:20'
+updated_date: '2026-09-03 11:04'
 labels: []
 dependencies: []
 references:

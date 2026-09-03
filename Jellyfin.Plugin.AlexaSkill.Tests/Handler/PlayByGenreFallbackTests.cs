@@ -37,32 +37,16 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class PlayByGenreFallbackTests : PluginTestBase
 {
-    private readonly Mock<ISessionManager> _sessionManagerMock;
-    private readonly Mock<ILibraryManager> _libraryManagerMock;
-    private readonly Mock<IUserManager> _userManagerMock;
-    private readonly Mock<IUserDataManager> _userDataManagerMock;
-    private readonly PluginConfiguration _config;
-    private readonly ILoggerFactory _loggerFactory;
-
-    public PlayByGenreFallbackTests()
-    {
-        _sessionManagerMock = new Mock<ISessionManager>();
-        _libraryManagerMock = new Mock<ILibraryManager>();
-        _userManagerMock = new Mock<IUserManager>();
-        _userDataManagerMock = new Mock<IUserDataManager>();
-        _config = new PluginConfiguration();
-        TestHelpers.SetServerAddress(_config, "https://test.example.com");
-        _loggerFactory = LoggerFactory.Create(b => { });
-    }
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture();
 
     private PlayByGenreIntentHandler CreateHandler()
         => new(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
 
     private static IntentRequest CreateGenreIntent(string genre, string locale = "es-ES")
     {
@@ -74,16 +58,6 @@ public class PlayByGenreFallbackTests : PluginTestBase
         return new IntentRequest { Intent = intent, Locale = locale, RequestId = "test-req" };
     }
 
-    private static Context CreateContext() => TestHelpers.CreateTestContext();
-    private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
-    private static Entities.User CreateUser() => TestHelpers.CreateTestUser();
-
-    private void SetupUserMock()
-    {
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
-    }
-
     /// <summary>
     /// Mocks the library so the genre query misses (triggering the entity fallback),
     /// the artist SearchTerm query finds <paramref name="artistName"/>, and the artist
@@ -91,7 +65,7 @@ public class PlayByGenreFallbackTests : PluginTestBase
     /// </summary>
     private void SetupGenreMissWithArtist(Guid artistId, string artistName, List<BaseItem> songs)
     {
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 bool isArtistQuery = q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicArtist);
@@ -125,7 +99,7 @@ public class PlayByGenreFallbackTests : PluginTestBase
     [Fact]
     public async Task GenreMiss_ArtistExists_PlaysArtistWithAnnouncement()
     {
-        SetupUserMock();
+        _fx.SetupUserMock();
         var artistId = Guid.NewGuid();
         var songs = new List<BaseItem>
         {
@@ -135,9 +109,9 @@ public class PlayByGenreFallbackTests : PluginTestBase
         SetupGenreMissWithArtist(artistId, "Abbey Road", songs);
 
         var handler = CreateHandler();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
         SkillResponse response = await handler.HandleAsync(
-            CreateGenreIntent("abbey road"), CreateContext(), CreateUser(), session, CancellationToken.None);
+            CreateGenreIntent("abbey road"), _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
 
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.NotNull(session.NowPlayingQueue);
@@ -152,13 +126,13 @@ public class PlayByGenreFallbackTests : PluginTestBase
     [Fact]
     public async Task GenreMiss_NothingFound_ReturnsGenreNotFoundWithoutPlayback()
     {
-        SetupUserMock();
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.SetupUserMock();
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
 
         var handler = CreateHandler();
         SkillResponse response = await handler.HandleAsync(
-            CreateGenreIntent("abbey road"), CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+            CreateGenreIntent("abbey road"), _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         Assert.Null(TestHelpers.GetPlayDirective(response));
         string speech = TestHelpers.GetSpeechText(response);
@@ -170,11 +144,11 @@ public class PlayByGenreFallbackTests : PluginTestBase
     [Fact]
     public async Task ResolvedGenre_PlaysGenre_NeverQueriesArtists()
     {
-        SetupUserMock();
+        _fx.SetupUserMock();
         var jazzSong = new Audio { Name = "So What", Id = Guid.NewGuid() };
         var queries = new List<InternalItemsQuery>();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 queries.Add(q);
@@ -182,9 +156,9 @@ public class PlayByGenreFallbackTests : PluginTestBase
             });
 
         var handler = CreateHandler();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
         SkillResponse response = await handler.HandleAsync(
-            CreateGenreIntent("jazz"), CreateContext(), CreateUser(), session, CancellationToken.None);
+            CreateGenreIntent("jazz"), _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
 
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.NotNull(session.NowPlayingQueue);
@@ -199,16 +173,16 @@ public class PlayByGenreFallbackTests : PluginTestBase
     [Fact]
     public async Task AnnouncementOff_ArtistStillPlaysSilently()
     {
-        SetupUserMock();
-        _config.AnnounceCrossMediaSubstitution = false;
+        _fx.SetupUserMock();
+        _fx.Config.AnnounceCrossMediaSubstitution = false;
         var artistId = Guid.NewGuid();
         var songs = new List<BaseItem> { new Audio { Name = "Come Together", Id = Guid.NewGuid() } };
         SetupGenreMissWithArtist(artistId, "Abbey Road", songs);
 
         var handler = CreateHandler();
-        var session = CreateSession();
+        var session = _fx.CreateSession();
         SkillResponse response = await handler.HandleAsync(
-            CreateGenreIntent("abbey road"), CreateContext(), CreateUser(), session, CancellationToken.None);
+            CreateGenreIntent("abbey road"), _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
 
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.NotNull(session.NowPlayingQueue);

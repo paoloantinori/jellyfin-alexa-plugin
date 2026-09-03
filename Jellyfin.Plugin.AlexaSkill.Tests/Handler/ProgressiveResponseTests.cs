@@ -71,27 +71,15 @@ internal class TestableHandler : BaseHandler
 [Collection("Plugin")]
 public class ProgressiveResponseTests : PluginTestBase
 {
-    private readonly Mock<ISessionManager> _sessionManagerMock;
-    private readonly PluginConfiguration _config;
-    private readonly ILoggerFactory _loggerFactory;
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture("http://localhost:8096", c => c.AsrCompoundWordFixEnabled = false);
 
-    public ProgressiveResponseTests()
-    {
-        _sessionManagerMock = new Mock<ISessionManager>();
-        _config = new PluginConfiguration { AsrCompoundWordFixEnabled = false };
-        TestHelpers.SetServerAddress(_config, "http://localhost:8096");
-        _loggerFactory = LoggerFactory.Create(b => { });
-    }
-
-    private TestableHandler CreateHandler() => new(_sessionManagerMock.Object, _config, _loggerFactory);
-
-    private static Context CreateContext() => TestHelpers.CreateTestContext();
+    private TestableHandler CreateHandler() => new(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory);
 
     [Fact]
     public async Task SendProgressiveResponse_DoesNotThrow_WhenApiTokenInvalid()
     {
         var handler = CreateHandler();
-        var context = CreateContext();
+        var context = _fx.CreateContext();
         var request = new IntentRequest { RequestId = "test-request-id" };
 
         // Should complete without throwing despite invalid token
@@ -139,10 +127,10 @@ public class ProgressiveResponseTests : PluginTestBase
     public async Task HandleAsync_ProgressiveResponseFailure_DoesNotBlockMainResponse()
     {
         var handler = CreateHandler();
-        var context = CreateContext();
+        var context = _fx.CreateContext();
         var request = new IntentRequest { RequestId = "test-request-id" };
 
-        SkillResponse response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), _fx.CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response);
     }
@@ -159,7 +147,7 @@ public class ProgressiveResponseTests : PluginTestBase
     public async Task SendProgressiveResponse_MultipleCalls_DoNotThrow()
     {
         var handler = CreateHandler();
-        var context = CreateContext();
+        var context = _fx.CreateContext();
         var request = new IntentRequest { RequestId = "test-request-id" };
 
         // First call should succeed
@@ -229,14 +217,14 @@ public class ProgressiveResponseTests : PluginTestBase
     public async Task HandleAsync_ReturnsWithoutAwaiting_ProgressiveResponse()
     {
         var handler = CreateHandler();
-        var context = CreateContext();
+        var context = _fx.CreateContext();
         var request = new IntentRequest { RequestId = "test-request-id" };
 
         // Handler should return a response without throwing, even though the
         // progressive-response task is NOT awaited internally (fire-and-forget).
         SkillResponse response = await handler.HandleAsync(
             request, context, TestHelpers.CreateTestUser(),
-            TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory),
+            _fx.CreateSession(),
             CancellationToken.None);
 
         Assert.NotNull(response);
@@ -258,41 +246,25 @@ public class ProgressiveResponseTests : PluginTestBase
 [Collection("Plugin")]
 public class ProgressiveResponseIntegrationTests : PluginTestBase
 {
-    private readonly Mock<ISessionManager> _sessionManagerMock;
-    private readonly Mock<ILibraryManager> _libraryManagerMock;
-    private readonly Mock<IUserManager> _userManagerMock;
-    private readonly Mock<IUserDataManager> _userDataManagerMock;
-    private readonly PluginConfiguration _config;
-    private readonly ILoggerFactory _loggerFactory;
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture("http://localhost:8096", c => c.AsrCompoundWordFixEnabled = false);
 
     public ProgressiveResponseIntegrationTests()
     {
-        _sessionManagerMock = new Mock<ISessionManager>();
-        _libraryManagerMock = new Mock<ILibraryManager>();
-        _userManagerMock = new Mock<IUserManager>();
-        _userDataManagerMock = new Mock<IUserDataManager>();
-        _userManagerMock
-            .Setup(um => um.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
-        _config = new PluginConfiguration { AsrCompoundWordFixEnabled = false };
-        TestHelpers.SetServerAddress(_config, "http://localhost:8096");
-        _loggerFactory = LoggerFactory.Create(b => { });
+        // the OLD ctor stubbed GetUserById once for every test; keep that contract.
+        _fx.SetupUserMock();
     }
-
-    private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
-    private static Context CreateContext() => TestHelpers.CreateTestContext();
 
     [Fact]
     public async Task PlaySongHandler_ReturnsAudioResponse_WithProgressiveResponse()
     {
         var song = new MediaBrowser.Controller.Entities.Audio.Audio { Name = "Test Song", Id = Guid.NewGuid() };
 
-        _libraryManagerMock
+        _fx.LibraryManager
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { song });
 
         var handler = new PlaySongIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, Mock.Of<IUserDataManager>(), _loggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, Mock.Of<IUserDataManager>(), _fx.LoggerFactory);
 
         var request = new IntentRequest
         {
@@ -308,7 +280,7 @@ public class ProgressiveResponseIntegrationTests : PluginTestBase
             DialogState = "COMPLETED"
         };
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), _fx.CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response.Response.Directives);
         Assert.Single(response.Response.Directives);
@@ -318,12 +290,12 @@ public class ProgressiveResponseIntegrationTests : PluginTestBase
     [Fact]
     public async Task PlayAlbumHandler_ReturnsNotFound_WhenAlbumMissing_WithProgressiveResponse()
     {
-        _libraryManagerMock
+        _fx.LibraryManager
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
 
         var handler = new PlayAlbumIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory);
 
         var request = new IntentRequest
         {
@@ -339,7 +311,7 @@ public class ProgressiveResponseIntegrationTests : PluginTestBase
             DialogState = "COMPLETED"
         };
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), _fx.CreateSession(), CancellationToken.None);
 
         var speech = response.Tells<PlainTextOutputSpeech>();
         Assert.Contains("couldn't find", speech.Text);
@@ -348,12 +320,12 @@ public class ProgressiveResponseIntegrationTests : PluginTestBase
     [Fact]
     public async Task PlayFavoritesHandler_ReturnsNoFavorites_WhenEmpty_WithProgressiveResponse()
     {
-        _libraryManagerMock
+        _fx.LibraryManager
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
 
         var handler = new PlayFavoritesIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.LoggerFactory);
 
         var request = new IntentRequest
         {
@@ -364,7 +336,7 @@ public class ProgressiveResponseIntegrationTests : PluginTestBase
             }
         };
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), _fx.CreateSession(), CancellationToken.None);
 
         var speech = response.Tells<PlainTextOutputSpeech>();
         Assert.Contains("favorite", speech.Text, StringComparison.OrdinalIgnoreCase);
@@ -373,12 +345,12 @@ public class ProgressiveResponseIntegrationTests : PluginTestBase
     [Fact]
     public async Task PlayLastAddedHandler_ReturnsNoItems_WhenEmpty_WithProgressiveResponse()
     {
-        _libraryManagerMock
+        _fx.LibraryManager
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
 
         var handler = new PlayLastAddedIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.LoggerFactory);
 
         var request = new IntentRequest
         {
@@ -389,7 +361,7 @@ public class ProgressiveResponseIntegrationTests : PluginTestBase
             }
         };
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), _fx.CreateSession(), CancellationToken.None);
 
         var speech = response.Tells<PlainTextOutputSpeech>();
         Assert.Contains("newly added", speech.Text, StringComparison.OrdinalIgnoreCase);
@@ -398,12 +370,12 @@ public class ProgressiveResponseIntegrationTests : PluginTestBase
     [Fact]
     public async Task PlayChannelHandler_ReturnsNotFound_WhenChannelMissing_WithProgressiveResponse()
     {
-        _libraryManagerMock
+        _fx.LibraryManager
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
 
         var handler = new PlayChannelIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, Mock.Of<ILiveTvStreamResolver>(), _loggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, Mock.Of<ILiveTvStreamResolver>(), _fx.LoggerFactory);
 
         var request = new IntentRequest
         {
@@ -414,7 +386,7 @@ public class ProgressiveResponseIntegrationTests : PluginTestBase
             }
         };
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), _fx.CreateSession(), CancellationToken.None);
 
         var speech = response.Tells<PlainTextOutputSpeech>();
         Assert.Contains("couldn't find", speech.Text);
@@ -423,12 +395,12 @@ public class ProgressiveResponseIntegrationTests : PluginTestBase
     [Fact]
     public async Task PlayArtistSongsHandler_ReturnsNotFound_WhenArtistMissing_WithProgressiveResponse()
     {
-        _libraryManagerMock
+        _fx.LibraryManager
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
 
         var handler = new PlayArtistSongsIntentHandler(
-            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory);
 
         var request = new IntentRequest
         {
@@ -439,7 +411,7 @@ public class ProgressiveResponseIntegrationTests : PluginTestBase
             }
         };
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), _fx.CreateSession(), CancellationToken.None);
 
         var speech = response.Tells<PlainTextOutputSpeech>();
         Assert.Contains("couldn't find", speech.Text);

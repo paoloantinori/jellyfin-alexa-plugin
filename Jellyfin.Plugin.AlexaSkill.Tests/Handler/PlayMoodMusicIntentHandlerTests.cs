@@ -26,33 +26,17 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class PlayMoodMusicIntentHandlerTests : PluginTestBase
 {
-    private readonly Mock<ISessionManager> _sessionManagerMock;
-    private readonly Mock<ILibraryManager> _libraryManagerMock;
-    private readonly Mock<IUserManager> _userManagerMock;
-    private readonly Mock<IUserDataManager> _userDataManagerMock;
-    private readonly PluginConfiguration _config;
-    private readonly ILoggerFactory _loggerFactory;
-
-    public PlayMoodMusicIntentHandlerTests()
-    {
-        _sessionManagerMock = new Mock<ISessionManager>();
-        _libraryManagerMock = new Mock<ILibraryManager>();
-        _userManagerMock = new Mock<IUserManager>();
-        _userDataManagerMock = new Mock<IUserDataManager>();
-        _config = new PluginConfiguration();
-        TestHelpers.SetServerAddress(_config, "https://test.example.com");
-        _loggerFactory = LoggerFactory.Create(b => { });
-    }
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture();
 
     private PlayMoodMusicIntentHandler CreateHandler()
     {
         return new PlayMoodMusicIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
     }
 
     private static IntentRequest CreateIntentRequest(string? mood = null)
@@ -66,27 +50,6 @@ public class PlayMoodMusicIntentHandlerTests : PluginTestBase
         }
 
         return new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req" };
-    }
-
-    private static Context CreateContext()
-    {
-        return TestHelpers.CreateTestContext();
-    }
-
-    private SessionInfo CreateSession()
-    {
-        return TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
-    }
-
-    private static Entities.User CreateUser()
-    {
-        return TestHelpers.CreateTestUser();
-    }
-
-    private void SetupUserMock()
-    {
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
     }
 
     [Fact]
@@ -116,9 +79,9 @@ public class PlayMoodMusicIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest();
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -131,18 +94,18 @@ public class PlayMoodMusicIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(mood: "relaxing");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var audio = new Audio { Name = "Chill Track", Id = Guid.NewGuid() };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audio });
 
-        _libraryManagerMock.Setup(l => l.GetItemById(audio.Id))
+        _fx.LibraryManager.Setup(l => l.GetItemById(audio.Id))
             .Returns(audio);
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -156,18 +119,18 @@ public class PlayMoodMusicIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(mood: "funkyspacerock");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var audio = new Audio { Name = "Space Rock", Id = Guid.NewGuid() };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audio });
 
-        _libraryManagerMock.Setup(l => l.GetItemById(audio.Id))
+        _fx.LibraryManager.Setup(l => l.GetItemById(audio.Id))
             .Returns(audio);
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -180,13 +143,13 @@ public class PlayMoodMusicIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(mood: "relaxing");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -204,18 +167,18 @@ public class PlayMoodMusicIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(mood: mood);
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var audio = new Audio { Name = "Test Track", Id = Guid.NewGuid() };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audio });
 
-        _libraryManagerMock.Setup(l => l.GetItemById(audio.Id))
+        _fx.LibraryManager.Setup(l => l.GetItemById(audio.Id))
             .Returns(audio);
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -336,18 +299,18 @@ public class PlayMoodMusicIntentHandlerTests : PluginTestBase
             ["mood"] = new global::Alexa.NET.Request.Slot { Name = "mood", Value = "rilassante" }
         };
         var request = new IntentRequest { Intent = intent, Locale = "it-IT", RequestId = "test-req" };
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var audio = new Audio { Name = "Italian Chill Track", Id = Guid.NewGuid() };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audio });
 
-        _libraryManagerMock.Setup(l => l.GetItemById(audio.Id))
+        _fx.LibraryManager.Setup(l => l.GetItemById(audio.Id))
             .Returns(audio);
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -595,16 +558,16 @@ public class PlayMoodMusicIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(mood: "relaxing");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var artist = new MusicArtist { Name = "Ambient Artist", Id = Guid.NewGuid() };
         var audio = new Audio { Name = "Ambient Track", Id = Guid.NewGuid() };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns((InternalItemsQuery q) =>
             {
                 // First calls are track-genre search (BaseItemKind.Audio with Genres) → return empty
@@ -624,7 +587,7 @@ public class PlayMoodMusicIntentHandlerTests : PluginTestBase
                 return new List<BaseItem>();
             });
 
-        _libraryManagerMock.Setup(l => l.GetItemById(audio.Id))
+        _fx.LibraryManager.Setup(l => l.GetItemById(audio.Id))
             .Returns(audio);
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -647,13 +610,13 @@ public class PlayMoodMusicIntentHandlerTests : PluginTestBase
             ["mood"] = new global::Alexa.NET.Request.Slot { Name = "mood", Value = "di miles davis" }
         };
         var request = new IntentRequest { Intent = intent, Locale = "it-IT", RequestId = "test-req" };
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 bool isArtistQuery = q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist);
@@ -715,7 +678,7 @@ public class PlayMoodMusicIntentHandlerTests : PluginTestBase
         var artistId = Guid.NewGuid();
         var song1 = new Audio { Name = "Waltz for Koop", Id = Guid.NewGuid() };
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var koop = new MusicArtist { Name = "Koop", Id = artistId };
         var codes = DoubleMetaphone.Encode("Koop");
@@ -724,18 +687,18 @@ public class PlayMoodMusicIntentHandlerTests : PluginTestBase
             new Dictionary<Guid, (string Primary, string? Alternate)> { [artistId] = codes });
 
         var handler = new PlayMoodMusicIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory,
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory,
             artistIndex: index);
 
         // The mood word "cup" maps to no genre: both genre searches miss, and the
         // ready index serves the artist search in memory (tier 4 phonetic), so the
         // only populated query shape is the artist-songs fetch.
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 if (q.ArtistIds != null && q.ArtistIds.Length > 0)
@@ -747,10 +710,10 @@ public class PlayMoodMusicIntentHandlerTests : PluginTestBase
             });
 
         var request = CreateIntentRequest(mood: "cup");
-        var context = CreateContext();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var session = _fx.CreateSession();
 
-        SkillResponse response = await handler.HandleAsync(request, context, CreateUser(), session, CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, context, _fx.CreateUser(), session, CancellationToken.None);
 
         // The artist's music plays (not NotFoundMood)
         Assert.NotNull(response.Response?.Directives);
@@ -766,14 +729,14 @@ public class PlayMoodMusicIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(mood: "relaxing");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         // All searches return empty — no genre tracks, no artist-genre, no artist fallback
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);

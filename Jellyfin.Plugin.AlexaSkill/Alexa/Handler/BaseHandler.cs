@@ -118,6 +118,30 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// JF-465: the ONE Layer-1 warming-gate preamble (JF-419 family). While the index
+    /// is present but still loading, this refuses the request at entry (throws
+    /// <see cref="Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions.SkillWarmingUpException"/>,
+    /// translated once by the request pipeline into the session-ending SkillWarmingUp
+    /// Tell) instead of letting the handler fall to the cold database path that can
+    /// exceed Alexa's ~8-second response window (live incident 2026-08-31 07:59).
+    /// Call at handler entry, BEFORE the "searching" progressive response (no
+    /// announcement-then-refusal) and AFTER any cancel-word escape hatch (an open
+    /// Dialog flow must still cancel during warming). A null or disabled index
+    /// degrades (no gate). Layer 2 (the ArtistSearch choke point) still covers every
+    /// unguarded caller. The gated-handler roster is asserted by WarmingGateCoverageTests:
+    /// gating a new handler requires adding it there.
+    /// </summary>
+    /// <param name="artistIndex">The artist index the handler's request path uses.</param>
+    protected static void GuardIndexReady(IArtistIndex? artistIndex) => IndexWarmingGate.EnsureReady(artistIndex);
+
+    /// <summary>
+    /// The song n-gram overload of <see cref="GuardIndexReady(IArtistIndex)"/>: the
+    /// per-path gate for handlers whose fast resource IS the song n-gram index.
+    /// </summary>
+    /// <param name="songIndex">The song n-gram index the handler's request path uses.</param>
+    protected static void GuardIndexReady(ISongNgramIndex? songIndex) => IndexWarmingGate.EnsureReady(songIndex);
+
+    /// <summary>
     /// JF-439: minimum KeywordMatcher score for the inverse cross-media song
     /// fallback to auto-play (the BaseHandler home since JF-440). Live calibration
     /// (minix, 12766 songs): the WRONG half-coverage phonetic hit ('rolling

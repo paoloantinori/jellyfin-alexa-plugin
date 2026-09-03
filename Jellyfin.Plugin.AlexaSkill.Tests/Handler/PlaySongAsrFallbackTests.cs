@@ -29,34 +29,22 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class PlaySongAsrFallbackTests : PluginTestBase
 {
-    private readonly Mock<ISessionManager> _sessionManagerMock;
-    private readonly Mock<ILibraryManager> _libraryManagerMock;
-    private readonly Mock<IUserManager> _userManagerMock;
-    private readonly Mock<IUserDataManager> _userDataManagerMock;
-    private readonly PluginConfiguration _config;
-    private readonly ILoggerFactory _loggerFactory;
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture();
 
     public PlaySongAsrFallbackTests()
     {
-        _sessionManagerMock = new Mock<ISessionManager>();
-        _libraryManagerMock = new Mock<ILibraryManager>();
-        _userManagerMock = new Mock<IUserManager>();
-        _userDataManagerMock = new Mock<IUserDataManager>();
-        _config = new PluginConfiguration();
-        _config.AnnounceAudioPlays = true; // opt in: this class tests PlaySong announce behavior
-        TestHelpers.SetServerAddress(_config, "https://test.example.com");
-        _loggerFactory = LoggerFactory.Create(b => { });
+        _fx.Config.AnnounceAudioPlays = true; // opt in: this class tests PlaySong announce behavior
     }
 
     private PlaySongIntentHandler CreateHandler()
     {
         return new PlaySongIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
     }
 
     private static IntentRequest CreateSongIntentRequest(string song)
@@ -69,41 +57,29 @@ public class PlaySongAsrFallbackTests : PluginTestBase
         return new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req" };
     }
 
-    private static Context CreateContext() => TestHelpers.CreateTestContext();
-
-    private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
-
-    private static Entities.User CreateUser() => TestHelpers.CreateTestUser();
-
-    private void SetupUserMock()
-    {
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
-    }
-
     [Fact]
     public async Task PlaySong_AsrFallback_JoinedVariantFindsSong_ReturnsPlayback()
     {
         // Arrange: "lazy bones" returns empty, but "lazybones" returns a song
         var song = new Audio { Name = "Lazybones", Id = Guid.NewGuid() };
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var searchTerms = new List<string>();
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Callback<InternalItemsQuery>(q => searchTerms.Add(q.SearchTerm))
             .Returns<InternalItemsQuery>(q =>
                 string.Equals(q.SearchTerm, "lazybones", StringComparison.OrdinalIgnoreCase)
                     ? new List<BaseItem> { song }
                     : new List<BaseItem>());
 
-        _config.AsrCompoundWordFixEnabled = true;
+        _fx.Config.AsrCompoundWordFixEnabled = true;
 
         var handler = CreateHandler();
         var request = CreateSongIntentRequest("lazy bones");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         // Act
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -131,15 +107,15 @@ public class PlaySongAsrFallbackTests : PluginTestBase
         // With AnnounceAudioPlays off (the default), a successful song play is silent
         // (no OutputSpeech) while playback still starts.
         var song = new Audio { Name = "Lazybones", Id = Guid.NewGuid() };
-        SetupUserMock();
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.SetupUserMock();
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { song });
 
-        _config.AnnounceAudioPlays = false;
+        _fx.Config.AnnounceAudioPlays = false;
 
         var handler = CreateHandler();
         var request = CreateSongIntentRequest("lazybones");
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response.Response?.Directives);
         Assert.NotEmpty(response.Response.Directives);
@@ -152,20 +128,20 @@ public class PlaySongAsrFallbackTests : PluginTestBase
         // Arrange: feature disabled — should NOT try ASR compound-word variants.
         // Note: the cross-media-type artist fallback will still trigger additional
         // searches (artist search) after the song search fails, which is expected.
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var searchTerms = new List<string?>();
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Callback<InternalItemsQuery>(q => searchTerms.Add(q.SearchTerm))
             .Returns(new List<BaseItem>());
 
-        _config.AsrCompoundWordFixEnabled = false;
+        _fx.Config.AsrCompoundWordFixEnabled = false;
 
         var handler = CreateHandler();
         var request = CreateSongIntentRequest("lazy bones");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         // Act
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -188,20 +164,20 @@ public class PlaySongAsrFallbackTests : PluginTestBase
         // Arrange: original query finds the song — no ASR fallback needed
         var song = new Audio { Name = "Lazy Bones", Id = Guid.NewGuid() };
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var searchTerms = new List<string>();
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Callback<InternalItemsQuery>(q => searchTerms.Add(q.SearchTerm))
             .Returns(new List<BaseItem> { song });
 
-        _config.AsrCompoundWordFixEnabled = true;
+        _fx.Config.AsrCompoundWordFixEnabled = true;
 
         var handler = CreateHandler();
         var request = CreateSongIntentRequest("lazy bones");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         // Act
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);

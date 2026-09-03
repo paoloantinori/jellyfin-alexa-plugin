@@ -33,29 +33,18 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposable
 {
-    private readonly Mock<ISessionManager> _sessionManagerMock;
-    private readonly Mock<ILibraryManager> _libraryManagerMock;
-    private readonly Mock<IUserManager> _userManagerMock;
-    private readonly Mock<IUserDataManager> _userDataManagerMock;
-    private readonly PluginConfiguration _config;
-    private readonly ILoggerFactory _loggerFactory;
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture("http://localhost:8096");
     private readonly JellyfinUser _jellyfinUser;
     private readonly Guid _sessionUserId;
 
     public ResumeIntentHandlerServerProgressTests()
     {
-        _sessionManagerMock = new Mock<ISessionManager>();
-        _libraryManagerMock = new Mock<ILibraryManager>();
-        _userManagerMock = new Mock<IUserManager>();
-        _userDataManagerMock = new Mock<IUserDataManager>();
-        _config = new PluginConfiguration { ServerAddress = "http://localhost:8096" };
-        _loggerFactory = LoggerFactory.Create(b => { });
         _jellyfinUser = new JellyfinUser("testuser", "test", "test");
         _sessionUserId = Guid.NewGuid();
 
         TestHelpers.EnsurePluginInstance(
-            _config,
-            _loggerFactory,
+            _fx.Config,
+            _fx.LoggerFactory,
             c => { },
             "resume-server-progress-tests");
     }
@@ -68,12 +57,12 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
     private ResumeIntentHandler CreateHandler()
     {
         return new ResumeIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _loggerFactory,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object);
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LoggerFactory,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object);
     }
 
     private static IntentRequest CreateResumeRequest()
@@ -106,10 +95,10 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
 
     private SessionInfo CreateEmptySession()
     {
-        var session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+        var session = TestHelpers.CreateTestSession(_fx.SessionManager.Object, _fx.LoggerFactory);
         session.UserId = _sessionUserId;
         // FullNowPlayingItem is null by default -- triggers server-side fallback
-        _userManagerMock.Setup(x => x.GetUserById(_sessionUserId)).Returns(_jellyfinUser);
+        _fx.UserManager.Setup(x => x.GetUserById(_sessionUserId)).Returns(_jellyfinUser);
         return session;
     }
 
@@ -121,7 +110,7 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
         var context = CreateContextNoAudioPlayer();
 
         var user = TestHelpers.CreateTestUser();
-        _config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
+        _fx.Config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
         {
             Id = user.Id,
             AnnouncePositionOnResume = false
@@ -137,7 +126,7 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
             Path = "/audiobooks/book/chapter7.mp3"
         };
 
-        _libraryManagerMock.Setup(x => x.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(x => x.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audioItem });
 
         long progressTicks = TimeSpan.FromMinutes(5).Ticks;
@@ -148,7 +137,7 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
             Played = false
         };
 
-        _userDataManagerMock.Setup(x => x.GetUserData(It.IsAny<JellyfinUser>(), It.IsAny<BaseItem>()))
+        _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<JellyfinUser>(), It.IsAny<BaseItem>()))
             .Returns(userData);
 
         var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -172,7 +161,7 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
         var context = CreateContextNoAudioPlayer();
 
         var user = TestHelpers.CreateTestUser();
-        _config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
+        _fx.Config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
         {
             Id = user.Id,
             AnnouncePositionOnResume = false
@@ -188,7 +177,7 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
             Path = "/movies/test.mkv"
         };
 
-        _libraryManagerMock.Setup(x => x.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(x => x.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { movie });
 
         long progressTicks = TimeSpan.FromMinutes(30).Ticks;
@@ -199,7 +188,7 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
             Played = false
         };
 
-        _userDataManagerMock.Setup(x => x.GetUserData(It.IsAny<JellyfinUser>(), It.IsAny<BaseItem>()))
+        _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<JellyfinUser>(), It.IsAny<BaseItem>()))
             .Returns(userData);
 
         var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -224,7 +213,7 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
         var context = CreateContextNoAudioPlayer();
 
         var user = TestHelpers.CreateTestUser();
-        _config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
+        _fx.Config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
         {
             Id = user.Id,
             AnnouncePositionOnResume = false
@@ -233,7 +222,7 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
         var session = CreateEmptySession();
 
         // No items with progress on the server
-        _libraryManagerMock.Setup(x => x.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(x => x.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
 
         var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -253,7 +242,7 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
         var context = CreateContextNoAudioPlayer();
 
         var user = TestHelpers.CreateTestUser();
-        _config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
+        _fx.Config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
         {
             Id = user.Id,
             AnnouncePositionOnResume = true
@@ -269,7 +258,7 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
             Path = "/music/test.mp3"
         };
 
-        _libraryManagerMock.Setup(x => x.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(x => x.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audioItem });
 
         long progressTicks = TimeSpan.FromMinutes(2).Ticks + TimeSpan.FromSeconds(30).Ticks;
@@ -280,7 +269,7 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
             Played = false
         };
 
-        _userDataManagerMock.Setup(x => x.GetUserData(It.IsAny<JellyfinUser>(), It.IsAny<BaseItem>()))
+        _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<JellyfinUser>(), It.IsAny<BaseItem>()))
             .Returns(userData);
 
         var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -301,7 +290,7 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
         var context = CreateContextNoAudioPlayer();
 
         var user = TestHelpers.CreateTestUser();
-        _config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
+        _fx.Config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
         {
             Id = user.Id,
             AnnouncePositionOnResume = false
@@ -316,7 +305,7 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
             Path = "/music/inprogress.mp3"
         };
 
-        _libraryManagerMock.Setup(x => x.GetItemList(It.Is<InternalItemsQuery>(q => q.IsPlayed == false)))
+        _fx.LibraryManager.Setup(x => x.GetItemList(It.Is<InternalItemsQuery>(q => q.IsPlayed == false)))
             .Returns(new List<BaseItem> { inProgressItem });
 
         var inProgressUserData = new UserItemData
@@ -326,7 +315,7 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
             Played = false
         };
 
-        _userDataManagerMock.Setup(x => x.GetUserData(It.IsAny<JellyfinUser>(), inProgressItem))
+        _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<JellyfinUser>(), inProgressItem))
             .Returns(inProgressUserData);
 
         var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -347,7 +336,7 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
         var context = CreateContextNoAudioPlayer();
 
         var user = TestHelpers.CreateTestUser();
-        _config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
+        _fx.Config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
         {
             Id = user.Id,
             AnnouncePositionOnResume = false
@@ -363,7 +352,7 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
             Path = "/music/zero.mp3"
         };
 
-        _libraryManagerMock.Setup(x => x.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(x => x.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { zeroProgressItem });
 
         var userData = new UserItemData
@@ -373,7 +362,7 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
             Played = false
         };
 
-        _userDataManagerMock.Setup(x => x.GetUserData(It.IsAny<JellyfinUser>(), It.IsAny<BaseItem>()))
+        _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<JellyfinUser>(), It.IsAny<BaseItem>()))
             .Returns(userData);
 
         var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -411,7 +400,7 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
         var context = CreateContextNoAudioPlayer();
 
         var user = TestHelpers.CreateTestUser();
-        _config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
+        _fx.Config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
         {
             Id = user.Id,
             AnnouncePositionOnResume = false
@@ -427,7 +416,7 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
             Path = "/tv/show/s01e01.mkv"
         };
 
-        _libraryManagerMock.Setup(x => x.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(x => x.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { episode });
 
         long progressTicks = TimeSpan.FromMinutes(15).Ticks;
@@ -438,7 +427,7 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
             Played = false
         };
 
-        _userDataManagerMock.Setup(x => x.GetUserData(It.IsAny<JellyfinUser>(), It.IsAny<BaseItem>()))
+        _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<JellyfinUser>(), It.IsAny<BaseItem>()))
             .Returns(userData);
 
         var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);

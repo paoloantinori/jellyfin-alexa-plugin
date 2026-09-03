@@ -31,33 +31,17 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class EntityFallbackTests : PluginTestBase
 {
-    private readonly Mock<ISessionManager> _sessionManagerMock;
-    private readonly Mock<ILibraryManager> _libraryManagerMock;
-    private readonly Mock<IUserManager> _userManagerMock;
-    private readonly Mock<IUserDataManager> _userDataManagerMock;
-    private readonly PluginConfiguration _config;
-    private readonly ILoggerFactory _loggerFactory;
-
-    public EntityFallbackTests()
-    {
-        _sessionManagerMock = new Mock<ISessionManager>();
-        _libraryManagerMock = new Mock<ILibraryManager>();
-        _userManagerMock = new Mock<IUserManager>();
-        _userDataManagerMock = new Mock<IUserDataManager>();
-        _config = new PluginConfiguration();
-        TestHelpers.SetServerAddress(_config, "https://test.example.com");
-        _loggerFactory = LoggerFactory.Create(b => { });
-    }
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture();
 
     private PlayMoodMusicIntentHandler CreateHandler()
     {
         return new PlayMoodMusicIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
     }
 
     private static IntentRequest CreateMoodIntent(string mood, string locale = "en-US")
@@ -70,16 +54,6 @@ public class EntityFallbackTests : PluginTestBase
         return new IntentRequest { Intent = intent, Locale = locale, RequestId = "test-req" };
     }
 
-    private static Context CreateContext() => TestHelpers.CreateTestContext();
-    private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
-    private static Entities.User CreateUser() => TestHelpers.CreateTestUser();
-
-    private void SetupUserMock()
-    {
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
-    }
-
     /// <summary>
     /// Configures the library mock so genre/artist-genre searches return empty
     /// (triggering the entity fallback), and the artist SearchTerm query returns
@@ -87,7 +61,7 @@ public class EntityFallbackTests : PluginTestBase
     /// </summary>
     private void SetupArtistFallback(Guid artistId, string artistName, params Audio[] songs)
     {
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 bool isArtistQuery = q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist);
@@ -128,14 +102,14 @@ public class EntityFallbackTests : PluginTestBase
         var artistId = Guid.NewGuid();
         var song = new Audio { Name = "So What", Id = Guid.NewGuid() };
 
-        SetupUserMock();
+        _fx.SetupUserMock();
         SetupArtistFallback(artistId, "Miles Davis", song);
 
         var handler = CreateHandler();
         var request = CreateMoodIntent("di miles davis", "it-IT");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -152,14 +126,14 @@ public class EntityFallbackTests : PluginTestBase
         var artistId = Guid.NewGuid();
         var song = new Audio { Name = "So What", Id = Guid.NewGuid() };
 
-        SetupUserMock();
+        _fx.SetupUserMock();
         SetupArtistFallback(artistId, "Miles Davis", song);
 
         var handler = CreateHandler();
         var request = CreateMoodIntent("by miles davis", "en-US");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -176,14 +150,14 @@ public class EntityFallbackTests : PluginTestBase
         var artistId = Guid.NewGuid();
         var song = new Audio { Name = "So What", Id = Guid.NewGuid() };
 
-        SetupUserMock();
+        _fx.SetupUserMock();
         SetupArtistFallback(artistId, "Miles Davis", song);
 
         var handler = CreateHandler();
         var request = CreateMoodIntent("von miles davis", "de-DE");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -197,17 +171,17 @@ public class EntityFallbackTests : PluginTestBase
     [Fact]
     public async Task NoMatch_ReturnsNull_CallerShowsNotFoundMood()
     {
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         // All searches return empty — no genre tracks, no artist-genre, no artist fallback
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
 
         var handler = CreateHandler();
         var request = CreateMoodIntent("relaxing", "en-US");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -223,14 +197,14 @@ public class EntityFallbackTests : PluginTestBase
         var artistId = Guid.NewGuid();
         var song = new Audio { Name = "So What", Id = Guid.NewGuid() };
 
-        SetupUserMock();
+        _fx.SetupUserMock();
         SetupArtistFallback(artistId, "Miles Davis", song);
 
         var handler = CreateHandler();
         var request = CreateMoodIntent("de miles davis", "es-ES");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -246,14 +220,14 @@ public class EntityFallbackTests : PluginTestBase
         var artistId = Guid.NewGuid();
         var song = new Audio { Name = "So What", Id = Guid.NewGuid() };
 
-        SetupUserMock();
+        _fx.SetupUserMock();
         SetupArtistFallback(artistId, "Miles Davis", song);
 
         var handler = CreateHandler();
         var request = CreateMoodIntent("do miles davis", "pt-BR");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -272,14 +246,14 @@ public class EntityFallbackTests : PluginTestBase
         var artistId = Guid.NewGuid();
         var song = new Audio { Name = "So What", Id = Guid.NewGuid() };
 
-        SetupUserMock();
+        _fx.SetupUserMock();
         SetupArtistFallback(artistId, "Miles Davis", song);
 
         var handler = CreateHandler();
         var request = CreateMoodIntent("miles davis john coltrane quartet", "en-US");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 

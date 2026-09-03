@@ -34,39 +34,27 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class PlayBookResumeTests : PluginTestBase
 {
-    private readonly Mock<ISessionManager> _sessionManagerMock;
-    private readonly Mock<ILibraryManager> _libraryManagerMock;
-    private readonly Mock<IUserManager> _userManagerMock;
-    private readonly Mock<IUserDataManager> _userDataManagerMock;
-    private readonly PluginConfiguration _config;
-    private readonly ILoggerFactory _loggerFactory;
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture();
     private readonly DeviceQueueManager _queueManager;
 
     public PlayBookResumeTests()
     {
-        _sessionManagerMock = new Mock<ISessionManager>();
-        _libraryManagerMock = new Mock<ILibraryManager>();
-        _userManagerMock = new Mock<IUserManager>();
-        _userDataManagerMock = new Mock<IUserDataManager>();
-        _config = new PluginConfiguration();
-        TestHelpers.SetServerAddress(_config, "https://test.example.com");
-        _loggerFactory = LoggerFactory.Create(b => { });
         var queueLogger = new Mock<ILogger<DeviceQueueManager>>();
         _queueManager = new DeviceQueueManager(System.IO.Path.GetTempPath(), queueLogger.Object);
 
         TestHelpers.EnsurePluginInstance(
-            _config, _loggerFactory, c => { }, "playbook-resume-tests");
+            _fx.Config, _fx.LoggerFactory, c => { }, "playbook-resume-tests");
     }
 
     private PlayBookIntentHandler CreateHandler()
     {
         return new PlayBookIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory,
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory,
             _queueManager);
     }
 
@@ -81,27 +69,11 @@ public class PlayBookResumeTests : PluginTestBase
         return new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req" };
     }
 
-    private static Context CreateContext()
-    {
-        return TestHelpers.CreateTestContext();
-    }
-
     private SessionInfo CreateSession()
     {
-        var session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+        var session = TestHelpers.CreateTestSession(_fx.SessionManager.Object, _fx.LoggerFactory);
         session.DeviceId = "test-device";
         return session;
-    }
-
-    private static Jellyfin.Plugin.AlexaSkill.Entities.User CreateUser()
-    {
-        return TestHelpers.CreateTestUser();
-    }
-
-    private void SetupUserMock()
-    {
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
     }
 
     private void SetupBookAndTracks(string bookName, List<Audio> tracks)
@@ -113,12 +85,12 @@ public class PlayBookResumeTests : PluginTestBase
         };
 
         // Book search returns the book
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
                 q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
             .Returns(new List<BaseItem> { bookItem });
 
         // Track listing returns the tracks
-        _libraryManagerMock.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q =>
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q =>
                 q.ParentId == bookItem.Id)))
             .Returns(new QueryResult<BaseItem>
             {
@@ -132,11 +104,11 @@ public class PlayBookResumeTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest("The Hobbit");
-        var context = CreateContext();
-        var user = CreateUser();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
         var session = CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         // Create 5 tracks for the book
         var tracks = new List<Audio>();
@@ -161,15 +133,15 @@ public class PlayBookResumeTests : PluginTestBase
             PlaybackPositionTicks = TimeSpan.FromSeconds(45).Ticks
         };
 
-        _userDataManagerMock.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), tracks[0]))
+        _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), tracks[0]))
             .Returns(playedData0);
-        _userDataManagerMock.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), tracks[1]))
+        _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), tracks[1]))
             .Returns(playedData1);
-        _userDataManagerMock.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), tracks[2]))
+        _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), tracks[2]))
             .Returns(inProgressData2);
-        _userDataManagerMock.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), tracks[3]))
+        _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), tracks[3]))
             .Returns((UserItemData?)null);
-        _userDataManagerMock.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), tracks[4]))
+        _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), tracks[4]))
             .Returns((UserItemData?)null);
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -195,11 +167,11 @@ public class PlayBookResumeTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest("The Hobbit");
-        var context = CreateContext();
-        var user = CreateUser();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
         var session = CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var tracks = new List<Audio>
         {
@@ -211,7 +183,7 @@ public class PlayBookResumeTests : PluginTestBase
         SetupBookAndTracks("The Hobbit", tracks);
 
         // No progress on any track
-        _userDataManagerMock.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
+        _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
             .Returns((UserItemData?)null);
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -232,11 +204,11 @@ public class PlayBookResumeTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest("The Hobbit");
-        var context = CreateContext();
-        var user = CreateUser();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
         var session = CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var tracks = new List<Audio>
         {
@@ -252,13 +224,13 @@ public class PlayBookResumeTests : PluginTestBase
         var playedData0 = new UserItemData { Key = "test", Played = true, PlaybackPositionTicks = 0 };
         var playedData1 = new UserItemData { Key = "test", Played = true, PlaybackPositionTicks = 0 };
 
-        _userDataManagerMock.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), tracks[0]))
+        _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), tracks[0]))
             .Returns(playedData0);
-        _userDataManagerMock.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), tracks[1]))
+        _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), tracks[1]))
             .Returns(playedData1);
-        _userDataManagerMock.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), tracks[2]))
+        _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), tracks[2]))
             .Returns((UserItemData?)null);
-        _userDataManagerMock.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), tracks[3]))
+        _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), tracks[3]))
             .Returns((UserItemData?)null);
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -277,11 +249,11 @@ public class PlayBookResumeTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest("Short Book");
-        var context = CreateContext();
-        var user = CreateUser();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
         var session = CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         // Only one track, fully played
         var tracks = new List<Audio>
@@ -292,7 +264,7 @@ public class PlayBookResumeTests : PluginTestBase
         SetupBookAndTracks("Short Book", tracks);
 
         var playedData = new UserItemData { Key = "test", Played = true, PlaybackPositionTicks = 0 };
-        _userDataManagerMock.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), tracks[0]))
+        _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), tracks[0]))
             .Returns(playedData);
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -311,11 +283,11 @@ public class PlayBookResumeTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest("Dune");
-        var context = CreateContext();
-        var user = CreateUser();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
         var session = CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var tracks = new List<Audio>
         {
@@ -334,11 +306,11 @@ public class PlayBookResumeTests : PluginTestBase
             PlaybackPositionTicks = TimeSpan.FromMinutes(12).Ticks + TimeSpan.FromSeconds(34).Ticks
         };
 
-        _userDataManagerMock.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), tracks[0]))
+        _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), tracks[0]))
             .Returns(inProgressData);
-        _userDataManagerMock.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), tracks[1]))
+        _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), tracks[1]))
             .Returns((UserItemData?)null);
-        _userDataManagerMock.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), tracks[2]))
+        _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), tracks[2]))
             .Returns((UserItemData?)null);
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);

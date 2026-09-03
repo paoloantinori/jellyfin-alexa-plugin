@@ -25,33 +25,17 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class PlayByGenreIntentHandlerTests : PluginTestBase
 {
-    private readonly Mock<ISessionManager> _sessionManagerMock;
-    private readonly Mock<ILibraryManager> _libraryManagerMock;
-    private readonly Mock<IUserManager> _userManagerMock;
-    private readonly Mock<IUserDataManager> _userDataManagerMock;
-    private readonly PluginConfiguration _config;
-    private readonly ILoggerFactory _loggerFactory;
-
-    public PlayByGenreIntentHandlerTests()
-    {
-        _sessionManagerMock = new Mock<ISessionManager>();
-        _libraryManagerMock = new Mock<ILibraryManager>();
-        _userManagerMock = new Mock<IUserManager>();
-        _userDataManagerMock = new Mock<IUserDataManager>();
-        _config = new PluginConfiguration();
-        TestHelpers.SetServerAddress(_config, "https://test.example.com");
-        _loggerFactory = LoggerFactory.Create(b => { });
-    }
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture();
 
     private PlayByGenreIntentHandler CreateHandler()
     {
         return new PlayByGenreIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory);
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
     }
 
     private static IntentRequest CreateIntentRequest(string? genre = null)
@@ -65,27 +49,6 @@ public class PlayByGenreIntentHandlerTests : PluginTestBase
         }
 
         return new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req" };
-    }
-
-    private static Context CreateContext()
-    {
-        return TestHelpers.CreateTestContext();
-    }
-
-    private SessionInfo CreateSession()
-    {
-        return TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
-    }
-
-    private static Entities.User CreateUser()
-    {
-        return TestHelpers.CreateTestUser();
-    }
-
-    private void SetupUserMock()
-    {
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
     }
 
     [Fact]
@@ -124,9 +87,9 @@ public class PlayByGenreIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest();
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -139,15 +102,15 @@ public class PlayByGenreIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(genre: "rock");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var audioItem = new Audio { Name = "Rock Song", Id = Guid.NewGuid() };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audioItem });
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -162,12 +125,12 @@ public class PlayByGenreIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(genre: "polka");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.SetupUserMock();
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -181,14 +144,14 @@ public class PlayByGenreIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(genre: "jazz");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         InternalItemsQuery? capturedQuery = null;
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Callback<InternalItemsQuery>(q => capturedQuery = q)
             .Returns(new List<BaseItem> { new Audio { Name = "Jazz Song", Id = Guid.NewGuid() } });
 
@@ -204,14 +167,14 @@ public class PlayByGenreIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(genre: "rock");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         InternalItemsQuery? capturedQuery = null;
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Callback<InternalItemsQuery>(q => capturedQuery = q)
             .Returns(new List<BaseItem> { new Audio { Name = "Rock Song", Id = Guid.NewGuid() } });
 
@@ -228,11 +191,11 @@ public class PlayByGenreIntentHandlerTests : PluginTestBase
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(genre: "rock");
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
 
-        SetupUserMock();
+        _fx.SetupUserMock();
 
         var items = new List<BaseItem>
         {
@@ -240,7 +203,7 @@ public class PlayByGenreIntentHandlerTests : PluginTestBase
             new Audio { Name = "Song 2", Id = Guid.NewGuid() },
         };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(items);
 
         await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -252,19 +215,19 @@ public class PlayByGenreIntentHandlerTests : PluginTestBase
     [Fact]
     public async Task HandleAsync_MusicDisabled_ReturnsNotFound()
     {
-        TestHelpers.EnsurePluginInstance(_config, _loggerFactory, c => c.MusicEnabled = false, "genre-music-test");
-        SetupUserMock();
+        TestHelpers.EnsurePluginInstance(_fx.Config, _fx.LoggerFactory, c => c.MusicEnabled = false, "genre-music-test");
+        _fx.SetupUserMock();
 
-        _libraryManagerMock
+        _fx.LibraryManager
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
 
         var handler = CreateHandler();
         var response = await handler.HandleAsync(
             CreateIntentRequest(genre: "rock"),
-            CreateContext(),
-            CreateUser(),
-            CreateSession(), CancellationToken.None);
+            _fx.CreateContext(),
+            _fx.CreateUser(),
+            _fx.CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response);
         Assert.True(response.Response.ShouldEndSession);

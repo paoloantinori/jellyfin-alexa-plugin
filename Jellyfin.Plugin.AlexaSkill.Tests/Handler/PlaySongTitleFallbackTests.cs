@@ -34,40 +34,18 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class PlaySongTitleFallbackTests : PluginTestBase
 {
-    private readonly Mock<ISessionManager> _sessionManagerMock;
-    private readonly Mock<ILibraryManager> _libraryManagerMock;
-    private readonly Mock<IUserManager> _userManagerMock;
-    private readonly Mock<IUserDataManager> _userDataManagerMock;
-    private readonly PluginConfiguration _config;
-    private readonly ILoggerFactory _loggerFactory;
-
-    public PlaySongTitleFallbackTests()
-    {
-        _sessionManagerMock = new Mock<ISessionManager>();
-        _libraryManagerMock = new Mock<ILibraryManager>();
-        _userManagerMock = new Mock<IUserManager>();
-        _userDataManagerMock = new Mock<IUserDataManager>();
-        _config = new PluginConfiguration();
-        TestHelpers.SetServerAddress(_config, "https://test.example.com");
-        _loggerFactory = LoggerFactory.Create(b => { });
-    }
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture();
 
     private PlaySongIntentHandler CreateSongHandler(ISongNgramIndex? ngramIndex = null)
     {
         return new PlaySongIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _userDataManagerMock.Object,
-            _loggerFactory,
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory,
             songNgramIndex: ngramIndex);
-    }
-
-    private void SetupUserMock()
-    {
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
     }
 
     private static IntentRequest CreateSongIntent(string song, string? musician = null)
@@ -85,10 +63,6 @@ public class PlaySongTitleFallbackTests : PluginTestBase
         return new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req" };
     }
 
-    private static Context CreateContext() => TestHelpers.CreateTestContext();
-    private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
-    private static Entities.User CreateUser() => TestHelpers.CreateTestUser();
-
     // With a musician slot: exact SearchTerm misses ("decatur street" vs "Decatur St."),
     // but the artist's own songs contain the track. The fallback must fetch the artist's
     // songs WITHOUT the name pre-filter and let KeywordMatcher (with abbreviation
@@ -96,11 +70,11 @@ public class PlaySongTitleFallbackTests : PluginTestBase
     [Fact]
     public async Task PlaySong_ExactMiss_WithMusician_FallsBackToArtistSongsScored()
     {
-        SetupUserMock();
+        _fx.SetupUserMock();
         var artistId = Guid.NewGuid();
         var song = new Audio { Name = "Decatur St.", Id = Guid.NewGuid() };
 
-        _libraryManagerMock.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 // Artist search: returns the artist
@@ -127,7 +101,7 @@ public class PlaySongTitleFallbackTests : PluginTestBase
         var handler = CreateSongHandler();
         var request = CreateSongIntent("decatur street", "twilight singers");
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response.Response?.Directives);
         Assert.NotEmpty(response.Response.Directives);
@@ -142,11 +116,11 @@ public class PlaySongTitleFallbackTests : PluginTestBase
     [Fact]
     public async Task PlaySong_ExactMiss_AccentDriftOnOneWord_PhoneticStageFinds()
     {
-        SetupUserMock();
+        _fx.SetupUserMock();
         var artistId = Guid.NewGuid();
         var song = new Audio { Name = "Decatur St.", Id = Guid.NewGuid() };
 
-        _libraryManagerMock.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
@@ -173,7 +147,7 @@ public class PlaySongTitleFallbackTests : PluginTestBase
         var handler = CreateSongHandler();
         var request = CreateSongIntent("the cater street", "twilight singers");
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response.Response?.Directives);
         Assert.NotEmpty(response.Response.Directives);
@@ -182,11 +156,11 @@ public class PlaySongTitleFallbackTests : PluginTestBase
     [Fact]
     public async Task PlaySong_ExactMiss_NoMusician_UsesNgramIndex()
     {
-        SetupUserMock();
+        _fx.SetupUserMock();
         var song = new Audio { Name = "Decatur St.", Id = Guid.NewGuid() };
         var fakeIndex = new TestHelpers.FakeSongIndex((song, 100.0));
 
-        _libraryManagerMock.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+        _fx.LibraryManager.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
                 // Exact song search misses
@@ -201,7 +175,7 @@ public class PlaySongTitleFallbackTests : PluginTestBase
         var handler = CreateSongHandler(fakeIndex);
         var request = CreateSongIntent("decatur street"); // no musician slot
 
-        SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response.Response?.Directives);
         Assert.NotEmpty(response.Response.Directives);

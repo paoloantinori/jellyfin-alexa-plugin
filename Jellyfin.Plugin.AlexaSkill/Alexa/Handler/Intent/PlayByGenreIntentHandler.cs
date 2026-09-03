@@ -93,11 +93,10 @@ public class PlayByGenreIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchGenre", locale));
         }
 
-        // JF-419 cold-start (JF-463 wiring): the genre queries hit the same cold
-        // database the artist index loading proxies, and the artist fallback
-        // (TryEntityFallbackAsync) throws at the choke point mid-handler; gate
-        // before the announcement, same placement as PlayMoodMusic.
-        Util.IndexWarmingGate.EnsureReady(_artistIndex);
+        // Layer-1 gate (GuardIndexReady): the genre queries hit the same cold database
+        // the artist index loading proxies (JF-463 wiring); gate before the
+        // announcement, same placement as PlayMoodMusic.
+        GuardIndexReady(_artistIndex);
 
         RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
 

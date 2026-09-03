@@ -209,10 +209,10 @@ public class FindSongIntentHandler : BaseHandler
             }
         }
 
-        // JF-419.3: this handler's PRIMARY resource is the song n-gram index (the
-        // keywords path); artist paths are covered by the ArtistSearch choke point.
-        // Placed AFTER the cancel hatch: an open flow must still cancel during warming.
-        Util.IndexWarmingGate.EnsureReady(_songNgramIndex);
+        // This handler's PRIMARY resource is the song n-gram index (the keywords
+        // path); artist paths are covered by the ArtistSearch choke point. Placed
+        // AFTER the cancel hatch: an open flow must still cancel during warming.
+        GuardIndexReady(_songNgramIndex);
 
         // If we have session data and the intent is FindSongIntent, it could be
         // a fresh invocation or a continuation. Check for slot values to distinguish.

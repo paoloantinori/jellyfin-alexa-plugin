@@ -164,11 +164,11 @@ public class PlaySongIntentHandler : BaseHandler
         // n-gram index, whose full-catalog cold window outlasts the artist's.
         if (!string.IsNullOrWhiteSpace(musicianQuery))
         {
-            Util.IndexWarmingGate.EnsureReady(_artistIndex);
+            GuardIndexReady(_artistIndex);
         }
         else
         {
-            Util.IndexWarmingGate.EnsureReady(_songNgramIndex);
+            GuardIndexReady(_songNgramIndex);
         }
 
         if (string.IsNullOrWhiteSpace(songQuery))

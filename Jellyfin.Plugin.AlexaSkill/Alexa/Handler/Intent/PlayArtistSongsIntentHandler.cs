@@ -189,10 +189,11 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             return musicDisabled;
         }
 
-        // The inline JF-382 search copy bypasses SearchAsync, so apply the same
-        // artist gate here AFTER slot validation (a slot-less utterance still gets
-        // DidNotCatch) but BEFORE the "searching" progressive response.
-        Util.IndexWarmingGate.EnsureReady(_artistIndex);
+        // The inline JF-382 search copy bypasses SearchAsync (the Layer-2 choke
+        // point), so the gate is explicit here: AFTER slot validation (a slot-less
+        // utterance still gets DidNotCatch) but BEFORE the "searching" progressive
+        // response.
+        GuardIndexReady(_artistIndex);
 
         RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
 
