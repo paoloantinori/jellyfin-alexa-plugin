@@ -1072,7 +1072,8 @@
           {
             "name": {
               "value": "künstler"
-            }
+            },
+            "id": "artists"
           },
           {
             "name": {
@@ -1082,7 +1083,8 @@
                 "platte",
                 "album"
               ]
-            }
+            },
+            "id": "albums"
           },
           {
             "name": {
@@ -1098,7 +1100,8 @@
                 "titel",
                 "lied"
               ]
-            }
+            },
+            "id": "songs"
           },
           {
             "name": {

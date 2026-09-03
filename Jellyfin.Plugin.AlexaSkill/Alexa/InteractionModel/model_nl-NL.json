@@ -983,7 +983,8 @@
           {
             "name": {
               "value": "artiesten"
-            }
+            },
+            "id": "artists"
           },
           {
             "name": {
@@ -993,7 +994,8 @@
                 "platen",
                 "album"
               ]
-            }
+            },
+            "id": "albums"
           },
           {
             "name": {
@@ -1009,7 +1011,8 @@
                 "nummer",
                 "tracks"
               ]
-            }
+            },
+            "id": "songs"
           },
           {
             "name": {

@@ -3,9 +3,10 @@ id: JF-461
 title: >-
   BrowseCategory slot values missing id fields outside the English locales (PR
   #15 follow-up)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-03 06:03'
+updated_date: '2026-09-03 09:06'
 labels: []
 dependencies: []
 references:

@@ -1001,7 +1001,8 @@
           {
             "name": {
               "value": "artistas"
-            }
+            },
+            "id": "artists"
           },
           {
             "name": {
@@ -1011,7 +1012,8 @@
                 "discos",
                 "disco"
               ]
-            }
+            },
+            "id": "albums"
           },
           {
             "name": {
@@ -1028,7 +1030,8 @@
                 "temas",
                 "canción"
               ]
-            }
+            },
+            "id": "songs"
           },
           {
             "name": {

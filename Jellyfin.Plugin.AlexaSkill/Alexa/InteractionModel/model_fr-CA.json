@@ -1017,7 +1017,8 @@
           {
             "name": {
               "value": "artistes"
-            }
+            },
+            "id": "artists"
           },
           {
             "name": {
@@ -1027,7 +1028,8 @@
                 "disques",
                 "album"
               ]
-            }
+            },
+            "id": "albums"
           },
           {
             "name": {
@@ -1044,7 +1046,8 @@
                 "titre",
                 "morceau"
               ]
-            }
+            },
+            "id": "songs"
           },
           {
             "name": {
