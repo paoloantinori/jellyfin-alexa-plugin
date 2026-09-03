@@ -1,10 +1,10 @@
 ---
 id: JF-345
 title: Recover bare-utterance album recall via song-to-album fallback cascade
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-07-16 16:38'
-updated_date: '2026-09-03 03:20'
+updated_date: '2026-09-03 04:29'
 labels: []
 dependencies: []
 references:
@@ -40,6 +40,12 @@ Likely files: `PlaySongIntentHandler.cs`, `BaseHandler.cs` (shared cascade helpe
 - [ ] #5 Unit tests cover: song miss &#8594; album hit (play + announcement), song hit &#8594; no album substitution, below-threshold album &#8594; no substitution, announcement config-off &#8594; silent substitution
 - [ ] #6 it-IT album routing is unchanged (still one-shots via AlbumName catalog type)
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped. BaseHandler.TryAlbumFallbackAsync runs in PlaySongIntentHandler after the song search AND the artist cascade both miss (precedence deliberate: song, artist, album; album-first would flip self-titled-album cases from today's correct artist playback). Bounded queries only per the f5c701c lesson (indexed SearchTerm MusicAlbum tier, then at most one cheap-DTO album-catalog scan, never Audio-catalog; pinned by a query-count/shape test). Acceptance: CrossMediaAlbumThreshold=90 (containment-grade, stricter than the artist gate's 85), the shared 2-content-word tokenized guard (now ONE shared PassesCrossMediaWordGuard for both gates, deduplicated in the simplify round), the JF-408 interior-containment rejection, and the RAW trimmed query (documented: album titles are rarely article-prefixed). PlayAlbum's ~100-line play path extracted verbatim to BaseHandler.BuildAlbumPlayResponseAsync (3056 tests prove fidelity); BuildAlbumQuery/CheapDtoOptions/MinFuzzyAlbumQueryLength promoted so the cascade and PlayAlbum share the exact query shape. AnnounceCrossMediaSubstitution (default true) gates all three substitution announcements (FoundAlbumInstead, FoundArtistInstead, FoundSongInstead), wired in PluginConfiguration + config.html (embedded-resource verified) + the PATCH whitelist (the review gate's one >= 80 finding, applied). Review gate (5 reviewers + scorer): score-75 premise correction filed as JF-459 and the false '16 locales trimmed' claim fixed at all four comment sites (PR #15 covered only the 5 English models); six score-50 findings applied. FoundAlbumInstead already in 17/17 locales (JF-439 reuse). Suite 3056/0, Release 0 warnings. REMAINING for maintainer: on-device AC#1 (en-US; the de-DE leg tests a coin-flip premise, see JF-459) and the AC#3 live timing log. Commit ee872aaf.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
