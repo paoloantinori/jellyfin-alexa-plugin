@@ -3,10 +3,10 @@ id: JF-464
 title: >-
   Cross-media artist fallback ignores MusicEnabled (shared-gate leak, predates
   JF-463)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-03 07:51'
-updated_date: '2026-09-03 08:21'
+updated_date: '2026-09-03 09:05'
 labels: []
 dependencies: []
 references:
@@ -44,3 +44,15 @@ Acceptance criteria:
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Both shared cross-media fallbacks now gate on the global music flag (commit c027a7c0). TryEntityFallbackAsync (artist fallback, five callers) and TryAlbumFallbackAsync (album cascade; the identical leak found by the /simplify pass and closed in the same task) short-circuit to null when MusicEnabled=false; null is the pre-existing no-confident-match contract, so every caller falls through to its own not-found unchanged. The flag is global-only (no per-user override exists; the per-user test in the brief was documented N/A rather than invented).
+
+Verified: suite 3066/3066 (5 new tests in CrossMediaFallbackMusicGateTests: direct shared-gate probe, genre-miss, mood-miss, song-miss album-cascade, music-enabled control), Release 0 warnings, per-gate mutation checks (each neutralized gate fails exactly its own test), validators PASS. Live verification on minix: PATCH MusicEnabled=false -> genre "pink floyd" returns NotFoundGenre with no playback and the log line "artist fallback skipped, music is disabled via configuration"; PATCH back to true -> the JF-463 artist recovery plays again ("Ho trovato l'artista Pink Floyd"); final config verified MusicEnabled=true, 1 user. The partial PATCH endpoint was used for the toggle (never the full config POST).
+
+Findings landed elsewhere same-turn: JF-467 (primary paths of PlaySong/PlayAlbum/FindSong/PlayMoodMusic still ungated + the _config vs Plugin.Instance read-source alignment the final review surfaced + the mood-entry gating execution note), JF-466 (FilterByContentAccess empty-array semantics, verify-against-source-first). The IfMediaTypeDisabled dead helper is noted for JF-467's implementer.
+
+Gates: /simplify (4 angles; the album-cascade leak finding applied in-task, comment triplication trimmed, remaining skips documented); code-review via pr-review-toolkit:code-reviewer (1 finding P3@80 landed on JF-467 as a tracker amendment; all six null-contract call sites verified clean).
+<!-- SECTION:FINAL_SUMMARY:END -->
