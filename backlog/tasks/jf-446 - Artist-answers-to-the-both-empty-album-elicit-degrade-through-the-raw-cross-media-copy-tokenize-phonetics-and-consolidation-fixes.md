@@ -3,10 +3,10 @@ id: JF-446
 title: >-
   Artist answers to the both-empty album elicit degrade through the raw
   cross-media copy (tokenize, phonetics, and consolidation fixes)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-01 23:28'
-updated_date: '2026-09-02 22:25'
+updated_date: '2026-09-03 00:33'
 labels:
   - code-review
   - dialog
@@ -48,6 +48,12 @@ JF-295 re-check (2026-09-03, review-local gate round): the tokenized guard makes
 - [ ] #6 Either PlayAlbum/PlaySong use the shared TryEntityFallbackAsync (extended with the JF-363 band) or the three-site divergence is documented with an owner note for future hardening
 - [ ] #7 Any stop-word addition (dei/degli/delle) verified against song-search index symmetry before merge
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped as full consolidation (AC#6's preferred shape). Both raw gate copies (PlayAlbum ~317-390, PlaySong ~297-372) deleted; both handlers call the shared BaseHandler.TryEntityFallbackAsync, extended with the JF-363 Confirm/AutoServe band (opt-in notFoundMediaType, DisambiguationHelper consts end to end after the gate round) and phonetic acceptance (Double Metaphone overload; length-banded collisions floor at 91 above the 85 bar: 'cup' for 'Koop' plays). AC#1 tokenize-before-count via KeywordMatcher with the slot locale; AC#2 phonetic chain, not raw FindBestMatchWithScore; AC#3+4 tests ('di pink floyd' plays; >2 content words skips, plus the PlaySong mirror); AC#5 CheapDtoOptions fuzzy scan; AC#7 dei/degli/delle added with both load-bearing invariants verified and pinned. The deliberate phonetic widening for FindSong/PlayMoodMusic is recorded and pinned (JF446_SharedGate_PhoneticAcceptance_PlaysArtist). Review-gate findings applied: band wins over the word-coverage valve for band-enabled callers ('ac/dc' pin), JF-295 canonical case recorded (guard-eligible, threshold-refuted) with an it-IT pin, dropped triage logs restored. Below-cap left: the valve/band reorder's inertness for null-band callers rests on branch inspection (contrived to test). Suite 3015/0. Commit fbdfff97.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

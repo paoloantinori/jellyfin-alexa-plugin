@@ -4,10 +4,10 @@ title: >-
   PlaybackReportOrdering residual interleavings: start-vs-start zombie,
   correction re-validation, displacement queue-state trust, double-stop (+
   test/registry hygiene)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-02 00:14'
-updated_date: '2026-09-02 22:00'
+updated_date: '2026-09-03 00:33'
 labels:
   - code-review
   - playback
@@ -48,6 +48,12 @@ JF-424.1 worker observations (2026-09-02): (1) PlaybackStoppedEventHandler ~:130
 
 review-local gate (2026-09-02, score 75, below reporting threshold but real): the JF-424.1 cache-hit validation resolves the current item FullNowPlayingItem-FIRST (FindCurrentQueueIndex) while the STORE side (PlaybackStartedEventHandler.TryPrecomputeNext) resolves token-only; when a start report failed and session.FullNowPlayingItem still holds the PREVIOUS queue item Z, the validation computes Z's successor (=A, the playing track), rejects the cached B, falls through to full resolution which ALSO resolves Z and enqueues A after itself (JF-409 self-reenqueue class); pre-JF-424.1 the unconditional cache hit served B correctly in this state. Fix direction: resolve token-first when a cache entry exists (match the store side).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+All four core ACs plus the Implementation Notes items shipped. AC#1 start-vs-start: per-device monotonic start generation, post-await mismatch restores the newest start via AUTOMATED OnPlaybackProgress (verified against Jellyfin v10.11.11 source: automated progress rewrites now-playing with no PlayCount/SaveUserData side effects; a replayed start would increment both). AC#2 correction re-validation after each await, handoff-bounded. AC#3 displacement classified WITHOUT the queue (latest START differs from the event token, folded into RecordStop's null return); Finished/Failed dropped their queue-manager dependency. AC#4 double-stop serialized via StopRegistration.ReportCompleted awaited before corrective re-issue; the three stop-shaped handlers share BaseHandler.ReportStopOrderedAsync owning the whole protocol. AC#5 12 tests incl. the inverted-order pin and the queue-contradicts-token guard (skips pointer/position stores when the directive-time queue already advanced). Notes (a) done, (b) StreamTokenCodec owns the composite format end to end (suffix-stacking and URL-embedding bonus fixes), (c) all four sibling Guid crashes fixed (sleep stops now persist ItemPositionState). JF-424.1 observations both done (MoveTo syncs CurrentIndex; gate reads the authoritative device queue; token-first validation with the JF-409 pin). AC#6 partial by design: seams done, CreateStopHandler done, GetDeviceId extractor adopted in 4+10 sites, slot abstraction SKIPPED (five registries differ in key semantics; needs an owner for RadioModeState/QueueContinuationStore/NextTrackPrecomputeCache - carried, not lost). Residual documented: inverted-order near-zero server-report clobber (the report payload is unchanged by design); 7 inline deviceId copies were migrated in the simplify round. Suite 3015/0. Commit 53b6e6a1.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
