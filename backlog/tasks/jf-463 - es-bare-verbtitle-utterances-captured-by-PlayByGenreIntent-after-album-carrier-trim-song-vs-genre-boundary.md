@@ -3,9 +3,10 @@ id: JF-463
 title: >-
   es bare verb+title utterances captured by PlayByGenreIntent after
   album-carrier trim (song-vs-genre boundary)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-03 06:23'
+updated_date: '2026-09-03 07:51'
 labels: []
 dependencies: []
 references:
@@ -26,19 +27,21 @@ Found by the JF-459 live verification matrix (2026-09-03, profile-nlu es-ES): af
 - "Escucha abbey road" -> PlaySongIntent
 - "Toca abbey road" -> PlaySongIntent
 
-Cause: es-ES/es-MX/es-US PlayByGenreIntent carries TWO bare carriers ("Reproduce {genre}", "Pon {genre}") that outrank PlaySongIntent's "Reproduce {song}" / "Pon {song}" in the es NLU. The bare {genre} carrier itself is deliberate repo-wide design (all 17 locales have one: "Play {genre}" en, "Spiele {genre}" de, etc., because "play jazz" must route to genre), so the fix is NOT a blanket genre-carrier trim. The specific problem is the OVERLAP in Spanish: the same bare verbs as the song intent, plural carriers (2 where other locales have 1), and no genre-noun requirement.
+Cause: es-ES/es-MX/es-US PlayByGenreIntent carries TWO bare carriers ("Reproduce {genre}", "Pon {genre}") that outrank PlaySongIntent's "Reproduce {song}" / "Pon {song}" in the es NLU. The bare {genre} carrier is deliberate repo-wide design (all 17 locales have one; "play jazz" must work), and the genre slot is the built-in AMAZON.Genre in ALL locales (verified 2026-09-03), so the model-layer fix would be the JF-354 custom-type conversion at 17-locale scale.
 
-Investigate (probe-first per repo rules):
-1. Whether the es PlayByGenreIntent can drop to ONE bare carrier (keep the most genre-typical verb) or require a noun on one of the two ("Pon musica {genre}" exists already as "Reproduce música {genre}"), so "Reproduce X"/"Pon X" fall to PlaySongIntent and the JF-345/JF-295 cascades recover genre-vs-album-vs-song server-side.
-2. The same probe in es-MX and es-US (identical sample sets) to confirm the behavior reproduces.
-3. What the PlayByGenre HANDLER does with an unresolved genre value ("abbey road" is no genre): today it presumably speaks genre-not-found. A handler-side fallback (unresolved genre value that fuzzy-matches no genre could fall to PlaySong/cascade) is an alternative or complementary fix; check TryEntityFallbackAsync applicability.
-4. en-US control: "play abbey road" -> PlaySongIntent (verified), so English single-carrier shape does not exhibit the steal.
+RESOLUTION DEPTH (amended 2026-09-03 after the slot-type discovery; the original ACs presumed a model-layer fix): the proportional fix is HANDLER-SIDE, mirroring the PlayMoodMusic precedent: when PlayByGenreIntentHandler receives a genre value that resolves to NO known genre (not in its genre map, no admin override, no fuzzy match), it should fall back via the existing BaseHandler.TryEntityFallbackAsync (artist search on the tokenized value, word-count guard, threshold gate) exactly like PlayMoodMusic does for mood misses, then its own song/album not-found path if that misses too. This recovers the user's intent server-side for every locale, not just es, without touching 17 models. The model-layer conversion (custom Genre type with per-locale vocabulary, JF-354 mirror) stays a possible future task if handler-side proves insufficient.
 
-Acceptance criteria:
-- es-ES "Reproduce abbey road" and "Pon abbey road" route to PlaySongIntent (probe-verified 3/3 deterministic each).
-- "Reproduce jazz" and "Pon jazz" still route to PlayByGenreIntent.
-- No regression in the other 16 locales' genre routing (probe "play jazz"/"Spiele jazz" before and after).
-- NLU fixtures updated if samples change.
+Investigation still required before implementing:
+1. Read PlayByGenreIntentHandler's current genre-resolution path: what happens today with genre="abbey road" (genre-not-found speech? fuzzy attempt?). Confirm TryEntityFallbackAsync is NOT already wired there.
+2. Reproduce the probes in es-MX and es-US (identical sample sets; confirm the same steal).
+3. Check the PlayMoodMusic wiring of TryEntityFallbackAsync for the exact call shape (tokenize, threshold, word guard, announcement, null return on miss).
+4. Verify a REAL genre still resolves normally (no behavior change for "Reproduce jazz": the fallback must fire ONLY on confirmed genre-resolution failure).
+
+Acceptance criteria (amended):
+- Handler: a genre value resolving to no genre triggers TryEntityFallbackAsync; a confirmed artist match plays with the FoundArtistInstead announcement (respecting AnnounceCrossMediaSubstitution); no match falls through to the existing not-found.
+- Unit tests: unresolved-genre + artist-exists plays the artist; unresolved-genre + nothing-found keeps the genre not-found; resolved genre (e.g. "jazz") never consults the fallback (no artist query issued).
+- Probe evidence recorded: es-ES/MX/US "Reproduce abbey road"/"Pon abbey road" steal reproduced pre-fix (the handler now recovers it; profile-nlu still shows PlayByGenreIntent routing, which is expected and fine: the fix is server-side).
+- "Reproduce jazz" behavior unchanged end-to-end (simulator or unit test).
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
@@ -54,3 +57,11 @@ Acceptance criteria:
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FACT CORRECTION (worker ground-truth scan, 2026-09-03): the genre slot is AMAZON.Genre in 16 locales but AMAZON.SearchQuery in model_it-IT.json (PlayByGenreIntent). The 'AMAZON.Genre in ALL locales' claim earlier in this description is wrong for it-IT; the handler-side fix is locale-agnostic either way.
+
+Live probe matrix recorded pre-fix: es-MX 'Reproduce abbey road' steals to PlayByGenreIntent (matches es-ES); es-MX 'Pon abbey road' and es-US 'Reproduce abbey road' went to PlaySongIntent, es-US 'Pon abbey road' to PlayArtistSongsIntent (NLU per-model probabilistic: the steal is intermittent, which is exactly why the handler-side recovery covers all locales); es-ES 'Reproduce jazz' stays PlayByGenreIntent (genre path intact).
+<!-- SECTION:NOTES:END -->

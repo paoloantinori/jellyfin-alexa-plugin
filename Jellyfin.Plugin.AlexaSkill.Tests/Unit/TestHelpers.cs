@@ -8,6 +8,7 @@ using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
+using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Entities;
@@ -106,6 +107,21 @@ internal static class TestHelpers
             }
         };
     }
+
+    /// <summary>
+    /// The first AudioPlayer.Play directive of a response, or null (shared by the
+    /// cross-media fallback test suites).
+    /// </summary>
+    internal static AudioPlayerPlayDirective? GetPlayDirective(SkillResponse response)
+        => response.Response?.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+
+    /// <summary>
+    /// The speech text of a response whose OutputSpeech may legitimately be null (a
+    /// silent AudioPlayer start): null means no speech at all, which is exactly what
+    /// the announce-off tests want to prove.
+    /// </summary>
+    internal static string? GetSpeechTextOrNull(SkillResponse response)
+        => (response.Response?.OutputSpeech as PlainTextOutputSpeech)?.Text;
 
     /// <summary>
     /// Extract speech text from a SkillResponse, handling both plain text and SSML output.

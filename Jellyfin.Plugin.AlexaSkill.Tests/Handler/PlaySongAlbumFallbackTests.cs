@@ -151,17 +151,6 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
         return (album, tracks);
     }
 
-    private static AudioPlayerPlayDirective? GetPlayDirective(SkillResponse response)
-        => response.Response?.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
-
-    /// <summary>
-    /// The speech text of a response whose OutputSpeech may legitimately be null (a
-    /// silent AudioPlayer start): null means no speech at all, which is exactly what
-    /// the announce-off tests want to prove.
-    /// </summary>
-    private static string? GetSpeechTextOrNull(SkillResponse response)
-        => (response.Response?.OutputSpeech as PlainTextOutputSpeech)?.Text;
-
     // AC#5a: song miss + artist miss + album hit plays the album with the
     // FoundAlbumInstead announcement.
     [Fact]
@@ -180,7 +169,7 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
         SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), session, CancellationToken.None);
 
         // Plays the album (AudioPlayer directive + the album's tracks in the queue).
-        Assert.NotNull(GetPlayDirective(response));
+        Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.NotNull(session.NowPlayingQueue);
         Assert.Equal(3, session.NowPlayingQueue.Count);
         Assert.Equal(tracks[0].Id, session.FullNowPlayingItem?.Id);
@@ -215,7 +204,7 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
 
         SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), session, CancellationToken.None);
 
-        Assert.NotNull(GetPlayDirective(response));
+        Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.Equal(song.Id, session.FullNowPlayingItem?.Id);
         Assert.DoesNotContain(queries, q => q.IncludeItemTypes?.Contains(BaseItemKind.MusicAlbum) == true);
     }
@@ -240,7 +229,7 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
 
         SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), session, CancellationToken.None);
 
-        Assert.Null(GetPlayDirective(response));
+        Assert.Null(TestHelpers.GetPlayDirective(response));
         Assert.True(session.NowPlayingQueue == null || session.NowPlayingQueue.Count == 0);
         string speech = TestHelpers.GetSpeechText(response);
         Assert.DoesNotContain("album", speech, StringComparison.OrdinalIgnoreCase);
@@ -264,9 +253,9 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
 
         SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), session, CancellationToken.None);
 
-        Assert.NotNull(GetPlayDirective(response));
+        Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.Equal(3, session.NowPlayingQueue?.Count);
-        string? speech = GetSpeechTextOrNull(response);
+        string? speech = TestHelpers.GetSpeechTextOrNull(response);
         Assert.True(string.IsNullOrWhiteSpace(speech) || !speech.Contains("album", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -305,8 +294,8 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
 
         SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
 
-        Assert.NotNull(GetPlayDirective(response));
-        string? speech = GetSpeechTextOrNull(response);
+        Assert.NotNull(TestHelpers.GetPlayDirective(response));
+        string? speech = TestHelpers.GetSpeechTextOrNull(response);
         Assert.True(string.IsNullOrWhiteSpace(speech) || !speech.Contains("artist", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -327,7 +316,7 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
         var request = CreateSongIntent("abbey roade"); // exact album tier misses, fuzzy tier finds it
 
         SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
-        Assert.NotNull(GetPlayDirective(response));
+        Assert.NotNull(TestHelpers.GetPlayDirective(response));
 
         var albumQueries = queries.Where(q => q.IncludeItemTypes?.Contains(BaseItemKind.MusicAlbum) == true).ToList();
         Assert.True(albumQueries.Count <= 2, $"album cascade issued {albumQueries.Count} MusicAlbum queries");
@@ -395,7 +384,7 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
 
         SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), session, CancellationToken.None);
 
-        Assert.NotNull(GetPlayDirective(response));
+        Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.Contains("Metallica", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(queries, q => q.IncludeItemTypes?.Contains(BaseItemKind.MusicAlbum) == true);
     }
@@ -417,7 +406,7 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
 
         SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
 
-        Assert.Null(GetPlayDirective(response));
+        Assert.Null(TestHelpers.GetPlayDirective(response));
         Assert.DoesNotContain(queries, q => q.IncludeItemTypes?.Contains(BaseItemKind.MusicAlbum) == true);
     }
 
@@ -438,7 +427,7 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
 
         SkillResponse response = await handler.HandleAsync(request, CreateContext(), CreateUser(), CreateSession(), CancellationToken.None);
 
-        Assert.Null(GetPlayDirective(response));
+        Assert.Null(TestHelpers.GetPlayDirective(response));
         string speech = TestHelpers.GetSpeechText(response);
         Assert.DoesNotContain("album", speech, StringComparison.OrdinalIgnoreCase);
     }

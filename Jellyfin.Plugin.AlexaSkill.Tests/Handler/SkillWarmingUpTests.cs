@@ -60,13 +60,18 @@ public class SkillWarmingUpTests : PluginTestBase
             "warming-tests");
     }
 
-    private static IntentRequest CreateIntentRequest(string intentName, string? musician = null, string? song = null, string? titleKeywords = null)
+    private static IntentRequest CreateIntentRequest(string intentName, string? musician = null, string? song = null, string? titleKeywords = null, string? genre = null)
     {
         var intent = new Intent { Name = intentName };
         intent.Slots = new Dictionary<string, Slot>();
         if (musician != null)
         {
             intent.Slots["musician"] = new Slot { Name = "musician", Value = musician };
+        }
+
+        if (genre != null)
+        {
+            intent.Slots["genre"] = new Slot { Name = "genre", Value = genre };
         }
 
         // AddToQueue/PlayNext read Slots["song"] with the indexer (KeyNotFoundException
@@ -93,9 +98,9 @@ public class SkillWarmingUpTests : PluginTestBase
 
     /// <summary>
     /// Layer-1 reachability: the entry points that previously had NO gate (AddToQueue,
-    /// QueryArtistLibrary, PlayNext) now refuse at entry via the shared guard. The
-    /// PlaySong/PlayAlbum/FindSong/SearchMedia/PlayMoodMusic entry gates and the
-    /// PlayArtistSongs inline-path guard follow the identical one-line shape; the
+    /// QueryArtistLibrary, PlayNext, PlayByGenre) now refuse at entry via the shared
+    /// guard. The PlaySong/PlayAlbum/FindSong/SearchMedia/PlayMoodMusic entry gates and
+    /// the PlayArtistSongs inline-path guard follow the identical one-line shape; the
     /// choke-point throw itself is proven in ArtistSearchTests.
     /// </summary>
     [Fact]
@@ -119,6 +124,14 @@ public class SkillWarmingUpTests : PluginTestBase
                 _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
                 _userManagerMock.Object, _loggerFactory, artistIndex: artistIndex),
             CreateIntentRequest(IntentNames.PlayNext, musician: "pink floyd", song: "shine on you crazy diamond"));
+
+    [Fact]
+    public Task PlayByGenre_WhileIndexWarming_ThrowsAtEntry()
+        => AssertEntryGateFiresAsync(artistIndex => new PlayByGenreIntentHandler(
+                _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
+                _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory,
+                artistIndex: artistIndex),
+            CreateIntentRequest(IntentNames.PlayByGenre, genre: "jazz"));
 
     private async Task AssertEntryGateFiresAsync(
         Func<IArtistIndex, BaseHandler> createHandler,

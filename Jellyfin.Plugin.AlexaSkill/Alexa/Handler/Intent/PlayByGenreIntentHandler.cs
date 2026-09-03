@@ -10,6 +10,7 @@ using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -28,6 +29,9 @@ public class PlayByGenreIntentHandler : BaseHandler
     private const int MaxQueryResults = 500;
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
+    private readonly IUserDataManager _userDataManager;
+    private readonly IArtistIndex? _artistIndex;
+    private readonly DeviceQueueManager? _queueManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PlayByGenreIntentHandler"/> class.
@@ -36,16 +40,25 @@ public class PlayByGenreIntentHandler : BaseHandler
     /// <param name="config">The plugin configuration.</param>
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
+    /// <param name="userDataManager">Instance of the <see cref="IUserDataManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
+    /// <param name="artistIndex">Optional in-memory artist index for fast search.</param>
+    /// <param name="queueManager">Optional per-device queue manager for crash recovery.</param>
     public PlayByGenreIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
+        IUserDataManager userDataManager,
+        ILoggerFactory loggerFactory,
+        IArtistIndex? artistIndex = null,
+        DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
+        _userDataManager = userDataManager;
+        _artistIndex = artistIndex;
+        _queueManager = queueManager;
     }
 
     /// <inheritdoc/>
@@ -75,10 +88,16 @@ public class PlayByGenreIntentHandler : BaseHandler
             genreSlot = genreSlotObj.Value;
         }
 
-        if (string.IsNullOrEmpty(genreSlot))
+        if (string.IsNullOrWhiteSpace(genreSlot))
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchGenre", locale));
         }
+
+        // JF-419 cold-start (JF-463 wiring): the genre queries hit the same cold
+        // database the artist index loading proxies, and the artist fallback
+        // (TryEntityFallbackAsync) throws at the choke point mid-handler; gate
+        // before the announcement, same placement as PlayMoodMusic.
+        Util.IndexWarmingGate.EnsureReady(_artistIndex);
 
         RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
 
@@ -104,6 +123,21 @@ public class PlayByGenreIntentHandler : BaseHandler
 
         if (items.Count == 0)
         {
+            // JF-463: the genre slot is free-text (AMAZON.Genre in 16 locales,
+            // AMAZON.SearchQuery in it-IT), so bare verb+title utterances
+            // ("Reproduce abbey road", es) can land here with a title captured as the
+            // genre. Mirror the PlayMoodMusic recovery: try the shared cross-media
+            // artist fallback (word-count guard + threshold inside); on a miss fall
+            // through to the genre not-found unchanged.
+            SkillResponse? artistFallback = await TryEntityFallbackAsync(
+                genreSlot, jellyfinUser!, user, session, context, locale,
+                _libraryManager, _userDataManager, _queueManager, _artistIndex,
+                "PlayByGenre artist fallback", cancellationToken).ConfigureAwait(false);
+            if (artistFallback != null)
+            {
+                return artistFallback;
+            }
+
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundGenre", locale, genreSlot));
         }
 
