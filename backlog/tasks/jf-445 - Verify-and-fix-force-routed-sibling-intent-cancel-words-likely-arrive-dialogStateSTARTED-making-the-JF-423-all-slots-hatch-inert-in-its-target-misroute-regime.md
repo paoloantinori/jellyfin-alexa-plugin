@@ -4,10 +4,10 @@ title: >-
   Verify and fix: force-routed sibling-intent cancel words likely arrive
   dialogState=STARTED, making the JF-423 all-slots hatch inert in its target
   misroute regime
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-01 22:27'
-updated_date: '2026-09-03 03:42'
+updated_date: '2026-09-03 01:50'
 labels:
   - code-review
   - dialog
@@ -32,21 +32,6 @@ Review finding from the JF-423 gates (2026-09-02, three angles + one verifier, e
 - [ ] #3 If IN_PROGRESS observed instead: close this task with the evidence, the current gate already covers it
 - [ ] #4 Unit tests for whichever shape lands
 <!-- AC:END -->
-
-## Definition of Done
-<!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining)
-- [ ] #11 Findings applied or tracked
-<!-- DOD:END -->
 
 ## Implementation Notes
 
@@ -100,3 +85,24 @@ the cancel-word tests repeatedly fetch ResponseStrings.Get("FindSongCancelled", 
 and compare against TestHelpers.GetSpeechText; add a shared assert-speaks /
 assert-does-not-speak helper in TestHelpers to dedupe.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed on evidence-first form. AC#1: the probe could not be run (zero hatch lines in 48h of minix logs; the simulator hardcodes empty attributes and emits no dialogState, so the misroute shape is unreproducible there; JF-411's on-device record is the adjacent fresh-dialog-registered-intent STARTED half, not the misroute) - the STARTED contract was verified live against the Alexa Dialog Interface Reference (manual control: STARTED when invoked, IN_PROGRESS mid-dialog, COMPLETED only under delegation) and the evidence basis, its limits, and the still-open on-device confirmation are recorded in the task notes; AC#1 checked on that documented basis, per the gate's finding 3. AC#2: implemented - new CancelWords.IsForceRoutedCancelCapture (STARTED-or-IN_PROGRESS + bare single-token cancel word in a NON-primary slot, dictionary-key identity, trimmed whole-value); FindSong's hatch gains the third disjunct inside its open-flow gate; PlaySong/PlayAlbum deliberately not widened (no session-state marker, no force-route targets them; locked by tests). The review gate (5 reviewers + scorer, max rigor) hardened it: the STARTED leg consults a probe-vetted narrower word set (it-IT drops fermo/fermare/arresta/stop/cancel from the FRESH regime only; annullare stays, its probe row routes to CancelIntent); the bare-artist sacrifice ('basta' mid-flow now cancels, JF-377 class) is recorded and pinned; the dialog-registered-sibling scope is documented (PlayArtistSongs/AddToQueue/PlayNext/QueryArtistLibrary uncovered); next-touch batches (comment dedup, assert-speaks helper) tracked in the notes. AC#4: 29 new tests across three files. Suite 3044/0, Release 0 warnings. Commit 6750409d.
+<!-- SECTION:FINAL_SUMMARY:END -->
+
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [ ] #1 dotnet build passes with 0 errors
+- [ ] #2 dotnet test passes
+- [ ] #3 No new compiler warnings introduced
+- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [ ] #6 NLU test fixtures updated if interaction model changed
+- [ ] #7 E2E test added for new intent or handler logic
+- [ ] #8 Locale response strings added to all 17 locales
+- [ ] #9 /simplify passed (no blocking cleanups remaining)
+- [ ] #10 /code-review high passed (no blocking findings remaining)
+- [ ] #11 Findings applied or tracked
+<!-- DOD:END -->
