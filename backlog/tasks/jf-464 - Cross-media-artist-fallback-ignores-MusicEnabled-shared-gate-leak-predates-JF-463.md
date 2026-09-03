@@ -3,9 +3,10 @@ id: JF-464
 title: >-
   Cross-media artist fallback ignores MusicEnabled (shared-gate leak, predates
   JF-463)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-03 07:51'
+updated_date: '2026-09-03 08:21'
 labels: []
 dependencies: []
 references:

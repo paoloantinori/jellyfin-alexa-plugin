@@ -2798,6 +2798,9 @@ public abstract class BaseHandler
     /// the phonetic artist search pipeline, and respects the cross-media word-count guard
     /// (<see cref="CrossMediaArtistMaxWords"/>) and threshold. Returns null when no
     /// confident match is found so the caller falls through to its own not-found response.
+    /// JF-464: returns null immediately when the global music flag
+    /// (<see cref="PluginConfiguration.MusicEnabled"/>) is off: the fallback plays artist
+    /// songs, and every caller must inherit that gate here rather than re-wire it.
     /// JF-446: the ONE cross-media artist gate. PlaySong and PlayAlbum route their
     /// no-results fallback here instead of inline copies (the copies counted RAW words,
     /// so an article-carrying elicit answer like "di pink floyd" dead-ended at the guard,
@@ -2839,6 +2842,17 @@ public abstract class BaseHandler
         Logger.LogDebug(
             "{Label}: no results found, trying artist fallback with query='{Query}'",
             logLabel, slotText);
+
+        // JF-464: the fallback's whole payoff is playing music (artist songs), and its
+        // artist queries skip FilterByContentAccess, so the global music flag must gate
+        // it HERE at the shared entry rather than in any caller's wiring.
+        if (!_config.MusicEnabled)
+        {
+            Logger.LogInformation(
+                "{Label}: artist fallback skipped, music is disabled via configuration, query='{Query}'",
+                logLabel, slotText);
+            return null;
+        }
 
         if (!PassesCrossMediaWordGuard(slotText, locale, fallbackNoun: "artist", logLabel, out var tokens))
         {
@@ -3108,6 +3122,18 @@ public abstract class BaseHandler
         string logLabel,
         CancellationToken cancellationToken)
     {
+        // JF-464: same music-disabled gate as the artist fallback. This cascade's
+        // whole payoff is playing an album of music, and its queries skip
+        // FilterByContentAccess, so the global flag must gate it here (null is the
+        // shared no-match contract; the caller falls through to its own not-found).
+        if (!_config.MusicEnabled)
+        {
+            Logger.LogInformation(
+                "{Label}: album fallback skipped, music is disabled via configuration, query='{Query}'",
+                logLabel, slotText);
+            return null;
+        }
+
         if (!PassesCrossMediaWordGuard(slotText, locale, fallbackNoun: "album", logLabel, out _))
         {
             return null;
