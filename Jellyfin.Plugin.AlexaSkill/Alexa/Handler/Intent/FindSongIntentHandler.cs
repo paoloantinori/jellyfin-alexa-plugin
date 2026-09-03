@@ -153,29 +153,37 @@ public class FindSongIntentHandler : BaseHandler
         FindSongSessionData? sessionData = ReadSessionData(sessionAttributes);
 
         // Escape hatch from the elicitation trap, ONLY while a FindSong flow is open (an
-        // open elicit always persists FindSongSessionData) AND the dialog is actually in
-        // progress, the same guard shape as PlaySong/PlayAlbum (JF-423): a captured
-        // cancel word cancels only when it arrived THROUGH the open elicit
-        // (dialogState IN_PROGRESS). A mid-flow request whose dialog is NOT in progress
-        // (a full-utterance remount like "trova la canzone basta", or a fresh invocation)
-        // is a legitimate search for a title that happens to be a cancel word, and must
-        // search. While a Dialog.ElicitSlot is open, Alexa captures the user's next
-        // utterance INTO the elicited slot, so stop/cancel words arrive as slot values
-        // instead of AMAZON.Stop/CancelIntent (observed via simulate-skill and the console
-        // 2026-08-28: "stop"/"ferma" fed the keywords and every subsequent utterance
-        // stayed hijacked). ANY slot counts, not just titleKeywords: a force-routed
-        // request can carry the word in the musician slot ("annulla" misrouted to a
-        // sibling intent), which would otherwise be searched as an artist name.
-        // Second capture regime: when the NLU DOES resolve Stop/Cancel, the controller
-        // force-routes any IntentRequest with FindSongSessionData here, and those arrive
-        // with NO titleKeywords slot; treat the intent name as the cancel signal too
-        // (code-review 2026-08-29; an explicitly resolved Stop/CancelIntent is
-        // unambiguous, so it needs no IN_PROGRESS gate).
+        // open elicit always persists FindSongSessionData). Three capture regimes end the
+        // flow here (JF-423; STARTED widening JF-445):
+        // 1. Same-intent elicit capture: while a Dialog.ElicitSlot is open, Alexa captures
+        //    the user's next utterance INTO the elicited slot, so stop/cancel words arrive
+        //    as slot values (dialogState IN_PROGRESS) instead of AMAZON.Stop/CancelIntent
+        //    (observed via simulate-skill and the console 2026-08-28: "stop"/"ferma" fed
+        //    the keywords and every subsequent utterance stayed hijacked). ANY slot counts
+        //    here, multi-word cancel phrases included.
+        // 2. NLU-resolved Stop/Cancel force-routed back: HandlerSelector routes any
+        //    IntentRequest with FindSongSessionData here, and those arrive with NO
+        //    titleKeywords slot; the intent name is the cancel signal (an explicitly
+        //    resolved Stop/CancelIntent is unambiguous, so it needs no dialog gate).
+        // 3. Sibling-intent misroute force-routed back (JF-445): a cancel word resolved
+        //    onto a DIALOG-REGISTERED sibling intent ("annulla" landing in its musician
+        //    slot) is a fresh invocation of that sibling's dialog, so it arrives
+        //    dialogState STARTED, not IN_PROGRESS (Alexa docs, Dialog Interface
+        //    Reference: STARTED "when the intent is invoked"; JF-411 recorded the STARTED
+        //    half on-device, JF-422 the IN_PROGRESS half for same-intent captures).
+        //    Siblings absent from dialog.intents (PlayArtistSongs, AddToQueue, PlayNext,
+        //    QueryArtistLibrary) carry no dialogState and stay uncovered (recorded
+        //    residual, JF-445 task note). The widened predicate requires the word in a
+        //    NON-primary slot and BARE (single token): a STARTED request carrying it in
+        //    titleKeywords is a full-utterance remount ("trova la canzone basta") searching
+        //    a title that happens to be a cancel word, and a multi-word value ("band basta")
+        //    is a real-artist search. Both of those must search.
         if (sessionData != null)
         {
             bool stopOrCancelIntent = intentRequest.Intent.Name is "AMAZON.StopIntent" or "AMAZON.CancelIntent";
             if (stopOrCancelIntent
-                || (Util.CancelWords.IsDialogInProgress(intentRequest) && Util.CancelWords.AnySlotIsCancelWord(intentRequest, locale)))
+                || (Util.CancelWords.IsDialogInProgress(intentRequest) && Util.CancelWords.AnySlotIsCancelWord(intentRequest, locale))
+                || Util.CancelWords.IsForceRoutedCancelCapture(intentRequest, locale, IntentNames.Slots.TitleKeywords))
             {
                 Logger.LogInformation("FindSong: cancel during open flow (intent={Intent}, dialogState={DialogState}), ending flow", intentRequest.Intent.Name, intentRequest.DialogState);
                 return ResponseBuilder.Tell(ResponseStrings.Get("FindSongCancelled", locale));

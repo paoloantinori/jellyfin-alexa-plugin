@@ -176,6 +176,8 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // "find the song stop" matching the intent's slotted samples) is a
         // legitimate search for a song titled like a cancel word (session attributes
         // still present from the open flow), and must search and play, not cancel.
+        // JF-445: this also guards the widened predicate's primary-slot rule: the word
+        // sits in titleKeywords, so the STARTED sibling-misroute branch must ignore it.
         var artistId = Guid.NewGuid();
         SetupJellyfinUser();
         SetupSongSearch(new List<BaseItem> { CreateAudioItem(Guid.NewGuid(), "Stop") });
@@ -211,7 +213,9 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // artist elicitation, "annulla" misrouted to a sibling intent is force-routed
         // back here (controller routes any IntentRequest with FindSongSessionData) with
         // the word captured into the musician slot; searching artist "annulla" would
-        // reopen the elicitation-trap loop the hatch exists to close.
+        // reopen the elicitation-trap loop the hatch exists to close. The IN_PROGRESS
+        // dialog state here is the same-intent capture half of the contract (JF-422);
+        // the realistic sibling-misroute state is STARTED, covered below (JF-445).
         SetupJellyfinUser();
         var user = CreateTestUser();
         var session = CreateSession();
@@ -234,6 +238,142 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         Assert.Equal(cancelled, TestHelpers.GetSpeechText(response));
         Assert.True(response.Response.ShouldEndSession != false, "musician-slot cancel word must end the session");
         Assert.True(response.Response.Directives?.Any(d => d.Type == "Dialog.ElicitSlot") != true, "musician-slot cancel word must not re-elicit");
+    }
+
+    [Fact]
+    public async Task ForceRoutedSiblingMisroute_StartedDialog_BareWordInMusicianSlot_EndsFlowWithTell()
+    {
+        // JF-445: a cancel word resolved onto a SIBLING intent is a fresh invocation of
+        // that sibling's dialog, so the force-routed request arrives dialogState STARTED,
+        // not IN_PROGRESS (Alexa docs, Dialog Interface Reference: under manual control
+        // dialogState is "STARTED (when the intent is invoked)"; JF-411 recorded STARTED
+        // on-device, JF-422 recorded IN_PROGRESS for same-intent captures). The JF-423
+        // all-slots hatch alone was therefore inert in exactly this regime; the widened
+        // predicate cancels on STARTED + a bare single-token cancel word in a NON-primary
+        // slot while the FindSong flow is open.
+        SetupJellyfinUser();
+        var user = CreateTestUser();
+        var session = CreateSession();
+        var attrs = BuildSessionAttributes(new FindSongSessionData
+        {
+            State = FindSongState.AwaitingArtist,
+            Keywords = "wish you were here"
+        });
+
+        var request = CreateIntentRequest("PlaySongIntent", new Dictionary<string, string?>
+        {
+            ["musician"] = "annulla"
+        });
+        request.Locale = "it-IT";
+        request.DialogState = "STARTED";
+
+        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, attrs, CancellationToken.None);
+
+        string cancelled = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("FindSongCancelled", "it-IT");
+        Assert.Equal(cancelled, TestHelpers.GetSpeechText(response));
+        Assert.True(response.Response.ShouldEndSession != false, "STARTED sibling misroute with a bare cancel word must end the session");
+        Assert.True(response.Response.Directives?.Any(d => d.Type == "Dialog.ElicitSlot") != true, "STARTED sibling misroute must not re-elicit");
+    }
+
+    [Fact]
+    public async Task ForceRoutedSiblingMisroute_StartedDialog_MultiWordMusician_StillSearches()
+    {
+        // JF-445 bare-word guard: a multi-word slot value is a search query naming a real
+        // artist ("band basta" for the artist Basta), so a STARTED request carrying it
+        // must search, not cancel, even while a FindSong flow is open.
+        SetupJellyfinUser();
+        SetupArtistSearchEmpty();
+        var user = CreateTestUser();
+        var session = CreateSession();
+        var attrs = BuildSessionAttributes(new FindSongSessionData
+        {
+            State = FindSongState.AwaitingArtist,
+            Keywords = "wish you were here"
+        });
+
+        var request = CreateIntentRequest("PlaySongIntent", new Dictionary<string, string?>
+        {
+            ["musician"] = "band basta"
+        });
+        request.Locale = "it-IT";
+        request.DialogState = "STARTED";
+
+        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, attrs, CancellationToken.None);
+
+        string cancelled = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("FindSongCancelled", "it-IT");
+        Assert.NotEqual(cancelled, TestHelpers.GetSpeechText(response));
+        Assert.False(response.Response.ShouldEndSession != false, "multi-word musician during open flow must keep the flow alive (artist search path)");
+    }
+
+    [Fact]
+    public async Task ForceRoutedSiblingMisroute_StartedDialog_BareCancelWordArtistName_Cancels()
+    {
+        // JF-445 review finding 1 (2026-09-03): THE SACRIFICE, pinned. A mid-flow bare
+        // single-word search for a REAL artist named exactly a cancel word (the band
+        // "Basta", spoken bare during an open FindSong artist elicit and misresolved
+        // onto a sibling intent's musician slot) now cancels instead of searching. The
+        // shape is string-indistinguishable from the misroute the widening must catch
+        // (bare cancel word + non-primary slot + STARTED), so cancel wins with one-turn
+        // recovery (the user simply asks again), the same trade-off class as the JF-377
+        // prompt-not-reject design. This test exists so a future change to that outcome
+        // must notice it. The no-open-flow counterpart ("basta" as a fresh first
+        // invocation still searches the artist) is locked by
+        // CancelWordArtist_FirstInvocation_NoOpenFlow_StillSearches below.
+        SetupJellyfinUser();
+        var user = CreateTestUser();
+        var session = CreateSession();
+        var attrs = BuildSessionAttributes(new FindSongSessionData
+        {
+            State = FindSongState.AwaitingArtist,
+            Keywords = "wish you were here"
+        });
+
+        var request = CreateIntentRequest("PlaySongIntent", new Dictionary<string, string?>
+        {
+            ["musician"] = "basta"
+        });
+        request.Locale = "it-IT";
+        request.DialogState = "STARTED";
+
+        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, attrs, CancellationToken.None);
+
+        string cancelled = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("FindSongCancelled", "it-IT");
+        Assert.Equal(cancelled, TestHelpers.GetSpeechText(response));
+        Assert.True(response.Response.ShouldEndSession != false, "the pinned sacrifice must end the session (one-turn recovery)");
+        Assert.True(response.Response.Directives?.Any(d => d.Type == "Dialog.ElicitSlot") != true, "the pinned sacrifice must not re-elicit");
+    }
+
+    [Fact]
+    public async Task CancelWordArtist_FirstInvocation_NoOpenFlow_StillSearches()
+    {
+        // JF-445 regression lock: a real artist named exactly a cancel word (Basta)
+        // searched WITHOUT an open flow (no session attributes) must be searched as an
+        // artist, never cancelled. This also pins why the widening lives ONLY in FindSong
+        // (the one handler with an open-flow marker + force-route): PlaySong/PlayAlbum
+        // elicit with no session state, so for them a bare STARTED word is
+        // indistinguishable from this legitimate search.
+        var artistId = Guid.NewGuid();
+        SetupJellyfinUser();
+        SetupArtistSearch(artistId, "Basta");
+        var user = CreateTestUser();
+        var session = CreateSession();
+
+        var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
+        {
+            ["musician"] = "basta"
+        });
+        request.Locale = "it-IT";
+        request.DialogState = "STARTED";
+
+        SkillResponse response = await _handler.HandleAsync(request, CreateContext(), user, session, null, CancellationToken.None);
+
+        string cancelled = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("FindSongCancelled", "it-IT");
+        Assert.NotEqual(cancelled, TestHelpers.GetSpeechText(response));
+        Assert.False(response.Response.ShouldEndSession, "first invocation must continue the flow (keywords elicit), not cancel");
+        var sessionData = ReadSessionData(response);
+        Assert.NotNull(sessionData);
+        Assert.Equal(FindSongState.AwaitingKeywords, sessionData.State);
+        Assert.Equal("Basta", sessionData.ArtistName);
     }
 
     [Fact]

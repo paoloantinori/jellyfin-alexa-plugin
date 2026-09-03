@@ -75,7 +75,8 @@ internal static class CancelWords
     // JF-423 live evidence). "fermare"/"arresta"/"fermo" do not route to Stop/Cancel as
     // standalone probes, but removing previously shipped escape words is a behavior
     // change beyond JF-444's add-only mandate; the probe rows above record the evidence
-    // if a later task wants to tighten it.
+    // if a later task wants to tighten it. JF-445 (2026-09-03) tightened exactly this
+    // for the FRESH (dialogState STARTED) regime only: see ProbedBareWordsByLocale.
     private static readonly HashSet<string> EnglishWords = new(StringComparer.OrdinalIgnoreCase)
     {
         "stop", "cancel",
@@ -171,9 +172,12 @@ internal static class CancelWords
             return false;
         }
 
-        HashSet<string> words = WordsByLocale.TryGetValue(locale, out HashSet<string>? localeWords) ? localeWords : EnglishWords;
-        return words.Contains(slotValue.Trim());
+        return WordsFor(locale).Contains(slotValue.Trim());
     }
+
+    /// <summary>The full vocabulary for a locale (English set as the fallback).</summary>
+    private static HashSet<string> WordsFor(string locale)
+        => WordsByLocale.TryGetValue(locale, out HashSet<string>? localeWords) ? localeWords : EnglishWords;
 
     /// <summary>
     /// Whether the request's dialog is still in progress, meaning the utterance arrived
@@ -208,6 +212,99 @@ internal static class CancelWords
         foreach (var slot in request.Intent.Slots.Values)
         {
             if (IsCancelWord(slot.Value, locale))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // Whitespace separators for the bare-word (single-token) guard below.
+    private static readonly char[] WhitespaceChars = { ' ', '\t', '\n', '\r' };
+
+    // JF-445 review hardening (2026-09-03): the STARTED (fresh-dialog) leg of the
+    // predicate below consults this NARROWER per-locale vocabulary instead of the
+    // locale's full set. Only it-IT needs an entry: every other locale's set was
+    // probe-vetted word-by-word by JF-444 (and its multi-word entries are already
+    // excluded by the bare guard), while it-IT keeps the pre-JF-444 legacy set for the
+    // IN_PROGRESS same-intent capture regime (JF-423 live evidence). In the STARTED
+    // shape the word must be one the deployed model actually routes toward Stop/Cancel
+    // as a standalone probe: exactly the single-token it-IT probe-table rows with a
+    // routed intent (ferma, annulla, basta, cancella, annullare, stoppa). The legacy
+    // single-token words WITHOUT a routing row stay out of the fresh regime:
+    // "fermare"/"arresta" (NO_SELECTION), "fermo" (ShowMoreIntent), "stop"/"cancel"
+    // (no it-IT probe row; "cancel" was NO_SELECTION in all 9 probed non-English
+    // locales).
+    private static readonly HashSet<string> ItalianProbedBareWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "ferma", "annulla", "basta", "cancella", "annullare", "stoppa",
+    };
+
+    private static readonly Dictionary<string, HashSet<string>> ProbedBareWordsByLocale = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["it-IT"] = ItalianProbedBareWords,
+    };
+
+    /// <summary>
+    /// The vocabulary for the FRESH-dialog (STARTED) leg of
+    /// <see cref="IsForceRoutedCancelCapture"/>: the locale's probed bare-word set where
+    /// one exists (today it-IT, whose full set is legacy), otherwise the locale's own
+    /// probe-vetted set unchanged.
+    /// </summary>
+    private static HashSet<string> ProbedBareWordsFor(string locale)
+        => ProbedBareWordsByLocale.TryGetValue(locale, out HashSet<string>? probedBare) ? probedBare : WordsFor(locale);
+
+    /// <summary>
+    /// Whether the request carries the force-routed sibling-misroute cancel shape:
+    /// dialogState STARTED or IN_PROGRESS, with a BARE single-token cancel word in a
+    /// slot OTHER than the flow's primary slot. Under manual dialog control Alexa sets
+    /// dialogState to "STARTED (when the intent is invoked)" per the Dialog Interface
+    /// Reference, so a cancel word the NLU resolves onto a SIBLING intent mid-flow
+    /// (e.g. "annulla" landing in musician) arrives STARTED, a fresh invocation of that
+    /// sibling's dialog; only replies captured into the SAME intent's open elicit arrive
+    /// IN_PROGRESS (JF-422 observation; JF-411 recorded the STARTED half on-device).
+    /// The word must sit in a NON-primary slot because a STARTED request carrying it in
+    /// the primary slot is a fresh full-utterance search for a title that happens to be
+    /// a cancel word ("trova la canzone basta"), and it must be BARE (single token,
+    /// whole-value match) because a multi-word slot value is a search query naming a
+    /// real artist ("band basta" for the artist Basta). The STARTED leg additionally
+    /// consults the locale's probed bare-word vocabulary (<see cref="ProbedBareWordsFor"/>),
+    /// a NARROWER set than <see cref="IsCancelWord"/> where the locale's full set is
+    /// legacy (today it-IT only), so a word the deployed model does not route toward
+    /// Stop/Cancel as a standalone probe cannot cancel a fresh sibling request.
+    /// Callers must additionally gate this on their open-flow session state: the
+    /// FindSongSessionData force-route is the only routing regime that delivers sibling
+    /// requests into an open flow, which is why only FindSong consumes it (JF-445).
+    /// </summary>
+    /// <param name="request">The incoming intent request.</param>
+    /// <param name="locale">The request locale, for the vocabulary lookup.</param>
+    /// <param name="primarySlotName">The flow's primary slot (e.g. titleKeywords); in the STARTED shape a cancel word there is a fresh full-utterance search, not a misroute capture.</param>
+    /// <returns>True when dialogState is STARTED or IN_PROGRESS and a non-primary slot holds a bare cancel word.</returns>
+    internal static bool IsForceRoutedCancelCapture(IntentRequest request, string locale, string primarySlotName)
+    {
+        bool freshDialog = string.Equals(request.DialogState, "STARTED", StringComparison.OrdinalIgnoreCase);
+        bool openDialog = freshDialog || IsDialogInProgress(request);
+        if (!openDialog || request.Intent.Slots == null)
+        {
+            return false;
+        }
+
+        // STARTED consults the probe-vetted bare-word vocabulary; IN_PROGRESS keeps the
+        // locale's full set, matching the same-intent capture regime (FindSong hatch
+        // disjunct 1 uses AnySlotIsCancelWord on the same full set).
+        HashSet<string> words = freshDialog ? ProbedBareWordsFor(locale) : WordsFor(locale);
+
+        foreach (var slot in request.Intent.Slots)
+        {
+            // The dictionary key is the slot's canonical identity (how GetSlotValue reads it).
+            if (string.Equals(slot.Key, primarySlotName, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            string trimmed = slot.Value?.Value?.Trim() ?? string.Empty;
+            if (trimmed.IndexOfAny(WhitespaceChars) < 0 && words.Contains(trimmed))
             {
                 return true;
             }

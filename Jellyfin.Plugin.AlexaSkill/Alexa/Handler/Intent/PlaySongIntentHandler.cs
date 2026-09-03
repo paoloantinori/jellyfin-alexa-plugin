@@ -141,12 +141,15 @@ public class PlaySongIntentHandler : BaseHandler
         // Escape hatch from the elicitation trap (shared CancelWords helpers): while OUR
         // song-name Dialog.ElicitSlot is open, a stop/cancel word gets captured into a
         // slot (dialogState IN_PROGRESS) instead of routing to AMAZON.Stop/Cancel. ANY
-        // slot counts (shared AnySlotIsCancelWord), not just song/musician: a
-        // force-routed request can carry the word in a sibling slot and searching it
-        // would reopen the trap (JF-423 consolidation). Gated on IN_PROGRESS so a
-        // first-invocation search for a song actually titled "Stop" still runs
-        // (code-review 2026-08-29). Runs BEFORE the warming gate so an open flow still
-        // cancels during the cold-start window (JF-419.2 contract, review round 2).
+        // slot counts (shared AnySlotIsCancelWord), not just song/musician. Gated on
+        // IN_PROGRESS deliberately (JF-445): unlike FindSong, this elicit persists NO
+        // session state ("the dialog lives Amazon-side"), so there is no open-flow marker
+        // to distinguish a STARTED sibling misroute from a fresh legitimate search, and no
+        // force-route delivers sibling requests here (the FindSongSessionData override is
+        // the only one). A first-invocation search for a song actually titled "Stop", or
+        // for the artist "Basta", must still run. Runs BEFORE the warming gate so an open
+        // flow still cancels during the cold-start window (JF-419.2 contract, review
+        // round 2).
         if (Util.CancelWords.IsDialogInProgress(intentRequest)
             && Util.CancelWords.AnySlotIsCancelWord(intentRequest, locale))
         {

@@ -160,6 +160,68 @@ public class EmptyMusicianSlotTests : PluginTestBase
         Assert.True(response.Response.ShouldEndSession != false, "captured cancel word must end the session");
     }
 
+    [Fact]
+    public async Task PlaySong_FirstInvocationCancelWordMusician_StillSearches()
+    {
+        // JF-445: PlaySong's hatch stays IN_PROGRESS-only, DELIBERATELY not widened to
+        // the STARTED force-route shape (that widening lives in FindSong alone): this
+        // elicit persists no session state and no force-route delivers sibling requests
+        // here, so a bare cancel word in a STARTED request is indistinguishable from a
+        // fresh search for a real artist named exactly like the word (Basta). It must
+        // search (here: continue the song elicit), not cancel.
+        var handler = CreateSongHandler();
+        var request = CreateSongIntentRequest(string.Empty, "basta");
+        request.DialogState = "STARTED";
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        var speech = (response.Response.OutputSpeech as PlainTextOutputSpeech)?.Text ?? string.Empty;
+        Assert.DoesNotContain("interrotto", speech, StringComparison.OrdinalIgnoreCase);
+        Assert.False(response.Response.ShouldEndSession, "STARTED bare word with no open flow must elicit the song, not cancel");
+    }
+
+    [Fact]
+    public async Task PlayAlbum_FirstInvocationCancelWordMusician_StillSearches()
+    {
+        // JF-445 mirror of the PlaySong lock: the STARTED widening does not apply to
+        // PlayAlbum either; a bare "basta" in musician resolves the artist and plays an
+        // album (the JF-411 path), never cancels.
+        var handler = CreateAlbumHandler();
+        var request = CreateAlbumIntentRequest(string.Empty, "basta");
+        request.DialogState = "STARTED";
+        SetupUserMock();
+
+        var artist = new MusicArtist { Name = "Basta", Id = Guid.NewGuid() };
+        var album = new MusicAlbum { Name = "Basta Debut", Id = Guid.NewGuid() };
+        var track = new Audio { Name = "Title Track", Id = Guid.NewGuid() };
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) =>
+            {
+                if (q.IncludeItemTypes?.Contains(BaseItemKind.MusicArtist) == true)
+                {
+                    return new List<BaseItem> { artist };
+                }
+
+                return new List<BaseItem> { album };
+            });
+        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem> { Items = new[] { track }, TotalRecordCount = 1 });
+
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        var speech = (response.Response.OutputSpeech as PlainTextOutputSpeech)?.Text ?? string.Empty;
+        Assert.DoesNotContain("interrotto", speech, StringComparison.OrdinalIgnoreCase);
+        var playDirective = response.Response.Directives?.FirstOrDefault(d => d is global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective);
+        Assert.NotNull(playDirective);
+    }
+
     private static Context CreateContext() => TestHelpers.CreateTestContext();
 
     [Fact]

@@ -153,4 +153,151 @@ public class CancelWordsTests
 
         Assert.False(CancelWords.AnySlotIsCancelWord(request, "en-US"));
     }
+
+    // JF-445: the force-routed sibling-misroute predicate. A cancel word resolved onto a
+    // sibling intent arrives dialogState STARTED (a fresh invocation of that sibling's
+    // dialog, per the Alexa Dialog Interface Reference), so this predicate accepts
+    // STARTED (and IN_PROGRESS for self-containment) when the word is BARE (single
+    // token) and in a NON-primary slot.
+
+    private static IntentRequest BuildMisrouteRequest(string? musicianValue, string? titleKeywordsValue = null)
+    {
+        var intent = new Intent { Name = "PlaySongIntent" };
+        var slots = new System.Collections.Generic.Dictionary<string, Slot>();
+        if (musicianValue != null)
+        {
+            slots["musician"] = new Slot { Name = "musician", Value = musicianValue };
+        }
+
+        if (titleKeywordsValue != null)
+        {
+            slots["titleKeywords"] = new Slot { Name = "titleKeywords", Value = titleKeywordsValue };
+        }
+
+        intent.Slots = slots;
+        return new IntentRequest { Intent = intent, Locale = "it-IT" };
+    }
+
+    [Theory]
+    [InlineData("STARTED")]
+    [InlineData("IN_PROGRESS")]
+    public void IsForceRoutedCancelCapture_BareWordInNonPrimarySlot_MidConversation_IsTrue(string dialogState)
+    {
+        var request = BuildMisrouteRequest("annulla");
+        request.DialogState = dialogState;
+
+        Assert.True(CancelWords.IsForceRoutedCancelCapture(request, "it-IT", "titleKeywords"));
+    }
+
+    [Fact]
+    public void IsForceRoutedCancelCapture_BareWordInPrimarySlot_IsFalse()
+    {
+        // A STARTED request carrying the word in the flow's primary slot is a fresh
+        // full-utterance search ("trova la canzone basta"), not a misroute capture.
+        var request = BuildMisrouteRequest(null, "basta");
+        request.DialogState = "STARTED";
+
+        Assert.False(CancelWords.IsForceRoutedCancelCapture(request, "it-IT", "titleKeywords"));
+    }
+
+    [Theory]
+    [InlineData("band basta")] // real-artist search shape ("band" carrier + name)
+    [InlineData("dimmi basta")] // qualified command, not a bare word
+    [InlineData("ferma tutto")] // a multi-word cancel PHRASE: bare words only here
+    public void IsForceRoutedCancelCapture_MultiWordSlotValue_IsFalse(string value)
+    {
+        var request = BuildMisrouteRequest(value);
+        request.DialogState = "STARTED";
+
+        Assert.False(CancelWords.IsForceRoutedCancelCapture(request, "it-IT", "titleKeywords"));
+    }
+
+    [Theory]
+    [InlineData("COMPLETED")]
+    [InlineData(null)]
+    public void IsForceRoutedCancelCapture_DialogNotMidConversation_IsFalse(string? dialogState)
+    {
+        var request = BuildMisrouteRequest("annulla");
+        request.DialogState = dialogState;
+
+        Assert.False(CancelWords.IsForceRoutedCancelCapture(request, "it-IT", "titleKeywords"));
+    }
+
+    [Fact]
+    public void IsForceRoutedCancelCapture_LocaleMismatch_IsFalse()
+    {
+        // The vocabulary lookup is locale-keyed (JF-444): a German bare word must not
+        // trigger the it-IT capture predicate.
+        var request = BuildMisrouteRequest("abbrechen");
+        request.DialogState = "STARTED";
+
+        Assert.False(CancelWords.IsForceRoutedCancelCapture(request, "it-IT", "titleKeywords"));
+        Assert.True(CancelWords.IsForceRoutedCancelCapture(request, "de-DE", "titleKeywords"));
+    }
+
+    [Fact]
+    public void IsForceRoutedCancelCapture_NoSlots_IsFalse()
+    {
+        var intent = new Intent { Name = "PlaySongIntent" };
+        var request = new IntentRequest { Intent = intent, Locale = "it-IT", DialogState = "STARTED" };
+
+        Assert.False(CancelWords.IsForceRoutedCancelCapture(request, "it-IT", "titleKeywords"));
+    }
+
+    [Fact]
+    public void IsForceRoutedCancelCapture_TrimsTheSlotValue()
+    {
+        var request = BuildMisrouteRequest("  annulla  ");
+        request.DialogState = "STARTED";
+
+        Assert.True(CancelWords.IsForceRoutedCancelCapture(request, "it-IT", "titleKeywords"));
+    }
+
+    // JF-445 review hardening (2026-09-03): the STARTED (fresh-dialog) leg consults the
+    // it-IT probe-vetted bare-word set, NOT the legacy full set, so single-token legacy
+    // words the deployed model does not route toward Stop/Cancel as standalone probes
+    // cannot cancel a fresh sibling request.
+
+    [Theory]
+    [InlineData("fermo")]    // probe: ShowMoreIntent
+    [InlineData("fermare")]  // probe: NO_SELECTION
+    [InlineData("arresta")]  // probe: NO_SELECTION
+    [InlineData("stop")]     // no it-IT probe row in the table
+    [InlineData("cancel")]   // no it-IT probe row (NO_SELECTION in all 9 probed non-English locales)
+    public void IsForceRoutedCancelCapture_StartedLegacyWordWithoutProbeRow_IsFalse(string word)
+    {
+        var request = BuildMisrouteRequest(word);
+        request.DialogState = "STARTED";
+
+        Assert.False(CancelWords.IsForceRoutedCancelCapture(request, "it-IT", "titleKeywords"));
+    }
+
+    [Theory]
+    [InlineData("ferma")]
+    [InlineData("annulla")]
+    [InlineData("basta")]
+    [InlineData("cancella")]
+    [InlineData("annullare")]
+    [InlineData("stoppa")]
+    public void IsForceRoutedCancelCapture_StartedProbedBareWord_IsTrue(string word)
+    {
+        // Exactly the single-token it-IT probe-table rows with a routed Stop/Cancel
+        // intent keep cancelling in the fresh regime.
+        var request = BuildMisrouteRequest(word);
+        request.DialogState = "STARTED";
+
+        Assert.True(CancelWords.IsForceRoutedCancelCapture(request, "it-IT", "titleKeywords"));
+    }
+
+    [Fact]
+    public void IsForceRoutedCancelCapture_InProgressLegacyWord_StillTrue()
+    {
+        // The trim is fresh-regime ONLY: the IN_PROGRESS leg keeps the full legacy set
+        // (the JF-423 same-intent capture regime has live evidence for those words, and
+        // FindSong hatch disjunct 1 uses AnySlotIsCancelWord on the same full set).
+        var request = BuildMisrouteRequest("fermo");
+        request.DialogState = "IN_PROGRESS";
+
+        Assert.True(CancelWords.IsForceRoutedCancelCapture(request, "it-IT", "titleKeywords"));
+    }
 }
