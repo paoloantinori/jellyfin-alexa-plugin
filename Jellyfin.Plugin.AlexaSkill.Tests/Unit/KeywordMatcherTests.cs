@@ -28,6 +28,19 @@ public class KeywordMatcherTests
     }
 
     [Fact]
+    public void Tokenize_StripsItalianPartitiveArticles()
+    {
+        // JF-446 AC#7: dei/degli/delle added to the it-IT set after verifying the two
+        // invariants (no AbbreviationCanonicalForms output is a stop word; the song
+        // n-gram index keeps them as title tokens, covered by the bigram-miss ->
+        // single-token-scan fallback and the request-locale re-tokenization in Score).
+        // An elicit answer like "dei koop" must tokenize down to the artist alone so
+        // the cross-media word-count guard does not count the article.
+        var result = KeywordMatcher.Tokenize("dei koop di pink floyd delle stelle", "it-IT");
+        Assert.Equal(new[] { "koop", "pink", "floyd", "stelle" }, result);
+    }
+
+    [Fact]
     public void Tokenize_StripsGermanStopWords()
     {
         var result = KeywordMatcher.Tokenize("der mond und die sterne", "de-DE");

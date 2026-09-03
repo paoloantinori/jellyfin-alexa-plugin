@@ -53,8 +53,6 @@ public class PlaySongIntentHandler : BaseHandler
         "a música ", "a faixa ", "música ",
     };
 
-    private static readonly char[] WhitespaceChars = new[] { ' ', '\t', '\n', '\r' };
-
     // Generic words meaning "music/songs" across supported locales.
     // When Alexa captures one of these as the {song} slot alongside a {musician} slot,
     // the user means "play music by <artist>" not "play a song titled 'music'".
@@ -299,73 +297,18 @@ public class PlaySongIntentHandler : BaseHandler
             // Cross-media-type fallback: no songs found and no musician slot.
             // The NLU may have routed an artist name to PlaySongIntent by mistake
             // (e.g. "mettere gli strokes" → song="strokes" instead of artist="strokes").
-            // Try searching for an artist with the same query — but only for SHORT
-            // queries, since a multi-word song title is a poor artist query and a
-            // wrong-artist false positive is worse than a clean "song not found"
-            // (observed: "la ballata del genesio" matched artist "Lamb" at score 75).
-            int wordCount = songQuery.Split(WhitespaceChars, StringSplitOptions.RemoveEmptyEntries).Length;
-            if (wordCount > CrossMediaArtistMaxWords)
+            // JF-446: the shared gate (TryEntityFallbackAsync) owns the word-count guard
+            // (on TOKENIZED words, so locale articles no longer count against the limit)
+            // and the acceptance thresholds (phonetic matcher + the JF-363
+            // Confirm/AutoServe band for sub-strict matches).
+            SkillResponse? artistFallback = await TryEntityFallbackAsync(
+                songQuery, jellyfinUser!, user, session, context, locale,
+                _libraryManager, _userDataManager, _queueManager, _artistIndex,
+                "PlaySong", cancellationToken,
+                notFoundMediaType: DisambiguationHelper.MediaTypeSong).ConfigureAwait(false);
+            if (artistFallback != null)
             {
-                Logger.LogInformation(
-                    "PlaySong: skipping artist fallback for {WordCount}-word query '{Query}' (max {Max})",
-                    wordCount, songQuery, CrossMediaArtistMaxWords);
-                return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByName", locale, songQuery));
-            }
-
-            Logger.LogDebug("PlaySong: no songs found, trying artist fallback with query='{Query}'", songQuery);
-            IReadOnlyList<BaseItem> fallbackArtists = await Util.ArtistSearch.SearchAsync(
-                songQuery, user, _libraryManager, _artistIndex, Logger,
-                (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtistsFallback", ct),
-                locale, cancellationToken).ConfigureAwait(false);
-
-            if (fallbackArtists.Count > 0)
-            {
-                var bestMatch = FuzzyMatcher.FindBestMatchWithScore(songQuery, fallbackArtists, a => a.Name);
-                // Require a stronger match than the normal threshold: a wrong artist
-                // is worse than a clean not-found. Take the max so a user who raised
-                // their fuzzy threshold above 85 is still respected.
-                int crossMediaThreshold = Math.Max(FuzzyMatcher.GetDefaultThreshold(user), CrossMediaArtistThreshold);
-                if (bestMatch.HasValue && bestMatch.Value.Score >= crossMediaThreshold)
-                {
-                    BaseItem artist = bestMatch.Value.Item;
-                    Logger.LogInformation(
-                        "PlaySong: artist fallback found '{ArtistName}' with score={Score} for query='{Query}' (threshold={Threshold})",
-                        artist.Name, bestMatch.Value.Score, songQuery, crossMediaThreshold);
-
-                    return await PlayArtistSongsFallback(
-                        artist.Id, artist.Name, jellyfinUser!, user, session, context, locale, cancellationToken,
-                        announcement: ResponseStrings.Get("FoundArtistInstead", locale, artist.Name)).ConfigureAwait(false);
-                }
-                else if (bestMatch.HasValue)
-                {
-                    Logger.LogInformation(
-                        "PlaySong: artist fallback rejected '{ArtistName}' score={Score}<{Threshold} for query='{Query}'",
-                        bestMatch.Value.Item.Name, bestMatch.Value.Score, crossMediaThreshold, songQuery);
-
-                    // JF-363: sub-strict band [normalThreshold, crossMediaThreshold). Offer or
-                    // auto-serve the artist instead of a dead-end not-found. Confirm/AutoServe are
-                    // safe (no silent wrong substitution: Confirm asks first; AutoServe is opt-in).
-                    int normalThreshold = FuzzyMatcher.GetDefaultThreshold(user);
-                    if (bestMatch.Value.Score >= normalThreshold)
-                    {
-                        BaseItem artist = bestMatch.Value.Item;
-                        var suggestionMode = GetCrossMediaArtistSuggestion(user);
-                        if (suggestionMode == CrossMediaArtistSuggestion.AutoServe)
-                        {
-                            Logger.LogInformation(
-                                "PlaySong: cross-media artist suggestion AutoServe '{Artist}' score={Score} for query='{Query}'",
-                                artist.Name, bestMatch.Value.Score, songQuery);
-                            return await PlayArtistSongsFallback(
-                                artist.Id, artist.Name, jellyfinUser!, user, session, context, locale, cancellationToken,
-                                announcement: ResponseStrings.Get("FoundArtistInstead", locale, artist.Name)).ConfigureAwait(false);
-                        }
-
-                        if (suggestionMode == CrossMediaArtistSuggestion.Confirm)
-                        {
-                            return BuildCrossMediaArtistOfferAsk(songQuery, artist, locale, "song");
-                        }
-                    }
-                }
+                return artistFallback;
             }
 
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByName", locale, songQuery));

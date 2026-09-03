@@ -237,5 +237,40 @@ internal static class TestHelpers
         public List<(BaseItem Item, double Score)> Search(string[] keywordTokens, string locale, Guid[]? topParentIds = null) => _results;
         public List<(BaseItem Item, double Score)> SearchPhonetic(string[] keywordTokens, string locale, Guid[]? topParentIds = null) => _results;
     }
+}
 
+/// <summary>
+/// JF-446: the ONE ready artist-index fake. History: one private copy lived in
+/// ArtistSearchTests at HEAD and was hoisted here (unchanged shape) so the new
+/// JF-446 gate tests could share it. Ready by default (pass
+/// <c>isReady: false</c> for warming-gate shapes); phonetic codes are optional so a
+/// test can exercise either the phonetic or the plain FuzzyMatcher overload.
+/// </summary>
+internal sealed class FakeArtistIndex : IArtistIndex
+{
+    private readonly IReadOnlyList<BaseItem> _artists;
+    private readonly Dictionary<Guid, (string Primary, string? Alternate)> _phoneticCodes;
+    private readonly bool _isReady;
+
+    public FakeArtistIndex(
+        IEnumerable<BaseItem> artists,
+        Dictionary<Guid, (string Primary, string? Alternate)>? phoneticCodes = null,
+        bool isReady = true)
+    {
+        _artists = artists.ToList();
+        _phoneticCodes = phoneticCodes ?? new Dictionary<Guid, (string Primary, string? Alternate)>();
+        _isReady = isReady;
+    }
+
+    public bool IsReady => _isReady;
+    public bool IsDisabled => false;
+    public int Count => _artists.Count;
+
+    public IReadOnlyList<BaseItem> GetArtists(Guid[]? topParentIds = null) => _artists;
+
+    public bool TryGetPhoneticCode(Guid artistId, out (string Primary, string? Alternate) codes)
+    {
+        codes = default;
+        return _phoneticCodes.TryGetValue(artistId, out codes);
+    }
 }

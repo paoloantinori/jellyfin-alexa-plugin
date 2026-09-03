@@ -61,7 +61,7 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
             _loggerFactory);
     }
 
-    private PlayAlbumIntentHandler CreateAlbumHandler()
+    private PlayAlbumIntentHandler CreateAlbumHandler(IArtistIndex? artistIndex = null)
     {
         return new PlayAlbumIntentHandler(
             _sessionManagerMock.Object,
@@ -69,10 +69,11 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
             _libraryManagerMock.Object,
             _userManagerMock.Object,
             _userDataManagerMock.Object,
-            _loggerFactory);
+            _loggerFactory,
+            artistIndex: artistIndex);
     }
 
-    private static IntentRequest CreateSongIntent(string song, string? musician = null)
+    private static IntentRequest CreateSongIntent(string song, string? musician = null, string locale = "en-US")
     {
         var intent = new Intent { Name = IntentNames.PlaySong };
         intent.Slots = new Dictionary<string, Slot>
@@ -83,10 +84,10 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         {
             intent.Slots["musician"] = new Slot { Name = "musician", Value = musician };
         }
-        return new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req" };
+        return new IntentRequest { Intent = intent, Locale = locale, RequestId = "test-req" };
     }
 
-    private static IntentRequest CreateAlbumIntent(string album, string? musician = null)
+    private static IntentRequest CreateAlbumIntent(string album, string? musician = null, string locale = "en-US")
     {
         var intent = new Intent { Name = IntentNames.PlayAlbum };
         intent.Slots = new Dictionary<string, Slot>
@@ -97,7 +98,7 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         {
             intent.Slots["musician"] = new Slot { Name = "musician", Value = musician };
         }
-        return new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req" };
+        return new IntentRequest { Intent = intent, Locale = locale, RequestId = "test-req" };
     }
 
     private static Context CreateContext() => TestHelpers.CreateTestContext();
@@ -913,6 +914,276 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         Assert.True(response.Response?.ShouldEndSession);
         Assert.Null(response.SessionAttributes?["disambig_type"]);
         Assert.DoesNotContain("Soul Coughing", TestHelpers.GetSpeechText(response));
+    }
+
+    // ============================================================
+    // JF-446: artist answers to the both-empty album elicit go through the
+    // SHARED cross-media gate (TryEntityFallbackAsync), which tokenizes before
+    // the word-count guard and accepts via the phonetic matcher. The inline
+    // copies PlaySong/PlayAlbum carried counted RAW words and scored
+    // non-phonetically, so "di pink floyd" dead-ended and "cup" for "Koop"
+    // never played.
+    // ============================================================
+
+    [Fact]
+    public async Task JF446_PlayAlbum_AlbumSlot_DiArtistAnswer_MusicianEmpty_PlaysArtist()
+    {
+        // AC#3: the JF-422 both-empty album elicit captures an artist ANSWER in the
+        // album slot. "di pink floyd" is 3 RAW words but tokenizes to [pink, floyd]
+        // under it-IT, so the shared gate's word-count guard must not dead-end it in
+        // NotFoundAlbumByName; the artist plays instead.
+        var artistId = Guid.NewGuid();
+        var song1 = new Audio { Name = "Wish You Were Here", Id = Guid.NewGuid() };
+        var song2 = new Audio { Name = "Time", Id = Guid.NewGuid() };
+
+        SetupUserMock();
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                // Every album query (exact search and fuzzy full-catalog scan): miss
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))
+                {
+                    return new List<BaseItem>();
+                }
+
+                // Artist search (tokenized query "pink floyd"): the artist
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                {
+                    return new List<BaseItem> { new MusicArtist { Name = "Pink Floyd", Id = artistId } };
+                }
+
+                // Artist songs fallback
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0 && q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.Audio))
+                {
+                    return new List<BaseItem> { song1, song2 };
+                }
+
+                return new List<BaseItem>();
+            });
+
+        var handler = CreateAlbumHandler();
+        // Mid-dialog shape: the answer to the elicit arrives with dialogState IN_PROGRESS.
+        var request = CreateAlbumIntent("di pink floyd", locale: "it-IT");
+        request.DialogState = "IN_PROGRESS";
+        var context = CreateContext();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, CreateUser(), session, CancellationToken.None);
+
+        // The artist's music plays (not NotFoundAlbumByName)
+        Assert.NotNull(response.Response?.Directives);
+        Assert.NotEmpty(response.Response.Directives);
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Equal(2, session.NowPlayingQueue.Count);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Pink Floyd", speech);
+    }
+
+    [Fact]
+    public async Task JF446_PlayAlbum_AlbumSlot_LongArtistAnswer_TokenizedGate_SkipsFallback()
+    {
+        // AC#4: tokenizing must not OPEN the guard for answers with >2 CONTENT words.
+        // "la ballata del grande koop" tokenizes to [ballata, grande, koop] = 3 tokens,
+        // so the artist fallback is skipped entirely (no artist query issued) and the
+        // clean album not-found is returned.
+        SetupUserMock();
+
+        bool artistQueryIssued = false;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                {
+                    artistQueryIssued = true;
+                    return new List<BaseItem> { new MusicArtist { Name = "Koop", Id = Guid.NewGuid() } };
+                }
+
+                return new List<BaseItem>();
+            });
+
+        var handler = CreateAlbumHandler();
+        var request = CreateAlbumIntent("la ballata del grande koop", locale: "it-IT");
+        var context = CreateContext();
+
+        SkillResponse response = await handler.HandleAsync(request, context, CreateUser(), CreateSession(), CancellationToken.None);
+
+        Assert.False(artistQueryIssued, "the tokenized word-count gate must skip the artist search for a >2-content-word answer");
+        Assert.True(response.Response?.Directives == null || response.Response.Directives.Count == 0);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("koop", speech, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task JF446_PlaySong_SongSlot_DiArtistAnswer_MusicianEmpty_PlaysArtist()
+    {
+        // PlaySong mirror of AC#3 through the same shared gate: a carrier article in
+        // the song slot ("di koop", it-IT) tokenizes to [koop] and plays the artist.
+        var artistId = Guid.NewGuid();
+        var song1 = new Audio { Name = "Waltz for Koop", Id = Guid.NewGuid() };
+
+        SetupUserMock();
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                // Song search (SearchTerm): miss
+                if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))
+                {
+                    return new List<BaseItem>();
+                }
+
+                // Artist search (tokenized query "koop"): the artist
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                {
+                    return new List<BaseItem> { new MusicArtist { Name = "Koop", Id = artistId } };
+                }
+
+                // Artist songs fallback
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0)
+                {
+                    return new List<BaseItem> { song1 };
+                }
+
+                return new List<BaseItem>();
+            });
+
+        var handler = CreateSongHandler();
+        var request = CreateSongIntent("di koop", locale: "it-IT");
+        var context = CreateContext();
+
+        SkillResponse response = await handler.HandleAsync(request, context, CreateUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response.Response?.Directives);
+        Assert.NotEmpty(response.Response.Directives);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Koop", speech);
+    }
+
+    [Fact]
+    public async Task JF446_PlayAlbum_PhoneticAsrDrift_WithArtistIndex_PlaysArtist()
+    {
+        // Finding 2 (AC#2): acceptance must score through the PHONETIC matcher when
+        // the artist index is available. The live JF-381/JF-446 drift case: ASR "cup"
+        // for "Koop" (both Double Metaphone code KP) scores far below 85 on plain
+        // Levenshtein; the phonetic overload floors the length-banded code collision
+        // above the strict bar, so the artist plays instead of a not-found.
+        var artistId = Guid.NewGuid();
+        var song1 = new Audio { Name = "Waltz for Koop", Id = Guid.NewGuid() };
+
+        SetupUserMock();
+
+        var koop = new MusicArtist { Name = "Koop", Id = artistId };
+        var codes = DoubleMetaphone.Encode("Koop");
+        var index = new FakeArtistIndex(
+            new[] { koop },
+            new Dictionary<Guid, (string Primary, string? Alternate)> { [artistId] = codes });
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                {
+                    return new List<BaseItem> { koop };
+                }
+
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0)
+                {
+                    return new List<BaseItem> { song1 };
+                }
+
+                return new List<BaseItem>();
+            });
+
+        var handler = CreateAlbumHandler(index);
+        var request = CreateAlbumIntent("cup"); // 3 chars: below MinFuzzyAlbumQueryLength, no album fuzzy scan
+        var context = CreateContext();
+
+        SkillResponse response = await handler.HandleAsync(request, context, CreateUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response.Response?.Directives);
+        Assert.NotEmpty(response.Response.Directives);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Koop", speech);
+    }
+
+    [Fact]
+    public async Task JF363_BandWinsOverWordCoverageValve_Confirm_NotAutoPlay()
+    {
+        // Review pin (band/valve precedence in TryEntityFallbackAsync): a word-subset
+        // artist scoring in [normalThreshold, 85) is reachable by BOTH the JF-440
+        // word-coverage valve (silent auto-play) and the JF-363 sub-strict band
+        // (Confirm offer) when the caller enabled the band (PlaySong/PlayAlbum). The
+        // band must WIN the overlap: the valve's silent auto-play would break the
+        // JF-363 contract of no silent substitution in [60,85). The pair is engineered
+        // into the overlap: "ac dc" is 2 content words (passes the tokenized guard)
+        // and tokenizes to the same words as "AC/DC", while the artist's slash form
+        // keeps the RAW strings apart so the containment floor (90) does not fire;
+        // the fuzzy score is 80 (verified against FuzzyMatcher). Valve-only callers
+        // (FindSong/PlayMoodMusic, notFoundMediaType=null) never enter the band
+        // branch, so their valve behavior is unchanged by the reorder.
+        var artistId = Guid.NewGuid();
+        var song = new Audio { Name = "Highway to Hell", Id = Guid.NewGuid() };
+        SetupSongMissArtistSubStrict("ac dc", "AC/DC", artistId, song);
+
+        _config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Confirm;
+
+        var handler = CreateSongHandler();
+        var session = CreateSession();
+        var response = await handler.HandleAsync(
+            CreateSongIntent("ac dc"), CreateContext(), CreateUser(), session, CancellationToken.None);
+
+        // The band's Confirm offer, NOT the valve's auto-play: session stays open,
+        // no playback directive, the artist is offered for yes/no.
+        Assert.True(response.Response?.ShouldEndSession != true, "the Confirm offer must keep the session open");
+        Assert.True(response.Response?.Directives == null || response.Response.Directives.Count == 0, "the Confirm offer must not start playback");
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("AC/DC", speech);
+        Assert.Equal("artist", response.SessionAttributes?["disambig_type"]);
+        Assert.True(session.NowPlayingQueue == null || session.NowPlayingQueue.Count == 0, "no artist songs may be enqueued by the offer");
+    }
+
+    [Fact]
+    public async Task JF295_ItCanonicalCase_GuardEligibleButThresholdRefuted_StaysNotFound()
+    {
+        // JF-295 re-check (JF-446 review): the tokenized guard makes the canonical
+        // case "la ballata del genesio" GUARD-ELIGIBLE under it-IT ([ballata,
+        // genesio] = 2 content words <= CrossMediaArtistMaxWords), so the JF-295
+        // protection is no longer the guard layer but the THRESHOLD layer: the fair
+        // length penalty keeps "Lamb" far below the 60 normal threshold for the
+        // cleaned "ballata genesio" query (see also FuzzyMatcherTests.
+        // FindBestMatch_LengthDisproportion_RejectsLambFromBallata), so the shared
+        // gate rejects and the clean song not-found stands. This pin exists to catch
+        // threshold changes: any future lowering of normalThreshold re-opens JF-295
+        // and must fail here first.
+        SetupUserMock();
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                // Song search: empty (no such song)
+                if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))
+                    return new List<BaseItem>();
+
+                // Artist search: the false-positive JF-295 artist
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                    return new List<BaseItem> { new MusicArtist { Name = "Lamb", Id = Guid.NewGuid() } };
+
+                return new List<BaseItem>();
+            });
+
+        var handler = CreateSongHandler();
+        var request = CreateSongIntent("la ballata del genesio", locale: "it-IT");
+        var context = CreateContext();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, CreateUser(), session, CancellationToken.None);
+
+        // Clean "song not found": no playback, no Lamb, empty queue.
+        Assert.True(response.Response?.Directives == null || response.Response.Directives.Count == 0);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.DoesNotContain("Lamb", speech);
+        Assert.True(session.NowPlayingQueue == null || session.NowPlayingQueue.Count == 0);
     }
 }
 

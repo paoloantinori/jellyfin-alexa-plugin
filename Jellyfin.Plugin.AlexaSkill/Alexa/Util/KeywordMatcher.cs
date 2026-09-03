@@ -68,7 +68,20 @@ internal static class KeywordMatcher
         ["it"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "il", "lo", "la", "i", "gli", "le", "di", "del", "della",
-            "un", "una", "in", "su", "per", "con", "da", "e", "o", "che"
+            "un", "una", "in", "su", "per", "con", "da", "e", "o", "che",
+            // JF-446: the partitive/genitive article forms. An elicit answer like
+            // "dei Koop" or "di pink floyd" must tokenize down to the artist alone or
+            // the cross-media word-count guard counts the article and dead-ends.
+            // Verified against the two invariants before adding: (1) no canonical
+            // OUTPUT of AbbreviationCanonicalForms is a stop word (street/road/
+            // avenue/part/volume are untouched by these forms); (2) the song n-gram
+            // index is built with en-US and keeps these forms as TITLE tokens, which
+            // only widens the index lookup keys: a query bigram that skips a stripped
+            // article misses the index bigram but SongNgramIndexService.Search falls
+            // back to the single-token scan, and KeywordMatcher.Score re-tokenizes
+            // the title with the request locale, so coverage stays symmetric (the
+            // documented JF-384 residual asymmetry).
+            "dei", "degli", "delle"
         },
         ["de"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {

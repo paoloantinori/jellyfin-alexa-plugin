@@ -704,6 +704,64 @@ public class PlayMoodMusicIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
+    public async Task JF446_SharedGate_PhoneticAcceptance_PlaysArtist()
+    {
+        // ALT-1 pin (JF-446 deliberate widening): PlayMoodMusic routes through the
+        // SHARED cross-media gate (TryEntityFallbackAsync), so the gate's phonetic
+        // acceptance applies here too. ASR drift "cup" for "Koop" (both Double
+        // Metaphone code KP) scores far below the 85 strict bar on plain
+        // Levenshtein; the phonetic overload floors the length-banded code
+        // collision at 91, so the artist's music plays instead of NotFoundMood.
+        var artistId = Guid.NewGuid();
+        var song1 = new Audio { Name = "Waltz for Koop", Id = Guid.NewGuid() };
+
+        SetupUserMock();
+
+        var koop = new MusicArtist { Name = "Koop", Id = artistId };
+        var codes = DoubleMetaphone.Encode("Koop");
+        var index = new FakeArtistIndex(
+            new[] { koop },
+            new Dictionary<Guid, (string Primary, string? Alternate)> { [artistId] = codes });
+
+        var handler = new PlayMoodMusicIntentHandler(
+            _sessionManagerMock.Object,
+            _config,
+            _libraryManagerMock.Object,
+            _userManagerMock.Object,
+            _userDataManagerMock.Object,
+            _loggerFactory,
+            artistIndex: index);
+
+        // The mood word "cup" maps to no genre: both genre searches miss, and the
+        // ready index serves the artist search in memory (tier 4 phonetic), so the
+        // only populated query shape is the artist-songs fetch.
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0)
+                {
+                    return new List<BaseItem> { song1 };
+                }
+
+                return new List<BaseItem>();
+            });
+
+        var request = CreateIntentRequest(mood: "cup");
+        var context = CreateContext();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, CreateUser(), session, CancellationToken.None);
+
+        // The artist's music plays (not NotFoundMood)
+        Assert.NotNull(response.Response?.Directives);
+        Assert.NotEmpty(response.Response.Directives);
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Single(session.NowPlayingQueue);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Koop", speech);
+    }
+
+    [Fact]
     public async Task HandleAsync_MoodMissNoArtist_ReturnsNotFoundMood()
     {
         var handler = CreateHandler();

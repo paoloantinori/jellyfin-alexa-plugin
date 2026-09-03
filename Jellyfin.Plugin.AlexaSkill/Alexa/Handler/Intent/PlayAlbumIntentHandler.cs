@@ -134,12 +134,11 @@ public class PlayAlbumIntentHandler : BaseHandler
         //   of the moon") into the musician slot and dead-ended in
         //   NotFoundAlbumByArtist for an album that exists. The 2026-08-28
         //   on-device case that motivated artist-first ("un disco dei Koop" arrived
-        //   as "un disco dei", ASR swallowed the name) degrades only PARTIALLY: an
-        //   artist answer in the album slot still plays that artist when it is short
-        //   and article-free (the cross-media fallback below gates on the RAW word
-        //   count and a non-phonetic 85 score), while article-carrying or 3-plus-word
-        //   answers ("di pink floyd") hit the word-count guard and return the album
-        //   not-found. Hardening that path is tracked in JF-446.
+        //   as "un disco dei", ASR swallowed the name) degrades gracefully since
+        //   JF-446: an artist answer in the album slot reaches the SHARED cross-media
+        //   gate below, which tokenizes before the word-count guard (articles like
+        //   "di"/"dei" no longer count) and accepts via the phonetic artist search,
+        //   so "di pink floyd" and ASR-drifted names play the artist too.
         // - musician filled, whether on the first shot or as an answer mid-dialog:
         //   fall through to the JF-411 album-by-artist resolution below, which
         //   plays an album without ever needing a title. The old IN_PROGRESS
@@ -275,6 +274,10 @@ public class PlayAlbumIntentHandler : BaseHandler
             // positives across a full-catalog scan (e.g. "red", "aria") — skip them.
             Logger.LogDebug("PlayAlbum: exact search miss, trying fuzzy fallback for '{Query}'", album);
             var phoneticAlbumQuery = BuildAlbumQuery(jellyfinUser, user, searchTerm: null, artistIds: null);
+            // JF-446 (finding 5): the full-catalog scan reads only a.Name downstream;
+            // use the cheap DTO shape instead of materializing images/userdata/
+            // current-program for every album in the library.
+            phoneticAlbumQuery.DtoOptions = CheapDtoOptions();
             IReadOnlyList<BaseItem> allAlbums = await RetryAsync(
                 () => _libraryManager.GetItemList(phoneticAlbumQuery),
                 "GetAlbumsPhonetic",
@@ -316,74 +319,23 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         if (albums.Count == 0)
         {
-            // Cross-media artist fallback: the NLU may have routed an artist name to
-            // PlayAlbumIntent. Only fire on a HIGH-confidence artist match — a weak match
-            // (e.g. "jazz caffè"→"Uazz" @75) must NOT play the wrong artist; report the
-            // album as not found instead. JF-336 (was GetDefaultThreshold=60).
-            // Word-count gate: a long album title is a poor artist query and a wrong-artist
-            // offer/substitution is worse than a clean not-found (same lesson as PlaySong's
-            // "la ballata del genesio"→"Lamb" @75). JF-363 widened the band to [60,85), so
-            // the guard now matters here too (previously a sub-85 long-query match was silent).
-            int wordCount = album.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
-            if (wordCount > CrossMediaArtistMaxWords)
+            // Cross-media artist fallback (JF-446): the NLU may have routed an artist name
+            // to PlayAlbumIntent, and an artist ANSWER to the both-empty album elicit
+            // (JF-422) lands in this slot. The shared gate (TryEntityFallbackAsync)
+            // tokenizes before the word-count guard (so "di pink floyd" no longer
+            // dead-ends at 3 raw words) and accepts through the phonetic artist-search
+            // thresholds, with the JF-363 Confirm/AutoServe band for sub-strict matches.
+            // Search order is unchanged (deliberate, JF-446 finding 3): the album-title
+            // search above runs first, so a self-titled album still preempts the artist
+            // fallback; the artist answer only plays on a title miss.
+            SkillResponse? artistFallback = await TryEntityFallbackAsync(
+                album, jellyfinUser!, user, session, context, locale,
+                _libraryManager, _userDataManager, _queueManager, _artistIndex,
+                "PlayAlbum", cancellationToken,
+                notFoundMediaType: DisambiguationHelper.MediaTypeAlbum).ConfigureAwait(false);
+            if (artistFallback != null)
             {
-                Logger.LogInformation(
-                    "PlayAlbum: skipping artist fallback for {WordCount}-word query '{Query}' (max {Max})",
-                    wordCount, album, CrossMediaArtistMaxWords);
-                return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByName", locale, album));
-            }
-
-            Logger.LogDebug("PlayAlbum: no albums found, trying artist fallback with query='{Query}'", album);
-            IReadOnlyList<BaseItem> fallbackArtists = await Util.ArtistSearch.SearchAsync(
-                album, user, _libraryManager, _artistIndex, Logger,
-                (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtistsFallback", ct),
-                locale, cancellationToken).ConfigureAwait(false);
-
-            if (fallbackArtists.Count > 0)
-            {
-                // Single best match (FindBestMatchWithScore), NOT RankMatches: this is a
-                // cross-media guess (album not found → play an artist instead), so only one
-                // strong match should fire — disambiguating among artist guesses is wrong UX.
-                var bestMatch = FuzzyMatcher.FindBestMatchWithScore(album, fallbackArtists, a => a.Name);
-                int crossMediaThreshold = Math.Max(FuzzyMatcher.GetDefaultThreshold(user), CrossMediaArtistThreshold);
-                if (bestMatch.HasValue && bestMatch.Value.Score >= crossMediaThreshold)
-                {
-                    BaseItem artist = bestMatch.Value.Item;
-                    Logger.LogInformation(
-                        "PlayAlbum: artist fallback found '{ArtistName}' with score={Score} for query='{Query}'",
-                        artist.Name, bestMatch.Value.Score, album);
-
-                    return await PlayArtistSongsFromAlbumFallback(
-                        artist.Id, artist.Name, jellyfinUser!, user, session, context, locale, cancellationToken,
-                        announcement: ResponseStrings.Get("FoundArtistInstead", locale, artist.Name)).ConfigureAwait(false);
-                }
-                else if (bestMatch.HasValue)
-                {
-                    // JF-363: sub-strict band [normalThreshold, crossMediaThreshold). Offer or
-                    // auto-serve the single best artist instead of a dead-end not-found. Single
-                    // candidate only (see the RankMatches comment above). Safe because Confirm
-                    // asks first and AutoServe is opt-in.
-                    int normalThreshold = FuzzyMatcher.GetDefaultThreshold(user);
-                    if (bestMatch.Value.Score >= normalThreshold)
-                    {
-                        BaseItem artist = bestMatch.Value.Item;
-                        var suggestionMode = GetCrossMediaArtistSuggestion(user);
-                        if (suggestionMode == CrossMediaArtistSuggestion.AutoServe)
-                        {
-                            Logger.LogInformation(
-                                "PlayAlbum: cross-media artist suggestion AutoServe '{Artist}' score={Score} for query='{Query}'",
-                                artist.Name, bestMatch.Value.Score, album);
-                            return await PlayArtistSongsFromAlbumFallback(
-                                artist.Id, artist.Name, jellyfinUser!, user, session, context, locale, cancellationToken,
-                                announcement: ResponseStrings.Get("FoundArtistInstead", locale, artist.Name)).ConfigureAwait(false);
-                        }
-
-                        if (suggestionMode == CrossMediaArtistSuggestion.Confirm)
-                        {
-                            return BuildCrossMediaArtistOfferAsk(album, artist, locale, "album");
-                        }
-                    }
-                }
+                return artistFallback;
             }
 
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByName", locale, album));
@@ -649,6 +601,15 @@ public class PlayAlbumIntentHandler : BaseHandler
     }
 
     /// <summary>
+    /// The cheap DTO shape for queries that read only names/ids (JF-443/JF-446): no
+    /// images, no userdata, no current program. Fresh instance per call (DtoOptions is
+    /// mutable; a shared instance could be mutated through one query and leak into
+    /// another).
+    /// </summary>
+    /// <returns>A minimal DtoOptions.</returns>
+    private static DtoOptions CheapDtoOptions() => new DtoOptions(false) { EnableImages = false, EnableUserData = false, AddCurrentProgram = false };
+
+    /// <summary>
     /// Builds a COUNT-only track query for <see cref="GetAlbumTrackCountsAsync"/>: Limit=0
     /// keeps TotalRecordCount (the COUNT) while Take(0) skips item materialization
     /// entirely (verified against Jellyfin 10.11.8 BaseItemRepository.ApplyQueryPaging,
@@ -666,7 +627,7 @@ public class PlayAlbumIntentHandler : BaseHandler
             Recursive = true,
             IncludeItemTypes = new[] { BaseItemKind.Audio },
             Limit = 0,
-            DtoOptions = new DtoOptions(false) { EnableImages = false, EnableUserData = false, AddCurrentProgram = false }
+            DtoOptions = CheapDtoOptions()
         };
 
         if (byParentId)
@@ -718,27 +679,5 @@ public class PlayAlbumIntentHandler : BaseHandler
         return RankByDeterministicOrder(albums)
             .OrderByDescending(a => trackCountsByAlbumId.TryGetValue(a.Id, out int trackCount) ? trackCount : 0)
             .First();
-    }
-
-    /// <summary>
-    /// Cross-media-type fallback: when no album is found, plays the matched artist's songs.
-    /// Delegates to <see cref="BaseHandler.BuildArtistSongsResponseAsync"/>.
-    /// </summary>
-    private Task<SkillResponse> PlayArtistSongsFromAlbumFallback(
-        Guid artistId,
-        string artistName,
-        Jellyfin.Database.Implementations.Entities.User jellyfinUser,
-        Entities.User user,
-        SessionInfo session,
-        Context context,
-        string locale,
-        CancellationToken cancellationToken,
-        string? announcement = null)
-    {
-        return BuildArtistSongsResponseAsync(
-            artistId, artistName, jellyfinUser, user, session, context, locale,
-            _libraryManager, _userDataManager, _queueManager,
-            "PlayAlbum fallback",
-            announcement, cancellationToken);
     }
 }

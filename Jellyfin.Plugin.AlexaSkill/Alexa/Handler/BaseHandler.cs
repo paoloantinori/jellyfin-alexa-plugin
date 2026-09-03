@@ -1238,6 +1238,52 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// JF-425/JF-447: the ONE stop-report sequence shared by the stop-shaped event
+    /// handlers (PlaybackStopped/Finished/Failed). Registers the stop for correction
+    /// duty (the displacement classification is folded into RecordStop, so a null
+    /// registration means the stop displaces an already-replaced stream and must not
+    /// correct anything), reports it to the server with the registration completed in a
+    /// finally (a correcting start report waits for it instead of firing a concurrent
+    /// duplicate), and restores the new track's session entry when the stop was a
+    /// displacement (its own server-side write cleared the entry the new track owns).
+    /// Callers that need the displacement flag BEFORE building the stop info (Stopped
+    /// zeroes the saved position) classify early and may pass their own reason.
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID (per-device ordering key).</param>
+    /// <param name="rawToken">The event's raw stream token, for the displacement classification.</param>
+    /// <param name="stopInfo">The stop report to send (replayed verbatim as the correction).</param>
+    /// <param name="displacementRestoreReason">Reason stamped into the classification and restore logs.</param>
+    /// <returns>A task representing the report and, for a displacement, the restore.</returns>
+    protected async Task ReportStopOrderedAsync(string deviceId, string? rawToken, PlaybackStopInfo stopInfo, string displacementRestoreReason)
+    {
+        Playback.PlaybackReportOrdering.StopRegistration? registration =
+            Playback.PlaybackReportOrdering.RecordStop(deviceId, rawToken, stopInfo);
+
+        bool isDisplacement = registration == null;
+        if (isDisplacement)
+        {
+            Logger.LogDebug(
+                "{Reason}: displacement detected, item={Token} but the device's latest start is a different item; not recording the stop",
+                displacementRestoreReason, rawToken);
+        }
+
+        try
+        {
+            await SessionManager.OnPlaybackStopped(stopInfo).ConfigureAwait(false);
+        }
+        finally
+        {
+            registration?.MarkReportCompleted();
+        }
+
+        if (isDisplacement)
+        {
+            await Playback.PlaybackReportOrdering.RestoreCurrentStartAsync(
+                SessionManager, deviceId, Logger, displacementRestoreReason).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
     /// Execute a synchronous Jellyfin API call with retry logic and exponential backoff.
     /// </summary>
     /// <typeparam name="T">The return type.</typeparam>
@@ -1590,9 +1636,22 @@ public abstract class BaseHandler
     /// <param name="query">The not-found song/album query (the raw slot value).</param>
     /// <param name="artist">The single best artist match to offer.</param>
     /// <param name="locale">The request locale.</param>
-    /// <param name="notFoundMediaType">The media type the user originally asked for ("song" or "album"), used to build the decline response.</param>
+    /// <param name="notFoundMediaType">The media type the user originally asked for:
+    /// exactly <see cref="DisambiguationHelper.MediaTypeSong"/> or
+    /// <see cref="DisambiguationHelper.MediaTypeAlbum"/> (the wire value NoIntentHandler
+    /// switches on for the decline response).</param>
     protected SkillResponse BuildCrossMediaArtistOfferAsk(string query, BaseItem artist, string locale, string notFoundMediaType)
     {
+        // Const guard (JF-446 simplify): the attribute written below is compared verbatim
+        // by NoIntentHandler's decline path, so only the two MediaType consts are valid.
+        if (notFoundMediaType != DisambiguationHelper.MediaTypeSong
+            && notFoundMediaType != DisambiguationHelper.MediaTypeAlbum)
+        {
+            Logger.LogWarning(
+                "CrossMediaArtistSuggestion: unexpected notFoundMediaType '{MediaType}' (must be MediaTypeSong or MediaTypeAlbum); the decline path will speak the song not-found",
+                notFoundMediaType);
+        }
+
         SkillResponse response = AskLocalized(
             "CrossMediaArtistOfferSsml", "CrossMediaArtistOffer", "FuzzySuggestionReprompt", locale, query, artist.Name);
 
@@ -2679,7 +2738,27 @@ public abstract class BaseHandler
     /// the phonetic artist search pipeline, and respects the cross-media word-count guard
     /// (<see cref="CrossMediaArtistMaxWords"/>) and threshold. Returns null when no
     /// confident match is found so the caller falls through to its own not-found response.
+    /// JF-446: the ONE cross-media artist gate. PlaySong and PlayAlbum route their
+    /// no-results fallback here instead of inline copies (the copies counted RAW words,
+    /// so an article-carrying elicit answer like "di pink floyd" dead-ended at the guard,
+    /// and accepted via non-phonetic scoring, so ASR drift in [60,85) like "cup" for
+    /// "Koop" never played). Acceptance scores through the SAME phonetic matcher the
+    /// musician-slot path uses (FuzzyMatcher's Double Metaphone overload): a
+    /// length-banded code collision floors at PhoneticFloorScore = 91 (ContainmentScore
+    /// 90 + 1), above the strict bar of max(normal, 85) while the user's threshold
+    /// stays at or below 91; a user threshold above 91 drops the floored collision
+    /// into the sub-strict band instead, so accent drift plays while non-phonetic
+    /// plausible matches stay in the JF-363
+    /// Confirm/AutoServe band. The band is opt-in via <paramref name="notFoundMediaType"/>
+    /// because its decline path must speak a media-type not-found: FindSong re-prompts
+    /// for the title instead (not a terminal song not-found) and PlayMoodMusic declines
+    /// to NotFoundMood, so neither can reuse the band's decline contract.
     /// </summary>
+    /// <param name="notFoundMediaType">When non-null (<see cref="DisambiguationHelper.MediaTypeSong"/>
+    /// or <see cref="DisambiguationHelper.MediaTypeAlbum"/>), enables the JF-363
+    /// sub-strict band: a single best artist scoring in [normalThreshold, strict) is
+    /// offered for confirmation (or auto-served per config), and the offer's decline
+    /// speaks the media-type not-found. Null keeps the pre-band behavior (clean miss).</param>
     protected async Task<SkillResponse?> TryEntityFallbackAsync(
         string slotText,
         JellyfinUser jellyfinUser,
@@ -2692,8 +2771,15 @@ public abstract class BaseHandler
         Playback.DeviceQueueManager? queueManager,
         IArtistIndex? artistIndex,
         string logLabel,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? notFoundMediaType = null)
     {
+        // Restored from the deleted PlaySong/PlayAlbum inline copies (JF-446 review):
+        // the gate's entry point must name the query it is about to interpret.
+        Logger.LogDebug(
+            "{Label}: no results found, trying artist fallback with query='{Query}'",
+            logLabel, slotText);
+
         var tokens = KeywordMatcher.Tokenize(slotText, locale);
         if (tokens.Length == 0)
         {
@@ -2703,7 +2789,8 @@ public abstract class BaseHandler
         string cleaned = string.Join(' ', tokens);
 
         // A long slot is a poor artist query and a wrong-artist false positive is worse
-        // than a clean not-found — same guard + constant as PlaySong's cross-media fallback.
+        // than a clean not-found (CrossMediaArtistMaxWords, shared by every caller of
+        // this gate since the JF-446 consolidation).
         if (tokens.Length > CrossMediaArtistMaxWords)
         {
             Logger.LogDebug(
@@ -2722,12 +2809,71 @@ public abstract class BaseHandler
             return null;
         }
 
-        var best = FuzzyMatcher.FindBestMatchWithScore(cleaned, artists, a => a.Name);
-        int threshold = Math.Max(FuzzyMatcher.GetDefaultThreshold(user), CrossMediaArtistThreshold);
+        // JF-446 finding 2: accept through the PHONETIC matcher when the artist index is
+        // available (the same lookup FuzzyMatchPhonetic and ArtistSearch's own tiers use).
+        // Threshold rationale: the strict bar stays Math.Max(normal, CrossMediaArtistThreshold)
+        // because this is still a cross-media GUESS (the user asked for another media
+        // type), so only near-exact or phonetically-colliding matches auto-play. The
+        // phonetic overload is what makes the shared thresholds meaningful: ASR drift
+        // ("cup" for "Koop", both code KP) floors at PhoneticFloorScore and plays, while
+        // the plain overload scored it below every bar and dead-ended (the defect the
+        // inline copies carried).
+        var best = artistIndex != null
+            ? FuzzyMatcher.FindBestMatchWithScore(
+                cleaned,
+                artists,
+                a => a.Name,
+                a => a.Id,
+                id => artistIndex.TryGetPhoneticCode(id, out var codes) ? codes : null)
+            : FuzzyMatcher.FindBestMatchWithScore(cleaned, artists, a => a.Name);
+        int normalThreshold = FuzzyMatcher.GetDefaultThreshold(user);
+        int threshold = Math.Max(normalThreshold, CrossMediaArtistThreshold);
         BaseItem? bestItem = best.HasValue ? best.Value.Item : null;
         int bestScore = best.HasValue ? best.Value.Score : 0;
 
-        if (!best.HasValue || bestItem == null || bestScore < threshold)
+        if (bestItem != null && bestScore >= threshold)
+        {
+            // Strict (or phonetic-floor) match: fall through to playback below.
+            // Restored from the deleted PlaySong/PlayAlbum inline copies (JF-446
+            // review): the acceptance must name the artist and its score.
+            Logger.LogInformation(
+                "{Label}: artist fallback found '{ArtistName}' with score={Score} for query='{Query}' (threshold={Threshold})",
+                logLabel, bestItem.Name, bestScore, cleaned, threshold);
+        }
+        else if (bestItem != null && bestScore >= normalThreshold && notFoundMediaType != null)
+        {
+            // JF-363 sub-strict band [normalThreshold, threshold): offer or auto-serve
+            // the single best artist instead of a dead-end miss. Confirm/AutoServe are
+            // safe (no silent wrong substitution: Confirm asks first; AutoServe is
+            // opt-in). The offer carries the RAW slot text so the decline speaks the
+            // user's own words. Single candidate only (same design as the copies this
+            // replaced: disambiguating among cross-media guesses is wrong UX).
+            // PRECEDENCE (review finding, pinned by CrossMediaTypeFallbackTests
+            // .JF363_BandWinsOverWordCoverageValve_Confirm): the band is checked
+            // BEFORE the word-coverage valve so it wins for the callers that enabled
+            // it (PlaySong/PlayAlbum). The valve auto-plays silently; letting it win
+            // in the overlap would break the JF-363 contract of no silent
+            // substitution in [normalThreshold, threshold).
+            var suggestionMode = GetCrossMediaArtistSuggestion(user);
+            if (suggestionMode == CrossMediaArtistSuggestion.Confirm)
+            {
+                return BuildCrossMediaArtistOfferAsk(slotText, bestItem, locale, notFoundMediaType);
+            }
+
+            if (suggestionMode == CrossMediaArtistSuggestion.Off)
+            {
+                Logger.LogDebug(
+                    "{Label}: entity fallback artist '{Artist}' score={Score} in suggestion band but suggestion is Off, query='{Query}'",
+                    logLabel, bestItem.Name, bestScore, cleaned);
+                return null;
+            }
+
+            Logger.LogInformation(
+                "{Label}: entity fallback artist suggestion AutoServe '{Artist}' score={Score} for query='{Query}'",
+                logLabel, bestItem.Name, bestScore, cleaned);
+        }
+        else if (bestItem != null && bestScore >= normalThreshold
+            && Util.ArtistSearch.WordCoverageCandidates(cleaned, new[] { bestItem }, locale).Count > 0)
         {
             // JF-440 (F4): a word-coverage tier match scores LOW on the fuzzy scale
             // ('The Beatles' vs 'beatles live' = 27, below every cross-media gate),
@@ -2740,21 +2886,19 @@ public abstract class BaseHandler
             // safety valve for genuinely-artist-shaped queries that just miss the
             // strict cross-media bar, never a bypass of every bar (the JF-437 search
             // tier, with its full selection + downstream gates, owns the main path).
-            int normalThreshold = FuzzyMatcher.GetDefaultThreshold(user);
-            bool wordCoverageMatch = bestItem != null
-                && bestScore >= normalThreshold
-                && Util.ArtistSearch.WordCoverageCandidates(cleaned, new[] { bestItem }, locale).Count > 0;
-            if (!wordCoverageMatch)
-            {
-                Logger.LogDebug(
-                    "{Label}: entity fallback artist score={Score} below threshold={Threshold}, query='{Query}'",
-                    logLabel, bestScore, threshold, cleaned);
-                return null;
-            }
-
+            // Scoped to callers WITHOUT the JF-363 band (the band branch above wins
+            // the overlap first): FindSong and PlayMoodMusic keep the valve behavior
+            // the shared gate always had.
             Logger.LogInformation(
                 "{Label}: entity fallback artist '{Artist}' below fuzzy threshold ({Score}<{Threshold}) but accepted as a word-coverage match for query='{Query}'",
-                logLabel, bestItem!.Name, bestScore, threshold, cleaned);
+                logLabel, bestItem.Name, bestScore, threshold, cleaned);
+        }
+        else
+        {
+            Logger.LogDebug(
+                "{Label}: entity fallback artist score={Score} below threshold={Threshold}, query='{Query}'",
+                logLabel, bestScore, threshold, cleaned);
+            return null;
         }
 
         return await BuildArtistSongsResponseAsync(

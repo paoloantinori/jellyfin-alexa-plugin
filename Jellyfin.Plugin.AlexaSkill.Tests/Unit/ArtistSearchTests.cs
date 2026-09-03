@@ -614,33 +614,4 @@ public class ArtistSearchTests
     private static Task<IReadOnlyList<BaseItem>> NotCalled(
         InternalItemsQuery q, CancellationToken t) =>
         throw new InvalidOperationException("In-memory path must not hit the database");
-
-    /// <summary>
-    /// Minimal ready artist index backed by a fixed list, with no phonetic codes so the
-    /// non-phonetic FuzzyMatcher.FindBestMatch overload is exercised (the tier-4 path under
-    /// test uses phonetic lookup only when codes are present).
-    /// </summary>
-    private sealed class FakeArtistIndex : IArtistIndex
-    {
-        private readonly IReadOnlyList<BaseItem> _artists;
-        private readonly Dictionary<Guid, (string Primary, string? Alternate)> _phoneticCodes;
-
-        public FakeArtistIndex(IEnumerable<BaseItem> artists, Dictionary<Guid, (string Primary, string? Alternate)>? phoneticCodes = null)
-        {
-            _artists = artists.ToList();
-            _phoneticCodes = phoneticCodes ?? new Dictionary<Guid, (string Primary, string? Alternate)>();
-        }
-
-        public bool IsReady => true;
-        public bool IsDisabled => false;
-        public int Count => _artists.Count;
-
-        public IReadOnlyList<BaseItem> GetArtists(Guid[]? topParentIds = null) => _artists;
-
-        public bool TryGetPhoneticCode(Guid artistId, out (string Primary, string? Alternate) codes)
-        {
-            codes = default;
-            return _phoneticCodes.TryGetValue(artistId, out codes);
-        }
-    }
 }

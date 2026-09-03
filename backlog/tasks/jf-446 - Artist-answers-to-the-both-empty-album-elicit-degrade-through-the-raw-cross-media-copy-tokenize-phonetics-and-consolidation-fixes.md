@@ -3,9 +3,10 @@ id: JF-446
 title: >-
   Artist answers to the both-empty album elicit degrade through the raw
   cross-media copy (tokenize, phonetics, and consolidation fixes)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-01 23:28'
+updated_date: '2026-09-02 22:25'
 labels:
   - code-review
   - dialog
@@ -31,6 +32,10 @@ Findings (file: Jellyfin.Plugin.AlexaSkill/Alexa/Handler/Intent/PlayAlbumIntentH
 4. Test gap: no test drives the album-slot-with-artist-name + musician-empty shape for a >2-word answer (the dead-end of finding 1). CrossMediaTypeFallbackTests.PlayAlbum_NoAlbums_NoMusician_ArtistExists_FallsBackToArtist covers only the 1-word passing case.
 5. Line ~259: the fuzzy full-catalog scan uses BuildAlbumQuery's DtoOptions(true) with no Limit, materializing full DTOs only to read a.Name. The same file already has the cheap precedent (GetAlbumTrackCountsAsync: DtoOptions(false) + EnableImages/EnableUserData/AddCurrentProgram=false).
 6. Root cause of 1+2: PlayAlbum and PlaySongIntentHandler (~line 310) each carry a raw-split copy of the gate while BaseHandler.TryEntityFallbackAsync tokenizes and has a WordCoverageCandidates acceptance valve the copies lack; the copies carry the JF-363 Confirm/AutoServe band the helper lacks. Consolidating on the shared layer (extended with the band) fixes 1 and 2 at the root. CAVEAT before touching stop words: the it-IT set in KeywordMatcher lacks dei/degli/delle, and the song n-gram index is built with en-US (JF-384 asymmetry), so widening stop-word stripping must verify song-search index symmetry first (LOAD-BEARING INVARIANT: no canonical output may be a stop word in any locale).
+
+Deliberate widening (recorded 2026-09-03, simplify ALT-1): consolidating on the shared gate makes its phonetic acceptance apply to ALL callers, including FindSong and PlayMoodMusic (pre-diff those paths already routed through the shared gate, which was equally non-phonetic), a monotone change (only boosts; length-banded phonetic collisions floor at 91, above the 85 bar), pinned by `PlayMoodMusicIntentHandlerTests.JF446_SharedGate_PhoneticAcceptance_PlaysArtist`.
+
+JF-295 re-check (2026-09-03, review-local gate round): the tokenized guard makes the canonical case 'la ballata del genesio' GUARD-ELIGIBLE (2 content words after it-IT stripping, <= CrossMediaArtistMaxWords), so the JF-295 protection moved from the guard layer to the THRESHOLD layer. The scorer refuted the harm: the repo's own `FuzzyMatcherTests.FindBestMatch_LengthDisproportion_RejectsLambFromBallata` plus the fair length penalty keep Lamb far below 60 for the cleaned 'ballata genesio' query, so the shared gate rejects and the clean song not-found stands; pinned by `CrossMediaTypeFallbackTests.JF295_ItCanonicalCase_GuardEligibleButThresholdRefuted_StaysNotFound`. Residual risk: any future lowering of normalThreshold (DefaultThreshold or the per-user FuzzyMatchThreshold) re-opens JF-295; that change must re-visit this note and the pin test.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
