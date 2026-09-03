@@ -362,6 +362,9 @@
                                 <button id="rebuildModelsButton" is="emby-button" type="button" class="raised button-alt emby-button" title="Rebuild the model for the locale selected above">
                                     <span>Rebuild Selected Locale</span>
                                 </button>
+                                <button id="rebuildAllModelsButton" is="emby-button" type="button" class="raised button-alt emby-button" title="Rebuild the models of every locale, not just the one selected above (one SMAPI build per locale, takes several minutes)">
+                                    <span>Rebuild All Locales</span>
+                                </button>
                             </div>
 
                             <div id="customModelStatus" style="display:none;margin-bottom:1em;padding:0.8em;border-radius:4px;background:#1a1a1a;">
@@ -370,7 +373,7 @@
                             <div id="customModelProgress" style="display:none;margin-bottom:1em;padding:0.8em;border-radius:4px;background:#333;color:#ccc;">
                             </div>
 
-                            <div class="fieldDescription" style="color:#888;">This replaces the interaction model for the selected locale. Model builds take 15-30 seconds.</div>
+                            <div class="fieldDescription" style="color:#888;">"Deploy Model" and "Restore Default" apply to the selected locale only. "Rebuild Selected Locale" redeploys the embedded model for that locale; "Rebuild All Locales" redeploys every locale's model (one build each). Model builds take 15-30 seconds per locale.</div>
 
                             <hr style="border:0;border-top:1px solid #333;margin:1.2em 0;" />
                             <div class="inputContainer">
@@ -382,7 +385,7 @@
 
                     <details>
                         <summary><span class="accordion-title">Mood Overrides</span></summary>
-                            <div class="fieldDescription">Add custom moods that map to Jellyfin genres. One per line as <code>mood: genre1, genre2</code> (e.g. <code>coding: electronic, ambient</code>). The handler resolves these immediately; run "Rebuild models" (Custom Interaction Model above) afterwards so Alexa recognizes the new mood words one-shot.</div>
+                            <div class="fieldDescription">Add custom moods that map to Jellyfin genres. One per line as <code>mood: genre1, genre2</code> (e.g. <code>coding: electronic, ambient</code>). The handler resolves these immediately; run "Rebuild Selected Locale" (Custom Interaction Model above) afterwards so Alexa recognizes the new mood words one-shot.</div>
                             <div class="inputContainer">
                                 <label class="inputLabel inputLabelUnfocused" for="MoodGenreOverrides">Custom moods</label>
                                 <textarea id="MoodGenreOverrides" is="emby-textarea" rows="5" style="width:100%;font-family:monospace;" placeholder="coding: electronic, ambient&#10;study: classical, instrumental"></textarea>
@@ -1926,6 +1929,14 @@
                     "alexaskill/api/custom-model/rebuild",
                     { userId: getFirstConfiguredUserId(), locale: document.querySelector("#CustomModelLocale").value },
                     "#rebuildModelsButton", "Rebuilding selected locale...", "Selected locale rebuilt"
+                );
+            });
+
+            document.querySelector("#rebuildAllModelsButton").addEventListener("click", function() {
+                callModelApi(
+                    "alexaskill/api/custom-model/rebuild",
+                    { userId: getFirstConfiguredUserId(), locale: "*" },
+                    "#rebuildAllModelsButton", "Rebuilding ALL locales (one build per locale, this takes a few minutes)...", "All locales rebuilt"
                 );
             });
         </script>

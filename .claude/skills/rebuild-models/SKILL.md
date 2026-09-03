@@ -5,8 +5,11 @@ description: Push updated embedded interaction models to Alexa via the plugin's 
 
 # Rebuild Interaction Models
 
-Push all 17 embedded interaction models to Alexa via the plugin's own API.
+Push the embedded interaction models to Alexa via the plugin's own API.
 This bypasses the version-check gate that normally only deploys models on startup when the plugin version changes.
+The endpoint is locale-scoped (PR #14): send `"locale":"*"` to rebuild every locale
+(the common case after model-file commits), a specific locale to rebuild just that one,
+or no `locale` to fall back to the saved `CustomModelLocale` (single locale, NOT all).
 
 ## When to Use
 
@@ -31,7 +34,7 @@ USER_ID=$(ssh $SSH_OPTS pantinor@minix "curl -sf 'http://localhost:8096/Plugins/
   -H 'X-Emby-Token: $JELLYFIN_API_KEY'" | python3 -c "import json,sys; print(json.load(sys.stdin)['Users'][0]['Id'])")
 ssh $SSH_OPTS pantinor@minix "curl -s -X POST 'http://localhost:8096/alexaskill/api/custom-model/rebuild' \
   -H 'X-Emby-Token: $JELLYFIN_API_KEY' -H 'Content-Type: application/json' \
-  -d '{\"userId\":\"$USER_ID\"}'"
+  -d '{\"userId\":\"$USER_ID\",\"locale\":\"*\"}'"
 ```
 
 ### 2. Verify Response
@@ -72,7 +75,7 @@ Voice testing requires the build to finish.
 ## Key Facts
 
 - Uses the plugin's `POST /alexaskill/api/custom-model/rebuild` endpoint — **never call SMAPI directly**
-- The endpoint pushes all 17 locale models and **waits for SMAPI builds to complete** before returning
+- With `"locale":"*"` the endpoint pushes every locale model and **waits for SMAPI builds to complete** before returning; a specific `locale` pushes only that one
 - Response includes per-locale SUCCEEDED/FAILED status — no separate polling step needed
 - No version bump or restart required
-- Also available as the "Rebuild All Models" button in the Jellyfin config UI
+- Also available as the "Rebuild Selected Locale" and "Rebuild All Locales" buttons in the Jellyfin config UI

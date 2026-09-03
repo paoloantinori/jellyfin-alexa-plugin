@@ -887,14 +887,9 @@ public class ConfigurationController : ControllerBase
             return new JsonResult(new { error = "Plugin manifest not loaded. Restart Jellyfin first." }) { StatusCode = 503 };
         }
 
-        // Rebuild the locale currently chosen in the UI dropdown. The client sends it in
-        // the request body (matching the Deploy/Restore buttons); fall back to the saved
-        // CustomModelLocale for callers that don't send it.
-        string? localeFilter = req.Value<string>("locale");
-        if (string.IsNullOrWhiteSpace(localeFilter))
-        {
-            localeFilter = Plugin.Instance!.Configuration.CustomModelLocale;
-        }
+        string? localeFilter = ResolveRebuildLocaleFilter(
+            req.Value<string>("locale"),
+            Plugin.Instance!.Configuration.CustomModelLocale);
 
         try
         {
@@ -923,6 +918,34 @@ public class ConfigurationController : ControllerBase
             _logger.LogError(ex, "Unexpected error during model rebuild");
             return new JsonResult(new { error = $"Internal error: {ex.Message}" }) { StatusCode = 500 };
         }
+    }
+
+    /// <summary>
+    /// Resolves the locale filter for a rebuild request. The locale normally names the
+    /// single locale to rebuild (the UI dropdown value); an absent or blank locale falls
+    /// back to the saved CustomModelLocale, preserving the pre-JF-348 contract used by
+    /// callers that send no locale. The literal "*" (JF-348, sent by the "Rebuild All
+    /// Locales" button) maps to a null filter, which the redeployer and
+    /// BuildSkillInteractionModels treat as "every embedded locale model".
+    /// </summary>
+    /// <param name="requestedLocale">The locale string from the request body (may be null).</param>
+    /// <param name="fallbackLocale">CustomModelLocale, used when the request sends no locale.</param>
+    /// <returns>The locale filter for the redeployer, or null to rebuild all locales.</returns>
+    internal static string? ResolveRebuildLocaleFilter(string? requestedLocale, string? fallbackLocale)
+    {
+        if (string.Equals(requestedLocale, "*", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(requestedLocale))
+        {
+            // A blank fallback is normalized to null so "null = all locales" stays the
+            // single representation; the redeployer treats null and blank identically.
+            return string.IsNullOrWhiteSpace(fallbackLocale) ? null : fallbackLocale;
+        }
+
+        return requestedLocale;
     }
 
     /// <summary>

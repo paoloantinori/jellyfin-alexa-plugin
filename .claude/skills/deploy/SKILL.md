@@ -92,7 +92,10 @@ cat /tmp/alexa_plugin_config_backup.json | ssh $SSH_OPTS pantinor@minix "curl -s
 ### 6. Rebuild Interaction Models (if models changed)
 
 If the deploy includes interaction model changes (new slot values, new utterances, new intents),
-rebuild all models so Alexa's NLU picks up the changes without requiring a version bump:
+rebuild the models so Alexa's NLU picks up the changes without requiring a version bump.
+The endpoint is locale-scoped (PR #14): `"locale":"*"` rebuilds every locale (used below);
+a specific locale (`"locale":"it-IT"`) rebuilds just that one; sending no `locale` falls
+back to the saved `CustomModelLocale` (single locale, NOT all):
 
 ```bash
 SSH_OPTS="-F /dev/null -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa"
@@ -100,7 +103,7 @@ USER_ID=$(ssh $SSH_OPTS pantinor@minix "curl -sf 'http://localhost:8096/Plugins/
   -H 'X-Emby-Token: $JELLYFIN_API_KEY'" | python3 -c "import json,sys; print(json.load(sys.stdin)['Users'][0]['Id'])")
 ssh $SSH_OPTS pantinor@minix "curl -s -X POST 'http://localhost:8096/alexaskill/api/custom-model/rebuild' \
   -H 'X-Emby-Token: $JELLYFIN_API_KEY' -H 'Content-Type: application/json' \
-  -d '{\"userId\":\"$USER_ID\"}'"
+  -d '{\"userId\":\"$USER_ID\",\"locale\":\"*\"}'"
 ```
 
 The endpoint polls SMAPI and waits for all locale model builds to complete.

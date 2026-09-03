@@ -3,9 +3,10 @@ id: JF-348
 title: >-
   Rebuild All Models button - honest label and all-locales option (follow-up to
   PR #14)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-07-16 17:06'
+updated_date: '2026-09-03 15:59'
 labels: []
 dependencies: []
 references:
