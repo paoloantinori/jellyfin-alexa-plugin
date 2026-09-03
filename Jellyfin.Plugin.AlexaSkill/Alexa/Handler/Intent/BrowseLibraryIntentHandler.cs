@@ -135,6 +135,22 @@ public class BrowseLibraryIntentHandler : BaseHandler
         }
 
         Logger.LogDebug("BrowseLibrary: resolved category to {ItemKind}", itemKind.Value);
+
+        // JF-466: the category's kind is disabled by content access. An empty
+        // IncludeItemTypes means "all kinds" to Jellyfin (verified at 10.11.11),
+        // so the primary query would list items of ANY type and the fuzzy
+        // fallback below re-queries the raw kind; answer with the shared
+        // disabled-type response without querying at all. Known wart (JF-466
+        // review, left as-is): the "searching" announcement above fires before
+        // this gate, so a disabled request speaks two messages; hoisting the
+        // gate would reorder announcement versus category resolution on the
+        // enabled path, which this fix does not touch.
+        if (FilterByContentAccess(new[] { itemKind.Value }).Length == 0)
+        {
+            Logger.LogInformation("BrowseLibrary: category '{Category}' ({ItemKind}) disabled by content access", browseCategory, itemKind.Value);
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaTypeNotAvailable", locale));
+        }
+
         IReadOnlyList<BaseItem> items = await QueryItems(itemKind.Value, filter, resolvedUser, user, cancellationToken).ConfigureAwait(false);
 
         if (items.Count == 0)
@@ -282,11 +298,22 @@ public class BrowseLibraryIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchBrowseCategory", locale));
         }
 
+        // JF-466: both browsable kinds are disabled by content access. An empty
+        // IncludeItemTypes means "all kinds" to Jellyfin (verified at 10.11.11), so
+        // the genre query would list items of ANY type; answer with the shared
+        // disabled-type response without querying.
+        BaseItemKind[] genreKinds = FilterByContentAccess(new[] { BaseItemKind.Audio, BaseItemKind.Movie });
+        if (genreKinds.Length == 0)
+        {
+            Logger.LogInformation("BrowseLibrary: genre query '{Filter}' has no content types allowed by configuration", filter);
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaTypeNotAvailable", locale));
+        }
+
         var query = new InternalItemsQuery
         {
             User = jellyfinUser,
             Recursive = true,
-            IncludeItemTypes = FilterByContentAccess(new[] { BaseItemKind.Audio, BaseItemKind.Movie }),
+            IncludeItemTypes = genreKinds,
             Genres = new[] { filter },
             Limit = MaxDisplayItems,
             OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },

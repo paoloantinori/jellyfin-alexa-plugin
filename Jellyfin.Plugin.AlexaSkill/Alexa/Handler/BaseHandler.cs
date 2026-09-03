@@ -1170,6 +1170,12 @@ public abstract class BaseHandler
     /// <summary>
     /// Filters an array of BaseItemKind values to only include types whose media type category
     /// is enabled in configuration.
+    /// CONTRACT (JF-466): an EMPTY result means every requested kind is disabled,
+    /// and Jellyfin treats an empty (length 0) IncludeItemTypes as NO type filter,
+    /// not as match-nothing (verified against Jellyfin 10.11.11,
+    /// BaseItemRepository: `if (filter.IncludeItemTypes.Length == 0)` applies only
+    /// the exclude filter). Callers must treat an empty result as a hard zero
+    /// (skip the query) or gate the entry, never assign it to IncludeItemTypes.
     /// </summary>
     protected static BaseItemKind[] FilterByContentAccess(BaseItemKind[] types)
     {
@@ -2229,6 +2235,16 @@ public abstract class BaseHandler
         ILogger? logger = null,
         int maxCandidates = 50)
     {
+        // JF-466: an EMPTY IncludeItemTypes means "all kinds" to Jellyfin (verified
+        // against 10.11.11 BaseItemRepository: length 0 applies no type filter), so
+        // when content access disabled every requested kind the query must not run
+        // at all, or it would return in-progress items of ANY type.
+        if (contentTypes.Length == 0)
+        {
+            logger?.LogDebug("FindLastPlayedItemWithProgress: no content types allowed by configuration, skipping query");
+            return (null, 0);
+        }
+
         var query = new InternalItemsQuery
         {
             User = jellyfinUser,

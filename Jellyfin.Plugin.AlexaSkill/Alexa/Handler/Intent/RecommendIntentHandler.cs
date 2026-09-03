@@ -89,8 +89,6 @@ public class RecommendIntentHandler : BaseHandler
 
         Logger.LogDebug("Recommend: entered, locale={Locale}, mediaType={MediaType}", locale, mediaType);
 
-        RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
-
         var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
         if (userError != null)
         {
@@ -98,6 +96,22 @@ public class RecommendIntentHandler : BaseHandler
         }
 
         BaseItemKind[] itemTypes = FilterByContentAccess(GetItemTypes(mediaType));
+
+        // JF-466: every kind applicable to this request is disabled by content
+        // access. An empty IncludeItemTypes means "all kinds" to Jellyfin (verified
+        // at 10.11.11), so issuing the history/genre/fallback queries would
+        // recommend items of ANY type. Speak the shared disabled-type response:
+        // the empty-library not-found would be false ("listen to more music"
+        // while music is disabled). The gate sits BEFORE the "searching"
+        // announcement (JF-466 review) so a disabled request speaks one
+        // message, not two.
+        if (itemTypes.Length == 0)
+        {
+            Logger.LogInformation("Recommend: all item types for media type '{MediaType}' disabled by configuration", mediaType);
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaTypeNotAvailable", locale));
+        }
+
+        RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
 
         // Step 1: Get user's most-played items to find their top genres
         var historyQuery = new InternalItemsQuery

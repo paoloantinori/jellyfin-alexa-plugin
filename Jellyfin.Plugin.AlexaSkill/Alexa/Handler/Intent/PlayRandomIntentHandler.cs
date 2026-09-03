@@ -71,8 +71,6 @@ public class PlayRandomIntentHandler : BaseHandler
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
 
-        RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
-
         string? mediaTypeSlot = null;
         string? genreSlot = null;
 
@@ -105,7 +103,23 @@ public class PlayRandomIntentHandler : BaseHandler
         };
         ApplyLibraryFilter(query, user, _libraryManager);
 
-        ApplyMediaTypeFilter(query, mediaTypeSlot);
+        BaseItemKind[] playableKinds = ResolvePlayableKinds(mediaTypeSlot);
+        if (playableKinds.Length == 0)
+        {
+            // JF-466: every kind applicable to this request is disabled by content
+            // access. Skip the query (an empty IncludeItemTypes would widen it to
+            // all types) and speak the shared disabled-type response: the
+            // empty-library not-found below would be false ("add music" while
+            // music exists but is disabled). The gate sits BEFORE the
+            // "searching" announcement (JF-466 review) so a disabled request
+            // speaks one message, not two.
+            Logger.LogInformation("PlayRandom: all playable kinds for media type '{MediaType}' disabled by configuration", mediaTypeSlot);
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaTypeNotAvailable", locale));
+        }
+
+        RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
+
+        query.IncludeItemTypes = playableKinds;
 
         if (!string.IsNullOrWhiteSpace(genreSlot))
         {
@@ -182,22 +196,24 @@ public class PlayRandomIntentHandler : BaseHandler
         return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, firstItem, user, context);
     }
 
-    private void ApplyMediaTypeFilter(InternalItemsQuery query, string? mediaTypeSlot)
+    // JF-466: returns the content-access-filtered kinds for the slot instead of
+    // assigning them to the query, so the caller can treat an EMPTY result as a
+    // hard zero: an empty IncludeItemTypes means "all kinds" to Jellyfin (verified
+    // at 10.11.11), so issuing the query anyway would return items of ANY type
+    // (e.g. movies through the audio stream URL when only music is disabled).
+    private BaseItemKind[] ResolvePlayableKinds(string? mediaTypeSlot)
     {
         if (string.IsNullOrEmpty(mediaTypeSlot))
         {
-            query.IncludeItemTypes = FilterByContentAccess(new[] { BaseItemKind.Movie, BaseItemKind.Episode });
-            return;
+            return FilterByContentAccess(new[] { BaseItemKind.Movie, BaseItemKind.Episode });
         }
 
         if (SlotMappings.MediaTypeToItemKinds.TryGetValue(mediaTypeSlot.ToLowerInvariant(), out BaseItemKind[]? types) && types != null)
         {
-            query.IncludeItemTypes = FilterByContentAccess(types);
+            return FilterByContentAccess(types);
         }
-        else
-        {
-            query.IncludeItemTypes = FilterByContentAccess(new[] { BaseItemKind.Audio });
-        }
+
+        return FilterByContentAccess(new[] { BaseItemKind.Audio });
     }
 
     private async Task<IReadOnlyList<BaseItem>> ExpandAlbumToTracks(MediaBrowser.Controller.Entities.Audio.MusicAlbum album, Jellyfin.Database.Implementations.Entities.User jellyfinUser, CancellationToken cancellationToken)

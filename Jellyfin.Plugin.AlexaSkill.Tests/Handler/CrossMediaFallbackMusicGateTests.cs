@@ -28,11 +28,12 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// JF-464: the shared cross-media fallbacks (BaseHandler.TryEntityFallbackAsync for
 /// artists, TryAlbumFallbackAsync for albums) play music, so the global music flag
 /// (PluginConfiguration.MusicEnabled, global-only: no per-user override exists) must
-/// gate them at the SHARED entry. With music disabled, a genre miss (PlayByGenre,
-/// JF-463) falls through to its own not-found: no AudioPlayer directive and no
-/// fallback query issued. With music enabled, the JF-463 behavior is unchanged (the
-/// artist still plays). The library mocks always ARM the would-be hit, so the
-/// disabled-flag tests prove the gate stops the path, not that the library was empty.
+/// gate them at the SHARED entry. With music disabled, a genre request (PlayByGenre,
+/// JF-463) stops at the handler's own entry gate (JF-466): the disabled-type
+/// response, no AudioPlayer directive, and no query issued at all. With music
+/// enabled, the JF-463 behavior is unchanged (the artist still plays). The library
+/// mocks always ARM the would-be hit, so the disabled-flag tests prove the gate
+/// stops the path, not that the library was empty.
 /// JF-467 superseded the full-handler mood/song miss tests this file carried
 /// (PlayMoodMusic and PlaySong are now gated at ENTRY, before any query); the
 /// primary-path coverage lives in MusicPrimaryPathGateTests, and the shared gates
@@ -90,10 +91,14 @@ public class CrossMediaFallbackMusicGateTests : PluginTestBase, IDisposable
         Assert.Empty(_queries);
     }
 
-    // Caller 1 (JF-463 wiring): music disabled + genre miss falls through to
-    // NotFoundGenre, with no playback and no artist query issued at all.
+    // Caller 1 (JF-463 wiring, superseded by the JF-466 entry gate): music
+    // disabled + a genre request now stops at PlayByGenre's own ENTRY gate (the
+    // JF-467 IfMediaTypeDisabled convention, JF-466): the disabled-type response,
+    // no playback, and ZERO library queries, so neither the genre query nor any
+    // MusicArtist fallback query runs. Before JF-466 the genre query itself was
+    // issued with an EMPTY IncludeItemTypes, which Jellyfin reads as "all kinds".
     [Fact]
-    public async Task GenreMiss_MusicDisabled_FallsThroughToGenreNotFound()
+    public async Task Genre_MusicDisabled_SpeaksDisabledTell_NoQuery()
     {
         DisableMusic();
         SetupUserMock();
@@ -105,10 +110,10 @@ public class CrossMediaFallbackMusicGateTests : PluginTestBase, IDisposable
 
         Assert.Null(TestHelpers.GetPlayDirective(response));
         string speech = TestHelpers.GetSpeechText(response);
-        Assert.Contains("abbey road", speech, StringComparison.OrdinalIgnoreCase);
-        // PlayByGenre issues only its genre query before the fallback: with the gate
-        // shut, no MusicArtist query of any shape may be issued.
-        Assert.Empty(_queries.Where(q => q.IncludeItemTypes?.Contains(BaseItemKind.MusicArtist) == true));
+        Assert.Contains("no está disponible", speech, StringComparison.OrdinalIgnoreCase);
+        // The entry gate fires before the genre query: no query of ANY shape is
+        // issued (stronger than the old MusicArtist-only assertion).
+        Assert.Empty(_queries);
     }
 
     // Caller 2 (mood, predates JF-463) was SUPERSEDED by the JF-467 entry gate on

@@ -93,6 +93,20 @@ public class PlayByGenreIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchGenre", locale));
         }
 
+        // JF-466 (JF-467 convention): the payoff is genre MUSIC through the audio
+        // stream URL, so the global music flag gates the whole entry. Without the
+        // gate, FilterByContentAccess would hand the genre query an EMPTY
+        // IncludeItemTypes, which Jellyfin reads as "all kinds" (verified at
+        // 10.11.11): a genre shared with movies (e.g. "Action") would queue and
+        // play non-audio items. Placed after the slot prompt, before the warming
+        // gate and the searching announcement, so a disabled request issues no
+        // library query at all.
+        SkillResponse? genreMusicDisabled = IfMediaTypeDisabled(c => c.MusicEnabled, request);
+        if (genreMusicDisabled != null)
+        {
+            return genreMusicDisabled;
+        }
+
         // Layer-1 gate (GuardIndexReady): the genre queries hit the same cold database
         // the artist index loading proxies (JF-463 wiring); gate before the
         // announcement, same placement as PlayMoodMusic.

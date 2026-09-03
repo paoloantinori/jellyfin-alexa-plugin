@@ -97,7 +97,7 @@ Handlers inherit `BaseHandler` and implement `CanHandle()` + `HandleAsync()`. `B
 - `GetStreamUrl()` / `GetVideoStreamUrl()` — `/Audio|Videos/{id}/stream?static=true`
 - `RetryAsync(operation, label)` — retry with exponential backoff, 6s timeout budget
 - `IfFeatureDisabled()` — short-circuit on feature flags
-- `IfMediaTypeDisabled()`: entry gate for single-media-type handlers (speaks `MediaTypeNotAvailable`); JF-467 uses it on the music-only handlers (PlaySong, PlayAlbum, FindSong, PlayMoodMusic, PlayArtistSongs). Placement contract on the method doc: AFTER the empty-slot prompt, BEFORE the first query and the "searching" announcement. The shared cross-media fallbacks (`TryEntityFallbackAsync`, `TryAlbumFallbackAsync`) gate on `IsMusicEnabled` instead (null means no confident match)
+- `IfMediaTypeDisabled()`: entry gate for single-media-type handlers (speaks `MediaTypeNotAvailable`); JF-467/JF-466 use it on the music-only handlers (PlaySong, PlayAlbum, FindSong, PlayMoodMusic, PlayArtistSongs, PlayByGenre). Placement contract on the method doc: AFTER the empty-slot prompt, BEFORE the first query and the "searching" announcement. The shared cross-media fallbacks (`TryEntityFallbackAsync`, `TryAlbumFallbackAsync`) gate on `IsMusicEnabled` instead (null means no confident match)
 - `ApplyLibraryFilter()` / `FilterByContentAccess()` — per-user library and content type gating
 - `BuildPauseResponse()` — `AudioPlayerStop()` + `ShouldEndSession=true` (ends session; Alexa routes resume via `AMAZON.ResumeIntent` automatically when audio was recently stopped)
 
