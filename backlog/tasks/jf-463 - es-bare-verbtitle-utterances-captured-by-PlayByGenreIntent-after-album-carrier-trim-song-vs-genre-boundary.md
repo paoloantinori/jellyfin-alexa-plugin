@@ -3,10 +3,10 @@ id: JF-463
 title: >-
   es bare verb+title utterances captured by PlayByGenreIntent after
   album-carrier trim (song-vs-genre boundary)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-03 06:23'
-updated_date: '2026-09-03 07:51'
+updated_date: '2026-09-03 08:20'
 labels: []
 dependencies: []
 references:
@@ -65,3 +65,20 @@ FACT CORRECTION (worker ground-truth scan, 2026-09-03): the genre slot is AMAZON
 
 Live probe matrix recorded pre-fix: es-MX 'Reproduce abbey road' steals to PlayByGenreIntent (matches es-ES); es-MX 'Pon abbey road' and es-US 'Reproduce abbey road' went to PlaySongIntent, es-US 'Pon abbey road' to PlayArtistSongsIntent (NLU per-model probabilistic: the steal is intermittent, which is exactly why the handler-side recovery covers all locales); es-ES 'Reproduce jazz' stays PlayByGenreIntent (genre path intact).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Handler-side fix implemented, deployed, and live-verified (commit 9bc80c78). PlayByGenreIntentHandler now mirrors the PlayMoodMusic recovery: on a confirmed genre miss (items.Count == 0) it calls the shared BaseHandler.TryEntityFallbackAsync (identical ctor shape, identical IndexWarmingGate entry placement before the progressive response, identical 12-arg call with the suggestion band off); a confident artist match plays with the FoundArtistInstead announcement, a miss falls through to the unchanged NotFoundGenre.
+
+Live verification on minix (simulator, it-IT, active DLL verified by UTF-16 marker 'PlayByGenre artist fallback'):
+- genre="pink floyd" -> AudioPlayer + "Ho trovato l'artista Pink Floyd. Ecco la musica di Pink Floyd."; log shows the fallback label with score=100 threshold=85.
+- genre="xyzzyfoo" -> NotFoundGenre tell, no playback (fallback miss path).
+- genre="Alternative" (real library genre) -> normal genre path, playback, no announcement (fallback never consulted).
+
+Hardening folded in from the /simplify and code-review passes: slot guard IsNullOrEmpty -> IsNullOrWhiteSpace (anti-pattern #7), the PlayByGenre entry-gate case added to SkillWarmingUpTests (the gate line was previously untested), the Layer-1 enumerations in CLAUDE.md and SkillWarmingUpTests updated, GetPlayDirective/GetSpeechTextOrNull hoisted to TestHelpers at their second copy, dead query-recording parameter dropped from the test helper. Suite 3061/3061 (5 new tests), Release 0 warnings, validators PASS, no interaction-model changes (probe evidence confirms profile-nlu still routes the stolen utterances to PlayByGenreIntent, which is expected: the recovery is server-side).
+
+Deploy note: the systemctl restart reported a timeout while the server completed a ~30s startup (index loads); server, plugin, and config all verified healthy after.
+
+Known limitations recorded: the JF-363 suggestion band [60,85) is off for this path (inherited from the PlayMoodMusic mirror); the MusicEnabled leak in the shared gate is filed as JF-464; test-fixture duplication and the eight-copy warming-gate preamble are filed as the consolidation task created at closure.
+<!-- SECTION:FINAL_SUMMARY:END -->
