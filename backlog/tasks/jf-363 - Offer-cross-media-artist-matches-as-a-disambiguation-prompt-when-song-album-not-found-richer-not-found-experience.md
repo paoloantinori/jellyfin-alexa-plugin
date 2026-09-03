@@ -3,9 +3,10 @@ id: JF-363
 title: >-
   Offer cross-media artist matches as a disambiguation prompt when song/album
   not found (richer not-found experience)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-23 20:56'
+updated_date: '2026-09-03 13:09'
 labels:
   - search
   - ux
@@ -67,3 +68,9 @@ Related: JF-362 (the coverage-synonym work that surfaced these gaps), JF-337 (cr
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining, or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+STALE-CLOSED as already implemented (verified 2026-09-03): the feature this task specifies ships as PluginConfiguration.CrossMediaArtistSuggestion (Off/Confirm/AutoServe, default Confirm; PluginConfiguration.cs:262) with the per-user override User.CrossMediaArtistSuggestion, wired through BaseHandler.BuildCrossMediaArtistOfferAsk (2 call sites) and the yes/no routing via crossmedia_notfound_* session attrs, exactly the design in this task's description. Test coverage exists and matches the ACs: CrossMediaTypeFallbackTests.JF363_PlaySong_SubStrict_Confirm_OffersArtistAsk (the [normalThreshold,85) band offers the Ask), JF363_PlaySong_SubStrict_AutoServe_PlaysArtist (opt-in auto-serve), plus the surrounding regressions (no-artist clean not-found, >=85 unchanged, word-guard). CLAUDE.md documents the full behavior under "Cross-Media Artist Suggestion (JF-363)" and commit a2aa47c3 updated the docs for JF-335/362/363. The task was left To Do when the feature landed; no code change needed.
+<!-- SECTION:FINAL_SUMMARY:END -->

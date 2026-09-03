@@ -4,9 +4,10 @@ title: >-
   it-IT NLU regression: 'c'e un album chiamato {album}' loses to
   FindSongByArtistIntent (musician slot eats the album name; explicit carrier,
   not a bare form)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-01 21:09'
+updated_date: '2026-09-03 13:10'
 labels:
   - nlu
   - it-IT

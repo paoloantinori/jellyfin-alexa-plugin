@@ -3,10 +3,10 @@ id: JF-466
 title: >-
   FilterByContentAccess returns empty IncludeItemTypes that may widen queries to
   all types when a flag is off (verify against Jellyfin source)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-03 08:38'
-updated_date: '2026-09-03 10:00'
+updated_date: '2026-09-03 13:05'
 labels: []
 dependencies: []
 references:
