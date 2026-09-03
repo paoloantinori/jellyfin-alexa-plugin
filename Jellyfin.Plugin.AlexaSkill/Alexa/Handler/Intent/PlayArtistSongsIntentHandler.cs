@@ -205,12 +205,20 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         IReadOnlyList<BaseItem> artists;
         IReadOnlyList<BaseItem>? jf420ArtistPool = null;
 
+        // JF-448 (review F2): the inline chain's pinned index view, captured once when
+        // the in-memory branch runs. Every GetArtists/FuzzyMatchPhonetic below resolves
+        // from the SAME publish, so a mid-search refresh cannot serve the artist list of
+        // one snapshot against another's phonetic codes (nulled code, skipped JF-381
+        // floor, wrong artist for one request). Null on the database path.
+        IArtistIndex? pinnedIndex = null;
+
         if (_artistIndex?.IsReady == true)
         {
             // In-memory search: resolve library filter once, search the pre-loaded index
             searchSource = "InMemory";
             topParentIds = Util.LibraryFilter.ResolveForUser(user, _libraryManager, Logger);
-            var allArtists = _artistIndex.GetArtists(topParentIds);
+            pinnedIndex = _artistIndex.Pin();
+            var allArtists = pinnedIndex.GetArtists(topParentIds);
             // JF-420 efficiency: reuse this list in the auto-selection check below
             // instead of calling GetArtists again (re-filters + re-allocates for
             // multi-library users).
@@ -238,7 +246,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 {
                     // Fast mode: skip prefix tiers, go straight to fuzzy-all
                     tierSw.Restart();
-                    BaseItem? fuzzy = FuzzyMatchPhonetic(musician, allArtists, a => a.Name, a => a.Id, _artistIndex, user);
+                    BaseItem? fuzzy = FuzzyMatchPhonetic(musician, allArtists, a => a.Name, a => a.Id, pinnedIndex, user);
                     tierSw.Stop();
                     tierReached = 4;
                     Logger.LogInformation(
@@ -259,7 +267,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                     var prefixCandidates = allArtists
                         .Where(a => a.Name.StartsWith(firstWord, StringComparison.OrdinalIgnoreCase))
                         .ToList();
-                    BaseItem? tier2Match = FuzzyMatchPhonetic(musician, prefixCandidates, a => a.Name, a => a.Id, _artistIndex, user);
+                    BaseItem? tier2Match = FuzzyMatchPhonetic(musician, prefixCandidates, a => a.Name, a => a.Id, pinnedIndex, user);
                     tierSw.Stop();
                     tierReached = 2;
                     Logger.LogInformation(
@@ -286,7 +294,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                         var fullPrefixCandidates = allArtists
                             .Where(a => a.Name.StartsWith(musician, StringComparison.OrdinalIgnoreCase))
                             .ToList();
-                        BaseItem? tier3Match = FuzzyMatchPhonetic(musician, fullPrefixCandidates, a => a.Name, a => a.Id, _artistIndex, user);
+                        BaseItem? tier3Match = FuzzyMatchPhonetic(musician, fullPrefixCandidates, a => a.Name, a => a.Id, pinnedIndex, user);
                         tierSw.Stop();
                         tierReached = 3;
                         Logger.LogInformation(
@@ -313,7 +321,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                     {
                         tierSw.Restart();
                         // JF-417 review correction: no exclusion (see ArtistSearch.cs comment)
-                        BaseItem? tier4Match = FuzzyMatchPhonetic(musician, allArtists, a => a.Name, a => a.Id, _artistIndex, user);
+                        BaseItem? tier4Match = FuzzyMatchPhonetic(musician, allArtists, a => a.Name, a => a.Id, pinnedIndex, user);
                         tierSw.Stop();
                         tierReached = 4;
                         Logger.LogInformation(
@@ -495,9 +503,11 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             && musician.Contains(' ')
             && musician.Contains(artists[0].Name, StringComparison.OrdinalIgnoreCase)
             && !IsExactNameMatch(musician, artists[0].Name)
-            && _artistIndex?.IsReady == true)
+            && pinnedIndex != null)
         {
-            var searchPool = jf420ArtistPool ?? _artistIndex.GetArtists(topParentIds);
+            // Same pinned view the chain above used (JF-448): the alternative pool and
+            // the match list stay on one publish.
+            var searchPool = jf420ArtistPool ?? pinnedIndex.GetArtists(topParentIds);
             var alternatives = searchPool.Where(a => !a.Id.Equals(artists[0].Id)).ToList();
             if (alternatives.Count > 0)
             {
@@ -608,7 +618,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         else if (fastAutoPlay)
         {
             // Fast mode: pick the best fuzzy match and auto-play
-            var best = FuzzyMatchPhonetic(musician, artists, a => a.Name, a => a.Id, _artistIndex, user);
+            var best = FuzzyMatchPhonetic(musician, artists, a => a.Name, a => a.Id, pinnedIndex, user);
             if (best != null)
             {
                 artists = new List<BaseItem> { best };

@@ -19,22 +19,18 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa;
 /// Loads at startup and refreshes when songs are added/removed from the library.
 /// Lifecycle (debounce, failed-load retry, readiness, dispose ordering) lives in
 /// <see cref="DebouncedLibraryIndexService"/> (JF-419.3 extraction: the song index
-/// gains the JF-419.1 failed-load self-recovery and the dispose-race fix for free).
+/// gains the JF-419.1 failed-load self-recovery and the dispose-race fix for free);
+/// the published-state slot lives in its generic companion (JF-448, review F4).
 /// The loaded state is published as one immutable <see cref="SongNgramIndexSnapshot"/>
 /// reference so a reader can never observe a torn mix of two loads (JF-432).
 /// </summary>
-public class SongNgramIndexService : DebouncedLibraryIndexService, ISongNgramIndex
+public class SongNgramIndexService : DebouncedLibraryIndexService<SongNgramIndexSnapshot>, ISongNgramIndex
 {
-    private volatile SongNgramIndexSnapshot _snapshot = SongNgramIndexSnapshot.Empty;
-
-    /// <summary>The currently published snapshot (internal test accessor, JF-432).</summary>
-    internal SongNgramIndexSnapshot CurrentSnapshot => _snapshot;
+    /// <inheritdoc />
+    public int SongCount => CurrentSnapshot.AllEntries.Count;
 
     /// <inheritdoc />
-    public int SongCount => _snapshot.AllEntries.Count;
-
-    /// <inheritdoc />
-    public int NgramCount => _snapshot.BigramIndex.Count;
+    public int NgramCount => CurrentSnapshot.BigramIndex.Count;
 
     /// <inheritdoc />
     protected override string IndexName => "song n-gram";
@@ -48,7 +44,7 @@ public class SongNgramIndexService : DebouncedLibraryIndexService, ISongNgramInd
     /// <param name="libraryManager">Library manager for the load query and change events.</param>
     /// <param name="logger">Logger instance.</param>
     public SongNgramIndexService(ILibraryManager libraryManager, ILogger<SongNgramIndexService> logger)
-        : base(libraryManager, logger)
+        : base(SongNgramIndexSnapshot.Empty, libraryManager, logger)
     {
     }
 
@@ -81,10 +77,7 @@ public class SongNgramIndexService : DebouncedLibraryIndexService, ISongNgramInd
         }
 
         // Capture once: every index and the parent map must come from the same publish
-        var snapshot = _snapshot;
-        var phoneticIdx = snapshot.PhoneticTokenIndex;
-        var topParentMap = snapshot.TopParentMap;
-        var allSongs = snapshot.AllEntries;
+        var snapshot = CurrentSnapshot;
 
         // Encode each keyword token phonetically and collect candidate song IDs
         var candidateIds = new HashSet<Guid>();
@@ -92,7 +85,7 @@ public class SongNgramIndexService : DebouncedLibraryIndexService, ISongNgramInd
         {
             var (primary, alternate) = DoubleMetaphone.Encode(token);
 
-            if (!string.IsNullOrEmpty(primary) && phoneticIdx.TryGetValue(primary, out var entries))
+            if (!string.IsNullOrEmpty(primary) && snapshot.PhoneticTokenIndex.TryGetValue(primary, out var entries))
             {
                 foreach (var song in entries)
                 {
@@ -100,7 +93,7 @@ public class SongNgramIndexService : DebouncedLibraryIndexService, ISongNgramInd
                 }
             }
 
-            if (!string.IsNullOrEmpty(alternate) && phoneticIdx.TryGetValue(alternate, out var altEntries))
+            if (!string.IsNullOrEmpty(alternate) && snapshot.PhoneticTokenIndex.TryGetValue(alternate, out var altEntries))
             {
                 foreach (var song in altEntries)
                 {
@@ -114,10 +107,10 @@ public class SongNgramIndexService : DebouncedLibraryIndexService, ISongNgramInd
             return new List<(BaseItem, double)>();
         }
 
-        var candidates = allSongs.Where(s => candidateIds.Contains(s.Id)).ToList();
+        IReadOnlyList<BaseItem> candidates = snapshot.AllEntries.Where(s => candidateIds.Contains(s.Id)).ToList();
 
         // Filter by library access (shared predicate, JF-456)
-        candidates = FilterByLibraryScope(candidates, s => s.Id, topParentMap, topParentIds);
+        candidates = FilterByLibraryScope(candidates, s => s.Id, snapshot.TopParentMap, topParentIds);
 
         if (candidates.Count == 0)
         {
@@ -139,14 +132,11 @@ public class SongNgramIndexService : DebouncedLibraryIndexService, ISongNgramInd
         }
 
         // Capture once: every index and the parent map must come from the same publish
-        var snapshot = _snapshot;
-        var bigramIdx = snapshot.BigramIndex;
-        var topParentMap = snapshot.TopParentMap;
-        var allSongs = snapshot.AllEntries;
+        var snapshot = CurrentSnapshot;
 
         // Collect candidate songs via bigram lookup or single-token scan
         HashSet<Guid> candidateIds;
-        List<BaseItem> candidates;
+        IReadOnlyList<BaseItem> candidates;
 
         if (keywordTokens.Length >= 2)
         {
@@ -155,7 +145,7 @@ public class SongNgramIndexService : DebouncedLibraryIndexService, ISongNgramInd
             for (int i = 0; i < keywordTokens.Length - 1; i++)
             {
                 string bigram = keywordTokens[i] + " " + keywordTokens[i + 1];
-                if (bigramIdx.TryGetValue(bigram, out var entries))
+                if (snapshot.BigramIndex.TryGetValue(bigram, out var entries))
                 {
                     foreach (var song in entries)
                     {
@@ -170,7 +160,7 @@ public class SongNgramIndexService : DebouncedLibraryIndexService, ISongNgramInd
                 return SearchBySingleTokens(snapshot, keywordTokens, locale, topParentIds);
             }
 
-            candidates = allSongs.Where(s => candidateIds.Contains(s.Id)).ToList();
+            candidates = snapshot.AllEntries.Where(s => candidateIds.Contains(s.Id)).ToList();
         }
         else
         {
@@ -179,7 +169,7 @@ public class SongNgramIndexService : DebouncedLibraryIndexService, ISongNgramInd
         }
 
         // Filter by library access (shared predicate, JF-456)
-        candidates = FilterByLibraryScope(candidates, s => s.Id, topParentMap, topParentIds);
+        candidates = FilterByLibraryScope(candidates, s => s.Id, snapshot.TopParentMap, topParentIds);
 
         if (candidates.Count == 0)
         {
@@ -202,14 +192,10 @@ public class SongNgramIndexService : DebouncedLibraryIndexService, ISongNgramInd
         string locale,
         Guid[]? topParentIds)
     {
-        var singleIdx = snapshot.SingleTokenIndex;
-        var topParentMap = snapshot.TopParentMap;
-        var allSongs = snapshot.AllEntries;
-
         var candidateIds = new HashSet<Guid>();
         foreach (string token in keywordTokens)
         {
-            if (singleIdx.TryGetValue(token, out var entries))
+            if (snapshot.SingleTokenIndex.TryGetValue(token, out var entries))
             {
                 foreach (var song in entries)
                 {
@@ -223,10 +209,10 @@ public class SongNgramIndexService : DebouncedLibraryIndexService, ISongNgramInd
             return new List<(BaseItem, double)>();
         }
 
-        var candidates = allSongs.Where(s => candidateIds.Contains(s.Id)).ToList();
+        IReadOnlyList<BaseItem> candidates = snapshot.AllEntries.Where(s => candidateIds.Contains(s.Id)).ToList();
 
         // Filter by library access (shared predicate, JF-456)
-        candidates = FilterByLibraryScope(candidates, s => s.Id, topParentMap, topParentIds);
+        candidates = FilterByLibraryScope(candidates, s => s.Id, snapshot.TopParentMap, topParentIds);
 
         if (candidates.Count == 0)
         {
@@ -287,8 +273,9 @@ public class SongNgramIndexService : DebouncedLibraryIndexService, ISongNgramInd
             }
         }
 
-        // One publish: all read paths see the new indexes, map, and entries together (JF-432)
-        _snapshot = new SongNgramIndexSnapshot(bigramIndex, singleTokenIndex, phoneticTokenIndex, topParentMap, entries);
+        // One publish: all read paths see the new indexes, map, and entries together (JF-432);
+        // the snapshot constructor freezes (copies) the loader's locals (JF-448, review F5)
+        Publish(new SongNgramIndexSnapshot(bigramIndex, singleTokenIndex, phoneticTokenIndex, topParentMap, entries));
 
         Logger.LogInformation("Song n-gram index {Action}: {SongCount} songs, {BigramCount} bigrams, {TokenCount} unique tokens, {PhoneticCount} phonetic codes",
             songs.Count > 0 ? "loaded" : "initialized (empty library)",

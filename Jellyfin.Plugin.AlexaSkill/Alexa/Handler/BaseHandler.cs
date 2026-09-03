@@ -1426,6 +1426,13 @@ public abstract class BaseHandler
     /// "cup", both code "KP"). When codes collide AND the candidate is within a length
     /// band, the score is floored above ContainmentScore so it beats coincidental
     /// substring matches. JF-381.
+    /// <para>
+    /// JF-448 (review F2) contract: callers whose candidates came from the artist index
+    /// MUST pass the index's pinned view (<see cref="IArtistIndex.CaptureSnapshot"/>) so
+    /// the candidate list and the phonetic codes resolve from the same publish; passing
+    /// the live service re-reads the snapshot field per lookup and a mid-search refresh
+    /// can null a code (the cross-snapshot window this fixes).
+    /// </para>
     /// </summary>
     /// <typeparam name="T">The candidate item type.</typeparam>
     protected T? FuzzyMatchPhonetic<T>(string query, IEnumerable<T> candidates, Func<T, string> selector, Func<T, Guid> idSelector, IArtistIndex? artistIndex, Entities.User? user = null, int threshold = -1)
@@ -2799,8 +2806,16 @@ public abstract class BaseHandler
             return null;
         }
 
+        // JF-448 (review F2): pin the artist index once for this fallback so the search
+        // chain below and the phonetic confirm after it read the SAME publish (a
+        // mid-fallback refresh could otherwise serve the artist list of one snapshot
+        // against another's phonetic codes). SearchAsync's own capture is idempotent on
+        // this view, so no extra hop is added; Pin degrades to live reads when the
+        // implementation cannot pin.
+        IArtistIndex? pinnedArtistIndex = artistIndex.Pin();
+
         IReadOnlyList<BaseItem> artists = await ArtistSearch.SearchAsync(
-            cleaned, user, libraryManager, artistIndex, Logger,
+            cleaned, user, libraryManager, pinnedArtistIndex, Logger,
             (q, ct) => RetryAsync(() => libraryManager.GetItemList(q), logLabel + ":GetArtistsFallback", ct),
             locale, cancellationToken).ConfigureAwait(false);
 
@@ -2818,13 +2833,13 @@ public abstract class BaseHandler
         // ("cup" for "Koop", both code KP) floors at PhoneticFloorScore and plays, while
         // the plain overload scored it below every bar and dead-ended (the defect the
         // inline copies carried).
-        var best = artistIndex != null
+        var best = pinnedArtistIndex != null
             ? FuzzyMatcher.FindBestMatchWithScore(
                 cleaned,
                 artists,
                 a => a.Name,
                 a => a.Id,
-                id => artistIndex.TryGetPhoneticCode(id, out var codes) ? codes : null)
+                id => pinnedArtistIndex.TryGetPhoneticCode(id, out var codes) ? codes : null)
             : FuzzyMatcher.FindBestMatchWithScore(cleaned, artists, a => a.Name);
         int normalThreshold = FuzzyMatcher.GetDefaultThreshold(user);
         int threshold = Math.Max(normalThreshold, CrossMediaArtistThreshold);

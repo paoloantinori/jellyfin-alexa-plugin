@@ -26,6 +26,10 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// </summary>
 public abstract class DebouncedLibraryIndexService : IHostedService, IDisposable
 {
+    // The non-generic half owns the LIFECYCLE; the published-state slot (one volatile
+    // snapshot field) lives in the generic companion below (JF-448, review F4). A new
+    // index service derives from DebouncedLibraryIndexService<TSnapshot> and gets both.
+
     private const int RefreshDebounceSeconds = 5;
     private const int FailedLoadRetrySeconds = 30;
 
@@ -404,18 +408,19 @@ public abstract class DebouncedLibraryIndexService : IHostedService, IDisposable
     /// <param name="idSelector">Extracts the item id used in the parent map.</param>
     /// <param name="topParentMap">The snapshot's item-id → top-parent map.</param>
     /// <param name="topParentIds">Allowed top parents, or null/empty for unrestricted.</param>
-    /// <returns>The items inside the user's library scope.</returns>
-    protected static List<T> FilterByLibraryScope<T>(
-        IEnumerable<T> items,
+    /// <returns>The items inside the user's library scope (the input reference itself when unrestricted).</returns>
+    protected static IReadOnlyList<T> FilterByLibraryScope<T>(
+        IReadOnlyList<T> items,
         Func<T, Guid> idSelector,
         IReadOnlyDictionary<Guid, Guid> topParentMap,
         Guid[]? topParentIds)
     {
         if (topParentIds == null || topParentIds.Length == 0)
         {
-            // Zero-copy when the caller already holds a List (the unrestricted
-            // GetArtists hot path returns the snapshot list as-is).
-            return items as List<T> ?? items.ToList();
+            // Zero-copy on the unrestricted GetArtists hot path: the snapshot's frozen
+            // list (array) is returned as-is; sharing is safe because the snapshot is
+            // deeply immutable (JF-448, review F5).
+            return items;
         }
 
         // Span scan instead of a HashSet: the typical scope is 2-6 ids, where the
@@ -513,4 +518,49 @@ public abstract class DebouncedLibraryIndexService : IHostedService, IDisposable
 
         return topParent;
     }
+}
+
+/// <summary>
+/// Generic companion of <see cref="DebouncedLibraryIndexService"/> that owns the
+/// published-state slot (JF-448, review F4): ONE volatile field of the immutable
+/// snapshot type, initialized to the service's empty snapshot, read through
+/// <see cref="CurrentSnapshot"/>, and replaced only through <see cref="Publish"/>.
+/// Owning the field here instead of redeclaring it per service makes the JF-432
+/// single-snapshot invariant structural: a subclass cannot add a second
+/// published-state field without visibly declaring it against the base, and the
+/// structural test asserts the shape once for every index.
+/// </summary>
+/// <typeparam name="TSnapshot">The immutable snapshot record the service publishes.</typeparam>
+public abstract class DebouncedLibraryIndexService<TSnapshot> : DebouncedLibraryIndexService
+    where TSnapshot : class
+{
+    private volatile TSnapshot _snapshot;
+
+    /// <summary>The currently published snapshot (internal test/read accessor, JF-432).</summary>
+    internal TSnapshot CurrentSnapshot => _snapshot;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DebouncedLibraryIndexService{TSnapshot}"/>
+    /// class with the service's empty snapshot filling the published-state slot (the
+    /// Empty convention: read paths see empty data until the first load publishes).
+    /// Passed as a constructor argument rather than an abstract property so no
+    /// virtual member runs from a constructor.
+    /// </summary>
+    /// <param name="emptySnapshot">The snapshot type's pre-load state.</param>
+    /// <param name="libraryManager">Library manager for the load query and change events.</param>
+    /// <param name="logger">Logger (the concrete service's category).</param>
+    protected DebouncedLibraryIndexService(TSnapshot emptySnapshot, ILibraryManager libraryManager, ILogger logger)
+        : base(libraryManager, logger)
+    {
+        _snapshot = emptySnapshot;
+    }
+
+    /// <summary>
+    /// Atomically replaces the published snapshot: the single write path. Holders of
+    /// the previous snapshot (pinned read views, in-flight reads) keep reading it,
+    /// and a reader that re-reads the field sees either the old or the new reference,
+    /// never a torn mix (JF-432).
+    /// </summary>
+    /// <param name="snapshot">The fully built snapshot to publish.</param>
+    protected void Publish(TSnapshot snapshot) => _snapshot = snapshot;
 }

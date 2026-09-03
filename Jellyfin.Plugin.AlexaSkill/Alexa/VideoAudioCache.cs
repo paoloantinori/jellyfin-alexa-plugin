@@ -318,8 +318,8 @@ public class VideoAudioCache
     /// <see cref="EvictIfNeededCore"/>. A scan at or above this duration is logged at
     /// Information level: every cache the default 2048MB cap can build measures under it
     /// on the deployment-class host, so crossing it means a non-default configuration or
-    /// storage slower than measured. The measurement note inside
-    /// <see cref="EvictIfNeededCore"/> holds the numbers backing this threshold.
+    /// storage slower than measured. The measurement table backing this threshold lives
+    /// in the JF-431 task notes (single home, JF-448 review F8).
     /// </summary>
     private const double SlowEvictionScanThresholdMs = 50;
 
@@ -348,30 +348,18 @@ public class VideoAudioCache
             return;
         }
 
-        // JF-431 (measured 2026-09-02, kept SYNCHRONOUS by decision): this scan runs on
-        // the Alexa request path (every gated encode start) and enumerates the whole cache
-        // directory: all *.mp4 files plus every HLS dir with per-file size stats. Numbers
-        // below are medians of 5 warm runs over synthetic sparse trees; the N100 rows are
-        // the deployment-class host (Intel N100, xfs) via a syscall-equivalent scandir+stat
-        // mirror (an upper bound), while the parenthetical dev-host numbers (i7-1185G7)
-        // use these production .NET APIs directly:
-        //   2,250 files / 2.0GB  -> 6.3ms   (3.5ms tmpfs, 3.3ms btrfs)
-        //  10,300 files / 1.8GB  -> 29.7ms  (14.5ms btrfs) [closest measured row below a
-        //                                     full default 2048MB cap, ~13,000 files]
-        //  20,400 files / 3.3GB  -> 56.5ms  (crosses the 50ms tripwire at ~18,000 files,
-        //                                     ~1.4x the default cap's file count)
-        // Page-cache-evicted runs (posix_fadvise) cost up to ~16% more (34.4ms for the
-        // 10,300-file tree), and extrapolating to the full default cap (~13,000 files)
-        // gives ~37ms warm / ~43ms cold, still under the tripwire. A truly post-boot cold
-        // cache (dcache dropped, needs root to measure) would be slower still; even at a
-        // 10x multiplier the worst measured tree stays an order of magnitude under the
-        // ~8s Alexa window, and the page-cache-warm steady state is the normal case
-        // because segment serving keeps the tree warm.
-        // Decision: a cached-size ledger or background sweep (the alternatives) adds
-        // stale-total risk against no measurable win at these sizes, and the JF-428
-        // pin-before-sweep + half-cap-floor semantics depend on this sweep running
-        // synchronously before every encode. The threshold log below is the tripwire: if a
-        // deployment's scan exceeds it, the synchronous-sweep decision no longer holds.
+        // JF-431 (kept SYNCHRONOUS by decision): this scan runs on the Alexa request
+        // path (every gated encode start) and enumerates the whole cache directory.
+        // Measured medians on the N100 deploy target and the dev hosts stay under the
+        // SlowEvictionScanThresholdMs budget at every cache size a default 2048MB cap
+        // can build, with margin even page-cache-cold; the full measurement table
+        // lives in the task notes (JF-448 review F8 dedup: numbers in ONE place).
+        // Decision constraint: a cached-size ledger or background sweep (the
+        // alternatives) adds stale-total risk against no measurable win at these
+        // sizes, and the JF-428 pin-before-sweep + half-cap-floor semantics depend on
+        // this sweep running synchronously before every encode. The threshold log
+        // below is the tripwire: if a deployment's scan exceeds it, the
+        // synchronous-sweep decision no longer holds.
         var scanWatch = Stopwatch.StartNew();
 
         var entries = new List<CacheEntry>();

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
@@ -645,18 +644,10 @@ public class ArtistIndexServiceTests : PluginTestBase
         // never in a group of separate volatile fields: volatile orders the individual
         // assignments but not the group, so sequential publishing let a reader observe
         // a torn mix mid-refresh (new artist list against the old top-parent map).
-        // Asserting the shape mechanically guards against a regression to per-member fields.
-        var derivedFields = typeof(ArtistIndexService)
-            .GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
-            .Where(f => f.DeclaringType == typeof(ArtistIndexService))
-            .ToList();
-
-        // A future non-state instance field on the service is fine ONLY if this
-        // assertion is updated alongside it: the snapshot must stay the single
-        // published-state field.
-        Assert.True(
-            derivedFields.Count == 1 && derivedFields[0].FieldType == typeof(ArtistIndexSnapshot),
-            $"ArtistIndexService must declare exactly one published-state field of type ArtistIndexSnapshot, found: {string.Join(", ", derivedFields.Select(f => $"{f.FieldType.Name} {f.Name}"))}");
+        // Asserting the shape mechanically guards against a regression to per-member
+        // fields. Shared helper since JF-448 (review F7): the field now lives on the
+        // generic snapshot base and the walk covers the whole ownership chain.
+        IndexSnapshotAssertions.AssertSingleSnapshotField<ArtistIndexService, ArtistIndexSnapshot>();
     }
 
     [Fact]
@@ -755,6 +746,66 @@ public class ArtistIndexServiceTests : PluginTestBase
         {
             service.Dispose();
         }
+    }
+
+    // --- JF-448: pinned read views + frozen snapshots (review F2/F5) ---
+
+    [Fact]
+    public async Task CaptureSnapshot_PinsOnePublish_AcrossLaterRefreshes()
+    {
+        // JF-448 (review F2): a view captured before a refresh keeps serving the
+        // snapshot it was pinned to. This is the contract the search chain relies on:
+        // artist list AND phonetic codes from one publish, immune to a refresh landing
+        // mid-search (the 1-10ms window that nulled the phonetic code and skipped the
+        // JF-381 floor).
+        var koopId = Guid.NewGuid();
+        var initial = new List<BaseItem> { new MusicArtist { Name = "Koop", Id = koopId } };
+        var updated = new List<BaseItem> { new MusicArtist { Name = "Miles Davis", Id = Guid.NewGuid() } };
+
+        int callCount = 0;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(() => ++callCount == 1 ? initial : updated);
+        _libraryManagerMock.Setup(l => l.GetItemById(It.IsAny<Guid>())).Returns((Guid id) => null as BaseItem);
+
+        var service = new ArtistIndexService(_libraryManagerMock.Object, _logger);
+        await service.StartAsync(CancellationToken.None);
+
+        var pinned = service.CaptureSnapshot();
+        Assert.Same(pinned, pinned.CaptureSnapshot()); // capture is idempotent
+
+        // The "refresh": a new publish the live service serves from now on
+        await service.StartAsync(CancellationToken.None);
+
+        // The pinned view still serves the FIRST publish, list and codes together
+        var pinnedArtists = pinned.GetArtists();
+        var pinnedArtist = Assert.Single(pinnedArtists);
+        Assert.Equal("Koop", pinnedArtist.Name);
+        Assert.True(pinned.TryGetPhoneticCode(koopId, out var pinnedCodes));
+        Assert.NotEmpty(pinnedCodes.Primary);
+
+        // The live service serves the second publish
+        var liveArtist = Assert.Single(service.GetArtists());
+        Assert.Equal("Miles Davis", liveArtist.Name);
+        Assert.False(service.TryGetPhoneticCode(koopId, out _));
+    }
+
+    [Fact]
+    public async Task PublishedSnapshot_IsFrozenAgainstLoaderLocals()
+    {
+        // JF-448 (review F5): the snapshot COPIES the loader's build locals at
+        // construction (frozen array + FrozenDictionary). The mock keeps returning the
+        // same List instance, which stays reachable here, so mutating it AFTER the
+        // publish must not change what the index serves (a snapshot that wrapped the
+        // live locals would leak loader mutations into published state).
+        var artists = new List<BaseItem> { new MusicArtist { Name = "Koop", Id = Guid.NewGuid() } };
+        var service = CreateService(artists);
+        await service.StartAsync(CancellationToken.None);
+        Assert.Equal(1, service.Count);
+
+        artists.Add(new MusicArtist { Name = "Late Addition", Id = Guid.NewGuid() });
+
+        Assert.Equal(1, service.Count); // frozen copy, not a view of the loader's list
+        Assert.Single(service.GetArtists());
     }
 
     // --- JF-455: top-parent id space (walk stops at the AggregateFolder boundary) ---

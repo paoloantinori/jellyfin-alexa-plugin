@@ -233,6 +233,17 @@ internal static class ArtistSearch
         // JF-419.2 choke point: see IndexWarmingGate (layer 2 of the warming gate)
         IndexWarmingGate.EnsureReady(artistIndex);
 
+        // JF-448 (review F2): pin ONE snapshot for the WHOLE chain. Previously
+        // GetArtists captured internally while every phonetic-code lookup in the
+        // fuzzy tiers re-read the LIVE field: a publish landing in that 1-10ms gap
+        // served the artist list of snapshot A against the phonetic codes of
+        // snapshot B, nulling the code lookup, skipping the JF-381 phonetic floor,
+        // and playing the wrong artist for one request. The pinned view resolves
+        // BOTH from one publish; capture is idempotent, so a caller that already
+        // pinned (TryEntityFallbackAsync) adds no extra hop. Pin degrades to live
+        // reads (the pre-JF-448 behavior) when the implementation cannot pin.
+        IArtistIndex? pinned = artistIndex.Pin();
+
         var totalSw = Stopwatch.StartNew();
         var tierSw = Stopwatch.StartNew();
         int tierReached = 0;
@@ -245,10 +256,10 @@ internal static class ArtistSearch
         // re-resolves it (ResolveForUser is cached, but one call is still cheaper).
         Guid[]? topParentIds = LibraryFilter.ResolveForUser(user, libraryManager, logger);
 
-        if (artistIndex?.IsReady == true)
+        if (pinned?.IsReady == true)
         {
             searchSource = "InMemory";
-            var allArtists = artistIndex.GetArtists(topParentIds);
+            var allArtists = pinned.GetArtists(topParentIds);
 
             // Tier 1: name contains query, with the JF-381 coincidental-containment gate.
             // Without the gate a short query inside a long name wins tier 1 and stops the
@@ -276,7 +287,7 @@ internal static class ArtistSearch
                 var prefixCandidates = allArtists
                     .Where(a => a.Name.StartsWith(firstWord, StringComparison.OrdinalIgnoreCase))
                     .ToList();
-                BaseItem? fuzzy = FuzzyMatch(musician, prefixCandidates, user, artistIndex);
+                BaseItem? fuzzy = FuzzyMatch(musician, prefixCandidates, user, pinned);
                 tierSw.Stop();
                 tierReached = 2;
                 logger.LogInformation(
@@ -308,7 +319,7 @@ internal static class ArtistSearch
                 var prefixCandidates = allArtists
                     .Where(a => a.Name.StartsWith(musician, StringComparison.OrdinalIgnoreCase))
                     .ToList();
-                BaseItem? fuzzy = FuzzyMatch(musician, prefixCandidates, user, artistIndex);
+                BaseItem? fuzzy = FuzzyMatch(musician, prefixCandidates, user, pinned);
                 tierSw.Stop();
                 tierReached = 3;
                 logger.LogInformation(
@@ -341,7 +352,7 @@ internal static class ArtistSearch
                 // carries the deferred candidate at ContainmentScore at tier-4; the
                 // P!nk-floyd case is handled by the ALBUM path (PlayAlbumIntent +
                 // catalog-backed AlbumName entity resolution), not the artist path.
-                BaseItem? fuzzy = FuzzyMatch(musician, allArtists, user, artistIndex);
+                BaseItem? fuzzy = FuzzyMatch(musician, allArtists, user, pinned);
                 tierSw.Stop();
                 tierReached = 4;
                 logger.LogInformation(

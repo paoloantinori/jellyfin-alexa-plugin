@@ -611,6 +611,101 @@ public class ArtistSearchTests
         });
     }
 
+    /// <summary>
+    /// JF-448 (review F2) chain test vehicle: an index whose LIVE state is replaced the
+    /// moment the search chain reads the artist list through it, simulating a refresh
+    /// publish landing in the 1-10ms gap between GetArtists and the phonetic lookups.
+    /// A chain that pins one snapshot (CaptureSnapshot at entry) resolves the accent-drift
+    /// match below from the pre-publish state; a chain that re-reads the live index for
+    /// phonetic codes sees the post-publish (empty) map, loses the JF-381 phonetic floor,
+    /// and returns nothing.
+    /// </summary>
+    private sealed class MidSearchPublishingFakeIndex : IArtistIndex
+    {
+        private IReadOnlyList<BaseItem> _artists;
+        private Dictionary<Guid, (string Primary, string? Alternate)> _phoneticCodes;
+
+        public MidSearchPublishingFakeIndex(
+            IReadOnlyList<BaseItem> artists,
+            Dictionary<Guid, (string Primary, string? Alternate)> phoneticCodes)
+        {
+            _artists = artists;
+            _phoneticCodes = phoneticCodes;
+        }
+
+        public bool IsReady => true;
+        public bool IsDisabled => false;
+        public int Count => _artists.Count;
+
+        public IReadOnlyList<BaseItem> GetArtists(Guid[]? topParentIds = null)
+        {
+            // The "refresh": from this point every LIVE read sees the new publish.
+            var published = _artists;
+            _artists = Array.Empty<BaseItem>();
+            _phoneticCodes = new Dictionary<Guid, (string Primary, string? Alternate)>();
+            return published;
+        }
+
+        public bool TryGetPhoneticCode(Guid artistId, out (string Primary, string? Alternate) codes)
+            => _phoneticCodes.TryGetValue(artistId, out codes);
+
+        public IArtistIndex CaptureSnapshot() => new PinnedView(_artists, _phoneticCodes);
+
+        private sealed class PinnedView : IArtistIndex
+        {
+            private readonly IReadOnlyList<BaseItem> _artists;
+            private readonly Dictionary<Guid, (string Primary, string? Alternate)> _phoneticCodes;
+
+            internal PinnedView(
+                IReadOnlyList<BaseItem> artists,
+                Dictionary<Guid, (string Primary, string? Alternate)> phoneticCodes)
+            {
+                _artists = artists;
+                _phoneticCodes = phoneticCodes;
+            }
+
+            public bool IsReady => true;
+            public bool IsDisabled => false;
+            public int Count => _artists.Count;
+
+            public IReadOnlyList<BaseItem> GetArtists(Guid[]? topParentIds = null) => _artists;
+
+            public bool TryGetPhoneticCode(Guid artistId, out (string Primary, string? Alternate) codes)
+                => _phoneticCodes.TryGetValue(artistId, out codes);
+
+            public IArtistIndex CaptureSnapshot() => this;
+        }
+    }
+
+    [Fact]
+    public async Task SearchAsync_MidSearchPublish_StillResolvesPhoneticMatchFromCapturedSnapshot()
+    {
+        // The JF-381 live-incident shape: ASR hears "Koop" as "cup" (both Double
+        // Metaphone code KP), so only the phonetic floor (score 91) clears the default
+        // threshold. The fake swaps its live state when the artist list is read, so the
+        // phonetic lookup must come from the SAME (captured) publish, not the live field.
+        var koop = new MusicArtist { Name = "Koop", Id = Guid.NewGuid() };
+        var index = new MidSearchPublishingFakeIndex(
+            new[] { koop },
+            new Dictionary<Guid, (string Primary, string? Alternate)>
+            {
+                [koop.Id] = DoubleMetaphone.Encode("Koop")
+            });
+
+        var result = await ArtistSearch.SearchAsync(
+            "cup",
+            user: null,
+            libraryManager: Mock.Of<ILibraryManager>(),
+            artistIndex: index,
+            logger: Logger,
+            dbQuery: NotCalled,
+            locale: "en-US",
+            cancellationToken: CancellationToken.None);
+
+        var match = Assert.Single(result);
+        Assert.Equal("Koop", match.Name);
+    }
+
     private static Task<IReadOnlyList<BaseItem>> NotCalled(
         InternalItemsQuery q, CancellationToken t) =>
         throw new InvalidOperationException("In-memory path must not hit the database");

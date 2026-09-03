@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
@@ -444,18 +443,10 @@ public class SongNgramIndexServiceTests : PluginTestBase
         // assignments but not the group, so sequential publishing let a reader observe
         // a torn mix mid-refresh (old bigram candidate IDs against the new entries list,
         // which returned empty results for an existing song). Asserting the shape
-        // mechanically guards against a regression to per-member fields.
-        var derivedFields = typeof(SongNgramIndexService)
-            .GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
-            .Where(f => f.DeclaringType == typeof(SongNgramIndexService))
-            .ToList();
-
-        // A future non-state instance field on the service is fine ONLY if this
-        // assertion is updated alongside it: the snapshot must stay the single
-        // published-state field.
-        Assert.True(
-            derivedFields.Count == 1 && derivedFields[0].FieldType == typeof(SongNgramIndexSnapshot),
-            $"SongNgramIndexService must declare exactly one published-state field of type SongNgramIndexSnapshot, found: {string.Join(", ", derivedFields.Select(f => $"{f.FieldType.Name} {f.Name}"))}");
+        // mechanically guards against a regression to per-member fields. Shared helper
+        // since JF-448 (review F7): the field now lives on the generic snapshot base
+        // and the walk covers the whole ownership chain.
+        IndexSnapshotAssertions.AssertSingleSnapshotField<SongNgramIndexService, SongNgramIndexSnapshot>();
     }
 
     [Fact]

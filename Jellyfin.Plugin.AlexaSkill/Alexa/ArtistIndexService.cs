@@ -17,19 +17,15 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa;
 /// Background service that maintains an in-memory index of all MusicArtist items.
 /// Loads at startup and refreshes when artists are added/removed from the library.
 /// Lifecycle (debounce, failed-load retry, readiness, dispose ordering) lives in
-/// <see cref="DebouncedLibraryIndexService"/> (JF-419.3 extraction). The loaded state is
+/// <see cref="DebouncedLibraryIndexService"/> (JF-419.3 extraction); the published-state
+/// slot lives in its generic companion (JF-448, review F4). The loaded state is
 /// published as one immutable <see cref="ArtistIndexSnapshot"/> reference so a reader can
 /// never observe a torn mix of two loads (JF-432).
 /// </summary>
-public class ArtistIndexService : DebouncedLibraryIndexService, IArtistIndex
+public class ArtistIndexService : DebouncedLibraryIndexService<ArtistIndexSnapshot>, IArtistIndex
 {
-    private volatile ArtistIndexSnapshot _snapshot = ArtistIndexSnapshot.Empty;
-
-    /// <summary>The currently published snapshot (internal test accessor, JF-432).</summary>
-    internal ArtistIndexSnapshot CurrentSnapshot => _snapshot;
-
     /// <inheritdoc />
-    public int Count => _snapshot.Artists.Count;
+    public int Count => CurrentSnapshot.Artists.Count;
 
     /// <inheritdoc />
     protected override string IndexName => "artist";
@@ -47,23 +43,39 @@ public class ArtistIndexService : DebouncedLibraryIndexService, IArtistIndex
     /// <param name="libraryManager">Library manager for the load query and change events.</param>
     /// <param name="logger">Logger instance.</param>
     public ArtistIndexService(ILibraryManager libraryManager, ILogger<ArtistIndexService> logger)
-        : base(libraryManager, logger)
+        : base(ArtistIndexSnapshot.Empty, libraryManager, logger)
     {
     }
 
     /// <inheritdoc />
     public bool TryGetPhoneticCode(Guid artistId, out (string Primary, string? Alternate) codes)
     {
-        return _snapshot.PhoneticCodes.TryGetValue(artistId, out codes);
+        return ReadPhoneticCode(CurrentSnapshot, artistId, out codes);
     }
 
     /// <inheritdoc />
     public IReadOnlyList<BaseItem> GetArtists(Guid[]? topParentIds = null)
     {
         // Capture once: the artist list and the parent map must come from the same publish
-        var snapshot = _snapshot;
-        return FilterByLibraryScope(snapshot.Artists, a => a.Id, snapshot.TopParentMap, topParentIds);
+        return ReadArtists(CurrentSnapshot, topParentIds);
     }
+
+    /// <inheritdoc />
+    public IArtistIndex CaptureSnapshot() => new SnapshotView(CurrentSnapshot, IsReady, IsDisabled);
+
+    /// <summary>
+    /// The ONE artist-list read over a snapshot (shared by the live service surface and
+    /// the pinned view, so both filter identically).
+    /// </summary>
+    private static IReadOnlyList<BaseItem> ReadArtists(ArtistIndexSnapshot snapshot, Guid[]? topParentIds)
+        => FilterByLibraryScope(snapshot.Artists, a => a.Id, snapshot.TopParentMap, topParentIds);
+
+    /// <summary>
+    /// The ONE phonetic-code read over a snapshot (shared by the live service surface
+    /// and the pinned view).
+    /// </summary>
+    private static bool ReadPhoneticCode(ArtistIndexSnapshot snapshot, Guid artistId, out (string Primary, string? Alternate) codes)
+        => snapshot.PhoneticCodes.TryGetValue(artistId, out codes);
 
     /// <inheritdoc />
     protected override async Task LoadAsync(CancellationToken cancellationToken)
@@ -104,8 +116,9 @@ public class ArtistIndexService : DebouncedLibraryIndexService, IArtistIndex
             }
         }
 
-        // One publish: all read paths see the new maps and the new list together (JF-432)
-        _snapshot = new ArtistIndexSnapshot(new List<BaseItem>(artists), topParentMap, phoneticCodes);
+        // One publish: all read paths see the new maps and the new list together (JF-432);
+        // the snapshot constructor freezes (copies) the loader's locals (JF-448, review F5)
+        Publish(new ArtistIndexSnapshot(artists, topParentMap, phoneticCodes));
 
         Logger.LogInformation("Artist index {Action}: {Count} artists, {PhoneticCount} with phonetic codes, {AlbumScopedCount} album-scoped",
             artists.Count > 0 ? "loaded" : "initialized (empty library)",
@@ -229,5 +242,47 @@ public class ArtistIndexService : DebouncedLibraryIndexService, IArtistIndex
         }
 
         return scoped;
+    }
+
+    /// <summary>
+    /// JF-448 (review F2): a read view pinned to ONE published snapshot. A search chain
+    /// that resolves its artist list AND its phonetic codes through this view cannot be
+    /// split across two publishes by a refresh landing mid-search (the 1-10ms window that
+    /// previously nulled the phonetic code of a snapshot-A artist against snapshot B's
+    /// map, skipping the JF-381 floor and playing the wrong artist for one request).
+    /// Readiness is captured with the snapshot so a warming-gate check on the view keeps
+    /// its live meaning. CaptureSnapshot on the view returns the view itself (pinned
+    /// twice is still pinned once).
+    /// </summary>
+    private sealed class SnapshotView : IArtistIndex
+    {
+        private readonly ArtistIndexSnapshot _snapshot;
+
+        internal SnapshotView(ArtistIndexSnapshot snapshot, bool isReady, bool isDisabled)
+        {
+            _snapshot = snapshot;
+            IsReady = isReady;
+            IsDisabled = isDisabled;
+        }
+
+        /// <inheritdoc />
+        public bool IsReady { get; }
+
+        /// <inheritdoc />
+        public bool IsDisabled { get; }
+
+        /// <inheritdoc />
+        public int Count => _snapshot.Artists.Count;
+
+        /// <inheritdoc />
+        public IReadOnlyList<BaseItem> GetArtists(Guid[]? topParentIds = null)
+            => ReadArtists(_snapshot, topParentIds);
+
+        /// <inheritdoc />
+        public bool TryGetPhoneticCode(Guid artistId, out (string Primary, string? Alternate) codes)
+            => ReadPhoneticCode(_snapshot, artistId, out codes);
+
+        /// <inheritdoc />
+        public IArtistIndex CaptureSnapshot() => this;
     }
 }

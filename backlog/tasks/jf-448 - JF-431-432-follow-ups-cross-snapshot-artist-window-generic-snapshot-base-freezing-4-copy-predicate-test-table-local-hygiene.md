@@ -3,9 +3,10 @@ id: JF-448
 title: >-
   JF-431/432 follow-ups: cross-snapshot artist window, generic snapshot base,
   freezing, 4-copy predicate, test/table/local hygiene
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-02 01:46'
+updated_date: '2026-09-03 01:53'
 labels:
   - code-review
   - follow-up-family

@@ -273,4 +273,8 @@ internal sealed class FakeArtistIndex : IArtistIndex
         codes = default;
         return _phoneticCodes.TryGetValue(artistId, out codes);
     }
+
+    // The fake's state is fixed per instance, so it is already pinned: capture is the
+    // identity (the same contract ArtistIndexService.SnapshotView honors).
+    public IArtistIndex CaptureSnapshot() => this;
 }
