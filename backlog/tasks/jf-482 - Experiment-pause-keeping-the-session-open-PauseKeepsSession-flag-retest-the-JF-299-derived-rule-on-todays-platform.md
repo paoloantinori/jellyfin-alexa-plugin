@@ -6,7 +6,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-09-04 11:38'
-updated_date: '2026-09-04 18:46'
+updated_date: '2026-09-04 18:48'
 labels: []
 dependencies: []
 references:
@@ -57,6 +57,8 @@ REVIEW ADDITION (JF-474 review P3-3@81): the hardware pause button (PlaybackCont
 DEVICE MATRIX INTERIM RESULTS (2026-09-04, flag ON live, log corrs 25e78f85/825aa129/7226fb49): TEST 1 PASSED (pause answered shouldEndSession=false; the bare 'suona jazz' 5s later ARRIVED AT OUR SKILL, corr=825aa129: the elicit fired and the chain completed with genre radio playing). TEST 2 PASSED (the second pause, corr=7226fb49, still routed as PauseIntent with the session kept open: no JF-299 regression). TEST 3 observation is PLATFORM behavior, not a flag failure: after the elicit asks, Alexa closes the session at the input timeout (~8s + reprompt); no Alexa session survives 60s of silence awaiting input, so the 60s-silence expectation was mal-formed. The flag's real use case (immediate follow-up after pause) is exactly test 1 and works. Tests 4, 5, 6 remain.
 
 DEVICE MATRIX COMPLETE RESULTS (2026-09-04, all corrs in the logs): test (a) PASSED (pause during active play routes as PauseIntent). test (b) PLATFORM FINDING: the re-launch after pause WORKED (the resume offer fired), but ~6s BEFORE the launch the platform closed the flag's open session with reason EXCEEDED_MAX_REPROMPTS accompanied by an audible error beep. ROOT CAUSE: the pause response with PauseKeepsSession=true is SILENT and carries NO reprompt; an open session with no pending question violates the platform's implicit contract (open session = something was asked), so Alexa times it out at the reprompt window (~8s) with the error tone. The immediate-follow-up scenario (test 1 in the earlier matrix) passed because the follow-up arrived BEFORE the timeout. FIX REQUIRED before the default can flip: the pause response when the flag is on must also carry a reprompt (a soft 'dimmi quando vuoi riprendere' style) so the open session has something to wait for; without it the flag trades the dead-conversation papercut for a timeout beep. Test (c) hardware button: not yet tested (Paolo reported only a and b). DECISION: the default stays OFF until the reprompt lands and the matrix re-runs clean.
+
+CORRECTION (2026-09-04, Paolo): the reprompt hypothesis is UNVERIFIED. What was observed: the SessionEndedRequest with EXCEEDED_MAX_REPROMPTS at 20:44:01, temporally consistent with the beep Paolo heard, and the pause response was silent with no reprompt. What was INFERRED but NOT tested: (1) that the no-reprompt shape CAUSED the timeout (the platform may time out any silent session-open response regardless of reprompt presence); (2) that adding a reprompt would prevent the beep (no experiment run); (3) that the beep is specifically the EXCEEDED_MAX_REPROMPTS tone rather than some other platform indication. The proposed fix (add a reprompt) is a reasonable FIRST EXPERIMENT, not a verified root-cause remedy. Verification path: add the reprompt behind the same flag, re-enable the flag, re-run the pause-then-wait scenario, and observe whether the timeout and the beep both disappear; if they do not, investigate the alternative hypotheses (silent-response handling, the AudioPlayer.Stop directive's interaction with session state, the PlaybackStopped event's session cleanup).
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
