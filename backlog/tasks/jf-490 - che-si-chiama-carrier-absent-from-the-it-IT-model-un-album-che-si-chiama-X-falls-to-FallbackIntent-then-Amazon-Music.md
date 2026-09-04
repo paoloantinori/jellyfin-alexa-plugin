@@ -3,9 +3,10 @@ id: JF-490
 title: >-
   'che si chiama' carrier absent from the it-IT model: 'un album che si chiama
   X' falls to FallbackIntent then Amazon Music
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-04 19:07'
+updated_date: '2026-09-04 19:08'
 labels: []
 dependencies: []
 references:

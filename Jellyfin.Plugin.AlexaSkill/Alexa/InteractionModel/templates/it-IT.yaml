@@ -889,6 +889,21 @@ templates:
       # same boundary the c'e pair already has.
       - "un album chiamato {album}"
       - "un disco chiamato {album}"
+      # JF-490: 'che si chiama' carrier, device-evidenced (corr=7446fba8,
+      # 2026-09-04: "un album che si chiama surfer rosa" matched NO intent,
+      # FallbackIntent on-device, and the bare retry went to Amazon Music).
+      # Same anchor rationale as the JF-441 chiamato pair: without a sample
+      # every considered fill bleeds into musician.
+      - "un album che si chiama {album}"
+      - "un disco che si chiama {album}"
+      # JF-490: cerca+chiamato as a PLAY shape. JF-469 excluded cerca from the
+      # play intent on purity grounds; overturned by device evidence
+      # (corr=f919db65, 2026-09-04: "cerca un album chiamato surfer rosa" is
+      # a play request; the statistical router already selects PlayAlbumIntent
+      # but the fill drifts into musician). The sample anchors the fill
+      # boundary, it does not move any utterance class between intents.
+      - "cerca un album chiamato {album}"
+      - "cerca un disco chiamato {album}"
       - "Fai suonare l'album {album}"
       - "Fai suonare il disco {album}"
     slots:

@@ -862,6 +862,26 @@ tests:
     expected_intent: PlayAlbumIntent
     expected_slots: {}
 
+  # JF-490: the 'che si chiama' carrier, device-evidenced (corr=7446fba8,
+  # 2026-09-04: matched NO intent on-device, FallbackIntent, and the bare
+  # retry was captured by Amazon Music). The template now carries
+  # "un album che si chiama {album}" / "un disco che si chiama {album}".
+  # Intent-level only: the fill is Amazon-statistical and drifts across
+  # rebuilds (on 2026-09-04 even the JF-441 shape "un album chiamato surfer
+  # rosa" flipped to musician="chiamato surfer rosa", deterministic 2/2);
+  # the handler-side calling-word strips are the fill coverage.
+  - utterance: "un album che si chiama surfer rosa"
+    expected_intent: PlayAlbumIntent
+    expected_slots: {}
+
+  # JF-490: the cerca+chiamato PLAY shape, device-evidenced (corr=f919db65,
+  # 2026-09-04: a play request the statistical router already sends to
+  # PlayAlbumIntent with the span stolen by musician). The new sample anchors
+  # the fill; the musician-theft recovery is JF-489's handler fix.
+  - utterance: "cerca un album chiamato surfer rosa"
+    expected_intent: PlayAlbumIntent
+    expected_slots: {}
+
   # "c'e un film che si chiama matrix" hits FallbackIntent — the NLU can't match
   # it to any intent reliably. SearchMediaIntent's "c'è {query}" pattern isn't
   # strong enough. Accept FallbackIntent; users should use "Cerca matrix" instead.
