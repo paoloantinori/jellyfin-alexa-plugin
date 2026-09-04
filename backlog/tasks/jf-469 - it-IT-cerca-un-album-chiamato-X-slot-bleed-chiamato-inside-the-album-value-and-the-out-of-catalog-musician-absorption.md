@@ -3,10 +3,10 @@ id: JF-469
 title: >-
   it-IT 'cerca un album chiamato X' slot bleed ('chiamato' inside the album
   value) and the out-of-catalog musician absorption
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-03 13:49'
-updated_date: '2026-09-04 14:54'
+updated_date: '2026-09-04 14:56'
 labels: []
 dependencies: []
 references:
@@ -54,3 +54,15 @@ POST-DEPLOY EVIDENCE (JF-441 closure, 2026-09-03 16:01 model): the JF-441 second
 
 REVIEW NOTE (2026-09-04, /simplify + code-review pass on the working-tree diff): no findings at or above the reporting bar. One below-threshold observation filed here per the same-turn landing rule: the JF-469 unit pins cover raw-hit-no-retry, stripped-retry order, not-found-names-raw, literally-titled album, and the strip predicate edge cases, but there is NO pin asserting that a STRIPPED-retry hit carries no FoundAlbumInstead announcement (the angle-1 'a stripped hit must not announce' contract holds only by construction today: fuzzyAlbumAnnouncement stays null because the retry assigns `albums` directly; a future edit routing the retry through the fuzzy branch would silently announce on a clean play). Suggested pin: assert the stripped-hit response speech does not contain the FoundAlbumInstead string (or that OutputSpeech is the plain now-playing/silent shape).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented, deployed, and live-verified (commit 0d4959ac).
+
+Probe matrix (deterministic): the bleed persists on cerca/c'e/che-si-chiama carriers; 'un album chiamato X' now fills clean on the rebuilt model (JF-441 obligation discharged); the model layer is evidenced insufficient, so the fix is handler-side. Design: TryStripLeadingAlbumCallingWord with a locale-keyed it-IT prefix map (chiamato/chiamata/che si chiama/di nome, space-suffixed so fragments and bare words never strip), raw-first bounded: the raw query runs, and only on a raw miss AND a calling-word prefix does exactly one extra indexed retry run with the stripped title (the JF-383 pattern). Raw hit never retries (pinned: exactly one query); stripped hit plays without announcement; not-found names the raw value; an album literally titled with a leading calling word stays findable (pinned). Other locales never strip (survey + pin): no calling-word PlayAlbum samples exist outside it-IT. The cascade (TryAlbumFallbackAsync) deliberately not wired: its input is PlaySong's song slot whose evidenced bleeds carry the carrier itself, so the predicate would never fire (documented for future wiring on new probe evidence).
+
+Live smoke post-deploy: simulator album='chiamato surfer rosa' (raw misses, prefix present) PLAYS via the stripped retry (Audio directive, the JF-469 log line firing exactly once). The other-locales calling-word survey recorded in the task notes: song-path samples exist in en/es/pt/fr but no album-path bleed shapes.
+
+19 tests + one e2e routing entry ('un album chiamato surfer rosa'); worker mutation kills 7/19 with both raw-first pins green; suite 3169/3169; Release 0 warnings; validators baseline; NLU dry-run unchanged. Review: zero findings >= 80; the below-threshold gap (no pin asserting the stripped hit carries no announcement; holds by construction) recorded in the notes. Device tests for Paolo: cerca un album chiamato surfer rosa plays; c'e un album chiamato thriller not-founds naming thriller; che si chiama shape plays; a literally-titled 'Chiamato X' album still plays raw.
+<!-- SECTION:FINAL_SUMMARY:END -->
