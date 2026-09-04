@@ -3,10 +3,10 @@ id: JF-468
 title: >-
   BrowseCategory id consistency: it-IT localized-id divergence decision + CI
   id-parity warning
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-03 09:30'
-updated_date: '2026-09-04 17:50'
+updated_date: '2026-09-04 18:14'
 labels: []
 dependencies: []
 references:
@@ -47,3 +47,15 @@ Acceptance criteria:
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed complete: implemented, deployed, live-verified (commit 6bc03c53).
+
+The maintainer decision landed as the UNIFY direction: it-IT's shared-concept BrowseCategory values carry the English canonical ids (artisti->artists, brani->songs; brani chosen because the template's song_noun opens with 'il brano'; albums was already canonical). The 11 it-IT-only concepts keep their localized ids: the unified key space covers only the three shared across the family. No VALUE changed (the regen diff is exactly 2 id lines), so entity resolution and the handler path are untouched (the server reads canonical NAME only). The mapping documented in the YAML template comment block.
+
+The CI guard: a warning-level BrowseCategory id lint (JF-460 precedent). Every locale must carry the shared three; the 16 hand-maintained locales must carry nothing beyond; it-IT's extras deliberately not enumerated. Silent on the current tree (the exact 90-warning baseline holds); the reviewer verified the missing/extra/wrong-id shapes empirically on mutated copies, and confirmed the id mapping by a direct dump of all 17 models (all 16 hand-maintained locales carry exactly artists/albums/songs). Known blind spot documented (a crossed id swap passes; presence checked, not attachment; ~35).
+
+Deploy: DLL swapped, config and the PauseKeepsSession flag survived, the it-IT model rebuilt via the locale-scoped endpoint, and the SAVED Amazon-side model verified carrying the unified ids (shared-three present, 14 total ids: 3 canonical + 11 localized extras). The cross-type namespace note (LibraryQueryType 'tracks' vs BrowseCategory 'songs') remains documented in the task as a no-action-until-load-bearing caution.
+<!-- SECTION:FINAL_SUMMARY:END -->
