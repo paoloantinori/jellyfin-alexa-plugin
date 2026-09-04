@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
+using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using Microsoft.Extensions.Logging;
 using Xunit;
 
@@ -374,10 +375,12 @@ public class DeviceQueueManagerTests : IDisposable
 
         // Arm-after-dispose race (JF-429): a queue write arriving after
         // Dispose must not arm the debounce timer and persist after cleanup.
-        // Debounce is 2s, so 3s proves no timer ever fires.
+        // Deterministic proof without wall-clock sleeps (JF-449 test-speed
+        // note): fire the maximally late straggler manually; a rejected arm
+        // leaves the gate nothing to run.
         _manager.SetQueue("device-1", new List<string> { "item1" }, 0);
+        _manager.FirePersistForTest("device-1");
         string file = Path.Combine(_tempDir, "queue_device-1.json");
-        Thread.Sleep(TimeSpan.FromSeconds(3));
 
         Assert.False(File.Exists(file));
     }
@@ -393,6 +396,88 @@ public class DeviceQueueManagerTests : IDisposable
 
         _manager.Clear("device-1");
         Assert.False(File.Exists(file));
+    }
+
+    [Fact]
+    public async Task Clear_WithInFlightPersistCallback_LeavesNoQueueFile()
+    {
+        // JF-449 interleaving (a), AC #1: the debounce persist callback has
+        // ALREADY STARTED when Clear runs; its write must not resurrect the
+        // deleted queue file. Forced deterministically: BeforeCallbackGate
+        // parks a fired payload inside the debounce gate (started, holding the
+        // gate), then Clear runs on another thread and must barrier on it.
+        _manager.TestDebounce.Interval = TimeSpan.FromSeconds(30); // no natural fire
+        _manager.SetQueue("device-1", new List<string> { "item1", "item2" }, 0);
+        string file = Path.Combine(_tempDir, "queue_device-1.json");
+
+        var started = new ManualResetEventSlim(false);
+        var release = new ManualResetEventSlim(false);
+        _manager.TestDebounce.BeforeCallbackGate = () => { started.Set(); release.Wait(TimeSpan.FromSeconds(5)); };
+
+        Task callback = Task.Run(() => _manager.FirePersistForTest("device-1"));
+        Assert.True(started.Wait(TimeSpan.FromSeconds(2))); // callback in flight, parked before its write
+
+        Task clear = Task.Run(() => _manager.Clear("device-1"));
+        Assert.False(await TestHelpers.CompletedWithinAsync(clear, TimeSpan.FromMilliseconds(100)), "Clear completed while the persist callback was still in flight");
+        Assert.False(File.Exists(file), "the parked callback cannot have written yet");
+
+        release.Set(); // the callback completes its write now; Clear's barrier then deletes it
+        await clear.WaitAsync(TimeSpan.FromSeconds(2));
+        await callback.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Null(_manager.GetQueue("device-1"));
+        Assert.False(File.Exists(file)); // no resurrect
+    }
+
+    [Fact]
+    public void Clear_ThenLateStragglerPersistCallback_DoesNotResurrectFile()
+    {
+        // JF-449 interleaving (a), straggler arm: the debounce fires after the
+        // Clear already returned (Timer.Dispose does not recall a queued
+        // callback). Entry removal in Clear's Disarm is what invalidates the
+        // stale pre-Clear payload.
+        _manager.TestDebounce.Interval = TimeSpan.FromMilliseconds(25);
+        _manager.SetQueue("device-1", new List<string> { "item1" }, 0);
+        string file = Path.Combine(_tempDir, "queue_device-1.json");
+        _manager.PersistAll();
+        Assert.True(File.Exists(file));
+
+        _manager.Clear("device-1"); // disarms well inside the 25ms delay
+        Thread.Sleep(150); // the natural fire window passes: nothing may run
+        _manager.FirePersistForTest("device-1"); // and the maximally late straggler is a no-op
+
+        Assert.False(File.Exists(file));
+    }
+
+    [Fact]
+    public async Task Dispose_TearsDownDebounce_BeforeFinalFlush()
+    {
+        // JF-449 interleaving (c) order pin: DQM.Dispose must tear the debounce
+        // down BEFORE the final flush (the unified order, previously the DQM
+        // ran PersistAll first). Witness: with a persist callback parked
+        // mid-flight (holding the debounce gate), the flush is ordered after
+        // the teardown that is blocked on that gate, so no queue file can
+        // exist until the callback is released.
+        _manager.TestDebounce.Interval = TimeSpan.FromSeconds(30); // no natural fire
+        _manager.SetQueue("device-1", new List<string> { "item1" }, 0);
+        string file1 = Path.Combine(_tempDir, "queue_device-1.json");
+
+        var started = new ManualResetEventSlim(false);
+        var release = new ManualResetEventSlim(false);
+        _manager.TestDebounce.BeforeCallbackGate = () => { started.Set(); release.Wait(TimeSpan.FromSeconds(5)); };
+
+        Task callback = Task.Run(() => _manager.FirePersistForTest("device-1"));
+        Assert.True(started.Wait(TimeSpan.FromSeconds(2)));
+
+        Task dispose = Task.Run(() => _manager.Dispose());
+        Assert.False(await TestHelpers.CompletedWithinAsync(dispose, TimeSpan.FromMilliseconds(150)), "Dispose completed while a persist callback was still in flight");
+        Assert.False(File.Exists(file1), "final flush ran before the debounce teardown (old Dispose order)");
+
+        release.Set(); // teardown drains the callback, then the final flush runs
+        await dispose.WaitAsync(TimeSpan.FromSeconds(2));
+        await callback.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.True(File.Exists(file1)); // the final flush wrote it after teardown
     }
 
     [Fact]

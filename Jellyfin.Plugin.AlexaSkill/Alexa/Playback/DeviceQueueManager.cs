@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using System.Threading;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
@@ -26,10 +26,9 @@ public sealed class DeviceQueueManager : IDisposable
     private static readonly TimeSpan DebounceInterval = TimeSpan.FromSeconds(2);
 
     private readonly ConcurrentDictionary<string, DeviceQueue> _queues = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, Timer> _debounceTimers = new(StringComparer.Ordinal);
+    private readonly KeyedOneShotDebounce _debounce = new(DebounceInterval);
     private readonly string _dataDirectory;
     private readonly ILogger<DeviceQueueManager> _logger;
-    private readonly object _timerLock = new();
     private volatile bool _disposed;
 
     /// <summary>
@@ -404,6 +403,14 @@ public sealed class DeviceQueueManager : IDisposable
     {
         _queues.TryRemove(deviceId, out _);
 
+        // Disarm BEFORE the file delete (JF-449): Disarm is a barrier, so a
+        // persist callback that already started finishes its write here, and
+        // the delete below removes what it wrote; a queued straggler finds the
+        // entry gone and no-ops. Timer.Dispose alone does not wait for an
+        // already-started callback, which is how Clear could previously
+        // resurrect the deleted queue file.
+        _debounce.Disarm(deviceId);
+
         // Delete persisted file
         string filePath = GetQueueFilePath(deviceId);
         try
@@ -416,16 +423,6 @@ public sealed class DeviceQueueManager : IDisposable
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to delete queue file for device {DeviceId}", deviceId);
-        }
-
-        // Dispose and remove the debounce timer under the arm lock so a
-        // concurrent SchedulePersistInternal cannot Change a timer being disposed here
-        lock (_timerLock)
-        {
-            if (_debounceTimers.TryRemove(deviceId, out Timer? timer))
-            {
-                timer.Dispose();
-            }
         }
 
         _logger.LogDebug("Queue cleared for device {DeviceId}", deviceId);
@@ -486,39 +483,19 @@ public sealed class DeviceQueueManager : IDisposable
 
     private void SchedulePersistInternal(string deviceId)
     {
-        if (_disposed)
+        // Payload is captured at ARM time, not looked up at fire time (JF-449):
+        // every mutation path re-arms, so the armed payload is always the latest
+        // state, while a straggler callback can no longer depend on live
+        // dictionary state that a Clear may already have removed. The entry
+        // check in the debounce gate is what stops such a stale payload.
+        if (!_queues.TryGetValue(deviceId, out DeviceQueue? queue))
         {
             return;
         }
 
-        lock (_timerLock)
-        {
-            // In-lock re-check: a queue write that passed the outer check
-            // before Dispose must not arm a timer after cleanup (same shape
-            // as DebouncedLibraryIndexService.ArmOneShot). Clear is covered by
-            // this same lock, which serializes it against timer arm and dispose.
-            if (_disposed)
-            {
-                return;
-            }
-
-            _debounceTimers.AddOrUpdate(
-                deviceId,
-                _ => new Timer(_ => PersistDevice(deviceId), null, DebounceInterval, Timeout.InfiniteTimeSpan),
-                (_, existingTimer) =>
-                {
-                    existingTimer.Change(DebounceInterval, Timeout.InfiniteTimeSpan);
-                    return existingTimer;
-                });
-        }
-    }
-
-    private void PersistDevice(string deviceId)
-    {
-        if (_queues.TryGetValue(deviceId, out DeviceQueue? queue))
-        {
-            PersistToDisk(deviceId, queue);
-        }
+        // Arm owns the disposed guard (volatile flag plus in-lock re-check, the
+        // JF-429 idiom moved into the shared helper).
+        _debounce.Arm(deviceId, () => PersistToDisk(deviceId, queue));
     }
 
     private void PersistToDisk(string deviceId, DeviceQueue queue)
@@ -590,7 +567,10 @@ public sealed class DeviceQueueManager : IDisposable
     }
 
     /// <summary>
-    /// Dispose debounce timers and persist all queues.
+    /// Dispose debounce timers and persist all queues. Unified teardown order
+    /// (JF-449): flag, then timer teardown, then the final flush. The teardown
+    /// is a barrier for in-flight persist callbacks, so no debounce write can
+    /// run concurrently with (or after) the final flush.
     /// </summary>
     public void Dispose()
     {
@@ -599,20 +579,24 @@ public sealed class DeviceQueueManager : IDisposable
             return;
         }
 
-        // Set before taking the lock so a concurrent queue write that passed
-        // the outer check cannot arm a timer after cleanup
         _disposed = true;
 
+        _debounce.Dispose();
+
         PersistAll();
-
-        lock (_timerLock)
-        {
-            foreach (var kvp in _debounceTimers)
-            {
-                kvp.Value.Dispose();
-            }
-
-            _debounceTimers.Clear();
-        }
     }
+
+    /// <summary>
+    /// The shared debounce map. Internal test seam: race tests use it to
+    /// shrink the interval and to park a callback mid-flight
+    /// (<see cref="KeyedOneShotDebounce.BeforeCallbackGate"/>).
+    /// </summary>
+    internal KeyedOneShotDebounce TestDebounce => _debounce;
+
+    /// <summary>
+    /// Fire the device's pending debounce payload synchronously (test seam for
+    /// the JF-449 interleavings; no-op when disarmed or disposed).
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    internal void FirePersistForTest(string deviceId) => _debounce.FireNow(deviceId);
 }

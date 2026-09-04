@@ -2,7 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Text.Json;
-using System.Threading;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
@@ -29,12 +29,14 @@ public sealed class AudiobookPositionTracker : IDisposable
 
     private static readonly TimeSpan PersistDebounce = TimeSpan.FromSeconds(3);
 
+    /// <summary>The single debounce key (one shared persist file, one timer).</summary>
+    internal const string PersistDebounceKey = "persist";
+
     // bookParentId (GUID "N"-format string) → highest segment number seen
     private readonly ConcurrentDictionary<string, int> _positions = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, Timer> _persistTimers = new(StringComparer.Ordinal);
+    private readonly KeyedOneShotDebounce _debounce = new(PersistDebounce);
     private readonly string _dataFilePath;
     private readonly ILogger<AudiobookPositionTracker> _logger;
-    private readonly object _persistLock = new();
     private volatile bool _disposed;
 
     /// <summary>
@@ -126,31 +128,9 @@ public sealed class AudiobookPositionTracker : IDisposable
 
     private void SchedulePersist()
     {
-        if (_disposed)
-        {
-            return;
-        }
-
-        lock (_persistLock)
-        {
-            // In-lock re-check: a segment request that passed the outer check
-            // before Dispose must not arm a timer after cleanup (same shape as
-            // DebouncedLibraryIndexService.ArmOneShot)
-            if (_disposed)
-            {
-                return;
-            }
-
-            // Debounce: reset a single shared timer on each write; persist once after 3s of quiet.
-            _persistTimers.AddOrUpdate(
-                "persist",
-                _ => new Timer(_ => PersistToDisk(), null, PersistDebounce, Timeout.InfiniteTimeSpan),
-                (_, existing) =>
-                {
-                    existing.Change(PersistDebounce, Timeout.InfiniteTimeSpan);
-                    return existing;
-                });
-        }
+        // Arm owns the disposed guard (volatile flag plus in-lock re-check, the
+        // JF-429 idiom moved into the shared KeyedOneShotDebounce helper).
+        _debounce.Arm(PersistDebounceKey, PersistToDisk);
     }
 
     private void PersistToDisk()
@@ -209,6 +189,11 @@ public sealed class AudiobookPositionTracker : IDisposable
     }
 
     /// <inheritdoc/>
+    /// <remarks>Unified teardown order (JF-449): flag, timer teardown, final
+    /// flush. The teardown is a barrier for an in-flight debounce callback, so
+    /// the final flush is the last writer of the shared .tmp path: no
+    /// concurrent write failure can be swallowed by PersistToDisk's catch,
+    /// leaving the previous on-disk content in place.</remarks>
     public void Dispose()
     {
         if (_disposed)
@@ -216,20 +201,23 @@ public sealed class AudiobookPositionTracker : IDisposable
             return;
         }
 
-        // Set before taking the lock so a concurrent RecordSegment/Clear that
-        // passed the outer check cannot arm a timer after cleanup
         _disposed = true;
 
-        lock (_persistLock)
-        {
-            foreach (var kvp in _persistTimers)
-            {
-                kvp.Value.Dispose();
-            }
-
-            _persistTimers.Clear();
-        }
+        _debounce.Dispose();
 
         PersistToDisk(); // final flush
     }
+
+    /// <summary>
+    /// The shared debounce map. Internal test seam: race tests use it to
+    /// shrink the interval and to park a callback mid-flight
+    /// (<see cref="KeyedOneShotDebounce.BeforeCallbackGate"/>).
+    /// </summary>
+    internal KeyedOneShotDebounce TestDebounce => _debounce;
+
+    /// <summary>
+    /// Fire the pending debounce payload synchronously (test seam for the
+    /// JF-449 interleavings; no-op when disarmed or disposed).
+    /// </summary>
+    internal void FirePersistForTest() => _debounce.FireNow(PersistDebounceKey);
 }

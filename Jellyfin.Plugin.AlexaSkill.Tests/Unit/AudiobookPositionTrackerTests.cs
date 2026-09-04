@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Microsoft.Extensions.Logging;
 using Xunit;
@@ -130,11 +131,57 @@ public class AudiobookPositionTrackerTests : IDisposable
 
         // Arm-after-dispose race (JF-429): a segment request arriving after
         // Dispose must not re-arm the persist timer and re-write the file
-        // after cleanup. Debounce is 3s, so 4s proves no timer ever fires.
+        // after cleanup. Deterministic proof without wall-clock sleeps
+        // (JF-449 test-speed note): fire the maximally late straggler
+        // manually; a rejected arm leaves the gate nothing to run.
         _tracker.RecordSegment("book2", 7);
-        Thread.Sleep(TimeSpan.FromSeconds(4));
+        _tracker.FirePersistForTest();
 
         Assert.False(File.Exists(dataFile));
+    }
+
+    [Fact]
+    public async Task Dispose_WithInFlightDebounceCallback_FinalFlushWins()
+    {
+        // JF-449 interleaving (b), AC #2: an in-flight debounce callback shares
+        // the .tmp path with the Dispose final flush; a collision's write
+        // failure used to be swallowed by the catch, silently persisting the
+        // previous on-disk content. Forced deterministically: park the persist
+        // payload inside the debounce gate (already started, holding the
+        // gate), then Dispose on another thread. The teardown barrier must
+        // drain the callback BEFORE the final flush, making the flush the last
+        // writer: no swallowed failure, and the flushed state is what persists.
+        _tracker.TestDebounce.Interval = TimeSpan.FromSeconds(30); // no natural fire
+        _tracker.RecordSegment("book1", 5);
+
+        var started = new ManualResetEventSlim(false);
+        var release = new ManualResetEventSlim(false);
+        _tracker.TestDebounce.BeforeCallbackGate = () => { started.Set(); release.Wait(TimeSpan.FromSeconds(5)); };
+
+        Task callback = Task.Run(() => _tracker.FirePersistForTest());
+        Assert.True(started.Wait(TimeSpan.FromSeconds(2))); // callback in flight
+
+        Task dispose = Task.Run(() => _tracker.Dispose());
+        Assert.False(await TestHelpers.CompletedWithinAsync(dispose, TimeSpan.FromMilliseconds(150)), "Dispose completed while the debounce callback was still in flight");
+
+        release.Set(); // the callback's write completes; teardown drains it; then the flush runs
+        await dispose.WaitAsync(TimeSpan.FromSeconds(2));
+        await callback.WaitAsync(TimeSpan.FromSeconds(2));
+
+        string dataFile = Path.Combine(_tempDir, "audiobook-positions.json");
+        Assert.True(File.Exists(dataFile));
+        Assert.False(File.Exists(dataFile + ".tmp"));
+
+        // Persisted content is the flushed state, not a stale pre-collision copy.
+        var reloaded = new AudiobookPositionTracker(_tempDir, LoggerFactory.Create(b => { }).CreateLogger<AudiobookPositionTracker>());
+        try
+        {
+            Assert.Equal(4 * TicksPerSegment, reloaded.GetPositionTicks("book1"));
+        }
+        finally
+        {
+            reloaded.Dispose();
+        }
     }
 
     [Fact]

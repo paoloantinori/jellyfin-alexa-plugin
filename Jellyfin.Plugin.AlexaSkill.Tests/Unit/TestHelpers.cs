@@ -61,6 +61,17 @@ internal static class TestHelpers
         return new SessionInfo(sessionManager, loggerFactory.CreateLogger<SessionInfo>());
     }
 
+    /// <summary>
+    /// Non-blocking form of <c>task.Wait(delay)</c>: true when the task
+    /// completed within the delay. Used by the concurrency tests for the
+    /// "cannot have completed yet" assertions (JF-449).
+    /// </summary>
+    /// <param name="task">The task to observe.</param>
+    /// <param name="delay">How long to observe it.</param>
+    /// <returns>True when the task completed within the delay.</returns>
+    internal static async Task<bool> CompletedWithinAsync(Task task, TimeSpan delay)
+        => await Task.WhenAny(task, Task.Delay(delay)).ConfigureAwait(false) == task;
+
     internal static Context CreateTestContext(string deviceId = "test-device")
     {
         return new Context
