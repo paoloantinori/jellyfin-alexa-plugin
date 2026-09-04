@@ -250,5 +250,7 @@
   "FindSongInvalidPick": "I didn't catch that. Please say the number or the title of the song.",
   "FindSongDisambigAbandoned": "No problem. Just ask me again whenever you want to find a song.",
   "FindSongCancelled": "Okay, I've stopped searching.",
-  "SkillWarmingUp": "I'm still getting ready. Please try again in a minute."
+  "SkillWarmingUp": "I'm still getting ready. Please try again in a minute.",
+  "PauseSessionSpeech": "Paused.",
+  "PauseSessionReprompt": "Tell me whenever you want to resume."
 }

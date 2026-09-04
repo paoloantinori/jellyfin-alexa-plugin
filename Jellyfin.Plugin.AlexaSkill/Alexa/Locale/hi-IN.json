@@ -250,5 +250,7 @@
   "FindSongInvalidPick": "I didn't catch that. Please say the number or the title of the song.",
   "FindSongDisambigAbandoned": "कोई बात नहीं। जब भी आप गाना खोजना चाहें, मुझे दोबारा पूछें।",
   "FindSongCancelled": "Okay, I've stopped searching.",
-  "SkillWarmingUp": "मैं अभी भी तैयार हो रहा हूँ। एक मिनट में फिर से कोशिश करें।"
+  "SkillWarmingUp": "मैं अभी भी तैयार हो रहा हूँ। एक मिनट में फिर से कोशिश करें।",
+  "PauseSessionSpeech": "रोक दिया गया।",
+  "PauseSessionReprompt": "जब आप फिर से सुनना चाहें, तब बताइए।"
 }

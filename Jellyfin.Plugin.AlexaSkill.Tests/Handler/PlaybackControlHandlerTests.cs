@@ -26,7 +26,10 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// - AudioPlayer.Stop directive must be present on ALL paths (stop, cancel, pause)
 /// - ShouldEndSession must be true on all paths EXCEPT pause with PauseKeepsSession on
 ///   (JF-482 experiment: audio still stops, only the session stays open)
-/// - No OutputSpeech on pause (causes device to ignore Stop directive)
+/// - No OutputSpeech on pause with the flag OFF (speech can make the device ignore
+///   the Stop directive); with the flag ON the response deliberately speaks a
+///   minimal pause word and carries a reprompt (JF-488: the silent open session
+///   was closed by the platform with EXCEEDED_MAX_REPROMPTS)
 /// - AudioPlayer.Play responses must use ShouldEndSession=true
 /// </summary>
 [Collection("Plugin")]
@@ -122,11 +125,12 @@ public class PlaybackControlHandlerTests : PluginTestBase
         Assert.Null(response.Response.Card);
     }
 
-    // === Regression: pause must never include OutputSpeech ===
+    // === Regression: pause must never include OutputSpeech when the flag is off ===
 
     [Fact]
-    public async Task PauseIntentHandler_Pause_NeverIncludesOutputSpeech()
+    public async Task PauseIntentHandler_Pause_FlagOff_NeverIncludesOutputSpeech()
     {
+        _config.PauseKeepsSession = false;
         _config.SeekEnabled = true;
         _config.PauseAnnouncePosition = true;
         TestHelpers.EnsurePluginInstance(
@@ -150,8 +154,9 @@ public class PlaybackControlHandlerTests : PluginTestBase
             TestHelpers.CreateTestUser(),
             session, CancellationToken.None);
 
-        // OutputSpeech must be null — speaking causes the Echo to ignore the Stop directive
+        // OutputSpeech must be null with the flag off; speaking causes the Echo to ignore the Stop directive
         Assert.Null(response.Response.OutputSpeech);
+        Assert.Null(response.Response.Reprompt);
         Assert.True(response.Response.ShouldEndSession);
         AssertHasAudioPlayerStopDirective(response);
     }
@@ -309,12 +314,16 @@ public class PlaybackControlHandlerTests : PluginTestBase
         AssertHasAudioPlayerStopDirective(response);
     }
 
-    // === JF-482: PauseKeepsSession experiment ===
+    // === JF-482/JF-488: PauseKeepsSession experiment ===
     // Default false keeps today's pause response byte-identical; flag on keeps the
     // session open BUT the AudioPlayer.Stop directive must still be sent (audio
-    // stops regardless of session handling). Stop/cancel are pinned to the
-    // session-ending behavior under BOTH flag values (JF-299 covers them; the
-    // JF-482 experiment does not retest them).
+    // stops regardless of session handling). With the flag on the response also
+    // speaks a minimal pause word and carries a reprompt (JF-488: the JF-482
+    // device matrix saw the platform close the silent open session with
+    // EXCEEDED_MAX_REPROMPTS ~8s after the response, with an error beep; whether
+    // the reprompt prevents that is the unverified hypothesis under device test).
+    // Stop/cancel are pinned to the session-ending behavior under BOTH flag values
+    // (JF-299 covers them; the JF-482 experiment does not retest them).
 
     [Fact]
     public async Task PauseIntentHandler_Pause_FlagOff_ResponseIdenticalToLegacyPauseResponse()
@@ -351,8 +360,51 @@ public class PlaybackControlHandlerTests : PluginTestBase
         Assert.False(response.Response.ShouldEndSession);
         // ...but audio must stop regardless: the Stop directive is the invariant.
         AssertHasAudioPlayerStopDirective(response);
-        // No speech either way (speech makes the Echo ignore the Stop directive).
-        Assert.Null(response.Response.OutputSpeech);
+    }
+
+    [Fact]
+    public async Task PauseIntentHandler_Pause_FlagOn_SpeaksMinimalPauseWithReprompt()
+    {
+        // JF-488: the open-session pause response must carry a reprompt and minimal
+        // speech. Literal values pin the strings: the speech must stay minimal (a
+        // chatty sentence risks masking the Stop directive) and the reprompt is the
+        // JF-488 hypothesis under device test.
+        _config.PauseKeepsSession = true;
+        var handler = new PauseIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "AMAZON.PauseIntent" } },
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            CreateSession(), CancellationToken.None);
+
+        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        Assert.Equal("Paused.", speech.Text);
+
+        Assert.NotNull(response.Response.Reprompt);
+        var repromptSpeech = Assert.IsType<PlainTextOutputSpeech>(response.Response.Reprompt.OutputSpeech);
+        Assert.Equal("Tell me whenever you want to resume.", repromptSpeech.Text);
+    }
+
+    [Fact]
+    public async Task PauseIntentHandler_Pause_FlagOn_LocalizesSpeechAndReprompt()
+    {
+        // The JF-488 speech/reprompt follow the request locale (it-IT is the locale
+        // of the JF-482/JF-488 device tests).
+        _config.PauseKeepsSession = true;
+        var handler = new PauseIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "AMAZON.PauseIntent" }, Locale = "it-IT" },
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            CreateSession(), CancellationToken.None);
+
+        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        Assert.Equal("Pausa.", speech.Text);
+
+        var repromptSpeech = Assert.IsType<PlainTextOutputSpeech>(response.Response.Reprompt.OutputSpeech);
+        Assert.Equal("Dimmi pure quando vuoi riprendere.", repromptSpeech.Text);
     }
 
     [Theory]

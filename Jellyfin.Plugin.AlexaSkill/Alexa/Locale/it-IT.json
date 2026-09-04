@@ -250,5 +250,7 @@
   "FindSongInvalidPick": "Non ho capito. Di' il numero o il titolo della canzone.",
   "FindSongDisambigAbandoned": "Nessun problema. Chiedimi di nuovo quando vuoi cercare una canzone.",
   "FindSongCancelled": "Ok, ho interrotto la ricerca.",
-  "SkillWarmingUp": "Mi sto ancora preparando. Riprova tra un minuto."
+  "SkillWarmingUp": "Mi sto ancora preparando. Riprova tra un minuto.",
+  "PauseSessionSpeech": "Pausa.",
+  "PauseSessionReprompt": "Dimmi pure quando vuoi riprendere."
 }

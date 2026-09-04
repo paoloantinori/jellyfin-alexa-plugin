@@ -250,5 +250,7 @@
   "FindSongInvalidPick": "I didn't catch that. Please say the number or the title of the song.",
   "FindSongDisambigAbandoned": "大丈夫です。曲を探したくなったら、いつでももう一度声をかけてください。",
   "FindSongCancelled": "Okay, I've stopped searching.",
-  "SkillWarmingUp": "準備中です。1分後にもう一度お試しください。"
+  "SkillWarmingUp": "準備中です。1分後にもう一度お試しください。",
+  "PauseSessionSpeech": "一時停止しました。",
+  "PauseSessionReprompt": "再開したいときは、声をかけてください。"
 }

@@ -3,9 +3,10 @@ id: JF-488
 title: >-
   Pause-with-session-open needs a reprompt to avoid the platform timeout beep
   (JF-482 follow-up; hypothesis unverified, device test required)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-04 18:51'
+updated_date: '2026-09-04 19:08'
 labels: []
 dependencies: []
 references:

@@ -17,7 +17,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// the hardware pause button (PlaybackControllerRequestType.Pause).
 /// All paths send AudioPlayer.Stop. Stop/cancel end the session; pause ends it
 /// unless PauseKeepsSession is on (JF-482 experiment: audio still stops, but the
-/// session stays open so bare follow-up commands stay in-skill). Alexa routes
+/// session stays open so bare follow-up commands stay in-skill, and the response
+/// speaks a minimal pause word plus a reprompt, JF-488: the silent open session
+/// was closed by the platform with EXCEEDED_MAX_REPROMPTS). Alexa routes
 /// resume to AMAZON.ResumeIntent automatically when audio was recently stopped.
 /// </summary>
 public class PauseIntentHandler : BaseHandler
@@ -46,8 +48,9 @@ public class PauseIntentHandler : BaseHandler
     /// <summary>
     /// Pause or stop currently playing media.
     /// All paths send AudioPlayer.Stop. Stop/cancel end the session; pause ends it
-    /// unless PauseKeepsSession is on (JF-482). Pause optionally includes a position
-    /// card (no OutputSpeech).
+    /// unless PauseKeepsSession is on (JF-482), in which case the response also
+    /// speaks a minimal pause word and carries a reprompt (JF-488; the silent open
+    /// session timed out on-device). Pause optionally includes a position card.
     /// </summary>
     /// <param name="request">The skill request which should be handled.</param>
     /// <param name="context">The context of the skill intent request.</param>
@@ -74,11 +77,14 @@ public class PauseIntentHandler : BaseHandler
         }
 
         // Pause: AudioPlayer.Stop, session handling per PauseKeepsSession (JF-482
-        // experiment; default false keeps today's session-ending behavior). Audio
-        // stops in both modes; the flag only decides whether bare follow-up
-        // commands stay in the skill session. The optional position card below
-        // (no OutputSpeech) is unaffected by the flag.
-        var response = BuildPauseResponse(_config.PauseKeepsSession);
+        // experiment; default false keeps today's session-ending behavior). With
+        // the flag on, the response also speaks a minimal pause word and carries a
+        // reprompt (JF-488: the silent open session was closed by the platform
+        // with EXCEEDED_MAX_REPROMPTS ~8s later, with an error beep). Audio stops
+        // in both modes; the flag only decides session handling plus that minimal
+        // speech. The optional position card below is unaffected by the flag.
+        string locale = GetLocale(request);
+        var response = BuildPauseResponse(_config.PauseKeepsSession, locale);
 
         bool seekEnabled = Plugin.Instance?.Configuration?.SeekEnabled == true;
         bool announcePosition = Plugin.Instance?.Configuration?.PauseAnnouncePosition == true;
@@ -86,7 +92,6 @@ public class PauseIntentHandler : BaseHandler
 
         if (seekEnabled && announcePosition && hasNowPlaying)
         {
-            string locale = GetLocale(request);
             string positionText = BuildPositionDisplay(session!, locale);
             if (!string.IsNullOrEmpty(positionText))
             {

@@ -738,7 +738,9 @@ public abstract class BaseHandler
     /// Build a pause response: AudioPlayer.Stop with session ended.
     /// Alexa routes resume to the skill automatically when audio was playing.
     /// </summary>
-    public static SkillResponse BuildPauseResponse() => BuildPauseResponse(keepSessionOpen: false);
+    // The literal locale is unread on this path: the open-session strings load
+    // only when keepSessionOpen is true, which this overload never passes.
+    public static SkillResponse BuildPauseResponse() => BuildPauseResponse(keepSessionOpen: false, locale: "en-US");
 
     /// <summary>
     /// Build a pause response with explicit session handling (JF-482). The
@@ -747,17 +749,39 @@ public abstract class BaseHandler
     /// ShouldEndSession=false so bare follow-up commands stay in-skill (the
     /// PauseKeepsSession experiment retesting the JF-299-derived rule; JF-299's
     /// evidence was about play responses during active playback, a different
-    /// contention point). Only the PAUSE path may pass true: stop and cancel
-    /// responses always end the session (JF-299 covers them, JF-482 does not
-    /// retest them), and neither play responses nor any other session-ending
-    /// response goes through this builder with the flag set.
+    /// contention point), and the open response also carries a minimal
+    /// OutputSpeech plus a Reprompt (JF-488): the JF-482 device matrix saw the
+    /// platform close the silent open session with EXCEEDED_MAX_REPROMPTS ~8s
+    /// after the response, with an error beep. Whether the reprompt prevents
+    /// that timeout is the unverified hypothesis the JF-488 device test decides;
+    /// the flag stays off by default until then. Only the PAUSE path may pass
+    /// true: stop and cancel responses always end the session (JF-299 covers
+    /// them, JF-482 does not retest them), and neither play responses nor any
+    /// other session-ending response goes through this builder with the flag
+    /// set. <paramref name="keepSessionOpen"/>=false stays byte-identical to the
+    /// pre-JF-482 pause response: silent, no reprompt, session ended.
     /// </summary>
     /// <param name="keepSessionOpen">Whether the session stays open (ShouldEndSession=false).
-    /// Audio stops in both modes; only the session flag differs.</param>
-    public static SkillResponse BuildPauseResponse(bool keepSessionOpen)
+    /// Audio stops in both modes; the open mode adds minimal speech and a reprompt.</param>
+    /// <param name="locale">The request locale, used only for the open-session
+    /// speech and reprompt strings.</param>
+    public static SkillResponse BuildPauseResponse(bool keepSessionOpen, string locale)
     {
         var response = ResponseBuilder.AudioPlayerStop();
         response.Response.ShouldEndSession = !keepSessionOpen;
+        if (keepSessionOpen)
+        {
+            // An open session carrying neither speech nor reprompt is the shape the
+            // platform timed out on (JF-482 device matrix, test b). The speech is
+            // deliberately minimal so it cannot mask the Stop directive; the
+            // reprompt is the JF-488 hypothesis under device test.
+            response.Response.OutputSpeech = new PlainTextOutputSpeech
+            {
+                Text = ResponseStrings.Get("PauseSessionSpeech", locale)
+            };
+            response.Response.Reprompt = new Reprompt(ResponseStrings.Get("PauseSessionReprompt", locale));
+        }
+
         return response;
     }
 
