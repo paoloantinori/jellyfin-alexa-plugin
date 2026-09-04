@@ -3,9 +3,10 @@ id: JF-453
 title: >-
   TestHelpers.EnsurePluginInstance leaks a GUID temp dir per call, never cleaned
   up
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-02 03:32'
+updated_date: '2026-09-04 15:26'
 labels:
   - tech-debt
   - test-hygiene
