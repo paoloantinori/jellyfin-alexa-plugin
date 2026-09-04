@@ -634,8 +634,9 @@ public class FindSongIntentHandler : BaseHandler
         // unique name, and prompting "Quale?" for a one-item list is absurd (device
         // 2026-09-04: "Ho trovato 1 canzoni. 1. The Idiot Kings. Quale?" for a
         // candidate that scored 105). A NEAR-EXACT single candidate (score >= the
-        // HandleFuzzyMiss no-qualifier bar, 90, floored by the user's fuzzy threshold
-        // so a raised personal threshold still governs) plays directly with the
+        // HandleFuzzyMiss no-qualifier bar via FuzzyMatcher.GetEffectiveThreshold(user,
+        // ContainmentScore): 90 raised by the user's fuzzy threshold so a stricter
+        // personal threshold still governs) plays directly with the
         // "Riproduco <name> di <artist>" wording; the artist comes from the item's own
         // metadata, so the pick is announced, never silent.
         // Below that bar the JF-423 review fix still applies: different recordings
@@ -644,8 +645,8 @@ public class FindSongIntentHandler : BaseHandler
         // still need. KeywordMatcher admits only 100%-keyword-coverage candidates, so
         // the practical score band here is 70 (coverage-only) .. 105 (full + positional
         // bonus); 90 means every keyword AND nearly every title token matched.
-        double singleCandidateAutoPlayThreshold = Math.Max(
-            FuzzyMatcher.GetDefaultThreshold(user), FuzzyMatcher.ContainmentScore);
+        double singleCandidateAutoPlayThreshold = FuzzyMatcher.GetEffectiveThreshold(
+            user, FuzzyMatcher.ContainmentScore);
         if (uniqueScored.Count == 1 && uniqueScored[0].Score >= singleCandidateAutoPlayThreshold)
         {
             BaseItem song = uniqueScored[0].Item;

@@ -80,7 +80,7 @@ public abstract class BaseHandler
     /// default threshold because a wrong-artist false positive is worse than a
     /// clean "not found" — the observed false positives ("la ballata del genesio"
     /// → "Lamb", "disco jazz caffè" → "Uazz") both scored 75. Apply via
-    /// <c>Math.Max(FuzzyMatcher.GetDefaultThreshold(user), CrossMediaArtistThreshold)</c>
+    /// <c>FuzzyMatcher.GetEffectiveThreshold(user, CrossMediaArtistThreshold)</c>
     /// so a user who raised FuzzyMatchThreshold is still respected. Shared by the
     /// PlayAlbum and PlaySong cross-media fallbacks (JF-339).
     /// </summary>
@@ -102,7 +102,7 @@ public abstract class BaseHandler
     /// artist cascade's <see cref="CrossMediaArtistThreshold"/> because song/album
     /// name overlap is far more common than artist/mood overlap: only a near-exact
     /// album name substitutes. Apply via
-    /// <c>Math.Max(FuzzyMatcher.GetDefaultThreshold(user), CrossMediaAlbumThreshold)</c>
+    /// <c>FuzzyMatcher.GetEffectiveThreshold(user, CrossMediaAlbumThreshold)</c>
     /// so a user who raised FuzzyMatchThreshold is still respected.
     /// </summary>
     protected const int CrossMediaAlbumThreshold = 90;
@@ -2190,6 +2190,9 @@ public abstract class BaseHandler
 
         // High-confidence matches auto-accept regardless of FuzzyMatchBehavior.
         // Only borderline matches (SuggestionThreshold..DefaultThreshold) consult the per-user config.
+        // Two-step judgment, not one effective bar: the AutoPlay disjunct admits
+        // sub-threshold scores, so GetEffectiveThreshold does not apply here; the
+        // no-qualifier bar's comment below records the composite.
         FuzzyMatchBehavior behavior = user?.FuzzyMatchBehavior ?? FuzzyMatchBehavior.Confirm;
         bool autoAccept = score >= FuzzyMatcher.GetDefaultThreshold(user)
             || (behavior == FuzzyMatchBehavior.AutoPlay && autoPlayFunc != null);
@@ -2207,8 +2210,13 @@ public abstract class BaseHandler
                 return (FuzzyMissOutcome.SuggestionHandled, null);
             }
 
-            // Near-exact or exact matches (score >= ContainmentScore) play directly without
-            // the "closest match" qualifier — it would sound redundant.
+            // Near-exact or exact matches (score >= ContainmentScore) play directly
+            // without the "closest match" qualifier; it would sound redundant. This is
+            // deliberately the bare ContainmentScore, not the effective bar
+            // FuzzyMatcher.GetEffectiveThreshold(user, ContainmentScore) would raise
+            // it to: AutoPlay-mode entry above can bypass a raised user threshold, and
+            // the qualifier keys off the score alone. In Confirm mode the two steps
+            // compose into exactly that effective bar.
             if (score >= FuzzyMatcher.ContainmentScore)
             {
                 return (FuzzyMissOutcome.SuggestionHandled, playResponse);
@@ -3392,7 +3400,7 @@ public abstract class BaseHandler
                 id => pinnedArtistIndex.TryGetPhoneticCode(id, out var codes) ? codes : null)
             : FuzzyMatcher.FindBestMatchWithScore(cleaned, artists, a => a.Name);
         int normalThreshold = FuzzyMatcher.GetDefaultThreshold(user);
-        int threshold = Math.Max(normalThreshold, CrossMediaArtistThreshold);
+        int threshold = FuzzyMatcher.GetEffectiveThreshold(user, CrossMediaArtistThreshold);
         BaseItem? bestItem = best.HasValue ? best.Value.Item : null;
         int bestScore = best.HasValue ? best.Value.Score : 0;
 
@@ -3751,7 +3759,7 @@ public abstract class BaseHandler
             return null;
         }
 
-        int threshold = Math.Max(FuzzyMatcher.GetDefaultThreshold(user), CrossMediaAlbumThreshold);
+        int threshold = FuzzyMatcher.GetEffectiveThreshold(user, CrossMediaAlbumThreshold);
         if (match.Score < threshold)
         {
             Logger.LogDebug(

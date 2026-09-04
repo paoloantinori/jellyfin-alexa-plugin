@@ -386,6 +386,19 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
         Assert.Equal(FuzzyMatcher.SuggestionThreshold, FuzzyMatcher.GetSuggestionThreshold(null));
     }
 
+    [Fact]
+    public void FuzzyMatcher_GetEffectiveThreshold_RaisesFloorByUserThreshold()
+    {
+        // Null user: the layer's floor (e.g. CrossMediaArtistThreshold, 85) stands.
+        Assert.Equal(85, FuzzyMatcher.GetEffectiveThreshold(null, 85));
+
+        // Default-threshold user (60): the floor is higher, so the floor stands.
+        Assert.Equal(85, FuzzyMatcher.GetEffectiveThreshold(new User(), 85));
+
+        // Raised-threshold user (90): the stricter personal threshold raises the bar.
+        Assert.Equal(90, FuzzyMatcher.GetEffectiveThreshold(new User { FuzzyMatchThreshold = 90 }, 85));
+    }
+
     // --- Test helper types ---
 
     /// <summary>

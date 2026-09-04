@@ -68,6 +68,18 @@ internal static class FuzzyMatcher
         user?.FuzzySuggestionThreshold ?? SuggestionThreshold;
 
     /// <summary>
+    /// Gets the effective fuzzy bar for a judgment layer: the layer's own floor (the
+    /// minimum score that decision point requires, e.g. a cross-media fallback gate or
+    /// the FindSong single-candidate auto-play bar) raised by the user's personal fuzzy
+    /// threshold when that is stricter. Names the idiom previously written inline as
+    /// <c>Math.Max(GetDefaultThreshold(user), bar)</c>, so a user who raised
+    /// FuzzyMatchThreshold is respected by every judgment site. Recall-side scoring
+    /// stays on the plain thresholds; only decision points compose this way.
+    /// </summary>
+    public static int GetEffectiveThreshold(Entities.User? user, int bar) =>
+        Math.Max(GetDefaultThreshold(user), bar);
+
+    /// <summary>
     /// Find the best matching item from a list of candidates using partial ratio scoring.
     /// </summary>
     /// <typeparam name="T">The type of candidate items.</typeparam>
