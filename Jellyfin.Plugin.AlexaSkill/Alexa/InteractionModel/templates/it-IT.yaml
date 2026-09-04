@@ -672,9 +672,18 @@ types:
       - Abbey Road
       - La cura
       - Come mai
+  # JF-468: the three concepts shared with the other 16 locales carry the
+  # English canonical ids (artists on artisti, songs on brani, albums on
+  # album) so any id-keyed lookup sees one key space across all 17 locales.
+  # brani carries "songs" because song_noun opens with "il brano", the
+  # primary song word; canzoni/musica are extra it-IT song words, not the
+  # shared concept, and keep localized ids. Every other value (film, serie,
+  # playlist, cartoni, ...) has no counterpart in the 16-locale set and also
+  # keeps its localized id. Ids are model metadata only: the handler resolves
+  # by canonical value NAME (BrowseLibraryIntentHandler), never by id.
   BrowseCategory:
     values:
-      - id: artisti
+      - id: artists
         value: artisti
         synonyms: [gli artisti]
       - id: albums
@@ -683,7 +692,7 @@ types:
       - id: film
         value: film
         synonyms: [i film, movies, cinema]
-      - id: brani
+      - id: songs
         value: brani
         synonyms: [i brani]
       - id: canzoni

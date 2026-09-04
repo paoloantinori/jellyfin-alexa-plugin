@@ -2174,7 +2174,7 @@
                 "gli artisti"
               ]
             },
-            "id": "artisti"
+            "id": "artists"
           },
           {
             "name": {
@@ -2206,7 +2206,7 @@
                 "i brani"
               ]
             },
-            "id": "brani"
+            "id": "songs"
           },
           {
             "name": {

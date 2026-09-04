@@ -3,9 +3,10 @@ id: JF-468
 title: >-
   BrowseCategory id consistency: it-IT localized-id divergence decision + CI
   id-parity warning
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-03 09:30'
+updated_date: '2026-09-04 17:50'
 labels: []
 dependencies: []
 references:

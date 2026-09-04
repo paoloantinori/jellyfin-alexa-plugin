@@ -23,6 +23,11 @@ advisory and a false positive here must not break it):
     manual profile-nlu probe noticed). Guards the fixtures mirror only; the
     other sample mirrors (VOICE_COMMANDS.md, docs/, docs-site/) stay manual
     (CLAUDE.md anti-pattern #11 lists them all).
+  - BrowseCategory id drift (JF-468): every locale must carry the English
+    canonical ids artists/albums/songs on the shared concept values, and the
+    16 hand-maintained locales must carry no ids beyond those three. The
+    template-generated locale (it-IT) also ids its extra it-IT-only concepts
+    (film, serie, playlist, ...), which are deliberately not enumerated here.
 
 Exit code: 0 if all checks pass, 1 if any error found. Warnings alone exit 0.
 --verbose prints every warning instead of the first 20.
@@ -119,6 +124,15 @@ ALBUM_CARRIER_NOUNS: dict[str, list[str]] = {
     "ja": ["アルバム"],
     "hi": ["एल्बम"],
 }
+
+# BrowseCategory slot-value id conventions (JF-468). Every locale carries the
+# English canonical ids on the three concepts shared across the model family
+# (artists/albums/songs); the 16 hand-maintained locales carry ids on exactly
+# those three values. The template-generated locale (it-IT) ids its extra
+# it-IT-only concepts too (film, serie, playlist, ...), so only the shared
+# three are pinned for it, never the extras (they may evolve).
+BROWSE_CATEGORY_SHARED_IDS = {"artists", "albums", "songs"}
+BROWSE_CATEGORY_TEMPLATE_LOCALE = "it-IT"
 
 
 def load_model(path: Path) -> dict | None:
@@ -453,6 +467,47 @@ def lint_fixture_carriers(all_models: dict[str, dict], fixtures_dir: Path = FIXT
     return warnings
 
 
+def lint_browse_category_ids(all_models: dict[str, dict]) -> list[str]:
+    """WARNING lint: BrowseCategory slot-value ids drifting from the shared key space.
+
+    The ids are model metadata only (the handler resolves by canonical value
+    NAME, never by id), so drift is not an error; but any future id-keyed
+    lookup assumes one key space across locales: the English canonical three
+    (artists/albums/songs) on the shared concepts, everywhere. Two failure
+    shapes warn: a locale missing a shared id, and a hand-maintained locale
+    carrying an id beyond the shared three. The template-generated locale's
+    extra concepts are out of scope on purpose (they may evolve).
+    """
+    warnings: list[str] = []
+    for locale, lm in sorted(all_models.items()):
+        type_def = next(
+            (t for t in lm.get("types", []) if isinstance(t, dict) and t.get("name") == "BrowseCategory"),
+            None,
+        )
+        if type_def is None:
+            # A missing BrowseCategory type is a cross-locale error elsewhere.
+            continue
+        ids = {
+            v["id"]
+            for v in type_def.get("values", [])
+            if isinstance(v, dict) and v.get("id")
+        }
+        missing = BROWSE_CATEGORY_SHARED_IDS - ids
+        if missing:
+            warnings.append(
+                f"  [{locale}] BrowseCategory is missing shared id(s) "
+                f"{sorted(missing)} (JF-468 key-space convention)"
+            )
+        if locale != BROWSE_CATEGORY_TEMPLATE_LOCALE:
+            extra = ids - BROWSE_CATEGORY_SHARED_IDS
+            if extra:
+                warnings.append(
+                    f"  [{locale}] BrowseCategory carries id(s) {sorted(extra)} "
+                    f"beyond the shared {sorted(BROWSE_CATEGORY_SHARED_IDS)} set"
+                )
+    return warnings
+
+
 def main() -> int:
     verbose = "--verbose" in sys.argv[1:]
     model_files = sorted(MODELS_DIR.glob("model_*.json"))
@@ -517,6 +572,17 @@ def main() -> int:
                     print(f"  WARN: {w}")
             else:
                 print("  All linted fixture utterances match a current sample carrier")
+
+    # Phase 4: BrowseCategory id-parity lint (JF-468 warning check)
+    if all_models:
+        print("\nBrowseCategory id lint:")
+        id_warnings = lint_browse_category_ids(all_models)
+        all_warnings.extend(id_warnings)
+        if id_warnings:
+            for w in id_warnings:
+                print(f"  WARN: {w}")
+        else:
+            print("  All locales carry the shared English ids on the BrowseCategory concepts")
 
     # Summary
     print(f"\n{'='*60}")
