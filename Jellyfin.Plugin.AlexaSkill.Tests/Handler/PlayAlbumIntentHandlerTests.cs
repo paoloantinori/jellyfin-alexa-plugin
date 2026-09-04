@@ -42,7 +42,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         TestHelpers.EnsurePluginInstance(_fx.Config, _fx.LoggerFactory, c => { }, "playalbum-tests");
     }
 
-    private PlayAlbumIntentHandler CreateHandler()
+    private PlayAlbumIntentHandler CreateHandler(IArtistIndex? artistIndex = null)
     {
         return new PlayAlbumIntentHandler(
             _fx.SessionManager.Object,
@@ -51,7 +51,8 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
             _fx.LoggerFactory,
-            _queueManager);
+            _queueManager,
+            artistIndex);
     }
 
     private static IntentRequest CreateIntentRequest(string? album = null, string? musician = null, string locale = "en-US")
@@ -1508,6 +1509,122 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         Assert.All(
             queries.Where(q => q.SearchTerm != null).Select(q => q.SearchTerm),
             term => Assert.Equal("thriller", term));
+    }
+
+    // -------------------------------------------------------------------------
+    // JF-489: it-IT calling-word bleed into the MUSICIAN slot. Device
+    // 2026-09-04 (corr=f919db65): 'cerca un album chiamato surfer rosa' arrived
+    // as album=EMPTY, musician='chiamato surfer rosa' (the calling word AND the
+    // title both in the musician slot; a different theft shape than JF-469's
+    // album-slot bleed, so the JF-469 album-path strip never fires). Before the
+    // artist search the calling word is stripped and the remainder is tried ONCE
+    // as an album title; a hit plays the album, a miss searches the artist with
+    // the STRIPPED value and every not-found names it.
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task HandleAsync_MusicianCallingWordBleed_AlbumEmpty_StrippedTitleRetry_PlaysAlbum()
+    {
+        // The evidenced device shape: album=EMPTY, musician='chiamato surfer rosa'.
+        // The stripped album-title retry ('surfer rosa') finds the album and it
+        // plays; the artist search never runs (the user asked for an album BY
+        // TITLE, and 'chiamato surfer rosa' is garbage as an artist query).
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(musician: "chiamato surfer rosa", locale: "it-IT");
+        _fx.SetupUserMock();
+
+        var (album, tracks) = MakeRelease("Surfer Rosa", 1988, 2, "Bone Machine");
+        var queries = new List<InternalItemsQuery>();
+        SetupTitleSearchByTerm(
+            new Dictionary<string, List<BaseItem>> { ["surfer rosa"] = new() { album } },
+            queries);
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem> { Items = new[] { tracks[0] }, TotalRecordCount = tracks.Count });
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.NotNull(playDirective);
+        Assert.Equal(tracks[0].Id.ToString(), playDirective!.AudioItem.Stream.Token);
+
+        // Exactly ONE title query (the stripped retry) and no artist query at all:
+        // the retry IS the album-title query (no re-query below), and the hit keeps
+        // the artist search from ever firing.
+        List<string> searchTerms = queries.Where(q => q.SearchTerm != null).Select(q => q.SearchTerm!).ToList();
+        Assert.Single(searchTerms);
+        Assert.Equal("surfer rosa", searchTerms[0]);
+        Assert.DoesNotContain(queries, q => q.IncludeItemTypes?.Contains(BaseItemKind.MusicArtist) == true);
+    }
+
+    [Fact]
+    public async Task HandleAsync_MusicianNoCallingWord_AlbumByArtistPath_ByteIdentical()
+    {
+        // Byte-identical pin: a musician value with NO calling-word prefix keeps
+        // the existing album-by-artist path exactly as before JF-489. The retry
+        // never fires (no SearchTerm query is ever issued), the artist search and
+        // the artist-album resolution run their existing query set, and the album
+        // plays (same shape as the JF-471 legit-flow pin, here in it-IT where the
+        // calling-word predicate is ACTIVE so the miss of the prefix is meaningful).
+        var artist = new MusicArtist { Name = "Pink Floyd", Id = Guid.NewGuid() };
+        var handler = CreateHandler(BuildPhoneticArtistIndex(artist));
+        var request = CreateIntentRequest(musician: "pink floyd", locale: "it-IT");
+        _fx.SetupUserMock();
+
+        var (album, albumTracks) = MakeRelease("The Dark Side of the Moon", 1973, 10, "Speak to Me");
+        var queries = new List<InternalItemsQuery>();
+        SetupIndefiniteAlbumCatalog(
+            artist,
+            new List<BaseItem> { album },
+            albumTracks,
+            new Dictionary<Guid, BaseItem> { [album.Id] = albumTracks[0] },
+            queries);
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.NotNull(playDirective);
+        Assert.Equal(albumTracks[0].Id.ToString(), playDirective!.AudioItem.Stream.Token);
+        Assert.True(response.Response.ShouldEndSession);
+        Assert.Null(response.Response.OutputSpeech);
+
+        // The JF-489 retry never fired: no album-title query was ever issued. The
+        // existing query set is the artist resolution's (in-memory search) plus the
+        // artist-album query, none of which carries a SearchTerm.
+        Assert.DoesNotContain(queries, q => q.SearchTerm != null);
+    }
+
+    [Fact]
+    public async Task HandleAsync_MusicianCallingWordBleed_NothingFound_NotFoundNamesStrippedValue()
+    {
+        // Calling word present, nothing found anywhere: the stripped album-title
+        // retry misses, the artist search (also on the stripped value) misses, and
+        // the clean not-found names 'xyzzyfoo', NEVER the raw 'chiamato xyzzyfoo'.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(musician: "chiamato xyzzyfoo", locale: "it-IT");
+        _fx.SetupUserMock();
+
+        var queries = new List<InternalItemsQuery>();
+        SetupTitleSearchByTerm(new Dictionary<string, List<BaseItem>>(), queries);
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 });
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.Null(response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective));
+        Assert.True(response.Response.ShouldEndSession);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("xyzzyfoo", speech, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("chiamato", speech, StringComparison.OrdinalIgnoreCase);
+
+        // The retry ran FIRST on the stripped value (the first recorded query is an
+        // album-title query for 'xyzzyfoo', before any artist query), and no query
+        // ever carried the raw 'chiamato xyzzyfoo'.
+        InternalItemsQuery firstSearch = queries.First(q => q.SearchTerm != null);
+        Assert.Equal("xyzzyfoo", firstSearch.SearchTerm);
+        Assert.Contains(BaseItemKind.MusicAlbum, firstSearch.IncludeItemTypes ?? Array.Empty<BaseItemKind>());
+        Assert.DoesNotContain(queries, q => q.SearchTerm == "chiamato xyzzyfoo");
     }
 
     /// <summary>

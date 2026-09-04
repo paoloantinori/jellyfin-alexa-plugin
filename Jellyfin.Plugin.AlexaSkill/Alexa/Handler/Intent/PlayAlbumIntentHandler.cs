@@ -170,12 +170,68 @@ public class PlayAlbumIntentHandler : BaseHandler
         BaseItem? resolvedAlbum = null;
         BaseItem? matchedArtist = null;
 
+        // JF-489: when the musician slot carried a calling-word bleed ('chiamato X')
+        // and the stripped album-title retry HIT, the retry's results feed the album
+        // play path directly (the retry IS the album-title query; re-running it below
+        // would double the database cost inside the Alexa window).
+        IReadOnlyList<BaseItem>? callingWordAlbumResults = null;
+
         // JF-448 (review F2), set inside the musician block so album-only requests
         // pay nothing: pin ONE index snapshot for the search AND the JF-471
         // acceptance gate below, so the phonetic codes the gate reads belong to the
         // same publish the chain searched (SearchAsync's own Pin is idempotent on a
         // view; Pin degrades to live reads when the implementation cannot pin).
         IArtistIndex? pinnedArtistIndex = null;
+
+        // JF-489 (device corr=f919db65, 2026-09-04): the it-IT NLU can put the
+        // calling word AND the title into the MUSICIAN slot ('cerca un album chiamato
+        // surfer rosa' -> album EMPTY, musician "chiamato surfer rosa"; a different
+        // theft shape than JF-469's album-slot bleed, so the JF-469 album-path strip
+        // never fires here). The raw value is guaranteed garbage as an artist name,
+        // so BEFORE the artist search the calling word is stripped and the remainder
+        // is tried ONCE as an album TITLE (one bounded indexed retry, the JF-383
+        // shape; the same BuildAlbumQuery shape the album-title path runs). A hit
+        // plays the album through the existing album play path; a miss continues to
+        // the artist search with the STRIPPED value, which also keeps an artist
+        // literally prefixed with a calling word reachable (the stripped query
+        // still containment-matches the full name inside the JF-381 band; only the
+        // 14-char 'che si chiama' prefix is long enough to exceed it) and makes
+        // every not-found below name the stripped value, never the raw
+        // calling-word bleed. When the musician value has no calling-word prefix
+        // the retry never fires and the existing album-by-artist path below is
+        // untouched.
+        if (!string.IsNullOrWhiteSpace(musician)
+            && string.IsNullOrWhiteSpace(album)
+            && TryStripLeadingAlbumCallingWord(musician, locale, out string strippedMusicianTitle))
+        {
+            Logger.LogDebug(
+                "PlayAlbum: musician='{Musician}' starts with an album calling word and the album slot is empty, trying the stripped '{Stripped}' as an album title first (JF-489)",
+                musician, strippedMusicianTitle);
+            IReadOnlyList<BaseItem> strippedTitleAlbums = await RetryAsync(
+                () => _libraryManager.GetItemList(BuildAlbumQuery(_libraryManager, jellyfinUser, user, strippedMusicianTitle, artistIds: null)),
+                "GetAlbumsMusicianCallingWordStripped",
+                cancellationToken).ConfigureAwait(false);
+            Logger.LogInformation(
+                "PlayAlbum: musician calling-word bleed, stripped album-title retry '{Stripped}' returned {ResultCount} albums (JF-489)",
+                strippedMusicianTitle, strippedTitleAlbums.Count);
+
+            if (strippedTitleAlbums.Count > 0)
+            {
+                // Hit: the user asked for the album BY TITLE. Clear the musician so
+                // the artist search, the JF-471/JF-473 gates and the
+                // by-name-and-artist not-found all stay out of the way; the retry's
+                // results reach the album play path below.
+                musician = null;
+                album = strippedMusicianTitle;
+                callingWordAlbumResults = strippedTitleAlbums;
+            }
+            else
+            {
+                // Miss: the stripped value is the only defensible artist query.
+                musician = strippedMusicianTitle;
+            }
+        }
+
         if (!string.IsNullOrWhiteSpace(musician))
         {
             pinnedArtistIndex = _artistIndex.Pin();
@@ -315,6 +371,11 @@ public class PlayAlbumIntentHandler : BaseHandler
         {
             Logger.LogDebug("PlayAlbum: using the album resolved from the artist filter, skipping the re-query by name");
             albums = new List<BaseItem> { resolvedAlbum };
+        }
+        else if (callingWordAlbumResults != null)
+        {
+            Logger.LogDebug("PlayAlbum: using the JF-489 calling-word-stripped album-title results, skipping the re-query by name");
+            albums = callingWordAlbumResults;
         }
         else
         {

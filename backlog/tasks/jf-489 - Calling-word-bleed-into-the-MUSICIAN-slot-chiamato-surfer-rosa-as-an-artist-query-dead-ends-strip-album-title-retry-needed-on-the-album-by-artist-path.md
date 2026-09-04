@@ -3,9 +3,10 @@ id: JF-489
 title: >-
   Calling-word bleed into the MUSICIAN slot: 'chiamato surfer rosa' as an artist
   query dead-ends (strip + album-title retry needed on the album-by-artist path)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-04 19:07'
+updated_date: '2026-09-04 19:08'
 labels: []
 dependencies: []
 references:

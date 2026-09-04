@@ -3499,6 +3499,14 @@ public abstract class BaseHandler
     /// "Chiamato qualcosa" stays findable through the raw query. The raw value also
     /// stays the value for every log line and the not-found speech (the user said
     /// "chiamato X"; the not-found names what they said).
+    /// SANCTIONED DEVIATION (JF-489): the musician-slot caller skips the raw-first
+    /// leg for its ARTIST query only, because "chiamato X" as an artist name is
+    /// guaranteed garbage (no artist is named with a leading calling word in any
+    /// locale vocabulary): it retries the stripped value as an ALBUM title first
+    /// (raw-first still applies there), and the artist search runs on the stripped
+    /// value. Raw-artist reachability is preserved through the JF-381 containment
+    /// band (a calling-word-named artist like "Chiamato Moe" matches via
+    /// containment when the user's query is the bare name).
     /// </summary>
     /// <param name="slotValue">The raw slot value as Alexa delivered it.</param>
     /// <param name="locale">The request locale; locales without an entry never strip.</param>
