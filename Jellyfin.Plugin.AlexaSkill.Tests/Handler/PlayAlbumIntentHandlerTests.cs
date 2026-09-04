@@ -124,72 +124,6 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         return (album, tracks);
     }
 
-    /// <summary>
-    /// Mocks the JF-411 indefinite album-by-artist flow: artist lookup, the artist's albums in the
-    /// given (insertion) order, per-album track counts for the JF-443 COUNT queries, and
-    /// per-album playback results. The count semantics mirror the TWO server mechanisms
-    /// (Jellyfin BaseItemRepository 10.11.8/10.11.11): ParentId answers by entity link
-    /// (well-formed albums), AlbumIds answers by matching the track's RAW Album tag against
-    /// the album entity's Name (f.Name == e.Album; the JF-338 malformed-folder shape).
-    /// Queries are recorded into <paramref name="queries"/> (when given) for assertions.
-    /// </summary>
-    private void SetupIndefiniteAlbumCatalog(
-        BaseItem artist,
-        List<BaseItem> artistAlbums,
-        List<BaseItem> allTracks,
-        IReadOnlyDictionary<Guid, BaseItem> firstTrackByAlbumId,
-        List<InternalItemsQuery>? queries = null)
-    {
-        var albumNameById = artistAlbums.ToDictionary(a => a.Id, a => a.Name);
-
-        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns((InternalItemsQuery q) =>
-            {
-                queries?.Add(q);
-                if (q.IncludeItemTypes?.Contains(BaseItemKind.MusicArtist) == true)
-                {
-                    return new List<BaseItem> { artist };
-                }
-
-                if (q.IncludeItemTypes?.Contains(BaseItemKind.MusicAlbum) == true)
-                {
-                    return artistAlbums;
-                }
-
-                return new List<BaseItem>();
-            });
-
-        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
-            .Returns((InternalItemsQuery q) =>
-            {
-                queries?.Add(q);
-                // JF-443 count queries are COUNT-only (Limit=0): the ParentId primary
-                // counts by entity link, the AlbumIds fallback by raw-tag name match.
-                if (q.Limit == 0)
-                {
-                    int count = q.ParentId != Guid.Empty
-                        ? allTracks.Count(t => t.ParentId == q.ParentId)
-                        : allTracks.Count(t => q.AlbumIds is { Length: > 0 }
-                            && albumNameById.TryGetValue(q.AlbumIds[0], out string? albumName)
-                            && string.Equals(t.Album, albumName, StringComparison.Ordinal));
-                    return new QueryResult<BaseItem>
-                    {
-                        Items = new List<BaseItem>(),
-                        TotalRecordCount = count
-                    };
-                }
-
-                // Playback page queries (nonzero Limit): ParentId first, then the JF-338
-                // AlbumIds retry when the folder link finds nothing.
-                Guid playKey = q.ParentId != Guid.Empty
-                    ? q.ParentId
-                    : q.AlbumIds is { Length: > 0 } ? q.AlbumIds[0] : Guid.Empty;
-                return firstTrackByAlbumId.TryGetValue(playKey, out BaseItem? track)
-                    ? new QueryResult<BaseItem> { Items = new[] { track }, TotalRecordCount = 1 }
-                    : new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 };
-            });
-    }
-
     private async Task<string> GetPlayedTrackTokenAsync(
         PlayAlbumIntentHandler handler,
         IntentRequest request,
@@ -218,7 +152,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
     {
         foreach (int[] order in orders)
         {
-            SetupIndefiniteAlbumCatalog(
+            _fx.SetupIndefiniteAlbumCatalog(
                 artist,
                 order.Select(i => (BaseItem)albums[i]).ToList(),
                 allTracks,
@@ -254,7 +188,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
             [single.Id] = singleTracks[0]
         };
         var queries = new List<InternalItemsQuery>();
-        SetupIndefiniteAlbumCatalog(
+        _fx.SetupIndefiniteAlbumCatalog(
             artist,
             new List<BaseItem> { liveAlbum, studioAlbum, single },
             liveTracks.Concat(studioTracks).Concat(singleTracks).ToList(),
@@ -381,7 +315,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
             [live.Id] = liveTracks[0]
         };
         var queries = new List<InternalItemsQuery>();
-        SetupIndefiniteAlbumCatalog(
+        _fx.SetupIndefiniteAlbumCatalog(
             artist,
             new List<BaseItem> { studio, live },
             studioTracks.Concat(liveTracks).ToList(),
@@ -430,7 +364,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
             [live.Id] = liveTracks[0]
         };
         var queries = new List<InternalItemsQuery>();
-        SetupIndefiniteAlbumCatalog(
+        _fx.SetupIndefiniteAlbumCatalog(
             artist,
             new List<BaseItem> { studio, live },
             studioTracks.Concat(liveTracks).ToList(),
@@ -485,7 +419,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         firstTrackByAlbum[oldest.Id] = oldestTracks[0];
 
         var queries = new List<InternalItemsQuery>();
-        SetupIndefiniteAlbumCatalog(artist, artistAlbums, allTracks, firstTrackByAlbum, queries);
+        _fx.SetupIndefiniteAlbumCatalog(artist, artistAlbums, allTracks, firstTrackByAlbum, queries);
 
         string token = await GetPlayedTrackTokenAsync(handler, request, CreateSession());
 
@@ -712,28 +646,18 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         _fx.SetupUserMock();
 
         var artist = new MusicArtist { Name = "Koop", Id = Guid.NewGuid() };
-        var album = new MusicAlbum { Name = "Waltz for Koop", Id = Guid.NewGuid() };
-        var track = new Audio { Name = "Baby", Id = Guid.NewGuid() };
+        var (album, albumTracks) = MakeRelease("Waltz for Koop", 1997, 1, "Baby");
         var queries = new List<InternalItemsQuery>();
-        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns((InternalItemsQuery q) =>
-            {
-                queries.Add(q);
-                if (q.IncludeItemTypes?.Contains(BaseItemKind.MusicArtist) == true)
-                {
-                    return new List<BaseItem> { artist };
-                }
+        _fx.SetupIndefiniteAlbumCatalog(
+            artist,
+            new List<BaseItem> { album },
+            albumTracks,
+            new Dictionary<Guid, BaseItem> { [album.Id] = albumTracks[0] },
+            queries);
 
-                return new List<BaseItem> { album };
-            });
-        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
-            .Returns(new QueryResult<BaseItem> { Items = new[] { track }, TotalRecordCount = 1 });
+        string token = await GetPlayedTrackTokenAsync(handler, request, CreateSession());
 
-        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
-
-        Assert.NotNull(response);
-        var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
-        Assert.NotNull(playDirective);
+        Assert.Equal(albumTracks[0].Id.ToString(), token);
 
         // The indefinite-resolution query (the MusicAlbum query with no SearchTerm) must
         // filter on album artists.
@@ -820,7 +744,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         var artist = new MusicArtist { Name = "Queen", Id = Guid.NewGuid() };
         var (album, albumTracks) = MakeRelease("A Night at the Opera", 1975, 1, "Bohemian Rhapsody");
         var queries = new List<InternalItemsQuery>();
-        SetupIndefiniteAlbumCatalog(
+        _fx.SetupIndefiniteAlbumCatalog(
             artist,
             new List<BaseItem> { album },
             albumTracks,
@@ -1000,7 +924,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         _fx.SetupUserMock();
 
         var (album, albumTracks) = MakeRelease("In Your Dreams", 2011, 10, "In Your Dreams First");
-        SetupIndefiniteAlbumCatalog(
+        _fx.SetupIndefiniteAlbumCatalog(
             artist,
             new List<BaseItem> { album },
             albumTracks,
@@ -1041,7 +965,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         _fx.SetupUserMock();
 
         var (album, albumTracks) = MakeRelease("The Dark Side of the Moon", 1973, 10, "Speak to Me");
-        SetupIndefiniteAlbumCatalog(
+        _fx.SetupIndefiniteAlbumCatalog(
             artist,
             new List<BaseItem> { album },
             albumTracks,
@@ -1083,7 +1007,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         _fx.SetupUserMock();
 
         var (album, albumTracks) = MakeRelease("Waltz for Koop", 1997, 10, "Baby");
-        SetupIndefiniteAlbumCatalog(
+        _fx.SetupIndefiniteAlbumCatalog(
             artist,
             new List<BaseItem> { album },
             albumTracks,
@@ -1121,7 +1045,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         _fx.SetupUserMock();
 
         var (album, albumTracks) = MakeRelease("Kind of Blue", 1959, 5, "So What");
-        SetupIndefiniteAlbumCatalog(
+        _fx.SetupIndefiniteAlbumCatalog(
             artist,
             new List<BaseItem> { album },
             albumTracks,
@@ -1159,7 +1083,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         _fx.SetupUserMock();
 
         var (album, albumTracks) = MakeRelease("In Your Dreams", 2011, 10, "In Your Dreams First");
-        SetupIndefiniteAlbumCatalog(
+        _fx.SetupIndefiniteAlbumCatalog(
             artist,
             new List<BaseItem> { album },
             albumTracks,
@@ -1206,7 +1130,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         _fx.SetupUserMock();
 
         var (album, albumTracks) = MakeRelease("In Your Dreams", 2011, 10, "In Your Dreams First");
-        SetupIndefiniteAlbumCatalog(
+        _fx.SetupIndefiniteAlbumCatalog(
             artist,
             new List<BaseItem> { album },
             albumTracks,
@@ -1257,7 +1181,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         _fx.SetupUserMock();
 
         var (album, albumTracks) = MakeRelease("The Joshua Tree", 1987, 10, "Where the Streets Have No Name");
-        SetupIndefiniteAlbumCatalog(
+        _fx.SetupIndefiniteAlbumCatalog(
             artist,
             new List<BaseItem> { album },
             albumTracks,
@@ -1297,7 +1221,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         _fx.SetupUserMock();
 
         var (album, albumTracks) = MakeRelease("In Your Dreams", 2011, 10, "In Your Dreams First");
-        SetupIndefiniteAlbumCatalog(
+        _fx.SetupIndefiniteAlbumCatalog(
             artist,
             new List<BaseItem> { album },
             albumTracks,
@@ -1572,7 +1496,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
 
         var (album, albumTracks) = MakeRelease("The Dark Side of the Moon", 1973, 10, "Speak to Me");
         var queries = new List<InternalItemsQuery>();
-        SetupIndefiniteAlbumCatalog(
+        _fx.SetupIndefiniteAlbumCatalog(
             artist,
             new List<BaseItem> { album },
             albumTracks,

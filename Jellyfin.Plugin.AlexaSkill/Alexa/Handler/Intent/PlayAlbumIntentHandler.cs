@@ -123,7 +123,10 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         // Elicit via Dialog.ElicitSlot so the session stays in the PlayAlbumIntent
         // dialog (the user's next utterance fills the slot; already-filled slots
-        // survive the round-trip). Branching is slot-presence driven (JF-422):
+        // survive the round-trip; a plain Ask let follow-ups fall through to general
+        // NLU and lose the thread, on-device 2026-08-28 20:23: "quali ci sono" after
+        // the elicit surfaced unrelated recently-added content). Branching is
+        // slot-presence driven (JF-422):
         // - both empty: ask WHICH ALBUM. The common answer to a bare "riproduci un
         //   album" is a title, and the answer feeds the album-title search below.
         //   The previous artist-first order captured a title answer ("the dark side
@@ -142,7 +145,12 @@ public class PlayAlbumIntentHandler : BaseHandler
         //   cannot answer.
         if (string.IsNullOrWhiteSpace(album) && string.IsNullOrWhiteSpace(musician))
         {
-            return BuildAlbumElicitResponse(locale);
+            return BuildDialogElicitResponse(
+                "ElicitAlbumName",
+                locale,
+                IntentNames.Slots.Album,
+                IntentNames.PlayAlbum,
+                new[] { IntentNames.Slots.Album, IntentNames.Slots.Musician });
         }
 
         // JF-467: primary-path music gate (shared contract on IfMediaTypeDisabled;
@@ -354,13 +362,14 @@ public class PlayAlbumIntentHandler : BaseHandler
                 album, matchedArtistName, artistAlbums.Count);
         }
 
-        // Flow guard: past this point an album title is guaranteed (either the user said one
-        // or the JF-411 block above resolved it from the artist filter).
-        if (string.IsNullOrWhiteSpace(album))
-        {
-            return BuildAlbumElicitResponse(locale);
-        }
-
+        // JF-442: an album title is guaranteed from here on. Either the user said one
+        // (the both-slots-empty case returned at the entry elicit above), the JF-489
+        // stripped-title retry set it (the strip predicate never yields an empty
+        // remainder), or the JF-411 block above resolved it. The old both-empty flow
+        // guard here was unreachable for every library state except a MusicAlbum row
+        // with a null/whitespace Name, which Jellyfin's scanner does not produce; the
+        // proof is recorded in the JF-442 task notes.
+        //
         // JF-427: carry the album resolved from the artist filter instead of re-querying by
         // its name. The re-query went through SearchTerm, which can miss on accent/index
         // normalization, and a miss cascaded into the artist-less full-catalog query plus
@@ -411,11 +420,12 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         if (albums.Count == 0 && !string.IsNullOrWhiteSpace(musician))
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByNameAndArtist", locale, album, matchedArtistName!));
+            // album! per the title-guaranteed invariant documented above (JF-442).
+            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByNameAndArtist", locale, album!, matchedArtistName!));
         }
 
         string? fuzzyAlbumAnnouncement = null;
-        if (albums.Count == 0 && album.Length >= MinFuzzyAlbumQueryLength)
+        if (albums.Count == 0 && album!.Length >= MinFuzzyAlbumQueryLength)
         {
             // Fuzzy fallback: ASR may transcribe the album name with accents or
             // Italian-vs-English spelling that Jellyfin's search index doesn't normalize
@@ -485,7 +495,7 @@ public class PlayAlbumIntentHandler : BaseHandler
             // search above runs first, so a self-titled album still preempts the artist
             // fallback; the artist answer only plays on a title miss.
             SkillResponse? artistFallback = await TryEntityFallbackAsync(
-                album, jellyfinUser!, user, session, context, locale,
+                album!, jellyfinUser!, user, session, context, locale,
                 _libraryManager, _userDataManager, _queueManager, _artistIndex,
                 "PlayAlbum", cancellationToken,
                 notFoundMediaType: DisambiguationHelper.MediaTypeAlbum).ConfigureAwait(false);
@@ -494,7 +504,7 @@ public class PlayAlbumIntentHandler : BaseHandler
                 return artistFallback;
             }
 
-            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByName", locale, album));
+            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByName", locale, album!));
         }
 
         if (albums.Count > 1)
@@ -540,29 +550,6 @@ public class PlayAlbumIntentHandler : BaseHandler
             announcement: fuzzyAlbumAnnouncement,
             cancellationToken).ConfigureAwait(false);
     }
-
-    /// <summary>
-    /// Builds the album-slot elicitation as a Dialog.ElicitSlot response (not a plain Ask)
-    /// so the session stays in the PlayAlbumIntent dialog: the user's next utterance is
-    /// captured as the album slot and already-filled slots survive the round-trip. A plain
-    /// Ask let follow-ups fall through to general NLU and lose the thread (on-device
-    /// 2026-08-28 20:23: "quali ci sono" after the elicit surfaced unrelated
-    /// recently-added content). The shared builder declares BOTH intent slots in
-    /// updatedIntent (Amazon rejects the directive otherwise, live INVALID_RESPONSE
-    /// 2026-08-28 21:17: "All slots must be defined when sending updated intent...
-    /// Missing: album"). Requires PlayAlbumIntent in dialog.intents with
-    /// elicitationRequired=false (manual dialog control, CLAUDE.md anti-pattern #9).
-    /// JF-398 write-time mutual exclusion: the elicit owns no session state of its own
-    /// (the dialog lives Amazon-side), so no OTHER flow's stale state may ride along.
-    /// </summary>
-    /// <param name="locale">The request locale, for the prompt string.</param>
-    /// <returns>The elicitation response.</returns>
-    private static SkillResponse BuildAlbumElicitResponse(string locale)
-        => BuildElicitSlotResponse(
-            IntentNames.PlayAlbum,
-            IntentNames.Slots.Album,
-            new[] { IntentNames.Slots.Album, IntentNames.Slots.Musician },
-            ResponseStrings.Get("ElicitAlbumName", locale));
 
     /// <summary>
     /// JF-427/JF-443: track counts per album ID, from COUNT-only queries. Each query reads

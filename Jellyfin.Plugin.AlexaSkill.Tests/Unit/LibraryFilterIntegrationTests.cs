@@ -187,6 +187,117 @@ public class LibraryFilterIntegrationTests : PluginTestBase, IDisposable
         Assert.Empty(capturedQuery.TopParentIds);
     }
 
+    // --- PlaySongIntentHandler ---
+
+    [Fact]
+    public async Task PlaySong_SetsTopParentIds_WhenUserHasLibraryFilter()
+    {
+        var musicLibId = Guid.NewGuid();
+        var user = CreateUserWithLibraries(musicLibId);
+        SetupJellyfinUser();
+
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemById(musicLibId))
+            .Returns(new Folder { Id = musicLibId });
+
+        var getCaptured = CaptureAllQueriesViaLibraryManager();
+
+        var handler = new PlaySongIntentHandler(
+            _sessionManagerMock.Object, _config,
+            _libraryManagerMock.Object, _userManagerMock.Object, Mock.Of<MediaBrowser.Controller.Library.IUserDataManager>(), _loggerFactory);
+
+        await handler.HandleAsync(
+            new IntentRequest
+            {
+                Intent = new Intent
+                {
+                    Name = "PlaySongIntent",
+                    Slots = new Dictionary<string, Slot>
+                    {
+                        ["song"] = new Slot { Value = "Bohemian Rhapsody" }
+                    }
+                }
+            },
+            CreateContext(), user, CreateSession(), CancellationToken.None);
+
+        // The title-search query carries the restriction (membership, not exact
+        // length, JF-456 item 9). The empty-mocked library runs PlaySong's full
+        // miss cascade, so the assertion is per captured query.
+        Assert.Contains(getCaptured(), q => q.TopParentIds?.Contains(musicLibId) == true);
+    }
+
+    [Fact]
+    public async Task PlaySong_DoesNotSetTopParentIds_WhenUserHasNoLibraryFilter()
+    {
+        var user = CreateUserWithoutLibraryFilter();
+        SetupJellyfinUser();
+
+        var getCaptured = CaptureAllQueriesViaLibraryManager();
+
+        var handler = new PlaySongIntentHandler(
+            _sessionManagerMock.Object, _config,
+            _libraryManagerMock.Object, _userManagerMock.Object, Mock.Of<MediaBrowser.Controller.Library.IUserDataManager>(), _loggerFactory);
+
+        await handler.HandleAsync(
+            new IntentRequest
+            {
+                Intent = new Intent
+                {
+                    Name = "PlaySongIntent",
+                    Slots = new Dictionary<string, Slot>
+                    {
+                        ["song"] = new Slot { Value = "Test Song" }
+                    }
+                }
+            },
+            CreateContext(), user, CreateSession(), CancellationToken.None);
+
+        // When AllowedLibraryIds is null, ApplyLibraryFilter is a no-op; every query
+        // of the miss cascade stays unfiltered (TopParentIds defaults to empty).
+        var captured = getCaptured();
+        Assert.NotEmpty(captured);
+        Assert.All(captured, q => Assert.Empty(q.TopParentIds));
+    }
+
+    [Fact]
+    public async Task PlaySong_DoesNotSetTopParentIds_WhenAllowedLibraryIdsIsEmpty()
+    {
+        var user = new Entities.User
+        {
+            Id = Guid.NewGuid(),
+            InvocationName = "test",
+            JellyfinToken = "test-token",
+            AllowedLibraryIds = new List<string>()
+        };
+        SetupJellyfinUser();
+
+        var getCaptured = CaptureAllQueriesViaLibraryManager();
+
+        var handler = new PlaySongIntentHandler(
+            _sessionManagerMock.Object, _config,
+            _libraryManagerMock.Object, _userManagerMock.Object, Mock.Of<MediaBrowser.Controller.Library.IUserDataManager>(), _loggerFactory);
+
+        await handler.HandleAsync(
+            new IntentRequest
+            {
+                Intent = new Intent
+                {
+                    Name = "PlaySongIntent",
+                    Slots = new Dictionary<string, Slot>
+                    {
+                        ["song"] = new Slot { Value = "Test Song" }
+                    }
+                }
+            },
+            CreateContext(), user, CreateSession(), CancellationToken.None);
+
+        // Empty AllowedLibraryIds is treated as unrestricted; every query of the
+        // miss cascade stays unfiltered.
+        var captured = getCaptured();
+        Assert.NotEmpty(captured);
+        Assert.All(captured, q => Assert.Empty(q.TopParentIds));
+    }
+
     // --- SearchMediaIntentHandler ---
 
     [Fact]
@@ -225,6 +336,63 @@ public class LibraryFilterIntegrationTests : PluginTestBase, IDisposable
         // through artist-fallback tiers, so several filtered queries are expected;
         // the out-of-library sibling assertion lives in the focused JF-456 tests.
         Assert.Contains(getCaptured(), q => q.TopParentIds?.Contains(libId) == true);
+    }
+
+    [Fact]
+    public async Task SearchMedia_RestrictedUser_SiblingPlaylistQueryHasNoTopParentIds()
+    {
+        var musicLibId = Guid.NewGuid();
+        var movieLibId = Guid.NewGuid();
+        var user = CreateUserWithLibraries(musicLibId, movieLibId);
+        SetupJellyfinUser();
+
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemById(musicLibId))
+            .Returns(new Folder { Id = musicLibId });
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemById(movieLibId))
+            .Returns(new Folder { Id = movieLibId });
+
+        // A found movie keeps the result count above the artist-fallback threshold,
+        // so the captured queries are the primary path's alone.
+        var movie = new MediaBrowser.Controller.Entities.Movies.Movie
+        {
+            Name = "Star Wars",
+            Id = Guid.NewGuid()
+        };
+        var capturedQueries = new List<InternalItemsQuery>();
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => capturedQueries.Add(q))
+            .Returns(new List<BaseItem> { movie });
+
+        var handler = new SearchMediaIntentHandler(
+            _sessionManagerMock.Object, _config,
+            _libraryManagerMock.Object, _userManagerMock.Object, Mock.Of<MediaBrowser.Controller.Library.IUserDataManager>(), _loggerFactory);
+
+        await handler.HandleAsync(
+            new IntentRequest
+            {
+                Intent = new Intent
+                {
+                    Name = "SearchMediaIntent",
+                    Slots = new Dictionary<string, Slot>
+                    {
+                        ["query"] = new Slot { Value = "Star Wars" }
+                    }
+                }
+            },
+            CreateContext(), user, CreateSession(), CancellationToken.None);
+
+        // At least one library-scoped query carries the restriction (membership, not
+        // exact length, JF-456 item 9). The out-of-library sibling (playlists,
+        // JF-456) must NOT carry TopParentIds.
+        Assert.Contains(capturedQueries, q =>
+            q.TopParentIds?.Contains(musicLibId) == true
+            && q.TopParentIds.Contains(movieLibId));
+        Assert.Contains(capturedQueries, q =>
+            q.IncludeItemTypes.Contains(Jellyfin.Data.Enums.BaseItemKind.Playlist)
+            && (q.TopParentIds == null || q.TopParentIds.Length == 0));
     }
 
     // --- PlayFavoritesIntentHandler ---

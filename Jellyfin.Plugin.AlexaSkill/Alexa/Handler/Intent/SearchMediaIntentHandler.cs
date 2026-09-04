@@ -53,6 +53,23 @@ public class SearchMediaIntentHandler : BaseHandler
 
     private const int ArtistFallbackThreshold = 3;
 
+    /// <summary>
+    /// The playable-kind scopes for one request: the ONE definition of the JF-456
+    /// split, consumed by BOTH the primary search path
+    /// (<see cref="SearchPlayableKindsAsync"/>, which wraps each scope in
+    /// FilterByContentAccess) and the fuzzy fallback in HandleAsync (which passes the
+    /// scopes to SearchItemsFuzzyAsync's kind-aware ApplyLibraryFilter). Unrestricted
+    /// users search a single unified scope; restricted users get the library-scoped
+    /// kinds first and the out-of-library kinds (playlists) as the sibling scope,
+    /// whose all-exempt kind set keeps the TopParentIds filter off it.
+    /// </summary>
+    /// <param name="libraryRestricted">Whether the user carries a library restriction.</param>
+    /// <returns>The primary scope and, under a restriction, the sibling scope.</returns>
+    private static (BaseItemKind[] Primary, BaseItemKind[]? Sibling) KindScopes(bool libraryRestricted)
+        => libraryRestricted
+            ? (_libraryScopedPlayableTypes, _outOfLibraryPlayableTypes)
+            : (_playableTypes, null);
+
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
     private readonly IUserDataManager _userDataManager;
@@ -144,11 +161,11 @@ public class SearchMediaIntentHandler : BaseHandler
             // array keeps the TopParentIds filter, so out-of-library kinds would again
             // be invisible (JF-456). Each call's ApplyLibraryFilter decides via the
             // kind-aware predicate, no flag at the call site.
-            BaseItemKind[] fuzzyTypes = libraryRestricted ? _libraryScopedPlayableTypes : _playableTypes;
-            var fuzzy = await SearchItemsFuzzyAsync(query, jellyfinUser, user, _libraryManager, fuzzyTypes, cancellationToken, "SearchMediaFuzzyFallback").ConfigureAwait(false);
-            if (fuzzy == null && libraryRestricted)
+            (BaseItemKind[] fuzzyPrimaryTypes, BaseItemKind[]? fuzzySiblingTypes) = KindScopes(libraryRestricted);
+            var fuzzy = await SearchItemsFuzzyAsync(query, jellyfinUser, user, _libraryManager, fuzzyPrimaryTypes, cancellationToken, "SearchMediaFuzzyFallback").ConfigureAwait(false);
+            if (fuzzy == null && fuzzySiblingTypes != null)
             {
-                fuzzy = await SearchItemsFuzzyAsync(query, jellyfinUser, user, _libraryManager, _outOfLibraryPlayableTypes, cancellationToken, "SearchMediaFuzzyOutOfLibrary").ConfigureAwait(false);
+                fuzzy = await SearchItemsFuzzyAsync(query, jellyfinUser, user, _libraryManager, fuzzySiblingTypes, cancellationToken, "SearchMediaFuzzyOutOfLibrary").ConfigureAwait(false);
             }
 
             if (fuzzy != null)
@@ -247,12 +264,17 @@ public class SearchMediaIntentHandler : BaseHandler
         async Task<IReadOnlyList<BaseItem>> RunAsync(InternalItemsQuery q, string label) =>
             await RetryAsync(() => _libraryManager.GetItemList(q), label, cancellationToken).ConfigureAwait(false);
 
+        // One KindScopes resolution for both branches: the sibling scope is non-null
+        // exactly under the restriction, so the unrestricted branch uses only the
+        // primary (unified) scope.
+        (BaseItemKind[] primaryKinds, BaseItemKind[]? siblingKinds) = KindScopes(topParentIds != null);
+
         if (topParentIds == null)
         {
             // Unrestricted: one unified query over all playable kinds (Playlist is
             // always content-access-allowed, so the array is never empty here). A
             // null scope means ApplyLibraryFilter would be a no-op; nothing to apply.
-            var unifiedQuery = BuildQuery(FilterByContentAccess(_playableTypes));
+            var unifiedQuery = BuildQuery(FilterByContentAccess(primaryKinds));
             return await RunAsync(unifiedQuery, "UnifiedSearch").ConfigureAwait(false);
         }
 
@@ -260,7 +282,7 @@ public class SearchMediaIntentHandler : BaseHandler
         // pre-resolved ApplyLibraryFilter leaves unfiltered. Sequential on purpose:
         // RetryAsync executes the query synchronously on this thread, so WhenAll
         // would add thread hops without parallelism (code-review F2).
-        var scopedTypes = FilterByContentAccess(_libraryScopedPlayableTypes);
+        var scopedTypes = FilterByContentAccess(primaryKinds);
         IReadOnlyList<BaseItem> scoped = Array.Empty<BaseItem>();
         if (scopedTypes.Length > 0)
         {
@@ -279,7 +301,7 @@ public class SearchMediaIntentHandler : BaseHandler
             // library-scoped kind is disabled by content access the sibling is the
             // only permissible query; issuing the scoped query would bypass the
             // content gating (code-review F3).
-            var outOfLibraryQuery = BuildQuery(FilterByContentAccess(_outOfLibraryPlayableTypes));
+            var outOfLibraryQuery = BuildQuery(FilterByContentAccess(siblingKinds!));
             Util.LibraryFilter.ApplyLibraryFilter(outOfLibraryQuery, topParentIds);
             IReadOnlyList<BaseItem> outOfLibrary = await RunAsync(outOfLibraryQuery, "UnifiedSearchOutOfLibrary").ConfigureAwait(false);
 

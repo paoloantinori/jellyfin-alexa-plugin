@@ -863,6 +863,37 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// The locale-keyed form of <see cref="BuildElicitSlotResponse"/> for handlers whose
+    /// elicit owns no session state of its own (the dialog lives Amazon-side): resolves
+    /// <paramref name="promptKey"/> in the request locale and elicits
+    /// <paramref name="slotToElicit"/> inside <paramref name="intentName"/>'s dialog,
+    /// declaring EVERY intent slot in updatedIntent (Amazon rejects a partial one, live
+    /// INVALID_RESPONSE 2026-08-28 21:17: "All slots must be defined when sending
+    /// updated intent in the Dialog.ElicitSlot directive"). The target intent must be
+    /// registered in the model's dialog.intents with elicitationRequired=false (manual
+    /// dialog control, CLAUDE.md anti-pattern #9). JF-398 write-time mutual exclusion:
+    /// no OTHER flow's stale state may ride along, so callers pass no active flow keys.
+    /// This is the one home for that lesson (was duplicated per handler, JF-442).
+    /// </summary>
+    /// <param name="promptKey">The locale response-string key for the spoken question.</param>
+    /// <param name="locale">The request locale, for the prompt string.</param>
+    /// <param name="slotToElicit">The slot the user's next utterance fills.</param>
+    /// <param name="intentName">The intent whose dialog the elicit continues.</param>
+    /// <param name="allSlotNames">Every slot of the target intent, for updatedIntent.</param>
+    /// <returns>The elicitation response.</returns>
+    protected static SkillResponse BuildDialogElicitResponse(
+        string promptKey,
+        string locale,
+        string slotToElicit,
+        string intentName,
+        string[] allSlotNames)
+        => BuildElicitSlotResponse(
+            intentName,
+            slotToElicit,
+            allSlotNames,
+            ResponseStrings.Get(promptKey, locale));
+
+    /// <summary>
     /// Build an AudioPlayer response with cover art metadata.
     /// </summary>
     /// <param name="playBehavior">The play behavior (ReplaceAll, Enqueue, ReplaceEnqueued).</param>

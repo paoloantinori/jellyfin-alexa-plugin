@@ -10,6 +10,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
+using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -19,6 +20,7 @@ using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Serialization;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -373,6 +375,75 @@ internal sealed class HandlerTestFixture
     internal void SetupUserMock()
         => UserManager.Setup(u => u.GetUserById(It.IsAny<Guid>()))
             .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+
+    /// <summary>
+    /// Mocks the JF-411 indefinite album-by-artist flow on the fixture's LibraryManager:
+    /// artist lookup, the artist's albums in the given (insertion) order, per-album
+    /// track counts for the JF-443 COUNT queries, and per-album playback results. The
+    /// count semantics mirror the TWO server mechanisms (Jellyfin BaseItemRepository
+    /// 10.11.8/10.11.11): ParentId answers by entity link (well-formed albums),
+    /// AlbumIds answers by matching the track's RAW Album tag against the album
+    /// entity's Name (f.Name == e.Album; the JF-338 malformed-folder shape). Queries
+    /// are recorded into <paramref name="queries"/> (when given) for assertions.
+    /// Hoisted from PlayAlbumIntentHandlerTests for the DialogDelegation slim
+    /// (JF-442); pair it with the caller's own GetPlayedTrackToken-style extraction.
+    /// </summary>
+    internal void SetupIndefiniteAlbumCatalog(
+        BaseItem artist,
+        List<BaseItem> artistAlbums,
+        List<BaseItem> allTracks,
+        IReadOnlyDictionary<Guid, BaseItem> firstTrackByAlbumId,
+        List<InternalItemsQuery>? queries = null)
+    {
+        var albumNameById = artistAlbums.ToDictionary(a => a.Id, a => a.Name);
+
+        LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) =>
+            {
+                queries?.Add(q);
+                if (q.IncludeItemTypes?.Contains(BaseItemKind.MusicArtist) == true)
+                {
+                    return new List<BaseItem> { artist };
+                }
+
+                if (q.IncludeItemTypes?.Contains(BaseItemKind.MusicAlbum) == true)
+                {
+                    return artistAlbums;
+                }
+
+                return new List<BaseItem>();
+            });
+
+        LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) =>
+            {
+                queries?.Add(q);
+                // JF-443 count queries are COUNT-only (Limit=0): the ParentId primary
+                // counts by entity link, the AlbumIds fallback by raw-tag name match.
+                if (q.Limit == 0)
+                {
+                    int count = q.ParentId != Guid.Empty
+                        ? allTracks.Count(t => t.ParentId == q.ParentId)
+                        : allTracks.Count(t => q.AlbumIds is { Length: > 0 }
+                            && albumNameById.TryGetValue(q.AlbumIds[0], out string? albumName)
+                            && string.Equals(t.Album, albumName, StringComparison.Ordinal));
+                    return new QueryResult<BaseItem>
+                    {
+                        Items = new List<BaseItem>(),
+                        TotalRecordCount = count
+                    };
+                }
+
+                // Playback page queries (nonzero Limit): ParentId first, then the JF-338
+                // AlbumIds retry when the folder link finds nothing.
+                Guid playKey = q.ParentId != Guid.Empty
+                    ? q.ParentId
+                    : q.AlbumIds is { Length: > 0 } ? q.AlbumIds[0] : Guid.Empty;
+                return firstTrackByAlbumId.TryGetValue(playKey, out BaseItem? track)
+                    ? new QueryResult<BaseItem> { Items = new[] { track }, TotalRecordCount = 1 }
+                    : new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 };
+            });
+    }
 
     internal SessionInfo CreateSession() => TestHelpers.CreateTestSession(SessionManager.Object, LoggerFactory);
 

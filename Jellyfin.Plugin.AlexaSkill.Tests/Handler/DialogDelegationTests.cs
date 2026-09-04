@@ -11,7 +11,6 @@ using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
-using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
@@ -119,6 +118,11 @@ public class DialogDelegationTests : PluginTestBase
             _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory);
         // Album slot missing even though musician is provided: JF-422 routes this into
         // the album-by-artist resolution (play without a title) instead of eliciting.
+        // Catalog via the shared fixture mock (JF-442); the play/resolution outcome of
+        // this exact scenario is pinned by the strictly stronger
+        // PlayAlbumIntentHandlerTests.HandleAsync_DialogInProgressWithMusician_PlaysArtistsAlbum_NoTitlePrompt,
+        // so this file keeps only its own angle: the response must not delegate the
+        // dialog back to Alexa.
         var request = CreateIntentRequest(IntentNames.PlayAlbum, "IN_PROGRESS",
             new Dictionary<string, string> { { "musician", "Queen" } });
         var session = _fx.CreateSession();
@@ -126,23 +130,17 @@ public class DialogDelegationTests : PluginTestBase
         _fx.SetupUserMock();
         var artist = new MusicArtist { Name = "Queen", Id = Guid.NewGuid() };
         var album = new MusicAlbum { Name = "A Night at the Opera", Id = Guid.NewGuid() };
-        var track = new Audio { Name = "Bohemian Rhapsody", Id = Guid.NewGuid() };
-        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns((InternalItemsQuery q) => q.IncludeItemTypes?.Contains(BaseItemKind.MusicArtist) == true
-                ? new List<BaseItem> { artist }
-                : new List<BaseItem> { album });
-        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
-            .Returns(new QueryResult<BaseItem>
-            {
-                Items = new[] { track },
-                TotalRecordCount = 1
-            });
+        var track = new Audio { Name = "Bohemian Rhapsody", Id = Guid.NewGuid(), ParentId = album.Id, Album = album.Name };
+        _fx.SetupIndefiniteAlbumCatalog(
+            artist,
+            new List<BaseItem> { album },
+            new List<BaseItem> { track },
+            new Dictionary<Guid, BaseItem> { [album.Id] = track });
 
         SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
 
         Assert.NotNull(response);
         Assert.DoesNotContain(response.Response.Directives ?? new List<IDirective>(), d => d.Type == "Dialog.Delegate");
-        Assert.Contains(response.Response.Directives ?? new List<IDirective>(), d => d.Type == "AudioPlayer.Play");
     }
 
     [Fact]

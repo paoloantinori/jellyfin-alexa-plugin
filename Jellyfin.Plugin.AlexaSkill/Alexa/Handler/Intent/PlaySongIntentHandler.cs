@@ -173,8 +173,16 @@ public class PlaySongIntentHandler : BaseHandler
 
         if (string.IsNullOrWhiteSpace(songQuery))
         {
+            // Context-preserving elicit (JF-413): the next utterance fills the song
+            // slot inside the PlaySongIntent dialog; PlaySongIntent is registered in
+            // dialog.intents in all 17 locales (verified 2026-08-29).
             Logger.LogDebug("PlaySong: empty song slot, eliciting via Dialog.ElicitSlot");
-            return BuildSongElicitResponse(locale);
+            return BuildDialogElicitResponse(
+                "ElicitSongName",
+                locale,
+                IntentNames.Slots.Song,
+                IntentNames.PlaySong,
+                new[] { IntentNames.Slots.Song, IntentNames.Slots.Musician });
         }
 
         // JF-467: primary-path music gate (shared contract on IfMediaTypeDisabled).
@@ -406,26 +414,6 @@ public class PlaySongIntentHandler : BaseHandler
             item_id, songs[0].Name, offsetMs);
         return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, songs[0], user, context, offsetMs, announceLocale: locale);
     }
-
-    /// <summary>
-    /// Song-name elicitation via Dialog.ElicitSlot (context-preserving, JF-413): the next
-    /// utterance fills the song slot inside the PlaySongIntent dialog instead of falling
-    /// through to general NLU, and an already-filled musician slot survives the
-    /// round-trip. The shared builder declares BOTH intent slots in updatedIntent
-    /// (Amazon rejects partial updatedIntent, live INVALID_RESPONSE 2026-08-28).
-    /// PlaySongIntent is registered in dialog.intents in all 17 locales (verified
-    /// 2026-08-29). MarkOthersInactive with no active keys (JF-398): the elicit owns no
-    /// session state of its own (the dialog lives Amazon-side), so any OTHER flow's
-    /// stale state must not ride along.
-    /// </summary>
-    /// <param name="locale">The request locale, for the prompt string.</param>
-    /// <returns>The elicitation response.</returns>
-    private static SkillResponse BuildSongElicitResponse(string locale)
-        => BuildElicitSlotResponse(
-            IntentNames.PlaySong,
-            IntentNames.Slots.Song,
-            new[] { IntentNames.Slots.Song, IntentNames.Slots.Musician },
-            ResponseStrings.Get("ElicitSongName", locale));
 
     // Alexa's NLU can misalign slot boundaries, causing carrier phrases like
     // "la canzone" to bleed into the slot value. Strip them before searching.
