@@ -53,7 +53,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
             _queueManager);
     }
 
-    private static IntentRequest CreateIntentRequest(string? album = null, string? musician = null)
+    private static IntentRequest CreateIntentRequest(string? album = null, string? musician = null, string locale = "en-US")
     {
         var intent = new Intent { Name = IntentNames.PlayAlbum };
         intent.Slots = new Dictionary<string, global::Alexa.NET.Request.Slot>();
@@ -68,7 +68,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
             intent.Slots["musician"] = new global::Alexa.NET.Request.Slot { Name = "musician", Value = musician };
         }
 
-        return new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req" };
+        return new IntentRequest { Intent = intent, Locale = locale, RequestId = "test-req" };
     }
 
     private SessionInfo CreateSession()
@@ -610,6 +610,90 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         Assert.NotNull(response);
         var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
         Assert.Null(playDirective);
+    }
+
+    [Fact]
+    public async Task HandleAsync_InteriorContainmentFuzzyMatch_DeviceCorr_DarkSideOfTheMoon_DoesNotAutoPlay()
+    {
+        // JF-478 incident replay (live 2026-09-04, corr=80bb4642, it-IT): 'riproduci
+        // album dark side of the moon' arrived with the album slot FILLED. The exact
+        // search missed, the fuzzy fallback matched Damien Rice's single-letter album
+        // 'O' at containment score 90, and the skill auto-played it. The 'o' is
+        // word-INITIAL inside "of" (and interior inside "moon"), so the JF-408
+        // every-occurrence-strictly-interior rule did not fire; the rejection must
+        // cover every embedded-fragment shape, never only the strictly-interior one.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(album: "dark side of the moon", locale: "it-IT");
+        _fx.SetupUserMock();
+
+        // Exact search (SearchTerm set) must miss; the fuzzy fallback's full-catalog
+        // scan (SearchTerm null) returns the degenerate 1-char album.
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => q.SearchTerm == null
+                ? new List<BaseItem> { new MusicAlbum { Name = "O", Id = Guid.NewGuid() } }
+                : new List<BaseItem>());
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.Null(playDirective);
+
+        // Clean not-found: 3 content words (dark/side/moon) exceed the cross-media
+        // artist guard, so no artist recovery fires either; the spoken words echo the
+        // user's own query back.
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("dark side of the moon", speech, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task HandleAsync_WholeWordContainmentFuzzyMatch_StillAutoPlays()
+    {
+        // JF-478 no-regression mirror (cascade reference class): a short REAL album
+        // name carried inside slot text as a WHOLE WORD ('u2' in the carrier-bleed
+        // shape "un disco di u2") must keep auto-playing. Only embedded fragments of
+        // other words are rejected; boundary-legit occurrences are not.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(album: "un disco di u2");
+        _fx.SetupUserMock();
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => q.SearchTerm == null
+                ? new List<BaseItem> { new MusicAlbum { Name = "U2", Id = Guid.NewGuid() } }
+                : new List<BaseItem>());
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem> { Items = new[] { new Audio { Name = "One", Id = Guid.NewGuid() } }, TotalRecordCount = 1 });
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.NotNull(playDirective);
+    }
+
+    [Fact]
+    public async Task HandleAsync_PluralAffixedContainmentFuzzyMatch_StillAutoPlays()
+    {
+        // JF-478 no-regression mirror (cascade reference class, pinned at the predicate
+        // level by IsEmbeddedContainment_PluralAffixedOccurrence_False): the ASR-plural
+        // shape "outkasts" -> album "Outkast" is an edge occurrence whose word extends
+        // the candidate by one character (a plausible affix form) and keeps playing.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(album: "outkasts");
+        _fx.SetupUserMock();
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => q.SearchTerm == null
+                ? new List<BaseItem> { new MusicAlbum { Name = "Outkast", Id = Guid.NewGuid() } }
+                : new List<BaseItem>());
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem> { Items = new[] { new Audio { Name = "Hey Ya", Id = Guid.NewGuid() } }, TotalRecordCount = 1 });
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.NotNull(playDirective);
     }
 
     [Fact]

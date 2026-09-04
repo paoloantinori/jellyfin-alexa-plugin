@@ -43,6 +43,29 @@ public class DoubleMetaphoneTests
         Assert.Contains("MT", schmidt.Primary);
     }
 
+    [Fact]
+    public void Encode_StylizedPunctuationName_PinsTheRealCodes()
+    {
+        // JF-479 device corr=f74eb567. What the encoder ACTUALLY does with the
+        // stylized spelling (probed, not assumed): Normalize keeps letters only, so
+        // "p!nk floyd" and the tokenized join "p nk floyd" the cross-media gate
+        // searches encode IDENTICALLY (both normalize to "PNKFLOYD"), but they do
+        // NOT collide with "Pink Floyd": a leading "PN" cluster is one of the
+        // silent-letter skips, so the stylized forms drop the P ("NKFL") while the
+        // plain spelling keeps it ("PNKF"). The cross-media recovery for this pair
+        // is therefore carried by the plain Levenshtein score ("p nk floyd" vs
+        // "pink floyd" is a one-character substitution = 90, above the strict bar of
+        // 85), NOT by the phonetic floor. Pinning the codes so nobody later assumes
+        // the phonetic chain owns this class and "simplifies" the plain scoring away.
+        var plain = DoubleMetaphone.Encode("Pink Floyd");
+        var stylized = DoubleMetaphone.Encode("p!nk floyd");
+        var tokenized = DoubleMetaphone.Encode("p nk floyd");
+
+        Assert.Equal("PNKF", plain.Primary);
+        Assert.Equal("NKFL", stylized.Primary);
+        Assert.Equal(stylized.Primary, tokenized.Primary);
+    }
+
     // --- Consistency and edge case tests ---
 
     [Fact]

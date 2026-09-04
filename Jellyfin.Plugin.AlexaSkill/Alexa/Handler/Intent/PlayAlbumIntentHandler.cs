@@ -336,15 +336,19 @@ public class PlayAlbumIntentHandler : BaseHandler
             var fuzzyMatch = FuzzyMatcher.FindBestMatchWithScore(album, allAlbums, a => a.Name);
             if (fuzzyMatch.HasValue && fuzzyMatch.Value.Score >= FuzzyMatcher.GetDefaultThreshold(user))
             {
-                if (Util.ArtistSearch.IsInteriorContainment(album, fuzzyMatch.Value.Item.Name))
+                if (Util.ArtistSearch.IsEmbeddedContainment(album, fuzzyMatch.Value.Item.Name))
                 {
                     // JF-408: the match exists only inside other words of the query (live
                     // incident: album "O" scored ContainmentScore against "walls for cup",
-                    // ASR for "Waltz for Koop", and auto-played on-device). The recall layer
-                    // must keep returning such candidates; the auto-play decision must not
-                    // act on them.
+                    // ASR for "Waltz for Koop", and auto-played on-device). JF-478 device
+                    // corr=80bb4642 extended the shape: the embedding may be word-INITIAL
+                    // ("O" via the 'o' of "of" in "dark side of the moon") or word-final,
+                    // not only strictly interior; the rejection covers every embedded
+                    // fragment, and falls through to the artist gate / clean not-found
+                    // below. The recall layer must keep returning such candidates; the
+                    // auto-play decision must not act on them.
                     Logger.LogInformation(
-                        "PlayAlbum: fuzzy fallback match '{Name}' score={Score} for query='{Query}' is interior containment, not auto-playing (JF-408)",
+                        "PlayAlbum: fuzzy fallback match '{Name}' score={Score} for query='{Query}' is embedded containment, not auto-playing (JF-408/JF-478)",
                         fuzzyMatch.Value.Item.Name, fuzzyMatch.Value.Score, album);
                 }
                 else

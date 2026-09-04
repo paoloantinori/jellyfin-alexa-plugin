@@ -560,6 +560,39 @@ public class FuzzyMatcherTests
             $"expected 'jazz caffè' to phonetic-match 'Jazz Cafe' at >= {FuzzyMatcher.DefaultThreshold}, got {result.Value.Score}");
     }
 
+    [Fact]
+    public void FindBestMatchWithScore_TokenizedStylizedName_ClearsStrictCrossMediaBar()
+    {
+        // JF-479 device corr=f74eb567: album slot "dei P!nk floyd" tokenizes (it-IT
+        // stop word "dei" stripped, "P!nk" split at the exclamation mark) to the
+        // cleaned query "p nk floyd" the cross-media artist gate scores. Against
+        // "Pink Floyd" that is a one-character substitution, so the PLAIN PartialRatio
+        // score (90) already clears the strict cross-media bar of
+        // max(GetDefaultThreshold, CrossMediaArtistThreshold=85) with the REAL phonetic
+        // codes in play (they do not collide for this pair: a leading "PN" cluster is
+        // a silent-letter skip, see DoubleMetaphoneTests). Pins that the gate's
+        // acceptance never depended on a phonetic floor for the P!nk class.
+        var pinkFloyd = new TestItemWithId("Pink Floyd", Guid.NewGuid());
+        var phoneticMap = new Dictionary<Guid, (string Primary, string? Alternate)>
+        {
+            [pinkFloyd.Id] = DoubleMetaphone.Encode("Pink Floyd")
+        };
+
+        (string Primary, string? Alternate)? Lookup(Guid id) =>
+            phoneticMap.TryGetValue(id, out var codes) ? codes : null;
+
+        var result = FuzzyMatcher.FindBestMatchWithScore(
+            "p nk floyd",
+            new[] { pinkFloyd },
+            i => i.Name,
+            i => i.Id,
+            Lookup);
+
+        Assert.NotNull(result);
+        Assert.True(result!.Value.Score >= 85,
+            $"expected 'p nk floyd' to clear the strict cross-media bar (85) against 'Pink Floyd', got {result.Value.Score}");
+    }
+
     // --- JF-342: length-disproportion penalty (coincidental-substring false positives) ---
 
     [Fact]

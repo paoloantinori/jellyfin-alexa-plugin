@@ -127,6 +127,87 @@ public class ArtistSearchTests
     }
 
     [Fact]
+    public void IsCoincidentalContainmentMatch_DeviceAlbumCorrWordInitialFragment_True()
+    {
+        // JF-478 device corr=80bb4642: 'riproduci album dark side of the moon' auto-played
+        // Damien Rice's album 'O'. The 'o' occurrences are word-INITIAL in "of" (left
+        // boundary) and strictly interior in "moon": no WHOLE-WORD occurrence exists, so
+        // the containment is coincidental even though the every-occurrence-strictly-
+        // interior shape does not hold. Under it-IT the coverage rule cannot fire either
+        // ('o' is the Italian conjunction, so the candidate tokenizes to nothing and
+        // coverage bails); the embedded-occurrence rule is the only rejection.
+        Assert.True(ArtistSearch.IsCoincidentalContainmentMatch("dark side of the moon", "O", "it-IT"));
+    }
+
+    [Fact]
+    public void IsEmbeddedContainment_WordInitialFragmentOccurrence_True()
+    {
+        // JF-478 predicate-level pin for the device corr: every 'o' occurrence is embedded
+        // in another word (word-initial in "of", interior in "moon"); none is a whole
+        // word, none is a plausible affix form (a 1-char name has no affix forms).
+        Assert.True(ArtistSearch.IsEmbeddedContainment("dark side of the moon", "O"));
+    }
+
+    [Fact]
+    public void IsEmbeddedContainment_WordFinalFragmentOccurrence_True()
+    {
+        // JF-478 symmetric shape: 'o' word-FINAL in "glow" and interior in "love"/"of"
+        // (word-initial). All fragments of other words, never a whole word.
+        Assert.True(ArtistSearch.IsEmbeddedContainment("the glow of love", "O"));
+    }
+
+    [Fact]
+    public void IsEmbeddedContainment_WholeWordOccurrence_False()
+    {
+        // No-regression lock: the carrier-bleed class keeps a whole-word occurrence
+        // legitimate ('o' spoken as its own word at the end of the query), exactly as
+        // 'u2' in "suona la musica di u2" must keep matching album/artist 'U2'.
+        Assert.False(ArtistSearch.IsEmbeddedContainment("l'album o", "O"));
+    }
+
+    [Fact]
+    public void IsEmbeddedContainment_PluralAffixedOccurrence_False()
+    {
+        // No-regression lock (JF-408): "outkasts" -> "outkast" is a prefix-shaped plural
+        // form; the word extends the candidate by one character, which is a plausible
+        // affix, so it stays legitimate.
+        Assert.False(ArtistSearch.IsEmbeddedContainment("outkasts", "outkast"));
+    }
+
+    [Fact]
+    public async Task SearchAsync_TokenizedStylizedName_ResolvesThroughTier2Prefix()
+    {
+        // JF-479 chain verification (real DM codes, real tier chain): the cross-media
+        // gate searches the TOKENIZED join of the slot ("dei P!nk floyd" -> tokens
+        // [p, nk, floyd] -> "p nk floyd"). The tier-2 first-word prefix pass ('p')
+        // surfaces Pink Floyd, and the match clears the bar on the PLAIN Levenshtein
+        // score ("p nk floyd" vs "pink floyd" is a one-character substitution = 90,
+        // above the strict cross-media bar of 85): the stylized forms do NOT collide
+        // phonetically with the plain spelling (leading "PN" is a silent-letter skip,
+        // see DoubleMetaphoneTests.Encode_StylizedPunctuationName_PinsTheRealCodes).
+        var pinkFloyd = new MusicArtist { Name = "Pink Floyd", Id = Guid.NewGuid() };
+        var index = new FakeArtistIndex(
+            new[] { pinkFloyd },
+            new Dictionary<Guid, (string Primary, string? Alternate)>
+            {
+                [pinkFloyd.Id] = DoubleMetaphone.Encode("Pink Floyd")
+            });
+
+        var result = await ArtistSearch.SearchAsync(
+            "p nk floyd",
+            user: null,
+            libraryManager: Mock.Of<ILibraryManager>(),
+            artistIndex: index,
+            logger: Logger,
+            dbQuery: NotCalled,
+            locale: "it-IT",
+            cancellationToken: CancellationToken.None);
+
+        Assert.Single(result);
+        Assert.Equal("Pink Floyd", result[0].Name);
+    }
+
+    [Fact]
     public async Task SearchAsync_Tier4_RealMultiWordNearMatch_StillResolves()
     {
         // No-regression: a genuine near-match where the candidate is contained in the query

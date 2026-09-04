@@ -403,7 +403,7 @@ internal static class FuzzyMatcher
     /// score so it can reach the caller. Auto-play decision points carry the guards:
     /// the artist path uses ArtistSearch.IsCoincidentalContainmentMatch (JF-377 word
     /// coverage + JF-408 interior-occurrence rule), the PlayAlbum fuzzy fallback uses
-    /// ArtistSearch.IsInteriorContainment (JF-408). Do NOT tighten this exemption.
+    /// ArtistSearch.IsEmbeddedContainment (JF-408). Do NOT tighten this exemption.
     /// </summary>
     private static int ApplyLengthPenalty(string query, string candidate, int score)
         => query.Contains(candidate, StringComparison.OrdinalIgnoreCase)

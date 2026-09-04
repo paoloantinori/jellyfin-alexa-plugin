@@ -500,13 +500,16 @@ internal static class ArtistSearch
     /// shape from JF-377 (e.g. query "zzzqqq nonexistent artist" vs artist "artist"): the
     /// containment shortcut in FuzzyMatcher.PartialRatio scores it 90, but only one of three
     /// content words belongs to the candidate, so it is unrelated noise rather than an intended
-    /// match. Also true for the JF-408 interior shape: every occurrence of the candidate strictly
-    /// inside another word (artist "artist" in "xyznonexistentartist123"), which the coverage
-    /// rule cannot see in single-content-word queries. Returns false for every legitimate shape:
+    /// match. Also true for the JF-408 embedded shape: every occurrence of the candidate
+    /// embedded inside another word (artist "artist" in "xyznonexistentartist123"; album "O"
+    /// via the word-initial 'o' of "of" in "dark side of the moon", JF-478), which the
+    /// coverage rule cannot see in single-content-word queries and cannot see at all when
+    /// the candidate itself tokenizes to nothing (a stop-word-only name like "O" under
+    /// it-IT, where "o" is the conjunction). Returns false for every legitimate shape:
     /// candidate at least as long as the query (ASR truncation), candidate not a substring of the
     /// query (genuine fuzzy-distance match), the candidate's words covering at least half the
-    /// query's content words, or a containment that touches a token boundary somewhere (whole-word
-    /// or affixed forms like "outkasts" -> "outkast").
+    /// query's content words, or a containment that occurs as a whole word somewhere or a
+    /// plausible affix form (whole-word or affixed forms like "outkasts" -> "outkast").
     /// <para>
     /// This NARROWS the JF-342 invariant in FuzzyMatcher.ApplyLengthPenalty (which exempts ALL
     /// contained candidates from the length penalty as "a real near-exact match"): the low-coverage
@@ -547,14 +550,17 @@ internal static class ArtistSearch
         }
 
         // JF-408 residual (found via the simulator on the deployed build): a containment whose
-        // every occurrence is strictly INTERIOR (word characters on both sides) is riding
-        // inside another word ("artist" inside "xyznonexistentartist123" auto-played a
-        // garbage-metadata artist). The coverage rule below cannot see this in single-token
-        // queries (fewer than 2 content words short-circuits to "not coincidental"), so the
-        // interior shape is detected here. Prefix/suffix shapes ("outkasts" -> "outkast",
-        // plural or affixed real names) are NOT interior and fall through to the coverage
+        // every occurrence is EMBEDDED in another word (strictly interior, or a word-edge
+        // fragment that is not a plausible affix form) is riding inside another word
+        // ("artist" inside "xyznonexistentartist123" auto-played a garbage-metadata artist;
+        // "O" via the 'o' of "of"/"moon" in "dark side of the moon" auto-played Damien
+        // Rice's album, JF-478). The coverage rule below cannot see this in single-token
+        // queries (fewer than 2 content words short-circuits to "not coincidental") and
+        // cannot see it at all for stop-word-only candidate names, so the embedded shape is
+        // detected here. Whole-word and plausible-affix shapes ("outkasts" -> "outkast",
+        // plural or affixed real names) are not embedded and fall through to the coverage
         // rule so legit affixed matches keep auto-playing.
-        if (HasOnlyInteriorOccurrences(q, c))
+        if (HasOnlyCoincidentalOccurrences(q, c))
         {
             return true;
         }
@@ -591,49 +597,70 @@ internal static class ArtistSearch
     }
 
     /// <summary>
-    /// Whether the candidate name occurs in the query ONLY strictly inside other words
-    /// (word characters on both sides of every occurrence). This is the coincidental
-    /// containment shape (JF-408): album "O" via the 'o' in "walls for cup", artist
-    /// "artist" inside "xyznonexistentartist123". Whole-word and affixed occurrences
-    /// ("outkasts" -> "outkast") are boundary-touching and return false. Used by
-    /// auto-play decision points that have no full word-coverage predicate (the
-    /// PlayAlbum fuzzy fallback); the artist path uses the richer
-    /// <see cref="IsCoincidentalContainmentMatch"/>.
+    /// Whether the candidate name occurs in the query only EMBEDDED inside other words:
+    /// never as a whole word, and never as a plausible affix form of a longer word
+    /// (plural/inflection, where the containing word extends the candidate by at most
+    /// <see cref="AffixOverflowTolerance"/> characters and the candidate itself is at
+    /// least <see cref="MinAffixCandidateLength"/> characters). This is the coincidental
+    /// containment shape: JF-408 (album "O" via the strictly-interior 'o' in
+    /// "walls for cup"; artist "artist" inside "xyznonexistentartist123") and JF-478
+    /// (album "O" via the word-INITIAL 'o' of "of" inside "dark side of the moon",
+    /// where the occurrences are boundary-touching fragments yet the user never spoke
+    /// the name as a word). Whole-word occurrences ("u2" in "un disco di u2") and
+    /// affixed occurrences ("outkasts" -> "outkast") are legit and return false. Used
+    /// by auto-play decision points that have no full word-coverage predicate (the
+    /// PlayAlbum fuzzy fallback and the song-to-album cascade); the artist path uses
+    /// the richer <see cref="IsCoincidentalContainmentMatch"/>.
     /// </summary>
     /// <param name="query">The raw query string.</param>
     /// <param name="candidateName">The matched candidate's name.</param>
-    /// <returns>True when the candidate is contained and every occurrence is interior.</returns>
-    internal static bool IsInteriorContainment(string query, string candidateName)
+    /// <returns>True when the candidate is contained and every occurrence is embedded in another word.</returns>
+    internal static bool IsEmbeddedContainment(string query, string candidateName)
     {
         if (string.IsNullOrWhiteSpace(query) || string.IsNullOrWhiteSpace(candidateName))
         {
             return false;
         }
 
-        return HasOnlyInteriorOccurrences(query.Trim(), candidateName.Trim());
+        return HasOnlyCoincidentalOccurrences(query.Trim(), candidateName.Trim());
     }
 
     /// <summary>
+    /// How many characters a containing word may extend beyond a boundary-touching
+    /// occurrence before it stops being a plausible affix form (plural "s"/"es",
+    /// possessive, vowel inflection) and becomes an unrelated word the candidate is a
+    /// fragment of. JF-478.
+    /// </summary>
+    internal const int AffixOverflowTolerance = 2;
+
+    /// <summary>
+    /// Minimum candidate length for an affix form to be plausible: 1-2 character names
+    /// have no inflection class, so any boundary-touching occurrence of them inside a
+    /// LONGER word is a fragment ("O" at the start of "of"), never a plural. JF-478.
+    /// </summary>
+    internal const int MinAffixCandidateLength = 3;
+
+    /// <summary>
     /// Whether every occurrence of <paramref name="needle"/> in <paramref name="haystack"/>
-    /// is strictly interior: word characters on BOTH sides (an occurrence touching a token
-    /// boundary, including prefix/suffix of a longer word such as the plural form
-    /// "outkasts" -> "outkast", disqualifies). See <see cref="IsCoincidentalContainmentMatch"/>.
+    /// is embedded in another word: not a whole word, and not a plausible affix form.
+    /// Strictly interior occurrences (word characters on both sides) are always
+    /// embedded; an occurrence at a word edge is embedded unless the containing word
+    /// extends the candidate by at most <see cref="AffixOverflowTolerance"/> characters
+    /// with a candidate at least <see cref="MinAffixCandidateLength"/> long (the
+    /// "outkasts" -> "outkast" plural class). See <see cref="IsCoincidentalContainmentMatch"/>.
     /// </summary>
     /// <param name="haystack">The query string.</param>
     /// <param name="needle">The candidate name.</param>
-    /// <returns>True when all occurrences are interior; false when there is none or any is boundary-touching.</returns>
-    private static bool HasOnlyInteriorOccurrences(string haystack, string needle)
+    /// <returns>True when all occurrences are embedded; false when there is none or any is a whole word or plausible affix.</returns>
+    private static bool HasOnlyCoincidentalOccurrences(string haystack, string needle)
     {
         int index = 0;
         bool any = false;
         while ((index = haystack.IndexOf(needle, index, StringComparison.OrdinalIgnoreCase)) >= 0)
         {
             any = true;
-            bool leftIsWordChar = index > 0 && char.IsLetterOrDigit(haystack[index - 1]);
-            int end = index + needle.Length;
-            bool rightIsWordChar = end < haystack.Length && char.IsLetterOrDigit(haystack[end]);
 
-            if (!(leftIsWordChar && rightIsWordChar))
+            if (IsRealWordOccurrence(haystack, needle, index))
             {
                 return false;
             }
@@ -642,6 +669,59 @@ internal static class ArtistSearch
         }
 
         return any;
+    }
+
+    /// <summary>
+    /// Whether the occurrence of <paramref name="needle"/> at <paramref name="index"/>
+    /// reads as the user having SPOKEN the name: a whole-word occurrence (non-word
+    /// characters or the string boundaries on both sides), or a plausible affix form
+    /// of a single word (the word extends the candidate by a short tail, e.g. the
+    /// plural "outkasts" for "outkast"). Everything else, including word-initial and
+    /// word-final fragments of longer words ("O" at the start of "of", at the end of
+    /// "glow"), is embedded in another word and carries no user intent. JF-478.
+    /// </summary>
+    /// <param name="haystack">The query string.</param>
+    /// <param name="needle">The candidate name.</param>
+    /// <param name="index">The start of this occurrence of the needle.</param>
+    /// <returns>True when this occurrence is a whole word or a plausible affix form.</returns>
+    private static bool IsRealWordOccurrence(string haystack, string needle, int index)
+    {
+        bool leftIsWordChar = index > 0 && char.IsLetterOrDigit(haystack[index - 1]);
+        int end = index + needle.Length;
+        bool rightIsWordChar = end < haystack.Length && char.IsLetterOrDigit(haystack[end]);
+
+        if (!leftIsWordChar && !rightIsWordChar)
+        {
+            return true;
+        }
+
+        if (leftIsWordChar && rightIsWordChar)
+        {
+            // Strictly interior: always embedded, never a spoken form.
+            return false;
+        }
+
+        // Edge occurrence (prefix or suffix of a longer word): legit only as a
+        // plausible affix form, which needs a candidate long enough to dominate the
+        // word (1-2 char names have no inflection class).
+        if (needle.Length < MinAffixCandidateLength)
+        {
+            return false;
+        }
+
+        int wordStart = index;
+        while (wordStart > 0 && char.IsLetterOrDigit(haystack[wordStart - 1]))
+        {
+            wordStart--;
+        }
+
+        int wordEnd = end;
+        while (wordEnd < haystack.Length && char.IsLetterOrDigit(haystack[wordEnd]))
+        {
+            wordEnd++;
+        }
+
+        return (wordEnd - wordStart) - needle.Length <= AffixOverflowTolerance;
     }
 
     private static BaseItem? FuzzyMatch(string query, IReadOnlyList<BaseItem> candidates, Entities.User? user,

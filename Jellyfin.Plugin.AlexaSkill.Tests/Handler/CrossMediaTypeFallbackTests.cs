@@ -988,6 +988,162 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         Assert.Contains("koop", speech, StringComparison.OrdinalIgnoreCase);
     }
 
+    // ============================================================
+    // JF-479: the album-title miss DOES reach the shared cross-media
+    // gate (wired since JF-446), but the word-count guard rejected the
+    // device shape: KeywordMatcher.Tokenize splits the stylized name
+    // "P!nk" on the exclamation mark into the tokens [p, nk], so the
+    // slot "dei P!nk floyd" counted THREE content tokens against the
+    // cap of two and dead-ended in NotFoundAlbumByName. The guard must
+    // count spoken WORDS that carry content, not alphanumeric fragments.
+    // ============================================================
+
+    [Fact]
+    public async Task JF479_PlayAlbum_AlbumSlot_DeiStylizedArtistAnswer_PlaysArtist()
+    {
+        // Device corr=f74eb567: 'riproduci l'album dei pink floyd' arrived as
+        // album='dei P!nk floyd', musician empty. 'dei' strips as an it-IT stop word
+        // and "P!nk" is ONE spoken word, so the guard sees 2 content words and the
+        // shared gate searches the tokenized join "p nk floyd", which resolves Pink
+        // Floyd via the PLAIN score (a one-char substitution from "pink floyd" = 90,
+        // above the 85 bar; the phonetic codes do NOT collide: see
+        // DoubleMetaphoneTests.Encode_StylizedPunctuationName_PinsTheRealCodes).
+        // Plays with the FoundArtistInstead announcement.
+        var artistId = Guid.NewGuid();
+        var song1 = new Audio { Name = "Wish You Were Here", Id = Guid.NewGuid() };
+        var song2 = new Audio { Name = "Time", Id = Guid.NewGuid() };
+
+        _fx.SetupUserMock();
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                // Every album query (exact search and fuzzy full-catalog scan): miss
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))
+                {
+                    return new List<BaseItem>();
+                }
+
+                // Artist search (tokenized query "p nk floyd"): the artist
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                {
+                    return new List<BaseItem> { new MusicArtist { Name = "Pink Floyd", Id = artistId } };
+                }
+
+                // Artist songs fallback
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0 && q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.Audio))
+                {
+                    return new List<BaseItem> { song1, song2 };
+                }
+
+                return new List<BaseItem>();
+            });
+
+        var handler = CreateAlbumHandler();
+        var request = CreateAlbumIntent("dei P!nk floyd", locale: "it-IT");
+        var context = _fx.CreateContext();
+        var session = _fx.CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, _fx.CreateUser(), session, CancellationToken.None);
+
+        // The artist's music plays (not the dead-end NotFoundAlbumByName)
+        Assert.NotNull(response.Response?.Directives);
+        Assert.NotEmpty(response.Response.Directives);
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Equal(2, session.NowPlayingQueue.Count);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Pink Floyd", speech);
+    }
+
+    [Fact]
+    public async Task JF479_PlayAlbum_AlbumSlot_ThreeWordAlbumTitle_CleanNotFound()
+    {
+        // Word-count guard discipline pin: a genuine album-shaped miss with 3 content
+    // words ('magical mystery tour', absent from the library) is a poor artist query;
+    // CrossMediaArtistMaxWords=2 rejects it BEFORE any artist search is issued and the
+    // response is the clean album not-found speaking the user's own words.
+        _fx.SetupUserMock();
+
+        bool artistQueryIssued = false;
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                {
+                    artistQueryIssued = true;
+                    return new List<BaseItem> { new MusicArtist { Name = "Pink Floyd", Id = Guid.NewGuid() } };
+                }
+
+                return new List<BaseItem>();
+            });
+
+        var handler = CreateAlbumHandler();
+        var request = CreateAlbumIntent("magical mystery tour", locale: "it-IT");
+        var context = _fx.CreateContext();
+
+        SkillResponse response = await handler.HandleAsync(request, context, _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+
+        Assert.False(artistQueryIssued, "a 3-content-word album title must not reach the artist search");
+        Assert.True(response.Response?.Directives == null || response.Response.Directives.Count == 0);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("magical mystery tour", speech, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task JF479_PlayAlbum_AlbumGateRejection_DoesNotBlockArtistRecovery()
+    {
+        // Interaction pin (JF-478 x JF-479): when the fuzzy album acceptance REJECTS
+    // a coincidental containment (here album 'O' interior-contained in "dei P!nk
+    // floyd" via the 'o' of "floyd"), the request must still fall through to the
+    // cross-media artist gate and play Pink Floyd. The album rejection may never
+    // create a new dead-end (cascade ordering precedent: reject, then the caller's
+    // own fallback chain).
+        var artistId = Guid.NewGuid();
+        var song1 = new Audio { Name = "Breathe", Id = Guid.NewGuid() };
+
+        _fx.SetupUserMock();
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                // Exact album search (SearchTerm set): miss. Fuzzy full-catalog scan
+                // (SearchTerm null): the degenerate 1-char album the JF-408/JF-478
+                // gate must reject.
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))
+                {
+                    return q.SearchTerm == null
+                        ? new List<BaseItem> { new MusicAlbum { Name = "O", Id = Guid.NewGuid() } }
+                        : new List<BaseItem>();
+                }
+
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                {
+                    return new List<BaseItem> { new MusicArtist { Name = "Pink Floyd", Id = artistId } };
+                }
+
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0 && q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.Audio))
+                {
+                    return new List<BaseItem> { song1 };
+                }
+
+                return new List<BaseItem>();
+            });
+
+        var handler = CreateAlbumHandler();
+        var request = CreateAlbumIntent("dei P!nk floyd", locale: "it-IT");
+        var context = _fx.CreateContext();
+        var session = _fx.CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, _fx.CreateUser(), session, CancellationToken.None);
+
+        Assert.NotNull(response.Response?.Directives);
+        Assert.NotEmpty(response.Response.Directives);
+        Assert.NotNull(session.NowPlayingQueue);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Pink Floyd", speech);
+        Assert.DoesNotContain("l'album O", speech, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public async Task JF446_PlaySong_SongSlot_DiArtistAnswer_MusicianEmpty_PlaysArtist()
     {

@@ -112,7 +112,13 @@ public abstract class BaseHandler
     /// tokenizes the slot text with the locale stop-word set and rejects queries whose
     /// content words exceed <see cref="CrossMediaArtistMaxWords"/> (a long query is a
     /// poor artist AND a poor album guess; JF-295's original rationale, JF-446 consolidation,
-    /// JF-345 extension to the album gate).
+    /// JF-345 extension to the album gate). The guard counts spoken WORDS that carry
+    /// content, not the tokenizer's alphanumeric fragments: a stylized name with
+    /// intra-word punctuation ("P!nk") splits into two tokens but is ONE spoken word,
+    /// and counting fragments rejected the JF-479 device shape "dei P!nk floyd"
+    /// (article stripped + one spoken name + surname = 2 content words) as three.
+    /// The <paramref name="tokens"/> out param keeps the fragment-level tokenize output
+    /// (the join the artist gate searches); only the COUNT is word-level.
     /// </summary>
     /// <param name="slotText">The raw slot text.</param>
     /// <param name="locale">The request locale (stop-word set selection).</param>
@@ -123,16 +129,32 @@ public abstract class BaseHandler
     protected bool PassesCrossMediaWordGuard(string slotText, string locale, string fallbackNoun, string logLabel, out string[] tokens)
     {
         tokens = Util.KeywordMatcher.Tokenize(slotText, locale);
-        if (tokens.Length == 0 || tokens.Length > CrossMediaArtistMaxWords)
+        int contentWords = CountContentWords(slotText, locale);
+        if (contentWords == 0 || contentWords > CrossMediaArtistMaxWords)
         {
             Logger.LogDebug(
                 "{Label}: skipping {Noun} fallback, {Count} content words in '{Query}' (guard {Max})",
-                logLabel, fallbackNoun, tokens.Length, slotText, CrossMediaArtistMaxWords);
+                logLabel, fallbackNoun, contentWords, slotText, CrossMediaArtistMaxWords);
             return false;
         }
 
         return true;
     }
+
+    /// <summary>
+    /// How many whitespace-delimited words of the slot text carry content (their
+    /// tokenized form is non-empty, i.e. they are not pure stop words). This is the
+    /// word-count the cross-media guard judges on: punctuation inside a spoken word
+    /// ("P!nk", "AC/DC") must not split one name into two words against the cap.
+    /// JF-479.
+    /// </summary>
+    /// <param name="slotText">The raw slot text.</param>
+    /// <param name="locale">The request locale (stop-word set selection).</param>
+    /// <returns>The number of content-carrying spoken words.</returns>
+    private static int CountContentWords(string slotText, string locale)
+        => slotText
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+            .Count(w => Util.KeywordMatcher.Tokenize(w, locale).Length > 0);
 
     /// <summary>
     /// JF-465: the ONE Layer-1 warming-gate preamble (JF-419 family). While the index
@@ -3442,13 +3464,15 @@ public abstract class BaseHandler
             return null;
         }
 
-        if (Util.ArtistSearch.IsInteriorContainment(query, match.Item.Name))
+        if (Util.ArtistSearch.IsEmbeddedContainment(query, match.Item.Name))
         {
             // JF-408: the match exists only inside other words of the query (live
-            // precedent: album "O" via the 'o' in "walls for cup"). The recall layer
-            // returned the candidate; the substitution decision must not act on it.
+            // precedent: album "O" via the 'o' in "walls for cup"). JF-478 extended
+            // the shape to word-initial/word-final fragments ("O" via the 'o' of
+            // "of" in "dark side of the moon"). The recall layer returned the
+            // candidate; the substitution decision must not act on it.
             Logger.LogInformation(
-                "{Label}: album fallback match '{Name}' score={Score} for query='{Query}' is interior containment, not substituting (JF-408)",
+                "{Label}: album fallback match '{Name}' score={Score} for query='{Query}' is embedded containment, not substituting (JF-408/JF-478)",
                 logLabel, match.Item.Name, match.Score, query);
             return null;
         }
