@@ -185,6 +185,89 @@ internal static class ArtistSearch
     }
 
     /// <summary>
+    /// JF-457 bound on the album-scope post-filter: at most this many artists of one
+    /// bypass-tier result set are verified, one Limit=1 MusicAlbum query each. Entries
+    /// past the cap are DROPPED, never returned unverified. The bound prices the
+    /// SELECTION pool, not just the spoken window: the downstream re-rankers pick the
+    /// winner from this returned list (the artist prompt itself speaks Take(3)), and
+    /// with more than 8 band-passing tier-1 rows a non-empty kept list short-circuits
+    /// the chain before tiers 2-4 could recover a true match sitting past position 8
+    /// of the unordered result. Accepted trade (review 2026-09-04): the reachability
+    /// is narrow (restricted user AND cold/disabled index AND >8 rows AND the true
+    /// match in the tail), the dropped direction is privacy-correct, and the warm
+    /// index serves the full scope.
+    /// </summary>
+    internal const int MaxAlbumScopeChecks = 8;
+
+    /// <summary>
+    /// JF-457 album-scope post-filter for the items-by-name bypass DB tiers. The bypass
+    /// (LibraryFilter.ApplyItemsByNameBypass) exists so a library-restricted user's
+    /// cold-window DB artist query can still find FOLDERLESS artists (TopParentId NULL,
+    /// the metadata-path majority); its cost is that Jellyfin matches every MusicArtist
+    /// row regardless of library, so an excluded library's artist NAME could otherwise
+    /// surface in a not-found or disambiguation prompt (names only: songs queries keep
+    /// the strict TopParentIds filter, so no playable content ever leaks). This filter
+    /// bounds the leak: an artist survives only when at least one album by them (or
+    /// containing a track by them, the same net ArtistIndexService scopes folderless
+    /// artists with) lives under the user's resolved top parents.
+    /// <para>
+    /// Cost bounds: skipped entirely for unrestricted users (null scope) and for empty
+    /// result sets; at most <see cref="MaxAlbumScopeChecks"/> Limit=1 MusicAlbum queries
+    /// per tier result set. Deliberately assigns TopParentIds RAW (not via
+    /// ApplyLibraryFilter): MusicAlbum is not an items-by-name type, so the bypass must
+    /// not fire on the verification query itself.
+    /// </para>
+    /// </summary>
+    /// <param name="artists">The bypass-tier artist results (names not yet spoken).</param>
+    /// <param name="topParentIds">The user's resolved library scope, or null when unrestricted.</param>
+    /// <param name="dbQuery">The caller's database query channel (RetryAsync-wrapped GetItemList).</param>
+    /// <param name="logger">The caller's logger.</param>
+    /// <param name="cancellationToken">Request cancellation token.</param>
+    /// <returns>Only the artists whose album scope intersects the user's libraries.</returns>
+    internal static async Task<IReadOnlyList<BaseItem>> FilterByAlbumScopeAsync(
+        IReadOnlyList<BaseItem> artists,
+        Guid[]? topParentIds,
+        Func<InternalItemsQuery, CancellationToken, Task<IReadOnlyList<BaseItem>>> dbQuery,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        // Unrestricted scope (the bypass is inert without TopParentIds anyway) or
+        // nothing to verify: zero cost.
+        if (topParentIds is not { Length: > 0 } || artists.Count == 0)
+        {
+            return artists;
+        }
+
+        var kept = new List<BaseItem>(Math.Min(artists.Count, MaxAlbumScopeChecks));
+        foreach (BaseItem artist in artists.Take(MaxAlbumScopeChecks))
+        {
+            var albumQuery = new InternalItemsQuery
+            {
+                Recursive = true,
+                IncludeItemTypes = new[] { BaseItemKind.MusicAlbum },
+                ArtistIds = new[] { artist.Id },
+                TopParentIds = topParentIds,
+                Limit = 1,
+                DtoOptions = new DtoOptions(false) { EnableImages = false, EnableUserData = false, AddCurrentProgram = false }
+            };
+
+            IReadOnlyList<BaseItem> albums = await dbQuery(albumQuery, cancellationToken).ConfigureAwait(false);
+            if (albums.Count > 0)
+            {
+                kept.Add(artist);
+            }
+            else
+            {
+                logger.LogInformation(
+                    "ArtistSearch: album-scope post-filter dropped bypass-tier artist '{Artist}' (no album under the user's libraries, JF-457)",
+                    artist.Name);
+            }
+        }
+
+        return kept;
+    }
+
+    /// <summary>
     /// Tier 1.5 entry point shared by BOTH search implementations (inline
     /// PlayArtistSongs chain and <see cref="SearchAsync"/>'s in-memory branch), so
     /// the stopwatch and the tier log line exist once. Runs AFTER tiers 2-3 and
@@ -382,7 +465,9 @@ internal static class ArtistSearch
             // Database fallback. Scope assignment; the items-by-name bypass fires
             // automatically inside ApplyLibraryFilter for the MusicArtist kind (the
             // full rationale, folderless artists vs the TopParentIds filter, lives
-            // in LibraryFilter.ApplyItemsByNameBypass).
+            // in LibraryFilter.ApplyItemsByNameBypass). JF-457: every tier below
+            // post-filters its results through FilterByAlbumScopeAsync, bounding the
+            // bypass's wrong-library NAME leak before any name leaves this chain.
             var query = new InternalItemsQuery()
             {
                 Recursive = true,
@@ -399,6 +484,11 @@ internal static class ArtistSearch
                 .Where(a => PassesContainmentBand(a.Name, musician))
                 .ToList();
 
+            // JF-457: the tier-1 LIST flows to the caller (not-found messages,
+            // disambiguation prompts), so every name must be album-scope verified;
+            // an emptied tier naturally continues the chain to tier 2.
+            artists = await FilterByAlbumScopeAsync(artists, topParentIds, dbQuery, logger, cancellationToken).ConfigureAwait(false);
+
             tierSw.Stop();
             tierReached = 1;
             logger.LogInformation(
@@ -410,7 +500,7 @@ internal static class ArtistSearch
             if (artists.Count == 0)
             {
                 tierSw.Restart();
-                artists = await PrefixSearchAsync(firstWord, musician, user, topParentIds, dbQuery, cancellationToken).ConfigureAwait(false);
+                artists = await PrefixSearchAsync(firstWord, musician, user, topParentIds, dbQuery, logger, cancellationToken).ConfigureAwait(false);
                 tierSw.Stop();
                 tierReached = 2;
                 logger.LogInformation(
@@ -422,7 +512,7 @@ internal static class ArtistSearch
             if (artists.Count == 0 && !string.Equals(firstWord, musician, StringComparison.Ordinal))
             {
                 tierSw.Restart();
-                artists = await PrefixSearchAsync(musician, musician, user, topParentIds, dbQuery, cancellationToken).ConfigureAwait(false);
+                artists = await PrefixSearchAsync(musician, musician, user, topParentIds, dbQuery, logger, cancellationToken).ConfigureAwait(false);
                 tierSw.Stop();
                 tierReached = 3;
                 logger.LogInformation(
@@ -434,7 +524,7 @@ internal static class ArtistSearch
             if (artists.Count == 0)
             {
                 tierSw.Restart();
-                artists = await ContainsSearchAsync(musician, user, topParentIds, dbQuery, cancellationToken).ConfigureAwait(false);
+                artists = await ContainsSearchAsync(musician, user, topParentIds, dbQuery, logger, cancellationToken).ConfigureAwait(false);
                 tierSw.Stop();
                 tierReached = 4;
                 logger.LogInformation(
@@ -454,6 +544,7 @@ internal static class ArtistSearch
     private static async Task<IReadOnlyList<BaseItem>> PrefixSearchAsync(
         string prefix, string musician, Entities.User? user, Guid[]? topParentIds,
         Func<InternalItemsQuery, CancellationToken, Task<IReadOnlyList<BaseItem>>> dbQuery,
+        ILogger logger,
         CancellationToken cancellationToken)
     {
         var query = new InternalItemsQuery()
@@ -467,12 +558,13 @@ internal static class ArtistSearch
 
         IReadOnlyList<BaseItem> results = await dbQuery(query, cancellationToken).ConfigureAwait(false);
         BaseItem? fuzzy = FuzzyMatch(musician, results, user, null);
-        return fuzzy != null ? new List<BaseItem> { fuzzy } : Array.Empty<BaseItem>();
+        return await KeepIfAlbumScopeAsync(fuzzy, topParentIds, dbQuery, logger, cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task<IReadOnlyList<BaseItem>> ContainsSearchAsync(
         string searchTerm, Entities.User? user, Guid[]? topParentIds,
         Func<InternalItemsQuery, CancellationToken, Task<IReadOnlyList<BaseItem>>> dbQuery,
+        ILogger logger,
         CancellationToken cancellationToken)
     {
         var query = new InternalItemsQuery()
@@ -490,7 +582,33 @@ internal static class ArtistSearch
         // candidate set itself can be purely coincidental ("cup" -> "Porcupine Tree")
         // and the fuzzy step would happily confirm it at ContainmentScore.
         BaseItem? fuzzy = FuzzyMatch(searchTerm, results.Where(a => PassesContainmentBand(a.Name, searchTerm)).ToList(), user, null);
-        return fuzzy != null ? new List<BaseItem> { fuzzy } : Array.Empty<BaseItem>();
+        return await KeepIfAlbumScopeAsync(fuzzy, topParentIds, dbQuery, logger, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// JF-457 winner-level album-scope verification shared by the prefix/contains DB
+    /// tiers: the fuzzy WINNER is verified (one bounded query), not the candidate set,
+    /// because prefix-shaped candidate sets are unbounded ("The" matches most of the
+    /// catalog) and per-candidate checks would blow the Alexa budget in the very
+    /// cold-window this branch exists for. When the winner fails the check the tier
+    /// returns empty, so the chain's next tier (or the caller's parallel tiers) runs.
+    /// Trade-off: a second-best in-scope candidate behind an out-of-scope winner is
+    /// not recovered by the same tier; the warm index re-serves the full scope.
+    /// </summary>
+    internal static async Task<IReadOnlyList<BaseItem>> KeepIfAlbumScopeAsync(
+        BaseItem? fuzzy, Guid[]? topParentIds,
+        Func<InternalItemsQuery, CancellationToken, Task<IReadOnlyList<BaseItem>>> dbQuery,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        if (fuzzy == null)
+        {
+            return Array.Empty<BaseItem>();
+        }
+
+        // The filter already returns exactly [fuzzy] when kept and [] when dropped.
+        return await FilterByAlbumScopeAsync(
+            new[] { fuzzy }, topParentIds, dbQuery, logger, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

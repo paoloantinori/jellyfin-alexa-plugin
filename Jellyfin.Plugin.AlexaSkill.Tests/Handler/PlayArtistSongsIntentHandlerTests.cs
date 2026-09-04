@@ -1083,4 +1083,134 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         Assert.True(anyReordered, "Shuffle should reorder at least one item in a 20-song queue");
         Assert.True(response.Response.ShouldEndSession);
     }
+
+    // --- JF-457: album-scope post-filter on the inline cold-window DB tiers ---
+
+    /// <summary>
+    /// The JF-457 acceptance case at the response layer: a library-restricted user
+    /// during the cold-index window must not HEAR an excluded library's artist
+    /// canonical name. The bypass-tier DB query matches the excluded artist (the
+    /// items-by-name bypass matches every MusicArtist row); the album-scope
+    /// post-filter must drop it before the not-found message speaks, so the
+    /// response carries only the user's own query words.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ColdDbPath_RestrictedUser_ExcludedLibraryArtistNameNotSpoken()
+    {
+        _fx.SetupUserMock();
+        var user = TestHelpers.CreateTestUser(allowedLibraryIds: new[] { Guid.NewGuid().ToString() });
+
+        // Excluded library's artist; canonical name differs from the spoken query so
+        // the speech assertion is meaningful ("geust" is the user's word, "Ghost" is
+        // the library's).
+        var excluded = new MusicArtist { Name = "Ghost", Id = Guid.NewGuid() };
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) =>
+            {
+                // Bypass-tier artist queries match the excluded row; the album-scope
+                // verification query finds no album under the user's libraries.
+                if (q.IncludeItemTypes.Contains(Jellyfin.Data.Enums.BaseItemKind.MusicAlbum))
+                {
+                    return new List<BaseItem>();
+                }
+
+                if (q.IncludeItemTypes.Contains(Jellyfin.Data.Enums.BaseItemKind.MusicArtist))
+                {
+                    return new List<BaseItem> { excluded };
+                }
+
+                return new List<BaseItem>();
+            });
+
+        var handler = CreateHandler(artistIndex: null); // cold: database path
+        var request = CreateIntentRequest(musician: "geust");
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), user, _fx.CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.DoesNotContain("Ghost", speech, StringComparison.OrdinalIgnoreCase);
+        _fx.LibraryManager.Verify(
+            l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes.Contains(Jellyfin.Data.Enums.BaseItemKind.MusicAlbum)
+                && q.Limit == 1)),
+            Times.AtLeastOnce,
+            "the album-scope verification query must run for a restricted user on the cold DB path");
+    }
+
+    /// <summary>
+    /// The bypass's reason to exist, preserved: the allowed library's FOLDERLESS
+    /// artist (TopParentId NULL) is found during the cold window and plays, because
+    /// its albums intersect the user's resolved libraries.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ColdDbPath_RestrictedUser_FolderlessArtistOfAllowedLibrary_Plays()
+    {
+        _fx.SetupUserMock();
+        var user = TestHelpers.CreateTestUser(allowedLibraryIds: new[] { Guid.NewGuid().ToString() });
+
+        var beatles = new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() };
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) =>
+            {
+                if (q.IncludeItemTypes.Contains(Jellyfin.Data.Enums.BaseItemKind.MusicAlbum))
+                {
+                    return new List<BaseItem> { new MusicAlbum { Name = "Abbey Road", Id = Guid.NewGuid() } };
+                }
+
+                if (q.IncludeItemTypes.Contains(Jellyfin.Data.Enums.BaseItemKind.MusicArtist))
+                {
+                    return new List<BaseItem> { beatles };
+                }
+
+                return new List<BaseItem> { new Audio { Name = "Yesterday", Id = Guid.NewGuid() } };
+            });
+
+        var handler = CreateHandler(artistIndex: null);
+        var request = CreateIntentRequest(musician: "Beatles");
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), user, _fx.CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.True(response.Response.ShouldEndSession, "must auto-play, not prompt");
+        var play = response.Response.Directives?.FirstOrDefault(d => d.Type == "AudioPlayer.Play");
+        Assert.NotNull(play);
+        var metadata = ((AudioPlayerPlayDirective)play).AudioItem?.Metadata;
+        Assert.NotNull(metadata);
+        Assert.Equal("Yesterday", metadata.Title); // the allowed library's folderless artist
+    }
+
+    /// <summary>
+    /// Zero cost for unrestricted users on the inline path: no MusicAlbum
+    /// verification query is issued and the cold-window result plays unchanged.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ColdDbPath_UnrestrictedUser_NoAlbumScopeQueries()
+    {
+        _fx.SetupUserMock();
+        var artist = new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() };
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) =>
+            {
+                if (q.IncludeItemTypes.Contains(Jellyfin.Data.Enums.BaseItemKind.MusicArtist))
+                {
+                    return new List<BaseItem> { artist };
+                }
+
+                return new List<BaseItem> { new Audio { Name = "Yesterday", Id = Guid.NewGuid() } };
+            });
+
+        var handler = CreateHandler(artistIndex: null);
+        var request = CreateIntentRequest(musician: "Beatles");
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.True(response.Response.ShouldEndSession);
+        _fx.LibraryManager.Verify(
+            l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(Jellyfin.Data.Enums.BaseItemKind.MusicAlbum))),
+            Times.Never,
+            "unrestricted users must not pay the album-scope verification cost (JF-457)");
+    }
 }

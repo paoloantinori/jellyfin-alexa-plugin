@@ -790,4 +790,194 @@ public class ArtistSearchTests
     private static Task<IReadOnlyList<BaseItem>> NotCalled(
         InternalItemsQuery q, CancellationToken t) =>
         throw new InvalidOperationException("In-memory path must not hit the database");
+
+    // --- JF-457: album-scope post-filter on the items-by-name bypass DB tiers ---
+
+    /// <summary>
+    /// The acceptance case: a library-restricted user's bypass-tier match from an
+    /// EXCLUDED library (no album under the allowed libraries) must not surface;
+    /// the folderless artist of the ALLOWED library (TopParentId NULL, the very
+    /// reason the bypass exists) must still be found. Pins the verification query
+    /// shape too: raw TopParentIds (no items-by-name bypass on the check itself),
+    /// Limit=1, per-artist ArtistIds.
+    /// </summary>
+    [Fact]
+    public async Task SearchAsync_DbTier1_RestrictedUser_DropsExcludedLibraryArtist_KeepsFolderlessOwn()
+    {
+        var libraryId = Guid.NewGuid();
+        var lm = new Mock<ILibraryManager>();
+        lm.Setup(l => l.GetItemById(It.IsAny<Guid>())).Returns((BaseItem?)null);
+        var user = new Jellyfin.Plugin.AlexaSkill.Entities.User
+        {
+            AllowedLibraryIds = new List<string> { libraryId.ToString() }
+        };
+
+        // Both folderless (the DB tier cannot distinguish them; only the album-scope
+        // post-filter can). "Metallica Tribute" lives only in the excluded library.
+        var ownFolderless = new MusicArtist { Name = "Metallica", Id = Guid.NewGuid() };
+        var excluded = new MusicArtist { Name = "Metallica Tribute", Id = Guid.NewGuid() };
+
+        var albumQueries = new List<InternalItemsQuery>();
+        Task<IReadOnlyList<BaseItem>> DbQuery(InternalItemsQuery q, CancellationToken t)
+        {
+            if (q.IncludeItemTypes.Contains(Jellyfin.Data.Enums.BaseItemKind.MusicAlbum))
+            {
+                albumQueries.Add(q);
+                IReadOnlyList<BaseItem> albums = q.ArtistIds.Contains(ownFolderless.Id)
+                    ? new[] { (BaseItem)new MusicAlbum { Name = "Metallica", Id = Guid.NewGuid() } }
+                    : Array.Empty<BaseItem>();
+                return Task.FromResult(albums);
+            }
+
+            // The bypass-tier artist query: matches BOTH rows regardless of library.
+            IReadOnlyList<BaseItem> artists = q.SearchTerm != null
+                ? new[] { (BaseItem)excluded, ownFolderless }
+                : Array.Empty<BaseItem>();
+            return Task.FromResult(artists);
+        }
+
+        var result = await ArtistSearch.SearchAsync(
+            "metallica",
+            user: user,
+            libraryManager: lm.Object,
+            artistIndex: null, // cold window: database tiers
+            logger: Logger,
+            dbQuery: DbQuery,
+            locale: "en-US",
+            cancellationToken: CancellationToken.None);
+
+        var kept = Assert.Single(result);
+        Assert.Equal("Metallica", kept.Name); // the allowed library's folderless artist
+        Assert.Equal(2, albumQueries.Count); // one bounded check per tier-1 artist
+        Assert.All(albumQueries, q =>
+        {
+            Assert.Equal(1, q.Limit);
+            // IncludeItemsByName is a nullable bool, null on a fresh query: the
+            // verification must not carry the bypass (null, never true).
+            Assert.NotEqual(true, q.IncludeItemsByName);
+            Assert.Contains(libraryId, q.TopParentIds);
+            Assert.Single(q.ArtistIds);
+        });
+    }
+
+    /// <summary>
+    /// Chain continuation: when the album-scope post-filter empties tier 1, the
+    /// search must keep walking the tiers instead of returning the excluded name
+    /// (or nothing): tier 2's in-scope folderless match is the answer.
+    /// </summary>
+    [Fact]
+    public async Task SearchAsync_DbTier1_EmptiedByScopeFilter_FallsThroughToTier2()
+    {
+        var libraryId = Guid.NewGuid();
+        var lm = new Mock<ILibraryManager>();
+        lm.Setup(l => l.GetItemById(It.IsAny<Guid>())).Returns((BaseItem?)null);
+        var user = new Jellyfin.Plugin.AlexaSkill.Entities.User
+        {
+            AllowedLibraryIds = new List<string> { libraryId.ToString() }
+        };
+
+        var koop = new MusicArtist { Name = "Koop", Id = Guid.NewGuid() };
+        var porcupine = new MusicArtist { Name = "Porcupine Tree", Id = Guid.NewGuid() };
+
+        Task<IReadOnlyList<BaseItem>> DbQuery(InternalItemsQuery q, CancellationToken t)
+        {
+            if (q.IncludeItemTypes.Contains(Jellyfin.Data.Enums.BaseItemKind.MusicAlbum))
+            {
+                IReadOnlyList<BaseItem> albums = q.ArtistIds.Contains(koop.Id)
+                    ? new[] { (BaseItem)new MusicAlbum { Name = "Koop Islands", Id = Guid.NewGuid() } }
+                    : Array.Empty<BaseItem>();
+                return Task.FromResult(albums);
+            }
+
+            // Tier 1 (SearchTerm) surfaces the excluded coincidental substring; tier 2
+            // (NameStartsWith) legitimately finds the in-scope folderless artist.
+            if (q.SearchTerm != null)
+            {
+                return Task.FromResult<IReadOnlyList<BaseItem>>(new[] { (BaseItem)porcupine });
+            }
+
+            if (q.NameStartsWith != null)
+            {
+                return Task.FromResult<IReadOnlyList<BaseItem>>(new[] { (BaseItem)koop });
+            }
+
+            return Task.FromResult<IReadOnlyList<BaseItem>>(Array.Empty<BaseItem>());
+        }
+
+        var result = await ArtistSearch.SearchAsync(
+            "koop",
+            user: user,
+            libraryManager: lm.Object,
+            artistIndex: null,
+            logger: Logger,
+            dbQuery: DbQuery,
+            locale: "en-US",
+            cancellationToken: CancellationToken.None);
+
+        var kept = Assert.Single(result);
+        Assert.Equal("Koop", kept.Name);
+    }
+
+    /// <summary>
+    /// Zero cost for unrestricted users: a null scope skips the post-filter entirely
+    /// (no MusicAlbum verification query) and the bypass-tier name still resolves.
+    /// </summary>
+    [Fact]
+    public async Task SearchAsync_DbTier_UnrestrictedUser_NoAlbumScopeQueries()
+    {
+        var excluded = new MusicArtist { Name = "Ghost", Id = Guid.NewGuid() };
+        int albumQueries = 0;
+
+        Task<IReadOnlyList<BaseItem>> DbQuery(InternalItemsQuery q, CancellationToken t)
+        {
+            if (q.IncludeItemTypes.Contains(Jellyfin.Data.Enums.BaseItemKind.MusicAlbum))
+            {
+                albumQueries++;
+            }
+
+            IReadOnlyList<BaseItem> artists = q.SearchTerm != null
+                ? new[] { (BaseItem)excluded }
+                : Array.Empty<BaseItem>();
+            return Task.FromResult(artists);
+        }
+
+        var result = await ArtistSearch.SearchAsync(
+            "ghost",
+            user: null,
+            libraryManager: Mock.Of<ILibraryManager>(),
+            artistIndex: null,
+            logger: Logger,
+            dbQuery: DbQuery,
+            locale: "en-US",
+            cancellationToken: CancellationToken.None);
+
+        var kept = Assert.Single(result);
+        Assert.Equal("Ghost", kept.Name);
+        Assert.Equal(0, albumQueries);
+    }
+
+    /// <summary>
+    /// The cost bound: a bypass-tier result set deeper than
+    /// <see cref="ArtistSearch.MaxAlbumScopeChecks"/> is truncated, not verified in
+    /// full (cold-window budget), and never returned unverified.
+    /// </summary>
+    [Fact]
+    public async Task FilterByAlbumScopeAsync_CapsChecksAtMaxAlbumScopeChecks()
+    {
+        var libraryId = Guid.NewGuid();
+        var artists = Enumerable.Range(0, 10)
+            .Select(i => new MusicArtist { Name = "Artist " + i, Id = Guid.NewGuid() })
+            .Cast<BaseItem>()
+            .ToList();
+
+        Task<IReadOnlyList<BaseItem>> DbQuery(InternalItemsQuery q, CancellationToken t)
+            => Task.FromResult<IReadOnlyList<BaseItem>>(
+                new[] { (BaseItem)new MusicAlbum { Name = "Any", Id = Guid.NewGuid() } });
+
+        var result = await ArtistSearch.FilterByAlbumScopeAsync(
+            artists, new[] { libraryId }, DbQuery, Logger, CancellationToken.None);
+
+        Assert.Equal(ArtistSearch.MaxAlbumScopeChecks, result.Count);
+        Assert.Equal(artists.Take(ArtistSearch.MaxAlbumScopeChecks), result);
+    }
 }

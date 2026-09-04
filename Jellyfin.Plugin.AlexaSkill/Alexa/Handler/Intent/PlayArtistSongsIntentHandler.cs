@@ -377,17 +377,24 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                         return RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", cancellationToken);
                     }, mode).ConfigureAwait(false);
 
-                tierSw.Stop();
-                tierReached = 1;
-                Logger.LogInformation(
-                    "ArtistSearch: tier=1 duration={TierMs}ms results={Count} method=SearchTerm query='{Query}' mode=Fast",
-                    tierSw.ElapsedMilliseconds, artists.Count, musician);
                 // NOTE: no JF-381 containment-band gate here - Fast mode DB has NO
                 // recovery tier (the in-memory Fast path falls through to fuzzy-all, this
                 // one does not), so gating would turn direct long-name hits ("florence" ->
                 // "Florence + The Machine") into not-founds during the cold-index window.
                 // Trade-off: a cold-start Fast DB search can auto-play a coincidental
                 // containment, as it did before the sweep (code-review 2026-08-29).
+
+                // JF-457: no recovery tier here either, but the privacy bound is not a
+                // recall trade: an excluded-library artist NAME must not be spoken, so
+                // the list is album-scope verified before it leaves the tier (empty
+                // result degrades to the JF-439 song fallback / not-found below).
+                artists = await FilterAlbumScopeAsync(artists, topParentIds, cancellationToken).ConfigureAwait(false);
+
+                tierSw.Stop();
+                tierReached = 1;
+                Logger.LogInformation(
+                    "ArtistSearch: tier=1 duration={TierMs}ms results={Count} method=SearchTerm query='{Query}' mode=Fast",
+                    tierSw.ElapsedMilliseconds, artists.Count, musician);
             }
             else
             {
@@ -408,14 +415,21 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                         return RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", cancellationToken);
                     }).ConfigureAwait(false);
 
+                artists = FilterContainmentBand(artists, musician);
+
+                // JF-457: album-scope verification of the bypass-tier list (same
+                // contract as the shared implementation); an emptied tier falls
+                // through to the parallel tiers 2-4 below. Fires before the tier log
+                // so duration and count carry the true yield (the SearchAsync shape).
+                artists = await FilterAlbumScopeAsync(artists, topParentIds, cancellationToken).ConfigureAwait(false);
+
                 tierSw.Stop();
                 tierReached = 1;
                 Logger.LogInformation(
                     "ArtistSearch: tier=1 duration={TierMs}ms results={Count} method=SearchTerm query='{Query}'",
                     tierSw.ElapsedMilliseconds, artists.Count, musician);
-                artists = FilterContainmentBand(artists, musician);
 
-                // Early-exit on tier 1 hit
+                // Tier 1 emptied (no band-passing in-scope match): run the parallel tiers 2-4
                 if (artists.Count == 0)
                 {
                     // Parallelize tiers 2-4: all independent, pick by priority order
@@ -810,8 +824,32 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         // query at the START of a long name is the intended ASR-truncation shape
         // ("crash" -> "Crash Test Dummies"), not a coincidence (code-review 2026-08-29).
         var candidates = applyContainmentBand ? FilterContainmentBand(results, musician) : results;
-        return FuzzyMatch(musician, candidates, a => a.Name, user);
+        BaseItem? match = FuzzyMatch(musician, candidates, a => a.Name, user);
+
+        // JF-457 winner-level album-scope verification via the shared
+        // ArtistSearch.KeepIfAlbumScopeAsync (the winner only, one bounded query; a
+        // scope failure empties the tier so the parallel caller considers the next).
+        IReadOnlyList<BaseItem> scopedWinner = await Util.ArtistSearch.KeepIfAlbumScopeAsync(
+            match, topParentIds,
+            (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "ArtistAlbumScope", ct),
+            Logger, cancellationToken).ConfigureAwait(false);
+        return scopedWinner.Count > 0 ? match : null;
     }
+
+    /// <summary>
+    /// JF-457 wiring of the shared <see cref="Util.ArtistSearch.FilterByAlbumScopeAsync"/>
+    /// for this handler's inline DB tiers (the JF-382 duplication): routes the bounded
+    /// MusicAlbum scope queries through the same RetryAsync GetItemList channel every
+    /// other DB call here uses. Skipped at zero cost for unrestricted users.
+    /// </summary>
+    private Task<IReadOnlyList<BaseItem>> FilterAlbumScopeAsync(
+        IReadOnlyList<BaseItem> artists, Guid[]? topParentIds, CancellationToken cancellationToken)
+        => Util.ArtistSearch.FilterByAlbumScopeAsync(
+            artists,
+            topParentIds,
+            (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "ArtistAlbumScope", ct),
+            Logger,
+            cancellationToken);
 
     /// <summary>
     /// Filters raw search results to the JF-381 containment band (shared predicate with

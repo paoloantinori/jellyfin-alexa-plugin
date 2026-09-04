@@ -75,7 +75,12 @@ public static class LibraryFilter
     /// Bounded trade-off: the bypass matches ALL MusicArtist rows regardless of
     /// library, so a wrong-library artist can be found; its songs query still
     /// filters by TopParentIds and the play degrades to artist-found-no-songs (the
-    /// JF-455 F1 shape), never a content leak.
+    /// JF-455 F1 shape), never a content leak. The artist SEARCH DB tiers further
+    /// post-filter their bypass results by album scope
+    /// (<see cref="ArtistSearch.FilterByAlbumScopeAsync"/>, JF-457), so a
+    /// wrong-library artist NAME cannot surface in a spoken response either;
+    /// non-search MusicArtist consumers of the bypass (PlayMoodMusic's genre
+    /// artist collection) never speak names and keep the raw semantics.
     /// </para>
     /// The steady-state catalog surfaces (LibrarySyncService.FetchLibraryItems,
     /// DynamicEntityBuilder.BuildSlotValues) opt OUT via
