@@ -15,8 +15,10 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// <summary>
 /// Handler for AMAZON.PauseIntent, AMAZON.StopIntent, AMAZON.CancelIntent, and
 /// the hardware pause button (PlaybackControllerRequestType.Pause).
-/// All paths send AudioPlayer.Stop and end the session. Alexa routes resume
-/// to AMAZON.ResumeIntent automatically when audio was recently stopped.
+/// All paths send AudioPlayer.Stop. Stop/cancel end the session; pause ends it
+/// unless PauseKeepsSession is on (JF-482 experiment: audio still stops, but the
+/// session stays open so bare follow-up commands stay in-skill). Alexa routes
+/// resume to AMAZON.ResumeIntent automatically when audio was recently stopped.
 /// </summary>
 public class PauseIntentHandler : BaseHandler
 {
@@ -43,8 +45,9 @@ public class PauseIntentHandler : BaseHandler
 
     /// <summary>
     /// Pause or stop currently playing media.
-    /// All paths send AudioPlayer.Stop + ShouldEndSession=true.
-    /// Pause optionally includes a position card (no OutputSpeech).
+    /// All paths send AudioPlayer.Stop. Stop/cancel end the session; pause ends it
+    /// unless PauseKeepsSession is on (JF-482). Pause optionally includes a position
+    /// card (no OutputSpeech).
     /// </summary>
     /// <param name="request">The skill request which should be handled.</param>
     /// <param name="context">The context of the skill intent request.</param>
@@ -62,15 +65,20 @@ public class PauseIntentHandler : BaseHandler
             "PauseIntent: isStopOrCancel={IsStop}, activity={Activity}, offset={OffsetMs}ms",
             isStopOrCancel, context.AudioPlayer?.PlayerActivity, context.AudioPlayer?.OffsetInMilliseconds);
 
-        // All paths send AudioPlayer.Stop + ShouldEndSession=true via BuildPauseResponse().
+        // All paths send AudioPlayer.Stop via BuildPauseResponse(). Stop/cancel always
+        // end the session (JF-299 covers them; the JF-482 experiment does not retest them).
         if (isStopOrCancel)
         {
             Logger.LogDebug("PauseIntent: STOP/CANCEL — ending session with AudioPlayer.Stop");
             return Task.FromResult(BuildPauseResponse());
         }
 
-        // Pause: AudioPlayer.Stop + end session, with optional position card (no OutputSpeech).
-        var response = BuildPauseResponse();
+        // Pause: AudioPlayer.Stop, session handling per PauseKeepsSession (JF-482
+        // experiment; default false keeps today's session-ending behavior). Audio
+        // stops in both modes; the flag only decides whether bare follow-up
+        // commands stay in the skill session. The optional position card below
+        // (no OutputSpeech) is unaffected by the flag.
+        var response = BuildPauseResponse(_config.PauseKeepsSession);
 
         bool seekEnabled = Plugin.Instance?.Configuration?.SeekEnabled == true;
         bool announcePosition = Plugin.Instance?.Configuration?.PauseAnnouncePosition == true;

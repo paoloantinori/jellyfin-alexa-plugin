@@ -223,6 +223,10 @@
                                 <div class="fieldDescription checkboxFieldDescription">Enable skip forward/back and jump-to-position voice commands. Also adds progress display when asking what's playing. Examples: "skip 30 seconds", "jump to 2 minutes".</div>
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="PauseKeepsSession" /> <span>Keep Session Open on Pause (experimental)</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">EXPERIMENTAL (retest of the JF-299 session rule, tracked as JF-482): when you pause, keep the Alexa session open so a bare follow-up command like "play jazz" reaches this skill instead of the device's default music service. Audio always stops either way; only the session stays open. Off by default (pause ends the session, today's behavior). "Stop" and "Cancel" always close the session regardless of this toggle.</div>
+                            </div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="ShuffleArtistSongs" /> <span>Shuffle Artist Songs</span></label>
                                 <div class="fieldDescription checkboxFieldDescription">Randomize song order when playing an artist. Off by default — songs play in popularity order (favorites, most played, highest rated, then alphabetical). This changes the initial queue for "play artist" requests; it does not affect "Alexa, shuffle" mid-session.</div>
                             </div>
@@ -534,6 +538,9 @@
 
                     // Diagnostics (default-false flag: separate from the default-true lists above)
                     document.querySelector("#DefaultDiagnosticInteractionLogging").checked = config.DefaultDiagnosticInteractionLogging === true;
+
+                    // Pause session experiment (JF-482, default-false flag)
+                    document.querySelector("#PauseKeepsSession").checked = config.PauseKeepsSession === true;
 
                     // Playback preferences
                     document.querySelector("#InitialFetchSize").value = config.InitialFetchSize != null ? config.InitialFetchSize : 5;
@@ -1325,6 +1332,9 @@
                     // Diagnostics (default-false flag)
                     config.DefaultDiagnosticInteractionLogging = document.querySelector("#DefaultDiagnosticInteractionLogging").checked;
 
+                    // Pause session experiment (JF-482, default-false flag)
+                    config.PauseKeepsSession = document.querySelector("#PauseKeepsSession").checked;
+
                     // Playback preferences
                     var ifRaw = parseInt(document.querySelector("#InitialFetchSize").value);
                     config.InitialFetchSize = isNaN(ifRaw) ? 5 : ifRaw;
@@ -1392,6 +1402,7 @@
                         AsrCompoundWordFixEnabled: config.AsrCompoundWordFixEnabled,
                         SeekEnabled: config.SeekEnabled,
                         PauseAnnouncePosition: config.PauseAnnouncePosition,
+                        PauseKeepsSession: config.PauseKeepsSession,
                         NativeControlsForAudio: config.NativeControlsForAudio,
                         NativeControlsForBooks: config.NativeControlsForBooks,
                         MusicEnabled: config.MusicEnabled,

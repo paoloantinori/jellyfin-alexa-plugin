@@ -559,6 +559,10 @@ public class ConfigurationController : ControllerBase
         if (req.TryGetValue("PauseAnnouncePosition", out var pauseAnnounceToken) && pauseAnnounceToken.Type == JTokenType.Boolean)
         { config.PauseAnnouncePosition = pauseAnnounceToken.Value<bool>(); updated = true; }
 
+        // JF-482 experiment: pause response keeps the session open (live toggle, no redeploy).
+        if (req.TryGetValue("PauseKeepsSession", out var pauseKeepsToken) && pauseKeepsToken.Type == JTokenType.Boolean)
+        { config.PauseKeepsSession = pauseKeepsToken.Value<bool>(); updated = true; }
+
         if (req.TryGetValue("NativeControlsForAudio", out var nativeControlsToken) && nativeControlsToken.Type == JTokenType.Boolean)
         { config.NativeControlsForAudio = nativeControlsToken.Value<bool>(); updated = true; }
 

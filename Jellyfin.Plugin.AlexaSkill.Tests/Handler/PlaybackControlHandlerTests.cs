@@ -24,7 +24,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// Tests for pause/stop/cancel handlers.
 /// Regression guards for:
 /// - AudioPlayer.Stop directive must be present on ALL paths (stop, cancel, pause)
-/// - ShouldEndSession must be true on all paths
+/// - ShouldEndSession must be true on all paths EXCEPT pause with PauseKeepsSession on
+///   (JF-482 experiment: audio still stops, only the session stays open)
 /// - No OutputSpeech on pause (causes device to ignore Stop directive)
 /// - AudioPlayer.Play responses must use ShouldEndSession=true
 /// </summary>
@@ -306,6 +307,80 @@ public class PlaybackControlHandlerTests : PluginTestBase
         Assert.NotNull(response);
         Assert.True(response.Response.ShouldEndSession);
         AssertHasAudioPlayerStopDirective(response);
+    }
+
+    // === JF-482: PauseKeepsSession experiment ===
+    // Default false keeps today's pause response byte-identical; flag on keeps the
+    // session open BUT the AudioPlayer.Stop directive must still be sent (audio
+    // stops regardless of session handling). Stop/cancel are pinned to the
+    // session-ending behavior under BOTH flag values (JF-299 covers them; the
+    // JF-482 experiment does not retest them).
+
+    [Fact]
+    public async Task PauseIntentHandler_Pause_FlagOff_ResponseIdenticalToLegacyPauseResponse()
+    {
+        // Flag off (the default) must be byte-identical to the pre-JF-482 pause response.
+        _config.PauseKeepsSession = false;
+        var handler = new PauseIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "AMAZON.PauseIntent" } },
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            CreateSession(), CancellationToken.None);
+
+        Assert.Equal(
+            JsonConvert.SerializeObject(BaseHandler.BuildPauseResponse()),
+            JsonConvert.SerializeObject(response));
+    }
+
+    [Fact]
+    public async Task PauseIntentHandler_Pause_FlagOn_KeepsSessionButStopsAudio()
+    {
+        _config.PauseKeepsSession = true;
+        var handler = new PauseIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "AMAZON.PauseIntent" } },
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        // The session stays open (the experiment's desired UX)...
+        Assert.False(response.Response.ShouldEndSession);
+        // ...but audio must stop regardless: the Stop directive is the invariant.
+        AssertHasAudioPlayerStopDirective(response);
+        // No speech either way (speech makes the Echo ignore the Stop directive).
+        Assert.Null(response.Response.OutputSpeech);
+    }
+
+    [Theory]
+    [InlineData("AMAZON.StopIntent")]
+    [InlineData("AMAZON.CancelIntent")]
+    public async Task PauseIntentHandler_StopAndCancel_FlagOn_StillEndSession(string intentName)
+    {
+        // Stop/cancel KEEP ending the session even with the flag on: JF-299's
+        // evidence covers them and the JF-482 experiment does not retest them.
+        _config.PauseKeepsSession = true;
+        var handler = new PauseIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = intentName } },
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.True(response.Response.ShouldEndSession);
+        AssertHasAudioPlayerStopDirective(response);
+    }
+
+    [Fact]
+    public void PauseKeepsSession_DefaultsToFalse()
+    {
+        // The experiment ships dark: today's behavior is the default.
+        Assert.False(new PluginConfiguration().PauseKeepsSession);
     }
 
     // === Fallback tests ===

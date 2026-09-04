@@ -668,10 +668,26 @@ public abstract class BaseHandler
     /// Build a pause response: AudioPlayer.Stop with session ended.
     /// Alexa routes resume to the skill automatically when audio was playing.
     /// </summary>
-    public static SkillResponse BuildPauseResponse()
+    public static SkillResponse BuildPauseResponse() => BuildPauseResponse(keepSessionOpen: false);
+
+    /// <summary>
+    /// Build a pause response with explicit session handling (JF-482). The
+    /// AudioPlayer.Stop directive is ALWAYS sent: audio must stop regardless of what
+    /// happens to the session. <paramref name="keepSessionOpen"/>=true returns
+    /// ShouldEndSession=false so bare follow-up commands stay in-skill (the
+    /// PauseKeepsSession experiment retesting the JF-299-derived rule; JF-299's
+    /// evidence was about play responses during active playback, a different
+    /// contention point). Only the PAUSE path may pass true: stop and cancel
+    /// responses always end the session (JF-299 covers them, JF-482 does not
+    /// retest them), and neither play responses nor any other session-ending
+    /// response goes through this builder with the flag set.
+    /// </summary>
+    /// <param name="keepSessionOpen">Whether the session stays open (ShouldEndSession=false).
+    /// Audio stops in both modes; only the session flag differs.</param>
+    public static SkillResponse BuildPauseResponse(bool keepSessionOpen)
     {
         var response = ResponseBuilder.AudioPlayerStop();
-        response.Response.ShouldEndSession = true;
+        response.Response.ShouldEndSession = !keepSessionOpen;
         return response;
     }
 
@@ -721,7 +737,8 @@ public abstract class BaseHandler
     /// <param name="intentName">The intent whose dialog the elicit continues.</param>
     /// <param name="slotToElicit">The slot the user's next utterance fills.</param>
     /// <param name="allSlotNames">Every slot of the target intent, for updatedIntent.</param>
-    /// <param name="prompt">The spoken question (also used as the reprompt: every current elicit repeats its question when the user stays silent).</param>
+    /// <param name="prompt">The spoken question (also used as the reprompt when no explicit reprompt is given: every current elicit repeats its question when the user stays silent).</param>
+    /// <param name="reprompt">Optional richer reprompt (JF-474): the re-prompt spoken when the user stays silent, distinct from the first ask (e.g. naming concrete answer choices) while the first ask stays short.</param>
     /// <param name="sessionAttributes">Session state for a flow that owns state (e.g. FindSong's search state); leave null when the dialog lives Amazon-side.</param>
     /// <param name="activeFlowKeys">The calling flow's session keys (JF-398 mutual exclusion); pass none when the elicit owns no flow state of its own.</param>
     /// <returns>The elicitation response.</returns>
@@ -730,6 +747,7 @@ public abstract class BaseHandler
         string slotToElicit,
         string[] allSlotNames,
         string prompt,
+        string? reprompt = null,
         Dictionary<string, object>? sessionAttributes = null,
         params string[] activeFlowKeys)
     {
@@ -741,7 +759,7 @@ public abstract class BaseHandler
             {
                 ShouldEndSession = false,
                 OutputSpeech = new PlainTextOutputSpeech { Text = prompt },
-                Reprompt = new Reprompt(prompt),
+                Reprompt = new Reprompt(reprompt ?? prompt),
                 Directives = new List<IDirective> { new ElicitSlotDirective(slotToElicit, intentName, allSlotNames) }
             }
         };
@@ -2232,17 +2250,51 @@ public abstract class BaseHandler
         Entities.User user,
         ILibraryManager libraryManager,
         CancellationToken cancellationToken)
+        => await FindRadioTracksByGenreAsync(
+            current.Genres ?? Array.Empty<string>(),
+            jellyfinUser,
+            user,
+            libraryManager,
+            cancellationToken,
+            current.Id).ConfigureAwait(false);
+
+    /// <summary>
+    /// Genre-seeded variant of <see cref="FindRadioTracksAsync"/> (JF-474): the identical
+    /// radio-track query, seeded by genre WORDS captured from the station elicit instead
+    /// of a playing item's Genres array. The Genres filter matches the server's cleaned
+    /// genre names exactly (Jellyfin 10.11 BaseItemRepository: ItemValue CleanValue
+    /// equality), so a spoken "jazz" matches the genre "Jazz" while a non-genre word
+    /// matches nothing and the caller falls through to its not-found.
+    /// </summary>
+    /// <param name="genres">The genre names to seed the query from.</param>
+    /// <param name="jellyfinUser">The Jellyfin user for the query.</param>
+    /// <param name="user">The plugin user for library filtering.</param>
+    /// <param name="libraryManager">The library manager instance.</param>
+    /// <param name="cancellationToken">Cancellation token for request timeout.</param>
+    /// <param name="excludeId">Optional item id to exclude from the results (the seeding item).</param>
+    /// <returns>A deduplicated list of tracks in those genres.</returns>
+    protected async Task<IReadOnlyList<BaseItem>> FindRadioTracksByGenreAsync(
+        string[] genres,
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser,
+        Entities.User user,
+        ILibraryManager libraryManager,
+        CancellationToken cancellationToken,
+        Guid? excludeId = null)
     {
         var allResults = new List<BaseItem>();
-        var seen = new HashSet<Guid> { current.Id };
+        var seen = new HashSet<Guid>();
+        if (excludeId.HasValue)
+        {
+            seen.Add(excludeId.Value);
+        }
 
-        if (current.Genres != null && current.Genres.Length > 0)
+        if (genres.Length > 0)
         {
             var genreQuery = new InternalItemsQuery
             {
                 User = jellyfinUser,
                 Recursive = true,
-                Genres = current.Genres,
+                Genres = genres,
                 IncludeItemTypes = new[] { BaseItemKind.Audio },
                 Limit = 50,
                 OrderBy = new[] { (ItemSortBy.Random, SortOrder.Ascending) },
