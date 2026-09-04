@@ -525,12 +525,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             return null;
         }
 
-        List<BaseItem> shuffled = similar.ToList();
-        Shuffle(shuffled);
-        if (shuffled.Count > 15)
-        {
-            shuffled.RemoveRange(15, shuffled.Count - 15);
-        }
+        List<BaseItem> shuffled = ShuffleAndCap(similar, 15);
 
         var queue = new List<QueueItem>(session.NowPlayingQueue);
         var seen = new HashSet<Guid>(queue.Select(q => q.Id));
@@ -591,12 +586,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             return null;
         }
 
-        List<BaseItem> shuffled = similar.ToList();
-        Shuffle(shuffled);
-        if (shuffled.Count > 15)
-        {
-            shuffled.RemoveRange(15, shuffled.Count - 15);
-        }
+        List<BaseItem> shuffled = ShuffleAndCap(similar, 15);
 
         var queue = new List<QueueItem>(session.NowPlayingQueue);
         var seen = new HashSet<Guid>(queue.Select(q => q.Id));

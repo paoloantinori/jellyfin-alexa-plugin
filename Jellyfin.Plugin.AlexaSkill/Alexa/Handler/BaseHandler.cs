@@ -2208,6 +2208,27 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// Create a shuffled copy of a read-only list truncated to at most
+    /// <paramref name="cap"/> entries. Shuffle happens before the cap, so the kept
+    /// subset is random (the radio queues: a 20-track radio start, a 15-track
+    /// continuation). Caps differ per caller, so the cap is a parameter.
+    /// </summary>
+    /// <typeparam name="T">The element type of the list.</typeparam>
+    /// <param name="source">The list to shuffle and cap.</param>
+    /// <param name="cap">The maximum number of entries to keep.</param>
+    /// <returns>A shuffled list of at most <paramref name="cap"/> entries.</returns>
+    protected static List<T> ShuffleAndCap<T>(IReadOnlyList<T> source, int cap)
+    {
+        List<T> copy = ShuffleCopy(source);
+        if (copy.Count > cap)
+        {
+            copy.RemoveRange(cap, copy.Count - cap);
+        }
+
+        return copy;
+    }
+
+    /// <summary>
     /// Rebuilds <paramref name="session"/>'s <c>NowPlayingQueue</c> from a
     /// <see cref="Playback.DeviceQueue"/>'s current (possibly reshuffled) item
     /// order, preserving <c>PlaylistItemId</c> and other metadata on items that

@@ -3,9 +3,10 @@ id: JF-484
 title: >-
   JF-474 review polish: RadioStarted count convention, shared shuffle-and-cap
   helper, ApplyLibraryFilter logger arg
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-04 12:22'
+updated_date: '2026-09-04 14:58'
 labels: []
 dependencies: []
 references:

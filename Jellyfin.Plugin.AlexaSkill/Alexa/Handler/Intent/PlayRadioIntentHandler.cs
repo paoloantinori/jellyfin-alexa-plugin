@@ -211,12 +211,7 @@ public class PlayRadioIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("RadioNoSimilar", locale));
         }
 
-        List<BaseItem> shuffled = similarTracks.ToList();
-        Shuffle(shuffled);
-        if (shuffled.Count > 20)
-        {
-            shuffled.RemoveRange(20, shuffled.Count - 20);
-        }
+        List<BaseItem> shuffled = ShuffleAndCap(similarTracks, 20);
 
         var queue = new List<QueueItem> { new() { Id = currentAudio.Id } };
         foreach (BaseItem track in shuffled)
@@ -229,7 +224,7 @@ public class PlayRadioIntentHandler : BaseHandler
 
         Logger.LogInformation("Radio mode enabled with {Count} similar tracks for {SongName}", queue.Count - 1, currentAudio.Name);
 
-        return StartRadioPlayback(currentAudio, queue, queue.Count - 1, session, user, context, locale);
+        return StartRadioPlayback(currentAudio, queue, session, user, context, locale);
     }
 
     /// <summary>
@@ -308,7 +303,7 @@ public class PlayRadioIntentHandler : BaseHandler
             channelQuery.OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) };
         }
 
-        ApplyLibraryFilter(channelQuery, user, _libraryManager);
+        ApplyLibraryFilter(channelQuery, user, _libraryManager, Logger);
 
         return await RetryAsync(
             () => _libraryManager.GetItemList(channelQuery),
@@ -360,18 +355,13 @@ public class PlayRadioIntentHandler : BaseHandler
     private SkillResponse StartGenreRadio(
         string genre, IReadOnlyList<BaseItem> genreTracks, SessionInfo session, Entities.User user, Context context, string locale)
     {
-        Logger.LogInformation("PlayRadio: station '{Genre}' resolved as a genre, seeding radio mode with {Count} tracks", genre, genreTracks.Count);
+        List<BaseItem> shuffled = ShuffleAndCap(genreTracks, 20);
 
-        List<BaseItem> shuffled = genreTracks.ToList();
-        Shuffle(shuffled);
-        if (shuffled.Count > 20)
-        {
-            shuffled.RemoveRange(20, shuffled.Count - 20);
-        }
+        Logger.LogInformation("PlayRadio: station '{Genre}' resolved as a genre, seeding radio mode with {Count} tracks", genre, shuffled.Count);
 
         BaseItem first = shuffled[0];
         session.FullNowPlayingItem = first;
-        return StartRadioPlayback(first, shuffled.Select(t => new QueueItem { Id = t.Id }).ToList(), shuffled.Count, session, user, context, locale);
+        return StartRadioPlayback(first, shuffled.Select(t => new QueueItem { Id = t.Id }).ToList(), session, user, context, locale);
     }
 
     /// <summary>
@@ -381,20 +371,23 @@ public class PlayRadioIntentHandler : BaseHandler
     /// </summary>
     /// <param name="first">The track that starts playing now.</param>
     /// <param name="queue">The full radio queue (first track included).</param>
-    /// <param name="announcedCount">The track count spoken in the announcement (the seed path counts only the similar tracks).</param>
     /// <param name="session">The Jellyfin session (queue + radio-mode state).</param>
     /// <param name="user">The plugin user (stream URLs + announce toggles).</param>
     /// <param name="context">The Alexa context (device id for radio-mode state).</param>
     /// <param name="locale">The request locale.</param>
     /// <returns>The AudioPlayer.Play response with the radio announcement.</returns>
     private SkillResponse StartRadioPlayback(
-        BaseItem first, List<QueueItem> queue, int announcedCount, SessionInfo session, Entities.User user, Context context, string locale)
+        BaseItem first, List<QueueItem> queue, SessionInfo session, Entities.User user, Context context, string locale)
     {
         session.NowPlayingQueue = queue;
         RadioModeState.Enable(session.UserId, context.System.Device.DeviceID);
 
         string? nowPlayingSsml = GetSsml("NowPlayingSsml", locale, EscapeXml(first.Name));
-        string radioMsg = ResponseStrings.Get("RadioStarted", locale, announcedCount.ToString(CultureInfo.InvariantCulture));
+
+        // JF-484: the announced count is DERIVED here (not a parameter) so both seed
+        // paths share one convention: it EXCLUDES <first>, the track that starts
+        // playing now, i.e. it announces the tracks that follow it.
+        string radioMsg = ResponseStrings.Get("RadioStarted", locale, (queue.Count - 1).ToString(CultureInfo.InvariantCulture));
 
         var response = BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(first.Id.ToString(), user), first.Id.ToString(), first, user, context);
         if (GetAnnounceNowPlaying(user))

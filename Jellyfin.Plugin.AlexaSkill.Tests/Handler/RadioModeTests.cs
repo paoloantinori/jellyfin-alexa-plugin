@@ -428,6 +428,65 @@ public class RadioModeTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// JF-484 count convention, context-seeded path: the RadioStarted announcement's
+    /// track count EXCLUDES the track that starts playing now. One similar track
+    /// queued after the seed must announce "Found 1 similar tracks", not 2.
+    /// </summary>
+    [Fact]
+    public async Task PlayRadio_ContextSeed_AnnouncedCountExcludesPlayingTrack()
+    {
+        var handler = CreateRadioHandler();
+        var session = CreateSession();
+
+        var currentId = Guid.NewGuid();
+        var currentAudio = new Audio { Id = currentId, Name = "Rock Song" };
+        currentAudio.Genres = new[] { "Rock" };
+        session.FullNowPlayingItem = currentAudio;
+
+        SetupSimilarTrackQuery();
+
+        var response = await handler.HandleAsync(
+            CreatePlayRadioRequest(),
+            CreateContextWithPlayerActivity("PLAYING", currentId.ToString(), 42_000),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        var text = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Found 1 similar tracks", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Found 2", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-484 count convention, genre-seeded path: the SAME convention as the
+    /// context-seeded path (the old genre path counted the playing track, an
+    /// off-by-one between the two paths for the same real queue length). Two genre
+    /// tracks queued, the first starts playing, so the announcement says
+    /// "Found 1 similar tracks", not 2.
+    /// </summary>
+    [Fact]
+    public async Task PlayRadio_GenreSeed_AnnouncedCountExcludesPlayingTrack()
+    {
+        var handler = CreateRadioHandler();
+        var session = CreateSession();
+        session.FullNowPlayingItem = null;
+        SetupJellyfinUser();
+
+        var genreTracks = new List<BaseItem>
+        {
+            new Audio { Id = Guid.NewGuid(), Name = "Blue in Green" },
+            new Audio { Id = Guid.NewGuid(), Name = "So What" },
+        };
+        SetupGenreQuery(genreTracks);
+
+        var response = await handler.HandleAsync(
+            CreatePlayRadioRequest("jazz"),
+            CreateContext(), TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        var text = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Found 1 similar tracks", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Found 2", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// JF-474 tier (iii): a word that is neither a channel nor a genre gets the
     /// TRUTHFUL not-found naming the station word and suggesting a genre, never the
     /// out-of-context nothing-playing Tell (the JF-474 dead-end).
