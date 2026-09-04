@@ -646,31 +646,40 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
     }
 
     /// <summary>
-    /// Album-search mirror of <see cref="SetupSongMissArtistSubStrict"/>: the album
-    /// search misses, the artist search returns the plausible-but-sub-strict artist,
-    /// and the artist songs fallback returns the artist's songs.
+    /// The album-path triage callback the cross-media tests share (JF-481 dedupe):
+    /// EVERY album query misses (the exact SearchTerm search and the fuzzy
+    /// full-catalog scan alike), the artist search returns the one artist, and the
+    /// artist-songs fallback returns the artist's songs.
     /// </summary>
-    private void SetupAlbumMissArtistSubStrict(string query, string artistName, Guid artistId, params Audio[] artistSongs)
+    private void SetupAlbumMissArtistWithSongs(string artistName, Guid artistId, params Audio[] artistSongs)
     {
         _fx.SetupUserMock();
         _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
-                // Album search: empty (no such album)
-                if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))
+                // Every album query (exact search and fuzzy full-catalog scan): miss
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))
                     return new List<BaseItem>();
 
-                // Artist search: the plausible-but-sub-strict artist
+                // Artist search: the artist
                 if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
                     return new List<BaseItem> { new MusicArtist { Name = artistName, Id = artistId } };
 
                 // Artist songs fallback: ArtistIds + Audio
-                if (q.ArtistIds != null && q.ArtistIds.Length > 0)
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0 && q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.Audio))
                     return new List<BaseItem>(artistSongs);
 
                 return new List<BaseItem>();
             });
     }
+
+    /// <summary>
+    /// Album-search mirror of <see cref="SetupSongMissArtistSubStrict"/>: the album
+    /// search misses, the artist search returns the plausible-but-sub-strict artist,
+    /// and the artist songs fallback returns the artist's songs.
+    /// </summary>
+    private void SetupAlbumMissArtistSubStrict(string query, string artistName, Guid artistId, params Audio[] artistSongs)
+        => SetupAlbumMissArtistWithSongs(artistName, artistId, artistSongs);
 
     /// <summary>
     /// Simulates the user answering "no" to a cross-media offer: feeds the offer's
@@ -865,18 +874,7 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         // (word-count gate), so no spurious offer on long song titles.
         var artistId = Guid.NewGuid();
         var song = new Audio { Name = "The Idiot Kings", Id = Guid.NewGuid() };
-        _fx.SetupUserMock();
-        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns<InternalItemsQuery>(q =>
-            {
-                if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))
-                    return new List<BaseItem>();
-                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
-                    return new List<BaseItem> { new MusicArtist { Name = "Soul Coughing", Id = artistId } };
-                if (q.ArtistIds != null && q.ArtistIds.Length > 0)
-                    return new List<BaseItem> { song };
-                return new List<BaseItem>();
-            });
+        SetupSongMissArtistSubStrict("la ballata del genesio", "Soul Coughing", artistId, song);
 
         _fx.Config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Confirm;
 
@@ -909,32 +907,7 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         var artistId = Guid.NewGuid();
         var song1 = new Audio { Name = "Wish You Were Here", Id = Guid.NewGuid() };
         var song2 = new Audio { Name = "Time", Id = Guid.NewGuid() };
-
-        _fx.SetupUserMock();
-
-        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns<InternalItemsQuery>(q =>
-            {
-                // Every album query (exact search and fuzzy full-catalog scan): miss
-                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))
-                {
-                    return new List<BaseItem>();
-                }
-
-                // Artist search (tokenized query "pink floyd"): the artist
-                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
-                {
-                    return new List<BaseItem> { new MusicArtist { Name = "Pink Floyd", Id = artistId } };
-                }
-
-                // Artist songs fallback
-                if (q.ArtistIds != null && q.ArtistIds.Length > 0 && q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.Audio))
-                {
-                    return new List<BaseItem> { song1, song2 };
-                }
-
-                return new List<BaseItem>();
-            });
+        SetupAlbumMissArtistWithSongs("Pink Floyd", artistId, song1, song2);
 
         var handler = CreateAlbumHandler();
         // Mid-dialog shape: the answer to the elicit arrives with dialogState IN_PROGRESS.
@@ -1012,32 +985,7 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         var artistId = Guid.NewGuid();
         var song1 = new Audio { Name = "Wish You Were Here", Id = Guid.NewGuid() };
         var song2 = new Audio { Name = "Time", Id = Guid.NewGuid() };
-
-        _fx.SetupUserMock();
-
-        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns<InternalItemsQuery>(q =>
-            {
-                // Every album query (exact search and fuzzy full-catalog scan): miss
-                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))
-                {
-                    return new List<BaseItem>();
-                }
-
-                // Artist search (tokenized query "p nk floyd"): the artist
-                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
-                {
-                    return new List<BaseItem> { new MusicArtist { Name = "Pink Floyd", Id = artistId } };
-                }
-
-                // Artist songs fallback
-                if (q.ArtistIds != null && q.ArtistIds.Length > 0 && q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.Audio))
-                {
-                    return new List<BaseItem> { song1, song2 };
-                }
-
-                return new List<BaseItem>();
-            });
+        SetupAlbumMissArtistWithSongs("Pink Floyd", artistId, song1, song2);
 
         var handler = CreateAlbumHandler();
         var request = CreateAlbumIntent("dei P!nk floyd", locale: "it-IT");
@@ -1059,9 +1007,9 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
     public async Task JF479_PlayAlbum_AlbumSlot_ThreeWordAlbumTitle_CleanNotFound()
     {
         // Word-count guard discipline pin: a genuine album-shaped miss with 3 content
-    // words ('magical mystery tour', absent from the library) is a poor artist query;
-    // CrossMediaArtistMaxWords=2 rejects it BEFORE any artist search is issued and the
-    // response is the clean album not-found speaking the user's own words.
+        // words ('magical mystery tour', absent from the library) is a poor artist query;
+        // CrossMediaArtistMaxWords=2 rejects it BEFORE any artist search is issued and the
+        // response is the clean album not-found speaking the user's own words.
         _fx.SetupUserMock();
 
         bool artistQueryIssued = false;
@@ -1093,11 +1041,11 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
     public async Task JF479_PlayAlbum_AlbumGateRejection_DoesNotBlockArtistRecovery()
     {
         // Interaction pin (JF-478 x JF-479): when the fuzzy album acceptance REJECTS
-    // a coincidental containment (here album 'O' interior-contained in "dei P!nk
-    // floyd" via the 'o' of "floyd"), the request must still fall through to the
-    // cross-media artist gate and play Pink Floyd. The album rejection may never
-    // create a new dead-end (cascade ordering precedent: reject, then the caller's
-    // own fallback chain).
+        // a coincidental containment (here album 'O' embedded in "dei P!nk floyd" via
+        // the 'o' of "floyd"), the request must still fall through to the cross-media
+        // artist gate and play Pink Floyd. The album rejection may never create a new
+        // dead-end (cascade ordering precedent: reject, then the caller's own
+        // fallback chain).
         var artistId = Guid.NewGuid();
         var song1 = new Audio { Name = "Breathe", Id = Guid.NewGuid() };
 

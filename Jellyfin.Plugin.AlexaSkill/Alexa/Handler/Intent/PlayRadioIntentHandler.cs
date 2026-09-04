@@ -99,12 +99,23 @@ public class PlayRadioIntentHandler : BaseHandler
         // pause every customer-initiated request carries playerActivity STOPPED
         // ("stream was interrupted"), while active playback reports PLAYING.
         // BUFFER_UNDERRUN counts as playing (transient mid-playback rebuffering, the
-        // same treatment as PlaybackFinishedEventHandler's hasQueuedNext).
-        bool activelyPlaying =
-            string.Equals(context.AudioPlayer?.PlayerActivity, "PLAYING", StringComparison.Ordinal)
-            || string.Equals(context.AudioPlayer?.PlayerActivity, "BUFFER_UNDERRUN", StringComparison.Ordinal);
+        // same treatment as PlaybackFinishedEventHandler's hasQueuedNext); both states
+        // live in the shared BaseHandler.IsActivelyPlaying helper (JF-481).
+        bool activelyPlaying = IsActivelyPlaying(context);
 
-        if (!activelyPlaying || session.FullNowPlayingItem == null)
+        // JF-481 item 2a, PROVISIONAL pending the device observation listed in the
+        // task: FINISHED is natural queue exhaustion, and with the requester's session
+        // still holding the item (the multi-room shape of JF-480: playback events come
+        // from a member device, so the coordinator's FullNowPlayingItem survives) the
+        // radio seed is the PostPlay-adjacent continuation. A user asking for radio
+        // right after the queue ended wants more music, not a station question. This
+        // branch is unit-testable only for the mechanism, not the rightness; if the
+        // device ever shows FINISHED arriving with a stale item it does not apply to,
+        // tighten here.
+        bool queueJustFinished = string.Equals(context.AudioPlayer?.PlayerActivity, "FINISHED", StringComparison.Ordinal);
+        bool maySeedRadio = activelyPlaying || queueJustFinished;
+
+        if (!maySeedRadio || session.FullNowPlayingItem == null)
         {
             // JF-472: Amazon's statistical NLU steals bare genre forms ("suona jazz")
             // for PlayRadioIntent even though every sample is noun-carrying, so the
@@ -115,7 +126,8 @@ public class PlayRadioIntentHandler : BaseHandler
             // anti-pattern #9). The elicit is deliberately conditional on nothing
             // ACTIVELY playing (JF-480: a paused device still holds a now-playing item
             // but is not actively playing, so it elicits too): with a current track
-            // actively playing the context seeds the radio and every slot-less sample
+            // actively playing, or the queue just finished (JF-481 item 2a), the
+            // context seeds the radio and every slot-less sample
             // ("riproduci radio") must keep starting radio mode directly. The intent
             // declares exactly one slot (station) in every locale; if a second slot is
             // ever added, allSlotNames below must list it too (Amazon rejects a partial

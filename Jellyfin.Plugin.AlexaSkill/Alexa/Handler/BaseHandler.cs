@@ -1300,6 +1300,27 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// Whether the request context reports the stream as actively playing: the
+    /// device's last-reported <c>playerActivity</c> (<c>context.AudioPlayer</c>) is
+    /// PLAYING or BUFFER_UNDERRUN. BUFFER_UNDERRUN counts as playing because it is
+    /// transient mid-playback rebuffering of the still-current stream, not a stopped
+    /// one. Null-tolerant: a context carrying no AudioPlayer object at all reports
+    /// false. Shared by PlayRadio's seed decision (JF-480) and
+    /// PlaybackFinishedEventHandler's hasQueuedNext; ResumeIntentHandler deliberately
+    /// keeps its own narrower PLAYING-only check and must NOT reuse this helper:
+    /// resume should still act on an underrun-stalled stream (restart it), not treat
+    /// it as "already playing, nothing to do".
+    /// </summary>
+    /// <param name="context">The Alexa request context (may carry no AudioPlayer object).</param>
+    /// <returns>True when the device last reported active playback.</returns>
+    protected static bool IsActivelyPlaying(Context? context)
+    {
+        string? activity = context?.AudioPlayer?.PlayerActivity;
+        return string.Equals(activity, "PLAYING", StringComparison.Ordinal)
+            || string.Equals(activity, "BUFFER_UNDERRUN", StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Returns a "feature disabled" response if the flag is off, or null if enabled.
     /// Reads from live configuration so config page changes take effect immediately.
     /// </summary>

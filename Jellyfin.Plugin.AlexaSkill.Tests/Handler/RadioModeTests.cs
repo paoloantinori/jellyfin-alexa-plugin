@@ -257,10 +257,7 @@ public class RadioModeTests : PluginTestBase, IDisposable
 
         var context = CreateContextWithPlayerActivity("PLAYING", currentId.ToString(), 42_000);
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
-            .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { new Audio { Id = Guid.NewGuid(), Name = "Similar Rock Song" } });
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+        SetupSimilarTrackQuery();
 
         var response = await handler.HandleAsync(
             CreatePlayRadioRequest(),
@@ -289,10 +286,7 @@ public class RadioModeTests : PluginTestBase, IDisposable
 
         var context = CreateContextWithPlayerActivity("BUFFER_UNDERRUN", currentId.ToString(), 42_000);
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
-            .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { new Audio { Id = Guid.NewGuid(), Name = "Similar Rock Song" } });
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+        SetupSimilarTrackQuery();
 
         var response = await handler.HandleAsync(
             CreatePlayRadioRequest(),
@@ -300,6 +294,38 @@ public class RadioModeTests : PluginTestBase, IDisposable
 
         Assert.True(RadioModeState.IsEnabled(session.UserId, context.System.Device.DeviceID), "a buffering stream is still the active playback");
         Assert.Contains(response.Response.Directives ?? Enumerable.Empty<IDirective>(), d => d.Type == "AudioPlayer.Play");
+    }
+
+    /// <summary>
+    /// JF-481 item 2a: playerActivity FINISHED is natural queue exhaustion. When the
+    /// queue just ended but the requester's session still holds the item (the
+    /// multi-room shape, same surviving-item mechanism as the JF-480 STOPPED case),
+    /// the radio seed is the PostPlay-adjacent continuation: radio mode starts from
+    /// the surviving item, not the station elicit. Provisional pending the device
+    /// observation listed in the task.
+    /// </summary>
+    [Fact]
+    public async Task PlayRadio_EmptyStationSlot_QueueFinishedWithSurvivingItem_StartsRadioMode()
+    {
+        var handler = CreateRadioHandler();
+        var session = CreateSession();
+
+        var currentId = Guid.NewGuid();
+        var currentAudio = new Audio { Id = currentId, Name = "Rock Song" };
+        currentAudio.Genres = new[] { "Rock" };
+        session.FullNowPlayingItem = currentAudio;
+
+        var context = CreateContextWithPlayerActivity("FINISHED", currentId.ToString(), 42_000);
+
+        SetupSimilarTrackQuery();
+
+        var response = await handler.HandleAsync(
+            CreatePlayRadioRequest(),
+            context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.True(RadioModeState.IsEnabled(session.UserId, context.System.Device.DeviceID), "a just-finished queue with a surviving item must seed radio mode");
+        Assert.Contains(response.Response.Directives ?? Enumerable.Empty<IDirective>(), d => d.Type == "AudioPlayer.Play");
+        Assert.DoesNotContain(response.Response.Directives ?? Enumerable.Empty<IDirective>(), d => d.Type == "Dialog.ElicitSlot");
     }
 
     /// <summary>
@@ -632,6 +658,17 @@ public class RadioModeTests : PluginTestBase, IDisposable
     {
         _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
             .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+    }
+
+    /// <summary>
+    /// The seeding path's shared mock pair (the StartsRadioMode family): any library
+    /// query returns one similar track, and the Jellyfin user resolves.
+    /// </summary>
+    private void SetupSimilarTrackQuery()
+    {
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { new Audio { Id = Guid.NewGuid(), Name = "Similar Rock Song" } });
+        SetupJellyfinUser();
     }
 
     /// <summary>Genre queries (Genres filter set) return the given tracks; every other query finds nothing.</summary>

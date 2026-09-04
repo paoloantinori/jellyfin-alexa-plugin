@@ -384,11 +384,11 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
         Assert.DoesNotContain(queries, q => q.IncludeItemTypes?.Contains(BaseItemKind.MusicAlbum) == true);
     }
 
-    // JF-408 pin: a coincidental interior containment (album "O" via the 'o' in
+    // JF-408 pin: a coincidental embedded containment (album "O" via the 'o' in
     // "walls for cup") reaches the bar via the containment score but must NOT
     // substitute. The exact tier misses; the fuzzy scan returns the album.
     [Fact]
-    public async Task PlaySong_InteriorContainmentAlbum_NotSubstituted()
+    public async Task PlaySong_EmbeddedContainmentAlbum_NotSubstituted()
     {
         _fx.SetupUserMock();
         var album = new MusicAlbum { Name = "O", Id = Guid.NewGuid() };

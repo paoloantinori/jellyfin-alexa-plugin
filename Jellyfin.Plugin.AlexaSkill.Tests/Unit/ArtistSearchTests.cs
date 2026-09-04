@@ -107,7 +107,7 @@ public class ArtistSearchTests
     }
 
     [Fact]
-    public void IsCoincidentalContainmentMatch_InteriorContainmentSingleTokenQuery_True()
+    public void IsCoincidentalContainmentMatch_EmbeddedContainmentSingleTokenQuery_True()
     {
         // JF-408 residual (found via the simulator on the deployed build): the query is ONE
         // content token, so the coverage rule cannot see the coincidence. The library had an

@@ -6,7 +6,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-09-04 11:38'
-updated_date: '2026-09-04 12:32'
+updated_date: '2026-09-04 13:21'
 labels: []
 dependencies: []
 references:
@@ -53,6 +53,8 @@ Note: this is a deliberate behavior experiment on the live skill; the flag makes
 
 <!-- SECTION:NOTES:BEGIN -->
 REVIEW ADDITION (JF-474 review P3-3@81): the hardware pause button (PlaybackController.PauseCommandIssued / PauseButtonPressed) flows through the SAME PauseIntentHandler path (CanHandle claims the PlaybackController request type), so with the flag on the hardware-pause response also carries ShouldEndSession=false. Platform acceptance of shouldEndSession=false on PlaybackController responses is UNVERIFIED (the documented JF-299 rejection covers AudioPlayer events). ADDED TO THE DEVICE MATRIX as step 6: flag on, press the physical pause button (remote/Echo control) -> no error tone / INVALID_RESPONSE, audio stops; note the result either way. The APL pause tap (touch) is a separate path and stays session-ending.
+
+DEVICE MATRIX INTERIM RESULTS (2026-09-04, flag ON live, log corrs 25e78f85/825aa129/7226fb49): TEST 1 PASSED (pause answered shouldEndSession=false; the bare 'suona jazz' 5s later ARRIVED AT OUR SKILL, corr=825aa129: the elicit fired and the chain completed with genre radio playing). TEST 2 PASSED (the second pause, corr=7226fb49, still routed as PauseIntent with the session kept open: no JF-299 regression). TEST 3 observation is PLATFORM behavior, not a flag failure: after the elicit asks, Alexa closes the session at the input timeout (~8s + reprompt); no Alexa session survives 60s of silence awaiting input, so the 60s-silence expectation was mal-formed. The flag's real use case (immediate follow-up after pause) is exactly test 1 and works. Tests 4, 5, 6 remain.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

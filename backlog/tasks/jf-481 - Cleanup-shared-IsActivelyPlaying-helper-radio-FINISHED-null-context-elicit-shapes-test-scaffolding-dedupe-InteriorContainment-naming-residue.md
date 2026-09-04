@@ -3,9 +3,10 @@ id: JF-481
 title: >-
   Cleanup: shared IsActivelyPlaying helper, radio FINISHED/null-context elicit
   shapes, test scaffolding dedupe, InteriorContainment naming residue
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-04 10:53'
+updated_date: '2026-09-04 12:53'
 labels: []
 dependencies: []
 references:

@@ -4,9 +4,10 @@ title: >-
   Coincidental-containment downgrade parity: PlayAlbum album-by-artist path
   still auto-plays single-word containment (JF-377 exists only on
   PlayArtistSongs)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-03 16:24'
+updated_date: '2026-09-04 12:53'
 labels: []
 dependencies: []
 references:
