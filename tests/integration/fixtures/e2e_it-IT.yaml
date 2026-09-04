@@ -250,6 +250,20 @@ tests:
       album: {}
     expected_response_type: any
 
+  # JF-469 (2026-09-04): the chiamato-family indefinite shape. Post-deploy probes on
+  # the 2026-09-04 rebuilt model fill this cleanly (album "surfer rosa",
+  # ER_SUCCESS_MATCH, deterministic 2/2); the other carriers still bleed the literal
+  # calling word into the slot ('cerca un album chiamato X' -> album "chiamato X",
+  # "c'e un album chiamato thriller" -> album "chiamato thriller"), which the
+  # handler-side calling-word strip recovers (raw-first fallback, it-IT scoped).
+  # This entry pins routing on the clean-fill shape; the bleed shapes are covered by
+  # the NLU fixture (intent-only) and the PlayAlbum unit tests (strip behavior).
+  - utterance: "un album chiamato surfer rosa"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+    expected_response_type: any
+
   # --- Play by playlist (issue #10 regression coverage) ---
   # Playlist members are linked children, not ParentId-owned rows; the handler must
   # resolve them via Playlist.GetManageableItems() or the playlist reports empty.

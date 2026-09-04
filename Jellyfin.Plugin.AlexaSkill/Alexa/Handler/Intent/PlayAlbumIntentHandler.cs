@@ -326,6 +326,26 @@ public class PlayAlbumIntentHandler : BaseHandler
                 "GetAlbums",
                 cancellationToken).ConfigureAwait(false);
             Logger.LogDebug("PlayAlbum: Jellyfin returned {ResultCount} albums", albums.Count);
+
+            // JF-469 calling-word strip, RAW-FIRST fallback (the JF-383 ArtistIds-retry
+            // shape): the it-IT NLU can bleed the literal calling word into the album
+            // slot value ('cerca un album chiamato X' -> album "chiamato X"; the model
+            // layer is evidenced insufficient, see TryStripLeadingAlbumCallingWord).
+            // Only when the raw-value query above missed AND the value starts with a
+            // locale calling word, retry ONCE with the stripped title, so an album
+            // actually titled "Chiamato qualcosa" is still found by the raw query and
+            // never displaced. The raw value stays in `album` for every log line and
+            // the not-found speech below.
+            if (albums.Count == 0 && TryStripLeadingAlbumCallingWord(album, locale, out string strippedAlbumTitle))
+            {
+                albums = await RetryAsync(
+                    () => _libraryManager.GetItemList(BuildAlbumQuery(_libraryManager, jellyfinUser, user, strippedAlbumTitle, artistsIds.ToArray())),
+                    "GetAlbumsStrippedCallingWord",
+                    cancellationToken).ConfigureAwait(false);
+                Logger.LogInformation(
+                    "PlayAlbum: raw album query '{RawAlbum}' missed, calling-word-stripped retry '{StrippedAlbum}' returned {ResultCount} albums (JF-469)",
+                    album, strippedAlbumTitle, albums.Count);
+            }
         }
 
         if (albums.Count == 0 && !string.IsNullOrWhiteSpace(musician))

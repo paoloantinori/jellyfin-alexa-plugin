@@ -1334,4 +1334,245 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         Assert.NotNull(playDirective);
         Assert.Equal(albumTracks[0].Id.ToString(), playDirective!.AudioItem.Stream.Token);
     }
+
+    // -------------------------------------------------------------------------
+    // JF-469: it-IT calling-word slot bleed. The NLU fills the album slot with the
+    // literal calling word ('cerca un album chiamato X' -> album "chiamato X"); the
+    // handler-side strip is a RAW-FIRST fallback: the stripped retry fires only when
+    // the raw-value query missed, so an album actually titled "Chiamato qualcosa"
+    // keeps playing through the raw query.
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Mocks the album-title search keyed on the SearchTerm value: a query whose
+    /// SearchTerm has a map entry returns that entry's albums, every other query
+    /// (including the fuzzy full-catalog scan, SearchTerm null) misses. Queries are
+    /// recorded into <paramref name="queries"/> for assertions.
+    /// </summary>
+    private void SetupTitleSearchByTerm(Dictionary<string, List<BaseItem>> resultsBySearchTerm, List<InternalItemsQuery> queries)
+    {
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) =>
+            {
+                queries.Add(q);
+                return q.SearchTerm != null && resultsBySearchTerm.TryGetValue(q.SearchTerm, out List<BaseItem>? results)
+                    ? results
+                    : new List<BaseItem>();
+            });
+    }
+
+    [Fact]
+    public async Task HandleAsync_CallingWordBleed_RawQueryHits_NoStrippedRetry()
+    {
+        // JF-469 raw-first pin: when the RAW slot value ('chiamato thriller', the
+        // profile-nlu fill of 'cerca un album chiamato thriller') finds the album,
+        // the calling-word strip must NOT fire: exactly one title query, on the raw
+        // value, and the album plays.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(album: "chiamato thriller", locale: "it-IT");
+        _fx.SetupUserMock();
+
+        var album = new MusicAlbum { Name = "Chiamato Thriller", Id = Guid.NewGuid() };
+        var track = new Audio { Name = "Track 1", Id = Guid.NewGuid() };
+        var queries = new List<InternalItemsQuery>();
+        SetupTitleSearchByTerm(
+            new Dictionary<string, List<BaseItem>> { ["chiamato thriller"] = new() { album } },
+            queries);
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem> { Items = new[] { track }, TotalRecordCount = 1 });
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.NotNull(playDirective);
+        Assert.Equal(track.Id.ToString(), playDirective!.AudioItem.Stream.Token);
+
+        // One title query only, on the raw value: the stripped variant ('thriller')
+        // was never queried (the fallback does not fire when the raw query hits).
+        List<string> searchTerms = queries.Where(q => q.SearchTerm != null).Select(q => q.SearchTerm!).ToList();
+        Assert.Single(searchTerms);
+        Assert.Equal("chiamato thriller", searchTerms[0]);
+    }
+
+    [Fact]
+    public async Task HandleAsync_CallingWordBleed_RawMiss_StrippedRetryHits_AndPlays()
+    {
+        // The evidenced live shape (profile-nlu 2026-09-04: 'un album che si chiama
+        // surfer rosa' -> album "che si chiama surfer rosa"): the raw query misses,
+        // the calling-word-stripped retry finds the album and it plays.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(album: "che si chiama surfer rosa", locale: "it-IT");
+        _fx.SetupUserMock();
+
+        var (album, tracks) = MakeRelease("Surfer Rosa", 1988, 2, "Bone Machine");
+        var queries = new List<InternalItemsQuery>();
+        SetupTitleSearchByTerm(
+            new Dictionary<string, List<BaseItem>>
+            {
+                ["surfer rosa"] = new() { album }
+            },
+            queries);
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem> { Items = new[] { tracks[0] }, TotalRecordCount = tracks.Count });
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.NotNull(playDirective);
+        Assert.Equal(tracks[0].Id.ToString(), playDirective!.AudioItem.Stream.Token);
+
+        // The stripped retry fired, AFTER the raw query (raw-first order).
+        List<string> searchTerms = queries.Where(q => q.SearchTerm != null).Select(q => q.SearchTerm!).ToList();
+        Assert.Equal(2, searchTerms.Count);
+        Assert.Equal("che si chiama surfer rosa", searchTerms[0]);
+        Assert.Equal("surfer rosa", searchTerms[1]);
+    }
+
+    [Fact]
+    public async Task HandleAsync_CallingWordBleed_RawAndStrippedMiss_CleanNotFoundNamesRawValue()
+    {
+        // Both the raw and the stripped query miss: the not-found speech names the
+        // RAW slot value (the user said "chiamato X"; the not-found names what they
+        // said), and nothing plays.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(album: "chiamato xyzzyfoo", locale: "it-IT");
+        _fx.SetupUserMock();
+
+        var queries = new List<InternalItemsQuery>();
+        SetupTitleSearchByTerm(new Dictionary<string, List<BaseItem>>(), queries);
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 });
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.Null(response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective));
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("chiamato xyzzyfoo", speech, StringComparison.OrdinalIgnoreCase);
+
+        // The stripped retry fired exactly once (raw first, then 'xyzzyfoo'), then
+        // the fuzzy scan and the artist fallback ran their own queries.
+        List<string> searchTerms = queries.Where(q => q.SearchTerm != null).Select(q => q.SearchTerm!).ToList();
+        Assert.Equal("chiamato xyzzyfoo", searchTerms[0]);
+        Assert.Contains("xyzzyfoo", searchTerms);
+    }
+
+    [Fact]
+    public async Task HandleAsync_AlbumLiterallyTitledCallingWord_RawQueryFindsIt_NoStripInterference()
+    {
+        // CRITICAL JF-469 safety: an album ACTUALLY TITLED with a leading calling
+        // word ("Chiamato Moe") must stay findable through the RAW query. The strip
+        // is a fallback on a raw miss, so the raw hit path never rewrites the query
+        // and the album titled with the calling word plays.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(album: "chiamato moe", locale: "it-IT");
+        _fx.SetupUserMock();
+
+        var (album, tracks) = MakeRelease("Chiamato Moe", 2001, 3, "Moe First");
+        var queries = new List<InternalItemsQuery>();
+        SetupTitleSearchByTerm(
+            new Dictionary<string, List<BaseItem>> { ["chiamato moe"] = new() { album } },
+            queries);
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem> { Items = new[] { tracks[0] }, TotalRecordCount = tracks.Count });
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.NotNull(playDirective);
+        Assert.Equal(tracks[0].Id.ToString(), playDirective!.AudioItem.Stream.Token);
+
+        // No 'moe'-only query was ever issued: the raw query found the album.
+        Assert.DoesNotContain(queries, q => q.SearchTerm == "moe");
+    }
+
+    [Fact]
+    public async Task HandleAsync_NoCallingWord_Miss_NoStrippedQuery()
+    {
+        // A plain title miss (no calling word in the value) must not change shape:
+        // every title query carries the raw value; the clean not-found names it.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(album: "thriller", locale: "it-IT");
+        _fx.SetupUserMock();
+
+        var queries = new List<InternalItemsQuery>();
+        SetupTitleSearchByTerm(new Dictionary<string, List<BaseItem>>(), queries);
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 });
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.Null(response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective));
+        Assert.Contains("thriller", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+        Assert.All(
+            queries.Where(q => q.SearchTerm != null).Select(q => q.SearchTerm),
+            term => Assert.Equal("thriller", term));
+    }
+
+    /// <summary>
+    /// Test-only subclass exposing the protected JF-469 strip predicate for direct
+    /// unit testing (the TestBaseHandler precedent).
+    /// </summary>
+    private class TestStripHandler : BaseHandler
+    {
+        public TestStripHandler(ISessionManager sessionManager, PluginConfiguration config, ILoggerFactory loggerFactory)
+            : base(sessionManager, config, loggerFactory)
+        {
+        }
+
+        public override bool CanHandle(Request request) => false;
+
+        public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
+            => Task.FromResult(new SkillResponse());
+
+        public static bool CallTryStripLeadingAlbumCallingWord(string? slotValue, string locale, out string stripped)
+            => TryStripLeadingAlbumCallingWord(slotValue, locale, out stripped);
+    }
+
+    [Theory]
+    [InlineData("chiamato thriller", "thriller")]
+    [InlineData("chiamata canzone", "canzone")]
+    [InlineData("che si chiama surfer rosa", "surfer rosa")]
+    [InlineData("di nome thriller", "thriller")]
+    [InlineData("Chiamato Thriller", "Thriller")]
+    public void TryStripLeadingAlbumCallingWord_ItSlots_CallingWordStripped(string raw, string expected)
+    {
+        Assert.True(TestStripHandler.CallTryStripLeadingAlbumCallingWord(raw, "it-IT", out string stripped));
+        Assert.Equal(expected, stripped);
+    }
+
+    [Theory]
+    [InlineData("chiamato")]
+    [InlineData("chiamato ")]
+    [InlineData("")]
+    [InlineData("  ")]
+    public void TryStripLeadingAlbumCallingWord_BareOrEmpty_NeverStrips(string raw)
+    {
+        // A slot that IS the calling word has no title left once stripped: the raw
+        // value must be kept (an album literally titled "Chiamato" stays searchable).
+        Assert.False(TestStripHandler.CallTryStripLeadingAlbumCallingWord(raw, "it-IT", out _));
+    }
+
+    [Fact]
+    public void TryStripLeadingAlbumCallingWord_WordFragmentPrefix_NeverStrips()
+    {
+        // The trailing space in every map entry means a strip can never cut a word
+        // fragment: "chiamatole qualcosa" (a title starting with the letters of
+        // "chiamato") is not the calling word.
+        Assert.False(TestStripHandler.CallTryStripLeadingAlbumCallingWord("chiamatole qualcosa", "it-IT", out _));
+    }
+
+    [Theory]
+    [InlineData("chiamato thriller", "en-US")]
+    [InlineData("chiamato thriller", "en-GB")]
+    [InlineData("called thriller", "it-IT")]
+    [InlineData("llamada thriller", "it-IT")]
+    public void TryStripLeadingAlbumCallingWord_OtherLocalesOrWords_NeverStrips(string raw, string locale)
+    {
+        // Scope pin: it-IT only, and only the it-IT calling words. The other locales
+        // carry no album-path calling-word samples (JF-469 survey) and their fills
+        // are clean, so their values are never rewritten.
+        Assert.False(TestStripHandler.CallTryStripLeadingAlbumCallingWord(raw, locale, out _));
+    }
 }

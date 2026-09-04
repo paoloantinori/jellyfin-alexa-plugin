@@ -665,6 +665,76 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// Launch a live-TV channel (the shared launch block of PlayChannelIntentHandler
+    /// and PlayRadioIntentHandler's channel tier, extracted by JF-483 so the two paths
+    /// cannot drift: a resolver change or launch-directive fix lands once). Live TV
+    /// must launch via VideoApp.Launch (like movies/episodes) so it plays on Echo Show:
+    /// the AudioPlayer static stream URL used by music playback 500s for a live source.
+    /// The resolver picks the correct URL via Jellyfin's PlaybackInfo (direct-remote HLS
+    /// or the transcode fallback); an unresolvable stream yields the not-available Tell.
+    /// </summary>
+    /// <param name="streamResolver">The live-TV stream resolver (PlaybackInfo URL).</param>
+    /// <param name="channel">The LiveTvChannel item to launch.</param>
+    /// <param name="context">The Alexa context (device id for the queue record).</param>
+    /// <param name="user">The plugin user (stream resolution + announce toggles).</param>
+    /// <param name="session">The Jellyfin session (queue + now-playing).</param>
+    /// <param name="locale">The request locale, for response strings.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The VideoApp.Launch response, or the not-available Tell when the stream cannot be resolved.</returns>
+    protected async Task<SkillResponse> BuildChannelLaunchResponseAsync(
+        ILiveTvStreamResolver streamResolver,
+        BaseItem channel,
+        Context context,
+        Entities.User user,
+        SessionInfo session,
+        string locale,
+        CancellationToken cancellationToken)
+    {
+        session.NowPlayingQueue = new List<QueueItem> { new() { Id = channel.Id } };
+        session.FullNowPlayingItem = channel;
+
+        LiveTvStream? stream = await streamResolver.ResolveAsync(channel, user, cancellationToken).ConfigureAwait(false);
+        if (stream is null)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaTypeNotAvailable", locale));
+        }
+
+        // Record the last-played channel for this device (the resume / continue-watching signal).
+        // Mirrors the chokepoint in BuildAudioPlayerResponse above; needed here because the
+        // direct-remote stream URL has no /Videos/ segment for LastPlayedResponseInterceptor to parse.
+        string? deviceId = context?.System?.Device?.DeviceID;
+        if (!string.IsNullOrEmpty(deviceId))
+        {
+            Plugin.Instance?.DeviceQueueManager?.RecordLastPlayed(deviceId, channel.Id.ToString());
+        }
+
+        return new SkillResponse
+        {
+            Version = "1.0",
+            Response = new ResponseBody
+            {
+                // VideoApp.Launch must NOT include shouldEndSession; Alexa rejects it.
+                ShouldEndSession = null,
+                OutputSpeech = BuildNowPlayingSpeech(channel.Name, locale, GetAnnounceNowPlaying(user)),
+                Directives = new List<IDirective>
+                {
+                    new Directive.VideoAppLaunchDirective
+                    {
+                        VideoItem = new Directive.VideoItem
+                        {
+                            Source = stream.Url,
+                            Metadata = new Directive.VideoItemMetadata
+                            {
+                                Title = channel.Name
+                            }
+                        }
+                    }
+                }
+            }
+        };
+    }
+
+    /// <summary>
     /// Build a pause response: AudioPlayer.Stop with session ended.
     /// Alexa routes resume to the skill automatically when audio was playing.
     /// </summary>
@@ -3347,6 +3417,75 @@ public abstract class BaseHandler
     /// by PlayAlbum's own fuzzy fallback and the JF-345 song-to-album cascade.
     /// </summary>
     protected const int MinFuzzyAlbumQueryLength = 4;
+
+    /// <summary>
+    /// JF-469: calling-word prefixes that can bleed INTO a title slot value, keyed by
+    /// the full locale string (the CancelWords vocabulary precedent). The it-IT NLU
+    /// fills the album slot with the literal calling word for shapes the model layer
+    /// cannot anchor (profile-nlu evidence, it-IT model rebuilt 2026-09-04, skill
+    /// 33dfacd5, deterministic across double probes): 'cerca un album chiamato dark
+    /// side of the moon' -> album "chiamato dark side of the moon"; "c'e un album
+    /// chiamato thriller" -> album "chiamato thriller"; 'un album che si chiama
+    /// surfer rosa' -> album "che si chiama surfer rosa". The JF-441 sample additions
+    /// did not stop the fill, so the handler-side strip is the sanctioned fix.
+    /// Entries carry a trailing space so a strip can never cut a word fragment (an
+    /// album titled "Chiamatole" does not match "chiamato ").
+    /// </summary>
+    private static readonly Dictionary<string, string[]> AlbumCallingWordPrefixes = new(StringComparer.Ordinal)
+    {
+        // 'chiamato'/'chiamata' are the evidenced bleed and its natural gender twin;
+        // 'che si chiama' is the second evidenced fill shape; 'di nome' is the same
+        // natural family (today Amazon absorbs that span into the musician slot
+        // instead, so it is listed for the fill shape, not a routed one).
+        // Scope is it-IT ONLY by evidence: the other 16 locales carry calling-word
+        // samples on SONG paths alone (called/llamada/chamada/appelee), never on the
+        // album path, and their fills are clean (en-US probe 2026-09-04: 'find a
+        // song called breathe' -> titleKeywords "breathe"). Add a locale key only
+        // with a probe showing the same bleed in that locale.
+        ["it-IT"] = new[] { "chiamato ", "chiamata ", "che si chiama ", "di nome " }
+    };
+
+    /// <summary>
+    /// JF-469: strips a leading locale calling word from a raw slot value, for the
+    /// one-bounded-retry pattern. CONTRACT: the strip is a FALLBACK, never a
+    /// preemptive rewrite. The caller MUST first run its query with the RAW value and
+    /// only retry with the stripped value on a confirmed miss (the JF-383
+    /// ArtistIds-retry shape, one extra query), so an album actually titled
+    /// "Chiamato qualcosa" stays findable through the raw query. The raw value also
+    /// stays the value for every log line and the not-found speech (the user said
+    /// "chiamato X"; the not-found names what they said).
+    /// </summary>
+    /// <param name="slotValue">The raw slot value as Alexa delivered it.</param>
+    /// <param name="locale">The request locale; locales without an entry never strip.</param>
+    /// <param name="stripped">The calling-word-stripped value when the method returns true.</param>
+    /// <returns>True when a calling word was stripped and a non-empty title remains.</returns>
+    protected static bool TryStripLeadingAlbumCallingWord(string? slotValue, string locale, out string stripped)
+    {
+        stripped = string.Empty;
+        if (string.IsNullOrWhiteSpace(slotValue) || !AlbumCallingWordPrefixes.TryGetValue(locale, out string[]? prefixes))
+        {
+            return false;
+        }
+
+        foreach (string prefix in prefixes)
+        {
+            if (slotValue.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                string remainder = slotValue.Substring(prefix.Length).Trim();
+                if (remainder.Length == 0)
+                {
+                    // The slot IS the bare calling word: nothing to search for once
+                    // stripped, keep the raw value.
+                    return false;
+                }
+
+                stripped = remainder;
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// The cheap DTO shape for queries that read only names/ids (JF-443/JF-446): no
