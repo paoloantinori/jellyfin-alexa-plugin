@@ -3,9 +3,10 @@ id: JF-485
 title: >-
   Register the 8 private inline GUID-temp-dir copies with PluginTempDirCleanup
   (~102 leaked dirs per suite run remain after JF-453)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-04 15:44'
+updated_date: '2026-09-04 16:00'
 labels: []
 dependencies: []
 references:
@@ -40,3 +41,9 @@ Optional second step (only after the 8 are fixed): the ~38,000 HISTORICAL GUID-t
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed complete (commit 95ff9ce6 with JF-453). All 13 private inline GUID-temp-dir sites across the 9 listed files carry the one-line PluginTempDirCleanup.Shared.Register right after their CreateDirectory, matching the shared helper's shape. The Register line was chosen over routing through EnsurePluginInstance because the copies are not uniformly equivalent (several load config differently, one returns the Plugin instance, one sets a trailing-slash address the helper would override; per-file rationale in the worker report). Measured: the ~102-per-run leak from these families is now zero (dashed-GUID delta 0, jf300 flat across runs; run-2 per-family attribution proved run-1's +9 residual is entirely out-of-scope families, filed as JF-486). Suite 3175/3175 twice, Release 0 warnings.
+<!-- SECTION:FINAL_SUMMARY:END -->

@@ -4,10 +4,10 @@ title: >-
   VOICE_COMMANDS.md it-IT Play Radio row carries 4 phantom samples absent from
   model_it-IT.json (stale mirror, pre-existing, left behind by the additive
   JF-472 sync)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-03 16:39'
-updated_date: '2026-09-04 15:26'
+updated_date: '2026-09-04 16:00'
 labels: []
 dependencies: []
 references:
@@ -29,6 +29,12 @@ Found by the JF-472 final code review. The VOICE_COMMANDS.md it-IT "Play Radio" 
 - [ ] #3 A repo-wide case-insensitive sample cross-check (doc rows vs model samples) runs over VOICE_COMMANDS.md and any other stale rows found are fixed in the same change
 - [ ] #4 Validation: python3 scripts/generate_interaction_model.py it-IT produces no diff (if template touched) and the doc row matches the regenerated model
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed complete (commit f39d757c). All four ACs met: the it-IT Play Radio row now carries only model-truth samples; the repo-wide cross-check (AC#3, the task's own extension) swept all 17 sections / 671 rows / 5512 tokens: 781 finding lines before (phantoms, within-row duplicates, casing drift), ZERO after (re-verified by the orchestrator's own re-run of the cross-checker). Every fix adopts the model as truth; no sample was promoted (each drop had an article-less twin or an equivalent carrier already in the model; decisions recorded in the commit message). No template/model change, so no regeneration (AC#4 vacuous) and no model-deploy obligation. The worker agent itself timed out mid-report-writing after completing all edits; the orchestrator independently verified the final state (cross-checker re-run, suite 3175/3175, validators baseline, zero em-dash in the diff).
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

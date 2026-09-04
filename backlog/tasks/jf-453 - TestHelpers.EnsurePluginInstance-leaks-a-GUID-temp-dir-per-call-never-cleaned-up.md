@@ -3,10 +3,10 @@ id: JF-453
 title: >-
   TestHelpers.EnsurePluginInstance leaks a GUID temp dir per call, never cleaned
   up
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-02 03:32'
-updated_date: '2026-09-04 15:26'
+updated_date: '2026-09-04 16:00'
 labels:
   - tech-debt
   - test-hygiene
@@ -35,3 +35,13 @@ Filed from the JF-433 code-review pass (2026-09-02). Tests/Unit/TestHelpers.cs E
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed complete (commits 95ff9ce6 with JF-485, evidence below).
+
+The leak was far larger than filed: xUnit news every test class per method and PluginTestBase resets Plugin.Instance, so EnsurePluginInstance minted a fresh GUID dir per test METHOD (roughly 37,800 accumulated in /tmp across 48 families). Fix: PluginTempDirCleanup (ConcurrentBag register + ModuleInitializer/ProcessExit sweep; xUnit 2.7 has no assembly fixture and the collection-fixture workaround silently drifts). Registered-paths-only deletion, never pattern sweeps. Measured: every covered family byte-flat across consecutive full-suite runs; a filtered run's dir peak returns to exactly its baseline after exit, proving the sweep fires. 4 hermetic sweeper pins; suite 3175/3175.
+
+Follow-ups filed from the measurements: JF-485 (the 13 private inline copies across 9 files: +102/run, landed as the same commit's one-line Registers, leak measured to zero) and JF-486 (the residual +9/run from shuffle-test/gapless, suspected delayed queue-flush recreation). The ~38k HISTORICAL dirs remain in /tmp (pattern deletion unsafe while a suite may run; low value, noted in JF-486).
+<!-- SECTION:FINAL_SUMMARY:END -->
