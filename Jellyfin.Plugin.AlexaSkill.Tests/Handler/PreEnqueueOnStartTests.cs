@@ -281,6 +281,83 @@ public class PreEnqueueOnStartTests : PluginTestBase, IDisposable
 
     }
 
+    // JF-424.2 (AC#2): an entry past its 15-minute TTL is dead on ANY read. With a
+    // MATCHING token the read misses AND reclaims the entry. Reclamation is proven
+    // through the public surface: the clock is then wound back inside the entry's
+    // validity window, where a matching-token read would hit if the entry were still
+    // stored; it misses, so the expired read removed it.
+    [Fact]
+    public void Cache_TryGet_ExpiredEntry_MatchingToken_MissesAndReclaimsEntry()
+    {
+        var deviceId = "device-jf4242-" + Guid.NewGuid().ToString("N"); // unique per test: isolation without shared state
+        var tokenA = Guid.NewGuid().ToString();
+        var nextId = Guid.NewGuid();
+        var t0 = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        using var fake = new FakeTimeProvider(t0);
+        NextTrackPrecomputeCache.Store(deviceId, tokenA, nextId, new Audio { Name = "Next", Id = nextId }, "https://stream/next");
+
+        // One minute past the 15-minute TTL: dead entry, matching token.
+        fake.SetUtcNow(t0 + TimeSpan.FromMinutes(16));
+        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, tokenA, out _, out _, out _));
+
+        // Back inside the window: still a miss, so the entry was reclaimed above.
+        fake.SetUtcNow(t0 + TimeSpan.FromMinutes(1));
+        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, tokenA, out _, out _, out _));
+    }
+
+    // JF-424.2 (AC#3): the TTL check runs BEFORE the token check, so an expired entry
+    // is reclaimed even by a MISMATCHED-token read. A refactor that swaps the two
+    // checks, or drops the remove-on-expired, would return the mismatch miss while
+    // leaving the dead entry resident; the second read below catches both shapes.
+    [Fact]
+    public void Cache_TryGet_ExpiredEntry_MismatchedToken_MissesAndReclaimsEntry()
+    {
+        var deviceId = "device-jf4242-" + Guid.NewGuid().ToString("N"); // unique per test: isolation without shared state
+        var tokenA = Guid.NewGuid().ToString();
+        var tokenB = Guid.NewGuid().ToString();
+        var nextId = Guid.NewGuid();
+        var t0 = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        using var fake = new FakeTimeProvider(t0);
+        NextTrackPrecomputeCache.Store(deviceId, tokenB, nextId, new Audio { Name = "Next", Id = nextId }, "https://stream/next");
+
+        // One minute past the 15-minute TTL: dead entry, mismatched token.
+        fake.SetUtcNow(t0 + TimeSpan.FromMinutes(16));
+        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, tokenA, out _, out _, out _));
+
+        // Back inside the window, the entry's OWN token must miss too: the expired
+        // mismatched read reclaimed the dead entry instead of leaving it for a
+        // later (wrongly fresh-looking) serve.
+        fake.SetUtcNow(t0 + TimeSpan.FromMinutes(1));
+        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, tokenB, out _, out _, out _));
+    }
+
+    // JF-424.2 (AC#4): the JF-424 retention invariant pinned at an EXPLICIT clock
+    // position inside the TTL (the TokenMismatch test above is fresh only by
+    // test-execution speed). At 14 of the 15 minutes the entry is still fresh: a
+    // mismatched read misses but must NOT reclaim it, and the matching read that
+    // follows still hits (which also pins fresh + matching token = hit through the seam).
+    [Fact]
+    public void Cache_TryGet_WithinTtl_MismatchedToken_MissesButRetainsEntry()
+    {
+        var deviceId = "device-jf4242-" + Guid.NewGuid().ToString("N"); // unique per test: isolation without shared state
+        var tokenA = Guid.NewGuid().ToString();
+        var tokenB = Guid.NewGuid().ToString();
+        var nextId = Guid.NewGuid();
+        var t0 = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        using var fake = new FakeTimeProvider(t0);
+        NextTrackPrecomputeCache.Store(deviceId, tokenB, nextId, new Audio { Name = "Next", Id = nextId }, "https://stream/next");
+
+        // Inside the window, mismatched token: miss, entry retained (JF-424).
+        fake.SetUtcNow(t0 + TimeSpan.FromMinutes(14));
+        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, tokenA, out _, out _, out _));
+
+        // Still inside the window: the matching consumer hits the retained entry.
+        fake.SetUtcNow(t0 + TimeSpan.FromMinutes(14) + TimeSpan.FromSeconds(30));
+        Assert.True(NextTrackPrecomputeCache.TryGet(deviceId, tokenB, out Guid cachedId, out _, out string? streamUrl));
+        Assert.Equal(nextId, cachedId);
+        Assert.Equal("https://stream/next", streamUrl);
+    }
+
     // JF-424 handler-level replay of the live interleaving: NearlyFinished(A) consumed
     // entry(A->B), Started(B) stored entry(B->C), then Amazon re-sent a late duplicate
     // NearlyFinished(A). The duplicate's mismatched probe must leave entry(B->C) in
@@ -586,5 +663,37 @@ public class PreEnqueueOnStartTests : PluginTestBase, IDisposable
         // ...but the queue pointer was left exactly where it was.
         Assert.Equal(previousPointer, queueManager.GetQueue(deviceId)!.CurrentItemId);
 
+    }
+
+    /// <summary>
+    /// Hand-rolled deterministic clock for the JF-424.2 TTL tests:
+    /// Microsoft.Extensions.TimeProvider.Testing is not referenced by the test project,
+    /// and the needed surface is just a settable UTC now. Parked at the epoch the test
+    /// chooses, so Store's ComputedAt stamp and the TTL check read the same clock.
+    /// Installing itself in the seam on construction and restoring
+    /// <see cref="TimeProvider.System"/> on Dispose keeps the global-state window
+    /// scoped to the declaring test.
+    /// </summary>
+    private sealed class FakeTimeProvider : TimeProvider, IDisposable
+    {
+        private DateTimeOffset _utcNow;
+
+        public FakeTimeProvider(DateTimeOffset start)
+        {
+            _utcNow = start;
+            NextTrackPrecomputeCache.Time = this;
+        }
+
+        public void SetUtcNow(DateTimeOffset utcNow)
+        {
+            _utcNow = utcNow;
+        }
+
+        public override DateTimeOffset GetUtcNow() => _utcNow;
+
+        public void Dispose()
+        {
+            NextTrackPrecomputeCache.Time = TimeProvider.System;
+        }
     }
 }

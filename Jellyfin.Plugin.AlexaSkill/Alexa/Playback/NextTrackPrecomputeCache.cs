@@ -41,6 +41,15 @@ internal static class NextTrackPrecomputeCache
     private static readonly TimeSpan EntryTtl = TimeSpan.FromMinutes(15);
 
     /// <summary>
+    /// Time source for both <see cref="Store"/> (the ComputedAt stamp) and the TTL check
+    /// in <see cref="TryGet"/>. Test seam (JF-424.2): the class is static so no ctor
+    /// injection is possible; production never assigns this and always runs on
+    /// <see cref="TimeProvider.System"/>, while tests substitute a fake to advance past
+    /// <see cref="EntryTtl"/> deterministically instead of sleeping the 15-minute window.
+    /// </summary>
+    internal static TimeProvider Time { get; set; } = TimeProvider.System;
+
+    /// <summary>
     /// Stores a pre-computed next-track entry for a device, replacing any previous entry
     /// (one live entry per device keeps the cache bounded).
     /// </summary>
@@ -51,7 +60,7 @@ internal static class NextTrackPrecomputeCache
     /// <param name="streamUrl">The pre-built stream URL for the next item.</param>
     public static void Store(string deviceId, string currentTrackToken, Guid nextItemId, BaseItem item, string streamUrl)
     {
-        Cache[deviceId] = new PrecomputedEntry(currentTrackToken, nextItemId, item, streamUrl, DateTimeOffset.UtcNow);
+        Cache[deviceId] = new PrecomputedEntry(currentTrackToken, nextItemId, item, streamUrl, Time.GetUtcNow());
     }
 
     /// <summary>
@@ -90,7 +99,7 @@ internal static class NextTrackPrecomputeCache
         // reclaimed on any read, matched or not; this is the only removal a mismatched
         // read may safely perform. The value-conditional remove takes only this exact
         // entry, never a concurrent Store's replacement.
-        if (DateTimeOffset.UtcNow - entry.ComputedAt > EntryTtl)
+        if (Time.GetUtcNow() - entry.ComputedAt > EntryTtl)
         {
             Cache.TryRemove(new KeyValuePair<string, PrecomputedEntry>(deviceId, entry));
             return false;
