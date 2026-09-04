@@ -9,8 +9,11 @@ using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Session;
@@ -31,6 +34,7 @@ public class RadioModeTests : PluginTestBase, IDisposable
     private readonly ILoggerFactory _loggerFactory;
     private readonly Mock<ILibraryManager> _libraryManagerMock;
     private readonly Mock<IUserManager> _userManagerMock;
+    private readonly Mock<ILiveTvStreamResolver> _resolverMock;
 
     public RadioModeTests()
     {
@@ -39,6 +43,12 @@ public class RadioModeTests : PluginTestBase, IDisposable
         _loggerFactory = LoggerFactory.Create(b => { });
         _libraryManagerMock = new Mock<ILibraryManager>();
         _userManagerMock = new Mock<IUserManager>();
+        // By default the resolver returns a direct-remote stream so channel-tier tests
+        // reach the VideoApp.Launch path (same default as PlayChannelIntentHandlerTests).
+        _resolverMock = new Mock<ILiveTvStreamResolver>();
+        _resolverMock
+            .Setup(r => r.ResolveAsync(It.IsAny<BaseItem>(), It.IsAny<Entities.User>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new LiveTvStream("https://remote.example/radio.m3u8"));
 
         QueueContinuationStore.Remove(Guid.Empty, DeviceId);
         RadioModeState.Disable(Guid.Empty, DeviceId);
@@ -50,6 +60,9 @@ public class RadioModeTests : PluginTestBase, IDisposable
         RadioModeState.Disable(Guid.Empty, DeviceId);
         GC.SuppressFinalize(this);
     }
+
+    private PlayRadioIntentHandler CreateRadioHandler()
+        => new(_sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _resolverMock.Object, _loggerFactory);
 
     private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
     private static Context CreateContext() => TestHelpers.CreateTestContext();
@@ -67,7 +80,7 @@ public class RadioModeTests : PluginTestBase, IDisposable
     [Fact]
     public void PlayRadio_CanHandle_ReturnsTrue()
     {
-        var handler = new PlayRadioIntentHandler(_sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+        var handler = CreateRadioHandler();
         var request = new IntentRequest { Intent = new Intent { Name = "PlayRadioIntent" } };
         Assert.True(handler.CanHandle(request));
     }
@@ -88,9 +101,9 @@ public class RadioModeTests : PluginTestBase, IDisposable
         Assert.True(handler.CanHandle(request));
     }
 
-    private static IntentRequest CreatePlayRadioRequest(string? stationValue = null, bool dialogInProgress = false)
+    private static IntentRequest CreatePlayRadioRequest(string? stationValue = null, bool dialogInProgress = false, string locale = "en-US")
     {
-        var request = new IntentRequest { Intent = new Intent { Name = "PlayRadioIntent" } };
+        var request = new IntentRequest { Intent = new Intent { Name = "PlayRadioIntent" }, Locale = locale };
         if (stationValue != null)
         {
             request.Intent.Slots = new Dictionary<string, Slot>
@@ -133,7 +146,7 @@ public class RadioModeTests : PluginTestBase, IDisposable
     [Fact]
     public async Task PlayRadio_EmptyStationSlot_NothingPlaying_ElicitsStation()
     {
-        var handler = new PlayRadioIntentHandler(_sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+        var handler = CreateRadioHandler();
         var session = CreateSession();
         session.FullNowPlayingItem = null;
 
@@ -152,7 +165,7 @@ public class RadioModeTests : PluginTestBase, IDisposable
     [Fact]
     public async Task PlayRadio_WhitespaceStationSlot_NothingPlaying_ElicitsStation()
     {
-        var handler = new PlayRadioIntentHandler(_sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+        var handler = CreateRadioHandler();
         var session = CreateSession();
         session.FullNowPlayingItem = null;
 
@@ -177,7 +190,7 @@ public class RadioModeTests : PluginTestBase, IDisposable
     [Fact]
     public async Task PlayRadio_EmptyStationSlot_PausedWithSurvivingItem_ElicitsStation()
     {
-        var handler = new PlayRadioIntentHandler(_sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+        var handler = CreateRadioHandler();
         var session = CreateSession();
 
         var currentId = Guid.NewGuid();
@@ -207,7 +220,7 @@ public class RadioModeTests : PluginTestBase, IDisposable
     [Fact]
     public async Task PlayRadio_EmptyStationSlot_PlayerActivityPaused_ElicitsStation()
     {
-        var handler = new PlayRadioIntentHandler(_sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+        var handler = CreateRadioHandler();
         var session = CreateSession();
 
         var currentId = Guid.NewGuid();
@@ -234,7 +247,7 @@ public class RadioModeTests : PluginTestBase, IDisposable
     [Fact]
     public async Task PlayRadio_EmptyStationSlot_SomethingPlaying_StartsRadioMode()
     {
-        var handler = new PlayRadioIntentHandler(_sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+        var handler = CreateRadioHandler();
         var session = CreateSession();
 
         var currentId = Guid.NewGuid();
@@ -266,7 +279,7 @@ public class RadioModeTests : PluginTestBase, IDisposable
     [Fact]
     public async Task PlayRadio_EmptyStationSlot_BufferUnderrun_StartsRadioMode()
     {
-        var handler = new PlayRadioIntentHandler(_sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+        var handler = CreateRadioHandler();
         var session = CreateSession();
 
         var currentId = Guid.NewGuid();
@@ -290,24 +303,357 @@ public class RadioModeTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
-    /// A filled station slot is not yet actionable (no station playback feature), so the
-    /// nothing-playing Tell stays (today's behavior for slot-given requests).
+    /// JF-474 tier (i): a station word matching a live-TV RADIO channel plays that
+    /// channel through the PlayChannel machinery (VideoApp.Launch, resolver URL,
+    /// ShouldEndSession null), never the nothing-playing Tell.
     /// </summary>
     [Fact]
-    public async Task PlayRadio_StationGiven_NothingPlaying_KeepsNothingPlayingTell()
+    public async Task PlayRadio_StationGiven_ChannelMatch_PlaysChannel()
     {
-        var handler = new PlayRadioIntentHandler(_sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+        var handler = CreateRadioHandler();
         var session = CreateSession();
         session.FullNowPlayingItem = null;
+        SetupJellyfinUser();
+
+        var channel = new Movie { Name = "Jazz FM", Id = Guid.NewGuid() };
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.Is<MediaBrowser.Controller.Entities.InternalItemsQuery>(
+                q => q.SearchTerm == "jazz fm")))
+            .Returns(new List<BaseItem> { channel });
+
+        var response = await handler.HandleAsync(
+            CreatePlayRadioRequest("jazz fm"),
+            CreateContext(), TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.Null(response.Response.ShouldEndSession);
+        Assert.Contains(response.Response.Directives ?? Enumerable.Empty<IDirective>(), d => d.Type == "VideoApp.Launch");
+        Assert.DoesNotContain(response.Response.Directives ?? Enumerable.Empty<IDirective>(), d => d.Type == "AudioPlayer.Play");
+        Assert.NotNull(session.FullNowPlayingItem);
+        Assert.Equal(channel.Id, session.FullNowPlayingItem!.Id);
+        Assert.Equal(channel.Id, Assert.Single(session.NowPlayingQueue!).Id);
+        Assert.False(RadioModeState.IsEnabled(session.UserId, DeviceId), "a channel launch is not radio mode");
+        _resolverMock.Verify(r => r.ResolveAsync(channel, It.IsAny<Entities.User>(), It.IsAny<CancellationToken>()), Times.Once);
+        var text = TestHelpers.GetSpeechText(response);
+        Assert.DoesNotContain("nothing", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// JF-474 tier (i) hard zero: when the resolver cannot produce a stream for the
+    /// matched channel, the response is the same not-available Tell PlayChannel speaks.
+    /// </summary>
+    [Fact]
+    public async Task PlayRadio_StationGiven_ChannelMatch_UnresolvableStream_SpeaksNotAvailable()
+    {
+        var handler = CreateRadioHandler();
+        var session = CreateSession();
+        session.FullNowPlayingItem = null;
+        SetupJellyfinUser();
+        _resolverMock
+            .Setup(r => r.ResolveAsync(It.IsAny<BaseItem>(), It.IsAny<Entities.User>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((LiveTvStream?)null);
+
+        var channel = new Movie { Name = "Jazz FM", Id = Guid.NewGuid() };
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.Is<MediaBrowser.Controller.Entities.InternalItemsQuery>(
+                q => q.SearchTerm == "jazz fm")))
+            .Returns(new List<BaseItem> { channel });
+
+        var response = await handler.HandleAsync(
+            CreatePlayRadioRequest("jazz fm"),
+            CreateContext(), TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.True(response.Response.ShouldEndSession == true, "the not-available Tell ends the session");
+        Assert.DoesNotContain(response.Response.Directives ?? Enumerable.Empty<IDirective>(), d => d.Type == "VideoApp.Launch");
+    }
+
+    /// <summary>
+    /// JF-474 tier (ii): a genre word with no channel match seeds radio mode with that
+    /// genre's tracks (FindRadioTracksByGenreAsync), announces RadioStarted, and enables
+    /// RadioModeState so PlaybackNearlyFinished continues the queue. This is the
+    /// end-to-end healing of the JF-472 Amazon-side misroute: "suona jazz" -> elicit ->
+    /// "jazz" answer -> genre radio plays.
+    /// </summary>
+    [Fact]
+    public async Task PlayRadio_StationGiven_GenreWord_StartsGenreRadio()
+    {
+        var handler = CreateRadioHandler();
+        var session = CreateSession();
+        session.FullNowPlayingItem = null;
+        SetupJellyfinUser();
+
+        var genreTracks = new List<BaseItem>
+        {
+            new Audio { Id = Guid.NewGuid(), Name = "Blue in Green" },
+            new Audio { Id = Guid.NewGuid(), Name = "So What" },
+        };
+        SetupGenreQuery(genreTracks);
 
         var response = await handler.HandleAsync(
             CreatePlayRadioRequest("jazz"),
             CreateContext(), TestHelpers.CreateTestUser(), session, CancellationToken.None);
 
+        Assert.Contains(response.Response.Directives ?? Enumerable.Empty<IDirective>(), d => d.Type == "AudioPlayer.Play");
+        Assert.True(RadioModeState.IsEnabled(session.UserId, DeviceId), "the genre tier must enable radio mode");
+        Assert.NotNull(session.FullNowPlayingItem);
+        Assert.Equal(2, session.NowPlayingQueue!.Count);
         var text = TestHelpers.GetSpeechText(response);
-        Assert.Contains("nothing", text, StringComparison.OrdinalIgnoreCase);
-        Assert.True(response.Response.ShouldEndSession == true, "the Tell must end the session");
-        Assert.DoesNotContain(response.Response.Directives ?? Enumerable.Empty<IDirective>(), d => d.Type == "Dialog.ElicitSlot");
+        Assert.Contains("radio", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("nothing", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// JF-474 tier (iii): a word that is neither a channel nor a genre gets the
+    /// TRUTHFUL not-found naming the station word and suggesting a genre, never the
+    /// out-of-context nothing-playing Tell (the JF-474 dead-end).
+    /// </summary>
+    [Fact]
+    public async Task PlayRadio_StationGiven_NoChannelNoGenre_TruthfulNotFound()
+    {
+        var handler = CreateRadioHandler();
+        var session = CreateSession();
+        session.FullNowPlayingItem = null;
+        SetupJellyfinUser();
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var response = await handler.HandleAsync(
+            CreatePlayRadioRequest("xyzzyfoo"),
+            CreateContext(), TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.True(response.Response.ShouldEndSession == true, "the not-found Tell ends the session");
+        var text = TestHelpers.GetSpeechText(response);
+        Assert.Contains("xyzzyfoo", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("jazz", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("nothing", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// JF-474 UX a: the elicit's REPROMPT names 2-3 real options from the live-TV radio
+    /// channel list, while the FIRST ask stays the short RadioAskStation question.
+    /// </summary>
+    [Fact]
+    public async Task PlayRadio_EmptyStationSlot_RepromptNamesChannelOptions()
+    {
+        var handler = CreateRadioHandler();
+        var session = CreateSession();
+        session.FullNowPlayingItem = null;
+        SetupJellyfinUser();
+        SetupRadioChannelList("Jazz FM", "RTL 102.5", "Radio Italia");
+
+        var response = await handler.HandleAsync(
+            CreatePlayRadioRequest(),
+            CreateContext(), TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.Contains(response.Response.Directives ?? Enumerable.Empty<IDirective>(), d => d.Type == "Dialog.ElicitSlot");
+        Assert.NotNull(response.Response.Reprompt?.OutputSpeech);
+        string ask = TestHelpers.GetSpeechText(response);
+        Assert.Contains("station", ask, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Jazz FM", ask, StringComparison.OrdinalIgnoreCase);
+
+        string reprompt = RepromptText(response);
+        Assert.Contains("Jazz FM", reprompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("RTL 102.5", reprompt, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// JF-474 UX a fallback: with no live-TV radio channels in the library the reprompt
+    /// suggests the genre words instead, and the elicit still fires.
+    /// </summary>
+    [Fact]
+    public async Task PlayRadio_EmptyStationSlot_NoChannels_GenreWordReprompt()
+    {
+        var handler = CreateRadioHandler();
+        var session = CreateSession();
+        session.FullNowPlayingItem = null;
+        SetupJellyfinUser();
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var response = await handler.HandleAsync(
+            CreatePlayRadioRequest(),
+            CreateContext(), TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.Contains(response.Response.Directives ?? Enumerable.Empty<IDirective>(), d => d.Type == "Dialog.ElicitSlot");
+        string reprompt = RepromptText(response);
+        Assert.Contains("jazz", reprompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("rock", reprompt, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// JF-474 UX b: during the open elicit a question-shaped answer ("what are the
+    /// options?") gets the available-list response plus a RE-ASK (still an elicit, so
+    /// the follow-up keeps filling the station slot), not the dead-end Tell.
+    /// </summary>
+    [Fact]
+    public async Task PlayRadio_QuestionShapedAnswer_ListsChannelsAndReAsks()
+    {
+        var handler = CreateRadioHandler();
+        var session = CreateSession();
+        session.FullNowPlayingItem = null;
+        SetupJellyfinUser();
+        SetupRadioChannelList("Jazz FM", "RTL 102.5");
+
+        var response = await handler.HandleAsync(
+            CreatePlayRadioRequest("what are the options", dialogInProgress: true),
+            CreateContext(), TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.False(response.Response.ShouldEndSession == true, "the help answer must keep the session open");
+        Assert.Contains(response.Response.Directives ?? Enumerable.Empty<IDirective>(), d => d.Type == "Dialog.ElicitSlot");
+        var text = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Jazz FM", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("station", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("nothing", text, StringComparison.OrdinalIgnoreCase);
+        Assert.False(RadioModeState.IsEnabled(session.UserId, DeviceId), "a help question must not start playback");
+    }
+
+    /// <summary>
+    /// JF-474 UX b, it-IT vocabulary: "quali ci sono" is a question in the Italian
+    /// locale's help-word set, so the it-IT device case (the JF-474 device evidence)
+    /// lists options and re-asks.
+    /// </summary>
+    [Fact]
+    public async Task PlayRadio_QuestionShapedAnswer_Italian_QualiCiSono_ListsAndReAsks()
+    {
+        var handler = CreateRadioHandler();
+        var session = CreateSession();
+        session.FullNowPlayingItem = null;
+        SetupJellyfinUser();
+        SetupRadioChannelList("Jazz FM");
+
+        var response = await handler.HandleAsync(
+            CreatePlayRadioRequest("quali ci sono", dialogInProgress: true, locale: "it-IT"),
+            CreateContext(), TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.Contains(response.Response.Directives ?? Enumerable.Empty<IDirective>(), d => d.Type == "Dialog.ElicitSlot");
+        var text = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Jazz FM", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("genere", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// JF-474 UX b, no-channels help shape: the available-list answer falls back to the
+    /// genre suggestion and still re-asks via the elicit.
+    /// </summary>
+    [Fact]
+    public async Task PlayRadio_QuestionShapedAnswer_NoChannels_ListsGenresAndReAsks()
+    {
+        var handler = CreateRadioHandler();
+        var session = CreateSession();
+        session.FullNowPlayingItem = null;
+        SetupJellyfinUser();
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var response = await handler.HandleAsync(
+            CreatePlayRadioRequest("list", dialogInProgress: true),
+            CreateContext(), TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.Contains(response.Response.Directives ?? Enumerable.Empty<IDirective>(), d => d.Type == "Dialog.ElicitSlot");
+        var text = TestHelpers.GetSpeechText(response);
+        Assert.Contains("jazz", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("station", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// JF-474 review P3-2: the apostrophe is a separator so contractions tokenize
+    /// ("what's on" -> "what" + "on"); a future "simplification" of the separator
+    /// list would silently break this. Pinned at the predicate level.
+    /// </summary>
+    [Fact]
+    public void QuestionWords_ContractionAndTokenDetection_Pinned()
+    {
+        Assert.True(global::Jellyfin.Plugin.AlexaSkill.Alexa.Util.QuestionWords.IsQuestion("what's on", "en-US"));
+        Assert.True(global::Jellyfin.Plugin.AlexaSkill.Alexa.Util.QuestionWords.IsQuestion("what is on", "en-US"));
+        Assert.True(global::Jellyfin.Plugin.AlexaSkill.Alexa.Util.QuestionWords.IsQuestion("quali ci sono", "it-IT"));
+        Assert.False(global::Jellyfin.Plugin.AlexaSkill.Alexa.Util.QuestionWords.IsQuestion("whatsername", "en-US"));
+        Assert.False(global::Jellyfin.Plugin.AlexaSkill.Alexa.Util.QuestionWords.IsQuestion("jazz fm", "en-US"));
+    }
+
+    /// <summary>
+    /// The question detection is token-based: a station word that merely CONTAINS a
+    /// help word without a token boundary ("whatsername") is not a question and falls
+    /// through the tiers to the truthful not-found.
+    /// </summary>
+    [Fact]
+    public async Task PlayRadio_QuestionWordEmbeddedInName_IsNotAQuestion()
+    {
+        var handler = CreateRadioHandler();
+        var session = CreateSession();
+        session.FullNowPlayingItem = null;
+        SetupJellyfinUser();
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var response = await handler.HandleAsync(
+            CreatePlayRadioRequest("whatsername", dialogInProgress: true),
+            CreateContext(), TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        // Falls through the tiers to the truthful not-found (names the word), NOT the
+        // help listing (which would contain the genre suggestion without the word).
+        var text = TestHelpers.GetSpeechText(response);
+        Assert.Contains("whatsername", text, StringComparison.OrdinalIgnoreCase);
+        Assert.True(response.Response.ShouldEndSession == true);
+    }
+
+    /// <summary>
+    /// The enrichment query is fail-soft by design: when the channel-name lookup throws
+    /// (transient DB error), the elicit still fires with the genre-word reprompt instead
+    /// of failing the whole question.
+    /// </summary>
+    [Fact]
+    public async Task PlayRadio_EmptyStationSlot_ChannelListQueryThrows_ElicitStillFires()
+    {
+        var handler = CreateRadioHandler();
+        var session = CreateSession();
+        session.FullNowPlayingItem = null;
+        SetupJellyfinUser();
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.Is<MediaBrowser.Controller.Entities.InternalItemsQuery>(
+                q => q.SearchTerm == null)))
+            .Throws(new InvalidOperationException("db hiccup"));
+
+        var response = await handler.HandleAsync(
+            CreatePlayRadioRequest(),
+            CreateContext(), TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.Contains(response.Response.Directives ?? Enumerable.Empty<IDirective>(), d => d.Type == "Dialog.ElicitSlot");
+        Assert.Contains("jazz", RepromptText(response), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>The reprompt's plain-text speech (the elicit reprompts are plain text; IOutputSpeech.ToString() is just the type name).</summary>
+    private static string RepromptText(SkillResponse response)
+        => (response.Response.Reprompt?.OutputSpeech as PlainTextOutputSpeech)?.Text ?? string.Empty;
+
+    private void SetupJellyfinUser()
+    {
+        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
+            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+    }
+
+    /// <summary>Genre queries (Genres filter set) return the given tracks; every other query finds nothing.</summary>
+    private void SetupGenreQuery(List<BaseItem> genreTracks)
+    {
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.Is<MediaBrowser.Controller.Entities.InternalItemsQuery>(
+                q => q.Genres != null && q.Genres.Count > 0)))
+            .Returns(genreTracks);
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.Is<MediaBrowser.Controller.Entities.InternalItemsQuery>(
+                q => q.Genres == null || q.Genres.Count == 0)))
+            .Returns(new List<BaseItem>());
+    }
+
+    /// <summary>The elicit reprompt's channel-name listing query: LiveTvChannel rows with no SearchTerm.</summary>
+    private void SetupRadioChannelList(params string[] names)
+    {
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.Is<MediaBrowser.Controller.Entities.InternalItemsQuery>(
+                q => q.SearchTerm == null && q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(Jellyfin.Data.Enums.BaseItemKind.LiveTvChannel))))
+            .Returns(names.Select(n => (BaseItem)new Movie { Name = n, Id = Guid.NewGuid() }).ToList());
     }
 
     /// <summary>
@@ -319,7 +665,7 @@ public class RadioModeTests : PluginTestBase, IDisposable
     [Fact]
     public async Task PlayRadio_CapturedCancelWordDuringOpenElicit_EndsFlow()
     {
-        var handler = new PlayRadioIntentHandler(_sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+        var handler = CreateRadioHandler();
         var session = CreateSession();
         session.FullNowPlayingItem = null;
 
