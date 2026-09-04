@@ -3,10 +3,10 @@ id: JF-490
 title: >-
   'che si chiama' carrier absent from the it-IT model: 'un album che si chiama
   X' falls to FallbackIntent then Amazon Music
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-04 19:07'
-updated_date: '2026-09-04 19:08'
+updated_date: '2026-09-04 20:27'
 labels: []
 dependencies: []
 references:
@@ -46,3 +46,9 @@ Acceptance criteria:
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented and deployed 2026-09-04 (commit 67f1b01a). Four PlayAlbumIntent sample literals added via the it-IT YAML template ('un album che si chiama {album}', 'un disco che si chiama {album}', 'cerca un album chiamato {album}', 'cerca un disco chiamato {album}'), regen surgical (exactly 4 lines, media noun in every carrier, no bare carrier). Two intent-only NLU fixture guards added (slot fill is Amazon-statistical and drifts across rebuilds; the handler-side JF-489 strip is the fill coverage). Model deployed live via the rebuild endpoint (it-IT SUCCEEDED). Device test card items: 'un album che si chiama X' routes to PlayAlbumIntent and plays; 'cerca un album chiamato X' same.
+<!-- SECTION:FINAL_SUMMARY:END -->

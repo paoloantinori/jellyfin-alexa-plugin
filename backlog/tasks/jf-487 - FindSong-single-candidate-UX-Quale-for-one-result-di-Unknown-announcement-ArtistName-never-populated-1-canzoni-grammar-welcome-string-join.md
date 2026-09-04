@@ -4,10 +4,10 @@ title: >-
   FindSong single-candidate UX: 'Quale?' for one result, 'di Unknown'
   announcement (ArtistName never populated), '1 canzoni' grammar, welcome-string
   join
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-04 18:27'
-updated_date: '2026-09-04 19:08'
+updated_date: '2026-09-04 20:26'
 labels: []
 dependencies: []
 references:
@@ -50,3 +50,9 @@ Acceptance criteria:
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented and deployed 2026-09-04 (commit 40a8f1ec). The dedup collapse to one unique name auto-plays at score >= max(userThreshold, 90) with the FindSongPlaying announcement; below the bar the JF-423 disambiguation prompt stays (different recordings share titles). ArtistName populated from item metadata (GetArtistSubtitle then AlbumArtists fallback) so candidates and announcements name the real artist instead of 'di Unknown'. FindSongFoundMultipleSingular added to all 17 locales (count grammar), welcome SSML separators repaired in all 17, LocaleStringsTests (36 cases) pins both. Simplify pass folded the two auto-play sites into a parameterized FoundOne and removed a dead local. Verified: full suite 3235/3235; live entry path via simulator (artist prompt unchanged by design); the second-turn branch is unit-verified (6 new tests) because the simulator cannot inject session attributes. Device test card item: 'cerca la canzone <title>' two-turn flow must auto-play the single candidate and announce the artist.
+<!-- SECTION:FINAL_SUMMARY:END -->

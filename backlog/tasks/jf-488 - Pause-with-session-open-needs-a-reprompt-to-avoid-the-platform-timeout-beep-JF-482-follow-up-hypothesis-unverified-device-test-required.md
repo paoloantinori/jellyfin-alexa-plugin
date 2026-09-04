@@ -3,10 +3,10 @@ id: JF-488
 title: >-
   Pause-with-session-open needs a reprompt to avoid the platform timeout beep
   (JF-482 follow-up; hypothesis unverified, device test required)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-04 18:51'
-updated_date: '2026-09-04 19:08'
+updated_date: '2026-09-04 20:27'
 labels: []
 dependencies: []
 references:
@@ -45,3 +45,9 @@ DECISION remains from JF-482: the default stays OFF until the matrix re-runs cle
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented and deployed 2026-09-04 (commit 1d387c2c). When PauseKeepsSession=true the pause response carries minimal speech ('Pausa.') plus a reprompt ('Dimmi pure quando vuoi riprendere.'), localized in all 17 locales (PauseSessionSpeech/PauseSessionReprompt). Flag-off responses stay byte-identical to the pre-JF-482 shape, pinned by serialization-equality tests. The locale parameter on BuildPauseResponse(bool, string) is required (compile-time explicitness); the parameterless overload pins its own unread literal. The hypothesis (reprompt prevents the EXCEEDED_MAX_REPROMPTS timeout beep) remains UNVERIFIED pending the device test: enable the flag, pause during playback, wait 15+ seconds, observe timeout/beep/follow-up routing. Flag currently OFF on the live server. Device test card item: the JF-482 matrix test (b) re-run with the reprompt deployed.
+<!-- SECTION:FINAL_SUMMARY:END -->

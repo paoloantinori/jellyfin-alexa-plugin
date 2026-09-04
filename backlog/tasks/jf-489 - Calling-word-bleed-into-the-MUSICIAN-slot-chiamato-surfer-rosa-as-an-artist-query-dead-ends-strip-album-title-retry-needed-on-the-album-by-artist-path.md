@@ -3,10 +3,10 @@ id: JF-489
 title: >-
   Calling-word bleed into the MUSICIAN slot: 'chiamato surfer rosa' as an artist
   query dead-ends (strip + album-title retry needed on the album-by-artist path)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-04 19:07'
-updated_date: '2026-09-04 19:08'
+updated_date: '2026-09-04 20:27'
 labels: []
 dependencies: []
 references:
@@ -44,3 +44,9 @@ Acceptance criteria:
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented and deployed 2026-09-04 (commit dc6f23c1). Guard before the musician branch: when the musician value starts with a calling word and the album slot is empty, the stripped value is retried as an ALBUM title (one bounded BuildAlbumQuery). A hit plays the album and clears the musician slot (the JF-471/473 artist gates stay out of a title query's way); a miss continues the artist search on the stripped value. The BaseHandler TryStripLeadingAlbumCallingWord doc carries the sanctioned-deviation paragraph (musician-slot caller skips the raw-first leg for the artist query; raw-artist reachability via the JF-381 containment band). LIVE-VERIFIED on minix after deploy: hit path 'chiamato surfer rosa' logs the retry, returns 1 album, skips the re-query, plays Surfer Rosa; miss path 'chiamato xyzzyfoo' returns the clean not-found naming the stripped artist after full tier search. Device test card item: 'un album chiamato <titolo>' must play the album.
+<!-- SECTION:FINAL_SUMMARY:END -->
