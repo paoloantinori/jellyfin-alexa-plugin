@@ -3,10 +3,10 @@ id: JF-449
 title: >-
   Playback persistence residual interleavings: Clear can resurrect a deleted
   queue file; tracker final flush can collide on the shared .tmp path
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-02 02:41'
-updated_date: '2026-09-02 03:58'
+updated_date: '2026-09-04 16:30'
 labels:
   - playback
   - concurrency
