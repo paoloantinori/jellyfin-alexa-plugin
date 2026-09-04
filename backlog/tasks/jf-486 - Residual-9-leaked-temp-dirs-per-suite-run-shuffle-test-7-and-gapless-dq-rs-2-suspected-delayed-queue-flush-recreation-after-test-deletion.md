@@ -3,10 +3,10 @@ id: JF-486
 title: >-
   Residual +9 leaked temp dirs per suite run: shuffle-test (7) and gapless-dq/rs
   (2), suspected delayed queue-flush recreation after test deletion
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-04 15:58'
-updated_date: '2026-09-04 16:01'
+updated_date: '2026-09-04 16:29'
 labels: []
 dependencies: []
 references:
@@ -45,3 +45,15 @@ Acceptance criteria: the shuffle-test/gapless-dq/gapless-rs families byte-flat a
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed complete (commit 5d409ce2).
+
+Mechanism PROVEN (the task filed it as suspected): DeviceQueueManager arms a 2s debounce timer on every queue mutation; PersistToDisk recreates the dir and writes the json when it fires; the three leaking sites never disposed their manager, so the timer outlived the test deletion. Control groups that dispose first (DeviceQueueManagerTests, DispatchHarness) measured flat. Nuance discovered: a filtered run of the leaking class leaks ZERO (the host exits before the debounce fires); the leak needs full-suite host lifetime, which is why only full runs showed it.
+
+Fix at both depths: root cause (the 9 test-owned managers became using-declarations, disposal strictly before the dir deletion on normal and exception paths) and belt made structural (TestHelpers.CreateRegisteredTempDir: create+register in one call; the shared EnsurePluginInstance mint and all 13 JF-485 sites migrated to it, 39 lines to 13, position-preserving). Leak table byte-flat across consecutive full-suite runs: shuffle-test 364 flat, gapless-dq/rs 66 flat, dq-test control 0 flat. The historical residue (the counts above) is the pre-fix accumulation; the JF-485 optional one-shot cleanup note covers it.
+
+Suite 3175/3175 three times, Release 0 warnings. Review: zero findings >= 80, with the disposal ordering verified against the DeviceQueueManager.Dispose source (_disposed set before the lock; final synchronous PersistAll; timers disposed). Two sub-threshold notes recorded: the fired-and-queued PersistDevice callback nuance (unreachable in tests, no production leak path, belt would sweep) and the N-to-D GUID format shift at 4 migrated sites (attribution-preserving). The ~16 remaining raw mints in unchanged files are uniformity-only churn, correctly left.
+<!-- SECTION:FINAL_SUMMARY:END -->
