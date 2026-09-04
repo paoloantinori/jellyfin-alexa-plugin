@@ -3,10 +3,10 @@ id: JF-449
 title: >-
   Playback persistence residual interleavings: Clear can resurrect a deleted
   queue file; tracker final flush can collide on the shared .tmp path
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-02 02:41'
-updated_date: '2026-09-04 16:30'
+updated_date: '2026-09-04 17:24'
 labels:
   - playback
   - concurrency
@@ -44,6 +44,20 @@ Sync-review addition 2026-09-02: a third pre-existing window in the same family.
 
 2026-09-02 simplify pass (batch JF-429/430/433) landed three related pointers on this task, since its fix re-touches both classes: (1) TEARDOWN DIVERGENCE: the two Dispose protocols already disagree (tracker: flag, then timer teardown under lock, then final flush; DQM: flag, then PersistAll, then teardown). When fixing the interleavings here, adopt ONE defined order in both. (2) SHARED HELPER: the arm-guard idiom now exists 3x (ArmOneShot + both playback copies, near-verbatim); the fix should introduce a small sealed keyed one-shot debounce helper in Alexa/Util/ (Arm/Disarm/DisposeAll owning the volatile flag, lock, timer map) that both classes adopt, so the interleaving fix lands once. The arm-copy itself was judged defensible this round (different key shapes, Timer.Change idiom, no viable base-class derivation). (3) TEST SPEED: the two new race tests sleep 7s wall-clock; the original rejection of debounce test hooks predates the discovery that InternalsVisibleTo("Jellyfin.Plugin.AlexaSkill.Tests") already exists (csproj:15), so an internal ctor overload or internal interval hook crosses no new assembly boundary. Fold that in here: 7s drops under 0.5s.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed complete: implemented, deployed, and live-smoked (commit f08c9177).
+
+The three interleavings confirmed in the pre-change code and closed by ONE mechanism: KeyedOneShotDebounce (Alexa/Util/), a keyed one-shot timer map whose callbacks run INSIDE the gate, making Disarm and DisposeAll barriers (on return no callback is executing and none can start). Clear does TryRemove, Disarm (the barrier), File.Delete: the resurrect window is closed (entry removal chosen over a generation counter: the callback consults the map under the gate, so zero extra state). DQM captures the payload at ARM time (stragglers no longer read the live dictionary). Both Dispose protocols unified on flag -> teardown(barrier) -> final flush (the tracker's old order; DQM's PersistAll-before-teardown window closed). The JF-429 arm-guard idiom lands once (both adopters dropped their own copies); DebouncedLibraryIndexService documented as the deliberate non-adopter (its callback awaits a seconds-long library load outside the lock; the helper's doc names this so nobody consolidates it and holds the gate across a load, and warns payloads against same-instance re-arming self-deadlock).
+
+Tests: 10 new (the barrier semantics, both AC interleavings forced deterministically via a parking seam, the Dispose-order pin via a file-existence witness) plus the two JF-429 race tests rewritten from 7s of sleeps to FireNow (the classes run in 1s). Three mutations each biting exactly their set. Suite 3188/3188, Release 0 warnings, no public API change.
+
+Review (combined 4+5 angle pass): zero findings >= 80; the doc overclaim (exactly-once vs DLIS) and the dead device-2 setup applied same-turn; the deadlock analysis verified by direct reading (no payload path touches Arm/Disarm/DisposeAll; the gate is the only lock; no cycle constructible; the one-hot caller RecordSegment arrives every ~10s next to a ~160KB transfer, no contention).
+
+Deploy: config survived, the PauseKeepsSession flag still on, the playback path smokes clean (artist play directive, zero errors in the logs).
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
