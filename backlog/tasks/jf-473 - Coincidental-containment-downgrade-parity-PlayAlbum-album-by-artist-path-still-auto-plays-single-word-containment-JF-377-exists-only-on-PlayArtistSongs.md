@@ -4,10 +4,10 @@ title: >-
   Coincidental-containment downgrade parity: PlayAlbum album-by-artist path
   still auto-plays single-word containment (JF-377 exists only on
   PlayArtistSongs)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-03 16:24'
-updated_date: '2026-09-04 12:53'
+updated_date: '2026-09-04 13:31'
 labels: []
 dependencies: []
 references:
@@ -45,3 +45,15 @@ Acceptance criteria:
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented, deployed, and live-verified (commit f54f705e).
+
+Parity with PlayArtistSongs' JF-377 behavior on the album-by-artist path: when the accepted artist match is a coincidental containment (single-word artist embedded in a stolen album span, containment 90 passing the JF-471 gate by construction), the handler downgrades to the yes/no AskFirstMatch prompt (disambig_type=artist, the artist's art) instead of silently auto-playing. The yes-route (YesIntentHandler.PlayArtist) verified end to end with the prompt's real session attrs; the no-route walks the shared cursor. Placement after the JF-471 gate preserves its documented user-threshold corner. The carrier-bearing legit class ('un disco di u2' -> U2) still auto-plays, pinned.
+
+Live note on the smoke test (2026-09-04 post-deploy): simulator PlayAlbum musician='dark side of the moon' answers the clean NotFoundAlbumByArtist, not the prompt: the live library's representative match for that query is NOT a single-word containment artist (the Dark Dark Dark class is already refused by the JF-471 gate at score 42; no literal 'Dark' artist exists in the catalog), so the downgrade tier has no live trigger with this library. The unit level (artist 'Dark' with an album) is where the class is pinned; the review pass independently reproduced the pre-fix auto-play by deleting the block. Device verification item stands: the prompt fires only when a single-word containment artist actually exists in the catalog.
+
+3 tests (red-first pin, end-to-end yes-route, carrier control); mutations by both the worker and the review pass; suite 3148/3148; Release 0 warnings; validators baseline. The review found zero findings >= 80 and judged the count-guard drift vs the PlayArtistSongs reference (artists[0] vs count==1) acceptable: this path has no multi-artist flow and the pre-change alternative was silent wrong-artist autoplay.
+<!-- SECTION:FINAL_SUMMARY:END -->
