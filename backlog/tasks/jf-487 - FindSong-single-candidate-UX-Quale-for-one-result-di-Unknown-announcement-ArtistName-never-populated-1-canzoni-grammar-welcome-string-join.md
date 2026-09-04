@@ -4,9 +4,10 @@ title: >-
   FindSong single-candidate UX: 'Quale?' for one result, 'di Unknown'
   announcement (ArtistName never populated), '1 canzoni' grammar, welcome-string
   join
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-04 18:27'
+updated_date: '2026-09-04 19:08'
 labels: []
 dependencies: []
 references:

@@ -925,6 +925,10 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // Disambiguation → ShouldEndSession=false
         Assert.False(response.Response.ShouldEndSession);
 
+        // JF-487 count grammar, plural side: three unique names read "3 songs".
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("I found 3 songs.", speech);
+
         var sessionData = ReadSessionData(response);
         Assert.NotNull(sessionData);
         Assert.Equal(FindSongState.Disambiguating, sessionData.State);
@@ -933,14 +937,17 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
     }
 
     [Fact]
-    public async Task Search_DuplicateNames_DifferentArtistsSameTitle_DedupCollapsesToOne_PromptsNotAutoPlays()
+    public async Task Search_DuplicateNames_HighScoreCollapse_AutoPlaysWithItemArtist()
     {
-        // FIX 1 (review 2026-09-02): when the JF-416 name-dedup collapses a
-        // MULTI-candidate list to ONE unique name, the recordings may be DIFFERENT songs
-        // sharing a title ("Stop" by two artists). The collapse must NOT silently
-        // auto-play one of them (it would announce the wrong artist or "Unknown" and
-        // leave no way to refuse); the 1-item disambiguation prompt keeps the
-        // negative-answer exit.
+        // JF-487 (device 2026-09-04: "Ho trovato 1 canzoni. 1. The Idiot Kings. Quale?"
+        // for a candidate scoring 105): when the JF-416 name-dedup collapses a
+        // MULTI-candidate list to ONE unique name whose score clears the near-exact
+        // auto-play bar (>= 90, the HandleFuzzyMiss no-qualifier precedent floored by
+        // the user's fuzzy threshold), the skill plays it directly with the
+        // "Playing <name> by <artist>" wording. The artist comes from the ITEM's own
+        // metadata (JF-487 defect 2: ArtistName was never populated at candidate-build
+        // time, so keyword-only searches announced "di Unknown"), so the pick is
+        // announced, never silent.
         var artistId = Guid.NewGuid();
         SetupJellyfinUser();
 
@@ -966,20 +973,188 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
         SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, sessionAttrs, CancellationToken.None);
 
-        // Prompt, not silent auto-play: the session stays open in Disambiguating with
-        // ONE candidate and no playback starts.
+        // Auto-play of the highest-scoring recording, named after its real artist:
+        // no "Quale?" prompt, no numbered-list preamble.
+        Assert.True(response.Response?.Directives?.Any(d => d.Type == "AudioPlayer.Play") == true,
+            "a single unique candidate at >= 90 must auto-play");
+        Assert.True(response.Response.ShouldEndSession);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Playing Hey Jude by The Beatles", speech);
+        Assert.DoesNotContain("Which one?", speech);
+        Assert.DoesNotContain("I found 1", speech, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("en-US", "I found 1 song.", "1 songs")]
+    [InlineData("it-IT", "Ho trovato 1 canzone.", "canzoni")]
+    public async Task Search_DuplicateNames_LowScoreCollapse_KeepsPromptWithSingularCount(
+        string locale, string singularPhrase, string wrongPluralPhrase)
+    {
+        // JF-423 protection, re-scoped by JF-487: different recordings share titles
+        // ("Hey Jude" by two artists), so a collapse whose best score is BELOW the
+        // near-exact auto-play bar keeps the disambiguation prompt (whose
+        // negative-answer exit the user may still need). Query "jude" vs title
+        // "Hey Jude" scores 85 (keyword coverage full, half the title tokens covered,
+        // no positional bonus): under 90, so the prompt fires. JF-487 defect 3: the
+        // one-item prompt must use the locale's singular count ("1 song"/"1 canzone"),
+        // never the plural ("1 songs"/"1 canzoni", the device's "Ho trovato 1 canzoni").
+        var artistId = Guid.NewGuid();
+        SetupJellyfinUser();
+
+        var first = CreateAudioItem(Guid.NewGuid(), "Hey Jude");
+        first.Artists = new[] { "The Beatles" };
+        var second = CreateAudioItem(Guid.NewGuid(), "Hey Jude");
+        second.Artists = new[] { "Joe Cocker" };
+        SetupSongSearch(new List<BaseItem> { first, second });
+
+        var user = CreateTestUser();
+        var session = _fx.CreateSession();
+        var sessionAttrs = BuildSessionAttributes(new FindSongSessionData
+        {
+            State = FindSongState.AwaitingKeywords,
+            ArtistId = artistId,
+            ArtistName = "The Beatles"
+        });
+
+        var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
+        {
+            ["titleKeywords"] = "jude"
+        });
+        request.Locale = locale;
+
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+
+        // Prompt, not auto-play: the session stays open in Disambiguating with ONE
+        // candidate, the count is singular, and no playback starts.
         Assert.False(response.Response.ShouldEndSession);
         Assert.True(response.Response?.Directives?.Any(d => d.Type == "AudioPlayer.Play") != true,
-            "a collapse from multiple candidates must not auto-play");
+            "a low-score collapse from multiple candidates must not auto-play");
         string speech = TestHelpers.GetSpeechText(response);
-        Assert.Contains("Which one?", speech);
-        Assert.DoesNotContain("Playing it now", speech, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(singularPhrase, speech);
+        Assert.DoesNotContain(wrongPluralPhrase, speech, StringComparison.OrdinalIgnoreCase);
 
         var sessionData = ReadSessionData(response);
         Assert.NotNull(sessionData);
         Assert.Equal(FindSongState.Disambiguating, sessionData.State);
         Assert.NotNull(sessionData.Candidates);
         Assert.Single(sessionData.Candidates);
+    }
+
+    [Fact]
+    public async Task Search_MultipleMatches_CandidatesCarryArtistName()
+    {
+        // JF-487 defect 2: the disambiguation candidates must carry the ITEM's artist
+        // name (was hardcoded null at candidate-build time), so a later pick announces
+        // the real artist instead of falling back to "Unknown".
+        var artistId = Guid.NewGuid();
+        SetupJellyfinUser();
+
+        var first = CreateAudioItem(Guid.NewGuid(), "Hey Jude");
+        first.Artists = new[] { "The Beatles" };
+        var second = CreateAudioItem(Guid.NewGuid(), "Hey There");
+        second.Artists = new[] { "Joe Cocker" };
+        SetupSongSearch(new List<BaseItem> { first, second });
+
+        var user = CreateTestUser();
+        var session = _fx.CreateSession();
+        var sessionAttrs = BuildSessionAttributes(new FindSongSessionData
+        {
+            State = FindSongState.AwaitingKeywords,
+            ArtistId = artistId,
+            ArtistName = "The Beatles"
+        });
+
+        var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
+        {
+            ["titleKeywords"] = "hey"
+        });
+
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+
+        Assert.False(response.Response.ShouldEndSession);
+        var sessionData = ReadSessionData(response);
+        Assert.NotNull(sessionData);
+        Assert.Equal(FindSongState.Disambiguating, sessionData.State);
+        Assert.NotNull(sessionData.Candidates);
+        Assert.Equal(2, sessionData.Candidates!.Count);
+        Assert.Equal("The Beatles", sessionData.Candidates[0].ArtistName);
+        Assert.Equal("Joe Cocker", sessionData.Candidates[1].ArtistName);
+    }
+
+    [Fact]
+    public async Task Search_DuplicateNames_TwoThirdsTitleCoverage_StaysPrompt()
+    {
+        // JF-487 effective-bar pin. The conceptual bar is 90, but the KeywordMatcher
+        // formula cannot produce exactly 90: full keyword coverage with 2/3 title
+        // coverage computes (0.7 + 0.3*2/3)*100 = 89.999... in floating point, which
+        // stays BELOW the bar and keeps the conservative one-item prompt. Auto-play
+        // therefore requires full coverage (100/105) or 3/4-coverage-plus shapes
+        // (92.5+). This test pins that no epsilon was added to the comparison.
+        var artistId = Guid.NewGuid();
+        SetupJellyfinUser();
+
+        var first = CreateAudioItem(Guid.NewGuid(), "Live Hey Jude");
+        var second = CreateAudioItem(Guid.NewGuid(), "Live Hey Jude");
+        SetupSongSearch(new List<BaseItem> { first, second });
+
+        var user = CreateTestUser();
+        var session = _fx.CreateSession();
+        var sessionAttrs = BuildSessionAttributes(new FindSongSessionData
+        {
+            State = FindSongState.AwaitingKeywords,
+            ArtistId = artistId,
+            ArtistName = "The Beatles"
+        });
+
+        var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
+        {
+            ["titleKeywords"] = "hey jude"
+        });
+
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+
+        Assert.True(response.Response?.Directives?.Any(d => d.Type == "AudioPlayer.Play") != true,
+            "a 2/3-coverage collapse computes 89.999... and must keep the prompt");
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("I found 1 song.", speech);
+    }
+
+    [Theory]
+    [InlineData(true, false)]   // track artists present
+    [InlineData(false, true)]   // only album artists (compilation shape)
+    public async Task Search_SingleMatch_WithoutSessionArtist_AnnouncesItemArtist(
+        bool setTrackArtists, bool setAlbumArtists)
+    {
+        // JF-487 defect 2 on the single-match branch: with NO artist in the session
+        // (keyword-only search, the device case), the announcement must name the
+        // item's own artist, never "Unknown". The album-artists fallback covers
+        // compilations where only the album carries the band.
+        SetupJellyfinUser();
+
+        var song = CreateAudioItem(Guid.NewGuid(), "The Idiot Kings");
+        song.Artists = setTrackArtists ? new[] { "Soul Coughing" } : Array.Empty<string>();
+        song.AlbumArtists = setAlbumArtists ? new List<string> { "Soul Coughing" } : new List<string>();
+        SetupSongSearch(new List<BaseItem> { song });
+
+        var user = CreateTestUser();
+        var session = _fx.CreateSession();
+        var sessionAttrs = BuildSessionAttributes(new FindSongSessionData
+        {
+            State = FindSongState.AwaitingKeywords
+        });
+
+        var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
+        {
+            ["titleKeywords"] = "idiot kings"
+        });
+
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+
+        Assert.True(response.Response?.Directives?.Any(d => d.Type == "AudioPlayer.Play") == true,
+            "a single match must auto-play");
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("I found The Idiot Kings by Soul Coughing", speech);
+        Assert.DoesNotContain("Unknown", speech);
     }
 
     [Fact]

@@ -589,23 +589,23 @@ public class FindSongIntentHandler : BaseHandler
         }
 
         // Single-found auto-play response (JF-440: the ONE single-song shape), shared by
-        // the auto-play sites below.
-        SkillResponse FoundOne(BaseItem song)
+        // the auto-play sites below (the announcement key is the only difference).
+        // JF-487: the artist comes from the ITEM's own metadata first (the session
+        // artist is null on keyword-only searches, which used to announce "di Unknown"
+        // while the item carried the artist all along).
+        SkillResponse FoundOne(BaseItem song, string announcementKey)
         {
-            string artistDisplay = sessionData.ArtistName ?? "Unknown";
+            string artistDisplay = GetItemArtistName(song) ?? sessionData.ArtistName ?? "Unknown";
             return BuildSingleSongResponse(
                 song, user, session, context, locale,
-                announcement: ResponseStrings.Get("FindSongFoundOne", locale, song.Name, artistDisplay));
+                announcement: ResponseStrings.Get(announcementKey, locale, song.Name, artistDisplay));
         }
 
         // Single match: auto-play (JF-440: the ONE single-song shape)
         if (songs.Count == 1)
         {
-            return FoundOne(songs[0]);
+            return FoundOne(songs[0], "FindSongFoundOne");
         }
-
-        // Multiple matches: take top 4 and check if we need artist narrowing
-        List<BaseItem> topSongs = songs.Take(4).ToList();
 
         if (songs.Count > 4 && !sessionData.ArtistId.HasValue)
         {
@@ -630,21 +630,32 @@ public class FindSongIntentHandler : BaseHandler
             .Take(4)
             .ToList();
 
-        // JF-423 review fix (2026-09-02): the dedup can collapse the list to ONE unique
-        // name, but a collapse from MULTIPLE candidates must not auto-play. Different
-        // recordings share titles ("Stop" by two artists): a silent pick would announce
-        // "Stop di Unknown" and leave the user no way to refuse the wrong recording.
-        // Auto-play survives only when there was exactly ONE candidate BEFORE the dedup;
-        // a collapsed list keeps the disambiguation prompt below, whose negative-answer
-        // exit ("no") the user may still need.
-        // A collapse from MULTIPLE candidates (different recordings sharing a title)
-        // deliberately falls through to the prompt: auto-playing one of them would be
-        // silent and uncorrectable (the review-round fix). A true single candidate was
-        // already returned by the single-match branch above, so there is no
-        // auto-play shape to handle here.
+        // JF-487 single-candidate auto-play: the dedup can collapse the list to ONE
+        // unique name, and prompting "Quale?" for a one-item list is absurd (device
+        // 2026-09-04: "Ho trovato 1 canzoni. 1. The Idiot Kings. Quale?" for a
+        // candidate that scored 105). A NEAR-EXACT single candidate (score >= the
+        // HandleFuzzyMiss no-qualifier bar, 90, floored by the user's fuzzy threshold
+        // so a raised personal threshold still governs) plays directly with the
+        // "Riproduco <name> di <artist>" wording; the artist comes from the item's own
+        // metadata, so the pick is announced, never silent.
+        // Below that bar the JF-423 review fix still applies: different recordings
+        // share titles ("Stop" by two artists), so a LOW-CONFIDENCE collapse keeps the
+        // disambiguation prompt below, whose negative-answer exit ("no") the user may
+        // still need. KeywordMatcher admits only 100%-keyword-coverage candidates, so
+        // the practical score band here is 70 (coverage-only) .. 105 (full + positional
+        // bonus); 90 means every keyword AND nearly every title token matched.
+        double singleCandidateAutoPlayThreshold = Math.Max(
+            FuzzyMatcher.GetDefaultThreshold(user), FuzzyMatcher.ContainmentScore);
+        if (uniqueScored.Count == 1 && uniqueScored[0].Score >= singleCandidateAutoPlayThreshold)
+        {
+            BaseItem song = uniqueScored[0].Item;
+            Logger.LogDebug("FindSong: single unique candidate '{Name}' scored {Score} >= {Threshold}, auto-playing",
+                song.Name, uniqueScored[0].Score, singleCandidateAutoPlayThreshold);
+            return FoundOne(song, "FindSongPlaying");
+        }
 
         var disambigCandidates = uniqueScored
-            .Select(s => new FindSongCandidate(s.Item.Id, s.Item.Name, null, s.Score))
+            .Select(s => new FindSongCandidate(s.Item.Id, s.Item.Name, GetItemArtistName(s.Item), s.Score))
             .ToList();
 
         sessionData.State = FindSongState.Disambiguating;
@@ -653,12 +664,28 @@ public class FindSongIntentHandler : BaseHandler
         // Build the list announcement. JF-416: FindSongFoundMultiple already receives
         // candidateNames as a format arg; do NOT append it again (the user heard the
         // full list twice: once in the message and once in the appended prompt).
+        // JF-487 count grammar: the singular variant avoids "1 canzoni"/"1 songs".
         var candidateNames = string.Join(", ", disambigCandidates.Select((c, i) => $"{i + 1}. {c.Name}"));
-        string fullPrompt = ResponseStrings.Get("FindSongFoundMultiple", locale, disambigCandidates.Count, candidateNames);
+        string countKey = disambigCandidates.Count == 1 ? "FindSongFoundMultipleSingular" : "FindSongFoundMultiple";
+        string fullPrompt = ResponseStrings.Get(countKey, locale, disambigCandidates.Count, candidateNames);
 
         return ElicitTitleKeywords(fullPrompt,
             sessionData);
     }
+
+    /// <summary>
+    /// Extract the item's own artist name for announcements and candidate metadata
+    /// (JF-487): the track's artists (via the shared BaseHandler.GetArtistSubtitle),
+    /// then the album artists as a fallback (common on compilations where only the
+    /// album carries the band), or null when neither is set.
+    /// </summary>
+    /// <param name="item">The song item.</param>
+    /// <returns>The first artist name, or null.</returns>
+    private static string? GetItemArtistName(BaseItem item)
+        => GetArtistSubtitle(item)
+            ?? (item is MediaBrowser.Controller.Entities.Audio.Audio audio && audio.AlbumArtists is { Count: > 0 }
+                ? audio.AlbumArtists[0]
+                : null);
 
     /// <summary>
     /// Negative answer words for the disambiguation picker, across the supported locales
