@@ -73,7 +73,24 @@ public class PlayRadioIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("FindSongCancelled", locale));
         }
 
-        if (session.FullNowPlayingItem == null)
+        // JF-480: PAUSED is a third state the JF-472 model missed. The plugin's pause
+        // emits AudioPlayer.Stop, so the platform answers with a PlaybackStopped event,
+        // and Jellyfin's OnPlaybackStopped clears FullNowPlayingItem only on the session
+        // of the device that SENT that event. In a multi-room group the voice request
+        // comes from the coordinator while playback events come from a member device,
+        // so the requester's session keeps the play path's optimistic
+        // FullNowPlayingItem indefinitely (live: corr=2c2d8676, paused 43s earlier,
+        // still seeded radio mode from the paused track). Item presence therefore
+        // cannot distinguish playing from paused; the request context can: after a
+        // pause every customer-initiated request carries playerActivity STOPPED
+        // ("stream was interrupted"), while active playback reports PLAYING.
+        // BUFFER_UNDERRUN counts as playing (transient mid-playback rebuffering, the
+        // same treatment as PlaybackFinishedEventHandler's hasQueuedNext).
+        bool activelyPlaying =
+            string.Equals(context.AudioPlayer?.PlayerActivity, "PLAYING", StringComparison.Ordinal)
+            || string.Equals(context.AudioPlayer?.PlayerActivity, "BUFFER_UNDERRUN", StringComparison.Ordinal);
+
+        if (!activelyPlaying || session.FullNowPlayingItem == null)
         {
             // JF-472: Amazon's statistical NLU steals bare genre forms ("suona jazz")
             // for PlayRadioIntent even though every sample is noun-carrying, so the
@@ -81,10 +98,12 @@ public class PlayRadioIntentHandler : BaseHandler
             // without a seed track, and the nothing-playing Tell sounds out of context
             // for those utterances: elicit the station instead (session open, the
             // follow-up fills the station slot because the intent is dialog-registered,
-            // anti-pattern #9). The elicit is deliberately conditional on NOTHING
-            // playing: with a current track the context seeds the radio and every
-            // slot-less sample ("riproduci radio") must keep starting radio mode
-            // directly. The captured station is not yet actionable (no station playback
+            // anti-pattern #9). The elicit is deliberately conditional on nothing
+            // ACTIVELY playing (JF-480: a paused device still holds a now-playing item
+            // but is not actively playing, so it elicits too): with a current track
+            // actively playing the context seeds the radio and every slot-less sample
+            // ("riproduci radio") must keep starting radio mode directly. The captured
+            // station is not yet actionable (no station playback
             // feature), so a filled slot still falls through to the Tell. The intent
             // declares exactly one slot (station) in every locale; if a second slot is
             // ever added, allSlotNames below must list it too (Amazon rejects a partial

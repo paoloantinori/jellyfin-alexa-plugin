@@ -3,9 +3,10 @@ id: JF-478
 title: >-
   PlayAlbum title path auto-plays interior-containment album matches (dark side
   of the moon -> 'O' by Damien Rice); JF-408 gate missing on this path
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-04 09:57'
+updated_date: '2026-09-04 10:00'
 labels: []
 dependencies: []
 references:

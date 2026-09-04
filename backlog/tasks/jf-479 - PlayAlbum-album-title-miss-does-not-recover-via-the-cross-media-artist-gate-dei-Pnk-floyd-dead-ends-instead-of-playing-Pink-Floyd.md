@@ -3,9 +3,10 @@ id: JF-479
 title: >-
   PlayAlbum album-title miss does not recover via the cross-media artist gate
   ('dei P!nk floyd' dead-ends instead of playing Pink Floyd)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-04 09:58'
+updated_date: '2026-09-04 10:00'
 labels: []
 dependencies: []
 references:

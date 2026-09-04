@@ -3,9 +3,10 @@ id: JF-480
 title: >-
   Radio station elicit skipped when playback is merely PAUSED (session
   now-playing survives pause; radio mode starts from the paused track)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-04 09:58'
+updated_date: '2026-09-04 10:00'
 labels: []
 dependencies: []
 references:
