@@ -310,4 +310,80 @@ public class PlayChannelIntentHandlerTests : PluginTestBase
         Assert.Contains(Jellyfin.Data.Enums.BaseItemKind.LiveTvChannel, capturedQuery.IncludeItemTypes);
         Assert.Empty(capturedQuery.TopParentIds);
     }
+
+    // --- JF-483: PlayChannelIntentHandler and PlayRadioIntentHandler's channel tier
+    // share ONE launch block (BaseHandler.BuildChannelLaunchResponseAsync). These pins
+    // run both paths with identical inputs and assert byte-identical serialized
+    // responses, so any future edit that diverges one launch path from the other
+    // (a directive change, an announce on one path only, a different Tell) fails here. ---
+
+    /// <summary>
+    /// Runs both channel-launch paths (this handler, and PlayRadioIntentHandler's
+    /// station tier, JF-474 tier i) against the same channel, user, and resolver, and
+    /// returns each response serialized to JSON.
+    /// </summary>
+    /// <param name="channel">The channel both paths must resolve to.</param>
+    /// <returns>The (PlayChannel, PlayRadio) serialized response pair.</returns>
+    private async Task<(string PlayChannelJson, string PlayRadioJson)> RunBothChannelLaunchPathsAsync(BaseItem channel)
+    {
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.Is<InternalItemsQuery>(q => q.SearchTerm == "CNN")))
+            .Returns(new List<BaseItem> { channel });
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.Is<InternalItemsQuery>(q => q.SearchTerm == "jazz fm")))
+            .Returns(new List<BaseItem> { channel });
+
+        var user = TestHelpers.CreateTestUser();
+        var playChannelResponse = await CreateHandler().HandleAsync(
+            CreatePlayChannelRequest("CNN"), CreateContext(), user, CreateSession(), CancellationToken.None);
+
+        var playRadioHandler = new PlayRadioIntentHandler(
+            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _resolverMock.Object, _loggerFactory);
+        var playRadioRequest = new IntentRequest
+        {
+            Locale = "en-US",
+            Intent = new Intent
+            {
+                Name = "PlayRadioIntent",
+                Slots = new Dictionary<string, Slot> { ["station"] = new Slot { Name = "station", Value = "jazz fm" } }
+            }
+        };
+        var playRadioResponse = await playRadioHandler.HandleAsync(
+            playRadioRequest, CreateContext(), user, CreateSession(), CancellationToken.None);
+
+        return (
+            Newtonsoft.Json.JsonConvert.SerializeObject(playChannelResponse),
+            Newtonsoft.Json.JsonConvert.SerializeObject(playRadioResponse));
+    }
+
+    /// <summary>
+    /// JF-483 pin: a successful channel launch produces the same bytes from both entry
+    /// points (VideoApp.Launch directive, resolver URL, channel-name announce, null
+    /// shouldEndSession).
+    /// </summary>
+    [Fact]
+    public async Task Handle_FoundChannel_ResponseIsByteIdenticalToPlayRadioChannelTier()
+    {
+        var (playChannelJson, playRadioJson) = await RunBothChannelLaunchPathsAsync(
+            new Movie { Name = "Jazz FM", Id = Guid.NewGuid() });
+
+        Assert.Equal(playChannelJson, playRadioJson);
+    }
+
+    /// <summary>
+    /// JF-483 pin: an unresolvable stream produces the same not-available Tell bytes
+    /// from both entry points.
+    /// </summary>
+    [Fact]
+    public async Task Handle_UnresolvableStream_ResponseIsByteIdenticalToPlayRadioChannelTier()
+    {
+        _resolverMock
+            .Setup(r => r.ResolveAsync(It.IsAny<BaseItem>(), It.IsAny<Entities.User>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((LiveTvStream?)null);
+
+        var (playChannelJson, playRadioJson) = await RunBothChannelLaunchPathsAsync(
+            new Movie { Name = "Jazz FM", Id = Guid.NewGuid() });
+
+        Assert.Equal(playChannelJson, playRadioJson);
+    }
 }

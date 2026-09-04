@@ -11,7 +11,6 @@ using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Enums;
-using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -170,7 +169,8 @@ public class PlayRadioIntentHandler : BaseHandler
             BaseItem? channel = await FindRadioChannelAsync(station!, jellyfinUser!, user, cancellationToken).ConfigureAwait(false);
             if (channel != null)
             {
-                return await LaunchChannelAsync(channel, context, user, session, locale, cancellationToken).ConfigureAwait(false);
+                Logger.LogInformation("PlayRadio: station '{ChannelName}' matched live-TV radio channel {ChannelId}", channel.Name, channel.Id);
+                return await BuildChannelLaunchResponseAsync(_streamResolver, channel, context, user, session, locale, cancellationToken).ConfigureAwait(false);
             }
 
             // JF-474 review P3-4: natural answers carry carrier nouns and articles
@@ -342,66 +342,6 @@ public class PlayRadioIntentHandler : BaseHandler
             station, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.LiveTvChannel },
             cancellationToken, "PlayRadioStationFuzzyFallback", mediaTypes: new[] { MediaType.Audio }).ConfigureAwait(false);
         return fuzzy?.Item;
-    }
-
-    /// <summary>
-    /// Tier (i) payoff: launch the matched live-TV radio channel. Mirrors
-    /// PlayChannelIntentHandler's playback block (read-only for JF-474, consolidation
-    /// candidate): live sources must launch via VideoApp.Launch with the resolver's
-    /// PlaybackInfo URL (the static Audio stream endpoint 500s for a live source),
-    /// ShouldEndSession stays null, and the device queue records the launch.
-    /// </summary>
-    /// <param name="channel">The matched LiveTvChannel item.</param>
-    /// <param name="context">The Alexa context (device id for the queue record).</param>
-    /// <param name="user">The plugin user (stream resolution).</param>
-    /// <param name="session">The Jellyfin session (queue + now-playing).</param>
-    /// <param name="locale">The request locale.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The VideoApp.Launch response, or the not-available Tell when the stream cannot be resolved.</returns>
-    private async Task<SkillResponse> LaunchChannelAsync(
-        BaseItem channel, Context context, Entities.User user, SessionInfo session, string locale, CancellationToken cancellationToken)
-    {
-        Logger.LogInformation("PlayRadio: station '{ChannelName}' matched live-TV radio channel {ChannelId}", channel.Name, channel.Id);
-
-        session.NowPlayingQueue = new List<QueueItem> { new() { Id = channel.Id } };
-        session.FullNowPlayingItem = channel;
-
-        LiveTvStream? stream = await _streamResolver.ResolveAsync(channel, user, cancellationToken).ConfigureAwait(false);
-        if (stream is null)
-        {
-            return ResponseBuilder.Tell(ResponseStrings.Get("MediaTypeNotAvailable", locale));
-        }
-
-        string? deviceId = context?.System?.Device?.DeviceID;
-        if (!string.IsNullOrEmpty(deviceId))
-        {
-            Plugin.Instance?.DeviceQueueManager?.RecordLastPlayed(deviceId, channel.Id.ToString());
-        }
-
-        return new SkillResponse
-        {
-            Version = "1.0",
-            Response = new ResponseBody
-            {
-                // VideoApp.Launch must NOT include shouldEndSession - Alexa rejects it.
-                ShouldEndSession = null,
-                OutputSpeech = BuildNowPlayingSpeech(channel.Name, locale, GetAnnounceNowPlaying(user)),
-                Directives = new List<IDirective>
-                {
-                    new VideoAppLaunchDirective
-                    {
-                        VideoItem = new Directive.VideoItem
-                        {
-                            Source = stream.Url,
-                            Metadata = new Directive.VideoItemMetadata
-                            {
-                                Title = channel.Name
-                            }
-                        }
-                    }
-                }
-            }
-        };
     }
 
     /// <summary>

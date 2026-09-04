@@ -7,7 +7,6 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Data.Enums;
-using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -15,7 +14,6 @@ using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
-using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
@@ -106,54 +104,6 @@ public class PlayChannelIntentHandler : BaseHandler
 
         BaseItem channel = channels[0];
 
-        List<QueueItem> queueItems = new List<QueueItem>
-        {
-            new QueueItem { Id = channel.Id }
-        };
-        session.NowPlayingQueue = queueItems;
-        session.FullNowPlayingItem = channel;
-
-        // Live TV must launch via VideoApp.Launch (like movies/episodes) so it plays on
-        // Echo Show. The AudioPlayer static stream URL used previously 500s for a live
-        // source. The resolver picks the correct URL via Jellyfin's PlaybackInfo.
-        LiveTvStream? stream = await _streamResolver.ResolveAsync(channel, user, cancellationToken).ConfigureAwait(false);
-        if (stream is null)
-        {
-            return ResponseBuilder.Tell(ResponseStrings.Get("MediaTypeNotAvailable", locale));
-        }
-
-        // Record the last-played channel for this device (the resume / continue-watching signal).
-        // Mirrors the chokepoint in BaseHandler.BuildAudioPlayerResponse; needed here because the
-        // direct-remote stream URL has no /Videos/ segment for LastPlayedResponseInterceptor to parse.
-        string? deviceId = context?.System?.Device?.DeviceID;
-        if (!string.IsNullOrEmpty(deviceId))
-        {
-            Plugin.Instance?.DeviceQueueManager?.RecordLastPlayed(deviceId, channel.Id.ToString());
-        }
-
-        return new SkillResponse
-        {
-            Version = "1.0",
-            Response = new ResponseBody
-            {
-                // VideoApp.Launch must NOT include shouldEndSession — Alexa rejects it.
-                ShouldEndSession = null,
-                OutputSpeech = BuildNowPlayingSpeech(channel.Name, locale, GetAnnounceNowPlaying(user)),
-                Directives = new List<IDirective>
-                {
-                    new VideoAppLaunchDirective
-                    {
-                        VideoItem = new VideoItem
-                        {
-                            Source = stream.Url,
-                            Metadata = new VideoItemMetadata
-                            {
-                                Title = channel.Name
-                            }
-                        }
-                    }
-                }
-            }
-        };
+        return await BuildChannelLaunchResponseAsync(_streamResolver, channel, context, user, session, locale, cancellationToken).ConfigureAwait(false);
     }
 }

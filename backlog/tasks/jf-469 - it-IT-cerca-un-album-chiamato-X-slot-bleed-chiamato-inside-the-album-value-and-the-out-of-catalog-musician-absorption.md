@@ -3,10 +3,10 @@ id: JF-469
 title: >-
   it-IT 'cerca un album chiamato X' slot bleed ('chiamato' inside the album
   value) and the out-of-catalog musician absorption
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-03 13:49'
-updated_date: '2026-09-03 14:03'
+updated_date: '2026-09-04 14:54'
 labels: []
 dependencies: []
 references:
@@ -51,4 +51,6 @@ Acceptance criteria:
 
 <!-- SECTION:NOTES:BEGIN -->
 POST-DEPLOY EVIDENCE (JF-441 closure, 2026-09-03 16:01 model): the JF-441 secondary sample addition did NOT fix the slot fill. 'un album chiamato surfer rosa' with the sample now deployed fills musician='surfer rosa' (album empty; the same statistical-filler theft as the out-of-catalog shape, now on an IN-CATALOG title), and 'un disco chiamato surfer rosa' selects NO intent at all. Scope of this task is therefore the chiamato-family FILL problem across ALL shapes (c'e/un/cerca/un disco), Amazon-side weighting versus sample presence; intent selection is intact on the album and c'e forms. Consider handler-side value normalization (strip a leading 'chiamato/chiamata' from the album slot, locale-aware) more seriously: the model layer is evidenced insufficient.
+
+REVIEW NOTE (2026-09-04, /simplify + code-review pass on the working-tree diff): no findings at or above the reporting bar. One below-threshold observation filed here per the same-turn landing rule: the JF-469 unit pins cover raw-hit-no-retry, stripped-retry order, not-found-names-raw, literally-titled album, and the strip predicate edge cases, but there is NO pin asserting that a STRIPPED-retry hit carries no FoundAlbumInstead announcement (the angle-1 'a stripped hit must not announce' contract holds only by construction today: fuzzyAlbumAnnouncement stays null because the retry assigns `albums` directly; a future edit routing the retry through the fuzzy branch would silently announce on a clean play). Suggested pin: assert the stripped-hit response speech does not contain the FoundAlbumInstead string (or that OutputSpeech is the plain now-playing/silent shape).
 <!-- SECTION:NOTES:END -->
