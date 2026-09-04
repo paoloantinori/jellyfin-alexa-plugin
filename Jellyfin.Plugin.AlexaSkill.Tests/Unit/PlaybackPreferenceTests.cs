@@ -138,9 +138,7 @@ public class ProgressiveQueueConstantsTests : PluginTestBase, IDisposable
             return;
         }
 
-        var tmpDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "alexa-playback-test-" + Guid.NewGuid());
-        System.IO.Directory.CreateDirectory(tmpDir);
-        PluginTempDirCleanup.Shared.Register(tmpDir);
+        var tmpDir = TestHelpers.CreateRegisteredTempDir("alexa-playback-test");
 
         var appPaths = new Mock<IApplicationPaths>();
         appPaths.Setup(p => p.PluginsPath).Returns(tmpDir);

@@ -161,6 +161,20 @@ internal static class TestHelpers
     }
 
     /// <summary>
+    /// Mints <c>&lt;suffix&gt;-&lt;guid&gt;</c> under the temp path, creates it, and
+    /// registers it with PluginTempDirCleanup for deletion at process exit
+    /// (JF-453/JF-486). Test code minting GUID temp dirs MUST go through this
+    /// helper so the Register call cannot be forgotten.
+    /// </summary>
+    internal static string CreateRegisteredTempDir(string suffix)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), suffix + "-" + Guid.NewGuid());
+        Directory.CreateDirectory(dir);
+        PluginTempDirCleanup.Shared.Register(dir);
+        return dir;
+    }
+
+    /// <summary>
     /// Sets Plugin.Instance with the provided configuration so IfFeatureDisabled
     /// can read from Plugin.Instance.Configuration. When the instance already exists,
     /// only the specific flag is synced via <paramref name="syncFlag"/>. The temp
@@ -179,9 +193,7 @@ internal static class TestHelpers
             return;
         }
 
-        var tmpDir = Path.Combine(Path.GetTempPath(), tempDirSuffix + "-" + Guid.NewGuid());
-        Directory.CreateDirectory(tmpDir);
-        PluginTempDirCleanup.Shared.Register(tmpDir);
+        var tmpDir = CreateRegisteredTempDir(tempDirSuffix);
 
         var appPaths = new Mock<IApplicationPaths>();
         appPaths.Setup(p => p.PluginsPath).Returns(tmpDir);

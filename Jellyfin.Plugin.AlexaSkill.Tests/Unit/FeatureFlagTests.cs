@@ -123,9 +123,7 @@ public class IfFeatureDisabledTests : PluginTestBase, IDisposable
             return;
         }
 
-        var tmpDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "alexa-feature-test-" + Guid.NewGuid());
-        System.IO.Directory.CreateDirectory(tmpDir);
-        PluginTempDirCleanup.Shared.Register(tmpDir);
+        var tmpDir = TestHelpers.CreateRegisteredTempDir("alexa-feature-test");
 
         var appPaths = new Mock<MediaBrowser.Common.Configuration.IApplicationPaths>();
         appPaths.Setup(p => p.PluginsPath).Returns(tmpDir);
@@ -251,9 +249,7 @@ public class HandlerFeatureFlagTests : PluginTestBase, IDisposable
             return;
         }
 
-        var tmpDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "alexa-handler-feature-test-" + Guid.NewGuid());
-        System.IO.Directory.CreateDirectory(tmpDir);
-        PluginTempDirCleanup.Shared.Register(tmpDir);
+        var tmpDir = TestHelpers.CreateRegisteredTempDir("alexa-handler-feature-test");
 
         var appPaths = new Mock<MediaBrowser.Common.Configuration.IApplicationPaths>();
         appPaths.Setup(p => p.PluginsPath).Returns(tmpDir);
@@ -362,9 +358,7 @@ public class AplVisualsFeatureFlagTests : PluginTestBase, IDisposable
             return;
         }
 
-        var tmpDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "alexa-apl-feature-test-" + Guid.NewGuid());
-        System.IO.Directory.CreateDirectory(tmpDir);
-        PluginTempDirCleanup.Shared.Register(tmpDir);
+        var tmpDir = TestHelpers.CreateRegisteredTempDir("alexa-apl-feature-test");
 
         var appPaths = new Mock<MediaBrowser.Common.Configuration.IApplicationPaths>();
         appPaths.Setup(p => p.PluginsPath).Returns(tmpDir);
@@ -1041,9 +1035,7 @@ public class QueueManagementFeatureFlagTests : PluginTestBase, IDisposable
             return;
         }
 
-        var tmpDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "alexa-queue-feature-test-" + Guid.NewGuid());
-        System.IO.Directory.CreateDirectory(tmpDir);
-        PluginTempDirCleanup.Shared.Register(tmpDir);
+        var tmpDir = TestHelpers.CreateRegisteredTempDir("alexa-queue-feature-test");
 
         var appPaths = new Mock<MediaBrowser.Common.Configuration.IApplicationPaths>();
         appPaths.Setup(p => p.PluginsPath).Returns(tmpDir);

@@ -51,9 +51,7 @@ public class PipelineTests : PluginTestBase
             return;
         }
 
-        var tmpDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "alexa-skill-test-" + Guid.NewGuid());
-        System.IO.Directory.CreateDirectory(tmpDir);
-        PluginTempDirCleanup.Shared.Register(tmpDir);
+        var tmpDir = TestHelpers.CreateRegisteredTempDir("alexa-skill-test");
 
         var appPaths = new Mock<MediaBrowser.Common.Configuration.IApplicationPaths>();
         appPaths.Setup(p => p.PluginsPath).Returns(tmpDir);

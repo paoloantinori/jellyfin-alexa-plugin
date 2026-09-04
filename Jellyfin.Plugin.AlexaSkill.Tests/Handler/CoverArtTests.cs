@@ -505,9 +505,7 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
             return;
         }
 
-        var tmpDir = Path.Combine(Path.GetTempPath(), "alexa-videoapp-test-" + Guid.NewGuid());
-        Directory.CreateDirectory(tmpDir);
-        PluginTempDirCleanup.Shared.Register(tmpDir);
+        var tmpDir = TestHelpers.CreateRegisteredTempDir("alexa-videoapp-test");
 
         var appPaths = new Mock<IApplicationPaths>();
         appPaths.Setup(p => p.PluginsPath).Returns(tmpDir);

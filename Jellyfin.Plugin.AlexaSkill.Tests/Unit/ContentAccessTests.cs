@@ -81,9 +81,7 @@ public class FilterByContentAccessTests : PluginTestBase, IDisposable
             return;
         }
 
-        var tmpDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "alexa-content-filter-test-" + Guid.NewGuid());
-        System.IO.Directory.CreateDirectory(tmpDir);
-        PluginTempDirCleanup.Shared.Register(tmpDir);
+        var tmpDir = TestHelpers.CreateRegisteredTempDir("alexa-content-filter-test");
 
         var appPaths = new Mock<MediaBrowser.Common.Configuration.IApplicationPaths>();
         appPaths.Setup(p => p.PluginsPath).Returns(tmpDir);
@@ -296,9 +294,7 @@ public class IfMediaTypeDisabledTests : PluginTestBase, IDisposable
             return;
         }
 
-        var tmpDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "alexa-mediatype-test-" + Guid.NewGuid());
-        System.IO.Directory.CreateDirectory(tmpDir);
-        PluginTempDirCleanup.Shared.Register(tmpDir);
+        var tmpDir = TestHelpers.CreateRegisteredTempDir("alexa-mediatype-test");
 
         var appPaths = new Mock<MediaBrowser.Common.Configuration.IApplicationPaths>();
         appPaths.Setup(p => p.PluginsPath).Returns(tmpDir);

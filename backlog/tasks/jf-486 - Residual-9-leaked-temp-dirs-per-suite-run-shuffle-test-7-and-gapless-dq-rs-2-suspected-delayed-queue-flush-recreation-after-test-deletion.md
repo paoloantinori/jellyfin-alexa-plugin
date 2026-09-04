@@ -3,9 +3,10 @@ id: JF-486
 title: >-
   Residual +9 leaked temp dirs per suite run: shuffle-test (7) and gapless-dq/rs
   (2), suspected delayed queue-flush recreation after test deletion
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-04 15:58'
+updated_date: '2026-09-04 16:01'
 labels: []
 dependencies: []
 references:

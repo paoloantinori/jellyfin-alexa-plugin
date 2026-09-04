@@ -33,8 +33,9 @@ public class ShuffleIntentHandlerTests : IDisposable
 
     public ShuffleIntentHandlerTests()
     {
-        _tempDir = Path.Combine(Path.GetTempPath(), $"shuffle-test-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(_tempDir);
+        // Registered mint (JF-486 belt): swept at process exit even if a queue
+        // flush slips past the per-test dispose below.
+        _tempDir = TestHelpers.CreateRegisteredTempDir("shuffle-test");
         _sessionManagerMock = new Mock<ISessionManager>();
         _sessionManagerMock
             .Setup(s => s.OnPlaybackProgress(It.IsAny<PlaybackProgressInfo>(), It.IsAny<bool>()))
@@ -45,6 +46,8 @@ public class ShuffleIntentHandlerTests : IDisposable
 
     public void Dispose()
     {
+        // Each test disposes its own DeviceQueueManager (using declaration) BEFORE
+        // this runs: a live manager's 2s debounce flush would recreate the dir (JF-486).
         try { Directory.Delete(_tempDir, true); } catch { }
         GC.SuppressFinalize(this);
     }
@@ -73,7 +76,7 @@ public class ShuffleIntentHandlerTests : IDisposable
     [Fact]
     public async Task ShuffleOn_SetsAuthoritativeState_AndReshufflesQueueTail()
     {
-        DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+        using DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
         List<Guid> guids = Enumerable.Range(0, 10).Select(_ => Guid.NewGuid()).ToList();
         List<string> ids = guids.Select(g => g.ToString()).ToList();
         mgr.SetQueue("test-device", ids, currentIndex: 0);
@@ -98,7 +101,7 @@ public class ShuffleIntentHandlerTests : IDisposable
     [Fact]
     public async Task ShuffleOn_ShortQueue_StillSetsFlag_NoReshuffle()
     {
-        DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+        using DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
         List<Guid> guids = new() { Guid.NewGuid(), Guid.NewGuid() };
         mgr.SetQueue("test-device", guids.Select(g => g.ToString()).ToList(), 0);
         SessionInfo session = NewSession(guids);
@@ -129,7 +132,7 @@ public class ShuffleIntentHandlerTests : IDisposable
     {
         // Playlists may contain the same song more than once → NowPlayingQueue holds
         // duplicate Guid IDs. MirrorQueueToSession must not throw on duplicate keys.
-        DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+        using DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
         Guid dup = Guid.NewGuid();
         List<Guid> guids = new() { dup, Guid.NewGuid(), dup, Guid.NewGuid(), Guid.NewGuid(), dup };
         mgr.SetQueue("test-device", guids.Select(g => g.ToString()).ToList(), currentIndex: 0);
@@ -152,7 +155,7 @@ public class ShuffleIntentHandlerTests : IDisposable
     [Fact]
     public async Task ShuffleOff_RestoresOriginalOrder_AfterShuffleOn()
     {
-        DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+        using DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
         List<Guid> guids = Enumerable.Range(0, 10).Select(_ => Guid.NewGuid()).ToList();
         List<string> ids = guids.Select(g => g.ToString()).ToList();
         mgr.SetQueue("test-device", ids, currentIndex: 0);
@@ -189,7 +192,7 @@ public class ShuffleIntentHandlerTests : IDisposable
         // Regression: RestoreOrder reverts ItemIds to original order, which moves the
         // playing item to a different index. ShuffleOff must MoveTo() the playing item
         // so persisted CurrentIndex (read by PlaybackStoppedEventHandler) stays correct.
-        DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+        using DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
         List<Guid> guids = Enumerable.Range(0, 5).Select(_ => Guid.NewGuid()).ToList();
         List<string> ids = guids.Select(g => g.ToString()).ToList();
         mgr.SetQueue("test-device", ids, currentIndex: 0);
@@ -222,7 +225,7 @@ public class ShuffleIntentHandlerTests : IDisposable
     [Fact]
     public async Task ShuffleOn_InvalidatesPrecomputeCache()
     {
-        DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+        using DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
         Guid current = Guid.NewGuid();
         Guid cachedNext = Guid.NewGuid();
         string deviceId = "shuffle-jf4241-" + Guid.NewGuid().ToString("N");
@@ -245,7 +248,7 @@ public class ShuffleIntentHandlerTests : IDisposable
     [Fact]
     public async Task ShuffleOff_InvalidatesPrecomputeCache()
     {
-        DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+        using DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
         Guid current = Guid.NewGuid();
         Guid cachedNext = Guid.NewGuid();
         string deviceId = "shuffle-jf4241-" + Guid.NewGuid().ToString("N");

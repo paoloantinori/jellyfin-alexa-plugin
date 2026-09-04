@@ -172,9 +172,7 @@ public class InvocationNameDefaultsTests : PluginTestBase
             return Plugin.Instance;
         }
 
-        string tmpDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "jf300-" + Guid.NewGuid().ToString("N"));
-        System.IO.Directory.CreateDirectory(tmpDir);
-        PluginTempDirCleanup.Shared.Register(tmpDir);
+        string tmpDir = TestHelpers.CreateRegisteredTempDir("jf300");
 
         var appPaths = new Mock<MediaBrowser.Common.Configuration.IApplicationPaths>();
         appPaths.Setup(p => p.PluginsPath).Returns(tmpDir);

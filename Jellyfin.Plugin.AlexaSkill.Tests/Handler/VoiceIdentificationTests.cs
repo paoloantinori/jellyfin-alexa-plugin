@@ -266,9 +266,7 @@ public class VoiceIdentificationTests : PluginTestBase
     public async Task HandleRequestAsync_WithPersonId_UsesMappedUser()
     {
         // Set up Plugin.Instance for HandleRequestAsync which needs it
-        var tmpDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "alexa-voice-test-" + Guid.NewGuid());
-        System.IO.Directory.CreateDirectory(tmpDir);
-        PluginTempDirCleanup.Shared.Register(tmpDir);
+        var tmpDir = TestHelpers.CreateRegisteredTempDir("alexa-voice-test");
 
         var appPaths = new Mock<MediaBrowser.Common.Configuration.IApplicationPaths>();
         appPaths.Setup(p => p.PluginsPath).Returns(tmpDir);

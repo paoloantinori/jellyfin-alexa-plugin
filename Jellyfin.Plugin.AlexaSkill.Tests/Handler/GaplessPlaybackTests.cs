@@ -538,11 +538,12 @@ public class GaplessPlaybackTests : PluginTestBase, IDisposable
         // Device queue says Default; session.PlayState says Shuffle. The resolver
         // must honor the device queue (Default → sequential next = track2), proving
         // the authoritative per-device store wins over the indirect PlayState flag.
-        string tempDir = Path.Combine(Path.GetTempPath(), $"gapless-dq-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempDir);
+        string tempDir = TestHelpers.CreateRegisteredTempDir("gapless-dq");
         try
         {
-            var queueManager = new DeviceQueueManager(tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+            // using: disposed at try-block exit, BEFORE the finally deletes the dir
+            // (a live manager's 2s debounce flush would recreate it, JF-486).
+            using var queueManager = new DeviceQueueManager(tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
             var track1Id = Guid.NewGuid();
             var track2Id = Guid.NewGuid();
             var track3Id = Guid.NewGuid();
@@ -596,11 +597,12 @@ public class GaplessPlaybackTests : PluginTestBase, IDisposable
         // After ShuffleOn the device queue is physically reshuffled (OriginalItemIds != null).
         // The resolver must honor that order via sequential advance, NOT random-pick
         // (which would discard the reshuffle and repeat/skip tracks).
-        string tempDir = Path.Combine(Path.GetTempPath(), $"gapless-rs-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempDir);
+        string tempDir = TestHelpers.CreateRegisteredTempDir("gapless-rs");
         try
         {
-            var queueManager = new DeviceQueueManager(tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+            // using: disposed at try-block exit, BEFORE the finally deletes the dir
+            // (a live manager's 2s debounce flush would recreate it, JF-486).
+            using var queueManager = new DeviceQueueManager(tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
             var t1 = Guid.NewGuid();
             var t2 = Guid.NewGuid();
             var t3 = Guid.NewGuid();
