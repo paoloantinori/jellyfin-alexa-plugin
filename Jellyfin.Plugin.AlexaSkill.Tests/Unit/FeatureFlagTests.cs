@@ -292,7 +292,8 @@ public class HandlerFeatureFlagTests : PluginTestBase, IDisposable
         Plugin.Instance!.Configuration.RadioModeEnabled = false;
         var handler = new PlayRadioIntentHandler(
             _sessionManagerMock.Object, _config,
-            _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+            _libraryManagerMock.Object, _userManagerMock.Object,
+            new Mock<Jellyfin.Plugin.AlexaSkill.Alexa.Util.ILiveTvStreamResolver>().Object, _loggerFactory);
         var session = CreateSession();
 
         var response = await handler.HandleAsync(
@@ -310,7 +311,8 @@ public class HandlerFeatureFlagTests : PluginTestBase, IDisposable
         // RadioModeEnabled defaults to true
         var handler = new PlayRadioIntentHandler(
             _sessionManagerMock.Object, _config,
-            _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+            _libraryManagerMock.Object, _userManagerMock.Object,
+            new Mock<Jellyfin.Plugin.AlexaSkill.Alexa.Util.ILiveTvStreamResolver>().Object, _loggerFactory);
         var session = CreateSession();
         session.FullNowPlayingItem = null;
 
