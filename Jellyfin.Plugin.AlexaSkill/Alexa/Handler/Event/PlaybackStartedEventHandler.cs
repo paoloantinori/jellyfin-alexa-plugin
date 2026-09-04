@@ -8,10 +8,12 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Diagnostics;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
+using MediaBrowser.Common.Extensions;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Session;
@@ -77,6 +79,14 @@ public class PlaybackStartedEventHandler : BaseHandler
         Logger.LogDebug(
             "PlaybackStarted: item={Token}, offset={OffsetMs}ms, sessionId={SessionId}",
             req.Token, req.OffsetInMilliseconds, session.Id);
+
+        // JF-477: event-driven warm refresh. PlaybackStarted fires once per track, and
+        // the event's own session resolution (HandleRequestAsync) only stores on a MISS;
+        // re-storing here extends the entry's TTL through continuous playback, so control
+        // intents arriving mid-playback ("next", "what's playing") are always cache hits
+        // and never pay the auth-DB session lookup. A synchronous dictionary write: no
+        // await is added to the event response, which must stay a keep-alive ack.
+        SessionReferenceCache.Store(user.JellyfinToken, deviceId, session);
 
         // JF-447: sleep-timer streams carry composite tokens ("{guid}|sleep:{ticks}");
         // the raw new Guid(token) threw FormatException on them, killing this handler
@@ -180,6 +190,16 @@ public class PlaybackStartedEventHandler : BaseHandler
         }
         catch (Exception ex)
         {
+            // JF-477: ResourceNotFoundException from OnPlaybackStart means the session is
+            // gone from the SessionManager (removed while our cached live reference kept
+            // pointing at it). Drop the device's cached entries so the next request
+            // refetches instead of reusing the corpse. Keyed by device: Jellyfin holds one
+            // session per (app, device), so the death is per-device, not per-user.
+            if (ex is ResourceNotFoundException)
+            {
+                SessionReferenceCache.InvalidateDevice(deviceId);
+            }
+
             Logger.LogError(ex, "PlaybackStarted: server playback-start report (or its ordering correction) failed for item {Token}", playbackStartInfo.ItemId);
         }
         finally

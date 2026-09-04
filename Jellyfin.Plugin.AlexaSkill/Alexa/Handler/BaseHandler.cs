@@ -18,6 +18,7 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
+using MediaBrowser.Common.Extensions;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -48,6 +49,22 @@ public abstract class BaseHandler
     /// Matches the CancellationTokenSource(TimeSpan.FromSeconds(6)) in AlexaSkillController.
     /// </summary>
     private const int AlexaRequestTimeoutMs = 6000;
+
+    /// <summary>
+    /// Fast-fail budget in milliseconds for the request-path session lookup (JF-477).
+    /// The lookup previously ran with the full <see cref="AlexaRequestTimeoutMs"/> budget;
+    /// during a transient auth-DB hiccup it hung the whole 6s before the handler's first
+    /// line could run, and the ~8s Alexa window expired with zero log output (live
+    /// incident 2026-09-03 corr=40edec8a). A session lookup that cannot answer in 2s
+    /// cannot serve the request anyway: against the 6s controller cancellation and the
+    /// 8s device window, 2s still leaves room for the handler's actual work while capping
+    /// the worst case at a coherent not-found response instead of a silent timeout.
+    /// The lookup result is cached in <see cref="SessionReferenceCache"/>, so this
+    /// budget is only paid on a cache miss. The budget bounds the WHOLE call because
+    /// ResolveSessionAsync dispatches the delegate via Task.Run (the callee's
+    /// synchronous prefix contains a blocking EF read that observes no token).
+    /// </summary>
+    private const int SessionLookupTimeoutMs = 2000;
 
     protected static readonly (ItemSortBy SortBy, SortOrder Order)[] PopularitySort =
     {
@@ -407,12 +424,27 @@ public abstract class BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("UserNotFound", GetLocale(request)));
         }
 
-        SessionInfo? session = await RetryHelper.ExecuteWithRetryAsync(
-            () => SessionManager.GetSessionByAuthenticationToken(user.JellyfinToken, context.System!.Device!.DeviceID, Plugin.Instance!.Configuration.ServerAddress),
-            Logger,
-            "GetSessionByAuthToken",
-            cancellationToken: cancellationToken,
-            timeoutMs: AlexaRequestTimeoutMs).ConfigureAwait(false);
+        // JF-477: the session lookup runs on EVERY request of every dialog turn, and
+        // Jellyfin's implementation queries the device/auth database per call. Serve it
+        // from the live-reference cache when fresh; only a miss pays the lookup below.
+        // The UserId guard covers shared devices: Jellyfin keeps ONE session object per
+        // (app, device) and LogSessionActivity re-stamps its UserId with the LAST
+        // resolver, so when another household profile spoke since our entry was stored,
+        // the cached object now names THEM. Serving it would attribute this request to
+        // the wrong Jellyfin user (every handler resolves the library from
+        // session.UserId); instead the mismatch is a miss and the lookup re-stamps.
+        string deviceId = context.System!.Device!.DeviceID;
+        SessionInfo? session;
+        if (SessionReferenceCache.TryGet(user.JellyfinToken, deviceId, out SessionInfo? cachedSession)
+            && cachedSession?.UserId == user.Id)
+        {
+            Logger.LogDebug("Session cache hit for device {DeviceId} (JF-477)", deviceId);
+            session = cachedSession;
+        }
+        else
+        {
+            session = await ResolveSessionAsync(user.JellyfinToken, deviceId, cancellationToken).ConfigureAwait(false);
+        }
 
         string serverUrl = _config.ServerAddress;
 
@@ -432,6 +464,86 @@ public abstract class BaseHandler
         {
             Plugin.Instance?.CircuitBreaker.RecordFailure(serverUrl, Logger);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Resolves the Jellyfin session on a cache miss with the JF-477 fast-fail budget:
+    /// retry-with-backoff (bounded by <see cref="SessionLookupTimeoutMs"/> inside the
+    /// retry helper) raced against the same budget, because the retry budget alone cannot
+    /// cut a HANGING first call, which is the incident shape. On budget expiry the caller
+    /// gets null and degrades to the existing session-not-found tell; the abandoned
+    /// lookup keeps running and, when it eventually lands a live session, warm-fills the
+    /// cache (full budget off the request path, where no user is waiting) so the retry a
+    /// few seconds later is a cache hit. A successful lookup stores the live reference
+    /// for the next request.
+    /// </summary>
+    /// <param name="token">The user's Jellyfin access token.</param>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    /// <param name="cancellationToken">Cancellation token for request timeout.</param>
+    /// <returns>The live session, or null when the lookup missed or exceeded the budget.</returns>
+    private async Task<SessionInfo?> ResolveSessionAsync(string? token, string deviceId, CancellationToken cancellationToken)
+    {
+        // Task.Run dispatches the WHOLE delegate off the request thread (JF-477
+        // review P1): GetSessionByAuthenticationToken's synchronous prefix contains
+        // a blocking EF read (UserManager.GetUserById, verified at v10.11.11) that
+        // observes no cancellation token, so without this hop a hang there is
+        // unreachable by the WaitAsync budget, the retry budget, and the controller
+        // token alike, and the request hangs exactly as in the live incident.
+        Task<SessionInfo?> lookup = RetryHelper.ExecuteWithRetryAsync(
+            () => Task.Run(() => SessionManager.GetSessionByAuthenticationToken(token, deviceId, Plugin.Instance!.Configuration.ServerAddress)),
+            Logger,
+            "GetSessionByAuthToken",
+            cancellationToken: cancellationToken,
+            timeoutMs: SessionLookupTimeoutMs);
+
+        SessionInfo? session;
+        try
+        {
+            using var budgetCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            budgetCts.CancelAfter(SessionLookupTimeoutMs);
+            session = await lookup.WaitAsync(budgetCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // The budget token fired, not the caller's: the request itself is still live,
+            // so degrade coherently instead of eating the Alexa window.
+            Logger.LogWarning(
+                "Session lookup exceeded the {BudgetMs}ms fast-fail budget for device {DeviceId}; degrading to the not-found response (JF-477)",
+                SessionLookupTimeoutMs,
+                deviceId);
+            RunFireAndForget(WarmFillAbandonedLookupAsync(lookup, token, deviceId), "SessionLookupWarmFill");
+            return null;
+        }
+
+        SessionReferenceCache.Store(token, deviceId, session);
+        return session;
+    }
+
+    /// <summary>
+    /// Awaits an abandoned (budget-expired) session lookup and, when it eventually
+    /// completes, stores the result so the NEXT request is a cache hit (the warm/refill
+    /// path may spend the full budget because no user is waiting on it). Self-protecting:
+    /// it catches its own exceptions so the fire-and-forget task can never fault.
+    /// </summary>
+    /// <param name="lookup">The still-running lookup task.</param>
+    /// <param name="token">The user's Jellyfin access token.</param>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    /// <returns>A task representing the observation and warm-fill.</returns>
+    private async Task WarmFillAbandonedLookupAsync(Task<SessionInfo?> lookup, string? token, string deviceId)
+    {
+        try
+        {
+            SessionInfo? late = await lookup.ConfigureAwait(false);
+            if (late != null)
+            {
+                SessionReferenceCache.Store(token, deviceId, late);
+                Logger.LogDebug("Late session lookup landed for device {DeviceId}; cache warm-filled (JF-477)", deviceId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Abandoned session lookup faulted for device {DeviceId}", deviceId);
         }
     }
 
@@ -1357,6 +1469,15 @@ public abstract class BaseHandler
         try
         {
             await SessionManager.OnPlaybackStopped(stopInfo).ConfigureAwait(false);
+        }
+        catch (ResourceNotFoundException)
+        {
+            // JF-477: the session no longer exists in the SessionManager (it was removed
+            // while our cached live reference kept pointing at it). Drop the device's
+            // cached entries so the next request refetches (and Jellyfin re-registers)
+            // instead of reusing the corpse, then preserve today's propagation.
+            SessionReferenceCache.InvalidateDevice(deviceId);
+            throw;
         }
         finally
         {
