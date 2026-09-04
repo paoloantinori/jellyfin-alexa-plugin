@@ -427,16 +427,12 @@ public abstract class BaseHandler
         // JF-477: the session lookup runs on EVERY request of every dialog turn, and
         // Jellyfin's implementation queries the device/auth database per call. Serve it
         // from the live-reference cache when fresh; only a miss pays the lookup below.
-        // The UserId guard covers shared devices: Jellyfin keeps ONE session object per
-        // (app, device) and LogSessionActivity re-stamps its UserId with the LAST
-        // resolver, so when another household profile spoke since our entry was stored,
-        // the cached object now names THEM. Serving it would attribute this request to
-        // the wrong Jellyfin user (every handler resolves the library from
-        // session.UserId); instead the mismatch is a miss and the lookup re-stamps.
+        // TryGet also refuses entries whose shared per-device session was re-stamped by
+        // another household profile since they were stored (expected-UserId check), so a
+        // served hit is always attributed to the right Jellyfin user.
         string deviceId = context.System!.Device!.DeviceID;
         SessionInfo? session;
-        if (SessionReferenceCache.TryGet(user.JellyfinToken, deviceId, out SessionInfo? cachedSession)
-            && cachedSession?.UserId == user.Id)
+        if (SessionReferenceCache.TryGet(user.JellyfinToken, deviceId, out SessionInfo? cachedSession))
         {
             Logger.LogDebug("Session cache hit for device {DeviceId} (JF-477)", deviceId);
             session = cachedSession;

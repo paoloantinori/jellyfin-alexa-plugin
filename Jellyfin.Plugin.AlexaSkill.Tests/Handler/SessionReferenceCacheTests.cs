@@ -101,13 +101,18 @@ public class SessionReferenceCacheTests : PluginTestBase
     }
 
     // (a) A cache hit issues NO second lookup: the second request reuses the reference.
+    // The session's UserId (Jellyfin id space) is DELIBERATELY different from the plugin
+    // user's Id (the linking-token Guid): the hit must not depend on the two id spaces
+    // coinciding (the production bug class this suite guards against).
     [Fact]
     public async Task CacheHit_SecondRequest_SkipsLookupAndServesSameReference()
     {
         var user = CreateUser("jf477-hit-token");
+        Guid jellyfinUserId = Guid.NewGuid(); // Jellyfin id space, distinct from user.Id
+        Assert.NotEqual(user.Id, jellyfinUserId);
         const string deviceId = "jf477-hit-device";
         var session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
-        session.UserId = user.Id; // the real lookup stamps the token owner onto the session
+        session.UserId = jellyfinUserId;
         SetupLookupReturns(session);
         var handler = new SessionRecordingHandler(_sessionManagerMock.Object, _config, _loggerFactory);
         var request = CreateIntentRequest();
@@ -169,13 +174,14 @@ public class SessionReferenceCacheTests : PluginTestBase
 
     // (c) PlaybackStarted warms the cache (TTL refresh) with no request-path lookup
     // beyond the event's own resolution; the next intent request is a pure cache hit.
+    // Same distinct-id-space discipline as the hit test above.
     [Fact]
     public async Task PlaybackStarted_WarmsCache_NextIntentIsPureCacheHit()
     {
         var user = CreateUser("jf477-warm-token");
         const string deviceId = "jf477-warm-device";
         var session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
-        session.UserId = user.Id; // the real lookup stamps the token owner onto the session
+        session.UserId = Guid.NewGuid(); // Jellyfin id space, distinct from user.Id by construction
         SetupLookupReturns(session);
         var startedHandler = new PlaybackStartedEventHandler(_sessionManagerMock.Object, _config, _loggerFactory);
         var probeHandler = new SessionRecordingHandler(_sessionManagerMock.Object, _config, _loggerFactory);
@@ -313,14 +319,21 @@ public class SessionReferenceCacheTests : PluginTestBase
     }
 
     // Shared Echo, two voice profiles alternating inside the TTL: Jellyfin keeps ONE
-    // session object per device and re-stamps its UserId with the last resolver, so the
-    // cached entry for profile A now names profile B. The hit guard must treat that as
-    // a miss and refetch (re-stamping to A) instead of attributing A's request to B.
+    // session object per device and re-stamps its UserId (Jellyfin id space) with the
+    // last resolver, so the cached entry for profile A now names profile B. The stored-
+    // expectation guard must treat that as a miss and refetch (re-stamping to A) instead
+    // of attributing A's request to B. The plugin users' Ids are deliberately in a
+    // DIFFERENT id space from the session stamps: the guard must key on the stored
+    // expectation, never on a plugin-side user id.
     [Fact]
     public async Task SharedDevice_ProfileSwitchWithinTtl_RefetchesInsteadOfServingOtherProfile()
     {
         var userA = CreateUser("jf477-profile-token-a");
         var userB = CreateUser("jf477-profile-token-b");
+        Guid jellyfinUserA = Guid.NewGuid(); // Jellyfin id space: distinct from both plugin ids
+        Guid jellyfinUserB = Guid.NewGuid();
+        Assert.NotEqual(userA.Id, jellyfinUserA);
+        Assert.NotEqual(userB.Id, jellyfinUserB);
         const string deviceId = "jf477-profile-device";
         var shared = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
         _sessionManagerMock
@@ -328,8 +341,8 @@ public class SessionReferenceCacheTests : PluginTestBase
             .ReturnsAsync((string token, string _, string _) =>
             {
                 // Mirror the Jellyfin side effect: LogSessionActivity stamps the shared
-                // per-device session with the LAST resolver's user id.
-                shared.UserId = token == userA.JellyfinToken ? userA.Id : userB.Id;
+                // per-device session with the LAST resolver's Jellyfin user id.
+                shared.UserId = token == userA.JellyfinToken ? jellyfinUserA : jellyfinUserB;
                 return shared;
             });
         var handler = new SessionRecordingHandler(_sessionManagerMock.Object, _config, _loggerFactory);
@@ -339,8 +352,8 @@ public class SessionReferenceCacheTests : PluginTestBase
         await handler.HandleRequestAsync(request, CreateContext(userA, deviceId), CancellationToken.None);
         await handler.HandleRequestAsync(request, CreateContext(userB, deviceId), CancellationToken.None);
 
-        // A again within the TTL: the cached object names B, so the guard must miss and
-        // the lookup must re-run, restoring A's attribution.
+        // A again within the TTL: the shared object now names B, so the guard must miss
+        // and the lookup must re-run, restoring A's attribution.
         await handler.HandleRequestAsync(request, CreateContext(userA, deviceId), CancellationToken.None);
 
         _sessionManagerMock.Verify(
@@ -350,7 +363,32 @@ public class SessionReferenceCacheTests : PluginTestBase
             s => s.GetSessionByAuthenticationToken(userB.JellyfinToken, deviceId, It.IsAny<string>()),
             Times.Once);
         Assert.Equal(3, handler.ReceivedSessions.Count);
-        Assert.Equal(userA.Id, handler.ReceivedSessions[2].UserId);
+        Assert.Equal(jellyfinUserA, handler.ReceivedSessions[2].UserId);
+    }
+
+    // Cache-level guard: an entry whose LIVE session was re-stamped by another profile
+    // (expected UserId no longer matches the object's current stamp) misses and is
+    // dropped; the un-re-stamped sibling still hits.
+    [Fact]
+    public void Cache_RestampedLiveSession_MissesAndDropsEntry()
+    {
+        Guid stampA = Guid.NewGuid();
+        var restamped = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+        restamped.UserId = stampA;
+        var stable = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+        stable.UserId = Guid.NewGuid();
+        SessionReferenceCache.Store("jf477-restamp-token", "jf477-restamp-device", restamped);
+        SessionReferenceCache.Store("jf477-stable-token", "jf477-restamp-device", stable);
+
+        Assert.True(SessionReferenceCache.TryGet("jf477-restamp-token", "jf477-restamp-device", out _));
+
+        // Another profile resolves the shared per-device session: the stamp changes.
+        restamped.UserId = Guid.NewGuid();
+
+        Assert.False(SessionReferenceCache.TryGet("jf477-restamp-token", "jf477-restamp-device", out _));
+        Assert.False(SessionReferenceCache.TryGet("jf477-restamp-token", "jf477-restamp-device", out _),
+            "the mismatched entry must be dropped, not re-evaluated");
+        Assert.True(SessionReferenceCache.TryGet("jf477-stable-token", "jf477-restamp-device", out _));
     }
 
     // (f) Different devices and tokens never collide; InvalidateDevice clears only the
