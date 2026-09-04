@@ -4,10 +4,10 @@ title: >-
   JF-456/450 batch simplify leftovers: merge twin LibraryFilterIntegrationTests
   classes, single KindScopes definition for SearchMedia, optional sibling-query
   saturation skip
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-02 17:08'
-updated_date: '2026-09-04 20:29'
+updated_date: '2026-09-04 21:29'
 labels:
   - tech-debt
   - library-filter
@@ -51,3 +51,9 @@ From the batch simplify round over JF-456+JF-450/451 (2026-09-02), deliberately 
 
 Verification: dotnet build 0 warnings 0 errors; full suite 3242/3242 passed (a CONCURRENT session's uncommitted JF-457/JF-491 work shares this checkout with +7 of its own new tests; its ArtistSearchTests.DbTier1 test was mid-work and failing during this task's runs, not involving any of this diff's code paths, and passed green by the final run).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented and deployed 2026-09-04 (commit e14beecc, together with JF-442). Twin LibraryFilterIntegrationTests classes merged into the Unit copy (4 tests moved with the sibling-query assertion verbatim; null/empty AllowedLibraryIds variants strictly stronger via Assert.All over every captured query; the Handler file deleted, ambiguous test output resolved). One KindScopes(libraryRestricted) definition in SearchMediaIntentHandler consumed by both the primary path and the fuzzy pass. Item 3 resolved as already-landed: the sibling-query saturation skip shipped in d02b9300 (JF-456, 2026-09-02) with the documented re-sorted-union ordering decision; nothing to adopt. Full suite 3243/3243.
+<!-- SECTION:FINAL_SUMMARY:END -->

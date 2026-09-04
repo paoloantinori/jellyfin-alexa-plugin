@@ -3,10 +3,10 @@ id: JF-442
 title: >-
   Cleanup: retrofit pre-JF-411 test fact onto shared catalog mock helpers;
   remove unreachable PlayAlbum flow-guard elicit
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-01 21:25'
-updated_date: '2026-09-04 20:29'
+updated_date: '2026-09-04 21:29'
 labels:
   - code-quality
   - tech-debt
@@ -80,3 +80,9 @@ Note for item 2: the flow-guard unreachability proof in the JF-422 review matche
 
 Verification: dotnet build 0 warnings 0 errors; full suite 3242/3242 passed. Note: a CONCURRENT session's uncommitted JF-457/JF-491 work shares this checkout (ArtistSearch/LibraryFilter/PlayArtistSongs changes, +7 of its own new tests); its ArtistSearchTests.SearchAsync_DbTier1_RestrictedUser_DropsExcludedLibraryArtist_KeepsFolderlessOwn was mid-work and failing during this task's runs (it does not exist at HEAD and failed in isolation with none of this diff's code paths involved) and passed green by the final run. Net test count vs the 3235 HEAD baseline from THIS task: unchanged (4 tests moved from the deleted Handler twin file into the Unit class).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented and deployed 2026-09-04 (commit e14beecc, together with JF-458). All four items: the pre-JF-411 fact retrofitted onto the shared helpers (AlbumArtistIds assertion preserved); the unreachable flow-guard elicit REMOVED with the unreachability proof re-verified against the current code including the JF-489 guard (TryStrip never yields an empty remainder; the JF-411 block returns or sets album; the album! sites are structurally sound, confirmed by the review agent); BuildDialogElicitResponse hoisted to BaseHandler owning the INVALID_RESPONSE lesson once, serving PlayAlbum and PlaySong (FindSong's session-state variant untouched); SetupIndefiniteAlbumCatalog hoisted to HandlerTestFixture with 15 call sites re-pointed and DialogDelegationTests slimmed to the delegation-absence assertion. Full suite 3243/3243.
+<!-- SECTION:FINAL_SUMMARY:END -->

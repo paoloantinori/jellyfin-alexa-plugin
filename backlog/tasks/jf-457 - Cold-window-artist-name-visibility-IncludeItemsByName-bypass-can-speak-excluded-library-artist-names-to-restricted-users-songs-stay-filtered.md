@@ -3,10 +3,10 @@ id: JF-457
 title: >-
   Cold-window artist name visibility: IncludeItemsByName bypass can speak
   excluded-library artist names to restricted users (songs stay filtered)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-02 16:49'
-updated_date: '2026-09-04 21:27'
+updated_date: '2026-09-04 21:29'
 labels:
   - privacy
   - library-filter
@@ -53,3 +53,9 @@ Implementation landed (2026-09-04, post-filter approach, no config flag):
 
 Review + simplify dispositions (2026-09-04, orchestrator): (1) bounded-recall note (code-review 85): the cap prices the SELECTION pool, not just the spoken window; with >8 band-passing tier-1 rows and the true match past position 8 of the unordered result, a non-empty kept list short-circuits the chain before tiers 2-4 could recover it. Narrow reachability (restricted user AND cold/disabled index AND >8 rows AND true match in the tail), privacy direction correct; the MaxAlbumScopeChecks doc comment now states this honestly. (2) Batching the 8 per-artist Limit=1 queries into one ArtistIds=[ids] query was evaluated and DECLINED: the album-to-artist mapping relies on DTO artist fields whose hydration on this query path is unproven, and a wrong mapping either reintroduces the leak or over-drops, on an exceptional path the cap already bounds; latency is bounded and local. (3) The winner-level verification copy in PlayArtistSongs.TrySearchFallbackAsync was consolidated onto the now-internal ArtistSearch.KeepIfAlbumScopeAsync (simplify REUSE-1). (4) Handler tier=1 logs now fire after band+scope filtering so duration and count carry the true yield, matching SearchAsync (simplify EFFICIENCY-2).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented and deployed 2026-09-04 (commit 36304110). Album-scope post-filter on every bypass-tier NAME surface in BOTH search implementations: ArtistSearch.FilterByAlbumScopeAsync verifies each tier-1 list entry (cap 8, Limit=1 MusicAlbum query, entries past cap dropped never unverified) and KeepIfAlbumScopeAsync verifies the prefix/contains winners; the inline PlayArtistSongs Fast/Thorough/Parallel tiers route through the same shared helpers. Unrestricted users pay zero queries (live-verified on minix: 0 ArtistAlbumScope log entries). The bounded-recall trade (cap prices the selection pool) and the declined batching are documented in the code comment and these notes. 7 new tests; full suite 3243/3243; Release 0 warnings. Behavior change: a bypass-found artist with no in-scope albums now yields a clean not-found instead of speaking the excluded library's canonical name.
+<!-- SECTION:FINAL_SUMMARY:END -->

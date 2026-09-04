@@ -1,10 +1,10 @@
 ---
 id: JF-491
 title: Consolidate the effective fuzzy bar idiom into a named helper
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-04 20:07'
-updated_date: '2026-09-04 20:29'
+updated_date: '2026-09-04 21:29'
 labels:
   - cleanup
   - fuzzy-matching
@@ -48,3 +48,9 @@ OUT-OF-SCOPE DISCOVERY (left untouched, for the orchestrator): the idiom also ap
 
 Verification (worker session, 2026-09-04): `dotnet build Jellyfin.Plugin.AlexaSkill.sln` 0 errors 0 warnings; `dotnet test Jellyfin.Plugin.AlexaSkill.Tests` 3243 passed / 0 failed (baseline 3242 + the new helper test). Gates ran in the worker session: /simplify (one comment-redundancy fix applied: the HandleFuzzyMiss auto-accept comment no longer duplicates the no-qualifier comment's AutoPlay rationale) and the review-local DoD gate run directly in-context (sub-agents forbidden for this worker); its single finding >= 80 is the doc/application spelling mismatch above, already tracked here.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented and deployed 2026-09-04 (commit 24b77dc7). FuzzyMatcher.GetEffectiveThreshold(user, bar) names the effective-bar idiom; applied at the FindSong single-candidate bar and both cross-media fallback thresholds (TryEntityFallbackAsync keeps the bare normalThreshold local for the JF-363 suggestion band). HandleFuzzyMiss bars deliberately stay as code with comments naming the idiom: the auto-accept check is an OR with a behavior clause, and the no-qualifier bar must stay bare because the AutoPlay disjunct admits sub-threshold scores (swapping would attach the qualifier to sub-bar AutoPlay winners, a behavior change). The worker's review pass surfaced two additional live sites (TryEntityFallbackAsync, TryAlbumFallbackAsync) beyond the task's original list; the orchestrator applied both swaps (value-identical) to close the finding. Doc comments prescribe the helper. 1 new pin test; full suite 3243/3243.
+<!-- SECTION:FINAL_SUMMARY:END -->
