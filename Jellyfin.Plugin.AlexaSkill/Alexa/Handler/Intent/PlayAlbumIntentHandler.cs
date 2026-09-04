@@ -234,6 +234,33 @@ public class PlayAlbumIntentHandler : BaseHandler
                 return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByArtist", locale, musician!));
             }
 
+            // JF-473 (JF-377 parity): the acceptance gate above refuses the below-threshold
+            // free pass, but a single-word artist whose name is genuinely CONTAINED in a
+            // stolen album span passes it by construction ("dark side of the moon" with an
+            // artist literally named "Dark": the containment shortcut scores 90, above the
+            // bar). PlayArtistSongs has downgraded exactly this shape to a yes/no prompt
+            // since JF-377 (nonsense queries and carrier-bleed real-artist queries are
+            // string-indistinguishable, so prompt, never reject); this is the same shape
+            // at the album-by-artist acceptance point, so both paths treat coincidental
+            // containment identically. The shared predicate returns false for every
+            // legitimate containment class the JF-471 pins protect (whole-word carrier
+            // form "u2" in "un disco di u2", qualifier "miles davis live", exact/full-name
+            // and ASR-truncation shapes), so those keep auto-playing. Yes routes through
+            // YesIntentHandler.PlayArtist (disambig_type=artist); No walks the shared
+            // disambiguation cycle to NoMoreMatches.
+            if (matchedArtist != null
+                && Util.ArtistSearch.IsCoincidentalContainmentMatch(musician!, matchedArtist.Name, locale))
+            {
+                Logger.LogInformation(
+                    "PlayAlbum: artist match '{Artist}' for musician='{Musician}' is coincidental containment, downgrading the album-by-artist auto-play to a yes/no prompt (JF-473/JF-377)",
+                    matchedArtist.Name, musician);
+                var matches = new List<(Guid Id, string Name, string? ArtUrl)>
+                {
+                    (matchedArtist.Id, matchedArtist.Name, GetImageUrl(matchedArtist.Id.ToString("N"), user))
+                };
+                return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeArtist, locale, context);
+            }
+
             InternalItemsQuery artistAlbumQuery = BuildAlbumQuery(_libraryManager, jellyfinUser, user, searchTerm: null, artistIds: artistsIds.ToArray(), albumArtistsOnly: true);
 
             // JF-427: explicit deterministic order; the query previously had NO OrderBy, so the

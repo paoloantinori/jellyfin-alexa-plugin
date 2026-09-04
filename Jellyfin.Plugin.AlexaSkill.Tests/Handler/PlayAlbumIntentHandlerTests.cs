@@ -22,6 +22,7 @@ using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Querying;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Newtonsoft.Json;
 using Xunit;
 using SortOrder = Jellyfin.Database.Implementations.Enums.SortOrder;
 
@@ -588,7 +589,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
-    public async Task HandleAsync_InteriorContainmentFuzzyMatch_DoesNotAutoPlay()
+    public async Task HandleAsync_EmbeddedContainmentFuzzyMatch_DoesNotAutoPlay()
     {
         // JF-408 incident replay (live 2026-08-28): query "walls for cup" (ASR for "Waltz for
         // Koop") fuzzy-matched album "O" at ContainmentScore because the query contains an 'o'
@@ -613,7 +614,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
-    public async Task HandleAsync_InteriorContainmentFuzzyMatch_DeviceCorr_DarkSideOfTheMoon_DoesNotAutoPlay()
+    public async Task HandleAsync_EmbeddedContainmentFuzzyMatch_DeviceCorr_DarkSideOfTheMoon_DoesNotAutoPlay()
     {
         // JF-478 incident replay (live 2026-09-04, corr=80bb4642, it-IT): 'riproduci
         // album dark side of the moon' arrived with the album slot FILLED. The exact
@@ -1168,5 +1169,169 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         Assert.NotNull(response);
         var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
         Assert.NotNull(playDirective);
+    }
+
+    // -----------------------------------------------------------------------
+    // JF-473 (JF-377 parity): a single-word artist whose name is genuinely
+    // CONTAINED in a stolen album span passes the JF-471 acceptance gate by
+    // construction (the containment shortcut scores 90, above the bar), so the
+    // album-by-artist path silently auto-played its album. PlayArtistSongs has
+    // downgraded exactly this shape to a yes/no prompt since JF-377; these pins
+    // hold the same contract at the album-by-artist acceptance point.
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// JF-473 failing-state pin: the coincidental-containment class that passes
+    /// the JF-471 gate (containment 90 by construction) must NOT silently
+    /// auto-play the album; it gets the JF-377 yes/no prompt instead. Pre-fix
+    /// behavior (probe, 2026-09-04): 'In Your Dreams' by 'Dark' auto-played for
+    /// musician='dark side of the moon'.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_MusicianOnly_SingleWordCoincidentalContainment_PromptsInsteadOfAutoPlay()
+    {
+        var artist = new MusicArtist { Name = "Dark", Id = Guid.NewGuid() };
+        var index = BuildPhoneticArtistIndex(artist);
+        var handler = new PlayAlbumIntentHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory,
+            _queueManager,
+            index);
+        var request = CreateIntentRequest(musician: "dark side of the moon", locale: "it-IT");
+        _fx.SetupUserMock();
+
+        var (album, albumTracks) = MakeRelease("In Your Dreams", 2011, 10, "In Your Dreams First");
+        SetupIndefiniteAlbumCatalog(
+            artist,
+            new List<BaseItem> { album },
+            albumTracks,
+            new Dictionary<Guid, BaseItem> { [album.Id] = albumTracks[0] });
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.Null(playDirective);
+        // The JF-377 prompt contract, not a terminal Tell: the session stays open
+        // for the yes/no cycle.
+        Assert.False(response.Response.ShouldEndSession ?? false);
+        Assert.NotNull(response.SessionAttributes);
+        Assert.Equal(DisambiguationHelper.MediaTypeArtist, response.SessionAttributes[DisambiguationHelper.AttrType]);
+        var matches = JsonConvert.DeserializeObject<List<DisambiguationHelper.MatchInfo>>(
+            response.SessionAttributes[DisambiguationHelper.AttrMatches].ToString());
+        Assert.NotNull(matches);
+        DisambiguationHelper.MatchInfo match = Assert.Single(matches);
+        Assert.Equal("Dark", match.Name);
+        Assert.Equal(artist.Id.ToString(), match.Id);
+        // The prompt speaks the candidate so the user can confirm or decline it.
+        Assert.Contains("Dark", TestHelpers.GetSpeechText(response));
+    }
+
+    /// <summary>
+    /// JF-473 legit-class pin: a real single-word artist inside a carrier phrase
+    /// that bled into the raw slot ('un disco di u2', the JF-377 carrier-bleed
+    /// class) is NOT a coincidental containment under the shared predicate (the
+    /// name occurs whole-word and covers half the query's content words), so it
+    /// keeps auto-playing exactly as before the downgrade.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_MusicianOnly_CarrierBearingSingleWordArtist_StillAutoPlays()
+    {
+        var artist = new MusicArtist { Name = "U2", Id = Guid.NewGuid() };
+        var index = BuildPhoneticArtistIndex(artist);
+        var handler = new PlayAlbumIntentHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory,
+            _queueManager,
+            index);
+        var request = CreateIntentRequest(musician: "un disco di u2", locale: "it-IT");
+        _fx.SetupUserMock();
+
+        var (album, albumTracks) = MakeRelease("The Joshua Tree", 1987, 10, "Where the Streets Have No Name");
+        SetupIndefiniteAlbumCatalog(
+            artist,
+            new List<BaseItem> { album },
+            albumTracks,
+            new Dictionary<Guid, BaseItem> { [album.Id] = albumTracks[0] });
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.NotNull(playDirective);
+        Assert.Equal(albumTracks[0].Id.ToString(), playDirective!.AudioItem.Stream.Token);
+    }
+
+    /// <summary>
+    /// JF-473 yes-route pin: the prompt's session attributes round-trip through
+    /// YesIntentHandler's artist disambiguation arm (disambig_type=artist ->
+    /// PlayArtist), so a user-confirmed coincidental containment still PLAYS (the
+    /// JF-377 contract: the prompt defers judgment to the user, it never
+    /// rejects). End-to-end: the attrs fed to the Yes handler are the ones the
+    /// PlayAlbum prompt built, not a hand-written copy.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_SingleWordCoincidentalContainment_Prompt_YesPlaysTheArtist()
+    {
+        var artist = new MusicArtist { Name = "Dark", Id = Guid.NewGuid() };
+        var index = BuildPhoneticArtistIndex(artist);
+        var handler = new PlayAlbumIntentHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory,
+            _queueManager,
+            index);
+        var request = CreateIntentRequest(musician: "dark side of the moon", locale: "it-IT");
+        _fx.SetupUserMock();
+
+        var (album, albumTracks) = MakeRelease("In Your Dreams", 2011, 10, "In Your Dreams First");
+        SetupIndefiniteAlbumCatalog(
+            artist,
+            new List<BaseItem> { album },
+            albumTracks,
+            new Dictionary<Guid, BaseItem> { [album.Id] = albumTracks[0] });
+
+        SkillResponse prompt = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+        Assert.NotNull(prompt.SessionAttributes);
+
+        // The Yes leg resolves the candidate by id and plays the artist's songs:
+        // GetItemById serves the artist, GetItemList serves the PlayArtist query.
+        _fx.LibraryManager.Setup(l => l.GetItemById(artist.Id)).Returns(artist);
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>())).Returns(albumTracks);
+        var yesHandler = new YesIntentHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.LoggerFactory);
+        var yesRequest = new IntentRequest
+        {
+            Intent = new Intent { Name = "AMAZON.YesIntent" },
+            Locale = "it-IT",
+            RequestId = "test-req"
+        };
+
+        SkillResponse confirmed = await yesHandler.HandleAsync(
+            yesRequest,
+            _fx.CreateContext(),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            prompt.SessionAttributes,
+            CancellationToken.None);
+
+        var playDirective = confirmed.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.NotNull(playDirective);
+        Assert.Equal(albumTracks[0].Id.ToString(), playDirective!.AudioItem.Stream.Token);
     }
 }
