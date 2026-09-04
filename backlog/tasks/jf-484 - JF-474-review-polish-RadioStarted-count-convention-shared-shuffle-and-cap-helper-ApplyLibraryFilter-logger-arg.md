@@ -3,10 +3,10 @@ id: JF-484
 title: >-
   JF-474 review polish: RadioStarted count convention, shared shuffle-and-cap
   helper, ApplyLibraryFilter logger arg
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-04 12:22'
-updated_date: '2026-09-04 14:58'
+updated_date: '2026-09-04 15:25'
 labels: []
 dependencies: []
 references:
@@ -43,3 +43,17 @@ Do NOT fold the LaunchChannelAsync vs PlayChannelIntentHandler duplication into 
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+All three items landed (commit 0389b24e), deployed, and live-smoked.
+
+1. The 'Found N similar tracks' count is EXCLUDES-the-playing-track on both seed paths, enforced structurally: the announcedCount parameter is REMOVED and derived once inside StartRadioPlayback (queue.Count - 1), so the off-by-one the genre path carried cannot return with a future caller. The genre seed log now reports the capped queue length. The sweep found no third speaking site (TurnRadioOn/Off speak no count; the AutoPopulate paths log addedCount only).
+2. BaseHandler.ShuffleAndCap<T> folds the four shuffle-and-cap copies (context 20, genre 20, continuation 15, PostPlay 15); bit-identical at every site (the old code copied-then-shuffled-then-truncated; the helper is ShuffleCopy + the same RemoveRange); no fifth copy exists, and the two cap-less shuffle sites are deliberately untouched.
+3. QueryRadioChannelsAsync passes Logger to ApplyLibraryFilter (log parity with the siblings).
+
+Two count pins (each asserting the new count present and the old absent; both deterministic under Random.Shared because the count is order-invariant for the fixture queues); three mutations: either path's flip fails exactly its pin, the derived single-site flip fails both. Suite 3171/3171, Release 0 warnings, validators baseline. Review: zero findings >= 80 (the single-track 'Found 0' edge scored ~35: truthful under the convention and a degenerate-library state; the Contains+DoesNotContain pair judged non-redundant: it is what makes the mutations bite singly).
+
+Deploy: config survived, the PauseKeepsSession flag still on, and the genre-radio smoke plays with the announcement riding the new unified count (Audio directive; the it-IT announcement is silent per AnnounceAudioPlays default, consistent with the earlier JF-474 verification).
+<!-- SECTION:FINAL_SUMMARY:END -->
