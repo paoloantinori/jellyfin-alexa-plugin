@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-03 16:28'
+updated_date: '2026-09-04 11:37'
 labels: []
 dependencies: []
 references:
@@ -47,3 +48,9 @@ Acceptance criteria:
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+UX REQUIREMENTS from Paolo's device test (2026-09-04, the elicit worked but was unanswerable): (a) the station prompt must OFFER choices: name 2-3 real options dynamically from the live-TV channel list (the 'radio'-named channels in the library, e.g. 'jazz fm', 'rtl'), with a genre-word fallback ('un genere come jazz o rock') when no channels exist; the reprompt (the second ask) is the natural carrier so the first ask stays short; (b) HELP PATH during the open elicit: the user's natural question 'quali ci sono?' currently lands in the station slot as free text and dead-ends; the station-given path must detect question-shaped answers (locale-aware help words: quali/cosa/elenco...) and respond with the available list + re-ask instead of the nothing-playing Tell.
+<!-- SECTION:NOTES:END -->
