@@ -4,10 +4,10 @@ title: >-
   Skill launch timeout: synchronous session lookup on every request with a 6s
   retry budget (cache the live SessionInfo reference + event-driven refresh + 2s
   fast-fail)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-04 04:38'
-updated_date: '2026-09-04 04:38'
+updated_date: '2026-09-04 09:51'
 labels: []
 dependencies: []
 references:
@@ -54,3 +54,17 @@ Acceptance criteria:
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed complete: implemented, deployed (commits 45c109f5 + follow-up 69cb5284), root-caused to the bottom, and live-verified end-to-end.
+
+What shipped: SessionReferenceCache (live-reference cache keyed by JellyfinToken+deviceId, 60s lazy TTL, value-conditional invalidation, stored ExpectedUserId guard against shared-Echo profile re-stamps); cache-first resolution in HandleRequestAsync; PlaybackStarted warm refresh outside the request window; dead-session invalidation at both throwing report sites; and on a miss, the lookup retry-wrapped AND Task.Run-dispatched (the review P1: the callee's synchronous prefix contains a blocking EF read that observes no token) raced against a 2s fast-fail budget via Task.WaitAsync, with coherent degradation plus abandoned-lookup warm-fill. 10 tests (the mock fiction reworked to distinct id-spaces discipline after live evidence), both guard mutations verified, suite 3111/3111, Release 0 warnings.
+
+The full incident chain (2026-09-03 20:06 launch timeout, corr=40edec8a): the repeated same-night DLL hot-swaps wiped the plugin's JellyfinToken (the documented hot-swap trap; element absent from the on-disk XML), which (a) made every GetSessionByAuthenticationToken call run Jellyfin's GetDevices UNFILTERED (the heavy query shape that hung 8s), and (b) nullified the cache key so the first deploy's cache could never store. The orchestrator's initial id-space diagnosis was wrong (the worker's source counter-evidence held: plugin user.Id IS the Jellyfin user Guid, verified on the live config); the null-token cause was found by live inspection. Token restored by the user via the direct account-linking URL (no skill disable needed); the live verification then showed the complete expected picture: token in XML, first request pays the lookup, second request logs 'Session cache hit' exactly once.
+
+Standing effect: even under a future token wipe or DB hiccup, the worst case per request is now a 2s bounded degradation with a coherent message instead of a silent 8s timeout, and at steady state the per-request session lookup is gone entirely.
+
+Gates: /simplify + code-review (combined reviewer pass: the P1 sync-prefix finding applied via Task.Run; the dead Invalidate removed; the follow-up delta self-reviewed with the honest evidence conflict surfaced and resolved by live measurement).
+<!-- SECTION:FINAL_SUMMARY:END -->
