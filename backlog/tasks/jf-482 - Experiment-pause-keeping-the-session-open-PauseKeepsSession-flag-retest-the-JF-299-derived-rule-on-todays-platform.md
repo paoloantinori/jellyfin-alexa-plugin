@@ -3,9 +3,10 @@ id: JF-482
 title: >-
   Experiment: pause keeping the session open (PauseKeepsSession flag) - retest
   the JF-299-derived rule on today's platform
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-04 11:38'
+updated_date: '2026-09-04 12:32'
 labels: []
 dependencies: []
 references:
@@ -47,3 +48,23 @@ Note: this is a deliberate behavior experiment on the live skill; the flag makes
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+REVIEW ADDITION (JF-474 review P3-3@81): the hardware pause button (PlaybackController.PauseCommandIssued / PauseButtonPressed) flows through the SAME PauseIntentHandler path (CanHandle claims the PlaybackController request type), so with the flag on the hardware-pause response also carries ShouldEndSession=false. Platform acceptance of shouldEndSession=false on PlaybackController responses is UNVERIFIED (the documented JF-299 rejection covers AudioPlayer events). ADDED TO THE DEVICE MATRIX as step 6: flag on, press the physical pause button (remote/Echo control) -> no error tone / INVALID_RESPONSE, audio stops; note the result either way. The APL pause tap (touch) is a separate path and stays session-ending.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented, deployed, and live-verified (commits 141e3330 flag + the review-folded P3 fixes riding 168aaae8).
+
+What shipped: PluginConfiguration.PauseKeepsSession (default false), gating ONLY the pause branch via a BuildPauseResponse(bool) overload (parameterless byte-identical; stop/cancel and every other session-ending response untouched, pinned); AudioPlayer.Stop always sent; config.html toggle (emby-checkbox idiom, served-page verified post-deploy: PauseKeepsSession x4) and a partial-PATCH whitelist entry, so the flag flips live without restart (the handler reads the live config object).
+
+Live evidence available so far: the served page carries the toggle; the behavioral matrix (6 steps: the original 5 plus the hardware pause button the JF-474 review surfaced as unverified platform behavior) is PAOLO'S to run, per the experiment design. The PATCH command and decision rule are in the task description; step 6 added in the notes.
+
+Review (combined pass over both streams): zero P1/P2; the P3@81 hardware-pause scope question landed as matrix step 6; the P3-1 progressive-guard, P3-2 contraction pin, and P3-4 stop-word strip belonged to the JF-474 stream and were applied there. The worker's two pre-analyzed session interactions (FindSong force-route intent-agnostic; JF-387 attributes empty in the target window) hold. Suite 3144/3144, mutation verified (flag neutralized kills exactly the flag-on test).
+
+This task closes as implemented-and-deployed; the DECISION (default flip or counterproof) remains open pending the device matrix and will land as a follow-up commit + CLAUDE.md Stop-vs-Pause update when Paolo reports the six results.
+<!-- SECTION:FINAL_SUMMARY:END -->
