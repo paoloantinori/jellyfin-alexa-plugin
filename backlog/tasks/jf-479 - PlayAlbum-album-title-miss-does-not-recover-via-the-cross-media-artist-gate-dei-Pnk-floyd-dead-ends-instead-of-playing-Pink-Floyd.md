@@ -3,10 +3,10 @@ id: JF-479
 title: >-
   PlayAlbum album-title miss does not recover via the cross-media artist gate
   ('dei P!nk floyd' dead-ends instead of playing Pink Floyd)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-04 09:58'
-updated_date: '2026-09-04 10:00'
+updated_date: '2026-09-04 10:55'
 labels: []
 dependencies: []
 references:
@@ -42,3 +42,13 @@ Fix: wire/reach the shared cross-media artist gate on PlayAlbum's album-title mi
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented, deployed, and live-verified by corr replay (commit a5d446e9 with JF-478).
+
+Investigation verdict: (b) wired-but-rejected. TryEntityFallbackAsync has been wired on PlayAlbum's album-title miss since JF-446; the rejection was the shared word guard counting tokenize FRAGMENTS ('P!nk' splits at the exclamation into 'p'+'nk', so 'dei P!nk floyd' counted 3 against CrossMediaArtistMaxWords=2). Fix: PassesCrossMediaWordGuard counts spoken content WORDS (new CountContentWords) instead of alphanumeric fragments; the tokens out-param and the searched join are unchanged. Phonetic-model correction pinned in tests: 'p!nk floyd' does NOT collide with 'Pink Floyd' in Double Metaphone (PNKF vs NKFL; leading-cluster silent-letter skip); the recovery rides the plain score (tokenized join 'p nk floyd' vs 'pink floyd' = 90 > the 85 bar). The review's P3@90 (the handler-test comment claimed the inverted phonetic mechanism) was corrected same-turn.
+
+Live verification on minix post-deploy: simulator replay of the exact device slot (album='dei P!nk floyd') returns 'Ho trovato l'artista Pink Floyd. Ecco la musica di Pink Floyd.' with playback: the incident closed. Three-word album-shaped titles still clean-not-found (pinned). Interaction pinned: an embedded-containment album rejection does not block the artist recovery (album 'O' + 'dei P!nk floyd' still plays Pink Floyd). Suite 3128/3128, mutation surgical (fragment-counting restored: exactly the 2 recovery tests red). Device re-verification item for Paolo folded into the final card.
+<!-- SECTION:FINAL_SUMMARY:END -->

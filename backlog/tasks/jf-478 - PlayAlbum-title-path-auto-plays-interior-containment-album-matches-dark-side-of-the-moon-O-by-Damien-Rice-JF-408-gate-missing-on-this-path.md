@@ -3,10 +3,10 @@ id: JF-478
 title: >-
   PlayAlbum title path auto-plays interior-containment album matches (dark side
   of the moon -> 'O' by Damien Rice); JF-408 gate missing on this path
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-04 09:57'
-updated_date: '2026-09-04 10:00'
+updated_date: '2026-09-04 10:55'
 labels: []
 dependencies: []
 references:
@@ -40,3 +40,13 @@ Fix: extend the JF-408 interior-containment rejection (shared helper IsInteriorC
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented, deployed, and live-verified by corr replay (commit a5d446e9, with JF-479 in the same commit: the two fixes share the predicate/guard machinery).
+
+Root cause (device corr=80bb4642, pinned red-first): the JF-408 rejection WAS wired on PlayAlbum's title path, but its predicate demanded strictly-INTERIOR occurrences; the winning 'o' in 'of' is word-initial, so the rule never fired and 'O' auto-played at containment 90. Fix: the predicate (renamed IsEmbeddedContainment per the review) rejects every embedded occurrence (interior + word-initial + word-final fragments) with an affix tolerance (overflow <= 2, candidates >= 3) preserving the whole-word ('u2') and plausible-affix ('outkasts') classes; the one widening production caller (PlayArtistSongs tier-4) lands on the yes/no prompt, the JF-377 safe direction. Blast radius enumerated by the review: all three decision points (PlayArtistSongs tier-4, PlayAlbum fuzzy, the PlaySong cascade) verified in the intended direction, JF-377/JF-420 pins green.
+
+Live verification on minix post-deploy: simulator replay of the exact device slot (album='dark side of the moon') returns 'Spiacente, non ho trovato nessun album chiamato dark side of the moon' with no playback: the incident closed. Suite 3128/3128, mutation surgical (predicate constant neutralized: exactly the 4 gate tests red, mirrors green). Device re-verification item for Paolo folded into the final card.
+<!-- SECTION:FINAL_SUMMARY:END -->

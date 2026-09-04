@@ -3,10 +3,10 @@ id: JF-480
 title: >-
   Radio station elicit skipped when playback is merely PAUSED (session
   now-playing survives pause; radio mode starts from the paused track)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-04 09:58'
-updated_date: '2026-09-04 10:00'
+updated_date: '2026-09-04 10:55'
 labels: []
 dependencies: []
 references:
@@ -39,3 +39,15 @@ Fix direction (decide by evidence): the radio handler's playing-check should tre
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented and deployed (commit 397be652). Live verification is device-only (adjudicated): the paused-context shape is not producible through simulate-skill (its synthetic context carries no AudioPlayer), so the unit tests pinning the REAL post-pause device shape are the verification level; Paolo's device re-test closes the loop.
+
+Root cause (device corr=2c2d8676, evidence from logs + Jellyfin v10.11.11 source): the album play path optimistically writes FullNowPlayingItem on the COORDINATOR Echo's session before issuing play; in a multi-room group the PlaybackStarted/Stopped reports land on a MEMBER device's session (AMAWQ5 vs AMA22QHY), so the pause cleared the wrong session and the coordinator's optimistic item survived. Item presence therefore cannot distinguish playing from paused; the request context's playerActivity can (STOPPED on every post-pause request; PLAYING/BUFFER_UNDERRUN while active, the same semantics ResumeIntentHandler and PlaybackFinishedEventHandler already use).
+
+Fix: the JF-472 elicit condition becomes !activelyPlaying || no item: paused behaves like idle (the station question, session open), actively playing keeps the byte-identical radio branch, cancel hatch/station-given/feature gate untouched. 4 tests including the real device shape (surviving item, STOPPED, 16384 offset); the pre-existing SomethingPlaying test corrected to a genuine PLAYING context. Mutation verified. Review below-threshold items (shared IsActivelyPlaying helper, FINISHED/null-context shapes, test dedupe) landed as JF-481; the FINISHED-elicits-instead-of-seeds question is explicitly open there for a device observation.
+
+Device test for Paolo: pause a track, wait a few seconds, 'suona jazz' -> the station question (not radio mode); then with a track actively playing, 'riproduci radio' -> radio mode unchanged.
+<!-- SECTION:FINAL_SUMMARY:END -->
