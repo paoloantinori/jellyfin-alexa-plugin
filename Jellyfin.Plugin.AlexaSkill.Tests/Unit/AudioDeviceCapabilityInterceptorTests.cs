@@ -44,6 +44,7 @@ public class AudioDeviceCapabilityInterceptorTests : PluginTestBase
 
         var tmpDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "alexa-skill-test-" + Guid.NewGuid());
         System.IO.Directory.CreateDirectory(tmpDir);
+        PluginTempDirCleanup.Shared.Register(tmpDir);
 
         var appPaths = new Mock<MediaBrowser.Common.Configuration.IApplicationPaths>();
         appPaths.Setup(p => p.PluginsPath).Returns(tmpDir);

@@ -163,7 +163,9 @@ internal static class TestHelpers
     /// <summary>
     /// Sets Plugin.Instance with the provided configuration so IfFeatureDisabled
     /// can read from Plugin.Instance.Configuration. When the instance already exists,
-    /// only the specific flag is synced via <paramref name="syncFlag"/>.
+    /// only the specific flag is synced via <paramref name="syncFlag"/>. The temp
+    /// dir minted for the mocked paths is registered with PluginTempDirCleanup for
+    /// deletion at process exit (JF-453).
     /// </summary>
     internal static void EnsurePluginInstance(
         PluginConfiguration config,
@@ -179,6 +181,7 @@ internal static class TestHelpers
 
         var tmpDir = Path.Combine(Path.GetTempPath(), tempDirSuffix + "-" + Guid.NewGuid());
         Directory.CreateDirectory(tmpDir);
+        PluginTempDirCleanup.Shared.Register(tmpDir);
 
         var appPaths = new Mock<IApplicationPaths>();
         appPaths.Setup(p => p.PluginsPath).Returns(tmpDir);

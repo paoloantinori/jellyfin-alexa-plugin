@@ -268,6 +268,7 @@ public class VoiceIdentificationTests : PluginTestBase
         // Set up Plugin.Instance for HandleRequestAsync which needs it
         var tmpDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "alexa-voice-test-" + Guid.NewGuid());
         System.IO.Directory.CreateDirectory(tmpDir);
+        PluginTempDirCleanup.Shared.Register(tmpDir);
 
         var appPaths = new Mock<MediaBrowser.Common.Configuration.IApplicationPaths>();
         appPaths.Setup(p => p.PluginsPath).Returns(tmpDir);
