@@ -3,9 +3,10 @@ id: JF-494
 title: >-
   VOICE_COMMANDS.md lacks PlayNextEpisode rows in all 17 locales (JF-324 mirror
   gap; JF-493 added samples to the intent without adding rows)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-05 12:40'
+updated_date: '2026-09-05 15:16'
 labels:
   - documentation
   - tv
@@ -37,3 +38,44 @@ JF-324 added PlayNextEpisodeIntent to all 17 locale models but never added the i
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- NOTES:BEGIN -->
+2026-09-05 (JF-494 implementation): added a `Play Next Episode` row to each of the 17 locale
+tables in VOICE_COMMANDS.md, inserted between `Play Next` and `Play Playlist` (alphabetical row
+order used by the tables). Sample lists copied verbatim from each locale's
+`Jellyfin.Plugin.AlexaSkill/Alexa/InteractionModel/model_<locale>.json`
+`PlayNextEpisodeIntent.samples`, preserving JSON order, backtick wrapping, and the ` · `
+separator. Scripted cross-check: all 17 locales EXACT MATCH (order and content), 17 insertions,
+0 deletions in the file diff. Includes the JF-493 infinitive twins (it-IT `Di riprodurre ...`,
+en `to play ...`, de `Zu spielen ...`, fr `De jouer ...`).
+
+Doc-only change (VOICE_COMMANDS.md plus this note): no code, model, or fixture edits, so DoD
+items 1-8 are unaffected by this diff.
+
+### Mirrors now stale (for the orchestrator to file; NOT touched in this task, out of scope)
+
+The CLAUDE.md anti-pattern #11 mirror list requires updates when samples change. Conservative
+reading (any intent, added flow): these mirrors lack the PlayNextEpisode flow entirely and would
+need it:
+
+1. `docs/playback-lifecycle-<locale>.md` (all 17 files): no `PlayNextEpisode` node and no
+   `Idle -->|"<sample>"| PlayNextEpisode` edge for any of the intent's samples in any locale.
+   Note the staleness is wider than this intent: `PlayEpisodeIntent` (the JF-324 sibling) is
+   ALSO absent from every playback-lifecycle diagram, so the episode-playback flows are missing
+   wholesale, not only the JF-493/JF-494 additions.
+2. `docs/graphs.json` and `docs-site/graphs.json` (identical mirrors of the md diagrams): zero
+   episode-playback nodes; a `python3 docs-site/parse_mermaid.py` regen is a no-op until the
+   mds gain the edges.
+3. `docs-site/data.json` (embedded mermaid strings): same absence; must be updated from the md
+   sources once they change.
+
+Not stale from this task, for the record:
+
+- `tests/integration/fixtures/<locale>.yaml`: no sample was removed or changed, so no NLU
+  expectation can have gone stale. Pre-existing coverage: en-US.yaml and it-IT.yaml already
+  assert PlayNextEpisodeIntent (5 cases each, including the JF-493 infinitive twins); the other
+  15 locale NLU fixtures have no PlayNextEpisode cases at all (JF-324/JF-493 coverage gap, only
+  relevant if per-locale NLU coverage for this intent is wanted).
+<!-- NOTES:END -->
