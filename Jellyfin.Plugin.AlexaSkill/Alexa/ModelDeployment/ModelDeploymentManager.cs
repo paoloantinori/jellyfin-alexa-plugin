@@ -249,13 +249,15 @@ public class ModelDeploymentManager
     /// <param name="user">The user whose SMAPI credentials to use.</param>
     /// <param name="skillId">The skill ID to update.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="auditSource">JF-495 audit label for the pre-PUT log line; the deploy endpoint leaves the default (CustomUrl), the restore path passes SourceRestore.</param>
     /// <returns>A <see cref="ModelDeploymentResult"/> with deployment outcome details.</returns>
     public async Task<ModelDeploymentResult> DeployCustomModelAsync(
         string modelJson,
         string locale,
         User user,
         string skillId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string auditSource = InteractionModelPutAudit.SourceCustomUrl)
     {
         if (user.SmapiDeviceToken == null)
         {
@@ -286,6 +288,10 @@ public class ModelDeploymentManager
             // The model JSON should contain the "interactionModel" envelope that SMAPI expects.
             var interactionModel = CreateSkillInteractionModel(modelJson, locale);
 
+            // JF-495: greppable audit line before the PUT.
+            var (intentCount, sampleCount) = InteractionModelPutAudit.Count(interactionModel);
+            InteractionModelPutAudit.LogModelPut(_logger, auditSource, locale, skillId, intentCount, sampleCount);
+
             await smapi.InteractionModel.Update(skillId, SkillStage.Development, locale, interactionModel)
                 .ConfigureAwait(false);
 
@@ -295,12 +301,22 @@ public class ModelDeploymentManager
 
             var finalStatus = await smapi.WaitForSkillStatusAsync(skillId, cancellationToken).ConfigureAwait(false);
 
-            string status = finalStatus.Manifest.LastModified.Status.ToString();
+            // JF-495 review fix: WaitForSkillStatusAsync polls the MANIFEST, which this
+            // deploy never touches, so it returns before this build's state exists and a
+            // single status read observes the PREVIOUS build (a FAILED build stays
+            // invisible and the healthy path reports the just-submitted IN_PROGRESS).
+            // Poll the LOCALE's interactionModel status to terminal under a bounded
+            // budget instead.
+            string status = await WaitForLocaleModelBuildAsync(smapi, skillId, locale, finalStatus, cancellationToken).ConfigureAwait(false);
+            bool succeeded = status == "SUCCEEDED";
             _logger.LogInformation(
-                "Custom model deployed successfully for skill {SkillId} locale {Locale}, status: {Status}",
+                "Custom model deploy for skill {SkillId} locale {Locale} finished with status: {Status}",
                 skillId, locale, status);
 
-            return new ModelDeploymentResult(true, "Deployment successful.", status);
+            return new ModelDeploymentResult(
+                succeeded,
+                succeeded ? "Deployment successful." : $"Model build {status}.",
+                status);
         }
         catch (Exception ex)
         {
@@ -336,7 +352,7 @@ public class ModelDeploymentManager
             "Restoring default interaction model for skill {SkillId} locale {Locale}",
             skillId, locale);
 
-        return await DeployCustomModelAsync(defaultJson, locale, user, skillId, cancellationToken)
+        return await DeployCustomModelAsync(defaultJson, locale, user, skillId, cancellationToken, InteractionModelPutAudit.SourceRestore)
             .ConfigureAwait(false);
     }
 
@@ -427,6 +443,42 @@ public class ModelDeploymentManager
         // Wrap: {"interactionModel": <existing content>}
         return $"{{\"interactionModel\":{modelJson}}}";
     }
+
+    /// <summary>
+    /// Polls the locale's interaction-model build status until terminal (JF-495 review
+    /// fix). Bounded at 30 polls x 2s; an exhausted budget reports TIMEOUT (the PUT was
+    /// accepted, the outcome is unknown) rather than a stale SUCCEEDED.
+    /// </summary>
+    /// <param name="smapi">The SMAPI management instance to poll through.</param>
+    /// <param name="skillId">The skill whose model build is awaited.</param>
+    /// <param name="locale">The locale whose build status is read.</param>
+    /// <param name="initial">The status snapshot taken right after the manifest wait.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The terminal status string (SUCCEEDED, FAILED, or a terminal custom
+    /// state), or TIMEOUT when the budget expires first.</returns>
+    private static async Task<string> WaitForLocaleModelBuildAsync(
+        SmapiManagement smapi,
+        string skillId,
+        string locale,
+        SkillStatus initial,
+        CancellationToken cancellationToken)
+    {
+        string? last = ReadLocaleBuildStatus(initial, locale);
+        for (int i = 0; i < 30 && (last is null || last == "IN_PROGRESS"); i++)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
+            last = ReadLocaleBuildStatus(await smapi.GetSkillStatusAsync(skillId).ConfigureAwait(false), locale);
+        }
+
+        return last is "SUCCEEDED" or "FAILED" ? last : "TIMEOUT";
+    }
+
+    private static string? ReadLocaleBuildStatus(SkillStatus status, string locale)
+        => status.InteractionModel != null
+            && status.InteractionModel.TryGetValue(locale, out var localeStatus)
+            && localeStatus?.LastModified != null
+                ? localeStatus.LastModified.Status.ToString()
+                : null;
 }
 
 /// <summary>

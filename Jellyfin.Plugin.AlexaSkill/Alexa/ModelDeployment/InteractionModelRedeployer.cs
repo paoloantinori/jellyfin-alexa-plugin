@@ -2,10 +2,12 @@
 
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Alexa.InteractionModel;
 using Jellyfin.Plugin.AlexaSkill.Entities;
 using Microsoft.Extensions.Logging;
 
@@ -66,6 +68,12 @@ public class InteractionModelRedeployer : IInteractionModelRedeployer
             .Where(r => deployedLocales.Contains(r.Key))
             .ToDictionary(r => r.Key, r => r.Value, StringComparer.Ordinal);
 
+        // JF-495 post-deploy canary: for every locale whose build SUCCEEDED, GET the
+        // model back and verify the live intent/sample counts match what was PUT.
+        // A mismatch means something replaced the model after (or racing) this
+        // deploy; log-only, no rollback.
+        await VerifyDeployedModelsAsync(user, skillId, interactionModels, deployedResults, cancellationToken).ConfigureAwait(false);
+
         int succeeded = deployedResults.Count(r => r.Value.Success);
         bool success = deployedResults.All(r => r.Value.Success) && updateFailures.Count == 0;
         string status = success ? "rebuilt" : "rebuilt_with_errors";
@@ -85,6 +93,61 @@ public class InteractionModelRedeployer : IInteractionModelRedeployer
             succeeded,
             updateFailures,
             deployedResults);
+    }
+
+    /// <summary>
+    /// Post-deploy canary (JF-495): after the builds settle, GET each successfully
+    /// deployed locale's live model and compare its intent and sample counts with
+    /// the payload that was PUT. A mismatch is logged as an ERROR naming both count
+    /// pairs; there is no auto-rollback. Canary GET failures are non-fatal warnings
+    /// (the deploy itself already succeeded).
+    /// </summary>
+    private async Task VerifyDeployedModelsAsync(
+        User user,
+        string skillId,
+        Collection<SkillInteractionModel> interactionModels,
+        Dictionary<string, ModelLocaleBuildResult> deployedResults,
+        CancellationToken cancellationToken)
+    {
+        foreach (var model in interactionModels)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!deployedResults.TryGetValue(model.Locale, out var build) || !build.Success)
+            {
+                continue;
+            }
+
+            try
+            {
+                var liveModel = await AlexaUtil.CallAsync(
+                    user,
+                    () => user.SmapiManagement!.GetInteractionModelAsync(skillId, model.Locale)).ConfigureAwait(false);
+
+                var (putIntents, putSamples) = InteractionModelPutAudit.Count(model);
+                var (liveIntents, liveSamples) = InteractionModelPutAudit.Count(liveModel);
+
+                if (putIntents == liveIntents && putSamples == liveSamples)
+                {
+                    InteractionModelPutAudit.LogCanaryOk(_logger, InteractionModelPutAudit.SourceEmbedded, model.Locale, liveIntents, liveSamples);
+                }
+                else
+                {
+                    InteractionModelPutAudit.LogCanaryMismatch(
+                        _logger, InteractionModelPutAudit.SourceEmbedded, model.Locale, skillId, putIntents, putSamples, liveIntents, liveSamples);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Model canary GET failed for skill {SkillId} locale {Locale}; live counts unverified (non-fatal)",
+                    skillId, model.Locale);
+            }
+        }
     }
 
     /// <summary>

@@ -135,6 +135,18 @@ public class SmapiManagement : ManagementApi
                 await Task.Delay(500).ConfigureAwait(false);
             }
 
+            // JF-495: one greppable audit line per submitted model, before the first
+            // attempt (not inside the retry loop). All current callers build these
+            // models from the DLL-embedded resources.
+            var (intentCount, sampleCount) = InteractionModelPutAudit.Count(interactionModel);
+            InteractionModelPutAudit.LogModelPut(
+                _logger,
+                InteractionModelPutAudit.SourceEmbedded,
+                interactionModel.Locale,
+                skillId,
+                intentCount,
+                sampleCount);
+
             try
             {
                 await RetryHelper.ExecuteWithRetryAsync(
@@ -299,6 +311,20 @@ public class SmapiManagement : ManagementApi
     public virtual async Task<SkillStatus> GetSkillStatusAsync(string skillId)
     {
         return await this.Skills.Status(skillId).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Gets the live interaction model for one locale of the development-stage skill.
+    /// Used by the post-deploy canary (JF-495) to verify the live model still
+    /// carries the counts that were submitted. Virtual so tests can fake the
+    /// GET without network, matching the other seam methods.
+    /// </summary>
+    /// <param name="skillId">The id of the skill.</param>
+    /// <param name="locale">The locale whose model to fetch (e.g. "it-IT").</param>
+    /// <returns>The deserialized live interaction model.</returns>
+    public virtual Task<SkillInteractionContainer> GetInteractionModelAsync(string skillId, string locale)
+    {
+        return this.InteractionModel.Get(skillId, SkillStage.Development, locale);
     }
 
     /// <summary>

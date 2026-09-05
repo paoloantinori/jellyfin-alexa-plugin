@@ -133,18 +133,27 @@ public class LibrarySyncService
                 // Update this locale's interaction model with the catalog references
                 if (artistResult.Version != null || albumResult.Version != null || seriesResult.Version != null)
                 {
-                    await _catalogManager.UpdateInteractionModelAsync(
+                    // JF-495: forward a catalog id ONLY together with the version minted
+                    // in THIS run. Forwarding a stored id with a null version (e.g. that
+                    // entity type had zero items this run) made the injection pin the
+                    // stale "1" fallback version; leaving the id null instead preserves
+                    // whatever catalog reference the live model already carries.
+                    var modelUpdate = await _catalogManager.UpdateInteractionModelAsync(
                         accessToken,
                         skillId,
                         DevelopmentStage,
                         locale,
-                        user.ArtistCatalogId,
-                        user.AlbumCatalogId,
-                        user.SeriesCatalogId,
+                        artistResult.Version != null ? user.ArtistCatalogId : null,
+                        albumResult.Version != null ? user.AlbumCatalogId : null,
+                        seriesResult.Version != null ? user.SeriesCatalogId : null,
                         artistResult.Version,
                         albumResult.Version,
                         seriesResult.Version,
                         cancellationToken).ConfigureAwait(false);
+
+                    // JF-495: catalog-sync model PUTs must appear in the per-locale
+                    // status ledger, not just ModelDeploymentManager deployments.
+                    RecordModelUpdateInLedger(locale, modelUpdate);
                 }
 
                 localesSucceeded++;
@@ -174,6 +183,45 @@ public class LibrarySyncService
             user.Id, localesSucceeded, locales.Count, result.ArtistCount, result.AlbumCount, result.SeriesCount, totalSw.ElapsedMilliseconds);
 
         return result;
+    }
+
+    /// <summary>
+    /// Ledger source label for interaction models pushed by the catalog sync's
+    /// GET-modify-PUT path (JF-495), so those deployments are distinguishable from
+    /// "Embedded" and "Custom" entries in LocaleModelStatuses.
+    /// </summary>
+    internal const string CatalogSyncLedgerSource = "CatalogSyncGetModifyPut";
+
+    /// <summary>
+    /// Records a catalog-sync model update outcome in the per-locale status ledger
+    /// (JF-495). A canary mismatch lands in the entry's Error field so the admin UI
+    /// surfaces it next to the build status.
+    /// </summary>
+    private void RecordModelUpdateInLedger(string locale, CatalogModelUpdateResult modelUpdate)
+    {
+        try
+        {
+            var config = Plugin.Instance?.Configuration;
+            if (config == null)
+            {
+                return;
+            }
+
+            config.SetLocaleModelStatus(locale, new Configuration.LocaleModelStatus
+            {
+                Status = modelUpdate.BuildStatus,
+                LastUpdated = DateTime.UtcNow,
+                Error = modelUpdate.CanaryError,
+                Source = CatalogSyncLedgerSource
+            });
+            Plugin.Instance!.SaveConfiguration();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Failed to record catalog-sync model update in the locale status ledger for {Locale} (non-fatal)",
+                locale);
+        }
     }
 
     /// <summary>

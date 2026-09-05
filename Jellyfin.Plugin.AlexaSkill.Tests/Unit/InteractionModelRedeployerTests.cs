@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Alexa.NET.Management.InteractionModel;
 using Alexa.NET.Management.Skills;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.InteractionModel;
@@ -111,6 +113,74 @@ public class InteractionModelRedeployerTests : PluginTestBase
         Assert.Equal(1, result.SucceededCount);
     }
 
+    /// <summary>
+    /// JF-495 canary: when the live model echoes the submitted payload the canary
+    /// logs OK and no ERROR is emitted.
+    /// </summary>
+    [Fact]
+    public async Task Redeploy_CanaryMatchesLiveModel_LogsNoError()
+    {
+        var loggerMock = new Mock<ILogger<InteractionModelRedeployer>>();
+        var user = CreateUserWithFakeSmapi(BuildStatus(new (string, SkillStatusState)[]
+        {
+            ("en-US", SkillStatusState.SUCCEEDED)
+        }));
+
+        var redeployer = new InteractionModelRedeployer(loggerMock.Object);
+        var result = await redeployer.RedeployAsync(user, string.Empty, CancellationToken.None, "en-US");
+
+        Assert.True(result.Success);
+        loggerMock.Verify(
+            l => l.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("canary MISMATCH", StringComparison.Ordinal)),
+                It.IsAny<Exception?>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// JF-495 canary: when the live model does NOT match what was submitted (a
+    /// racing deploy replaced it), the redeployer must log an ERROR naming both
+    /// count pairs. The deploy result itself stays successful (log-only, no rollback).
+    /// </summary>
+    [Fact]
+    public async Task Redeploy_LiveModelDiffers_CanaryMismatchLogsError()
+    {
+        var loggerMock = new Mock<ILogger<InteractionModelRedeployer>>();
+        var user = CreateUserWithFakeSmapi(BuildStatus(new (string, SkillStatusState)[]
+        {
+            ("en-US", SkillStatusState.SUCCEEDED)
+        }));
+
+        // One intent, no samples: guaranteed to differ from the embedded en-US model.
+        SetLiveModelOverride(user, new SkillInteractionContainer
+        {
+            InteractionModel = new SkillInteraction
+            {
+                Language = new Language
+                {
+                    InvocationName = "jellyfin player",
+                    IntentTypes = new[] { new IntentType { Name = "OnlyIntent", Samples = Array.Empty<string>() } }
+                }
+            }
+        });
+
+        var redeployer = new InteractionModelRedeployer(loggerMock.Object);
+        var result = await redeployer.RedeployAsync(user, string.Empty, CancellationToken.None, "en-US");
+
+        Assert.True(result.Success); // canary is log-only, it must not fail the deploy
+        loggerMock.Verify(
+            l => l.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("canary MISMATCH", StringComparison.Ordinal)),
+                It.IsAny<Exception?>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
     // ---- helpers ----
 
     private static Entities.User CreateUserWithFakeSmapi(SkillStatus status)
@@ -131,6 +201,16 @@ public class InteractionModelRedeployerTests : PluginTestBase
         return user;
     }
 
+    /// <summary>
+    /// Sets the canary's live-model override on the user's fake SMAPI instance.
+    /// Null (the default) means "echo back what was last PUT", the canary-OK path.
+    /// </summary>
+    private static void SetLiveModelOverride(Entities.User user, SkillInteractionContainer? liveModel)
+    {
+        var fake = (FakeSmapiManagement)user.SmapiManagement!;
+        fake.LiveModelOverride = liveModel;
+    }
+
     private static SkillStatus BuildStatus(IEnumerable<(string Locale, SkillStatusState State)> locales)
     {
         var status = new SkillStatus { InteractionModel = new Dictionary<string, StatusManifest>() };
@@ -147,11 +227,14 @@ public class InteractionModelRedeployerTests : PluginTestBase
 
     /// <summary>
     /// Fake SmapiManagement: returns a controlled SkillStatus and a no-op update result,
-    /// avoiding all SMAPI network calls. Overrides the virtual seam methods.
+    /// avoiding all SMAPI network calls. Overrides the virtual seam methods. The
+    /// interaction-model GET (JF-495 canary) echoes back the model that was last PUT,
+    /// unless <see cref="LiveModelOverride"/> is set.
     /// </summary>
     private sealed class FakeSmapiManagement : SmapiManagement
     {
         private readonly SkillStatus _status;
+        private Collection<SkillInteractionModel>? _lastUpdateModels;
 
         public FakeSmapiManagement(SkillStatus status)
             : base(CreateTestDeviceToken(), LoggerFactory.Create(b => { }))
@@ -159,12 +242,29 @@ public class InteractionModelRedeployerTests : PluginTestBase
             _status = status;
         }
 
+        public SkillInteractionContainer? LiveModelOverride { get; set; }
+
         public override Task<SkillStatus> GetSkillStatusAsync(string skillId)
             => Task.FromResult(_status);
 
         public override Task<Dictionary<string, string>> UpdateSkillAsync(
             string skillId, ManifestSkill manifestSkill,
             Collection<SkillInteractionModel> interactionModels)
-            => Task.FromResult(new Dictionary<string, string>());
+        {
+            _lastUpdateModels = interactionModels;
+            return Task.FromResult(new Dictionary<string, string>());
+        }
+
+        public override Task<SkillInteractionContainer> GetInteractionModelAsync(string skillId, string locale)
+        {
+            if (LiveModelOverride != null)
+            {
+                return Task.FromResult(LiveModelOverride);
+            }
+
+            var match = _lastUpdateModels?.FirstOrDefault(m =>
+                string.Equals(m.Locale, locale, StringComparison.OrdinalIgnoreCase));
+            return Task.FromResult<SkillInteractionContainer>(match ?? new SkillInteractionContainer());
+        }
     }
 }

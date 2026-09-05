@@ -15,6 +15,7 @@ using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Lwa;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using Microsoft.Extensions.Logging;
@@ -186,19 +187,112 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// JF-495: the catalog sync's model PUT must land in the per-locale status
+    /// ledger with the dedicated source label. The fake PUT carries no Location
+    /// header, so this also exercises the skill-status build-tracking fallback.
+    /// </summary>
+    [Fact]
+    public async Task SyncUserLibraryAsync_RecordsModelPutInLocaleLedger()
+    {
+        // Arrange
+        SetupLibraryWithSeries("Adolescence");
+        var user = CreateUser();
+        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+
+        // Act
+        var result = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
+
+        // Assert
+        Assert.True(result.Success);
+        var ledger = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(ledger);
+        Assert.Equal(LibrarySyncService.CatalogSyncLedgerSource, ledger!.Source);
+        Assert.Equal("SUCCEEDED", ledger.Status);
+        Assert.Null(ledger.Error);
+    }
+
+    /// <summary>
+    /// JF-495: when the PUT's async build is tracked via its Location header and
+    /// the post-deploy canary matches (the live model echoes the PUT body), the
+    /// ledger records SUCCEEDED with no error.
+    /// </summary>
+    [Fact]
+    public async Task SyncUserLibraryAsync_TrackedBuild_CanaryMatch_RecordsSucceeded()
+    {
+        // Arrange
+        _smapiHandler.TrackModelBuild = true;
+        SetupLibraryWithSeries("Adolescence");
+        var user = CreateUser();
+        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+
+        // Act
+        var result = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
+
+        // Assert
+        Assert.True(result.Success);
+        var ledger = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(ledger);
+        Assert.Equal(LibrarySyncService.CatalogSyncLedgerSource, ledger!.Source);
+        Assert.Equal("SUCCEEDED", ledger.Status);
+        Assert.Null(ledger.Error);
+    }
+
+    /// <summary>
+    /// JF-495 stale-pin guard: an entity type with ZERO items this run (series here)
+    /// must NOT forward its stored catalog id with a null version; that made the
+    /// injection pin the stale fallback version "1". The PUT must leave the static
+    /// SeriesName seed untouched (no valueSupplier) while still injecting the types
+    /// whose catalogs were refreshed (artist here).
+    /// </summary>
+    [Fact]
+    public async Task SyncUserLibraryAsync_EmptyEntityType_DoesNotPinStaleCatalogVersion()
+    {
+        // Arrange: artists only; the user already carries a stored series catalog id.
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => q.IncludeItemTypes?.Contains(BaseItemKind.MusicArtist) == true
+                ? new List<BaseItem> { new MusicArtist { Name = "Mina", Id = Guid.NewGuid() } }
+                : new List<BaseItem>());
+        var user = CreateUser();
+        user.SeriesCatalogId = "amzn1.catalog.test.stored-series";
+        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+
+        // Act
+        var result = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
+
+        // Assert
+        Assert.True(result.Success);
+        Assert.NotNull(_smapiHandler.LastModelPutBody);
+        using var doc = JsonDocument.Parse(_smapiHandler.LastModelPutBody!);
+        var types = doc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
+
+        var seriesType = types.EnumerateArray().Single(t => t.GetProperty("name").GetString() == "SeriesName");
+        Assert.False(seriesType.TryGetProperty("valueSupplier", out _),
+            "an entity type with no fresh version must not have its stored catalog id pinned");
+
+        var artistType = types.EnumerateArray().Single(t => t.GetProperty("name").GetString() == "JellyfinArtist");
+        Assert.Equal(user.ArtistCatalogId, artistType.GetProperty("valueSupplier").GetProperty("valueCatalog").GetProperty("catalogId").GetString());
+    }
+
+    /// <summary>
     /// Fake SMAPI backend. Serves the minimum surface LibrarySyncService touches:
     /// catalog creation, catalog version upload (202 + poll location), poll
-    /// (SUCCEEDED), interaction model GET (static SeriesName seed) and PUT.
+    /// (SUCCEEDED), skill status, interaction model GET (static SeriesName seed;
+    /// later GETs echo the last PUT body so the canary matches) and PUT
+    /// (optionally 202 + poll location when <see cref="TrackModelBuild"/> is set).
     /// </summary>
     private sealed class FakeSmapiHandler : HttpMessageHandler
     {
         private readonly string _catalogId;
         private const string Base = "https://api.amazonalexa.com";
+        private int _modelGetCount;
 
         public FakeSmapiHandler(string catalogId)
         {
             _catalogId = catalogId;
         }
+
+        /// <summary>When true, model PUTs answer 202 + a pollable update-request location (JF-495).</summary>
+        public bool TrackModelBuild { get; set; }
 
         public List<(HttpMethod Method, string Url, string? Body)> Requests { get; } = new();
 
@@ -243,6 +337,12 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
                 };
             }
 
+            if (request.Method == HttpMethod.Get && url.EndsWith("/stages/development/status", StringComparison.Ordinal))
+            {
+                // JF-495 build-settle wait: nothing in progress.
+                return Json("""{"manifest":{"lastUpdateRequest":{"status":"SUCCEEDED"}},"interactionModel":{"it-IT":{"lastUpdateRequest":{"status":"SUCCEEDED"}}}}""");
+            }
+
             if (request.Method == HttpMethod.Get && url.Contains("/updateRequest/", StringComparison.Ordinal))
             {
                 return Json("""{"lastUpdateRequest":{"status":"SUCCEEDED","version":"1"}}""");
@@ -250,12 +350,27 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
 
             if (request.Method == HttpMethod.Get && url.Contains("/interactionModel/locales/", StringComparison.Ordinal))
             {
+                _modelGetCount++;
+                if (TrackModelBuild && _modelGetCount > 1 && LastModelPutBody != null)
+                {
+                    // Post-deploy canary GET: echo what was PUT.
+                    return Json(LastModelPutBody);
+                }
+
                 return Json(ModelJson);
             }
 
             if (request.Method == HttpMethod.Put && url.Contains("/interactionModel/locales/", StringComparison.Ordinal))
             {
                 LastModelPutBody = body;
+                if (TrackModelBuild)
+                {
+                    return new HttpResponseMessage(HttpStatusCode.Accepted)
+                    {
+                        Headers = { Location = new Uri($"{Base}/v1/skills/skill-1/stages/development/interactionModel/updateRequest/req-model-1") }
+                    };
+                }
+
                 return new HttpResponseMessage(HttpStatusCode.OK);
             }
 

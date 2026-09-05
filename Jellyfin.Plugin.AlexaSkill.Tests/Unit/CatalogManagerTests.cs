@@ -1,7 +1,11 @@
 using System;
+using System.Net;
 using System.Net.Http;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Threading;
+using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -259,6 +263,240 @@ public class CatalogManagerTests
         string result = _manager.InjectCatalogReferences(model, "cat-1", null, null, "1", null, null);
 
         Assert.Equal(model, result);
+    }
+
+    [Fact]
+    public void InjectCatalogReferences_NullVersion_WarnsOnStaleFallback()
+    {
+        // JF-495: a null version with a non-empty catalog id pins the stale "1"
+        // fallback; the injection must warn so the pin is visible in the logs.
+        string model = BuildInteractionModelJson();
+
+        _manager.InjectCatalogReferences(model, "artist-cat-1", null, null, null, null, null);
+
+        _loggerMock.Verify(
+            l => l.Log(
+                LogLevel.Warning,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("stale fallback version", StringComparison.Ordinal)
+                    && v.ToString()!.Contains("JellyfinArtist", StringComparison.Ordinal)
+                    && v.ToString()!.Contains("artist-cat-1", StringComparison.Ordinal)),
+                It.IsAny<Exception?>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public void InjectCatalogReferences_SameCatalogIdForTwoTypes_WarnsOnCrossType()
+    {
+        // JF-495: one catalog id feeding two slot types means one type points at
+        // another type's catalog; the injection must warn naming both types.
+        string model = BuildInteractionModelJson();
+
+        _manager.InjectCatalogReferences(model, "shared-cat", "shared-cat", null, "3", "3", null);
+
+        _loggerMock.Verify(
+            l => l.Log(
+                LogLevel.Warning,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("another type's catalog", StringComparison.Ordinal)
+                    && v.ToString()!.Contains("Artist", StringComparison.Ordinal)
+                    && v.ToString()!.Contains("Album", StringComparison.Ordinal)),
+                It.IsAny<Exception?>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    #endregion
+
+    #region UpdateInteractionModelAsync canary (JF-495)
+
+    [Fact]
+    public async Task UpdateInteractionModelAsync_BuildSucceeded_CanaryMatches_ReturnsOkResult()
+    {
+        var handler = new ModelPutFakeHandler(trackBuild: true, liveModel: null);
+        var manager = new CatalogManager(
+            new StubHttpClientFactory(() => new HttpClient(handler)),
+            _loggerMock.Object);
+
+        var result = await manager.UpdateInteractionModelAsync(
+            "token", "skill-1", "development", "it-IT",
+            "artist-cat-1", null, null, "3", null, null, CancellationToken.None);
+
+        Assert.Equal("SUCCEEDED", result.BuildStatus);
+        Assert.True(result.CanaryMatch);
+        Assert.Equal(2, result.PutIntents);
+        Assert.Equal(4, result.PutSamples);
+        Assert.Equal(2, result.LiveIntents);
+        Assert.Equal(4, result.LiveSamples);
+        Assert.Null(result.CanaryError);
+
+        // The mandatory pre-PUT audit line (one grep finds every model PUT).
+        _loggerMock.Verify(
+            l => l.Log(
+                LogLevel.Information,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("MODEL PUT submitting interaction model", StringComparison.Ordinal)
+                    && v.ToString()!.Contains("GetModifyPut", StringComparison.Ordinal)),
+                It.IsAny<Exception?>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateInteractionModelAsync_LiveModelDiffers_CanaryMismatchIsLoud()
+    {
+        // The JF-495 signature: the build reports SUCCEEDED but the live model
+        // carries different counts (a racing deploy replaced it).
+        string staleLiveModel = """{"interactionModel":{"languageModel":{"invocationName":"mia collezione","intents":[{"name":"OnlyIntent"}]}}}""";
+        var handler = new ModelPutFakeHandler(trackBuild: true, liveModel: staleLiveModel);
+        var manager = new CatalogManager(
+            new StubHttpClientFactory(() => new HttpClient(handler)),
+            _loggerMock.Object);
+
+        var result = await manager.UpdateInteractionModelAsync(
+            "token", "skill-1", "development", "it-IT",
+            "artist-cat-1", null, null, "3", null, null, CancellationToken.None);
+
+        Assert.Equal("SUCCEEDED", result.BuildStatus);
+        Assert.False(result.CanaryMatch);
+        Assert.Equal(2, result.PutIntents);
+        Assert.Equal(1, result.LiveIntents);
+        Assert.Equal(0, result.LiveSamples);
+        Assert.NotNull(result.CanaryError);
+        Assert.Contains("canary mismatch", result.CanaryError, StringComparison.Ordinal);
+
+        _loggerMock.Verify(
+            l => l.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("canary MISMATCH", StringComparison.Ordinal)
+                    && v.ToString()!.Contains("samples=4", StringComparison.Ordinal)
+                    && v.ToString()!.Contains("samples=0", StringComparison.Ordinal)),
+                It.IsAny<Exception?>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateInteractionModelAsync_NoLocationHeader_TracksBuildViaSkillStatusFallback()
+    {
+        // Some SMAPI response shapes carry no Location header on the model PUT;
+        // the build must still be tracked (via the skill-status endpoint) and the
+        // canary must still run.
+        var handler = new ModelPutFakeHandler(trackBuild: false, liveModel: null);
+        var manager = new CatalogManager(
+            new StubHttpClientFactory(() => new HttpClient(handler)),
+            _loggerMock.Object);
+
+        var result = await manager.UpdateInteractionModelAsync(
+            "token", "skill-1", "development", "it-IT",
+            "artist-cat-1", null, null, "3", null, null, CancellationToken.None);
+
+        Assert.Equal("SUCCEEDED", result.BuildStatus);
+        Assert.True(result.CanaryMatch);
+        Assert.Equal(2, result.LiveIntents);
+        Assert.Equal(4, result.LiveSamples);
+    }
+
+    [Fact]
+    public async Task UpdateInteractionModelAsync_NoCatalogs_ReturnsSkipped()
+    {
+        var manager = new CatalogManager(new StubHttpClientFactory(), _loggerMock.Object);
+
+        var result = await manager.UpdateInteractionModelAsync(
+            "token", "skill-1", "development", "it-IT",
+            null, null, null, null, null, null, CancellationToken.None);
+
+        Assert.Equal("Skipped", result.BuildStatus);
+        Assert.Equal(0, result.PutIntents);
+    }
+
+    [Fact]
+    public void ExtractLocaleModelStatus_ReadsNestedLocaleStatus()
+    {
+        string json = """{"manifest":{"lastUpdateRequest":{"status":"SUCCEEDED"}},"interactionModel":{"it-IT":{"lastUpdateRequest":{"status":"IN_PROGRESS"}},"en-US":{"lastUpdateRequest":{"status":"SUCCEEDED"}}}}""";
+
+        Assert.Equal("IN_PROGRESS", CatalogManager.ExtractLocaleModelStatus(json, "it-IT"));
+        Assert.Equal("SUCCEEDED", CatalogManager.ExtractLocaleModelStatus(json, "en-US"));
+        Assert.Null(CatalogManager.ExtractLocaleModelStatus(json, "de-DE"));
+    }
+
+    [Fact]
+    public void ExtractLocaleModelStatus_MalformedJson_ReturnsNull()
+    {
+        Assert.Null(CatalogManager.ExtractLocaleModelStatus("{not json", "it-IT"));
+    }
+
+    /// <summary>
+    /// Fake SMAPI backend for the UpdateInteractionModelAsync flow: skill status
+    /// (settle wait), model GET (first call returns the pre-modification model,
+    /// later calls return the "live" model), model PUT (optionally 202 + Location),
+    /// and the update-request poll.
+    /// </summary>
+    private sealed class ModelPutFakeHandler : HttpMessageHandler
+    {
+        private const string Base = "https://api.amazonalexa.com";
+        private readonly bool _trackBuild;
+        private readonly string? _liveModel;
+        private int _modelGetCount;
+
+        public ModelPutFakeHandler(bool trackBuild, string? liveModel)
+        {
+            _trackBuild = trackBuild;
+            _liveModel = liveModel;
+        }
+
+        private static string OriginalModel =>
+            """{"interactionModel":{"languageModel":{"invocationName":"mia collezione","intents":[{"name":"PlayEpisodeIntent","slots":[{"name":"series_name","type":"SeriesName"}],"samples":["a","b"]},{"name":"PlayArtistSongsIntent","samples":["c","d"]}],"types":[{"name":"SeriesName","values":[{"name":{"value":"Breaking Bad"}}]}]}}}""";
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            string url = request.RequestUri!.ToString();
+
+            if (request.Method == HttpMethod.Get && url.EndsWith("/stages/development/status", StringComparison.Ordinal))
+            {
+                return Json("""{"manifest":{"lastUpdateRequest":{"status":"SUCCEEDED"}},"interactionModel":{"it-IT":{"lastUpdateRequest":{"status":"SUCCEEDED"}}}}""");
+            }
+
+            if (request.Method == HttpMethod.Put && url.Contains("/interactionModel/locales/", StringComparison.Ordinal))
+            {
+                if (!_trackBuild)
+                {
+                    return new HttpResponseMessage(HttpStatusCode.OK);
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.Accepted)
+                {
+                    Headers = { Location = new Uri($"{Base}/v1/skills/skill-1/stages/development/interactionModel/updateRequest/req-model-1") }
+                };
+            }
+
+            if (request.Method == HttpMethod.Get && url.Contains("/updateRequest/req-model-1", StringComparison.Ordinal))
+            {
+                return Json("""{"lastUpdateRequest":{"status":"SUCCEEDED"}}""");
+            }
+
+            if (request.Method == HttpMethod.Get && url.Contains("/interactionModel/locales/", StringComparison.Ordinal))
+            {
+                _modelGetCount++;
+                return Json(_modelGetCount == 1 || _liveModel == null ? OriginalModel : _liveModel);
+            }
+
+            string? body = request.Content == null
+                ? null
+                : await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            return new HttpResponseMessage(HttpStatusCode.NotFound)
+            {
+                Content = new StringContent($"{{\"error\":\"unexpected {request.Method} {url} {body}\"}}", Encoding.UTF8, "application/json")
+            };
+        }
+
+        private static HttpResponseMessage Json(string json) =>
+            new(HttpStatusCode.OK)
+            {
+                Content = new StringContent(json, Encoding.UTF8, "application/json")
+            };
     }
 
     #endregion

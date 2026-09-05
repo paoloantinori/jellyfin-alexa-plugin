@@ -619,7 +619,9 @@ public class PluginConfiguration : BasePluginConfiguration
 /// </summary>
 public record LocaleModelStatus
 {
-    /// <summary>Gets the build status: "SUCCEEDED", "FAILED", or "IN_PROGRESS".</summary>
+    /// <summary>Gets the build status: "SUCCEEDED", "FAILED", "IN_PROGRESS", or the
+    /// observation outcomes "TIMEOUT" / "UNVERIFIED" (build accepted, outcome not
+    /// confirmed; JF-495) or "Skipped" (locale not carried by the skill).</summary>
     public string Status { get; init; } = string.Empty;
 
     /// <summary>Gets the UTC timestamp when this status was last checked.</summary>

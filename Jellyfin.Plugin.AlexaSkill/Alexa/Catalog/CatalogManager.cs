@@ -12,6 +12,7 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Plugin.AlexaSkill.Alexa.InteractionModel;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
@@ -157,6 +158,9 @@ public class CatalogManager
             if (locationUri == null)
             {
                 _logger.LogWarning("Catalog version creation returned no Location header");
+                _logger.LogWarning(
+                    "Falling back to catalog version \"1\" for {CatalogId}; the version minted by this upload is unknown and the interaction model may pin a stale version (JF-495)",
+                    catalogId);
                 return "1";
             }
 
@@ -166,6 +170,13 @@ public class CatalogManager
             {
                 string? version = await PollSmapiOperationAsync(
                     accessToken, client, locationUri, "Catalog version", cancellationToken).ConfigureAwait(false);
+
+                if (version == null)
+                {
+                    _logger.LogWarning(
+                        "Catalog version poll for {CatalogId} succeeded but reported no version; falling back to \"1\", which may pin a stale version in the interaction model (JF-495)",
+                        catalogId);
+                }
 
                 _logger.LogInformation("Catalog {CatalogId} version {Version} created successfully", catalogId, version);
                 return version ?? "1";
@@ -399,6 +410,12 @@ public class CatalogManager
     /// Uses GET-modify-PUT: fetches the current model, injects catalog-backed
     /// slot type definitions, and pushes the modified model back.
     /// This replaces the broken POST /update incremental endpoint.
+    /// JF-495: before the GET, waits for any in-flight build of this locale's model
+    /// to settle (so the GET cannot capture pre-build, stale content while another
+    /// deploy's build is still queued); after the PUT, polls the update request and
+    /// runs a canary GET-back comparing the live intent/sample counts with what was
+    /// submitted. Both measures make the 2026-09-05 silent-stale-regression class
+    /// either impossible (GET race) or loud (canary mismatch ERROR).
     /// </summary>
     /// <param name="accessToken">The SMAPI access token.</param>
     /// <param name="skillId">The skill ID whose model should be updated.</param>
@@ -411,8 +428,8 @@ public class CatalogManager
     /// <param name="albumCatalogVersion">The album catalog version (may be null).</param>
     /// <param name="seriesCatalogVersion">The series catalog version (may be null).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    public async Task UpdateInteractionModelAsync(
+    /// <returns>The build outcome and canary counts for the status ledger.</returns>
+    public async Task<CatalogModelUpdateResult> UpdateInteractionModelAsync(
         string accessToken,
         string skillId,
         string stage,
@@ -428,11 +445,17 @@ public class CatalogManager
         if (string.IsNullOrEmpty(artistCatalogId) && string.IsNullOrEmpty(albumCatalogId) && string.IsNullOrEmpty(seriesCatalogId))
         {
             _logger.LogInformation("No catalogs to inject into interaction model, skipping update");
-            return;
+            return new CatalogModelUpdateResult("Skipped", null, 0, 0);
         }
 
         var client = _httpClientFactory.CreateClient("AlexaSkill");
         string modelUrl = $"{SmapiEndpoint}/v1/skills/{skillId}/stages/{stage}/interactionModel/locales/{locale}";
+
+        // JF-495: serialize against concurrently-pending builds BEFORE the GET. When a
+        // rebuild (or any other writer) submitted a model moments ago, its build may
+        // still be IN_PROGRESS and the GET would return the last SUCCEEDED (stale)
+        // content; PUTting that content back redeploys yesterday's model.
+        await WaitForLocaleBuildToSettleAsync(accessToken, client, skillId, stage, locale, cancellationToken).ConfigureAwait(false);
 
         _logger.LogInformation("Fetching interaction model for skill {SkillId} locale {Locale}", skillId, locale);
 
@@ -446,6 +469,16 @@ public class CatalogManager
 
         string modifiedJson = InjectCatalogReferences(modelJson, artistCatalogId, albumCatalogId, seriesCatalogId, artistCatalogVersion, albumCatalogVersion, seriesCatalogVersion);
 
+        // JF-495: greppable audit line before the PUT.
+        var (putIntents, putSamples) = InteractionModelPutAudit.CountFromJson(modifiedJson);
+        InteractionModelPutAudit.LogModelPut(
+            _logger,
+            InteractionModelPutAudit.SourceGetModifyPut,
+            locale,
+            skillId,
+            putIntents,
+            putSamples);
+
         _logger.LogInformation("Pushing updated interaction model for skill {SkillId} locale {Locale}", skillId, locale);
 
         using var putRequest = new HttpRequestMessage(HttpMethod.Put, modelUrl);
@@ -456,6 +489,275 @@ public class CatalogManager
         await EnsureSuccessAsync(putResponse, cancellationToken).ConfigureAwait(false);
 
         _logger.LogInformation("Interaction model update submitted for skill {SkillId} locale {Locale}", skillId, locale);
+
+        // JF-495: the PUT is asynchronous on SMAPI (202 + update-request Location).
+        // Wait for the build so this sync's build cannot complete and clobber the
+        // live model minutes later, unobserved.
+        string buildStatus;
+        Uri? buildLocation = putResponse.Headers.Location;
+        if (buildLocation != null)
+        {
+            try
+            {
+                await PollSmapiOperationAsync(
+                    accessToken, client, ResolveLocationUri(buildLocation), "Interaction model update", cancellationToken).ConfigureAwait(false);
+                buildStatus = "SUCCEEDED";
+            }
+            catch (TimeoutException ex)
+            {
+                buildStatus = "TIMEOUT";
+                _logger.LogWarning(ex,
+                    "Interaction model update build did not settle within the poll budget for skill {SkillId} locale {Locale}; the live model state is unverified (JF-495)",
+                    skillId, locale);
+            }
+            catch (HttpRequestException ex)
+            {
+                // JF-495 review fix: the PUT itself succeeded (a failure above would have
+                // thrown before the poll); only the OBSERVATION failed (e.g. a 429
+                // mid-poll). Do not mark the locale failed or skip its ledger entry for
+                // an observation error.
+                buildStatus = "UNVERIFIED";
+                _logger.LogWarning(ex,
+                    "Interaction model update poll failed transiently for skill {SkillId} locale {Locale}; the build outcome is unverified, not failed (JF-495)",
+                    skillId, locale);
+            }
+            catch (InvalidOperationException ex)
+            {
+                buildStatus = "FAILED";
+                _logger.LogError(ex,
+                    "Interaction model update build FAILED for skill {SkillId} locale {Locale} (JF-495)",
+                    skillId, locale);
+            }
+        }
+        else
+        {
+            _logger.LogWarning(
+                "Interaction model PUT for skill {SkillId} locale {Locale} returned no Location header; tracking the build via the skill-status endpoint instead (JF-495)",
+                skillId, locale);
+            buildStatus = await WaitForModelBuildOutcomeViaSkillStatusAsync(
+                accessToken, client, skillId, stage, locale, cancellationToken).ConfigureAwait(false);
+        }
+
+        // Canary: only meaningful once the build reports SUCCEEDED; a GET before the
+        // build settles would race and produce a false mismatch.
+        if (buildStatus == "SUCCEEDED")
+        {
+            return await VerifyPutCanaryAsync(accessToken, client, modelUrl, locale, skillId, putIntents, putSamples, buildStatus, cancellationToken).ConfigureAwait(false);
+        }
+
+        return new CatalogModelUpdateResult(buildStatus, null, putIntents, putSamples);
+    }
+
+    /// <summary>
+    /// Post-deploy canary (JF-495): GET the model back and compare the live intent
+    /// and sample counts with what was PUT. A mismatch is logged as an ERROR naming
+    /// both counts; there is no auto-rollback by design.
+    /// </summary>
+    private async Task<CatalogModelUpdateResult> VerifyPutCanaryAsync(
+        string accessToken,
+        HttpClient client,
+        string modelUrl,
+        string locale,
+        string skillId,
+        int putIntents,
+        int putSamples,
+        string buildStatus,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var canaryRequest = CreateAuthorizedGet(modelUrl, accessToken);
+
+            using var canaryResponse = await client.SendAsync(canaryRequest, cancellationToken).ConfigureAwait(false);
+            await EnsureSuccessAsync(canaryResponse, cancellationToken).ConfigureAwait(false);
+
+            string liveJson = await canaryResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            var (liveIntents, liveSamples) = InteractionModelPutAudit.CountFromJson(liveJson);
+
+            if (liveIntents == putIntents && liveSamples == putSamples)
+            {
+                InteractionModelPutAudit.LogCanaryOk(_logger, InteractionModelPutAudit.SourceGetModifyPut, locale, liveIntents, liveSamples);
+                return new CatalogModelUpdateResult(buildStatus, true, putIntents, putSamples, liveIntents, liveSamples);
+            }
+
+            InteractionModelPutAudit.LogCanaryMismatch(
+                _logger, InteractionModelPutAudit.SourceGetModifyPut, locale, skillId, putIntents, putSamples, liveIntents, liveSamples);
+            return new CatalogModelUpdateResult(
+                buildStatus,
+                false,
+                putIntents,
+                putSamples,
+                liveIntents,
+                liveSamples,
+                $"canary mismatch: submitted {putIntents} intents/{putSamples} samples but live model reports {liveIntents}/{liveSamples}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Model canary GET failed for skill {SkillId} locale {Locale}; live counts unverified (non-fatal)",
+                skillId, locale);
+            return new CatalogModelUpdateResult(buildStatus, null, putIntents, putSamples);
+        }
+    }
+
+    /// <summary>
+    /// Builds a bearer-authorized GET request for a SMAPI URL.
+    /// </summary>
+    private static HttpRequestMessage CreateAuthorizedGet(string url, string accessToken)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        return request;
+    }
+
+    /// <summary>
+    /// Reads the locale's interaction-model build state from the skill-status
+    /// endpoint. Returns null when the status cannot be read (endpoint failure)
+    /// or the locale has no reported status; failures are logged as warnings.
+    /// </summary>
+    private async Task<string?> TryGetLocaleModelStatusAsync(
+        string accessToken,
+        HttpClient client,
+        string skillId,
+        string stage,
+        string locale,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var request = CreateAuthorizedGet(
+                $"{SmapiEndpoint}/v1/skills/{skillId}/stages/{stage}/status", accessToken);
+
+            using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
+
+            string json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            return ExtractLocaleModelStatus(json, locale);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or TimeoutException)
+        {
+            _logger.LogWarning(ex,
+                "Could not read skill status for skill {SkillId} locale {Locale} (JF-495)",
+                skillId, locale);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Waits until the locale's interaction model build is no longer IN_PROGRESS
+    /// (JF-495 GET-race guard). Best-effort: when the status cannot be read the
+    /// wait is skipped rather than failing the sync.
+    /// </summary>
+    private async Task WaitForLocaleBuildToSettleAsync(
+        string accessToken,
+        HttpClient client,
+        string skillId,
+        string stage,
+        string locale,
+        CancellationToken cancellationToken)
+    {
+        int delay = 500;
+        for (int i = 0; i < 30; i++)
+        {
+            string? state = await TryGetLocaleModelStatusAsync(
+                accessToken, client, skillId, stage, locale, cancellationToken).ConfigureAwait(false);
+            if (state is null || state != "IN_PROGRESS")
+            {
+                return;
+            }
+
+            _logger.LogInformation(
+                "Waiting for pending interaction model build ({State}) to settle before GET-modify-PUT for skill {SkillId} locale {Locale} (JF-495)",
+                state, skillId, locale);
+
+            await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+            delay = Math.Min(delay * 2, 2000);
+        }
+
+        _logger.LogWarning(
+            "Interaction model build for skill {SkillId} locale {Locale} is still IN_PROGRESS after the settle budget; proceeding with GET-modify-PUT anyway (JF-495)",
+            skillId, locale);
+    }
+
+    /// <summary>
+    /// Fallback build tracker for model PUTs whose response carries no Location
+    /// header (JF-495): polls the skill-status endpoint until the locale's model
+    /// build reaches a terminal state. When the first observation is already
+    /// terminal it may reflect the PREVIOUS build; that ambiguity is logged and
+    /// the canary still verifies the live counts afterwards.
+    /// </summary>
+    /// <returns>"SUCCEEDED", "FAILED", or "TIMEOUT" when the budget is exhausted.</returns>
+    private async Task<string> WaitForModelBuildOutcomeViaSkillStatusAsync(
+        string accessToken,
+        HttpClient client,
+        string skillId,
+        string stage,
+        string locale,
+        CancellationToken cancellationToken)
+    {
+        // Give SMAPI a moment to flip the locale's status to IN_PROGRESS before
+        // the first poll, so a stale terminal status from the previous build is
+        // not mistaken for this PUT's outcome.
+        await Task.Delay(500, cancellationToken).ConfigureAwait(false);
+
+        int delay = 500;
+        for (int i = 0; i < 30; i++)
+        {
+            string? state = await TryGetLocaleModelStatusAsync(
+                accessToken, client, skillId, stage, locale, cancellationToken).ConfigureAwait(false);
+
+            if (state == "SUCCEEDED" || state == "FAILED")
+            {
+                if (i == 0)
+                {
+                    _logger.LogInformation(
+                        "Locale {Locale} model status was already {State} on the first fallback poll; it may reflect the previous build (JF-495)",
+                        locale, state);
+                }
+
+                return state;
+            }
+
+            await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+            delay = Math.Min(delay * 2, 2000);
+        }
+
+        return "TIMEOUT";
+    }
+
+    /// <summary>
+    /// Extracts the build status of one locale from a raw skill-status response body
+    /// (the JSON shape served by GET /v1/skills/[id]/stages/[stage]/status:
+    /// "interactionModel" maps each locale to its "lastUpdateRequest" object whose
+    /// "status" is the build state, e.g. SUCCEEDED or IN_PROGRESS).
+    /// Returns null when the locale has no reported status.
+    /// </summary>
+    internal static string? ExtractLocaleModelStatus(string statusJson, string locale)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(statusJson);
+            JsonElement root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object
+                || !root.TryGetProperty("interactionModel", out var im)
+                || im.ValueKind != JsonValueKind.Object
+                || !im.TryGetProperty(locale, out var localeNode)
+                || localeNode.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            JsonElement container = localeNode.TryGetProperty("lastUpdateRequest", out var lur)
+                && lur.ValueKind == JsonValueKind.Object
+                    ? lur
+                    : localeNode;
+
+            return container.TryGetProperty("status", out var s) ? s.GetString() : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -495,14 +797,14 @@ public class CatalogManager
         var catalogMappings = new List<(string CatalogId, string Version, string SlotTypeName, string? ReplacesType)>();
         if (!string.IsNullOrEmpty(artistCatalogId))
         {
-            catalogMappings.Add((artistCatalogId!, artistCatalogVersion ?? "1",
+            catalogMappings.Add((artistCatalogId!, ResolveCatalogVersion(artistCatalogVersion, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Artist], artistCatalogId),
                 CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Artist],
                 CatalogSlotTypes.Names[CatalogType.Artist]));
         }
 
         if (!string.IsNullOrEmpty(albumCatalogId))
         {
-            catalogMappings.Add((albumCatalogId!, albumCatalogVersion ?? "1",
+            catalogMappings.Add((albumCatalogId!, ResolveCatalogVersion(albumCatalogVersion, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Album], albumCatalogId),
                 CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Album],
                 null));
         }
@@ -512,10 +814,12 @@ public class CatalogManager
             // No ReplacesType: every locale model already declares SeriesName
             // (static seed) and slots reference it directly, so the injection
             // replaces the type definition in place without re-typing slots.
-            catalogMappings.Add((seriesCatalogId!, seriesCatalogVersion ?? "1",
+            catalogMappings.Add((seriesCatalogId!, ResolveCatalogVersion(seriesCatalogVersion, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Series], seriesCatalogId),
                 CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Series],
                 null));
         }
+
+        WarnOnCrossTypeCatalogIds(artistCatalogId, albumCatalogId, seriesCatalogId);
 
         _logger.LogInformation(
             "Injecting {Count} catalog references into interaction model ({SlotTypes})",
@@ -571,6 +875,56 @@ public class CatalogManager
         }
 
         return root.ToJsonString();
+    }
+
+    /// <summary>
+    /// Resolves the catalog version to pin, warning when the stale "1" fallback
+    /// engages (JF-495). A null/empty version with a non-empty catalog id pins
+    /// version "1"; on a long-lived catalog that version may be purged or far
+    /// behind, which can degrade NLU slot resolution while the model build still
+    /// reports SUCCEEDED. Version "1" is ambiguous (it is also a real first
+    /// version), so this warns rather than rejects.
+    /// </summary>
+    private string ResolveCatalogVersion(string? catalogVersion, string slotTypeName, string catalogId)
+    {
+        if (!string.IsNullOrWhiteSpace(catalogVersion))
+        {
+            return catalogVersion!;
+        }
+
+        _logger.LogWarning(
+            "Catalog version for slot type {SlotTypeName} on catalog {CatalogId} is null or empty; pinning the stale fallback version \"1\". If this catalog has newer (or purged) versions the model may reference a version Amazon cannot resolve (JF-495)",
+            slotTypeName, catalogId);
+        return "1";
+    }
+
+    /// <summary>
+    /// Warns when the same catalog id is supplied for two different entity types
+    /// (JF-495): one slot type would then be backed by another type's catalog
+    /// (e.g. the artist catalog feeding AlbumName), corrupting slot resolution.
+    /// </summary>
+    private void WarnOnCrossTypeCatalogIds(string? artistCatalogId, string? albumCatalogId, string? seriesCatalogId)
+    {
+        var supplied = new[]
+        {
+            (Type: "Artist", Id: artistCatalogId),
+            (Type: "Album", Id: albumCatalogId),
+            (Type: "Series", Id: seriesCatalogId)
+        };
+
+        for (int i = 0; i < supplied.Length; i++)
+        {
+            for (int j = i + 1; j < supplied.Length; j++)
+            {
+                if (!string.IsNullOrEmpty(supplied[i].Id)
+                    && string.Equals(supplied[i].Id, supplied[j].Id, StringComparison.Ordinal))
+                {
+                    _logger.LogWarning(
+                        "Catalog {CatalogId} is referenced for both the {TypeA} and {TypeB} slot types; one slot type is pointing at another type's catalog (JF-495)",
+                        supplied[i].Id, supplied[i].Type, supplied[j].Type);
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -754,3 +1108,25 @@ public class CatalogManager
         response.EnsureSuccessStatusCode();
     }
 }
+
+/// <summary>
+/// Outcome of a catalog-sync interaction-model update (JF-495): the SMAPI build
+/// status plus the post-deploy canary counts, consumed by the status ledger
+/// (LocaleModelStatuses) so catalog-sync PUTs are recorded next to
+/// ModelDeploymentManager deployments.
+/// </summary>
+/// <param name="BuildStatus">"SUCCEEDED", "FAILED", "TIMEOUT" (poll budget exhausted), or "Skipped" (no catalogs to inject).</param>
+/// <param name="CanaryMatch">True/false when the canary ran; null when it could not (build not settled or GET failed).</param>
+/// <param name="PutIntents">Intent count of the submitted payload.</param>
+/// <param name="PutSamples">Sample count of the submitted payload.</param>
+/// <param name="LiveIntents">Intent count of the live model after the build, when the canary ran.</param>
+/// <param name="LiveSamples">Sample count of the live model after the build, when the canary ran.</param>
+/// <param name="CanaryError">Human-readable canary mismatch description, or null.</param>
+public sealed record CatalogModelUpdateResult(
+    string BuildStatus,
+    bool? CanaryMatch,
+    int PutIntents,
+    int PutSamples,
+    int? LiveIntents = null,
+    int? LiveSamples = null,
+    string? CanaryError = null);
