@@ -6,7 +6,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-09-04 18:51'
-updated_date: '2026-09-04 20:27'
+updated_date: '2026-09-05 09:55'
 labels: []
 dependencies: []
 references:
@@ -45,6 +45,12 @@ DECISION remains from JF-482: the default stays OFF until the matrix re-runs cle
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+DEVICE VERIFIED 2026-09-05 (Paolo, Echo Show, reprompt deployed): pause response landed with 'Pausa.' + reprompt + open session (corr=af19984c, f2bd6f18, bbfb46f3). The platform did NOT close the session with EXCEEDED_MAX_REPROMPTS: after the 11:43:42 pause it survived 34 seconds and was closed USER_INITIATED (corr=2b69fdcf); zero EXCEEDED_MAX_REPROMPTS in the 3h test window and no beep (yesterday's failure signature is gone). Immediate follow-up after pause routed IN-SKILL (corr=f17e55ad, 'suona jazz' -> PlayRadioIntent, sessionNew=False) and AMAZON.ResumeIntent resumed at the exact pause offset (corr=9cb70b3c, offsetInMilliseconds=14466). The matrix re-ran clean WITH the reprompt: per the JF-482 decision line, the PauseKeepsSession default flips to true.
+<!-- SECTION:NOTES:END -->
 
 ## Final Summary
 

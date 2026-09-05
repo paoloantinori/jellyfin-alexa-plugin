@@ -78,6 +78,9 @@ public class PlaybackControlHandlerTests : PluginTestBase
     [Fact]
     public async Task PauseIntentHandler_Pause_ReturnsAudioPlayerStopDirective()
     {
+        // Flag-off pinned explicitly since the JF-488 default flip (the fresh-config
+        // default is now true); the flag-on pause shape has its own tests below.
+        _config.PauseKeepsSession = false;
         var handler = new PauseIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory);
         var response = await handler.HandleAsync(
             new IntentRequest { Intent = new Intent { Name = "AMAZON.PauseIntent" } },
@@ -261,6 +264,9 @@ public class PlaybackControlHandlerTests : PluginTestBase
     [Fact]
     public async Task PauseIntentHandler_DeviceAlreadyStopped_EndsSession()
     {
+        // Flag-off pinned explicitly since the JF-488 default flip (fresh-config
+        // default is now true); these guards pin the flag-off pause shape.
+        _config.PauseKeepsSession = false;
         var handler = new PauseIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory);
         var context = TestHelpers.CreateTestContext();
         context.AudioPlayer = new PlaybackState
@@ -283,6 +289,9 @@ public class PlaybackControlHandlerTests : PluginTestBase
     [Fact]
     public async Task PauseIntentHandler_DeviceFinished_EndsSession()
     {
+        // Flag-off pinned explicitly since the JF-488 default flip (fresh-config
+        // default is now true); these guards pin the flag-off pause shape.
+        _config.PauseKeepsSession = false;
         var handler = new PauseIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory);
         var context = TestHelpers.CreateTestContext();
         context.AudioPlayer = new PlaybackState
@@ -314,8 +323,8 @@ public class PlaybackControlHandlerTests : PluginTestBase
         AssertHasAudioPlayerStopDirective(response);
     }
 
-    // === JF-482/JF-488: PauseKeepsSession experiment ===
-    // Default false keeps today's pause response byte-identical; flag on keeps the
+    // === JF-482/JF-488: PauseKeepsSession experiment (default ON since 2026-09-05) ===
+    // Flag off keeps today's pause response byte-identical; flag on keeps the
     // session open BUT the AudioPlayer.Stop directive must still be sent (audio
     // stops regardless of session handling). With the flag on the response also
     // speaks a minimal pause word and carries a reprompt (JF-488: the JF-482
@@ -429,10 +438,12 @@ public class PlaybackControlHandlerTests : PluginTestBase
     }
 
     [Fact]
-    public void PauseKeepsSession_DefaultsToFalse()
+    public void PauseKeepsSession_DefaultsToTrue()
     {
-        // The experiment ships dark: today's behavior is the default.
-        Assert.False(new PluginConfiguration().PauseKeepsSession);
+        // JF-488 device verification (2026-09-05): the matrix re-ran clean WITH the
+        // reprompt (no EXCEEDED_MAX_REPROMPTS, no beep, in-skill follow-up routing,
+        // exact-offset resume), so the JF-482 decision line flips the default ON.
+        Assert.True(new PluginConfiguration().PauseKeepsSession);
     }
 
     // === Fallback tests ===

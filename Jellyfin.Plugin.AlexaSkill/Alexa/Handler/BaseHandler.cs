@@ -755,7 +755,9 @@ public abstract class BaseHandler
     /// platform close the silent open session with EXCEEDED_MAX_REPROMPTS ~8s
     /// after the response, with an error beep. Whether the reprompt prevents
     /// that timeout is the unverified hypothesis the JF-488 device test decides;
-    /// the flag stays off by default until then. Only the PAUSE path may pass
+    /// the device matrix re-ran clean WITH the reprompt on 2026-09-05 (no
+    /// EXCEEDED_MAX_REPROMPTS, no beep, in-skill follow-up, exact-offset
+    /// resume), so the default is now on. Only the PAUSE path may pass
     /// true: stop and cancel responses always end the session (JF-299 covers
     /// them, JF-482 does not retest them), and neither play responses nor any
     /// other session-ending response goes through this builder with the flag

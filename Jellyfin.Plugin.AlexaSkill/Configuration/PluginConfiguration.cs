@@ -200,17 +200,21 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Gets or sets a value indicating whether the PAUSE response keeps the skill session
     /// open (ShouldEndSession=false) so a bare follow-up command ("suona jazz") stays
     /// in-skill instead of falling through to the device's default music service.
-    /// EXPERIMENTAL (JF-482): it retests the JF-299-derived "pause ends the session"
-    /// rule on today's platform. JF-299's evidence (2026-07) covered PLAY responses
-    /// keeping the session open DURING ACTIVE PLAYBACK (that broke stop-routing, the
-    /// device sent SessionEndedRequest instead of PauseIntent); pause answers when
-    /// audio is already stopped, so that contention may not apply, and the platform
-    /// has changed since. The AudioPlayer.Stop directive is sent either way (audio
-    /// always stops); only the session flag changes. This flag does NOT affect play,
-    /// stop, or cancel responses: those keep ending the session (JF-299 covers them
-    /// and the experiment does not retest them). Default false (today's behavior).
+    /// Default true since the JF-488 device verification (2026-09-05): with the minimal
+    /// pause word plus reprompt deployed, the JF-482 matrix re-ran clean on the device
+    /// (zero EXCEEDED_MAX_REPROMPTS in the 3h window, no error beep, the open session
+    /// survived 34s and closed USER_INITIATED, the immediate follow-up routed in-skill,
+    /// and ResumeIntent resumed at the exact pause offset in milliseconds). This
+    /// supersedes the JF-299-derived "pause ends the session" default, which JF-482
+    /// showed does not apply to pause: JF-299's evidence (2026-07) covered PLAY
+    /// responses keeping the session open DURING ACTIVE PLAYBACK (that broke
+    /// stop-routing, the device sent SessionEndedRequest instead of PauseIntent), while
+    /// pause answers when audio is already stopped. The AudioPlayer.Stop directive is
+    /// sent either way (audio always stops); only the session flag changes. This flag
+    /// does NOT affect play, stop, or cancel responses: those keep ending the session
+    /// (JF-299 covers them).
     /// </summary>
-    public bool PauseKeepsSession { get; set; } = false;
+    public bool PauseKeepsSession { get; set; } = true;
 
     // Media type visibility — exclude content types from search and library queries
     public bool MusicEnabled { get; set; } = true;

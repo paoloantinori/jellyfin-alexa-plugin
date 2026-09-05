@@ -77,12 +77,11 @@ public class PauseIntentHandler : BaseHandler
         }
 
         // Pause: AudioPlayer.Stop, session handling per PauseKeepsSession (JF-482
-        // experiment; default false keeps today's session-ending behavior). With
-        // the flag on, the response also speaks a minimal pause word and carries a
-        // reprompt (JF-488: the silent open session was closed by the platform
-        // with EXCEEDED_MAX_REPROMPTS ~8s later, with an error beep). Audio stops
-        // in both modes; the flag only decides session handling plus that minimal
-        // speech. The optional position card below is unaffected by the flag.
+        // experiment; default ON since the JF-488 device verification of 2026-09-05,
+        // which re-ran the matrix clean WITH the reprompt). The open-response
+        // rationale (minimal speech + reprompt shape) is owned by the
+        // BuildPauseResponse doc in BaseHandler. Audio stops in both modes; the
+        // optional position card below is unaffected by the flag.
         string locale = GetLocale(request);
         var response = BuildPauseResponse(_config.PauseKeepsSession, locale);
 
