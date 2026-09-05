@@ -874,6 +874,14 @@ tests:
     expected_intent: PlayAlbumIntent
     expected_slots: {}
 
+  # JF-490 device follow-up (2026-09-05): the bare carrier matches profile-nlu
+  # but NOT on-device ASR (four FallbackIntent attempts, corr=d94fb3da et al.);
+  # verb-ful anchors added. Intent-level only, same fill-drift rationale as the
+  # bare pair above.
+  - utterance: "metti un album che si chiama surfer rosa"
+    expected_intent: PlayAlbumIntent
+    expected_slots: {}
+
   # JF-490: the cerca+chiamato PLAY shape, device-evidenced (corr=f919db65,
   # 2026-09-04: a play request the statistical router already sends to
   # PlayAlbumIntent with the span stolen by musician). The new sample anchors

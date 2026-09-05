@@ -912,6 +912,15 @@ templates:
       # every considered fill bleeds into musician.
       - "un album che si chiama {album}"
       - "un disco che si chiama {album}"
+      # JF-490 device follow-up (2026-09-05): the bare 'che si chiama' pair
+      # matches in profile-nlu on the exact string but NOT on-device ASR (four
+      # FallbackIntent attempts, in-session and one-shot: corr=d94fb3da,
+      # f8cba7bd, 6a8f15cc, 170aff3d), while the chiamato family from the same
+      # rebuild routes fine on-device (corr=7a54cdf1). The statistical matcher
+      # needs verb-ful anchors for this carrier; the imperative product adds
+      # five verb forms over both nouns.
+      - "{imperative} un album che si chiama {album}"
+      - "{imperative} un disco che si chiama {album}"
       # JF-490: cerca+chiamato as a PLAY shape. JF-469 excluded cerca from the
       # play intent on purity grounds; overturned by device evidence
       # (corr=f919db65, 2026-09-04: "cerca un album chiamato surfer rosa" is

@@ -6,7 +6,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-09-04 19:07'
-updated_date: '2026-09-04 20:27'
+updated_date: '2026-09-05 10:51'
 labels: []
 dependencies: []
 references:
@@ -46,6 +46,12 @@ Acceptance criteria:
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+DEVICE FOLLOW-UP 2026-09-05: the bare 'che si chiama' samples match profile-nlu on the exact string but NOT on-device ASR (four FallbackIntent attempts, in-session and one-shot: corr=d94fb3da, f8cba7bd, 6a8f15cc, 170aff3d), while the chiamato family from the same rebuild routes fine on-device. Root cause is device-side statistical/ASR matching, not the model content (get-interaction-model confirmed all 8 samples; profile-nlu returned PlayAlbumIntent as top intent). Fix: 10 verb-ful anchors added via the it-IT template imperative product ('{imperative} un album/disco che si chiama {album}') + one intent-level fixture; it-IT rebuilt SUCCEEDED. Device re-verification pending Paolo's retry.
+<!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
