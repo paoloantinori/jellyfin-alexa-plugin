@@ -178,11 +178,19 @@ public class PlayAlbumIntentHandler : BaseHandler
         BaseItem? resolvedAlbum = null;
         BaseItem? matchedArtist = null;
 
-        // JF-489: when the musician slot carried a calling-word bleed ('chiamato X')
-        // and the stripped album-title retry HIT, the retry's results feed the album
-        // play path directly (the retry IS the album-title query; re-running it below
-        // would double the database cost inside the Alexa window).
-        IReadOnlyList<BaseItem>? callingWordAlbumResults = null;
+        // The musician-slot album-title retry results (set by the JF-489 calling-word
+        // strip hit and the JF-492 artist-miss retry hit): they feed the album play
+        // path directly (the retry IS the album-title query; re-running it below would
+        // double the database cost inside the Alexa window).
+        IReadOnlyList<BaseItem>? musicianSlotAlbumResults = null;
+
+        // Set when the JF-489 calling-word retry already ran an album-TITLE query for
+        // the value the artist search then consumed: the JF-492 artist-miss retry
+        // would re-issue the identical query that already missed (nothing mutated the
+        // library between the two calls), so it is skipped and the not-found speaks
+        // straight away (code-review 2026-09-05, one redundant bounded query inside
+        // the Alexa window otherwise).
+        bool musicianSlotTitleRetryMissed = false;
 
         // JF-448 (review F2), set inside the musician block so album-only requests
         // pay nothing: pin ONE index snapshot for the search AND the JF-471
@@ -231,12 +239,15 @@ public class PlayAlbumIntentHandler : BaseHandler
                 // results reach the album play path below.
                 musician = null;
                 album = strippedMusicianTitle;
-                callingWordAlbumResults = strippedTitleAlbums;
+                musicianSlotAlbumResults = strippedTitleAlbums;
             }
             else
             {
-                // Miss: the stripped value is the only defensible artist query.
+                // Miss: the stripped value is the only defensible artist query. The
+                // title query for it already ran and missed, which the JF-492
+                // artist-miss retry below must not repeat.
                 musician = strippedMusicianTitle;
+                musicianSlotTitleRetryMissed = true;
             }
         }
 
@@ -253,14 +264,66 @@ public class PlayAlbumIntentHandler : BaseHandler
 
             if (artists.Count == 0)
             {
-                return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByArtist", locale, musician));
-            }
+                // JF-492 (device corr=7a54cdf1, 2026-09-05): 'cerca un album chiamato
+                // surfer rosa' can fill ONLY the musician slot with the bare title (NO
+                // calling-word prefix: Amazon's statistical fill consumed 'chiamato'
+                // entirely, and the fill shape drifts BETWEEN requests, so the JF-489
+                // prefix strip does not fire for this shape). The artist search then
+                // consumed the title as an artist query and found nothing, and the flow
+                // dead-ended right here. When NO album title is in hand, retry ONCE, as
+                // an ALBUM TITLE, the exact value the artist search consumed (post any
+                // JF-489 calling-word strip), through the same bounded BuildAlbumQuery
+                // shape the JF-489 retry uses, BEFORE speaking the not-found. Strictly
+                // the artist-MISS case, so every artist-hit flow below (JF-411
+                // resolution, JF-471/JF-473 gates, no-albums messaging) is untouched.
+                // A hit plays the album through the album play path (musician cleared,
+                // so the JF-471/JF-473 gates and the by-name-and-artist not-found stay
+                // out of the way; the retry results feed the play path without a
+                // re-query, the JF-489 hit-path mechanism); a miss keeps today's
+                // not-found naming the searched value. Skipped entirely when the
+                // JF-489 retry already missed this exact value as a title.
+                if (string.IsNullOrWhiteSpace(album) && !musicianSlotTitleRetryMissed)
+                {
+                    string artistMissTitle = musician!;
+                    Logger.LogDebug(
+                        "PlayAlbum: artist search missed and the album slot is empty, retrying '{Musician}' as an album title (JF-492)",
+                        artistMissTitle);
+                    IReadOnlyList<BaseItem> artistMissAlbums = await RetryAsync(
+                        () => _libraryManager.GetItemList(BuildAlbumQuery(_libraryManager, jellyfinUser, user, artistMissTitle, artistIds: null)),
+                        "GetAlbumsArtistMissTitleRetry",
+                        cancellationToken).ConfigureAwait(false);
+                    Logger.LogDebug(
+                        "PlayAlbum: artist-miss album-title retry '{Musician}' returned {ResultCount} albums (JF-492)",
+                        artistMissTitle, artistMissAlbums.Count);
 
-            matchedArtist = artists[0];
-            matchedArtistName = artists[0].Name;
-            foreach (BaseItem artist in artists)
+                    if (artistMissAlbums.Count > 0)
+                    {
+                        musician = null;
+                        album = artistMissTitle;
+                        musicianSlotAlbumResults = artistMissAlbums;
+                    }
+                    else
+                    {
+                        return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByArtist", locale, artistMissTitle));
+                    }
+                }
+                else
+                {
+                    // Either an album title is already in hand (both slots filled) or
+                    // the JF-489 retry already missed this value as a title: keep
+                    // today's artist-filtered not-found, the retry is scoped to the
+                    // musician-only no-calling-word fill shape.
+                    return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByArtist", locale, musician));
+                }
+            }
+            else
             {
-                artistsIds.Add(artist.Id);
+                matchedArtist = artists[0];
+                matchedArtistName = artists[0].Name;
+                foreach (BaseItem artist in artists)
+                {
+                    artistsIds.Add(artist.Id);
+                }
             }
         }
 
@@ -363,9 +426,10 @@ public class PlayAlbumIntentHandler : BaseHandler
         }
 
         // JF-442: an album title is guaranteed from here on. Either the user said one
-        // (the both-slots-empty case returned at the entry elicit above), the JF-489
-        // stripped-title retry set it (the strip predicate never yields an empty
-        // remainder), or the JF-411 block above resolved it. The old both-empty flow
+        // (the both-slots-empty case returned at the entry elicit above), a
+        // musician-slot title retry set it (the JF-489 calling-word strip or the JF-492
+        // artist-miss retry; the strip predicate never yields an empty remainder), or
+        // the JF-411 block above resolved it. The old both-empty flow
         // guard here was unreachable for every library state except a MusicAlbum row
         // with a null/whitespace Name, which Jellyfin's scanner does not produce; the
         // proof is recorded in the JF-442 task notes.
@@ -381,10 +445,10 @@ public class PlayAlbumIntentHandler : BaseHandler
             Logger.LogDebug("PlayAlbum: using the album resolved from the artist filter, skipping the re-query by name");
             albums = new List<BaseItem> { resolvedAlbum };
         }
-        else if (callingWordAlbumResults != null)
+        else if (musicianSlotAlbumResults != null)
         {
-            Logger.LogDebug("PlayAlbum: using the JF-489 calling-word-stripped album-title results, skipping the re-query by name");
-            albums = callingWordAlbumResults;
+            Logger.LogDebug("PlayAlbum: using the musician-slot album-title retry results (JF-489/JF-492), skipping the re-query by name");
+            albums = musicianSlotAlbumResults;
         }
         else
         {

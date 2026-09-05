@@ -1551,6 +1551,219 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
         Assert.DoesNotContain(queries, q => q.SearchTerm == "chiamato xyzzyfoo");
     }
 
+    // -------------------------------------------------------------------------
+    // JF-492: the chiamato-family fill shape WITHOUT the calling word. Device
+    // 2026-09-05 (corr=7a54cdf1): 'cerca un album chiamato surfer rosa' arrived as
+    // album=EMPTY, musician='surfer rosa' (Amazon's statistical fill consumed
+    // 'chiamato' entirely this time; the fill shape drifts BETWEEN requests, so the
+    // JF-489 prefix-strip guard does not fire for this shape). The album-by-artist
+    // path searched artist 'surfer rosa', found zero, and dead-ended with
+    // NotFoundAlbumByArtist. When the artist search returns ZERO artists and the
+    // album slot is empty, the searched value (post any calling-word strip) is
+    // retried ONCE as an album title before the not-found speech; strictly the
+    // artist-MISS case, every artist-hit flow is untouched.
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Mocks GetItemList keyed on item type AND SearchTerm: MusicArtist queries
+    /// always miss (the artist-miss precondition), MusicAlbum title queries hit only
+    /// for mapped titles. SetupTitleSearchByTerm cannot express this shape: it
+    /// ignores the item type, so a mapped title would also come back from the artist
+    /// search's tier-1 query as a bogus "artist" and the miss would never happen.
+    /// Queries are recorded for assertions.
+    /// </summary>
+    private void SetupArtistMissCatalog(Dictionary<string, List<BaseItem>> albumsByTitle, List<InternalItemsQuery> queries)
+    {
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) =>
+            {
+                queries.Add(q);
+                if (q.IncludeItemTypes?.Contains(BaseItemKind.MusicAlbum) == true
+                    && q.SearchTerm != null
+                    && albumsByTitle.TryGetValue(q.SearchTerm, out List<BaseItem>? results))
+                {
+                    return results;
+                }
+
+                return new List<BaseItem>();
+            });
+    }
+
+    [Fact]
+    public async Task HandleAsync_MusicianOnly_ArtistMiss_EmptyAlbum_TitleRetryHits_PlaysAlbum()
+    {
+        // The evidenced device shape (corr=7a54cdf1): album=EMPTY, musician='surfer
+        // rosa' with NO calling-word prefix. The artist search misses, the JF-492
+        // artist-miss album-title retry finds 'Surfer Rosa', and it plays.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(musician: "surfer rosa", locale: "it-IT");
+        _fx.SetupUserMock();
+
+        var (album, tracks) = MakeRelease("Surfer Rosa", 1988, 2, "Bone Machine");
+        var queries = new List<InternalItemsQuery>();
+        SetupArtistMissCatalog(
+            new Dictionary<string, List<BaseItem>> { ["surfer rosa"] = new() { album } },
+            queries);
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem> { Items = new[] { tracks[0] }, TotalRecordCount = tracks.Count });
+
+        string token = await GetPlayedTrackTokenAsync(handler, request, CreateSession());
+
+        Assert.Equal(tracks[0].Id.ToString(), token);
+
+        // The retry is ONE MusicAlbum title query on the searched value, issued only
+        // after the artist search had missed (the first recorded query is the artist
+        // tier's), and its results feed the play path with no re-query.
+        List<InternalItemsQuery> titleQueries = queries.Where(
+            q => q.IncludeItemTypes?.Contains(BaseItemKind.MusicAlbum) == true && q.SearchTerm == "surfer rosa").ToList();
+        Assert.Single(titleQueries);
+        Assert.Contains(BaseItemKind.MusicArtist, queries[0].IncludeItemTypes ?? Array.Empty<BaseItemKind>());
+    }
+
+    [Fact]
+    public async Task HandleAsync_MusicianOnly_ArtistMiss_TitleRetryMisses_NotFoundNamesSearchedValue()
+    {
+        // Both the artist search and the artist-miss title retry miss: the not-found
+        // keeps today's NotFoundAlbumByArtist shape, naming the SEARCHED value.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(musician: "xyzzyfoo", locale: "it-IT");
+        _fx.SetupUserMock();
+
+        var queries = new List<InternalItemsQuery>();
+        SetupArtistMissCatalog(new Dictionary<string, List<BaseItem>>(), queries);
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.True(response.Response.ShouldEndSession);
+        Assert.Null(response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective));
+        Assert.Contains("xyzzyfoo", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+
+        // The retry fired exactly once (one MusicAlbum title query on the searched
+        // value), after the artist search and before the not-found speech.
+        List<InternalItemsQuery> titleQueries = queries.Where(
+            q => q.IncludeItemTypes?.Contains(BaseItemKind.MusicAlbum) == true && q.SearchTerm == "xyzzyfoo").ToList();
+        Assert.Single(titleQueries);
+        Assert.Contains(BaseItemKind.MusicArtist, queries[0].IncludeItemTypes ?? Array.Empty<BaseItemKind>());
+    }
+
+    [Fact]
+    public async Task HandleAsync_MusicianCallingWord_BothMiss_NoSecondTitleRetryQuery()
+    {
+        // Calling-word musician + both misses: the JF-489 strip retry already ran an
+        // album-TITLE query for the stripped value and missed, so the JF-492
+        // artist-miss retry must NOT re-issue the identical query; exactly one
+        // title query total, and the not-found names the stripped value
+        // (code-review 2026-09-05: the double query was one redundant bounded
+        // query inside the Alexa window).
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(musician: "chiamato xyzzyfoo", locale: "it-IT");
+        _fx.SetupUserMock();
+
+        var queries = new List<InternalItemsQuery>();
+        SetupArtistMissCatalog(new Dictionary<string, List<BaseItem>>(), queries);
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.True(response.Response.ShouldEndSession);
+        Assert.Contains("xyzzyfoo", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("chiamato", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+
+        // Exactly ONE album-title query for the stripped value (the JF-489 one):
+        // the JF-492 retry skipped it because it already missed.
+        List<InternalItemsQuery> strippedTitleQueries = queries.Where(
+            q => q.IncludeItemTypes?.Contains(BaseItemKind.MusicAlbum) == true && q.SearchTerm == "xyzzyfoo").ToList();
+        Assert.Single(strippedTitleQueries);
+    }
+
+    [Fact]
+    public async Task HandleAsync_MusicianOnly_ArtistHit_NoAlbumTitleRetryQuery()
+    {
+        // Artist-hit pin: the JF-492 retry fires ONLY on the artist miss. A found
+        // artist keeps the JF-411 album-by-artist resolution exactly as before, with
+        // no album-title query ever issued.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(musician: "koop", locale: "it-IT");
+        _fx.SetupUserMock();
+
+        var artist = new MusicArtist { Name = "Koop", Id = Guid.NewGuid() };
+        var (album, albumTracks) = MakeRelease("Waltz for Koop", 1997, 10, "Baby");
+        var queries = new List<InternalItemsQuery>();
+        _fx.SetupIndefiniteAlbumCatalog(
+            artist,
+            new List<BaseItem> { album },
+            albumTracks,
+            new Dictionary<Guid, BaseItem> { [album.Id] = albumTracks[0] },
+            queries);
+
+        string token = await GetPlayedTrackTokenAsync(handler, request, CreateSession());
+
+        Assert.Equal(albumTracks[0].Id.ToString(), token);
+
+        // No ALBUM-TITLE query was ever issued (the artist search's own SearchTerm
+        // tiers are MusicArtist queries and keep running, the JF-492 retry fires only
+        // on the artist miss).
+        Assert.DoesNotContain(queries, q => q.IncludeItemTypes?.Contains(BaseItemKind.MusicAlbum) == true && q.SearchTerm != null);
+    }
+
+    [Fact]
+    public async Task HandleAsync_MusicianCallingWordBleed_TitleRetryHits_NoSecondAlbumTitleQuery()
+    {
+        // JF-489/JF-492 interaction pin: on the JF-489 calling-word HIT path the
+        // stripped-title retry's results already feed the play path and the musician
+        // is cleared, so the artist search never runs and the JF-492 post-miss retry
+        // cannot fire: exactly ONE album-title query in total.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(musician: "chiamato surfer rosa", locale: "it-IT");
+        _fx.SetupUserMock();
+
+        var (album, tracks) = MakeRelease("Surfer Rosa", 1988, 2, "Bone Machine");
+        var queries = new List<InternalItemsQuery>();
+        SetupArtistMissCatalog(
+            new Dictionary<string, List<BaseItem>> { ["surfer rosa"] = new() { album } },
+            queries);
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem> { Items = new[] { tracks[0] }, TotalRecordCount = tracks.Count });
+
+        string token = await GetPlayedTrackTokenAsync(handler, request, CreateSession());
+
+        Assert.Equal(tracks[0].Id.ToString(), token);
+
+        // Times verification: exactly one album-title query (the JF-489 stripped
+        // retry) and zero artist queries.
+        int titleQueryCount = queries.Count(
+            q => q.IncludeItemTypes?.Contains(BaseItemKind.MusicAlbum) == true && q.SearchTerm != null);
+        Assert.Equal(1, titleQueryCount);
+        Assert.DoesNotContain(queries, q => q.IncludeItemTypes?.Contains(BaseItemKind.MusicArtist) == true);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ArtistMiss_AlbumTitlePresent_NoTitleRetry_NotFoundStaysByArtist()
+    {
+        // Scope pin: the JF-492 retry is scoped to the musician-ONLY fill shape. When
+        // an album title is already present and the artist search misses, today's
+        // NotFoundAlbumByArtist stands and the musician value is never re-queried as
+        // a title.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(album: "thriller", musician: "surfer rosa", locale: "it-IT");
+        _fx.SetupUserMock();
+
+        var queries = new List<InternalItemsQuery>();
+        SetupArtistMissCatalog(new Dictionary<string, List<BaseItem>>(), queries);
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.True(response.Response.ShouldEndSession);
+        Assert.Null(response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective));
+        Assert.Contains("surfer rosa", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+
+        // No album-title query was ever issued: the artist-filtered not-found returns
+        // before the album-title path, and the retry did not fire.
+        Assert.DoesNotContain(queries, q => q.IncludeItemTypes?.Contains(BaseItemKind.MusicAlbum) == true && q.SearchTerm != null);
+    }
+
     /// <summary>
     /// Test-only subclass exposing the protected JF-469 strip predicate for direct
     /// unit testing (the TestBaseHandler precedent).
