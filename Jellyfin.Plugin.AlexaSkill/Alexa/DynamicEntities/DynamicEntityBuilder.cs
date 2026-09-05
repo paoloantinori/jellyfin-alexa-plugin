@@ -51,6 +51,7 @@ public class DynamicEntityBuilder : IDisposable
     private static readonly HashSet<string> TvIntents = new(StringComparer.Ordinal)
     {
         IntentNames.PlayEpisode,
+        IntentNames.PlayNextEpisode,
         IntentNames.PlayVideo,
         IntentNames.ContinueWatching,
         IntentNames.SearchMedia,

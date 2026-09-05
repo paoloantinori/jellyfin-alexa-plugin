@@ -979,3 +979,26 @@ tests:
     expected_intent: PlayPlaylistIntent
     expected_slots:
       playlist: {}
+
+  # -------------------------------------------------------------------------
+  # 34. PlayNextEpisodeIntent (series_name), JF-324
+  # Next/latest-episode and continue-watching phrasings. NOTE: "Continua a
+  # guardare {series_name}" shares its carrier region with the slotless
+  # ContinueWatchingIntent sample "Continua a guardare": the slotted variant is
+  # expected to win when a series follows, the bare phrase keeps routing to
+  # ContinueWatchingIntent (pinned in section 19).
+  # -------------------------------------------------------------------------
+  - utterance: "Riproduci il prossimo episodio di breaking bad"
+    expected_intent: PlayNextEpisodeIntent
+    expected_slots:
+      series_name: {}
+
+  - utterance: "Metti l'ultimo episodio di stranger things"
+    expected_intent: PlayNextEpisodeIntent
+    expected_slots:
+      series_name: {}
+
+  - utterance: "Continua a guardare dark"
+    expected_intent: PlayNextEpisodeIntent
+    expected_slots:
+      series_name: {}

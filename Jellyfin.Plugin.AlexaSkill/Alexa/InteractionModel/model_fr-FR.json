@@ -467,6 +467,22 @@
         ]
       },
       {
+        "name": "PlayNextEpisodeIntent",
+        "slots": [
+          {
+            "name": "series_name",
+            "type": "SeriesName"
+          }
+        ],
+        "samples": [
+          "joue le prochain épisode de {series_name}",
+          "joue le prochain épisode de la série {series_name}",
+          "mets le prochain épisode de {series_name}",
+          "joue le dernier épisode de {series_name}",
+          "continue à regarder {series_name}"
+        ]
+      },
+      {
         "name": "BrowseLibraryIntent",
         "slots": [
           {

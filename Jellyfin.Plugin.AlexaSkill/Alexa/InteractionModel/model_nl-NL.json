@@ -472,6 +472,21 @@
         ]
       },
       {
+        "name": "PlayNextEpisodeIntent",
+        "slots": [
+          {
+            "name": "series_name",
+            "type": "SeriesName"
+          }
+        ],
+        "samples": [
+          "speel de volgende aflevering van {series_name}",
+          "speel de volgende aflevering van de serie {series_name}",
+          "speel de nieuwste aflevering van {series_name}",
+          "ga verder met {series_name}"
+        ]
+      },
+      {
         "name": "PlayPodcastIntent",
         "samples": [
           "speel de podcast {podcast_name}",

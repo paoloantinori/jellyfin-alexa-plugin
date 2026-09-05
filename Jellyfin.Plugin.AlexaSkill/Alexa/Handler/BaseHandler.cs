@@ -24,6 +24,7 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Playlists;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Controller.TV;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Session;
@@ -2647,6 +2648,194 @@ public abstract class BaseHandler
 
         logger?.LogDebug("FindLastPlayedItemWithProgress: no item with progress found");
         return (null, 0);
+    }
+
+    /// <summary>
+    /// Resolves a series by spoken name for playback (JF-324): content-access-gated
+    /// SearchTerm query with the per-user library filter, then the shared fuzzy
+    /// fallback. Shared by PlayEpisodeIntentHandler and PlayNextEpisodeIntentHandler
+    /// so the explicit season+episode path and the next-up paths match series the
+    /// same way.
+    /// </summary>
+    /// <param name="libraryManager">The library manager for the series query.</param>
+    /// <param name="jellyfinUser">The Jellyfin user for query context.</param>
+    /// <param name="user">The plugin user for library access filtering.</param>
+    /// <param name="seriesName">The spoken series name.</param>
+    /// <param name="locale">The request locale for error response strings.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The matched series, or an error response (content disabled or series not found).</returns>
+    protected async Task<(BaseItem? Series, SkillResponse? Error)> ResolveSeriesForPlaybackAsync(
+        ILibraryManager libraryManager,
+        JellyfinUser jellyfinUser,
+        Entities.User user,
+        string seriesName,
+        string locale,
+        CancellationToken cancellationToken)
+    {
+        // JF-466: an EMPTY IncludeItemTypes means "all kinds" to Jellyfin, so a
+        // videos-disabled configuration must hard-zero here instead of querying.
+        BaseItemKind[] seriesKinds = FilterByContentAccess(new[] { BaseItemKind.Series });
+        if (seriesKinds.Length == 0)
+        {
+            Logger.LogInformation("Series resolution skipped: no series kind allowed by configuration");
+            return (null, ResponseBuilder.Tell(ResponseStrings.Get("MediaTypeNotAvailable", locale)));
+        }
+
+        var seriesQuery = new InternalItemsQuery
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            SearchTerm = seriesName,
+            IncludeItemTypes = seriesKinds,
+            DtoOptions = new DtoOptions(true)
+        };
+        ApplyLibraryFilter(seriesQuery, user, libraryManager, Logger);
+        Logger.LogDebug("ResolveSeries: querying Jellyfin with searchTerm='{SeriesName}', types=Series", seriesName);
+        IReadOnlyList<BaseItem> seriesList = await RetryAsync(() => libraryManager.GetItemList(seriesQuery), "GetSeries", cancellationToken).ConfigureAwait(false);
+        Logger.LogDebug("ResolveSeries: Jellyfin returned {ResultCount} series", seriesList.Count);
+
+        if (seriesList.Count > 0)
+        {
+            return (seriesList[0], null);
+        }
+
+        var fuzzy = await SearchItemsFuzzyAsync(seriesName, jellyfinUser, user, libraryManager, seriesKinds, cancellationToken, "SeriesFuzzyFallback").ConfigureAwait(false);
+        if (fuzzy != null)
+        {
+            return (fuzzy.Value.Item, null);
+        }
+
+        return (null, ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSeries", locale, seriesName)));
+    }
+
+    /// <summary>
+    /// JF-324 shared next-up episode launch: resolves the next unwatched episode of a
+    /// series via Jellyfin's NextUp (per-user watched state; EnableResumable so an
+    /// in-progress episode counts as the next one, which is what both "next episode"
+    /// and "continue watching" mean to a viewer who stopped mid-episode), falls back to
+    /// the most recently created episode when NextUp is empty (nothing unwatched left),
+    /// and launches the winner via VideoApp with the resume-aware announce. Used by
+    /// PlayNextEpisodeIntentHandler and PlayEpisodeIntentHandler's series-only
+    /// fallback. Library and content gating happen in the caller's series resolution
+    /// (<see cref="ResolveSeriesForPlaybackAsync"/>); this core only needs the
+    /// already-scoped series.
+    /// </summary>
+    /// <param name="tvSeriesManager">The Jellyfin TV series manager (NextUp source).</param>
+    /// <param name="libraryManager">The library manager (latest-episode fallback query).</param>
+    /// <param name="userDataManager">The user data manager (resume-aware announce).</param>
+    /// <param name="jellyfinUser">The Jellyfin user (per-user watched state).</param>
+    /// <param name="user">The plugin user (stream URL + announce toggle).</param>
+    /// <param name="session">The Jellyfin session (now-playing queue).</param>
+    /// <param name="series">The already-resolved series item.</param>
+    /// <param name="locale">The request locale for response strings.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The VideoApp launch response, or the localized NoNextEpisode Tell when the series has no playable episode.</returns>
+    protected async Task<SkillResponse> PlayNextUpEpisodeAsync(
+        ITVSeriesManager tvSeriesManager,
+        ILibraryManager libraryManager,
+        IUserDataManager userDataManager,
+        JellyfinUser jellyfinUser,
+        Entities.User user,
+        SessionInfo session,
+        BaseItem series,
+        string locale,
+        CancellationToken cancellationToken)
+    {
+        var nextUpQuery = new NextUpQuery
+        {
+            User = jellyfinUser,
+            SeriesId = series.Id,
+            Limit = 1,
+            EnableResumable = true
+        };
+        Logger.LogDebug("NextUp: querying NextUp for seriesId={SeriesId}, enableResumable=true", series.Id);
+        QueryResult<BaseItem> nextUp = await RetryAsync(
+            () => tvSeriesManager.GetNextUp(nextUpQuery, new DtoOptions(true)),
+            "GetNextUp",
+            cancellationToken).ConfigureAwait(false);
+        BaseItem? episode = nextUp?.Items?.FirstOrDefault();
+        bool latestFallback = episode == null;
+
+        if (episode == null)
+        {
+            // Latest fallback (JF-324): with nothing unwatched left, serve the most
+            // recently created episode (DateCreated, the same ordering PlayPodcast
+            // uses for "newest episode") and announce it with the latest-episode
+            // wording instead of refusing.
+            var latestQuery = new InternalItemsQuery
+            {
+                User = jellyfinUser,
+                Recursive = true,
+                IncludeItemTypes = new[] { BaseItemKind.Episode },
+                AncestorIds = new[] { series.Id },
+                IsVirtualItem = false,
+                OrderBy = new[] { (ItemSortBy.DateCreated, SortOrder.Descending) },
+                Limit = 1,
+                DtoOptions = new DtoOptions(true)
+            };
+            IReadOnlyList<BaseItem> latest = await RetryAsync(
+                () => libraryManager.GetItemList(latestQuery),
+                "GetLatestEpisode",
+                cancellationToken).ConfigureAwait(false);
+            episode = latest?.FirstOrDefault();
+        }
+
+        if (episode == null)
+        {
+            Logger.LogDebug("NextUp: no next-up and no episodes for series '{SeriesName}' ({SeriesId})", series.Name, series.Id);
+            return ResponseBuilder.Tell(ResponseStrings.Get("NoNextEpisode", locale, series.Name));
+        }
+
+        Logger.LogDebug(
+            "NextUp: resolved episode '{EpisodeName}' ({EpisodeId}) for series '{SeriesName}', latestFallback={LatestFallback}",
+            episode.Name, episode.Id, series.Name, latestFallback);
+
+        session.NowPlayingQueue = new List<QueueItem> { new QueueItem { Id = episode.Id } };
+        session.FullNowPlayingItem = episode;
+
+        // A next-up episode with playback progress is a resume: the announce says so
+        // (VideoApp.Launch cannot honor the offset; the position info is spoken only).
+        long resumeTicks = userDataManager.GetUserData(jellyfinUser, episode)?.PlaybackPositionTicks ?? 0;
+        IOutputSpeech? speech;
+        if (resumeTicks > 0)
+        {
+            speech = BuildVideoLaunchSpeech(episode, locale, resumeTicks, GetAnnounceNowPlaying(user));
+        }
+        else
+        {
+            speech = GetAnnounceNowPlaying(user)
+                ? BuildOutputSpeech(
+                    latestFallback ? "PlayingLatestEpisodeSsml" : "PlayingNextEpisodeSsml",
+                    latestFallback ? "PlayingLatestEpisode" : "PlayingNextEpisode",
+                    locale,
+                    episode.Name)
+                : null;
+        }
+
+        return new SkillResponse
+        {
+            Version = "1.0",
+            Response = new ResponseBody
+            {
+                // VideoApp.Launch must NOT include shouldEndSession
+                ShouldEndSession = null,
+                OutputSpeech = speech,
+                Directives = new List<IDirective>
+                {
+                    new Directive.VideoAppLaunchDirective
+                    {
+                        VideoItem = new Directive.VideoItem
+                        {
+                            Source = GetVideoStreamUrl(episode.Id.ToString(), user),
+                            Metadata = new Directive.VideoItemMetadata
+                            {
+                                Title = episode.Name
+                            }
+                        }
+                    }
+                }
+            }
+        };
     }
 
     /// <summary>

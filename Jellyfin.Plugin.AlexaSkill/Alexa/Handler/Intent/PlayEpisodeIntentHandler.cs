@@ -16,29 +16,39 @@ using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Controller.TV;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
 /// <summary>
-/// Handler for PlayEpisodeIntent — plays a specific TV episode by series name,
-/// season number, and episode number via the Alexa VideoApp interface.
+/// Handler for PlayEpisodeIntent: plays a specific TV episode by series name,
+/// season number, and episode number via the Alexa VideoApp interface. Explicit
+/// season+episode still wins; a series-only request (JF-324) no longer hard-fails
+/// with "didn't catch the episode number" and falls back to the shared NextUp core
+/// instead.
 /// </summary>
 public class PlayEpisodeIntentHandler : BaseHandler
 {
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
+    private readonly IUserDataManager _userDataManager;
+    private readonly ITVSeriesManager _tvSeriesManager;
 
     public PlayEpisodeIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
+        IUserDataManager userDataManager,
+        ITVSeriesManager tvSeriesManager,
         ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
+        _userDataManager = userDataManager;
+        _tvSeriesManager = tvSeriesManager;
     }
 
     /// <inheritdoc/>
@@ -76,10 +86,16 @@ public class PlayEpisodeIntentHandler : BaseHandler
         // words the it-IT model delivers for the ItalianNumber-typed season_number /
         // episode_number slots ("stagione due" arrives as "due", not "2"; JF-451
         // adoption).
-        if (!Util.ItalianNumberWords.TryParse(seasonRaw, out int seasonNumber)
-            || !Util.ItalianNumberWords.TryParse(episodeRaw, out int episodeNumber))
+        int seasonNumber = 0;
+        int episodeNumber = 0;
+        bool hasExplicitNumbers = Util.ItalianNumberWords.TryParse(seasonRaw, out seasonNumber)
+            && Util.ItalianNumberWords.TryParse(episodeRaw, out episodeNumber);
+        if (!hasExplicitNumbers)
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchEpisodeNumber", locale));
+            Logger.LogDebug(
+                "PlayEpisode: season/episode not parseable (season='{Season}', episode='{Episode}'), falling back to next-up",
+                seasonRaw,
+                episodeRaw);
         }
 
         RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
@@ -90,34 +106,18 @@ public class PlayEpisodeIntentHandler : BaseHandler
             return userError;
         }
 
-        var seriesQuery = new InternalItemsQuery
+        var (series, seriesError) = await ResolveSeriesForPlaybackAsync(_libraryManager, jellyfinUser!, user, seriesName, locale, cancellationToken).ConfigureAwait(false);
+        if (seriesError != null || series is null)
         {
-            User = jellyfinUser,
-            Recursive = true,
-            SearchTerm = seriesName,
-            IncludeItemTypes = new[] { BaseItemKind.Series },
-            DtoOptions = new DtoOptions(true)
-        };
-        ApplyLibraryFilter(seriesQuery, user, _libraryManager);
-        Logger.LogDebug("PlayEpisode: querying Jellyfin with searchTerm='{SeriesName}', types=Series", seriesName);
-        IReadOnlyList<BaseItem> seriesList = await RetryAsync(() => _libraryManager.GetItemList(seriesQuery), "GetSeries", cancellationToken).ConfigureAwait(false);
-        Logger.LogDebug("PlayEpisode: Jellyfin returned {ResultCount} series", seriesList.Count);
-
-        if (seriesList.Count == 0)
-        {
-            var fuzzy = await SearchItemsFuzzyAsync(seriesName, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.Series }, cancellationToken, "PlayEpisodeFuzzyFallback").ConfigureAwait(false);
-            if (fuzzy != null)
-            {
-                seriesList = new List<BaseItem> { fuzzy.Value.Item };
-            }
-            else
-            {
-                return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSeries", locale, seriesName));
-            }
+            return seriesError!;
         }
 
-        BaseItem series = seriesList[0];
         Logger.LogDebug("PlayEpisode: matched series='{SeriesName}' (id={SeriesId})", series.Name, series.Id);
+
+        if (!hasExplicitNumbers)
+        {
+            return await PlayNextUpEpisodeAsync(_tvSeriesManager, _libraryManager, _userDataManager, jellyfinUser!, user, session, series, locale, cancellationToken).ConfigureAwait(false);
+        }
 
         var episodeQuery = new InternalItemsQuery
         {

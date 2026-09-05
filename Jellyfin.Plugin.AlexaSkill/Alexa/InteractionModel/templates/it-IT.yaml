@@ -240,6 +240,22 @@ explicit_intents:
         type: ItalianNumber
       - name: episode_number
         type: ItalianNumber
+  # JF-324: next/latest-episode playback and "continue watching {series}". All
+  # carriers name the episode (prossimo/ultimo episodio) or the continuation verb,
+  # so PlayEpisodeIntent's number-carrying samples keep their own region; the
+  # series_name slot reuses the SeriesName type PlayEpisode already declares.
+  PlayNextEpisodeIntent:
+    samples:
+      - Riproduci il prossimo episodio di {series_name}
+      - Metti il prossimo episodio di {series_name}
+      - Guarda il prossimo episodio di {series_name}
+      - Riproduci l'ultimo episodio di {series_name}
+      - Metti l'ultimo episodio di {series_name}
+      - Continua a guardare {series_name}
+      - Continua a guardare la serie {series_name}
+    slots:
+      - name: series_name
+        type: SeriesName
   PlayPodcastIntent:
     samples:
       - Riproduci il podcast {podcast_name}

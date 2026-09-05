@@ -466,6 +466,22 @@
         ]
       },
       {
+        "name": "PlayNextEpisodeIntent",
+        "slots": [
+          {
+            "name": "series_name",
+            "type": "SeriesName"
+          }
+        ],
+        "samples": [
+          "spiele die nächste folge von {series_name}",
+          "spiele die nächste folge der serie {series_name}",
+          "schau die nächste folge von {series_name}",
+          "spiele die neueste folge von {series_name}",
+          "schau {series_name} weiter"
+        ]
+      },
+      {
         "name": "BrowseLibraryIntent",
         "slots": [
           {

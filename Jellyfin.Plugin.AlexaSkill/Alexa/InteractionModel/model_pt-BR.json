@@ -485,6 +485,21 @@
         ]
       },
       {
+        "name": "PlayNextEpisodeIntent",
+        "slots": [
+          {
+            "name": "series_name",
+            "type": "SeriesName"
+          }
+        ],
+        "samples": [
+          "tocar o próximo episódio de {series_name}",
+          "tocar o próximo episódio da série {series_name}",
+          "tocar o episódio mais recente de {series_name}",
+          "continuar assistindo {series_name}"
+        ]
+      },
+      {
         "name": "PlayPodcastIntent",
         "samples": [
           "tocar o podcast {podcast_name}",

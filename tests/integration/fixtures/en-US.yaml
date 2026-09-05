@@ -715,3 +715,25 @@ tests:
     expected_intent: PlayAlbumIntent
     expected_slots:
       musician: {}
+
+  # -------------------------------------------------------------------------
+  # 38. PlayNextEpisodeIntent (series_name), JF-324
+  # Next/latest-episode and continue-watching phrasings. NOTE: "continue
+  # watching {series_name}" shares its carrier region with the slotless
+  # ContinueWatchingIntent sample "Continue watching" (pinned in section 10);
+  # the slotted variant is expected to win when a series follows.
+  # -------------------------------------------------------------------------
+  - utterance: "play the next episode of breaking bad"
+    expected_intent: PlayNextEpisodeIntent
+    expected_slots:
+      series_name: {}
+
+  - utterance: "play the latest episode of stranger things"
+    expected_intent: PlayNextEpisodeIntent
+    expected_slots:
+      series_name: {}
+
+  - utterance: "continue watching dark"
+    expected_intent: PlayNextEpisodeIntent
+    expected_slots:
+      series_name: {}

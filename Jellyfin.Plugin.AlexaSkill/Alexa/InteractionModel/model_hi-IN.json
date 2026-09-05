@@ -446,6 +446,20 @@
         ]
       },
       {
+        "name": "PlayNextEpisodeIntent",
+        "slots": [
+          {
+            "name": "series_name",
+            "type": "SeriesName"
+          }
+        ],
+        "samples": [
+          "{series_name} का अगला एपिसोड चलाओ",
+          "{series_name} का नवीनतम एपिसोड चलाओ",
+          "{series_name} देखना जारी रखो"
+        ]
+      },
+      {
         "name": "PlayPodcastIntent",
         "samples": [
           "पॉडकास्ट {podcast_name} चलाओ",

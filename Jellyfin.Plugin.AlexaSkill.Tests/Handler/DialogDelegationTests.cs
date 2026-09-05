@@ -147,7 +147,7 @@ public class DialogDelegationTests : PluginTestBase
     public async Task PlayEpisode_DoesNotDelegate()
     {
         var handler = new PlayEpisodeIntentHandler(
-            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.LoggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.TvSeriesManager.Object, _fx.LoggerFactory);
         var request = CreateIntentRequest(IntentNames.PlayEpisode, "COMPLETED",
             new Dictionary<string, string>
             {

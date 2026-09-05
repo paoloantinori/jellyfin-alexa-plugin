@@ -20,6 +20,7 @@ using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Controller.TV;
 using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Serialization;
 using Microsoft.Extensions.Logging;
@@ -341,6 +342,7 @@ internal sealed class HandlerTestFixture
     internal Mock<ILibraryManager> LibraryManager { get; }
     internal Mock<IUserManager> UserManager { get; }
     internal Mock<IUserDataManager> UserDataManager { get; }
+    internal Mock<ITVSeriesManager> TvSeriesManager { get; }
     internal PluginConfiguration Config { get; }
     internal ILoggerFactory LoggerFactory { get; }
 
@@ -358,6 +360,7 @@ internal sealed class HandlerTestFixture
         LibraryManager = new Mock<ILibraryManager>();
         UserManager = new Mock<IUserManager>();
         UserDataManager = new Mock<IUserDataManager>();
+        TvSeriesManager = new Mock<ITVSeriesManager>();
         Config = new PluginConfiguration();
         configure?.Invoke(Config);
         if (serverAddress != null)

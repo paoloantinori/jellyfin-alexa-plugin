@@ -19,6 +19,7 @@ using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Controller.TV;
+using MediaBrowser.Model.Querying;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Alexa.NET.Assertions;
@@ -32,6 +33,8 @@ public class PlayEpisodeIntentHandlerTests : PluginTestBase
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly Mock<ILibraryManager> _libraryManagerMock;
     private readonly Mock<IUserManager> _userManagerMock;
+    private readonly Mock<IUserDataManager> _userDataManagerMock;
+    private readonly Mock<ITVSeriesManager> _tvSeriesManagerMock;
     private readonly PluginConfiguration _config;
     private readonly ILoggerFactory _loggerFactory;
 
@@ -40,6 +43,8 @@ public class PlayEpisodeIntentHandlerTests : PluginTestBase
         _sessionManagerMock = new Mock<ISessionManager>();
         _libraryManagerMock = new Mock<ILibraryManager>();
         _userManagerMock = new Mock<IUserManager>();
+        _userDataManagerMock = new Mock<IUserDataManager>();
+        _tvSeriesManagerMock = new Mock<ITVSeriesManager>();
         _config = new PluginConfiguration();
         TestHelpers.SetServerAddress(_config, "https://test.example.com");
         _loggerFactory = LoggerFactory.Create(b => { });
@@ -52,6 +57,8 @@ public class PlayEpisodeIntentHandlerTests : PluginTestBase
             _config,
             _libraryManagerMock.Object,
             _userManagerMock.Object,
+            _userDataManagerMock.Object,
+            _tvSeriesManagerMock.Object,
             _loggerFactory);
     }
 
@@ -137,18 +144,70 @@ public class PlayEpisodeIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
-    public async Task HandleAsync_MissingSeasonNumber_ReturnsPrompt()
+    public async Task HandleAsync_MissingSeasonNumber_FallsBackToNextUp()
     {
+        // JF-324: a series-only request no longer hard-fails with the episode-number
+        // prompt; partial or missing numbers fall back to the NextUp core.
         var handler = CreateHandler();
         var request = CreateIntentRequest(seriesName: "The Office", episodeNumber: "10");
         var context = CreateContext();
         var user = CreateUser();
         var session = CreateSession();
 
+        SetupUserMock();
+        SetupNextUpEpisode("The Convention");
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        response.HasDirective<VideoAppLaunchDirective>();
+    }
+
+    [Fact]
+    public async Task HandleAsync_SeriesOnly_NoNextUpOrEpisodes_ReturnsNoNextEpisode()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(seriesName: "The Office");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+        SetupSeriesFound();
+        _tvSeriesManagerMock
+            .Setup(t => t.GetNextUp(It.IsAny<NextUpQuery>(), It.IsAny<DtoOptions>()))
+            .Returns(new QueryResult<BaseItem>());
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Episode))))
+            .Returns(new List<BaseItem>());
+
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
         Assert.NotNull(response);
         response.Tells();
+        Assert.Contains("next episode", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+    }
+
+    private void SetupSeriesFound()
+    {
+        var series = new global::MediaBrowser.Controller.Entities.TV.Series { Name = "The Office", Id = Guid.NewGuid() };
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Series))))
+            .Returns(new List<BaseItem> { series });
+    }
+
+    private void SetupNextUpEpisode(string episodeName)
+    {
+        SetupSeriesFound();
+        var episode = new global::MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = episodeName,
+            Id = Guid.NewGuid(),
+            ParentIndexNumber = 3,
+            IndexNumber = 1
+        };
+        _tvSeriesManagerMock
+            .Setup(t => t.GetNextUp(It.IsAny<NextUpQuery>(), It.IsAny<DtoOptions>()))
+            .Returns(new QueryResult<BaseItem>(new[] { episode }));
     }
 
     [Fact]
@@ -299,11 +358,17 @@ public class PlayEpisodeIntentHandlerTests : PluginTestBase
     [Fact]
     public async Task HandleAsync_DialogInProgress_ElicitsMissingInfo()
     {
+        // JF-324: series-only IN_PROGRESS requests take the NextUp path now; with an
+        // empty library the response is the not-found Tell (still no Delegate).
         var handler = CreateHandler();
         var request = CreateIntentRequest(seriesName: "The Office", dialogState: "IN_PROGRESS");
         var context = CreateContext();
         var user = CreateUser();
         var session = CreateSession();
+
+        SetupUserMock();
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 

@@ -437,6 +437,20 @@
         ]
       },
       {
+        "name": "PlayNextEpisodeIntent",
+        "slots": [
+          {
+            "name": "series_name",
+            "type": "SeriesName"
+          }
+        ],
+        "samples": [
+          "شغل الحلقة التالية من {series_name}",
+          "شغل أحدث حلقة من {series_name}",
+          "أكمل مشاهدة {series_name}"
+        ]
+      },
+      {
         "name": "PlayPodcastIntent",
         "samples": [
           "شغل البودكاست {podcast_name}",

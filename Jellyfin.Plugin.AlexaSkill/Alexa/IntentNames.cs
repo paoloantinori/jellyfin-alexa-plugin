@@ -35,6 +35,7 @@ internal static class IntentNames
     public const string Recommend = "RecommendIntent";
     public const string SleepTimer = "SleepTimerIntent";
     public const string PlayEpisode = "PlayEpisodeIntent";
+    public const string PlayNextEpisode = "PlayNextEpisodeIntent";
 
     // JF-450 loop-mode vocabulary: de-DE, fr-FR, fr-CA and it-IT declare the custom
     // loop intents instead of the AMAZON.LoopOn/LoopOff built-ins the other locales

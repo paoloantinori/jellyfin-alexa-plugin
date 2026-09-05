@@ -7,6 +7,7 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Controller.TV;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
@@ -26,6 +27,7 @@ public class VideoPlaybackFeatureFlagTests : PluginTestBase, IDisposable
     private readonly Mock<ILibraryManager> _libraryManagerMock;
     private readonly Mock<IUserManager> _userManagerMock;
     private readonly Mock<IUserDataManager> _userDataManagerMock;
+    private readonly Mock<ITVSeriesManager> _tvSeriesManagerMock;
 
     public VideoPlaybackFeatureFlagTests()
     {
@@ -35,6 +37,7 @@ public class VideoPlaybackFeatureFlagTests : PluginTestBase, IDisposable
         _libraryManagerMock = new Mock<ILibraryManager>();
         _userManagerMock = new Mock<IUserManager>();
         _userDataManagerMock = new Mock<IUserDataManager>();
+        _tvSeriesManagerMock = new Mock<ITVSeriesManager>();
         TestHelpers.EnsurePluginInstance(
             _config, _loggerFactory,
             c => c.VideoPlaybackEnabled = _config.VideoPlaybackEnabled,
@@ -72,10 +75,28 @@ public class VideoPlaybackFeatureFlagTests : PluginTestBase, IDisposable
 
         var handler = new PlayEpisodeIntentHandler(
             _sessionManagerMock.Object, _config,
-            _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _tvSeriesManagerMock.Object, _loggerFactory);
 
         var response = await handler.HandleAsync(
             new IntentRequest { Intent = new Intent { Name = "PlayEpisodeIntent" } },
+            CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.Contains("disabled", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task PlayNextEpisode_ReturnsDisabledMessage_WhenVideoPlaybackDisabled()
+    {
+        _config.VideoPlaybackEnabled = false;
+        Plugin.Instance!.Configuration.VideoPlaybackEnabled = false;
+
+        var handler = new PlayNextEpisodeIntentHandler(
+            _sessionManagerMock.Object, _config,
+            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _tvSeriesManagerMock.Object, _loggerFactory);
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "PlayNextEpisodeIntent" } },
             CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response);
@@ -104,10 +125,27 @@ public class VideoPlaybackFeatureFlagTests : PluginTestBase, IDisposable
     {
         var handler = new PlayEpisodeIntentHandler(
             _sessionManagerMock.Object, _config,
-            _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _tvSeriesManagerMock.Object, _loggerFactory);
 
         var response = await handler.HandleAsync(
             new IntentRequest { Intent = new Intent { Name = "PlayEpisodeIntent" } },
+            CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        // Without a series slot, handler returns "I didn't catch the series name"
+        var text = TestHelpers.GetSpeechText(response);
+        Assert.Contains("series name", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task PlayNextEpisode_ProceedsNormally_WhenVideoPlaybackEnabled()
+    {
+        var handler = new PlayNextEpisodeIntentHandler(
+            _sessionManagerMock.Object, _config,
+            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _tvSeriesManagerMock.Object, _loggerFactory);
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "PlayNextEpisodeIntent" } },
             CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
 
         Assert.NotNull(response);

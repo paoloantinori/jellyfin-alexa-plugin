@@ -423,6 +423,20 @@
         ]
       },
       {
+        "name": "PlayNextEpisodeIntent",
+        "slots": [
+          {
+            "name": "series_name",
+            "type": "SeriesName"
+          }
+        ],
+        "samples": [
+          "{series_name} の次のエピソードを再生して",
+          "{series_name} の最新のエピソードを再生して",
+          "{series_name} を続きから観て"
+        ]
+      },
+      {
         "name": "PlayPodcastIntent",
         "samples": [
           "ポッドキャスト {podcast_name} を再生して",

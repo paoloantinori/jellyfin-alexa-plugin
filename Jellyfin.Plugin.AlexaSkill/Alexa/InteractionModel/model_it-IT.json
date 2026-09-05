@@ -291,6 +291,24 @@
         ]
       },
       {
+        "name": "PlayNextEpisodeIntent",
+        "samples": [
+          "Riproduci il prossimo episodio di {series_name}",
+          "Metti il prossimo episodio di {series_name}",
+          "Guarda il prossimo episodio di {series_name}",
+          "Riproduci l'ultimo episodio di {series_name}",
+          "Metti l'ultimo episodio di {series_name}",
+          "Continua a guardare {series_name}",
+          "Continua a guardare la serie {series_name}"
+        ],
+        "slots": [
+          {
+            "name": "series_name",
+            "type": "SeriesName"
+          }
+        ]
+      },
+      {
         "name": "PlayPodcastIntent",
         "samples": [
           "Riproduci il podcast {podcast_name}",
@@ -1311,6 +1329,16 @@
           "un disco chiamato {album}",
           "un album che si chiama {album}",
           "un disco che si chiama {album}",
+          "Riproduci un album che si chiama {album}",
+          "Suona un album che si chiama {album}",
+          "Metti un album che si chiama {album}",
+          "Pleia un album che si chiama {album}",
+          "Ascolta un album che si chiama {album}",
+          "Riproduci un disco che si chiama {album}",
+          "Suona un disco che si chiama {album}",
+          "Metti un disco che si chiama {album}",
+          "Pleia un disco che si chiama {album}",
+          "Ascolta un disco che si chiama {album}",
           "cerca un album chiamato {album}",
           "cerca un disco chiamato {album}",
           "Fai suonare l'album {album}",
