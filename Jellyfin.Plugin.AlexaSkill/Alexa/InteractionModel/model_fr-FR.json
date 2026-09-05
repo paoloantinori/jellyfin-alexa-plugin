@@ -463,7 +463,9 @@
         "samples": [
           "joue la saison {season_number} épisode {episode_number} de {series_name}",
           "joue {series_name} saison {season_number} épisode {episode_number}",
-          "regarde la saison {season_number} épisode {episode_number} de {series_name}"
+          "regarde la saison {season_number} épisode {episode_number} de {series_name}",
+          "De jouer la saison {season_number} épisode {episode_number} de {series_name}",
+          "De regarder la saison {season_number} épisode {episode_number} de {series_name}"
         ]
       },
       {
@@ -479,7 +481,12 @@
           "joue le prochain épisode de la série {series_name}",
           "mets le prochain épisode de {series_name}",
           "joue le dernier épisode de {series_name}",
-          "continue à regarder {series_name}"
+          "continue à regarder {series_name}",
+          "De jouer le prochain épisode de {series_name}",
+          "De jouer le prochain épisode de la série {series_name}",
+          "De mettre le prochain épisode de {series_name}",
+          "De jouer le dernier épisode de {series_name}",
+          "De continuer à regarder {series_name}"
         ]
       },
       {

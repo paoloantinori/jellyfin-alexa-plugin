@@ -90,10 +90,10 @@ public class LibrarySyncServiceTests
         var result = await service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
 
         // Assert
-        // SyncUserLibraryAsync makes two parallel calls to SyncCatalogAsync (artists + albums).
-        // Both should have TopParentIds set. Membership, not exact length: the
+        // SyncUserLibraryAsync queries artists + albums + series (JF-493 added series).
+        // All should have TopParentIds set. Membership, not exact length: the
         // resolution may union in physical folder ids (JF-456 item 9).
-        Assert.Equal(2, capturedQueries.Count);
+        Assert.Equal(3, capturedQueries.Count);
         Assert.All(capturedQueries, q =>
         {
             Assert.NotNull(q.TopParentIds);
@@ -122,7 +122,7 @@ public class LibrarySyncServiceTests
         var result = await service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
 
         // Assert
-        Assert.Equal(2, capturedQueries.Count);
+        Assert.Equal(3, capturedQueries.Count);
         Assert.All(capturedQueries, q =>
         {
             // TopParentIds is not set; InternalItemsQuery initializes it to empty array.
@@ -150,7 +150,7 @@ public class LibrarySyncServiceTests
         var result = await service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
 
         // Assert
-        Assert.Equal(2, capturedQueries.Count);
+        Assert.Equal(3, capturedQueries.Count);
         Assert.All(capturedQueries, q =>
         {
             // TopParentIds is not set; InternalItemsQuery initializes it to empty array.
@@ -179,12 +179,44 @@ public class LibrarySyncServiceTests
         // Act
         await service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
 
-        // Assert — two parallel catalog queries (artists + albums)
-        Assert.Equal(2, capturedQueries.Count);
+        // Assert: three catalog queries (artists + albums + series)
+        Assert.Equal(3, capturedQueries.Count);
         Assert.All(capturedQueries, q =>
         {
             Assert.Equal(ExpectedLimit, q.Limit);
         });
+    }
+
+    /// <summary>
+    /// Verifies that the series catalog query (JF-493) targets BaseItemKind.Series,
+    /// so only TV series (Show libraries) feed the SeriesName catalog, and that it
+    /// carries the same user-access scoping (TopParentIds) and Limit as the
+    /// artist/album queries.
+    /// </summary>
+    [Fact]
+    public async Task SyncUserLibraryAsync_QueriesSeriesItems_ScopedByUserAccess()
+    {
+        // Arrange
+        var showLibId = Guid.NewGuid();
+        var user = CreatePluginUser(allowedLibraryIds: new List<string> { showLibId.ToString() });
+        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        var service = CreateService();
+
+        List<InternalItemsQuery> capturedQueries = new List<InternalItemsQuery>();
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => capturedQueries.Add(q))
+            .Returns(Array.Empty<BaseItem>());
+
+        // Act
+        await service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
+
+        // Assert
+        var seriesQueries = capturedQueries
+            .Where(q => q.IncludeItemTypes?.Contains(BaseItemKind.Series) == true)
+            .ToList();
+        Assert.Single(seriesQueries);
+        Assert.Contains(showLibId, seriesQueries[0].TopParentIds);
+        Assert.Equal(50000, seriesQueries[0].Limit);
     }
 
     /// <summary>

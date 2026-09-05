@@ -93,13 +93,15 @@ public class LibrarySyncService
         // Fetch library items once (shared across locales)
         var artistItems = FetchLibraryItems(jellyfinUser, user, BaseItemKind.MusicArtist);
         var albumItems = FetchLibraryItems(jellyfinUser, user, BaseItemKind.MusicAlbum);
+        var seriesItems = FetchLibraryItems(jellyfinUser, user, BaseItemKind.Series);
 
         result.ArtistCount = artistItems.Count;
         result.AlbumCount = albumItems.Count;
+        result.SeriesCount = seriesItems.Count;
 
-        if (artistItems.Count == 0 && albumItems.Count == 0)
+        if (artistItems.Count == 0 && albumItems.Count == 0 && seriesItems.Count == 0)
         {
-            _logger.LogWarning("No artists or albums found for user {UserId}, skipping sync", user.Id);
+            _logger.LogWarning("No artists, albums or series found for user {UserId}, skipping sync", user.Id);
             return result;
         }
 
@@ -123,8 +125,13 @@ public class LibrarySyncService
                     user.AlbumCatalogId, "Jellyfin Albums", "Album catalog synced from Jellyfin library",
                     locale, cancellationToken).ConfigureAwait(false);
 
+                var seriesResult = await SyncCatalogForLocaleAsync(
+                    user, accessToken, vendorId, CatalogType.Series, seriesItems,
+                    user.SeriesCatalogId, "Jellyfin Series", "Series catalog synced from Jellyfin library",
+                    locale, cancellationToken).ConfigureAwait(false);
+
                 // Update this locale's interaction model with the catalog references
-                if (artistResult.Version != null || albumResult.Version != null)
+                if (artistResult.Version != null || albumResult.Version != null || seriesResult.Version != null)
                 {
                     await _catalogManager.UpdateInteractionModelAsync(
                         accessToken,
@@ -133,8 +140,10 @@ public class LibrarySyncService
                         locale,
                         user.ArtistCatalogId,
                         user.AlbumCatalogId,
+                        user.SeriesCatalogId,
                         artistResult.Version,
                         albumResult.Version,
+                        seriesResult.Version,
                         cancellationToken).ConfigureAwait(false);
                 }
 
@@ -161,8 +170,8 @@ public class LibrarySyncService
         result.SyncTime = DateTime.UtcNow;
 
         _logger.LogInformation(
-            "Catalog sync completed for user {UserId}: {Succeeded}/{Total} locales, {Artists} artists, {Albums} albums, {ElapsedMs}ms total",
-            user.Id, localesSucceeded, locales.Count, result.ArtistCount, result.AlbumCount, totalSw.ElapsedMilliseconds);
+            "Catalog sync completed for user {UserId}: {Succeeded}/{Total} locales, {Artists} artists, {Albums} albums, {Series} series, {ElapsedMs}ms total",
+            user.Id, localesSucceeded, locales.Count, result.ArtistCount, result.AlbumCount, result.SeriesCount, totalSw.ElapsedMilliseconds);
 
         return result;
     }
@@ -246,9 +255,13 @@ public class LibrarySyncService
             {
                 user.ArtistCatalogId = catalogId;
             }
-            else
+            else if (catalogType == CatalogType.Album)
             {
                 user.AlbumCatalogId = catalogId;
+            }
+            else if (catalogType == CatalogType.Series)
+            {
+                user.SeriesCatalogId = catalogId;
             }
         }
         else

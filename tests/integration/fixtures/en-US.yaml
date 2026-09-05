@@ -350,6 +350,16 @@ tests:
       season_number: {}
       episode_number: {}
 
+  # JF-493: one-shot infinitive twin ("ask jellyfin player to play season one
+  # episode one of X"). The imperative numbers-first shapes above already
+  # cover the bare form; this pins the "to ..." delivery.
+  - utterance: "to play season one episode one of breaking bad"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
+      series_name: {}
+      season_number: {}
+      episode_number: {}
+
   # -------------------------------------------------------------------------
   # 19. BrowseLibraryIntent (browse_category)
   # -------------------------------------------------------------------------
@@ -734,6 +744,18 @@ tests:
       series_name: {}
 
   - utterance: "continue watching dark"
+    expected_intent: PlayNextEpisodeIntent
+    expected_slots:
+      series_name: {}
+
+  # JF-493: one-shot infinitive twins ("ask jellyfin player to play the next
+  # episode of X" / "... to continue watching the series X").
+  - utterance: "to play the next episode of breaking bad"
+    expected_intent: PlayNextEpisodeIntent
+    expected_slots:
+      series_name: {}
+
+  - utterance: "to continue watching the series dark"
     expected_intent: PlayNextEpisodeIntent
     expected_slots:
       series_name: {}

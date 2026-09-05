@@ -308,6 +308,30 @@ tests:
       season_number: {}
       episode_number: {}
 
+  # JF-493: numbers-first family ("la stagione X episodio Y di Z" before the
+  # series name). Slot-pinned on seed series (stable fill); the adolescence
+  # variant stays intent-level because a non-seed series fills only after the
+  # series catalog syncs.
+  - utterance: "Metti la stagione due episodio uno di stranger things"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
+      series_name: {}
+      season_number: {}
+      episode_number: {}
+
+  - utterance: "Metti la stagione uno episodio uno di adolescence"
+    expected_intent: PlayEpisodeIntent
+    expected_slots: {}
+
+  # JF-493: one-shot infinitive twin ("chiedi a mia collezione di mettere la
+  # stagione uno episodio uno di X").
+  - utterance: "Di mettere la stagione uno episodio uno di breaking bad"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
+      series_name: {}
+      season_number: {}
+      episode_number: {}
+
   # -------------------------------------------------------------------------
   # 14. BrowseLibraryIntent (browse_category)
   # -------------------------------------------------------------------------
@@ -1010,3 +1034,26 @@ tests:
     expected_intent: PlayNextEpisodeIntent
     expected_slots:
       series_name: {}
+
+  # JF-493: one-shot infinitive twins ("chiedi a mia collezione di mettere il
+  # prossimo episodio di X"). The adolescence variant is intent-level: a
+  # non-seed series fills only after the series catalog syncs; before that the
+  # greedy musician slot on PlayArtistSongs used to absorb the name.
+  - utterance: "Di mettere il prossimo episodio di breaking bad"
+    expected_intent: PlayNextEpisodeIntent
+    expected_slots:
+      series_name: {}
+
+  - utterance: "Di riprodurre l'ultimo episodio di stranger things"
+    expected_intent: PlayNextEpisodeIntent
+    expected_slots:
+      series_name: {}
+
+  - utterance: "Di mettere la serie dark"
+    expected_intent: PlayNextEpisodeIntent
+    expected_slots:
+      series_name: {}
+
+  - utterance: "Di mettere il prossimo episodio di adolescence"
+    expected_intent: PlayNextEpisodeIntent
+    expected_slots: {}

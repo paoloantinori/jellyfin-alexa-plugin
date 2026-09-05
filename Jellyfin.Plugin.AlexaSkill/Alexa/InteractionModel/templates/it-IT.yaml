@@ -228,34 +228,6 @@ explicit_intents:
       - quali video non ho finito
       - cosa non ho finito di guardare
       - video non finiti
-  PlayEpisodeIntent:
-    samples:
-      - Riproduci {series_name} stagione {season_number} episodio {episode_number}
-      - Suona {series_name} stagione {season_number} episodio {episode_number}
-      - Metti {series_name} stagione {season_number} episodio {episode_number}
-    slots:
-      - name: series_name
-        type: SeriesName
-      - name: season_number
-        type: ItalianNumber
-      - name: episode_number
-        type: ItalianNumber
-  # JF-324: next/latest-episode playback and "continue watching {series}". All
-  # carriers name the episode (prossimo/ultimo episodio) or the continuation verb,
-  # so PlayEpisodeIntent's number-carrying samples keep their own region; the
-  # series_name slot reuses the SeriesName type PlayEpisode already declares.
-  PlayNextEpisodeIntent:
-    samples:
-      - Riproduci il prossimo episodio di {series_name}
-      - Metti il prossimo episodio di {series_name}
-      - Guarda il prossimo episodio di {series_name}
-      - Riproduci l'ultimo episodio di {series_name}
-      - Metti l'ultimo episodio di {series_name}
-      - Continua a guardare {series_name}
-      - Continua a guardare la serie {series_name}
-    slots:
-      - name: series_name
-        type: SeriesName
   PlayPodcastIntent:
     samples:
       - Riproduci il podcast {podcast_name}
@@ -983,6 +955,56 @@ templates:
     slots:
       - name: media_type
         type: MediaType
+
+  # JF-324: series-first episode addressing. The series-first family stays
+  # hand-picked (Riproduci/Suona/Metti only) as originally curated; JF-493 adds
+  # the numbers-first family below as full imperative/infinitive vocab products
+  # ("metti la stagione 1 episodio 1 di X" had NO sample at all, so profile-nlu
+  # considered PlayEpisodeIntent but never selected it).
+  PlayEpisodeIntent:
+    templates:
+      - Riproduci {series_name} stagione {season_number} episodio {episode_number}
+      - Suona {series_name} stagione {season_number} episodio {episode_number}
+      - Metti {series_name} stagione {season_number} episodio {episode_number}
+      # JF-493: numbers-first family (stagione/episodio before the series name),
+      # both the bare imperative and the one-shot infinitive twin
+      # ("chiedi a mia collezione di mettere la stagione 1 episodio 1 di X").
+      - "{imperative} la stagione {season_number} episodio {episode_number} di {series_name}"
+      - "{infinitive} la stagione {season_number} episodio {episode_number} di {series_name}"
+    slots:
+      - name: series_name
+        type: SeriesName
+      - name: season_number
+        type: ItalianNumber
+      - name: episode_number
+        type: ItalianNumber
+
+  # JF-324: next/latest-episode playback and "continue watching {series}". All
+  # carriers name the episode (prossimo/ultimo episodio) or the continuation verb,
+  # so PlayEpisodeIntent's number-carrying samples keep their own region; the
+  # series_name slot reuses the SeriesName type PlayEpisode already declares.
+  # JF-493: infinitive one-shot twins ("chiedi a mia collezione di mettere il
+  # prossimo episodio di X") previously had no sample, so the greedy PlayArtistSongs
+  # musician slot absorbed the series name instead.
+  PlayNextEpisodeIntent:
+    templates:
+      - Riproduci il prossimo episodio di {series_name}
+      - Metti il prossimo episodio di {series_name}
+      - Guarda il prossimo episodio di {series_name}
+      - Riproduci l'ultimo episodio di {series_name}
+      - Metti l'ultimo episodio di {series_name}
+      - Continua a guardare {series_name}
+      - Continua a guardare la serie {series_name}
+      # JF-493: infinitive twins of the prossimo/ultimo families and of
+      # "Continua a guardare la serie". The "la serie" noun stays in the carrier:
+      # a bare "{infinitive} {series_name}" would be a bare carrier competing
+      # with the artist region.
+      - "{infinitive} il prossimo episodio di {series_name}"
+      - "{infinitive} l'ultimo episodio di {series_name}"
+      - "{infinitive} la serie {series_name}"
+    slots:
+      - name: series_name
+        type: SeriesName
 
 # Dialog configuration for intents that use Dialog.ElicitSlot directives.
 # Without these entries Alexa silently ignores ElicitSlot and routes

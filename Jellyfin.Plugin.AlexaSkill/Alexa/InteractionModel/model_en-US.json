@@ -666,7 +666,9 @@
           "play {series_name} season {season_number} episode {episode_number}",
           "play episode {episode_number} of season {season_number} of {series_name}",
           "watch season {season_number} episode {episode_number} of {series_name}",
-          "watch {series_name} season {season_number} episode {episode_number}"
+          "watch {series_name} season {season_number} episode {episode_number}",
+          "to play season {season_number} episode {episode_number} of {series_name}",
+          "to watch season {season_number} episode {episode_number} of {series_name}"
         ]
       },
       {
@@ -684,7 +686,14 @@
           "play the latest episode of {series_name}",
           "play the newest episode of {series_name}",
           "continue watching {series_name}",
-          "continue watching the series {series_name}"
+          "continue watching the series {series_name}",
+          "to play the next episode of {series_name}",
+          "to play the next episode of the series {series_name}",
+          "to watch the next episode of {series_name}",
+          "to play the latest episode of {series_name}",
+          "to play the newest episode of {series_name}",
+          "to continue watching {series_name}",
+          "to continue watching the series {series_name}"
         ]
       },
       {

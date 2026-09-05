@@ -269,46 +269,6 @@
         ]
       },
       {
-        "name": "PlayEpisodeIntent",
-        "samples": [
-          "Riproduci {series_name} stagione {season_number} episodio {episode_number}",
-          "Suona {series_name} stagione {season_number} episodio {episode_number}",
-          "Metti {series_name} stagione {season_number} episodio {episode_number}"
-        ],
-        "slots": [
-          {
-            "name": "series_name",
-            "type": "SeriesName"
-          },
-          {
-            "name": "season_number",
-            "type": "ItalianNumber"
-          },
-          {
-            "name": "episode_number",
-            "type": "ItalianNumber"
-          }
-        ]
-      },
-      {
-        "name": "PlayNextEpisodeIntent",
-        "samples": [
-          "Riproduci il prossimo episodio di {series_name}",
-          "Metti il prossimo episodio di {series_name}",
-          "Guarda il prossimo episodio di {series_name}",
-          "Riproduci l'ultimo episodio di {series_name}",
-          "Metti l'ultimo episodio di {series_name}",
-          "Continua a guardare {series_name}",
-          "Continua a guardare la serie {series_name}"
-        ],
-        "slots": [
-          {
-            "name": "series_name",
-            "type": "SeriesName"
-          }
-        ]
-      },
-      {
         "name": "PlayPodcastIntent",
         "samples": [
           "Riproduci il podcast {podcast_name}",
@@ -1897,6 +1857,71 @@
           {
             "name": "media_type",
             "type": "MediaType"
+          }
+        ]
+      },
+      {
+        "name": "PlayEpisodeIntent",
+        "samples": [
+          "Riproduci {series_name} stagione {season_number} episodio {episode_number}",
+          "Suona {series_name} stagione {season_number} episodio {episode_number}",
+          "Metti {series_name} stagione {season_number} episodio {episode_number}",
+          "Riproduci la stagione {season_number} episodio {episode_number} di {series_name}",
+          "Suona la stagione {season_number} episodio {episode_number} di {series_name}",
+          "Metti la stagione {season_number} episodio {episode_number} di {series_name}",
+          "Pleia la stagione {season_number} episodio {episode_number} di {series_name}",
+          "Ascolta la stagione {season_number} episodio {episode_number} di {series_name}",
+          "Di riprodurre la stagione {season_number} episodio {episode_number} di {series_name}",
+          "Di suonare la stagione {season_number} episodio {episode_number} di {series_name}",
+          "Di mettere la stagione {season_number} episodio {episode_number} di {series_name}",
+          "Di pleiare la stagione {season_number} episodio {episode_number} di {series_name}",
+          "Di ascoltare la stagione {season_number} episodio {episode_number} di {series_name}"
+        ],
+        "slots": [
+          {
+            "name": "series_name",
+            "type": "SeriesName"
+          },
+          {
+            "name": "season_number",
+            "type": "ItalianNumber"
+          },
+          {
+            "name": "episode_number",
+            "type": "ItalianNumber"
+          }
+        ]
+      },
+      {
+        "name": "PlayNextEpisodeIntent",
+        "samples": [
+          "Riproduci il prossimo episodio di {series_name}",
+          "Metti il prossimo episodio di {series_name}",
+          "Guarda il prossimo episodio di {series_name}",
+          "Riproduci l'ultimo episodio di {series_name}",
+          "Metti l'ultimo episodio di {series_name}",
+          "Continua a guardare {series_name}",
+          "Continua a guardare la serie {series_name}",
+          "Di riprodurre il prossimo episodio di {series_name}",
+          "Di suonare il prossimo episodio di {series_name}",
+          "Di mettere il prossimo episodio di {series_name}",
+          "Di pleiare il prossimo episodio di {series_name}",
+          "Di ascoltare il prossimo episodio di {series_name}",
+          "Di riprodurre l'ultimo episodio di {series_name}",
+          "Di suonare l'ultimo episodio di {series_name}",
+          "Di mettere l'ultimo episodio di {series_name}",
+          "Di pleiare l'ultimo episodio di {series_name}",
+          "Di ascoltare l'ultimo episodio di {series_name}",
+          "Di riprodurre la serie {series_name}",
+          "Di suonare la serie {series_name}",
+          "Di mettere la serie {series_name}",
+          "Di pleiare la serie {series_name}",
+          "Di ascoltare la serie {series_name}"
+        ],
+        "slots": [
+          {
+            "name": "series_name",
+            "type": "SeriesName"
           }
         ]
       }

@@ -26,4 +26,9 @@ public class SyncResult
     /// Gets or sets the number of albums synced.
     /// </summary>
     public int AlbumCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of TV series synced.
+    /// </summary>
+    public int SeriesCount { get; set; }
 }

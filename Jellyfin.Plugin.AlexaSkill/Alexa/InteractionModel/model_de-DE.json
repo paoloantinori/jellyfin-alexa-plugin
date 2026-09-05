@@ -462,7 +462,9 @@
         "samples": [
           "spiele staffel {season_number} folge {episode_number} von {series_name}",
           "spiele {series_name} staffel {season_number} folge {episode_number}",
-          "schau staffel {season_number} folge {episode_number} von {series_name}"
+          "schau staffel {season_number} folge {episode_number} von {series_name}",
+          "Zu spielen staffel {season_number} folge {episode_number} von {series_name}",
+          "Zu schauen staffel {season_number} folge {episode_number} von {series_name}"
         ]
       },
       {
@@ -478,7 +480,11 @@
           "spiele die nächste folge der serie {series_name}",
           "schau die nächste folge von {series_name}",
           "spiele die neueste folge von {series_name}",
-          "schau {series_name} weiter"
+          "schau {series_name} weiter",
+          "Zu spielen die nächste folge von {series_name}",
+          "Zu spielen die nächste folge der serie {series_name}",
+          "Zu schauen die nächste folge von {series_name}",
+          "Zu spielen die neueste folge von {series_name}"
         ]
       },
       {

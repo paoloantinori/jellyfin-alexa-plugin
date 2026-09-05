@@ -57,6 +57,10 @@ public static class CatalogSlotTypes
     public static readonly Dictionary<CatalogType, string> CatalogSlotTypeNames = new()
     {
         [CatalogType.Artist] = "JellyfinArtist",
-        [CatalogType.Album] = "AlbumName"
+        [CatalogType.Album] = "AlbumName",
+        // JF-493: unlike AlbumName (it-IT only), SeriesName is declared by ALL 17
+        // locale models as a static seed list, so the catalog injection REPLACES
+        // the static type everywhere and no slot re-typing is needed.
+        [CatalogType.Series] = "SeriesName"
     };
 }

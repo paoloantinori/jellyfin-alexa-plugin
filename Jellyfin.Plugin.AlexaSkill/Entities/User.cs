@@ -201,6 +201,12 @@ public class User
     public string? AlbumCatalogId { get; set; }
 
     /// <summary>
+    /// Gets or sets the SMAPI catalog ID for the user's TV series library.
+    /// Null if catalog has not been created yet.
+    /// </summary>
+    public string? SeriesCatalogId { get; set; }
+
+    /// <summary>
     /// Gets or sets the timestamp of the last successful catalog sync.
     /// </summary>
     public DateTime? LastCatalogSync { get; set; }

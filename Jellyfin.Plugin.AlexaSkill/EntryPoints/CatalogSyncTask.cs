@@ -109,10 +109,11 @@ public class CatalogSyncTask : IScheduledTask
                 {
                     user.LastCatalogSync = result.SyncTime;
                     _logger.LogInformation(
-                        "Catalog sync succeeded for user {UserId}: {Artists} artists, {Albums} albums",
+                        "Catalog sync succeeded for user {UserId}: {Artists} artists, {Albums} albums, {Series} series",
                         user.Id,
                         result.ArtistCount,
-                        result.AlbumCount);
+                        result.AlbumCount,
+                        result.SeriesCount);
                 }
             }
             catch (Exception ex)

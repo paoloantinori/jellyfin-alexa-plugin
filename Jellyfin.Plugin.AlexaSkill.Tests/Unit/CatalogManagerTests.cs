@@ -27,7 +27,7 @@ public class CatalogManagerTests
     {
         string model = BuildInteractionModelJson();
 
-        string result = _manager.InjectCatalogReferences(model, "artist-cat-1", null, "3", null);
+        string result = _manager.InjectCatalogReferences(model, "artist-cat-1", null, null, "3", null, null);
 
         using var resultDoc = JsonDocument.Parse(result);
         var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
@@ -45,7 +45,7 @@ public class CatalogManagerTests
     {
         string model = BuildInteractionModelJson();
 
-        string result = _manager.InjectCatalogReferences(model, null, "album-cat-2", null, "5");
+        string result = _manager.InjectCatalogReferences(model, null, "album-cat-2", null, null, "5", null);
 
         using var resultDoc = JsonDocument.Parse(result);
         var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
@@ -56,11 +56,50 @@ public class CatalogManagerTests
     }
 
     [Fact]
+    public void InjectCatalogReferences_AddsSeriesCatalog_ReplacingStaticSeed()
+    {
+        // JF-493: every locale model declares SeriesName with a static seed list;
+        // the series catalog injection must REPLACE that definition in place
+        // (same slot type name) instead of adding a parallel type.
+        string model = BuildInteractionModelJson(existingTypes: new[]
+        {
+            ("SeriesName", "{\"type\":\"PLAIN_TEXT\",\"values\":[{\"name\":{\"value\":\"Breaking Bad\"}}]}")
+        });
+
+        string result = _manager.InjectCatalogReferences(model, null, null, "series-cat-9", null, null, "4");
+
+        using var resultDoc = JsonDocument.Parse(result);
+        var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
+
+        Assert.Equal(1, types.GetArrayLength());
+        Assert.Equal("SeriesName", types[0].GetProperty("name").GetString());
+        Assert.Equal("CatalogValueSupplier", types[0].GetProperty("valueSupplier").GetProperty("type").GetString());
+        Assert.Equal("series-cat-9", types[0].GetProperty("valueSupplier").GetProperty("valueCatalog").GetProperty("catalogId").GetString());
+        Assert.Equal("4", types[0].GetProperty("valueSupplier").GetProperty("valueCatalog").GetProperty("version").GetString());
+    }
+
+    [Fact]
+    public void InjectCatalogReferences_SeriesCatalog_DoesNotRetypeSeriesSlots()
+    {
+        // SeriesName has no ReplacesType: slots already reference it, so the
+        // series injection must leave intent slot types untouched.
+        string model = BuildInteractionModelJson(
+            existingTypes: new[] { ("SeriesName", "{\"type\":\"PLAIN_TEXT\",\"values\":[{\"name\":{\"value\":\"Dark\"}}]}") },
+            intents: new[] { ("PlayEpisodeIntent", new[] { ("series_name", "SeriesName") }) });
+
+        string result = _manager.InjectCatalogReferences(model, null, null, "series-cat-9", null, null, "1");
+
+        using var resultDoc = JsonDocument.Parse(result);
+        var intents = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("intents");
+        Assert.Equal("SeriesName", intents[0].GetProperty("slots")[0].GetProperty("type").GetString());
+    }
+
+    [Fact]
     public void InjectCatalogReferences_AddsBothCatalogs()
     {
         string model = BuildInteractionModelJson();
 
-        string result = _manager.InjectCatalogReferences(model, "artist-1", "album-1", "v1", "v2");
+        string result = _manager.InjectCatalogReferences(model, "artist-1", "album-1", null, "v1", "v2", null);
 
         using var resultDoc = JsonDocument.Parse(result);
         var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
@@ -78,7 +117,7 @@ public class CatalogManagerTests
             ("JellyfinArtist", "{\"type\":\"PLAIN_TEXT\",\"values\":[{\"name\":{\"value\":\"OldArtist\",\"synonyms\":[]}}]}")
         });
 
-        string result = _manager.InjectCatalogReferences(model, "new-artist-cat", null, "2", null);
+        string result = _manager.InjectCatalogReferences(model, "new-artist-cat", null, null, "2", null, null);
 
         using var resultDoc = JsonDocument.Parse(result);
         var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
@@ -97,7 +136,7 @@ public class CatalogManagerTests
             ("JellyfinArtist", "{\"type\":\"PLAIN_TEXT\",\"values\":[]}")
         });
 
-        string result = _manager.InjectCatalogReferences(model, "cat-1", "cat-2", "1", "1");
+        string result = _manager.InjectCatalogReferences(model, "cat-1", "cat-2", null, "1", "1", null);
 
         using var resultDoc = JsonDocument.Parse(result);
         var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
@@ -115,7 +154,7 @@ public class CatalogManagerTests
             existingTypes: new[] { ("AMAZON.Musician", "{\"type\":\"PLAIN_TEXT\",\"values\":[]}") },
             intents: new[] { ("PlayMusicIntent", new[] { ("artist", "AMAZON.Musician") }) });
 
-        string result = _manager.InjectCatalogReferences(model, "artist-cat", null, "1", null);
+        string result = _manager.InjectCatalogReferences(model, "artist-cat", null, null, "1", null, null);
 
         using var resultDoc = JsonDocument.Parse(result);
         var intents = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("intents");
@@ -144,7 +183,7 @@ public class CatalogManagerTests
         }
         """;
 
-        string result = _manager.InjectCatalogReferences(model, "artist-cat", null, "2", null);
+        string result = _manager.InjectCatalogReferences(model, "artist-cat", null, null, "2", null, null);
 
         using var resultDoc = JsonDocument.Parse(result);
         var im = resultDoc.RootElement.GetProperty("interactionModel");
@@ -166,7 +205,7 @@ public class CatalogManagerTests
         string model = BuildInteractionModelJson(
             intents: new[] { ("PlayAlbumIntent", new[] { ("album", "AlbumName") }) });
 
-        string result = _manager.InjectCatalogReferences(model, null, "album-cat", null, "1");
+        string result = _manager.InjectCatalogReferences(model, null, "album-cat", null, null, "1", null);
 
         using var resultDoc = JsonDocument.Parse(result);
         var intents = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("intents");
@@ -179,7 +218,7 @@ public class CatalogManagerTests
     {
         string model = BuildInteractionModelJson();
 
-        string result = _manager.InjectCatalogReferences(model, null, null, null, null);
+        string result = _manager.InjectCatalogReferences(model, null, null, null, null, null, null);
 
         Assert.Equal(model, result);
     }
@@ -189,7 +228,7 @@ public class CatalogManagerTests
     {
         string model = BuildInteractionModelJson();
 
-        string result = _manager.InjectCatalogReferences(model, "cat-1", null, null, null);
+        string result = _manager.InjectCatalogReferences(model, "cat-1", null, null, null, null, null);
 
         using var resultDoc = JsonDocument.Parse(result);
         var catalog = resultDoc.RootElement.GetProperty("interactionModel")
@@ -204,7 +243,7 @@ public class CatalogManagerTests
     {
         string model = """{"interactionModel":{"languageModel":{"invocationName":"test","intents":[]}}}""";
 
-        string result = _manager.InjectCatalogReferences(model, "cat-1", "cat-2", "1", "2");
+        string result = _manager.InjectCatalogReferences(model, "cat-1", "cat-2", null, "1", "2", null);
 
         using var resultDoc = JsonDocument.Parse(result);
         var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
@@ -217,7 +256,7 @@ public class CatalogManagerTests
     {
         string model = """{"notAnInteractionModel":true}""";
 
-        string result = _manager.InjectCatalogReferences(model, "cat-1", null, "1", null);
+        string result = _manager.InjectCatalogReferences(model, "cat-1", null, null, "1", null, null);
 
         Assert.Equal(model, result);
     }

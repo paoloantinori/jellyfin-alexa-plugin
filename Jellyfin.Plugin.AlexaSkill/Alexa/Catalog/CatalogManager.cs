@@ -406,8 +406,10 @@ public class CatalogManager
     /// <param name="locale">The locale to update (e.g. "it-IT").</param>
     /// <param name="artistCatalogId">The artist catalog ID (may be null).</param>
     /// <param name="albumCatalogId">The album catalog ID (may be null).</param>
+    /// <param name="seriesCatalogId">The series catalog ID (may be null).</param>
     /// <param name="artistCatalogVersion">The artist catalog version (may be null).</param>
     /// <param name="albumCatalogVersion">The album catalog version (may be null).</param>
+    /// <param name="seriesCatalogVersion">The series catalog version (may be null).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
     public async Task UpdateInteractionModelAsync(
@@ -417,11 +419,13 @@ public class CatalogManager
         string locale,
         string? artistCatalogId,
         string? albumCatalogId,
+        string? seriesCatalogId,
         string? artistCatalogVersion,
         string? albumCatalogVersion,
+        string? seriesCatalogVersion,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrEmpty(artistCatalogId) && string.IsNullOrEmpty(albumCatalogId))
+        if (string.IsNullOrEmpty(artistCatalogId) && string.IsNullOrEmpty(albumCatalogId) && string.IsNullOrEmpty(seriesCatalogId))
         {
             _logger.LogInformation("No catalogs to inject into interaction model, skipping update");
             return;
@@ -440,7 +444,7 @@ public class CatalogManager
 
         string modelJson = await getResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
-        string modifiedJson = InjectCatalogReferences(modelJson, artistCatalogId, albumCatalogId, artistCatalogVersion, albumCatalogVersion);
+        string modifiedJson = InjectCatalogReferences(modelJson, artistCatalogId, albumCatalogId, seriesCatalogId, artistCatalogVersion, albumCatalogVersion, seriesCatalogVersion);
 
         _logger.LogInformation("Pushing updated interaction model for skill {SkillId} locale {Locale}", skillId, locale);
 
@@ -461,10 +465,12 @@ public class CatalogManager
     /// <param name="modelJson">The raw interaction model JSON string.</param>
     /// <param name="artistCatalogId">The artist catalog ID to inject.</param>
     /// <param name="albumCatalogId">The album catalog ID to inject.</param>
+    /// <param name="seriesCatalogId">The series catalog ID to inject.</param>
     /// <param name="artistCatalogVersion">The artist catalog version.</param>
     /// <param name="albumCatalogVersion">The album catalog version.</param>
+    /// <param name="seriesCatalogVersion">The series catalog version.</param>
     /// <returns>The modified interaction model JSON string.</returns>
-    internal string InjectCatalogReferences(string modelJson, string? artistCatalogId, string? albumCatalogId, string? artistCatalogVersion, string? albumCatalogVersion)
+    internal string InjectCatalogReferences(string modelJson, string? artistCatalogId, string? albumCatalogId, string? seriesCatalogId, string? artistCatalogVersion, string? albumCatalogVersion, string? seriesCatalogVersion)
     {
         JsonNode? root = JsonNode.Parse(modelJson);
         if (root == null)
@@ -498,6 +504,16 @@ public class CatalogManager
         {
             catalogMappings.Add((albumCatalogId!, albumCatalogVersion ?? "1",
                 CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Album],
+                null));
+        }
+
+        if (!string.IsNullOrEmpty(seriesCatalogId))
+        {
+            // No ReplacesType: every locale model already declares SeriesName
+            // (static seed) and slots reference it directly, so the injection
+            // replaces the type definition in place without re-typing slots.
+            catalogMappings.Add((seriesCatalogId!, seriesCatalogVersion ?? "1",
+                CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Series],
                 null));
         }
 
