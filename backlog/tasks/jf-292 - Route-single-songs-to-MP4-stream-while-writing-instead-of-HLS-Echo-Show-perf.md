@@ -1,10 +1,10 @@
 ---
 id: JF-292
 title: Route single songs to MP4 stream-while-writing instead of HLS (Echo Show perf)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-06-16 08:32'
-updated_date: '2026-09-05 08:43'
+updated_date: '2026-09-05 09:21'
 labels:
   - performance
 dependencies: []
@@ -55,7 +55,7 @@ TO FINISH THIS TASK: a different approach is needed — either (a) keep HLS for 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Changed BaseHandler.GetVideoAudioUrl (line 393) to drop /stream.m3u8, routing single songs to the StreamVideoAudio MP4 stream-while-writing endpoint instead of the HLS segment encode. Audiobooks keep the HLS concat path. Tests: added Audio->MP4 and AudioBook->HLS routing tests in CoverArtTests; updated URL fixtures in CoverArtTests + LastPlayedResponseInterceptorTests. Build green (0 warnings), 2384 tests pass. Committed 0f1ce2c. On-device seek-bar verification on Echo Show still pending (manual).
+Closed 2026-09-05 (commit 983fdf8a) on live measurements, not on the originally-planned routing change. The latency goal (cold song play from 5-20s down to sub-second) is ALREADY MET by the fixes retained after the June revert: JF-293 audio-copy plus the -g 1 keyframe fix. Measured on the live server 2026-09-05 (three songs 140-209s, cache cleared per item): cold HLS playlist 0.42s / 0.65s / 1.97s, first segment 0.01s, warm playlist 3-10ms. Routing unchanged: songs stay on HLS (the seek bar keeps working by construction, no on-device regression possible); the MP4 stream-while-writing approach stays dead per the 2026-06-16 black-screen evidence (ExoPlayer VideoApp rejects fMP4 with empty_moov over plain HTTP; corr=f492736d). The only code change that landed: the shared ffmpeg monitor's log messages now carry a per-path {Label} (Song / Audiobook) so song encodes stop being logged as audiobooks (AC#4's residual); scoped code-review verified it behavior-neutral, suite 3243/3243. Deploy rides the next batch; the 'Song HLS encoding complete' line gets its live check then. AC#1/#5 are void (the MP4 routing they describe was reverted); AC#2/#3 hold by construction.
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
