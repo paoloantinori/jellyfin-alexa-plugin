@@ -4,10 +4,10 @@ title: >-
   'cerca un album chiamato X' fill shape WITHOUT the calling word
   (musician='surfer rosa') dead-ends on the album-by-artist path: artist-miss +
   empty album needs an album-title retry
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-05 09:49'
-updated_date: '2026-09-05 10:28'
+updated_date: '2026-09-05 10:54'
 labels:
   - nlu-fill-drift
   - play-album
@@ -111,3 +111,9 @@ orchestrator's dispatch flow.
 <!-- SECTION:NOTES:BEGIN -->
 Simplify dispositions (2026-09-05, orchestrator): the QueryAlbumsByTitleAsync local helper for the two retry sites (JF-489 + JF-492) was evaluated and SKIPPED: the two sites diverge in their logging (LogInformation vs LogDebug) which a query-only helper would not absorb, and the saving is about 8 lines in a 540-line handler. The shared-series-prelude extraction watch-item is recorded on JF-324 (apply it when part 2 adds a third series path, not before).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented, reviewed, deployed and live-verified 2026-09-05 (commit c9f77c6e). When the artist search returns zero and the album slot is empty, the searched musician value (post any JF-489 strip) is retried once as an album TITLE before the not-found: a hit plays the album through the musicianSlotAlbumResults mechanism (shared with the JF-489 hit path), a miss keeps today's NotFoundAlbumByArtist naming the searched value. Artist-hit flows untouched; both-slots miss untouched. The code-review finding (the JF-489 miss + artist miss re-issued the identical title query) is fixed with a musicianSlotTitleRetryMissed guard and pinned by a query-count test (exactly one title query for the stripped value). 6 new tests; full suite 3263/3263; LIVE-VERIFIED on minix post-deploy: musician='surfer rosa' (the exact corr=7a54cdf1 shape) now plays Surfer Rosa instead of dead-ending.
+<!-- SECTION:FINAL_SUMMARY:END -->
