@@ -4,10 +4,10 @@ title: >-
   Silent live-model regression to yesterday's model (1385 samples) between
   13:53-14:56 2026-09-05: find the deploy path that PUT a stale model and harden
   every model-deploy source
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-05 13:04'
-updated_date: '2026-09-05 16:30'
+updated_date: '2026-09-05 16:44'
 labels:
   - incident
   - smapi
@@ -118,3 +118,9 @@ SMAPI's documented GET-during-build semantics (returns last succeeded; asserted 
 <!-- SECTION:NOTES:BEGIN -->
 Formal review dispositions (2026-09-05, orchestrator): P2-85 APPLIED (ModelDeploymentManager now polls the locale's interactionModel build status to terminal under a bounded 30x2s budget via the new WaitForLocaleModelBuildAsync helper; healthy path reports SUCCEEDED again, FAILED derives Success=false, exhausted budget reports TIMEOUT); BT1 APPLIED (HttpRequestException during the update-request poll is caught as an observation failure: buildStatus UNVERIFIED, warning log, locale not marked failed and ledger entry kept); BT2 APPLIED (LocaleModelStatus doc lists TIMEOUT/UNVERIFIED/Skipped). BT3 SKIPPED (coverage-only, behavior unchanged). Coverage note: DeployCustomModelAsync has NO test coverage at any point (pre-existing); pinning the new poll requires making WaitForSkillStatusAsync virtual or a seam change, filed here as the follow-up rather than expanding this stream. Build 0 warnings, suite 3282/3282 after the fixes.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed 2026-09-05 (commit 12e39bfc, deployed and live-verified). FORENSIC CONCLUSION: two code-verified mechanisms for the silent regression: H1, the catalog sync's GET could race a pending build (no guard) and its fire-and-forget PUT's build could complete late from a serialized queue; H5, SkillStartup silently redeploys embedded models on a version-tag mismatch in either direction (a restart under an older DLL downgrades live models); the all-phrases Fallback storm matches the injection-less embedded models (it-IT embeds no JellyfinArtist type, so any DLL-origin redeploy strips catalog-backed slots until the next sync). The decision procedure for revisiting the incident (server-log signatures + SMAPI audit timestamps) is written in the task file. HARDENING (all live): MODEL PUT audit line at all three PUT sites (grep 'MODEL PUT': source, locale, intent+sample counts); sync waits for pending builds before its GET, polls its own build, canary GET-back compares counts (ERROR on mismatch); redeployer canary; ledger records sync PUTs; stale '1' version pins and cross-type ids warn; custom deploy polls the locale build to terminal (review P2). LIVE-VERIFIED post-deploy: forced 12-locale sync emitted all audit lines, serialized the builds, all SUCCEEDED, live models correct (it-IT 60/1427). Burst-canary tuning gap filed as JF-497; DeployCustomModelAsync test-coverage gap noted (pre-existing). Suite 3282/3282; gates: /simplify (worker) + formal scoped code-review (P2-85, BT1, BT2 applied; BT3 noted).
+<!-- SECTION:FINAL_SUMMARY:END -->
