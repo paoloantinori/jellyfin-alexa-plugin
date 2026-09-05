@@ -437,7 +437,7 @@ public class VideoAudioController : ControllerBase
                 _cache.RegisterHlsDirectory(itemId, artModifiedTicks);
 
                 // Monitor ffmpeg in the background: wait for completion, log errors, trigger eviction.
-                _ = MonitorFfmpegHlsAsync(ffmpegProcess, hlsDir, itemId, artModifiedTicks);
+                _ = MonitorFfmpegHlsAsync(ffmpegProcess, hlsDir, itemId, artModifiedTicks, "Song");
 
                 // Serve the partial playlist immediately — the Echo Show will start
                 // fetching segments and re-request the playlist for updates.
@@ -712,7 +712,7 @@ public class VideoAudioController : ControllerBase
             _activeAudiobookEncodes.TryAdd(parentId, true);
 
             // Monitor ffmpeg in background — logs errors, triggers eviction when done.
-            _ = MonitorFfmpegHlsAsync(ffmpegProcess, hlsDir, parentId, artModifiedTicks);
+            _ = MonitorFfmpegHlsAsync(ffmpegProcess, hlsDir, parentId, artModifiedTicks, "Audiobook");
 
             // Wait briefly for the first segment to appear so we don't serve a playlist
             // that references zero actual segment files (Echo Show would fail immediately).
@@ -1777,12 +1777,14 @@ public class VideoAudioController : ControllerBase
     /// <param name="hlsDir">The HLS directory containing playlist and segments.</param>
     /// <param name="itemId">Item ID for logging.</param>
     /// <param name="artModifiedTicks">Art ticks for logging.</param>
+    /// <param name="label">Content label for log messages ("Song" or "Audiobook").</param>
     /// <returns>A task representing the background monitoring operation.</returns>
     private async Task MonitorFfmpegHlsAsync(
         Process process,
         string hlsDir,
         string itemId,
-        long artModifiedTicks)
+        long artModifiedTicks,
+        string label)
     {
         try
         {
@@ -1847,21 +1849,21 @@ public class VideoAudioController : ControllerBase
             if (process.ExitCode != 0)
             {
                 _logger.LogWarning(
-                    "Audiobook HLS encoding FAILED for {ParentId}: ffmpeg exit code {ExitCode}, {SegmentFileCount} segment files, {PlaylistSegmentCount} playlist entries{MetaInfo}",
-                    itemId, process.ExitCode, segmentFileCount, playlistSegmentCount,
+                    "{Label} HLS encoding FAILED for {ParentId}: ffmpeg exit code {ExitCode}, {SegmentFileCount} segment files, {PlaylistSegmentCount} playlist entries{MetaInfo}",
+                    label, itemId, process.ExitCode, segmentFileCount, playlistSegmentCount,
                     expectedChapterCount > 0 ? $" (expected {expectedChapterCount})" : string.Empty);
             }
             else if (expectedChapterCount > 0 && playlistSegmentCount != expectedChapterCount)
             {
                 _logger.LogWarning(
-                    "Audiobook HLS encoding INCOMPLETE for {ParentId}: ffmpeg exited 0 but produced {PlaylistSegmentCount}/{ExpectedCount} playlist segments, {SegmentFileCount} segment files on disk",
-                    itemId, playlistSegmentCount, expectedChapterCount, segmentFileCount);
+                    "{Label} HLS encoding INCOMPLETE for {ParentId}: ffmpeg exited 0 but produced {PlaylistSegmentCount}/{ExpectedCount} playlist segments, {SegmentFileCount} segment files on disk",
+                    label, itemId, playlistSegmentCount, expectedChapterCount, segmentFileCount);
             }
             else
             {
                 _logger.LogDebug(
-                    "Audiobook HLS encoding complete for {ParentId}: {SegmentFileCount} segments",
-                    itemId, segmentFileCount);
+                    "{Label} HLS encoding complete for {ParentId}: {SegmentFileCount} segments",
+                    label, itemId, segmentFileCount);
             }
 
             // Background eviction — don't block
@@ -1869,12 +1871,12 @@ public class VideoAudioController : ControllerBase
         }
         catch (OperationCanceledException)
         {
-            _logger.LogWarning("Audiobook HLS encoding TIMED OUT (30 min) for {ParentId}", itemId);
+            _logger.LogWarning("{Label} HLS encoding TIMED OUT (30 min) for {ParentId}", label, itemId);
             try { process.Kill(); } catch { /* already exited */ }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Audiobook HLS: ffmpeg monitoring failed for {ParentId}", itemId);
+            _logger.LogWarning(ex, "{Label} HLS: ffmpeg monitoring failed for {ParentId}", label, itemId);
         }
         finally
         {

@@ -1,17 +1,15 @@
 ---
 id: JF-292
 title: Route single songs to MP4 stream-while-writing instead of HLS (Echo Show perf)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-06-16 08:32'
-updated_date: '2026-07-13 20:16'
+updated_date: '2026-09-05 08:43'
 labels:
   - performance
 dependencies: []
 references:
   - Jellyfin.Plugin.AlexaSkill/Controller/VideoAudioController.cs
-  - Jellyfin.Plugin.AlexaSkill/Alexa/Handler/BaseHandler.cs
-modified_files:
   - Jellyfin.Plugin.AlexaSkill/Alexa/Handler/BaseHandler.cs
 priority: high
 ---
@@ -51,6 +49,7 @@ EVIDENCE: deployed v0.7.0.0 (JF-292 active), played '1979' by Smashing Pumpkins 
 STATE NOW: GetVideoAudioUrl reverted to .m3u8 (songs via HLS again). JF-293 (audio copy), JF-294, JF-295 retained and deployed. Songs play again via HLS.
 
 TO FINISH THIS TASK: a different approach is needed — either (a) keep HLS for Echo Show and optimize it (audio copy from JF-293 already speeds the encode; investigate faster first-segment / shorter segments), or (b) find a streamable container ExoPlayer VideoApp accepts live (proper fMP4 CMAF with init segment? needs validation). Do NOT assume MP4 stream-while-writing works on Echo Show — it does not.
+2026-09-05 closure measurements (live server): the latency goal of this task is ALREADY MET with routing unchanged, by the shipped JF-293 audio-copy encode plus the `-g 1` keyframe fix. Cold HLS playlist generation for songs measured 0.42s / 0.65s / 1.97s (three songs, 140-209s long), first segment 0.01s, warm playlist 3-10ms. The 2026-06 5-20s numbers in the Description are stale. Conclusion: HLS stays for songs (option (a) above, already shipped); the MP4 stream-while-writing route remains dead per the June on-device black-screen evidence, and no re-attempt is warranted without a validated CMAF-style container. The only code change in this final scope is the log-label fix: MonitorFfmpegHlsAsync (shared by the song and audiobook HLS paths) gained a `label` parameter ("Song" at the StreamHlsVideoAudio call site, "Audiobook" at the StreamHlsAudiobook call site) so song encodes stop logging as "Audiobook HLS encoding ..." (the AC#4 triage complaint). No routing, argument, or timeout behavior changed; the expectedChapterCount INCOMPLETE branch still fires only for audiobooks because only that path writes encode-metadata.json.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
