@@ -110,7 +110,8 @@ public class ContinueWatchingIntentHandler : BaseHandler
                         {
                             VideoItem = new Directive.VideoItem
                             {
-                                Source = GetVideoStreamUrl(itemId, user),
+                                // JF-498: codec-routed static vs HLS remux source.
+                                Source = GetVideoAppLaunchUrl(resumeItem, user),
                                 Metadata = new Directive.VideoItemMetadata { Title = resumeItem.Name }
                             }
                         }

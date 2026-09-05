@@ -109,6 +109,23 @@ public class LastPlayedResponseInterceptorTests : IDisposable
         Assert.Equal(guid, _queueManager.GetLastPlayedItemId("test-device"));
     }
 
+    /// <summary>
+    /// JF-498: an episode/movie launched through the HLS remux endpoint (audio codec
+    /// without an Echo decoder) is still a video play and must be recorded, or
+    /// continue-watching/start-over would silently miss every EAC3 episode.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_EpisodeRemuxUrl_RecordsGuid()
+    {
+        string guid = Guid.NewGuid().ToString();
+        var ctx = CreateContext(ResponseWithDirective(
+            VideoApp($"https://jellyfin.example/alexaskill/api/video-audio/episode/{guid}/stream.m3u8?token=abc.def")));
+
+        await _interceptor.ProcessAsync(ctx, CancellationToken.None);
+
+        Assert.Equal(guid, _queueManager.GetLastPlayedItemId("test-device"));
+    }
+
     [Fact]
     public async Task ProcessAsync_VideoAudioUrl_DoesNotRecord()
     {

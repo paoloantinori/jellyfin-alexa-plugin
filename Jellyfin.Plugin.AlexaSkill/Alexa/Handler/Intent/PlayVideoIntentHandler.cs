@@ -137,7 +137,6 @@ public class PlayVideoIntentHandler : BaseHandler
         }
 
         BaseItem video = videos[0];
-        string itemId = video.Id.ToString();
 
         List<QueueItem> queueItems = new List<QueueItem>
         {
@@ -159,7 +158,8 @@ public class PlayVideoIntentHandler : BaseHandler
                     {
                         VideoItem = new VideoItem
                         {
-                            Source = GetVideoStreamUrl(itemId, user),
+                            // JF-498: codec-routed static vs HLS remux source.
+                            Source = GetVideoAppLaunchUrl(video, user),
                             Metadata = new VideoItemMetadata
                             {
                                 Title = video.Name

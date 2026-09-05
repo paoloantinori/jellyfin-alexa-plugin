@@ -184,7 +184,9 @@ public class PlayRandomIntentHandler : BaseHandler
                         {
                             VideoItem = new Directive.VideoItem
                             {
-                                Source = GetStreamUrl(itemId, user),
+                                // JF-498: codec-routed static vs HLS remux source (this
+                                // was the Audio stream URL, which cannot serve a movie/episode).
+                                Source = GetVideoAppLaunchUrl(firstItem, user),
                                 Metadata = new Directive.VideoItemMetadata { Title = firstItem.Name }
                             }
                         }

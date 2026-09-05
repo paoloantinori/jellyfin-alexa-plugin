@@ -11,6 +11,7 @@ using Jellyfin.Plugin.AlexaSkill.Controller;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.MediaEncoding;
+using MediaBrowser.Model.Entities;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -1565,5 +1566,348 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     public void EstimateEncodeBytes_ScalesWithDuration_FloorsAtOneHour(long runtimeTicks, long expectedBytes)
     {
         Assert.Equal(expectedBytes, VideoAudioController.EstimateEncodeBytes(runtimeTicks));
+    }
+
+    // ========== JF-498: episode HLS remux (static-vs-HLS routing for video items) ==========
+
+    /// <summary>
+    /// EAC3 source (the evidenced library shape): video stream COPY at full
+    /// framerate, audio transcode to AAC 192k, 4s segments, explicit v:0/a:0
+    /// mapping, and NO -shortest (both streams come from one finite input).
+    /// </summary>
+    [Fact]
+    public void BuildEpisodeHlsFfmpegArguments_Eac3Source_CopiesVideoAndTranscodesAudio()
+    {
+        string videoUrl = "http://localhost:8096/Videos/abc/stream?static=true";
+
+        List<string> args = VideoAudioController.BuildEpisodeHlsFfmpegArguments(
+            videoUrl, "/tmp/hls/stream.m3u8", "/tmp/hls/seg_%04d.ts", "/alexaskill/api/video-audio/abc/segments/", "eac3");
+
+        // Input: the item's own static stream
+        Assert.Contains(videoUrl, args);
+
+        // Explicit mapping: first video + first audio only (drops subtitles)
+        int mapIdx = args.IndexOf("-map");
+        Assert.True(mapIdx >= 0, "expected explicit -map");
+        Assert.Equal("0:v:0", args[mapIdx + 1]);
+        Assert.Equal("-map", args[mapIdx + 2]);
+        Assert.Equal("0:a:0", args[mapIdx + 3]);
+
+        // Video: copy (the sources routed here are H.264) with the GOP hint
+        Assert.Equal("copy", args[args.IndexOf("-c:v") + 1]);
+        Assert.Equal("48", args[args.IndexOf("-g") + 1]);
+
+        // Audio: AAC 192k (EAC3 has no Echo decoder; 192k covers a 5.1 mixdown)
+        Assert.Equal("aac", args[args.IndexOf("-c:a") + 1]);
+        Assert.Equal("192k", args[args.IndexOf("-b:a") + 1]);
+
+        // HLS: 4-second segments, full listing, event-style growth, MPEG-TS
+        Assert.Equal("4", args[args.IndexOf("-hls_time") + 1]);
+        Assert.Equal("0", args[args.IndexOf("-hls_list_size") + 1]);
+        Assert.Equal("append_list", args[args.IndexOf("-hls_flags") + 1]);
+        Assert.Equal("mpegts", args[args.IndexOf("-hls_segment_type") + 1]);
+        Assert.Equal("/tmp/hls/seg_%04d.ts", args[args.IndexOf("-hls_segment_filename") + 1]);
+        Assert.Equal("/alexaskill/api/video-audio/abc/segments/", args[args.IndexOf("-hls_base_url") + 1]);
+
+        // No -shortest: it exists to bound the audiobook path's infinite art input;
+        // here both output streams come from ONE finite input.
+        Assert.DoesNotContain("-shortest", args);
+
+        // Playlist is the final positional output
+        Assert.Equal("/tmp/hls/stream.m3u8", args[^1]);
+    }
+
+    /// <summary>
+    /// A copy-compatible source audio codec (aac/mp3) streams audio as-is: only the
+    /// container changes (mkv -> MPEG-TS), matching BuildAudioCodecArgs' selection.
+    /// </summary>
+    [Fact]
+    public void BuildEpisodeHlsFfmpegArguments_AacSource_CopiesAudio()
+    {
+        List<string> args = VideoAudioController.BuildEpisodeHlsFfmpegArguments(
+            "http://localhost:8096/Videos/abc/stream?static=true",
+            "/tmp/hls/stream.m3u8", "/tmp/hls/seg_%04d.ts", "/alexaskill/api/video-audio/abc/segments/", "aac");
+
+        Assert.Equal("copy", args[args.IndexOf("-c:a") + 1]);
+        Assert.Null(args.FirstOrDefault(a => a == "-b:a"));
+    }
+
+    /// <summary>Unknown audio codec: transcode to AAC (the conservative default).</summary>
+    [Fact]
+    public void BuildEpisodeHlsFfmpegArguments_UnknownAudio_TranscodesToAac()
+    {
+        List<string> args = VideoAudioController.BuildEpisodeHlsFfmpegArguments(
+            "http://localhost:8096/Videos/abc/stream?static=true",
+            "/tmp/hls/stream.m3u8", "/tmp/hls/seg_%04d.ts", "/alexaskill/api/video-audio/abc/segments/", null);
+
+        Assert.Equal("aac", args[args.IndexOf("-c:a") + 1]);
+    }
+
+    /// <summary>
+    /// JF-498: the episode remux COPIES the video bytes, so its on-disk estimate is
+    /// ~20x the art+audio path (1280MB/h vs 64MB/h): ~2.5Mbps H.264 video + 192k AAC
+    /// + TS overhead is ~1.2GB per hour, i.e. a 45min episode reserves one hour's
+    /// worth by the same round-UP/floor shape as EstimateEncodeBytes.
+    /// </summary>
+    [Theory]
+    [InlineData(0L, 1280L * 1024 * 1024)]
+    [InlineData(45L * TimeSpan.TicksPerMinute, 1280L * 1024 * 1024)]  // 45min rounds UP to 1h
+    [InlineData(90L * TimeSpan.TicksPerMinute, 2560L * 1024 * 1024)]  // 1.5h rounds UP to 2h
+    [InlineData(2L * TimeSpan.TicksPerHour, 2560L * 1024 * 1024)]
+    public void EstimateEpisodeEncodeBytes_ScalesWithDuration_FloorsAtOneHour(long runtimeTicks, long expectedBytes)
+    {
+        Assert.Equal(expectedBytes, VideoAudioController.EstimateEpisodeEncodeBytes(runtimeTicks));
+    }
+
+    /// <summary>A bare-GUID episode playlist request with no token must be rejected (401), like every other stream endpoint.</summary>
+    [Fact]
+    public async Task StreamHlsEpisode_NoToken_Returns401()
+    {
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+
+        var controller = CreateController(); // no token in query
+
+        ActionResult result = await controller.StreamHlsEpisode(Guid.NewGuid().ToString());
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+    }
+
+    /// <summary>Invalid GUID: 400 before anything else.</summary>
+    [Fact]
+    public async Task StreamHlsEpisode_InvalidItemId_Returns400()
+    {
+        var controller = CreateController();
+
+        ActionResult result = await controller.StreamHlsEpisode("not-a-guid");
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.NotNull(badRequest.Value);
+    }
+
+    /// <summary>
+    /// Cache-miss flow: the endpoint starts ffmpeg (a fake script here), waits for
+    /// the first segment, and serves the partial playlist with the stream token
+    /// injected into the segment lines. The recorded ffmpeg arguments must target
+    /// the item's STATIC /Videos/ stream as input (the no-auth shape the song path
+    /// uses for /Audio/) with the video-copy argument set.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_CacheMiss_ServesPartialPlaylistAndFeedsStaticVideoUrlToFfmpeg()
+    {
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Adolescence S01E01",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(45).Ticks
+        };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(episode.Id)).Returns(episode);
+
+        // Fake ffmpeg: record its arguments next to the output playlist, create the
+        // first segment + playlist, exit 0.
+        string fakeFfmpegPath = Path.Combine(_tempDir, "fake-ffmpeg-episode");
+        string fakeFfmpegScript = "#!/bin/sh\n" +
+            "for last_arg in \"$@\"; do :; done\n" +
+            "dir=$(dirname \"$last_arg\")\n" +
+            "printf '%s\\n' \"$@\" > \"$dir/episode-args.txt\"\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
+            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:4.000,\\nseg_0000.ts\\n' > \"$last_arg\"\n" +
+            "exit 0\n";
+        File.WriteAllText(fakeFfmpegPath, fakeFfmpegScript);
+#pragma warning disable CA3003, CA1416 // test-created path; Unix-only test
+        File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+#pragma warning restore CA3003, CA1416
+
+        var controller = CreateController(episode.Id.ToString());
+        controller.FfmpegPath = fakeFfmpegPath;
+        controller.ControllerContext.HttpContext = new DefaultHttpContext
+        {
+            Request =
+            {
+                Query = controller.ControllerContext.HttpContext.Request.Query
+            }
+        };
+
+        ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString());
+
+        // Partial playlist served as content with the token injected on segment lines
+        var content = Assert.IsType<ContentResult>(result);
+        Assert.Equal("application/vnd.apple.mpegurl", content.ContentType);
+        Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
+
+        // The encode ran against the item's static video stream URL
+        string hlsDir = _cache.GetHlsDirectoryPath(episode.Id.ToString(), 0);
+        string recordedArgs = File.ReadAllText(Path.Combine(hlsDir, "episode-args.txt"));
+        Assert.Contains($"/Videos/{episode.Id}/stream?static=true", recordedArgs, StringComparison.Ordinal);
+        Assert.Contains("-c:v", recordedArgs, StringComparison.Ordinal);
+        Assert.Contains("copy", recordedArgs, StringComparison.Ordinal);
+        Assert.Contains("0:v:0", recordedArgs, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-498 review C1b: the bitrate resolver sums the FIRST video stream's BitRate
+    /// and the FIRST audio stream's BitRate; later audio streams and subtitle streams
+    /// are ignored (the remux maps 0:v:0 + 0:a:0).
+    /// </summary>
+    [Fact]
+    public void ResolveTotalMediaBitrateBps_SumsFirstVideoAndAudioStreams()
+    {
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Adolescence S01E02",
+            Id = Guid.NewGuid()
+        };
+
+        var mediaSourceManager = new Mock<IMediaSourceManager>();
+        mediaSourceManager
+            .Setup(m => m.GetMediaStreams(episode.Id))
+            .Returns(new List<MediaStream>
+            {
+                new() { Type = MediaStreamType.Video, Codec = "h264", BitRate = 2_500_000 },
+                new() { Type = MediaStreamType.Audio, Codec = "eac3", BitRate = 384_000 },
+                new() { Type = MediaStreamType.Audio, Codec = "aac", BitRate = 192_000 },
+                new() { Type = MediaStreamType.Subtitle, Codec = "subrip", BitRate = 1_000_000 }
+            });
+
+        var controller = new VideoAudioController(
+            _libraryManagerMock.Object, _mediaEncoderMock.Object, _cache, _loggerFactory, mediaSourceManager.Object);
+
+        Assert.Equal(2_884_000L, controller.ResolveTotalMediaBitrateBps(episode));
+    }
+
+    /// <summary>
+    /// C1b: the resolver returns null (flat-estimate fallback) when no stream carries
+    /// a BitRate and when the media source manager is unavailable (the 4-arg ctor
+    /// leaves it null, the same shape the song path runs with).
+    /// </summary>
+    [Fact]
+    public void ResolveTotalMediaBitrateBps_NoBitrateOrNoManager_ReturnsNull()
+    {
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Adolescence S01E03",
+            Id = Guid.NewGuid()
+        };
+
+        var mediaSourceManager = new Mock<IMediaSourceManager>();
+        mediaSourceManager
+            .Setup(m => m.GetMediaStreams(episode.Id))
+            .Returns(new List<MediaStream>
+            {
+                new() { Type = MediaStreamType.Video, Codec = "h264" },
+                new() { Type = MediaStreamType.Audio, Codec = "eac3" }
+            });
+
+        var withStreams = new VideoAudioController(
+            _libraryManagerMock.Object, _mediaEncoderMock.Object, _cache, _loggerFactory, mediaSourceManager.Object);
+        Assert.Null(withStreams.ResolveTotalMediaBitrateBps(episode));
+
+        var withoutManager = CreateController();
+        Assert.Null(withoutManager.ResolveTotalMediaBitrateBps(episode));
+    }
+
+    /// <summary>
+    /// C1b: with a source bitrate the estimate scales from it (bytes = bits/s / 8 *
+    /// seconds, +10% container overhead): a 10Mbps Blu-ray remux reserves ~4.95GB per
+    /// hour instead of the flat 1280MB, and a TV-shaped ~2.9Mbps source reserves
+    /// slightly more than the flat rate.
+    /// </summary>
+    [Theory]
+    [InlineData(45L * TimeSpan.TicksPerMinute, 10_000_000L, 3_712_500_000L)]
+    [InlineData(TimeSpan.TicksPerHour, 10_000_000L, 4_950_000_000L)]
+    [InlineData(TimeSpan.TicksPerHour, 2_884_000L, 1_427_580_000L)]
+    public void EstimateEpisodeEncodeBytes_BitRateAware_ScalesWithSourceBitrate(long runtimeTicks, long totalBitRateBps, long expectedBytes)
+    {
+        Assert.Equal(expectedBytes, VideoAudioController.EstimateEpisodeEncodeBytes(runtimeTicks, totalBitRateBps));
+    }
+
+    /// <summary>
+    /// C1b: absent (null) or zero bitrate falls back to the flat 1280MB/h with the
+    /// round-UP/floor shape, and a bitrate with an unknown runtime reserves the flat
+    /// one-hour floor.
+    /// </summary>
+    [Theory]
+    [InlineData(2L * TimeSpan.TicksPerHour, null, 2560L * 1024 * 1024)]
+    [InlineData(2L * TimeSpan.TicksPerHour, 0L, 2560L * 1024 * 1024)]
+    [InlineData(0L, 10_000_000L, 1280L * 1024 * 1024)]
+    public void EstimateEpisodeEncodeBytes_AbsentBitrateOrUnknownRuntime_FallsBackToFlat(long runtimeTicks, long? totalBitRateBps, long expectedBytes)
+    {
+        Assert.Equal(expectedBytes, VideoAudioController.EstimateEpisodeEncodeBytes(runtimeTicks, totalBitRateBps));
+    }
+
+    /// <summary>
+    /// JF-498 review I1, endpoint level: a re-encode over interrupted-encode debris
+    /// (non-empty playlist WITHOUT ENDLIST, no active encode) must start ffmpeg over a
+    /// CLEAN target: the fake ffmpeg snapshots the pre-existing playlist/segments
+    /// before writing anything, and the snapshot must show neither the stale playlist
+    /// nor the stale segment, so append_list cannot bake a doubled playlist into the
+    /// cache. The debris is removed by the layered cleanups (the validation Cleanup,
+    /// then DeleteHlsEncodeDebris immediately before the process starts, which covers
+    /// the whole-directory-delete-failed case those layers cannot).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_DebrisBeforeEncode_FfmpegStartsOverCleanTarget()
+    {
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Adolescence S01E04",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(45).Ticks
+        };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(episode.Id)).Returns(episode);
+
+        // Fake ffmpeg: snapshot whether the stale playlist/segment exist at start,
+        // then write the fresh first segment + playlist and exit 0.
+        string fakeFfmpegPath = Path.Combine(_tempDir, "fake-ffmpeg-debris");
+        string fakeFfmpegScript = "#!/bin/sh\n" +
+            "for last_arg in \"$@\"; do :; done\n" +
+            "dir=$(dirname \"$last_arg\")\n" +
+            "snapshot=\"$dir/snapshot-before-encode.txt\"\n" +
+            ": > \"$snapshot\"\n" +
+            "[ -f \"$dir/stream.m3u8\" ] && echo STALE-PLAYLIST >> \"$snapshot\"\n" +
+            "[ -f \"$dir/seg_0999.ts\" ] && echo STALE-SEGMENT >> \"$snapshot\"\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
+            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:4.000,\\nseg_0000.ts\\n' > \"$last_arg\"\n" +
+            "exit 0\n";
+        File.WriteAllText(fakeFfmpegPath, fakeFfmpegScript);
+#pragma warning disable CA3003, CA1416 // test-created path; Unix-only test
+        File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+#pragma warning restore CA3003, CA1416
+
+        // Debris of an interrupted encode: a live-looking playlist (no ENDLIST)
+        // referencing segments, with a stale segment file on disk.
+        string hlsDir = _cache.GetHlsDirectoryPath(episode.Id.ToString(), 0);
+        Directory.CreateDirectory(hlsDir);
+        await File.WriteAllTextAsync(
+            Path.Combine(hlsDir, "stream.m3u8"),
+            "#EXTM3U\n#EXTINF:4.000,\nseg_0000.ts\n#EXTINF:4.000,\nseg_0999.ts\n");
+        await File.WriteAllBytesAsync(Path.Combine(hlsDir, "seg_0999.ts"), new byte[1024]);
+
+        var controller = CreateController(episode.Id.ToString());
+        controller.FfmpegPath = fakeFfmpegPath;
+        controller.ControllerContext.HttpContext = new DefaultHttpContext
+        {
+            Request =
+            {
+                Query = controller.ControllerContext.HttpContext.Request.Query
+            }
+        };
+
+        ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString());
+
+        // The debris invalidated the cache: a re-encode ran and the fresh partial
+        // playlist was served, carrying only the new segment.
+        var content = Assert.IsType<ContentResult>(result);
+        Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("seg_0999", content.Content, StringComparison.Ordinal);
+
+        // At ffmpeg start the target was clean: neither the stale playlist nor the
+        // stale segment existed (append_list had nothing to append over).
+        string snapshot = await File.ReadAllTextAsync(Path.Combine(hlsDir, "snapshot-before-encode.txt"));
+        Assert.DoesNotContain("STALE-PLAYLIST", snapshot, StringComparison.Ordinal);
+        Assert.DoesNotContain("STALE-SEGMENT", snapshot, StringComparison.Ordinal);
     }
 }

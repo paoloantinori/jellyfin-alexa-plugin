@@ -651,6 +651,75 @@ public abstract class BaseHandler
     public string GetAudiobookResumeUrl(string parentId, long startTicks)
         => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/audiobook/{parentId}/stream.m3u8?start={startTicks}&token={StreamTokenHelper.Mint(parentId, _config.StreamTokenSecret)}").ToString();
 
+    /// <summary>
+    /// Get the video-audio URL for the EPISODE HLS REMUX (JF-498): video stream copy +
+    /// audio AAC transcode into MPEG-TS segments, for video items whose audio codec has
+    /// no decoder on the Echo Show (eac3/ac3/truehd/dts) so the static stream never
+    /// starts. Serves movies too: it is the one remux endpoint for every Movie/Episode
+    /// launch that <see cref="GetVideoAppLaunchUrl"/> routes here. Segments are served
+    /// by the existing segment endpoint, keyed by the item GUID; the token is the same
+    /// item-scoped HMAC as the other video-audio endpoints (JF-309).
+    /// </summary>
+    /// <param name="itemId">Id of the video item.</param>
+    /// <returns>URL to the episode remux HLS endpoint.</returns>
+    public string GetEpisodeVideoAudioUrl(string itemId)
+        => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/episode/{itemId}/stream.m3u8?token={StreamTokenHelper.Mint(itemId, _config.StreamTokenSecret)}").ToString();
+
+    /// <summary>
+    /// Resolve the static-vs-HLS-remux decision for a VideoApp launch by probing the
+    /// item's media streams (JF-498). Extracted as its own step so the policy itself
+    /// (<see cref="VideoAppStreamPolicy.Decide"/>) stays a pure function.
+    /// </summary>
+    /// <param name="item">The Movie/Episode item about to be launched.</param>
+    /// <returns>The launch decision with a log-ready reason.</returns>
+    protected VideoAppStreamDecision ResolveVideoAppStreamDecision(BaseItem item)
+    {
+        try
+        {
+            (string? videoCodec, string? audioCodec) = VideoAppStreamPolicy.ExtractCodecs(item.GetMediaStreams());
+            return VideoAppStreamPolicy.Decide(videoCodec, audioCodec, item.Container);
+        }
+        catch (Exception ex)
+        {
+            // GetMediaStreams() goes through BaseItem's statically injected
+            // MediaSourceManager (null under unit tests) and a database read. Any
+            // failure keeps the static stream: the probe may only ADD the remux
+            // route, never break the launch path.
+            Logger.LogDebug(ex, "VideoApp stream decision: could not read media streams for item {ItemId}; keeping the static stream", item.Id);
+            return VideoAppStreamPolicy.Decide(videoCodec: null, audioCodec: null);
+        }
+    }
+
+    /// <summary>
+    /// Get the VideoApp.Launch source URL for a MOVIE or EPISODE item, routed by codec
+    /// compatibility (JF-498): Echo-decodable sources (h264 video + aac/mp3/... audio)
+    /// keep the static <c>/Videos/{id}/stream?static=true</c> URL; sources whose audio
+    /// has no Echo decoder (eac3/ac3/truehd/dts) get the HLS remux URL instead. Every
+    /// VideoApp launch site that launches a Movie or Episode item must go through this
+    /// helper so the routing cannot drift between handlers (live incident 2026-09-05
+    /// corr=d9f848a7: the whole PlayNextEpisode chain was correct and the video never
+    /// started because the static URL served raw EAC3 bytes).
+    /// </summary>
+    /// <param name="item">The Movie/Episode item to launch.</param>
+    /// <param name="user">The user for the static stream URL (api_key).</param>
+    /// <returns>The VideoApp source URL (static or episode HLS remux).</returns>
+    public string GetVideoAppLaunchUrl(BaseItem item, Entities.User user)
+    {
+        VideoAppStreamDecision decision = ResolveVideoAppStreamDecision(item);
+        if (decision.LogWarning)
+        {
+            Logger.LogWarning("VideoApp launch routing for '{ItemName}' ({ItemId}): {Reason}", item.Name, item.Id, decision.Reason);
+        }
+        else
+        {
+            Logger.LogDebug("VideoApp launch routing for '{ItemName}' ({ItemId}): {Reason}", item.Name, item.Id, decision.Reason);
+        }
+
+        return decision.Route == VideoAppStreamRoute.HlsRemux
+            ? GetEpisodeVideoAudioUrl(item.Id.ToString())
+            : GetVideoStreamUrl(item.Id.ToString(), user);
+    }
+
     private string BuildStreamUrl(string pathSegment, string itemId, Entities.User user)
         => new Uri(new Uri(_config.ServerAddress), $"{pathSegment}{itemId}/stream?static=true&api_key={user.JellyfinToken}").ToString();
 
@@ -2828,7 +2897,8 @@ public abstract class BaseHandler
                     {
                         VideoItem = new Directive.VideoItem
                         {
-                            Source = GetVideoStreamUrl(episode.Id.ToString(), user),
+                            // JF-498: codec-routed static vs HLS remux source.
+                            Source = GetVideoAppLaunchUrl(episode, user),
                             Metadata = new Directive.VideoItemMetadata
                             {
                                 Title = episode.Name

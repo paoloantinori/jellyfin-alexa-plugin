@@ -211,7 +211,8 @@ public class AplUserEventHandler : BaseHandler
                         {
                             VideoItem = new Directive.VideoItem
                             {
-                                Source = GetVideoStreamUrl(itemIdStr, user),
+                                // JF-498: codec-routed static vs HLS remux source.
+                                Source = GetVideoAppLaunchUrl(item, user),
                                 Metadata = new Directive.VideoItemMetadata { Title = item.Name }
                             }
                         }

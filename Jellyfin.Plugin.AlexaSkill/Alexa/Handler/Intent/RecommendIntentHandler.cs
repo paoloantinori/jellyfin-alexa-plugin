@@ -218,7 +218,9 @@ public class RecommendIntentHandler : BaseHandler
                         {
                             VideoItem = new Directive.VideoItem
                             {
-                                Source = GetStreamUrl(itemId, user),
+                                // JF-498: codec-routed static vs HLS remux source (this
+                                // was the Audio stream URL, which cannot serve a movie).
+                                Source = GetVideoAppLaunchUrl(item, user),
                                 Metadata = new Directive.VideoItemMetadata { Title = item.Name }
                             }
                         }

@@ -374,6 +374,157 @@ public class VideoAudioCacheTests : PluginTestBase, IDisposable
         }
     }
 
+    // --- JF-498 review C1: playback pin (serve-recency eviction exemption) ---
+
+    /// <summary>
+    /// C1: an HLS directory the client is ACTIVELY WATCHING (playlist + segment fetches
+    /// inside the TTL window) is never the eviction victim, even when it alone exceeds
+    /// the cap. The JF-428 write pin releases when ffmpeg exits, minutes into a
+    /// multi-hour watch; without the serve-recency exemption the post-encode sweep
+    /// (targeting the full cap) then deleted the just-encoded directory mid-playback,
+    /// stalling the stream with 404s and forcing a from-zero re-encode. Over budget is
+    /// relieved from non-watching entries first, and tolerated when the watched entry
+    /// alone is over cap.
+    /// </summary>
+    [Fact]
+    public async Task EvictIfNeeded_RecentlyServedHlsDir_SurvivesEvenWhenAloneOverCap()
+    {
+        Plugin.Instance!.Configuration.VideoAudioCacheSizeMB = 1;
+
+        string watchedItemId = "eeeeeeee-1111-1111-1111-111111111111";
+        string coldItemId = "ffffffff-2222-2222-2222-222222222222";
+        string watchedDir = _cache.GetHlsDirectoryPath(watchedItemId, 1);
+        string coldDir = _cache.GetHlsDirectoryPath(coldItemId, 2);
+        Directory.CreateDirectory(watchedDir);
+        Directory.CreateDirectory(coldDir);
+
+        // Watched entry: playlist + a 1.5MB segment (alone over the 1MB cap)
+        await File.WriteAllTextAsync(Path.Combine(watchedDir, "stream.m3u8"), "#EXTM3U\n#EXTINF:4.000,\nseg_0000.ts\n");
+        await File.WriteAllBytesAsync(Path.Combine(watchedDir, "seg_0000.ts"), new byte[1536 * 1024]);
+        // Cold entry: playlist + a small segment
+        await File.WriteAllTextAsync(Path.Combine(coldDir, "stream.m3u8"), "#EXTM3U\n#EXTINF:4.000,\nseg_0000.ts\n");
+        await File.WriteAllBytesAsync(Path.Combine(coldDir, "seg_0000.ts"), new byte[100 * 1024]);
+
+        // A playing client: playlist fetch + segment fetch refresh the serve record
+        // (the shared RecordAccess hooks used by the episode, song, and audiobook paths).
+        Assert.NotNull(await _cache.GetCachedHlsPlaylist(watchedItemId, 1));
+        Assert.NotNull(_cache.FindSegmentPath(watchedItemId, "seg_0000.ts"));
+
+        // Filesystem atime ancient on BOTH sides: the survival must come from the
+        // serve record, not from atime ordering.
+        foreach (string dir in new[] { watchedDir, coldDir })
+        {
+            File.SetLastAccessTimeUtc(dir, DateTime.UtcNow.AddHours(-5));
+            foreach (string file in Directory.GetFiles(dir))
+            {
+                File.SetLastAccessTimeUtc(file, DateTime.UtcNow.AddHours(-5));
+            }
+        }
+
+        await _cache.EvictIfNeeded();
+
+        Assert.True(Directory.Exists(watchedDir), "An entry served inside the TTL window is never the eviction victim, even alone over cap");
+        Assert.False(Directory.Exists(coldDir), "Over-budget pressure is relieved from non-watching entries");
+    }
+
+    /// <summary>
+    /// C1: the playback pin is a TTL, not a lifetime lease: once the serve record ages
+    /// past the window (the client stopped fetching), the entry is evictable again.
+    /// Uses the internal TTL seam to avoid a wall-clock 10-minute wait.
+    /// </summary>
+    [Fact]
+    public async Task EvictIfNeeded_ServeRecordPastTtl_EntryEvictedNormally()
+    {
+        Plugin.Instance!.Configuration.VideoAudioCacheSizeMB = 1;
+
+        string itemId = "10101010-3333-3333-3333-333333333333";
+        string dir = _cache.GetHlsDirectoryPath(itemId, 1);
+        Directory.CreateDirectory(dir);
+        await File.WriteAllTextAsync(Path.Combine(dir, "stream.m3u8"), "#EXTM3U\n#EXTINF:4.000,\nseg_0000.ts\n");
+        await File.WriteAllBytesAsync(Path.Combine(dir, "seg_0000.ts"), new byte[1536 * 1024]);
+
+        // Serve (records now), then age the record past the shrunk window.
+        Assert.NotNull(await _cache.GetCachedHlsPlaylist(itemId, 1));
+        _cache.PlaybackEvictionExemptionTtl = TimeSpan.FromMilliseconds(30);
+        await Task.Delay(200);
+
+        await _cache.EvictIfNeeded();
+
+        Assert.False(Directory.Exists(dir), "Past the TTL window the entry is an ordinary eviction candidate");
+    }
+
+    // --- JF-498 review I1: pre-encode debris deletion (append_list doubled playlist) ---
+
+    /// <summary>
+    /// I1: DeleteHlsEncodeDebris removes the playlist and segment files of the item's
+    /// HLS directory (the append_list doubled-playlist hazard) while leaving unrelated
+    /// files and the directory itself alone.
+    /// </summary>
+    [Fact]
+    public void DeleteHlsEncodeDebris_RemovesPlaylistAndSegments_KeepsOtherFiles()
+    {
+        string itemId = "20202020-3333-3333-3333-333333333333";
+        string dir = _cache.GetHlsDirectoryPath(itemId, 7);
+        Directory.CreateDirectory(dir);
+        string playlist = Path.Combine(dir, "stream.m3u8");
+        File.WriteAllText(playlist, "#EXTM3U\n#EXTINF:4.000,\nseg_0000.ts\n");
+        File.WriteAllBytes(Path.Combine(dir, "seg_0000.ts"), new byte[16]);
+        File.WriteAllBytes(Path.Combine(dir, "seg_0001.ts"), new byte[16]);
+        File.WriteAllText(Path.Combine(dir, "encode-metadata.json"), "{}");
+
+        _cache.DeleteHlsEncodeDebris(itemId, 7);
+
+        Assert.False(File.Exists(playlist), "the stale playlist must be gone so append_list starts from an empty target");
+        Assert.False(File.Exists(Path.Combine(dir, "seg_0000.ts")), "stale segments must be gone");
+        Assert.False(File.Exists(Path.Combine(dir, "seg_0001.ts")), "stale segments must be gone");
+        Assert.True(File.Exists(Path.Combine(dir, "encode-metadata.json")), "unrelated files are not this method's business");
+        Assert.True(Directory.Exists(dir), "the directory itself is kept (ffmpeg recreates the files)");
+    }
+
+    /// <summary>I1: no directory yet (fresh encode) is a no-op, not a throw.</summary>
+    [Fact]
+    public void DeleteHlsEncodeDebris_MissingDirectory_IsNoOp()
+    {
+        _cache.DeleteHlsEncodeDebris("30303030-3333-3333-3333-333333333333", 7);
+
+        // Reaching here without throwing IS the assertion.
+    }
+
+    /// <summary>
+    /// I1: when deletion is denied (owner loses write on the directory, the
+    /// root-owned-file shape a podman cp can leave behind), the method warns and
+    /// returns instead of throwing: the encode must proceed, degraded, rather than
+    /// fail the play.
+    /// </summary>
+    [Fact]
+    public async Task DeleteHlsEncodeDebris_DeniedDeletion_WarnsAndDoesNotThrow()
+    {
+        if (!PermissionBitsDenyDelete())
+        {
+            return; // privileges bypass permission bits (root): no denial to simulate
+        }
+
+        string itemId = "40404040-3333-3333-3333-333333333333";
+        string dir = _cache.GetHlsDirectoryPath(itemId, 7);
+        Directory.CreateDirectory(dir);
+        string playlist = Path.Combine(dir, "stream.m3u8");
+        await File.WriteAllTextAsync(playlist, "#EXTM3U\n");
+        await File.WriteAllBytesAsync(Path.Combine(dir, "seg_0000.ts"), new byte[16]);
+
+        File.SetAttributes(dir, FileAttributes.ReadOnly);
+        try
+        {
+            _cache.DeleteHlsEncodeDebris(itemId, 7);
+
+            Assert.True(File.Exists(playlist), "Deletion was denied; the file survives");
+            Assert.True(File.Exists(Path.Combine(dir, "seg_0000.ts")), "Deletion was denied; the file survives");
+        }
+        finally
+        {
+            File.SetAttributes(dir, FileAttributes.Normal);
+        }
+    }
+
     // --- review 2026-09-02: permission-denied entries must not wedge the sweep ---
 
     /// <summary>

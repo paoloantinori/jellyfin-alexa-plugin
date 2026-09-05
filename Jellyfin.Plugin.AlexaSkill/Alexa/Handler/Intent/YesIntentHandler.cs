@@ -367,7 +367,6 @@ public class YesIntentHandler : BaseHandler
 
     private SkillResponse PlayVideo(BaseItem video, Entities.User user, SessionInfo session, string locale)
     {
-        string itemId = video.Id.ToString();
         session.NowPlayingQueue = new List<QueueItem> { new() { Id = video.Id } };
         session.FullNowPlayingItem = video;
 
@@ -385,7 +384,9 @@ public class YesIntentHandler : BaseHandler
                     {
                         VideoItem = new VideoAppDirective.VideoItem
                         {
-                            Source = GetStreamUrl(itemId, user),
+                            // JF-498: codec-routed static vs HLS remux source (this
+                            // was the Audio stream URL, which cannot serve a movie/episode).
+                            Source = GetVideoAppLaunchUrl(video, user),
                             Metadata = new VideoAppDirective.VideoItemMetadata
                             {
                                 Title = video.Name

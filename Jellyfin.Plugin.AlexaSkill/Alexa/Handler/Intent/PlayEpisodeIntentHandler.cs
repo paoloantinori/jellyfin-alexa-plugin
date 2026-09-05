@@ -165,7 +165,9 @@ public class PlayEpisodeIntentHandler : BaseHandler
                     {
                         VideoItem = new VideoItem
                         {
-                            Source = GetStreamUrl(itemId, user),
+                            // JF-498: codec-routed static vs HLS remux source (this
+                            // was the Audio stream URL, which cannot serve an episode).
+                            Source = GetVideoAppLaunchUrl(episode, user),
                             Metadata = new VideoItemMetadata
                             {
                                 Title = episode.Name

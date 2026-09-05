@@ -394,7 +394,9 @@ public class SearchMediaIntentHandler : BaseHandler
                         {
                             VideoItem = new VideoItem
                             {
-                                Source = GetStreamUrl(itemId, user),
+                                // JF-498: codec-routed static vs HLS remux source (this
+                                // was the Audio stream URL, which cannot serve a movie/episode).
+                                Source = GetVideoAppLaunchUrl(item, user),
                                 Metadata = new VideoItemMetadata
                                 {
                                     Title = item.Name

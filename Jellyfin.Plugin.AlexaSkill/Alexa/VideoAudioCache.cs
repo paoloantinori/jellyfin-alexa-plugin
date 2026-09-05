@@ -38,9 +38,28 @@ public class VideoAudioCache
     /// In-memory last-served timestamps keyed by cache entry path, so LRU eviction reflects real
     /// recency of use independent of filesystem mount options (relatime/noatime suppress atime).
     /// Falls back to filesystem atime for entries with no recorded serve (e.g. created before this
-    /// process started).
+    /// process started). Doubles as the playback-pin source (see
+    /// <see cref="PlaybackEvictionExemptionTtl"/>): every playlist and segment fetch refreshes the
+    /// entry's timestamp, so an entry being watched right now is never the eviction victim.
     /// </summary>
     private readonly ConcurrentDictionary<string, DateTime> _lastAccessUtc = new();
+
+    /// <summary>
+    /// JF-498 review C1 (playback pin): how long a recorded serve exempts a cache entry
+    /// from eviction. A playing client fetches segments every few seconds and the
+    /// playlist every few tens of seconds, so a timestamp inside this window means the
+    /// entry is being watched right now; deleting it mid-playback stalls the stream
+    /// with 404s and forces a from-zero re-encode. The JF-428 write pin only covers
+    /// the encode window (it releases when ffmpeg exits, minutes into a multi-hour
+    /// watch); serve recency is what protects the completed-but-being-watched entry.
+    /// Ten minutes is far above any client fetch interval, so the exemption only
+    /// expires after the client actually stops. An entry alone exceeding the cap while
+    /// exempt is tolerated: disk temporarily over budget beats breaking playback (the
+    /// sweep still evicts every older non-exempt entry and warns about the remainder).
+    /// Internal test hook (the InternalsVisibleTo seam): shrink it to milliseconds to
+    /// exercise TTL expiry without wall-clock sleeps.
+    /// </summary>
+    internal TimeSpan PlaybackEvictionExemptionTtl { get; set; } = TimeSpan.FromMinutes(10);
 
     /// <summary>Record that a cache entry was served, for in-memory LRU eviction (JF-320 part 2).</summary>
     private void RecordAccess(string? path)
@@ -56,8 +75,9 @@ public class VideoAudioCache
     /// being produced, or a faststart remux in flight. Eviction never deletes a pinned
     /// entry, even when it is the oldest over-limit one: deleting the segments the Echo
     /// Show is fetching mid-book stalls playback with 404s. Scope is the WRITE window
-    /// only; after the write the entry is an ordinary LRU citizen (post-encode
-    /// streaming is protected by serve-recency, see RecordAccess).
+    /// only; after the write the entry is an ordinary LRU citizen, and post-encode
+    /// streaming is protected by the playback pin (serve recency inside
+    /// <see cref="PlaybackEvictionExemptionTtl"/>, recorded by <see cref="RecordAccess"/>).
     /// </summary>
     private readonly ConcurrentDictionary<string, int> _pinnedPaths = new();
 
@@ -296,6 +316,63 @@ public class VideoAudioCache
     }
 
     /// <summary>
+    /// Delete the playlist and segment files of an item's HLS cache directory,
+    /// best-effort (JF-498 review I1). Unlike <see cref="CleanupHlsStub"/> (which only
+    /// removes directories whose playlist is missing or empty) and <see cref="Cleanup"/>
+    /// (whose recursive directory delete is all-or-nothing and swallows IOExceptions),
+    /// this targets the individual FILES of a directory whose non-empty playlist
+    /// survived those cleanups (a locked or permission-denied recursive delete): the
+    /// episode encode runs ffmpeg with <c>append_list</c>, which would otherwise append
+    /// the new encode's entries to the stale playlist's entries and bake a doubled
+    /// playlist into the cache. Per-file deletion also removes everything deletable
+    /// when one undeletable file would have failed the whole recursive delete. Only
+    /// call while holding the per-item lock. Failures are logged as warnings and
+    /// swallowed: the encode proceeds degraded (stale entries may survive) rather than
+    /// failing the play.
+    /// </summary>
+    /// <param name="itemId">The Jellyfin item ID.</param>
+    /// <param name="artModifiedTicks">Ticks from the album art's DateModified.</param>
+    public void DeleteHlsEncodeDebris(string itemId, long artModifiedTicks)
+    {
+#pragma warning disable CA3003 // itemId is GUID-validated by the caller (VideoAudioController)
+        string dirPath = GetHlsDirectoryPath(itemId, artModifiedTicks);
+        if (!Directory.Exists(dirPath))
+        {
+            return;
+        }
+
+        string playlistPath = Path.Combine(dirPath, "stream.m3u8");
+        try
+        {
+            File.Delete(playlistPath); // no-op when absent (fresh encode)
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(ex, "Failed to delete stale HLS playlist before re-encode (append_list may append to its entries): {Path}", playlistPath);
+        }
+
+        try
+        {
+            foreach (string segmentPath in Directory.EnumerateFiles(dirPath, "seg_*.ts"))
+            {
+                try
+                {
+                    File.Delete(segmentPath);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    _logger.LogWarning(ex, "Failed to delete stale HLS segment before re-encode: {Path}", segmentPath);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(ex, "Failed to enumerate stale HLS segments before re-encode: {Path}", dirPath);
+        }
+#pragma warning restore CA3003
+    }
+
+    /// <summary>
     /// Checks total cache size and evicts oldest entries until under the limit.
     /// Handles both flat MP4 files (legacy) and HLS directories.
     /// Entries are evicted by last access time (oldest first).
@@ -467,6 +544,10 @@ public class VideoAudioCache
         // Sort by last access time ascending (oldest first)
         var sorted = entries.OrderBy(e => e.LastAccessTimeUtc).ToList();
 
+        // One playback-pin cutoff for the whole sweep (JF-498 review C1), computed
+        // before the loop so every entry is judged against the same instant.
+        DateTime playbackExemptCutoffUtc = DateTime.UtcNow - PlaybackEvictionExemptionTtl;
+
         foreach (var entry in sorted)
         {
             if (totalSize <= maxSizeBytes)
@@ -480,6 +561,19 @@ public class VideoAudioCache
             // the loop stops and warns below; that is the sweep doing its job with
             // the entries it is allowed to touch.
             if (_pinnedPaths.ContainsKey(entry.Path))
+            {
+                continue;
+            }
+
+            // JF-498 review C1 (playback pin): never evict an entry served inside the
+            // TTL window either. The write pin above releases when ffmpeg exits, which
+            // for a completed remux is minutes into a multi-hour watch; without this
+            // check the post-encode sweep (targeting the full cap) then deleted the
+            // just-encoded directory the client was still fetching segments from,
+            // stalling playback with 404s and forcing a from-zero re-encode. An exempt
+            // entry alone exceeding the cap is tolerated (see PlaybackEvictionExemptionTtl).
+            if (_lastAccessUtc.TryGetValue(entry.Path, out DateTime lastServed)
+                && lastServed >= playbackExemptCutoffUtc)
             {
                 continue;
             }
@@ -521,7 +615,7 @@ public class VideoAudioCache
         if (totalSize > maxSizeBytes)
         {
             _logger.LogWarning(
-                "VideoAudio cache still {OverMB:F1}MB over the {TargetMB:F1}MB target after eviction (pinned in-use entries and/or failed deletes)",
+                "VideoAudio cache still {OverMB:F1}MB over the {TargetMB:F1}MB target after eviction (pinned in-use entries, recently-served entries, and/or failed deletes)",
                 (totalSize - maxSizeBytes) / (1024.0 * 1024.0),
                 maxSizeBytes / (1024.0 * 1024.0));
         }

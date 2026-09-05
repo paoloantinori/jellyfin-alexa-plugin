@@ -10,20 +10,30 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 
 /// <summary>
 /// Response interceptor that records the last-played item per device for VIDEO content
-/// (movies/TV episodes) — the one play path that bypasses
+/// (movies/TV episodes): the one play path that bypasses
 /// <c>BaseHandler.BuildAudioPlayerResponse</c>. Those handlers build a <c>VideoApp.Launch</c>
-/// directive inline with a <c>/Videos/{id}/stream</c> source URL, so this interceptor recovers
-/// the item ID from the outgoing directive.
+/// directive inline with either a <c>/Videos/{id}/stream</c> source URL (compatible codecs,
+/// served statically) or the episode remux HLS URL
+/// (<c>/alexaskill/api/video-audio/episode/{id}/stream.m3u8</c>, JF-498), so this
+/// interceptor recovers the item ID from the outgoing directive for both shapes.
 /// </summary>
 /// <remarks>
 /// Audio (incl. audiobooks, with chapter precision) is recorded separately in
 /// <c>BaseHandler.BuildAudioPlayerResponse</c>; this interceptor intentionally only acts on
-/// <c>/Videos/</c> sources to avoid duplicating that recording and to preserve audiobook chapter
-/// accuracy (the audiobook HLS concat URL carries only the book ID, not the chapter).
+/// the two VIDEO source shapes to avoid duplicating that recording and to preserve audiobook
+/// chapter accuracy (the audiobook HLS concat URL carries only the book ID, not the chapter).
 /// </remarks>
 public class LastPlayedResponseInterceptor : IResponseInterceptor
 {
     private const string VideoPathSegment = "/Videos/";
+
+    /// <summary>
+    /// The JF-498 episode remux playlist URL prefix; the GUID it carries is the
+    /// movie/episode item ID. Deliberately distinct from the single-item audio path
+    /// (<c>/video-audio/{guid}/</c>) and the audiobook concat path
+    /// (<c>/video-audio/audiobook/{guid}/</c>), which must NOT be recorded here.
+    /// </summary>
+    private const string EpisodeHlsPathSegment = "/alexaskill/api/video-audio/episode/";
 
     private static readonly char[] PathOrQueryDelimiters = { '/', '?' };
 
@@ -72,12 +82,14 @@ public class LastPlayedResponseInterceptor : IResponseInterceptor
                 continue;
             }
 
-            // Extract the GUID path segment from .../Videos/{guid}/stream?... and validate it.
-            // Returns null for non-/Videos/ sources (audio-via-VideoApp, audiobook concat).
+            // Extract the GUID path segment from .../Videos/{guid}/stream?... (static
+            // video source) or .../video-audio/episode/{guid}/stream.m3u8?... (JF-498
+            // remux source) and validate it. Returns null for anything else
+            // (audio-via-VideoApp, audiobook concat).
             string? itemId = ExtractVideoItemId(source);
             if (itemId == null)
             {
-                _logger.LogDebug("LastPlayed: no /Videos/ item GUID in source {Source}", source);
+                _logger.LogDebug("LastPlayed: no video item GUID in source {Source}", source);
                 continue;
             }
 
@@ -92,18 +104,30 @@ public class LastPlayedResponseInterceptor : IResponseInterceptor
     }
 
     /// <summary>
-    /// Extract the item ID from a Jellyfin video stream URL (<c>/Videos/{guid}/stream</c>).
-    /// Returns null when the source is not a <c>/Videos/</c> URL or its segment is not a valid GUID.
+    /// Extract the item ID from a video launch source URL: either Jellyfin's static
+    /// stream (<c>/Videos/{guid}/stream</c>) or the episode remux playlist
+    /// (<c>/alexaskill/api/video-audio/episode/{guid}/stream.m3u8</c>, JF-498).
+    /// Returns null when the source matches neither shape or its segment is not a
+    /// valid GUID.
     /// </summary>
     private static string? ExtractVideoItemId(string source)
     {
         int start = source.IndexOf(VideoPathSegment, StringComparison.Ordinal);
         if (start < 0)
         {
-            return null;
+            start = source.IndexOf(EpisodeHlsPathSegment, StringComparison.Ordinal);
+            if (start < 0)
+            {
+                return null;
+            }
+
+            start += EpisodeHlsPathSegment.Length;
+        }
+        else
+        {
+            start += VideoPathSegment.Length;
         }
 
-        start += VideoPathSegment.Length;
         int end = source.IndexOfAny(PathOrQueryDelimiters, start);
         string segment = end < 0 ? source[start..] : source[start..end];
         return Guid.TryParse(segment, out _) ? segment : null;

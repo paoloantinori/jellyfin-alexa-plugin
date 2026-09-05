@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Linq;
 using global::Alexa.NET;
 using global::Alexa.NET.Request;
 using global::Alexa.NET.Request.Type;
@@ -14,6 +15,7 @@ using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Entities;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -289,7 +291,90 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
             TestHelpers.CreateTestUser(),
             _fx.CreateSession(), CancellationToken.None);
 
-        // VideoApp.Launch must NOT include shouldEndSession — Alexa rejects it
+        // VideoApp.Launch must NOT include shouldEndSession; Alexa rejects it
         Assert.Null(response.Response.ShouldEndSession);
+    }
+
+    // ========== JF-498: codec-routed static-vs-HLS launch source ==========
+
+    /// <summary>
+    /// Test seam for <c>BaseItem.GetMediaStreams()</c> (virtual): under the test host
+    /// there is no statically injected MediaSourceManager, so a plain item's probe
+    /// degrades to "unknown codecs" (static route). Overriding the streams lets the
+    /// wiring tests exercise the REAL probe + routing path.
+    /// </summary>
+    private sealed class MovieWithStreams : Movie
+    {
+        private readonly List<MediaStream> _streams;
+
+        public MovieWithStreams(string name, Guid id, params MediaStream[] streams)
+        {
+            Name = name;
+            Id = id;
+            _streams = streams.ToList();
+        }
+
+        public override IReadOnlyList<MediaStream> GetMediaStreams() => _streams;
+    }
+
+    /// <summary>
+    /// The launch site is wired through BaseHandler.GetVideoAppLaunchUrl: an EAC3
+    /// movie (the evidenced library shape) launches the HLS REMUX endpoint, not the
+    /// static stream the Echo cannot decode.
+    /// </summary>
+    [Fact]
+    public async Task Handle_Eac3Movie_LaunchesEpisodeHlsRemux()
+    {
+        var id = Guid.NewGuid();
+        var movie = new MovieWithStreams(
+            "Adolescence S01E01",
+            id,
+            new MediaStream { Type = MediaStreamType.Video, Codec = "h264" },
+            new MediaStream { Type = MediaStreamType.Audio, Codec = "eac3" });
+
+        _fx.LibraryManager
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { movie });
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreatePlayVideoRequest("Adolescence"),
+            _fx.CreateContext(),
+            TestHelpers.CreateTestUser(),
+            _fx.CreateSession(), CancellationToken.None);
+
+        var directive = response.HasDirective<VideoAppLaunchDirective>();
+        Assert.Contains($"/alexaskill/api/video-audio/episode/{id}/stream.m3u8?token=", directive.VideoItem.Source, StringComparison.Ordinal);
+        Assert.DoesNotContain("/Videos/", directive.VideoItem.Source, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The compatible shape (h264 + aac) keeps the static stream URL: zero change
+    /// for sources that already play.
+    /// </summary>
+    [Fact]
+    public async Task Handle_AacMovie_KeepsStaticVideoStream()
+    {
+        var id = Guid.NewGuid();
+        var movie = new MovieWithStreams(
+            "The Matrix",
+            id,
+            new MediaStream { Type = MediaStreamType.Video, Codec = "h264" },
+            new MediaStream { Type = MediaStreamType.Audio, Codec = "aac" });
+
+        _fx.LibraryManager
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { movie });
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreatePlayVideoRequest("The Matrix"),
+            _fx.CreateContext(),
+            TestHelpers.CreateTestUser(),
+            _fx.CreateSession(), CancellationToken.None);
+
+        var directive = response.HasDirective<VideoAppLaunchDirective>();
+        Assert.Contains($"/Videos/{id}/stream?static=true&api_key=", directive.VideoItem.Source, StringComparison.Ordinal);
+        Assert.DoesNotContain("video-audio", directive.VideoItem.Source, StringComparison.Ordinal);
     }
 }
