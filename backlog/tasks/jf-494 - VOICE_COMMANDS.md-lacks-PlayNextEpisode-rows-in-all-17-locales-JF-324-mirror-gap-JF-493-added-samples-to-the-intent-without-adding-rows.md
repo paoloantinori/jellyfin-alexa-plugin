@@ -3,10 +3,10 @@ id: JF-494
 title: >-
   VOICE_COMMANDS.md lacks PlayNextEpisode rows in all 17 locales (JF-324 mirror
   gap; JF-493 added samples to the intent without adding rows)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-05 12:40'
-updated_date: '2026-09-05 15:16'
+updated_date: '2026-09-05 15:24'
 labels:
   - documentation
   - tv
@@ -41,6 +41,7 @@ JF-324 added PlayNextEpisodeIntent to all 17 locale models but never added the i
 
 ## Implementation Notes
 
+<!-- SECTION:NOTES:BEGIN -->
 <!-- NOTES:BEGIN -->
 2026-09-05 (JF-494 implementation): added a `Play Next Episode` row to each of the 17 locale
 tables in VOICE_COMMANDS.md, inserted between `Play Next` and `Play Playlist` (alphabetical row
@@ -79,3 +80,10 @@ Not stale from this task, for the record:
   15 locale NLU fixtures have no PlayNextEpisode cases at all (JF-324/JF-493 coverage gap, only
   relevant if per-locale NLU coverage for this intent is wanted).
 <!-- NOTES:END -->
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed 2026-09-05 (commit fc075253). 17 PlayNextEpisode rows added to VOICE_COMMANDS.md, one per locale table, samples mirrored verbatim from each model's PlayNextEpisodeIntent (scripted cross-check: EXACT MATCH on order and content for all 17). Includes the JF-493 infinitive twins. Pure documentation change (gate-exempt). The stale-mirror audit the task surfaced (episode flows missing wholesale from playback-lifecycle mds, graphs.json copies, docs-site/data.json) is filed as JF-496.
+<!-- SECTION:FINAL_SUMMARY:END -->
