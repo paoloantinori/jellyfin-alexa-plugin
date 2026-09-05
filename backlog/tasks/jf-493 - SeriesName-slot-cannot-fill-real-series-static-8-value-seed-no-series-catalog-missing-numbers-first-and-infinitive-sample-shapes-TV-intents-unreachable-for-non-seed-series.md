@@ -4,9 +4,10 @@ title: >-
   SeriesName slot cannot fill real series (static 8-value seed, no series
   catalog) + missing numbers-first and infinitive sample shapes: TV intents
   unreachable for non-seed series
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-05 11:59'
+updated_date: '2026-09-05 13:35'
 labels:
   - tv
   - catalog-sync
@@ -62,3 +63,9 @@ VERIFICATION: dotnet build 0 errors 0 warnings; dotnet test 3269/3269 green (bas
 
 REMAINING for the orchestrator: deploy DLL + rebuild/deploy models (rebuild-models skill), let CatalogSyncTask run (or force it) so SeriesCatalogId populates and the SeriesName catalog-backed type lands in the live models, then the live profile-nlu probes from the task description ("metti il prossimo episodio di adolescence" selecting PlayNextEpisodeIntent with the slot FILLED, numbers-first explicit shape, infinitive one-shots) and the device retest card (invocation-prefixed one-shot is the reliable form; bare phrasing may stay claimed by the device video skill, platform competition).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented, reviewed, deployed and live-verified 2026-09-05 (commit 3d206c27). Third catalog (CatalogType.Series -> SeriesName, 61 series uploaded on the live vendor) following the artist/album pattern: LibrarySyncService series sync, User.SeriesCatalogId persistence, in-place static-seed replacement (ReplacesType=null; the only SeriesName slots are the two episode intents, all 17 locales). Sample shapes: it-IT numbers-first families via template, infinitive one-shot twins in the 8 infinitive-convention locales. Deployed: DLL ca5abaed, catalog sync force-run after clearing LastCatalogSync (XML edit with backup; the 12h dedup gate skips manual triggers). LIVE-VERIFIED via profile-nlu post-sync: 'metti il prossimo episodio di adolescence' -> PlayNextEpisodeIntent with series_name ER_SUCCESS_MATCH 'Adolescence' (jellyfin_series catalog id); 'metti la stagione 1 episodio 1 di adolescence' -> PlayEpisodeIntent with season_number + series_name filled. The two adolescence it-IT fixtures' live-suite confirmation and the device retest are the remaining card items. Full suite 3269/3269; gates: /simplify (worker, 3 applied) + formal scoped code-review (no findings at threshold).
+<!-- SECTION:FINAL_SUMMARY:END -->
