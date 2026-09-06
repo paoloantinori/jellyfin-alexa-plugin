@@ -4,10 +4,10 @@ title: >-
   JF-495 poll bug: 404 on a consumed SMAPI update-request URL logs an ERR every
   ~90s during playback (should read as terminal-completed); find what calls
   catalog SMAPI during playback
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-06 08:47'
-updated_date: '2026-09-06 11:22'
+updated_date: '2026-09-06 11:16'
 labels:
   - smapi
   - bug
@@ -35,16 +35,16 @@ Bug in the JF-495 hardening observed live 2026-09-06 (10:43-10:46, during episod
 - [ ] #6 NLU test fixtures updated if interaction model changed
 - [ ] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 17 locales
-- [x] #1 dotnet build passes with 0 errors
-- [x] #2 dotnet test passes
-- [x] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [x] #9 /simplify passed (no blocking cleanups remaining)
-- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #9 dotnet build passes with 0 errors
+- [x] #10 dotnet test passes
+- [x] #11 No new compiler warnings introduced
+- [ ] #12 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [ ] #13 HttpClient instances are not shared across calls that modify BaseAddress
+- [ ] #14 NLU test fixtures updated if interaction model changed
+- [ ] #15 E2E test added for new intent or handler logic
+- [ ] #16 Locale response strings added to all 17 locales
+- [x] #17 /simplify passed (no blocking cleanups remaining)
+- [x] #18 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
 ## Implementation notes (2026-09-06)
@@ -81,3 +81,9 @@ Live evidence shows the observed ERRs were NOT on an update-request Location URL
 - `dotnet test Jellyfin.Plugin.AlexaSkill.Tests`: Passed! Failed: 0, Passed: 3340, Skipped: 0, Total: 3340 (baseline 3336 + 4 new: poll-404 terminal, settle-404 quiet, catalog poll-404 fallback version, poll-503 still errors).
 - /simplify pass applied (test verify helpers deduplicated; `NotFoundHtml` accessibility kept `internal` because the outer test class cannot reach nested private members). code-review (review-local methodology, high): no findings at or above the 80 threshold; two sub-threshold notes recorded (the `"1"` fallback delta on a catalog poll 404 is the instructed disposition and already warns via the JF-495 path; treating any poll-URL 404 as terminal is bounded by the Location always originating from SMAPI's own 202 response).
 - Log evidence gathered read-only from the minix container (`podman logs jellyfin`); no deploy, no SMAPI calls, no model files touched.
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed 2026-09-06 (commit c2e6095e + budget bump 7cf2a03e, deployed and live-verified over three full sync cycles). A 404 from the polled update-request URL (consumed/expired after completion) now reads as terminal-completed with a debug line; the settle-wait 404 is quiet. Caller identified with evidence: the startup catalog sync itself (one ERR per locale, the ~90s cadence was the per-locale iteration); no playback-cadence SMAPI caller exists. LIVE: the post-fix full sync emitted ZERO 'SMAPI request failed' lines across 12 locales (previously 12 ERRs).
+<!-- SECTION:FINAL_SUMMARY:END -->

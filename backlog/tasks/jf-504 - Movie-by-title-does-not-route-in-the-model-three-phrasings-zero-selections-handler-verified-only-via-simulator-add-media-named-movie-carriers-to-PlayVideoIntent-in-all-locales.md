@@ -4,10 +4,10 @@ title: >-
   Movie-by-title does not route in the model (three phrasings, zero selections;
   handler verified only via simulator): add media-named movie carriers to
   PlayVideoIntent in all locales
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-06 08:58'
-updated_date: '2026-09-06 09:03'
+updated_date: '2026-09-06 11:16'
 labels:
   - nlu
   - video
@@ -123,3 +123,8 @@ model layer has no new handler logic to E2E beyond what they pin).
 <!-- NOTES:END -->
 <!-- SECTION:NOTES:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed 2026-09-06 (commit 920f0494, models deployed to all 12 active locales and live-verified). Media-named movie carriers added to PlayVideoIntent in all 17 locales (it-IT: 6 carriers via the YAML template with a hand-expanded idiomatic verb subset; the other 16 per their own conventions; ja-JP watch-only, its search carriers would be byte-identical duplicates of SearchMediaIntent); title stays AMAZON.SearchQuery everywhere. Fixtures it-IT + en-US including the exact device-failing phrasing; VOICE_COMMANDS.md 17/17 EXACT MATCH cross-check. DEPLOYED + LIVE-VERIFIED: all 12 active-locale models rebuilt SUCCEEDED, the final catalog sync re-injected references with 12/12 canaries OK, live it-IT carries the 6 film carriers (60 intents / 1433 samples), and profile-nlu now selects PlayVideoIntent with title filled for all three previously-failing phrasings ('di riprodurre il film ada', 'metti il film ada', 'voglio guardare il film ada'). Device retest card: 'chiedi a mia collezione di riprodurre il film ada' should now launch the movie.
+<!-- SECTION:FINAL_SUMMARY:END -->

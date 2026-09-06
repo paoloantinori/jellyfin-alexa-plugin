@@ -3,10 +3,10 @@ id: JF-497
 title: >-
   Sync canary never fires during full 12-locale bursts (per-locale poll budget
   vs serialized build queue): add a post-sync canary sweep or scale the budget
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-05 16:44'
-updated_date: '2026-09-06 09:53'
+updated_date: '2026-09-06 11:16'
 labels:
   - smapi
   - catalog-sync
@@ -54,3 +54,9 @@ Verification: dotnet build 0 errors 0 warnings; dotnet test full suite 3345/3345
 
 [code-review gate 2026-09-06, sub-threshold observations recorded per the same-turn landing rule; both assessed BELOW the 80 reporting threshold, no action required now] (1) Canary blindness on same-count failures: in the sync path the PUT is a GET-modify-PUT whose intent/sample counts equal the live model's by construction (catalog injection touches only the types array), so a build that silently never landed cannot be caught by the counts-only canary; the fallback tracker's 500ms pre-delay plus the i==0 'may reflect the previous build' log are the only guards. Acceptable because consequence is bounded (next weekly sync re-submits; next locale's settle wait observes the in-flight build). Revisit only if the ledger ever shows SUCCEEDED+canary-OK while the live model lacks the injected types. (2) Status-404 asymmetry (JF-502/JF-497 cross-path): on the update-request poll a 404 reads as terminal-completed, but on the skill-status fallback a 404 reads as null and WaitForModelBuildOutcomeViaSkillStatusAsync keeps polling to a ~57s TIMEOUT. Defensible (status-404 = no status object, not operation-gone) and loud rather than silent, but if Amazon ever 404s the bare /v1/skills/{id}/status shape, every locale burns the fallback budget and records TIMEOUT; the settle-wait path stays cheap (null returns immediately).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed 2026-09-06 (commits c2e6095e + 7cf2a03e, deployed and live-verified over three full sync cycles). ROOT CAUSE (from the JF-502 investigation): the model PUT's Location is a skill-status URL whose shape the update-request poll cannot parse, so every locale burned its budget into TIMEOUT and the canary never fired; the settle-wait also used a stage-scoped status URL that 404s (the SDK has no such route). Fix: IsUpdateRequestLocation gates the Location (genuine update-request URLs keep the operation poll; anything else falls back immediately to WaitForModelBuildOutcomeViaSkillStatusAsync), the settle wait and fallback share the corrected /v1/skills/{id}/status URL, and the fallback budget was raised to ~170s after live measurement showed each locale queues FOUR serialized SMAPI builds (3 catalog versions + the model build = ~80-110s of genuine settle). LIVE-VERIFIED: full 12-locale syncs now emit 'MODEL PUT canary OK: live model matches submission' on 12/12 locales with 0 TIMEOUT and 0 errors. Duration stays ~16-20 min (48 serialized builds are the real floor); the win is per-locale verification, not speed.
+<!-- SECTION:FINAL_SUMMARY:END -->
