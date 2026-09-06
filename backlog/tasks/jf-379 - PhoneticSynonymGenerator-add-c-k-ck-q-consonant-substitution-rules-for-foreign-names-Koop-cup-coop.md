@@ -7,7 +7,7 @@ status: To Do
 assignee:
   - zai
 created_date: '2026-07-25 18:07'
-updated_date: '2026-08-29 08:00'
+updated_date: '2026-09-06 15:14'
 labels:
   - enhancement
   - phonetic
@@ -44,6 +44,8 @@ NOTE: distinct from the catalog-injection question (JF-380). This task is about 
 
 <!-- SECTION:NOTES:BEGIN -->
 REOPENED-BY-MISTAKE 2026-08-29: briefly set In Progress based on the stale AC#1 ('add c/k/ck/q rules'); the 2026-07-27 REDESIGN supersedes that AC - data-driven generative composite (Epitran port + PHOBLE interference maps + inverse orthography), explicitly multi-session with open questions awaiting maintainer confirmation ('Confirm the team wants to commit', spec question 4). Reverted to To Do untouched. Before ANY implementation: the open questions in docs/superpowers/specs/2026-07-27-jf379-generative-phonetic-synonyms-design.md need decisions (CMUdict delivery form, replace-vs-alongside transition, rollout flag).
+
+New device-ASR evidence for the phonetic-variant need (2026-09-06, Echo Dot): 'soul coughing' heard as 'i soul coffin' (song slot, corr=61db93dd). The title n-gram search found 100 'soul' candidates, the fuzzy best was an unrelated 'Glory-Of Soul Ignoring' (53), and the disambiguation 'no' ended in a clean not-found; the correct recovery was the ARTIST path, never reached because the title search had candidates. A generative phonetic synonym for 'coughing' emitting 'coffin' (the Romance consonant-doubler already emits exactly this direction: Cofin->Coffin) would have covered the artist-side resolution had the song-miss cascaded; the deeper fix is also letting a low-confidence title disambiguation 'no' cascade to the cross-media artist fallback. Operational note until then: 'suona la band soul coughing' (artist carrier) works.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
