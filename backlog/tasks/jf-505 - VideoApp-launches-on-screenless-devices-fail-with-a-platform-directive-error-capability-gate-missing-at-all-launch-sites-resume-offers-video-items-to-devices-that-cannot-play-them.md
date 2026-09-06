@@ -4,9 +4,10 @@ title: >-
   VideoApp launches on screenless devices fail with a platform directive error:
   capability gate missing at all launch sites + resume offers video items to
   devices that cannot play them
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-06 15:14'
+updated_date: '2026-09-06 15:15'
 labels:
   - video
   - device-capabilities
