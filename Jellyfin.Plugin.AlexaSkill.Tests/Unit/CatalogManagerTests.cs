@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -314,7 +316,7 @@ public class CatalogManagerTests
     [Fact]
     public async Task UpdateInteractionModelAsync_BuildSucceeded_CanaryMatches_ReturnsOkResult()
     {
-        var handler = new ModelPutFakeHandler(trackBuild: true, liveModel: null);
+        var handler = new ModelPutFakeHandler(PutLocation.UpdateRequest, liveModel: null);
         var manager = new CatalogManager(
             new StubHttpClientFactory(() => new HttpClient(handler)),
             _loggerMock.Object);
@@ -349,7 +351,7 @@ public class CatalogManagerTests
         // The JF-495 signature: the build reports SUCCEEDED but the live model
         // carries different counts (a racing deploy replaced it).
         string staleLiveModel = """{"interactionModel":{"languageModel":{"invocationName":"mia collezione","intents":[{"name":"OnlyIntent"}]}}}""";
-        var handler = new ModelPutFakeHandler(trackBuild: true, liveModel: staleLiveModel);
+        var handler = new ModelPutFakeHandler(PutLocation.UpdateRequest, liveModel: staleLiveModel);
         var manager = new CatalogManager(
             new StubHttpClientFactory(() => new HttpClient(handler)),
             _loggerMock.Object);
@@ -384,7 +386,7 @@ public class CatalogManagerTests
         // Some SMAPI response shapes carry no Location header on the model PUT;
         // the build must still be tracked (via the skill-status endpoint) and the
         // canary must still run.
-        var handler = new ModelPutFakeHandler(trackBuild: false, liveModel: null);
+        var handler = new ModelPutFakeHandler(PutLocation.None, liveModel: null);
         var manager = new CatalogManager(
             new StubHttpClientFactory(() => new HttpClient(handler)),
             _loggerMock.Object);
@@ -428,24 +430,165 @@ public class CatalogManagerTests
         Assert.Null(CatalogManager.ExtractLocaleModelStatus("{not json", "it-IT"));
     }
 
+    [Fact]
+    public async Task UpdateInteractionModelAsync_SkillStatusLocation_FallsBackImmediately_CanaryFires()
+    {
+        // JF-497 root cause: the model PUT's Location is a skill-status URL
+        // (observed live on the 2026-09-06 startup sync), a shape the
+        // update-request poll can never parse; every locale burned its full poll
+        // budget, landed TIMEOUT, and the canary never fired. A non-update-request
+        // Location must dispatch to the skill-status tracker immediately and
+        // resolve within the first poll iterations.
+        var handler = new ModelPutFakeHandler(PutLocation.SkillStatus, liveModel: null);
+        var manager = new CatalogManager(
+            new StubHttpClientFactory(() => new HttpClient(handler)),
+            _loggerMock.Object);
+
+        var result = await manager.UpdateInteractionModelAsync(
+            "token", "skill-1", "development", "it-IT",
+            "artist-cat-1", null, null, "3", null, null, CancellationToken.None);
+
+        Assert.Equal("SUCCEEDED", result.BuildStatus);
+        Assert.True(result.CanaryMatch);
+        Assert.Equal(2, result.LiveIntents);
+        Assert.Equal(4, result.LiveSamples);
+
+        // Settle wait (1 GET) + first fallback poll (1 GET): resolves in the first
+        // iterations, not the 30-iteration budget burn of the pre-fix poll.
+        Assert.True(handler.StatusGetCount <= 3,
+            $"skill-status tracker should resolve within the first poll iterations, got {handler.StatusGetCount} status GETs");
+        // The unparseable Location was never polled as an update request.
+        Assert.Equal(0, handler.UpdateRequestGetCount);
+        // Exactly two model GETs: the settle-time fetch and the canary GET-back
+        // (the canary fired once).
+        Assert.Equal(2, handler.ModelGetCount);
+        Assert.Empty(handler.UnexpectedRequests);
+
+        VerifyLoggedOnce(LogLevel.Information, "non-update-request Location", "JF-497");
+    }
+
+    [Fact]
+    public async Task UpdateInteractionModelAsync_GenuineUpdateRequestLocation_PollsOperationEndpoint()
+    {
+        // JF-497: genuine update-request Locations must keep polling through the
+        // update-request endpoint (the JF-332/JF-495 behavior), not get silently
+        // rerouted to the skill-status tracker.
+        var handler = new ModelPutFakeHandler(PutLocation.UpdateRequest, liveModel: null);
+        var manager = new CatalogManager(
+            new StubHttpClientFactory(() => new HttpClient(handler)),
+            _loggerMock.Object);
+
+        var result = await manager.UpdateInteractionModelAsync(
+            "token", "skill-1", "development", "it-IT",
+            "artist-cat-1", null, null, "3", null, null, CancellationToken.None);
+
+        Assert.Equal("SUCCEEDED", result.BuildStatus);
+        Assert.True(result.CanaryMatch);
+        Assert.True(handler.UpdateRequestGetCount >= 1,
+            $"the update-request Location must be polled, got {handler.UpdateRequestGetCount} polls");
+        Assert.Empty(handler.UnexpectedRequests);
+    }
+
+    [Fact]
+    public async Task UpdateInteractionModelAsync_SettleWait_UsesNonStagedSkillStatusUrl()
+    {
+        // JF-497: the settle-wait status GET must hit /v1/skills/{id}/status (the
+        // shape Alexa.NET.Management's Skills.Status calls and the live evidence
+        // confirms); the stage-scoped /v1/skills/{id}/stages/{stage}/status
+        // 404'd for every locale of the 2026-09-06 startup sync.
+        var handler = new ModelPutFakeHandler(PutLocation.UpdateRequest, liveModel: null);
+        var manager = new CatalogManager(
+            new StubHttpClientFactory(() => new HttpClient(handler)),
+            _loggerMock.Object);
+
+        await manager.UpdateInteractionModelAsync(
+            "token", "skill-1", "development", "it-IT",
+            "artist-cat-1", null, null, "3", null, null, CancellationToken.None);
+
+        Assert.Contains($"GET {ModelPutFakeHandler.SkillStatusUrl}", handler.Requests);
+        Assert.DoesNotContain(handler.Requests, r =>
+            r.Contains("/stages/", StringComparison.Ordinal)
+            && r.EndsWith("/status", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void IsUpdateRequestLocation_UpdateRequestUrls_ReturnsTrue()
+    {
+        Assert.True(CatalogManager.IsUpdateRequestLocation(
+            new Uri("https://api.amazonalexa.com/v1/skills/api/custom/interactionModel/catalogs/cat-1/updateRequest/req-1")));
+        Assert.True(CatalogManager.IsUpdateRequestLocation(
+            new Uri("https://api.amazonalexa.com/v1/skills/skill-1/stages/development/interactionModel/updateRequest/req-model-1")));
+        Assert.True(CatalogManager.IsUpdateRequestLocation(
+            new Uri("/v1/skills/api/custom/interactionModel/slotTypes/st-1/updateRequest/req-2", UriKind.Relative)));
+    }
+
+    [Fact]
+    public void IsUpdateRequestLocation_NonUpdateRequestUrls_ReturnsFalse()
+    {
+        // The live-observed model PUT Location shape (JF-497) and the stage-scoped
+        // variant both lack the updateRequest segment.
+        Assert.False(CatalogManager.IsUpdateRequestLocation(
+            new Uri("https://api.amazonalexa.com/v1/skills/skill-1/status")));
+        Assert.False(CatalogManager.IsUpdateRequestLocation(
+            new Uri("https://api.amazonalexa.com/v1/skills/skill-1/stages/development/status")));
+        Assert.False(CatalogManager.IsUpdateRequestLocation(
+            new Uri("https://api.amazonalexa.com/v1/skills/skill-1/stages/development/interactionModel/locales/it-IT")));
+    }
+
+    /// <summary>
+    /// Shape of the Location header the fake model PUT returns (JF-497): none
+    /// (plain 200), a pollable update-request URL, or the live-observed
+    /// skill-status URL that the update-request poll cannot parse.
+    /// </summary>
+    private enum PutLocation
+    {
+        None,
+        UpdateRequest,
+        SkillStatus
+    }
+
     /// <summary>
     /// Fake SMAPI backend for the UpdateInteractionModelAsync flow: skill status
-    /// (settle wait), model GET (first call returns the pre-modification model,
-    /// later calls return the "live" model), model PUT (optionally 202 + Location),
-    /// and the update-request poll.
+    /// (settle wait; served at the JF-497 non-staged /v1/skills/{id}/status URL),
+    /// model GET (first call returns the pre-modification model, later calls
+    /// return the "live" model), model PUT (configurable Location shape), and
+    /// the update-request poll. The two 404 modes reproduce the JF-502 live
+    /// evidence shapes (404 with an HTML body, as Amazon serves for gone resources).
+    /// Records every request so tests can assert URL shapes and poll counts.
     /// </summary>
     private sealed class ModelPutFakeHandler : HttpMessageHandler
     {
         private const string Base = "https://api.amazonalexa.com";
-        private readonly bool _trackBuild;
+        private readonly PutLocation _putLocation;
         private readonly string? _liveModel;
+        private readonly bool _pollNotFound;
+        private readonly bool _statusNotFound;
         private int _modelGetCount;
 
-        public ModelPutFakeHandler(bool trackBuild, string? liveModel)
+        internal static string SkillStatusUrl => $"{Base}/v1/skills/skill-1/status";
+
+        public ModelPutFakeHandler(PutLocation putLocation, string? liveModel, bool pollNotFound = false, bool statusNotFound = false)
         {
-            _trackBuild = trackBuild;
+            _putLocation = putLocation;
             _liveModel = liveModel;
+            _pollNotFound = pollNotFound;
+            _statusNotFound = statusNotFound;
         }
+
+        /// <summary>Every request as "METHOD url", in order, for URL-shape assertions.</summary>
+        public List<string> Requests { get; } = new();
+
+        /// <summary>Requests that fell through to the fake's unexpected branch.</summary>
+        public List<string> UnexpectedRequests { get; } = new();
+
+        public int ModelGetCount => _modelGetCount;
+
+        public int StatusGetCount =>
+            Requests.Count(r => r == $"GET {SkillStatusUrl}");
+
+        public int UpdateRequestGetCount =>
+            Requests.Count(r => r.StartsWith("GET ", StringComparison.Ordinal)
+                && r.Contains("/updateRequest/req-model-1", StringComparison.Ordinal));
 
         private static string OriginalModel =>
             """{"interactionModel":{"languageModel":{"invocationName":"mia collezione","intents":[{"name":"PlayEpisodeIntent","slots":[{"name":"series_name","type":"SeriesName"}],"samples":["a","b"]},{"name":"PlayArtistSongsIntent","samples":["c","d"]}],"types":[{"name":"SeriesName","values":[{"name":{"value":"Breaking Bad"}}]}]}}}""";
@@ -453,27 +596,43 @@ public class CatalogManagerTests
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             string url = request.RequestUri!.ToString();
+            Requests.Add($"{request.Method} {url}");
 
-            if (request.Method == HttpMethod.Get && url.EndsWith("/stages/development/status", StringComparison.Ordinal))
+            // JF-497: the settle wait and the fallback tracker must GET the
+            // non-staged skill-status URL (the stage-scoped shape 404s live).
+            if (request.Method == HttpMethod.Get && url == SkillStatusUrl)
             {
+                if (_statusNotFound)
+                {
+                    return NotFoundHtml();
+                }
+
                 return Json("""{"manifest":{"lastUpdateRequest":{"status":"SUCCEEDED"}},"interactionModel":{"it-IT":{"lastUpdateRequest":{"status":"SUCCEEDED"}}}}""");
             }
 
             if (request.Method == HttpMethod.Put && url.Contains("/interactionModel/locales/", StringComparison.Ordinal))
             {
-                if (!_trackBuild)
+                if (_putLocation == PutLocation.None)
                 {
                     return new HttpResponseMessage(HttpStatusCode.OK);
                 }
 
+                var location = _putLocation == PutLocation.SkillStatus
+                    ? new Uri(SkillStatusUrl)
+                    : new Uri($"{Base}/v1/skills/skill-1/stages/development/interactionModel/updateRequest/req-model-1");
                 return new HttpResponseMessage(HttpStatusCode.Accepted)
                 {
-                    Headers = { Location = new Uri($"{Base}/v1/skills/skill-1/stages/development/interactionModel/updateRequest/req-model-1") }
+                    Headers = { Location = location }
                 };
             }
 
             if (request.Method == HttpMethod.Get && url.Contains("/updateRequest/req-model-1", StringComparison.Ordinal))
             {
+                if (_pollNotFound)
+                {
+                    return NotFoundHtml();
+                }
+
                 return Json("""{"lastUpdateRequest":{"status":"SUCCEEDED"}}""");
             }
 
@@ -486,6 +645,7 @@ public class CatalogManagerTests
             string? body = request.Content == null
                 ? null
                 : await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            UnexpectedRequests.Add($"{request.Method} {url}");
             return new HttpResponseMessage(HttpStatusCode.NotFound)
             {
                 Content = new StringContent($"{{\"error\":\"unexpected {request.Method} {url} {body}\"}}", Encoding.UTF8, "application/json")
@@ -497,6 +657,161 @@ public class CatalogManagerTests
             {
                 Content = new StringContent(json, Encoding.UTF8, "application/json")
             };
+
+        internal static HttpResponseMessage NotFoundHtml() =>
+            new(HttpStatusCode.NotFound)
+            {
+                Content = new StringContent(
+                    "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\"><html><body>404 Not Found</body></html>",
+                    Encoding.UTF8,
+                    "text/html")
+            };
+    }
+
+    #endregion
+
+    #region 404 disposition (JF-502)
+
+    [Fact]
+    public async Task UpdateInteractionModelAsync_PollReturns404_TreatedAsTerminalCompleted()
+    {
+        // JF-502: the update-request Location URL is consumed/expired once the
+        // build completes, so a poll can get 404 + HTML instead of a status.
+        // That must read as terminal-completed (SUCCEEDED disposition, canary
+        // still verifies the live model), never as an ERR or a failed locale.
+        var handler = new ModelPutFakeHandler(PutLocation.UpdateRequest, liveModel: null, pollNotFound: true);
+        var manager = new CatalogManager(
+            new StubHttpClientFactory(() => new HttpClient(handler)),
+            _loggerMock.Object);
+
+        var result = await manager.UpdateInteractionModelAsync(
+            "token", "skill-1", "development", "it-IT",
+            "artist-cat-1", null, null, "3", null, null, CancellationToken.None);
+
+        Assert.Equal("SUCCEEDED", result.BuildStatus);
+        Assert.True(result.CanaryMatch);
+
+        VerifyNeverLogged(LogLevel.Error, "SMAPI request failed");
+        VerifyLoggedOnce(LogLevel.Debug, "returned 404", "terminal-completed");
+    }
+
+    [Fact]
+    public async Task UpdateInteractionModelAsync_SkillStatus404_SettledQuietlyWithoutError()
+    {
+        // JF-502 live evidence: the settle-wait skill-status GET answered 404 for
+        // every locale of the 2026-09-06 startup sync, one ERR per locale. The 404
+        // must take the quiet no-status path (debug log, settle skipped) instead of
+        // ERR + warning, and the sync must proceed with the model update.
+        var handler = new ModelPutFakeHandler(PutLocation.UpdateRequest, liveModel: null, statusNotFound: true);
+        var manager = new CatalogManager(
+            new StubHttpClientFactory(() => new HttpClient(handler)),
+            _loggerMock.Object);
+
+        var result = await manager.UpdateInteractionModelAsync(
+            "token", "skill-1", "development", "it-IT",
+            "artist-cat-1", null, null, "3", null, null, CancellationToken.None);
+
+        Assert.Equal("SUCCEEDED", result.BuildStatus);
+        Assert.True(result.CanaryMatch);
+
+        VerifyNeverLogged(LogLevel.Error, "SMAPI request failed");
+        VerifyNeverLogged(LogLevel.Warning, "Could not read skill status");
+        VerifyLoggedOnce(LogLevel.Debug, "returned 404", "no reported status");
+    }
+
+    [Fact]
+    public async Task UploadCatalogValuesAsync_PollReturns404_TerminalCompletedWithFallbackVersion()
+    {
+        // JF-502: same terminal-completed disposition on the catalog version poll.
+        // The version minted by the upload is unknown, so the existing JF-495
+        // "falling back to 1" warning path applies, but no ERR and no throw.
+        var handler = new CatalogUploadFakeHandler(() => ModelPutFakeHandler.NotFoundHtml());
+        var manager = new CatalogManager(
+            new StubHttpClientFactory(() => new HttpClient(handler)),
+            _loggerMock.Object);
+
+        string version = await manager.UploadCatalogValuesAsync(
+            "token", "cat-1", new CatalogPayload(), () => "https://example.test/catalog/x", CancellationToken.None);
+
+        Assert.Equal("1", version);
+
+        VerifyNeverLogged(LogLevel.Error, "SMAPI request failed");
+        VerifyLoggedOnce(LogLevel.Debug, "returned 404", "terminal-completed");
+    }
+
+    [Fact]
+    public async Task UploadCatalogValuesAsync_PollReturns503_StillSurfacesError()
+    {
+        // Locks the distinction: only the 404 is terminal; any other HTTP failure
+        // keeps the transient current behavior (ERR log + HttpRequestException).
+        var handler = new CatalogUploadFakeHandler(() => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+        var manager = new CatalogManager(
+            new StubHttpClientFactory(() => new HttpClient(handler)),
+            _loggerMock.Object);
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => manager.UploadCatalogValuesAsync(
+            "token", "cat-1", new CatalogPayload(), () => "https://example.test/catalog/x", CancellationToken.None));
+
+        _loggerMock.Verify(
+            l => l.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("SMAPI request failed", StringComparison.Ordinal)),
+                It.IsAny<Exception?>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// Fake SMAPI backend for the UploadCatalogValuesAsync flow: catalog version
+    /// creation (202 + Location) and a configurable update-request poll response
+    /// (each poll gets a fresh instance; responses are disposed by the caller).
+    /// </summary>
+    private sealed class CatalogUploadFakeHandler : HttpMessageHandler
+    {
+        private const string Base = "https://api.amazonalexa.com";
+        private readonly Func<HttpResponseMessage> _pollResponse;
+
+        public CatalogUploadFakeHandler(Func<HttpResponseMessage> pollResponse) => _pollResponse = pollResponse;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            string url = request.RequestUri!.ToString();
+
+            if (request.Method == HttpMethod.Post && url.Contains("/catalogs/cat-1/versions", StringComparison.Ordinal))
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Accepted)
+                {
+                    Headers = { Location = new Uri($"{Base}/v1/skills/api/custom/interactionModel/catalogs/cat-1/updateRequest/req-cat-1") }
+                });
+            }
+
+            if (request.Method == HttpMethod.Get && url.Contains("/updateRequest/req-cat-1", StringComparison.Ordinal))
+            {
+                return Task.FromResult(_pollResponse());
+            }
+
+            return Task.FromResult(ModelPutFakeHandler.NotFoundHtml());
+        }
+    }
+
+    private void VerifyNeverLogged(LogLevel level, string messageFragment) =>
+        VerifyLogged(level, Times.Never, new[] { messageFragment });
+
+    private void VerifyLoggedOnce(LogLevel level, params string[] messageFragments) =>
+        VerifyLogged(level, Times.Once, messageFragments);
+
+    private void VerifyLogged(LogLevel level, Func<Times> times, params string[] messageFragments)
+    {
+        _loggerMock.Verify(
+            l => l.Log(
+                level,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => messageFragments.All(
+                    f => v.ToString()!.Contains(f, StringComparison.Ordinal))),
+                It.IsAny<Exception?>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            times);
     }
 
     #endregion

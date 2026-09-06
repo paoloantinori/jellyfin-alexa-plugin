@@ -337,9 +337,11 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
                 };
             }
 
-            if (request.Method == HttpMethod.Get && url.EndsWith("/stages/development/status", StringComparison.Ordinal))
+            if (request.Method == HttpMethod.Get && url.EndsWith("/status", StringComparison.Ordinal))
             {
-                // JF-495 build-settle wait: nothing in progress.
+                // JF-495 build-settle wait and JF-497 fallback tracker: nothing in
+                // progress, served at the non-staged /v1/skills/{id}/status URL
+                // (the stage-scoped shape 404s live).
                 return Json("""{"manifest":{"lastUpdateRequest":{"status":"SUCCEEDED"}},"interactionModel":{"it-IT":{"lastUpdateRequest":{"status":"SUCCEEDED"}}}}""");
             }
 

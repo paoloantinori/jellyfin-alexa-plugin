@@ -412,10 +412,12 @@ public class CatalogManager
     /// This replaces the broken POST /update incremental endpoint.
     /// JF-495: before the GET, waits for any in-flight build of this locale's model
     /// to settle (so the GET cannot capture pre-build, stale content while another
-    /// deploy's build is still queued); after the PUT, polls the update request and
-    /// runs a canary GET-back comparing the live intent/sample counts with what was
-    /// submitted. Both measures make the 2026-09-05 silent-stale-regression class
-    /// either impossible (GET race) or loud (canary mismatch ERROR).
+    /// deploy's build is still queued); after the PUT, waits for the build (polling
+    /// the update request when its Location is one, or tracking the skill status
+    /// otherwise, JF-497) and runs a canary GET-back comparing the live
+    /// intent/sample counts with what was submitted. Both measures make the
+    /// 2026-09-05 silent-stale-regression class either impossible (GET race) or
+    /// loud (canary mismatch ERROR).
     /// </summary>
     /// <param name="accessToken">The SMAPI access token.</param>
     /// <param name="skillId">The skill ID whose model should be updated.</param>
@@ -455,7 +457,7 @@ public class CatalogManager
         // rebuild (or any other writer) submitted a model moments ago, its build may
         // still be IN_PROGRESS and the GET would return the last SUCCEEDED (stale)
         // content; PUTting that content back redeploys yesterday's model.
-        await WaitForLocaleBuildToSettleAsync(accessToken, client, skillId, stage, locale, cancellationToken).ConfigureAwait(false);
+        await WaitForLocaleBuildToSettleAsync(accessToken, client, skillId, locale, cancellationToken).ConfigureAwait(false);
 
         _logger.LogInformation("Fetching interaction model for skill {SkillId} locale {Locale}", skillId, locale);
 
@@ -490,17 +492,26 @@ public class CatalogManager
 
         _logger.LogInformation("Interaction model update submitted for skill {SkillId} locale {Locale}", skillId, locale);
 
-        // JF-495: the PUT is asynchronous on SMAPI (202 + update-request Location).
+        // JF-495: the PUT is asynchronous on SMAPI (202 + a Location header).
         // Wait for the build so this sync's build cannot complete and clobber the
         // live model minutes later, unobserved.
+        // JF-497: the Location is not always a pollable update-request URL. Observed
+        // live (2026-09-06 startup sync): the model PUT's Location is a skill-status
+        // URL, whose response nests the per-locale status under
+        // interactionModel.{locale}; ExtractPollStatus (root/lastUpdateRequest) can
+        // never parse it, so the poll burned its full budget on every locale, landed
+        // TIMEOUT, and the canary never fired. Dispatch on the Location's shape:
+        // poll only genuine update-request URLs, and fall back to the skill-status
+        // tracker immediately otherwise (no budget burn on an unparseable URL).
         string buildStatus;
-        Uri? buildLocation = putResponse.Headers.Location;
-        if (buildLocation != null)
+        Uri? rawLocation = putResponse.Headers.Location;
+        Uri? pollLocation = rawLocation == null ? null : ResolveLocationUri(rawLocation);
+        if (pollLocation != null && IsUpdateRequestLocation(pollLocation))
         {
             try
             {
                 await PollSmapiOperationAsync(
-                    accessToken, client, ResolveLocationUri(buildLocation), "Interaction model update", cancellationToken).ConfigureAwait(false);
+                    accessToken, client, pollLocation, "Interaction model update", cancellationToken).ConfigureAwait(false);
                 buildStatus = "SUCCEEDED";
             }
             catch (TimeoutException ex)
@@ -531,11 +542,21 @@ public class CatalogManager
         }
         else
         {
-            _logger.LogWarning(
-                "Interaction model PUT for skill {SkillId} locale {Locale} returned no Location header; tracking the build via the skill-status endpoint instead (JF-495)",
-                skillId, locale);
+            if (pollLocation == null)
+            {
+                _logger.LogWarning(
+                    "Interaction model PUT for skill {SkillId} locale {Locale} returned no Location header; tracking the build via the skill-status endpoint instead (JF-495)",
+                    skillId, locale);
+            }
+            else
+            {
+                _logger.LogInformation(
+                    "Interaction model PUT for skill {SkillId} locale {Locale} returned a non-update-request Location ({Location}); tracking the build via the skill-status endpoint instead (JF-497)",
+                    skillId, locale, pollLocation);
+            }
+
             buildStatus = await WaitForModelBuildOutcomeViaSkillStatusAsync(
-                accessToken, client, skillId, stage, locale, cancellationToken).ConfigureAwait(false);
+                accessToken, client, skillId, locale, cancellationToken).ConfigureAwait(false);
         }
 
         // Canary: only meaningful once the build reports SUCCEEDED; a GET before the
@@ -611,6 +632,19 @@ public class CatalogManager
     }
 
     /// <summary>
+    /// Builds the skill-status URL used by both the pre-GET settle wait and the
+    /// fallback build tracker. Deliberately NOT stage-scoped:
+    /// /v1/skills/{id}/stages/{stage}/status answered 404 for every locale of
+    /// the 2026-09-06 startup sync, while /v1/skills/{id}/status works (the
+    /// same URL Alexa.NET.Management's Skills.Status calls, and the shape the
+    /// model PUT's Location header carries). Single owner of the string so the
+    /// two callers cannot drift apart (JF-497).
+    /// </summary>
+    /// <param name="skillId">The skill whose status is read.</param>
+    /// <returns>The absolute skill-status URL.</returns>
+    private static string SkillStatusUrl(string skillId) => $"{SmapiEndpoint}/v1/skills/{skillId}/status";
+
+    /// <summary>
     /// Reads the locale's interaction-model build state from the skill-status
     /// endpoint. Returns null when the status cannot be read (endpoint failure)
     /// or the locale has no reported status; failures are logged as warnings.
@@ -619,16 +653,29 @@ public class CatalogManager
         string accessToken,
         HttpClient client,
         string skillId,
-        string stage,
         string locale,
         CancellationToken cancellationToken)
     {
         try
         {
-            using var request = CreateAuthorizedGet(
-                $"{SmapiEndpoint}/v1/skills/{skillId}/stages/{stage}/status", accessToken);
+            using var request = CreateAuthorizedGet(SkillStatusUrl(skillId), accessToken);
 
             using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+
+            // JF-502: the skill-status URL can answer 404 (observed live for every
+            // locale of the 2026-09-06 startup sync, one ERR per locale). "No status
+            // to read" is the same best-effort outcome as the catch below (return
+            // null, skip the wait), so handle the 404 quietly instead of letting
+            // EnsureSuccessAsync log an ERR for it.
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                _logger.LogDebug(
+                    "Skill status for skill {SkillId} locale {Locale} returned 404 (no readable status); treating as no reported status (JF-502)",
+                    skillId,
+                    locale);
+                return null;
+            }
+
             await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
 
             string json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
@@ -652,7 +699,6 @@ public class CatalogManager
         string accessToken,
         HttpClient client,
         string skillId,
-        string stage,
         string locale,
         CancellationToken cancellationToken)
     {
@@ -660,7 +706,7 @@ public class CatalogManager
         for (int i = 0; i < 30; i++)
         {
             string? state = await TryGetLocaleModelStatusAsync(
-                accessToken, client, skillId, stage, locale, cancellationToken).ConfigureAwait(false);
+                accessToken, client, skillId, locale, cancellationToken).ConfigureAwait(false);
             if (state is null || state != "IN_PROGRESS")
             {
                 return;
@@ -681,17 +727,18 @@ public class CatalogManager
 
     /// <summary>
     /// Fallback build tracker for model PUTs whose response carries no Location
-    /// header (JF-495): polls the skill-status endpoint until the locale's model
-    /// build reaches a terminal state. When the first observation is already
-    /// terminal it may reflect the PREVIOUS build; that ambiguity is logged and
-    /// the canary still verifies the live counts afterwards.
+    /// header (JF-495), or whose Location is not a pollable update-request URL
+    /// (observed live: a skill-status URL, JF-497): polls the skill-status
+    /// endpoint until the locale's model build reaches a terminal state. When
+    /// the first observation is already terminal it may reflect the PREVIOUS
+    /// build; that ambiguity is logged and the canary still verifies the live
+    /// counts afterwards.
     /// </summary>
     /// <returns>"SUCCEEDED", "FAILED", or "TIMEOUT" when the budget is exhausted.</returns>
     private async Task<string> WaitForModelBuildOutcomeViaSkillStatusAsync(
         string accessToken,
         HttpClient client,
         string skillId,
-        string stage,
         string locale,
         CancellationToken cancellationToken)
     {
@@ -704,7 +751,7 @@ public class CatalogManager
         for (int i = 0; i < 30; i++)
         {
             string? state = await TryGetLocaleModelStatusAsync(
-                accessToken, client, skillId, stage, locale, cancellationToken).ConfigureAwait(false);
+                accessToken, client, skillId, locale, cancellationToken).ConfigureAwait(false);
 
             if (state == "SUCCEEDED" || state == "FAILED")
             {
@@ -727,7 +774,7 @@ public class CatalogManager
 
     /// <summary>
     /// Extracts the build status of one locale from a raw skill-status response body
-    /// (the JSON shape served by GET /v1/skills/[id]/stages/[stage]/status:
+    /// (the JSON shape served by GET /v1/skills/[id]/status:
     /// "interactionModel" maps each locale to its "lastUpdateRequest" object whose
     /// "status" is the build state, e.g. SUCCEEDED or IN_PROGRESS).
     /// Returns null when the locale has no reported status.
@@ -1009,8 +1056,40 @@ public class CatalogManager
     }
 
     /// <summary>
+    /// True when a resolved Location header points at a pollable SMAPI
+    /// update-request resource: a URL carrying an "updateRequest" path segment
+    /// (e.g. .../catalogs/{id}/updateRequest/{requestId}), the only response
+    /// shape <see cref="ExtractPollStatus"/> can parse. Any other Location
+    /// (observed live, JF-497: a skill-status URL like /v1/skills/{id}/status,
+    /// whose response nests the status under interactionModel.{locale}) must be
+    /// tracked via <see cref="WaitForModelBuildOutcomeViaSkillStatusAsync"/>
+    /// instead of being polled into a guaranteed timeout.
+    /// </summary>
+    /// <param name="location">The resolved Location URI from the 202 response.</param>
+    /// <returns>True when the URL names an update-request resource.</returns>
+    internal static bool IsUpdateRequestLocation(Uri location)
+    {
+        string path = location.IsAbsoluteUri ? location.AbsolutePath : location.ToString();
+        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        foreach (string segment in segments)
+        {
+            if (string.Equals(segment, "updateRequest", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Polls a SMAPI async operation until SUCCEEDED or FAILED.
     /// Returns the "version" property from the final response if present, otherwise null.
+    /// A 404 from the polled update-request URL is treated as TERMINAL-COMPLETED with
+    /// an unknown version (null): SMAPI consumes/expires the one-shot updateRequest
+    /// resource once the operation completes, so a poll that outlives the build gets
+    /// 404 with an HTML error page rather than a status. Logged quietly (JF-502);
+    /// other HTTP failures keep the transient behavior (log ERR + throw).
     /// </summary>
     private async Task<string?> PollSmapiOperationAsync(
         string accessToken,
@@ -1032,6 +1111,24 @@ public class CatalogManager
             pollRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
             using var pollResponse = await client.SendAsync(pollRequest, cancellationToken).ConfigureAwait(false);
+
+            // JF-502: a 404 from the polled update-request URL means the update
+            // request is GONE, not that the poll failed: SMAPI consumes/expires the
+            // one-shot updateRequest resource once the operation completes, so a
+            // poll arriving after completion gets 404 with an HTML error page.
+            // Treat it as terminal-completed with an unknown version and log
+            // quietly; EnsureSuccessAsync would log an ERR and throw, marking the
+            // whole operation failed. Other HTTP failures (429, 5xx, ...) keep the
+            // transient current behavior.
+            if (pollResponse.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                _logger.LogDebug(
+                    "{Operation} poll at {Location} returned 404 (update request consumed or expired after completion); treating as terminal-completed with an unknown version (JF-502)",
+                    operationName,
+                    location);
+                return null;
+            }
+
             await EnsureSuccessAsync(pollResponse, cancellationToken).ConfigureAwait(false);
 
             string pollJson = await pollResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
