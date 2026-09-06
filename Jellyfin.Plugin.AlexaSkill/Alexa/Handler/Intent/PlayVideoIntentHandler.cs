@@ -127,7 +127,13 @@ public class PlayVideoIntentHandler : BaseHandler
 
             if (videos.Count == 0)
             {
-                var fuzzy = await SearchItemsFuzzyAsync(titleQuery, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.Movie, BaseItemKind.Episode }, cancellationToken, "PlayVideoFuzzyFallback").ConfigureAwait(false);
+                // When a stripped title exists the fuzzy runs on the STRIPPED value:
+                // the swallowed-carrier shape ('film ada') fuzzies against 'ada', the
+                // title the user meant, not against the raw 'film ada' (live 19:38:
+                // raw-fuzzy matched 'Cicada' score 50 while 'Ada: My Mother the
+                // Architect' existed and fuzzy-on-'ada' is the high-confidence hit).
+                string fuzzyQuery = strippedTitle ?? titleQuery;
+                var fuzzy = await SearchItemsFuzzyAsync(fuzzyQuery, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.Movie, BaseItemKind.Episode }, cancellationToken, "PlayVideoFuzzyFallback").ConfigureAwait(false);
                 if (fuzzy != null)
                 {
                     videos = new List<BaseItem> { fuzzy.Value.Item };
