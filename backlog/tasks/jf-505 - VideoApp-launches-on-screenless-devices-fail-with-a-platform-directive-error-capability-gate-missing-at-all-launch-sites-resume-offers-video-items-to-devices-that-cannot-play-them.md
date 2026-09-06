@@ -4,10 +4,10 @@ title: >-
   VideoApp launches on screenless devices fail with a platform directive error:
   capability gate missing at all launch sites + resume offers video items to
   devices that cannot play them
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-06 15:14'
-updated_date: '2026-09-06 16:49'
+updated_date: '2026-09-06 16:52'
 labels:
   - video
   - device-capabilities
@@ -164,3 +164,9 @@ task's core phrase verbatim). de/es/fr follow those files' ASCII-safe convention
 <!-- SECTION:NOTES:BEGIN -->
 Orchestrator /simplify pass dispositions (2026-09-06): APPLIED the gate-first reorder in BuildChannelLaunchResponseAsync (capability check before the 5s resolver round-trip; the last-played record is unconditional-for-capable again since the refusal path cannot reach it); the shared IsVideoAppLaunchItem predicate (Movie/Episode/LiveTvChannel) replacing the drifted hand-written type lists at the resume-offer gate and the ResumeIntent router (ResumeIntent now correctly includes LiveTvChannel); the DELIBERATE comment pinning the screenless audiobook fallback to plain UserData ticks (no tracker/playlist on a plain AudioPlayer resume); the test-only/fail-open doc on the context-less BuildAudioPlayerResponse overload. SKIPPED (documented): the ~41-call-site removal of the dead overload (test churn), the assertion-triple and config-boilerplate consolidation in VideoAppCapabilityGateTests, the factory composition in ScreenlessResumeOfferTests.CreateContextWithAudioToken (all test-file polish, no production impact), and the double ResolveJellyfinUser in the screenless path (in-memory lookup, negligible).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented, reviewed, deployed 2026-09-06 (commit 24a885e0, DLL e1ae26e6). The VideoApp capability gate lives in the shared launch builders: BuildVideoAppLaunchResponse refuses with the localized VideoRequiresScreen Tell (17 locales) on devices without the VideoApp interface; the audio-capable builders degrade to plain AudioPlayer (a song needs no screen); the resume offer never proposes Movie/Episode/LiveTvChannel to a screenless device and falls back to the last audio item with progress; gated launches no longer record as device last-played; the channel launch checks capability BEFORE the 5s stream resolver. Detector fails open only on an entirely absent SupportedInterfaces map (real Echoes always report it). Formal review's two Important findings applied (five context-less audio sites threaded; channel record + LiveTvChannel gate) and the simplify pass landed the shared IsVideoAppLaunchItem predicate (fixing the ResumeIntent drift). Device verification pending on the Dot: video requests should now speak 'questo contenuto richiede un dispositivo con schermo' instead of the platform directive error, and the launch-time resume offer should name an audio item.
+<!-- SECTION:FINAL_SUMMARY:END -->
