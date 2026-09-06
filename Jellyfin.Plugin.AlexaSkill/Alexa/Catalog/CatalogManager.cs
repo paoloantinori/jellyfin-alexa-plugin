@@ -748,7 +748,13 @@ public class CatalogManager
         await Task.Delay(500, cancellationToken).ConfigureAwait(false);
 
         int delay = 500;
-        for (int i = 0; i < 30; i++)
+        // 90 iterations with the 2s backoff cap is a ~150-170s budget: a full 12-locale
+        // sync queues FOUR serialized SMAPI builds per locale (3 catalog versions + the
+        // model build), so a locale's model build legitimately settles at ~80s+ of
+        // queue; the previous 30-iteration budget (~57s) landed TIMEOUT on every locale
+        // and the canary never fired (live evidence 2026-09-06: 80-85s per locale with
+        // zero errors, the waits genuinely working).
+        for (int i = 0; i < 90; i++)
         {
             string? state = await TryGetLocaleModelStatusAsync(
                 accessToken, client, skillId, locale, cancellationToken).ConfigureAwait(false);
