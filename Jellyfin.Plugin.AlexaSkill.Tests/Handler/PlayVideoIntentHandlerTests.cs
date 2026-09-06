@@ -162,6 +162,101 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
+    public async Task Handle_TitleSwallowedMediaNoun_StripsAndFinds()
+    {
+        // JF-509: the SearchQuery fill drifts and can swallow the carrier noun
+        // ('voglio guardare il film ada' filled title='film ada' on-device
+        // 2026-09-06, corr=655db7c3). RAW-FIRST contract: the raw title query
+        // runs first and misses, then ONE stripped retry finds 'ada'.
+        var movie = CreateTestItem("Ada: My Mother the Architect");
+        var queries = new List<InternalItemsQuery>();
+        _fx.LibraryManager
+            .Setup(lm => lm.GetItemList(Capture.In(queries)))
+            .Returns((InternalItemsQuery q) => q.SearchTerm == "ada" ? new List<BaseItem> { movie } : new List<BaseItem>());
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreatePlayVideoRequest("film ada"),
+            _fx.CreateContext(),
+            TestHelpers.CreateTestUser(),
+            _fx.CreateSession(), CancellationToken.None);
+
+        response.HasDirective<VideoAppLaunchDirective>();
+        // The raw query runs first; the stripped retry lands after the fuzzy miss.
+        Assert.Equal("film ada", queries[0].SearchTerm);
+        Assert.Contains(queries, q => q.SearchTerm == "ada");
+    }
+
+    [Fact]
+    public async Task Handle_RawTitleWinsWhenItExists()
+    {
+        // JF-509 raw-first: a movie genuinely titled starting with the noun
+        // ('Film Stars Don't Die in Liverpool') is found by the RAW query; the
+        // strip retry never fires.
+        var movie = CreateTestItem("Film Stars Don't Die in Liverpool");
+        var queries = new List<InternalItemsQuery>();
+        _fx.LibraryManager
+            .Setup(lm => lm.GetItemList(Capture.In(queries)))
+            .Returns((InternalItemsQuery q) => q.SearchTerm == "Film Stars Don't Die in Liverpool" ? new List<BaseItem> { movie } : new List<BaseItem>());
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreatePlayVideoRequest("Film Stars Don't Die in Liverpool"),
+            _fx.CreateContext(),
+            TestHelpers.CreateTestUser(),
+            _fx.CreateSession(), CancellationToken.None);
+
+        response.HasDirective<VideoAppLaunchDirective>();
+        Assert.Single(queries.Where(q => q.SearchTerm != null));
+    }
+
+    [Fact]
+    public async Task Handle_TitleWordFragment_NotStripped()
+    {
+        // JF-509: the trailing-space word-fragment guard ('filmstar' is one word,
+        // not the noun + a title): the strip returns null, no second query.
+        var queries = new List<InternalItemsQuery>();
+        _fx.LibraryManager
+            .Setup(lm => lm.GetItemList(Capture.In(queries)))
+            .Returns(new List<BaseItem>());
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreatePlayVideoRequest("filmstar"),
+            _fx.CreateContext(),
+            TestHelpers.CreateTestUser(),
+            _fx.CreateSession(), CancellationToken.None);
+
+        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        Assert.Contains("couldn't find", speech.Text, StringComparison.OrdinalIgnoreCase);
+        // One-word fragment: the strip returns null (nothing new to retry), so the
+        // only search-shaped query is the raw one (plus the fuzzy fallback shape).
+        Assert.DoesNotContain(queries, q => q.SearchTerm == "star");
+    }
+
+    [Fact]
+    public async Task Handle_TitleOnlyMediaNoun_NoRetry()
+    {
+        // The strip leaves nothing searchable ('il film' is all noun): the null
+        // return means no retry, and the not-found names the raw value the user said.
+        var queries = new List<InternalItemsQuery>();
+        _fx.LibraryManager
+            .Setup(lm => lm.GetItemList(Capture.In(queries)))
+            .Returns(new List<BaseItem>());
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreatePlayVideoRequest("il film"),
+            _fx.CreateContext(),
+            TestHelpers.CreateTestUser(),
+            _fx.CreateSession(), CancellationToken.None);
+
+        // Raw + the fuzzy fallback shape only: no stripped-value query exists.
+        Assert.DoesNotContain(queries, q => q.SearchTerm != null && !q.SearchTerm.Contains(' '));
+        Assert.Contains("il film", Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech).Text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Handle_FoundMultipleResults_ReturnsDisambiguationPrompt()
     {
         var movie1 = CreateTestItem("Inception");
