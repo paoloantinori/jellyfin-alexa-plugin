@@ -7,7 +7,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-09-05 19:13'
-updated_date: '2026-09-05 20:32'
+updated_date: '2026-09-06 08:40'
 labels:
   - tv
   - video
@@ -105,6 +105,12 @@ Side effect of the wiring: 5 sites (PlayEpisode, SearchMedia video branch, YesIn
 **Tests (+14, suite 3322 -> 3336, all green)**: cache playback pin (`EvictIfNeeded_RecentlyServedHlsDir_SurvivesEvenWhenAloneOverCap`: served dir alone over cap is never the victim while the cold sibling evicts, ancient atimes on both so only the serve record can explain survival; `EvictIfNeeded_ServeRecordPastTtl_EntryEvictedNormally`: TTL expiry via the internal seam); debris deletion (`DeleteHlsEncodeDebris_RemovesPlaylistAndSegments_KeepsOtherFiles`, `_MissingDirectory_IsNoOp`, `_DeniedDeletion_WarnsAndDoesNotThrow` with the mode-bit + non-root guard of the existing permission tests); bitrate resolver (`ResolveTotalMediaBitrateBps_SumsFirstVideoAndAudioStreams` incl. second-audio/subtitle exclusion, `_NoBitrateOrNoManager_ReturnsNull`); estimate theories (bitrate-present 10Mbps/45min, 10Mbps/1h, 2.884Mbps/1h; absent/zero bitrate and unknown-runtime flat fallbacks); endpoint-level invariant `StreamHlsEpisode_DebrisBeforeEncode_FfmpegStartsOverCleanTarget` (fake ffmpeg snapshots the dir at start: no stale playlist/segment exist when the encode begins, and the served playlist carries only the fresh segment). Test-design note, stated for honesty: on Linux the discriminating failure for I1 (whole-dir delete fails while per-file deletes succeed) is not constructible without tripping the separately tracked JF-499 W4 (Cleanup's missing UnauthorizedAccessException catch), so the endpoint test pins the layered invariant while the three unit tests discriminate on the new method directly.
 
 **Verification**: `dotnet build` Debug AND Release: 0 errors, 0 warnings. `dotnet test` full suite: 3336/3336 passed, 0 failed, 0 skipped (non-root, so the permission-denial branches genuinely executed). /simplify pass on the C1+I1 hunks applied: `TryGetMediaStreams` extracted as the one shared media-streams reader (ResolveSourceCodec + ResolveTotalMediaBitrateBps both use it), the redundant `File.Exists` guard before the playlist delete dropped (File.Delete is a no-op on a missing file), and the playback-pin cutoff hoisted to a single per-sweep instant. One skip noted: the episode encode-start path now makes three `GetMediaStreams` reads (two pre-existing codec resolvers + the bitrate resolver); collapsing them means re-plumbing the first-cut codec-resolver call sites, out of this pass's scope, and the cost is one query per play start. DoD #9/#10 (formal /simplify + /code-review high over the FULL stream) remain for the task's Done transition.
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+DEVICE VERIFIED 2026-09-06 (Paolo): 'chiedi a mia collezione di mettere il prossimo episodio di the bear' launched with WORKING audio and video end-to-end. First device attempt black-screened with TTS cut: ffprobe of the produced segment showed AAC-LC channels=6 (the Echo's ExoPlayer decodes stereo AAC only in skill video); fixed by the -ac 2 stereo downmix (commit 52d3e3d9), episode cache cleared, fresh encode verified channels=2 (playlist cold 0.58s). Video level verified in-range (h264 High L4.0 1080p vs the device's advertised 4.1/4.2). Residual cosmetic filed separately: the spoken announcement still cuts mid-sentence when the video launches, because the HLS playlist is ready in ~0.6s and the player takes the audio channel before the TTS finishes (movies finish the announcement only because the static file buffers longer).
+<!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
