@@ -1720,11 +1720,15 @@ public class VideoAudioController : ControllerBase
     private static readonly string[] EpisodeVideoCopyArgs = ["-c:v", "copy", "-g", "48"];
 
     /// <summary>
-    /// AAC encode arguments for the episode remux audio. 192k (vs the 128k music
-    /// path) because TV/movie audio is commonly a 5.1 EAC3/AC3 mixdown and 128k
-    /// starves six channels.
+    /// AAC encode arguments for the episode remux audio. STEREO DOWNMIX (-ac 2):
+    /// the Echo's ExoPlayer decodes stereo AAC only in skill video; a 5.1 EAC3
+    /// source kept at six channels produced a 5.1 AAC track that black-screened
+    /// on-device (2026-09-06 device test: the player opened, killed the TTS
+    /// mid-sentence, and rendered nothing; ffprobe of the segment showed AAC-LC
+    /// channels=6). 192k (vs the 128k music path) because it carries a 5.1
+    /// mixdown.
     /// </summary>
-    private static readonly string[] EpisodeAudioCodecArgs = ["-c:a", "aac", "-b:a", "192k"];
+    private static readonly string[] EpisodeAudioCodecArgs = ["-c:a", "aac", "-ac", "2", "-b:a", "192k"];
 
     /// <summary>
     /// Build the ffmpeg audio codec arguments for the episode remux, in the

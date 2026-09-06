@@ -1597,8 +1597,11 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.Equal("copy", args[args.IndexOf("-c:v") + 1]);
         Assert.Equal("48", args[args.IndexOf("-g") + 1]);
 
-        // Audio: AAC 192k (EAC3 has no Echo decoder; 192k covers a 5.1 mixdown)
+        // Audio: AAC stereo downmix at 192k (EAC3 has no Echo decoder, and the
+        // Echo's ExoPlayer decodes STEREO AAC only: a 6-channel AAC track
+        // black-screened on-device 2026-09-06)
         Assert.Equal("aac", args[args.IndexOf("-c:a") + 1]);
+        Assert.Equal("2", args[args.IndexOf("-ac") + 1]);
         Assert.Equal("192k", args[args.IndexOf("-b:a") + 1]);
 
         // HLS: 4-second segments, full listing, event-style growth, MPEG-TS
