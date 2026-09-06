@@ -102,6 +102,41 @@ tests:
     expected_slots:
       title: {}
 
+  # JF-504 (2026-09-06): media-named movie carriers added to PlayVideoIntent.
+  # Before them the model could not route movie-by-title at all ('di riprodurre
+  # il film ada' -> FallbackIntent, 'riproduci il film ada' / 'di riprodurre
+  # ada' -> no selection; device: three phrasings, zero requests reached the
+  # skill). 'metti il film' also guards the JF-436 boundary pinned below:
+  # bare 'metti matrix' goes to PlayArtistSongsIntent, the film carrier must
+  # flip it to PlayVideoIntent. 'cerca il film' is the JF-490 cerca-as-play
+  # precedent applied to movies. Slots pinned presence-only ({}): the intent
+  # plus a non-empty title is the failure mode under test; exact free-text
+  # SearchQuery values are not stable enough to pin.
+  - utterance: "Riproduci il film star wars"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+
+  - utterance: "Di riprodurre il film ada"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+
+  - utterance: "metti il film matrix"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+
+  - utterance: "voglio guardare il film ada"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+
+  - utterance: "cerca il film ada"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+
   # JF-436: video-regression direction of the JF-418 bare-form collision.
   # PlayArtistSongsIntent's bare '{imperative} {musician}' samples (JF-418)
   # collide in surface shape with PlayVideoIntent's '{imperative} {title}' on

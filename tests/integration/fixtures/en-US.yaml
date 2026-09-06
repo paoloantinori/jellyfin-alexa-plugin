@@ -83,6 +83,26 @@ tests:
     expected_slots:
       title: {}
 
+  # JF-504 (2026-09-06): media-named movie carriers added to PlayVideoIntent
+  # (watch / infinitive 'to play' / 'search for the', mirroring the it-IT film
+  # carriers). 'search for the movie' (definite) is the JF-490-style
+  # search-as-play recovery and must beat SearchMediaIntent's indefinite
+  # 'Search for a movie {query}'. Slots pinned presence-only ({}).
+  - utterance: "watch the movie star wars"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+
+  - utterance: "to play the movie the godfather"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+
+  - utterance: "search for the movie star wars"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+
   # -------------------------------------------------------------------------
   # 6. PlayArtistSongsIntent (musician)
   # -------------------------------------------------------------------------

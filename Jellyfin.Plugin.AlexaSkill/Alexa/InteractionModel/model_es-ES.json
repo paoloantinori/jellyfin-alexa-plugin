@@ -163,7 +163,11 @@
           "Pon el vídeo {title}",
           "Ver el vídeo {title}",
           "Quiero ver el vídeo {title}",
-          "Reproduce la película {title}"
+          "Reproduce la película {title}",
+          "Reproducir la película {title}",
+          "Ver la película {title}",
+          "Quiero ver la película {title}",
+          "Busca la película {title}"
         ],
         "slots": [
           {

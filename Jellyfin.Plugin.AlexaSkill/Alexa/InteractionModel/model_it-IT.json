@@ -113,7 +113,13 @@
           "fai vedere {title}",
           "fammi vedere {title}",
           "mostra {title}",
-          "voglio vedere {title}"
+          "voglio vedere {title}",
+          "Riproduci il film {title}",
+          "Metti il film {title}",
+          "Di riprodurre il film {title}",
+          "Di mettere il film {title}",
+          "voglio guardare il film {title}",
+          "cerca il film {title}"
         ],
         "slots": [
           {

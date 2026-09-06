@@ -174,7 +174,11 @@
           "Zeig mir {title}",
           "Kannst du {title} zeigen",
           "{title} ansehen",
-          "ich möchte mir {title} ansehen"
+          "ich möchte mir {title} ansehen",
+          "Spiele den Film {title}",
+          "Zu spielen den Film {title}",
+          "Ich möchte den Film {title} sehen",
+          "Suche nach dem Film {title}"
         ],
         "slots": [
           {

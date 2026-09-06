@@ -193,7 +193,10 @@
           "stick on {title}",
           "stick on the film {title}",
           "bang on the video {title}",
-          "whack on {title}"
+          "whack on {title}",
+          "watch the movie {title}",
+          "to play the movie {title}",
+          "search for the movie {title}"
         ],
         "slots": [
           {

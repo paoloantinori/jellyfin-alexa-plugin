@@ -161,7 +161,10 @@
           "mostrar {title}",
           "tocar o filme {title}",
           "pode tocar o vídeo {title}",
-          "iniciar o vídeo {title}"
+          "iniciar o vídeo {title}",
+          "assistir o filme {title}",
+          "quero assistir o filme {title}",
+          "procurar o filme {title}"
         ],
         "slots": [
           {

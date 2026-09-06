@@ -173,7 +173,10 @@
           "peux-tu me montrer {title}",
           "mets le film {title}",
           "je veux voir {title}",
-          "diffuse le film {title}"
+          "diffuse le film {title}",
+          "De jouer le film {title}",
+          "Je veux regarder le film {title}",
+          "Cherche le film {title}"
         ],
         "slots": [
           {

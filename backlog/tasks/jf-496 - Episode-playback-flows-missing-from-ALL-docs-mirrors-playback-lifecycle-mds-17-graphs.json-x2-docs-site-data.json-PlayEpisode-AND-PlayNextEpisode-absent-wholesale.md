@@ -7,6 +7,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-05 15:24'
+updated_date: '2026-09-06 09:53'
 labels:
   - documentation
   - tv
@@ -39,3 +40,9 @@ From JF-494's stale-mirror audit (2026-09-05): the docs mirrors are missing EPIS
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+[code-review gate 2026-09-06, JF-504 streams] Scope addition, landed by the review gate: this task ALSO covers the PlayVideo movie-carrier edge labels (JF-504 added media-named samples to PlayVideoIntent in all 17 locales; the playback-lifecycle mds, docs/graphs.json x2, and docs-site/data.json still carry only the pre-JF-504 sample labels, e.g. docs/playback-lifecycle-it-IT.md lines 13-14 'Riproduci {title}' / 'voglio guardare {title}'). The JF-504 note's claim that this coverage was 'noted as a JF-496 addition' had not actually landed here; this note is that landing. No other change to this task's scope.
+<!-- SECTION:NOTES:END -->

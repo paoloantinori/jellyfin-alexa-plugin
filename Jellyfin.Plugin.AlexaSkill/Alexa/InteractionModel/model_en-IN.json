@@ -174,7 +174,10 @@
           "put on the movie {title}",
           "can you play the video {title}",
           "start the video {title}",
-          "I want to see {title}"
+          "I want to see {title}",
+          "watch the movie {title}",
+          "to play the movie {title}",
+          "search for the movie {title}"
         ],
         "slots": [
           {

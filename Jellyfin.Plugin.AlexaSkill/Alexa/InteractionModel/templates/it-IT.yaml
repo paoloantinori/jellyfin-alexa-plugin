@@ -120,6 +120,22 @@ explicit_intents:
       - fammi vedere {title}
       - mostra {title}
       - voglio vedere {title}
+      # JF-504: media-named movie carriers. The bare verb+title samples above
+      # lose against the catalog-heavy model ('di riprodurre il film ada' fell
+      # to FallbackIntent, 'riproduci il film ada' and 'di riprodurre ada' to
+      # no selection; 2026-09-06 device session: three phrasings, zero requests
+      # reached the skill). Every carrier names the media (no bare carriers,
+      # anti-patterns #1/#11). Verb subset is Riproduci/Metti only: Suona/Pleia/
+      # Ascolta are music-performance verbs, unidiomatic with a film object
+      # (anti-pattern #6 discipline applied by hand; explicit_intents samples
+      # are not template-expanded by the generator). 'cerca il film' follows
+      # the JF-490 cerca-as-play precedent.
+      - Riproduci il film {title}
+      - Metti il film {title}
+      - Di riprodurre il film {title}
+      - Di mettere il film {title}
+      - voglio guardare il film {title}
+      - cerca il film {title}
     slots:
       - name: title
         type: AMAZON.SearchQuery

@@ -157,7 +157,10 @@
           "laten we {title} kijken",
           "stream {title}",
           "speel de film {title}",
-          "start de video {title}"
+          "start de video {title}",
+          "zet de film {title} op",
+          "ik wil de film {title} kijken",
+          "zoek de film {title}"
         ],
         "slots": [
           {
