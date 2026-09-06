@@ -2820,10 +2820,20 @@ public abstract class BaseHandler
             EnableResumable = true
         };
         Logger.LogDebug("NextUp: querying NextUp for seriesId={SeriesId}, enableResumable=true", series.Id);
+        var nextUpSw = System.Diagnostics.Stopwatch.StartNew();
         QueryResult<BaseItem> nextUp = await RetryAsync(
             () => tvSeriesManager.GetNextUp(nextUpQuery, new DtoOptions(true)),
             "GetNextUp",
             cancellationToken).ConfigureAwait(false);
+        nextUpSw.Stop();
+        // Stage timing (device session 2026-09-06: four requests spent 6-26s between
+        // these two lines while a remux and the startup catalog sync ran; controlled
+        // re-runs under the same encode load measured 91-131ms, so the spikes were a
+        // transient that left no trace. This line makes the next occurrence readable
+        // from the logs instead of inferred).
+        Logger.LogInformation(
+            "NextUp: GetNextUp took {ElapsedMs}ms for series '{SeriesName}' ({ResultCount} results)",
+            nextUpSw.ElapsedMilliseconds, series.Name, nextUp?.Items?.Count ?? 0);
         BaseItem? episode = nextUp?.Items?.FirstOrDefault();
         bool latestFallback = episode == null;
 
