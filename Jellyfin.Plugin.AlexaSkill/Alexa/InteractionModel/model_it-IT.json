@@ -119,7 +119,9 @@
           "Di riprodurre il film {title}",
           "Di mettere il film {title}",
           "voglio guardare il film {title}",
-          "cerca il film {title}"
+          "cerca il film {title}",
+          "Di guardare il film {title}",
+          "Di vedere il film {title}"
         ],
         "slots": [
           {

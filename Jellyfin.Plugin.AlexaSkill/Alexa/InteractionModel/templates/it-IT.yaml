@@ -136,6 +136,13 @@ explicit_intents:
       - Di mettere il film {title}
       - voglio guardare il film {title}
       - cerca il film {title}
+      # JF-504 device follow-up (2026-09-06): the invocation-wrapped one-shot fell
+      # to Fallback on-device while every clean string routed in profile-nlu (the
+      # known device-vs-profiler divergence). The guardare family is the one the
+      # user actually speaks (bare 'voglio guardare il film ada' works on-device),
+      # so its infinitive twins anchor that family for the one-shot shape.
+      - Di guardare il film {title}
+      - Di vedere il film {title}
     slots:
       - name: title
         type: AMAZON.SearchQuery
