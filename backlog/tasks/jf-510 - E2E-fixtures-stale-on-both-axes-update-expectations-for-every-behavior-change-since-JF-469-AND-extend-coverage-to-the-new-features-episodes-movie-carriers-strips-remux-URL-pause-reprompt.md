@@ -4,9 +4,10 @@ title: >-
   E2E fixtures stale on both axes: update expectations for every behavior change
   since JF-469 AND extend coverage to the new features (episodes, movie
   carriers, strips, remux URL, pause reprompt)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-06 19:10'
+updated_date: '2026-09-06 19:27'
 labels:
   - e2e
   - tests
