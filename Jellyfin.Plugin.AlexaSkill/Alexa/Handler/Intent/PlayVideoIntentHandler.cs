@@ -100,36 +100,39 @@ public class PlayVideoIntentHandler : BaseHandler
 
         if (videos.Count == 0)
         {
-            var fuzzy = await SearchItemsFuzzyAsync(titleQuery, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.Movie, BaseItemKind.Episode }, cancellationToken, "PlayVideoFuzzyFallback").ConfigureAwait(false);
-            if (fuzzy != null)
+            // JF-509 raw-first retry, BEFORE the fuzzy fallback: the fill may have
+            // swallowed the carrier noun ('film ada' for 'ada'), and the stripped
+            // exact query is a far higher-probability hit than a fuzzy near-miss on
+            // the raw value (live: the fuzzy answered 'Intendevi <unrelated>?' while
+            // 'ada' existed). A title genuinely starting with the noun was already
+            // found by the raw query above.
+            string? strippedTitle = StripLeadingMediaNoun(titleQuery);
+            if (strippedTitle != null)
             {
-                videos = new List<BaseItem> { fuzzy.Value.Item };
-            }
-            else
-            {
-                // JF-509 raw-first retry: the fill may have swallowed the carrier noun
-                // ('film ada' for 'ada'). One stripped retry on the confirmed miss; a
-                // title genuinely starting with the noun was already found above.
-                string? strippedTitle = StripLeadingMediaNoun(titleQuery);
-                if (strippedTitle != null)
+                Logger.LogDebug("PlayVideo: raw title miss, retrying stripped '{Stripped}' (JF-509)", strippedTitle);
+                var strippedQuery = new InternalItemsQuery
                 {
-                    Logger.LogDebug("PlayVideo: raw title miss, retrying stripped '{Stripped}' (JF-509)", strippedTitle);
-                    var strippedQuery = new InternalItemsQuery
-                    {
-                        User = jellyfinUser,
-                        Recursive = true,
-                        SearchTerm = strippedTitle,
-                        IncludeItemTypes = new[] { BaseItemKind.Movie, BaseItemKind.Episode },
-                        DtoOptions = new DtoOptions(true)
-                    };
-                    ApplyLibraryFilter(strippedQuery, user, _libraryManager);
-                    videos = await RetryAsync(
-                        () => _libraryManager.GetItemList(strippedQuery),
-                        "GetVideosStrippedTitle",
-                        cancellationToken).ConfigureAwait(false);
-                }
+                    User = jellyfinUser,
+                    Recursive = true,
+                    SearchTerm = strippedTitle,
+                    IncludeItemTypes = new[] { BaseItemKind.Movie, BaseItemKind.Episode },
+                    DtoOptions = new DtoOptions(true)
+                };
+                ApplyLibraryFilter(strippedQuery, user, _libraryManager);
+                videos = await RetryAsync(
+                    () => _libraryManager.GetItemList(strippedQuery),
+                    "GetVideosStrippedTitle",
+                    cancellationToken).ConfigureAwait(false);
+            }
 
-                if (videos.Count == 0)
+            if (videos.Count == 0)
+            {
+                var fuzzy = await SearchItemsFuzzyAsync(titleQuery, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.Movie, BaseItemKind.Episode }, cancellationToken, "PlayVideoFuzzyFallback").ConfigureAwait(false);
+                if (fuzzy != null)
+                {
+                    videos = new List<BaseItem> { fuzzy.Value.Item };
+                }
+                else
                 {
                     return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundVideo", locale, titleQuery));
                 }
