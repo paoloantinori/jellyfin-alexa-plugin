@@ -133,6 +133,7 @@ public class PlayVideoIntentHandler : BaseHandler
                 // raw-fuzzy matched 'Cicada' score 50 while 'Ada: My Mother the
                 // Architect' existed and fuzzy-on-'ada' is the high-confidence hit).
                 string fuzzyQuery = strippedTitle ?? titleQuery;
+                Logger.LogDebug("PlayVideo: fuzzy fallback on '{FuzzyQuery}' (JF-509)", fuzzyQuery);
                 var fuzzy = await SearchItemsFuzzyAsync(fuzzyQuery, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.Movie, BaseItemKind.Episode }, cancellationToken, "PlayVideoFuzzyFallback").ConfigureAwait(false);
                 if (fuzzy != null)
                 {
@@ -148,8 +149,13 @@ public class PlayVideoIntentHandler : BaseHandler
         if (videos.Count > 1)
         {
             BaseItem? videoMatch = null;
+            // JF-509: the multi-result FuzzyMatch runs on the STRIPPED title when one
+            // exists (same rationale as the fuzzy below: the raw 'film ada' scores the
+            // unrelated 'Cicada' at 50 while the stripped 'ada' picks the real match
+            // among candidates the stripped query returned).
+            string? multiMatchQuery = StripLeadingMediaNoun(titleQuery) ?? titleQuery;
             var (missOutcome, missResponse) = HandleFuzzyMiss(
-                titleQuery,
+                multiMatchQuery,
                 videos,
                 v => v.Name,
                 best => new List<(Guid, string)> { (best.Id, best.Name) },
@@ -276,6 +282,8 @@ public class PlayVideoIntentHandler : BaseHandler
             }
         }
 
-        return cleaned;
+        // Unchanged input means there is nothing new to retry (the caller's raw query
+        // already ran): null, never the original value.
+        return string.Equals(cleaned, title.Trim(), StringComparison.Ordinal) ? null : cleaned;
     }
 }
