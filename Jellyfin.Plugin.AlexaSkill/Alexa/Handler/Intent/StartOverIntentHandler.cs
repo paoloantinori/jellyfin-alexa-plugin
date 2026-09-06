@@ -115,26 +115,13 @@ public class StartOverIntentHandler : BaseHandler
         if (item is MediaBrowser.Controller.Entities.Movies.Movie
             or MediaBrowser.Controller.Entities.TV.Episode)
         {
-            return Task.FromResult<SkillResponse>(new SkillResponse
-            {
-                Version = "1.0",
-                Response = new ResponseBody
-                {
-                    OutputSpeech = new PlainTextOutputSpeech(ResponseStrings.Get("RestartingContent", locale, item.Name)),
-                    Directives = new List<IDirective>
-                    {
-                        new Directive.VideoAppLaunchDirective
-                        {
-                            VideoItem = new Directive.VideoItem
-                            {
-                                // JF-498: codec-routed static vs HLS remux source.
-                                Source = GetVideoAppLaunchUrl(item, user),
-                                Metadata = new Directive.VideoItemMetadata { Title = item.Name }
-                            }
-                        }
-                    }
-                }
-            });
+            // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
+            return Task.FromResult<SkillResponse>(BuildVideoAppLaunchResponse(
+                context,
+                locale,
+                GetVideoAppLaunchUrl(item, user),
+                item.Name,
+                new PlainTextOutputSpeech(ResponseStrings.Get("RestartingContent", locale, item.Name))));
         }
 
         return Task.FromResult<SkillResponse>(BuildAudioPlayerResponse(

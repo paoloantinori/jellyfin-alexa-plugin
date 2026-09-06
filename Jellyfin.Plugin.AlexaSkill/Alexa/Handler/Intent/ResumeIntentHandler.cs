@@ -177,31 +177,18 @@ public class ResumeIntentHandler : BaseHandler
                 item_id = resumeItem.Id.ToString();
                 offset = (int)TimeSpan.FromTicks(resumeTicks).TotalMilliseconds;
 
-                // Video items (Movie/Episode) use VideoApp launch directive
-                if (resumeItem is MediaBrowser.Controller.Entities.Movies.Movie
-                    or MediaBrowser.Controller.Entities.TV.Episode)
+                // Video items use the VideoApp launch directive (the shared predicate owns
+                // the kind list, JF-505; LiveTvChannel included)
+                if (IsVideoAppLaunchItem(resumeItem))
                 {
-                    SkillResponse videoResponse = new SkillResponse
-                    {
-                        Version = "1.0",
-                        Response = new ResponseBody
-                        {
-                                OutputSpeech = new PlainTextOutputSpeech(
-                                ResponseStrings.Get("NowPlayingWithPosition", locale, resumeItem.Name, FormatPosition(resumeTicks))),
-                            Directives = new List<IDirective>
-                            {
-                                new Directive.VideoAppLaunchDirective
-                                {
-                                    VideoItem = new Directive.VideoItem
-                                    {
-                                        // JF-498: codec-routed static vs HLS remux source.
-                                        Source = GetVideoAppLaunchUrl(resumeItem, user),
-                                        Metadata = new Directive.VideoItemMetadata { Title = resumeItem.Name }
-                                    }
-                                }
-                            }
-                        }
-                    };
+                    // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
+                    SkillResponse videoResponse = BuildVideoAppLaunchResponse(
+                        context,
+                        locale,
+                        GetVideoAppLaunchUrl(resumeItem, user),
+                        resumeItem.Name,
+                        new PlainTextOutputSpeech(
+                            ResponseStrings.Get("NowPlayingWithPosition", locale, resumeItem.Name, FormatPosition(resumeTicks))));
 
                     return Task.FromResult<SkillResponse>(videoResponse);
                 }

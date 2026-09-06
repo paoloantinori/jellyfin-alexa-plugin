@@ -102,6 +102,6 @@ public class PlayNextEpisodeIntentHandler : BaseHandler
             return seriesError!;
         }
 
-        return await PlayNextUpEpisodeAsync(_tvSeriesManager, _libraryManager, _userDataManager, jellyfinUser!, user, session, series, locale, cancellationToken).ConfigureAwait(false);
+        return await PlayNextUpEpisodeAsync(_tvSeriesManager, _libraryManager, _userDataManager, jellyfinUser!, user, session, series, locale, context, cancellationToken).ConfigureAwait(false);
     }
 }

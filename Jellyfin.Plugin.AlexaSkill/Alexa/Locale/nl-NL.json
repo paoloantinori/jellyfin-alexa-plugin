@@ -166,6 +166,7 @@
   "NoEpisodesInPodcast": "Ik kon geen afleveringen vinden van {0}.",
   "ServerUnavailable": "Ik kan je mediaserver momenteel niet bereiken. Probeer het zo opnieuw.",
   "AudioPlayerNotSupported": "Sorry, dit apparaat ondersteunt geen audio afspelen. Probeer het via een Echo speaker of Fire TV.",
+  "VideoRequiresScreen": "Sorry, deze content vereist een apparaat met een scherm. Probeer het via een Echo Show of Fire TV.",
   "ErrorPermanentBackend": "Die media is niet gevonden of niet beschikbaar.",
   "ErrorUserError": "Ik kon dat niet begrijpen, probeer het opnieuw.",
   "ErrorSkillError": "Er is iets misgegaan. Probeer het opnieuw.",

@@ -116,7 +116,7 @@ public class PlayEpisodeIntentHandler : BaseHandler
 
         if (!hasExplicitNumbers)
         {
-            return await PlayNextUpEpisodeAsync(_tvSeriesManager, _libraryManager, _userDataManager, jellyfinUser!, user, session, series, locale, cancellationToken).ConfigureAwait(false);
+            return await PlayNextUpEpisodeAsync(_tvSeriesManager, _libraryManager, _userDataManager, jellyfinUser!, user, session, series, locale, context, cancellationToken).ConfigureAwait(false);
         }
 
         var episodeQuery = new InternalItemsQuery
@@ -151,36 +151,16 @@ public class PlayEpisodeIntentHandler : BaseHandler
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = episode;
 
-        var response = new SkillResponse
-        {
-            Version = "1.0",
-            Response = new ResponseBody
-            {
-                // VideoApp.Launch must NOT include shouldEndSession
-                ShouldEndSession = null,
-                OutputSpeech = BuildNowPlayingSpeech(episode.Name, locale, GetAnnounceNowPlaying(user)),
-                Directives = new List<IDirective>
-                {
-                    new VideoAppLaunchDirective
-                    {
-                        VideoItem = new VideoItem
-                        {
-                            // JF-498: codec-routed static vs HLS remux source (this
-                            // was the Audio stream URL, which cannot serve an episode).
-                            Source = GetVideoAppLaunchUrl(episode, user),
-                            Metadata = new VideoItemMetadata
-                            {
-                                Title = episode.Name
-                            }
-                        }
-                    }
-                }
-            }
-        };
-
         Logger.LogDebug(
             "PlayEpisode: returning VideoApp, itemId={ItemId}, episode='{EpisodeName}'",
             itemId, episode.Name);
-        return response;
+
+        // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
+        return BuildVideoAppLaunchResponse(
+            context,
+            locale,
+            GetVideoAppLaunchUrl(episode, user),
+            episode.Name,
+            BuildNowPlayingSpeech(episode.Name, locale, GetAnnounceNowPlaying(user)));
     }
 }

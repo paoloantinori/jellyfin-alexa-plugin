@@ -204,29 +204,13 @@ public class RecommendIntentHandler : BaseHandler
                 ? (IOutputSpeech)new SsmlOutputSpeech { Ssml = $"<speak>{recSsml}</speak>" }
                 : new PlainTextOutputSpeech(ResponseStrings.Get("RecommendPlaying", locale, item.Name));
 
-            return new SkillResponse
-            {
-                Version = "1.0",
-                Response = new ResponseBody
-                {
-                    // VideoApp.Launch must NOT include shouldEndSession
-                    ShouldEndSession = null,
-                    OutputSpeech = outputSpeech,
-                    Directives = new List<IDirective>
-                    {
-                        new VideoAppLaunchDirective
-                        {
-                            VideoItem = new Directive.VideoItem
-                            {
-                                // JF-498: codec-routed static vs HLS remux source (this
-                                // was the Audio stream URL, which cannot serve a movie).
-                                Source = GetVideoAppLaunchUrl(item, user),
-                                Metadata = new Directive.VideoItemMetadata { Title = item.Name }
-                            }
-                        }
-                    }
-                }
-            };
+            // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
+            return BuildVideoAppLaunchResponse(
+                context,
+                locale,
+                GetVideoAppLaunchUrl(item, user),
+                item.Name,
+                outputSpeech);
         }
 
         // For audio, add NowPlaying speech before the audio directive

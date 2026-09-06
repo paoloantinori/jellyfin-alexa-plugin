@@ -166,6 +166,7 @@
   "NoEpisodesInPodcast": "Je n'ai trouvé aucun épisode de {0}.",
   "ServerUnavailable": "Je n'arrive pas à joindre votre serveur multimédia pour le moment. Veuillez réessayer dans un instant.",
   "AudioPlayerNotSupported": "Desole, cet appareil ne prend pas en charge la lecture audio. Essayez depuis un haut-parleur Echo ou un Fire TV.",
+  "VideoRequiresScreen": "Desole, ce contenu necessite un appareil avec ecran. Essayez depuis un Echo Show ou un Fire TV.",
   "ErrorPermanentBackend": "Ce média est introuvable ou non disponible.",
   "ErrorUserError": "Je n'ai pas compris, veuillez réessayer.",
   "ErrorSkillError": "Un problème est survenu. Veuillez réessayer.",

@@ -197,28 +197,13 @@ public class AplUserEventHandler : BaseHandler
                 return Task.FromResult(userError);
             }
 
-            return Task.FromResult(new SkillResponse
-            {
-                Version = "1.0",
-                Response = new ResponseBody
-                {
-                    // VideoApp.Launch must NOT include shouldEndSession
-                    ShouldEndSession = null,
-                    OutputSpeech = BuildVideoLaunchSpeech(item, locale, _userDataManager, jellyfinUser, GetAnnounceNowPlaying(user)),
-                    Directives = new List<IDirective>
-                    {
-                        new VideoAppLaunchDirective
-                        {
-                            VideoItem = new Directive.VideoItem
-                            {
-                                // JF-498: codec-routed static vs HLS remux source.
-                                Source = GetVideoAppLaunchUrl(item, user),
-                                Metadata = new Directive.VideoItemMetadata { Title = item.Name }
-                            }
-                        }
-                    }
-                }
-            });
+            // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
+            return Task.FromResult(BuildVideoAppLaunchResponse(
+                context,
+                locale,
+                GetVideoAppLaunchUrl(item, user),
+                item.Name,
+                BuildVideoLaunchSpeech(item, locale, _userDataManager, jellyfinUser, GetAnnounceNowPlaying(user))));
         }
 
         // Folder items (audiobooks, music folders, etc.) need to be resolved to their

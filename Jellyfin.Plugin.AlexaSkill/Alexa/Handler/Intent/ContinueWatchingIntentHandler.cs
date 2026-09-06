@@ -98,26 +98,13 @@ public class ContinueWatchingIntentHandler : BaseHandler
         if (resumeItem is MediaBrowser.Controller.Entities.Movies.Movie
             or MediaBrowser.Controller.Entities.TV.Episode)
         {
-            return Task.FromResult(new SkillResponse
-            {
-                Version = "1.0",
-                Response = new ResponseBody
-                {
-                    OutputSpeech = new PlainTextOutputSpeech(ResponseStrings.Get("NowPlayingWithPosition", locale, resumeItem.Name, FormatPosition(resumeTicks))),
-                    Directives = new List<IDirective>
-                    {
-                        new Directive.VideoAppLaunchDirective
-                        {
-                            VideoItem = new Directive.VideoItem
-                            {
-                                // JF-498: codec-routed static vs HLS remux source.
-                                Source = GetVideoAppLaunchUrl(resumeItem, user),
-                                Metadata = new Directive.VideoItemMetadata { Title = resumeItem.Name }
-                            }
-                        }
-                    }
-                }
-            });
+            // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
+            return Task.FromResult(BuildVideoAppLaunchResponse(
+                context,
+                locale,
+                GetVideoAppLaunchUrl(resumeItem, user),
+                resumeItem.Name,
+                new PlainTextOutputSpeech(ResponseStrings.Get("NowPlayingWithPosition", locale, resumeItem.Name, FormatPosition(resumeTicks)))));
         }
 
         return Task.FromResult(BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, resumeItem, user, context, offsetMs));

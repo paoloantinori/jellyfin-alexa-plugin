@@ -166,6 +166,7 @@
   "NoEpisodesInPodcast": "Não consegui encontrar episódios de {0}.",
   "ServerUnavailable": "Estou com dificuldade para acessar seu servidor de mídia no momento. Por favor, tente novamente em instantes.",
   "AudioPlayerNotSupported": "Desculpe, este dispositivo não suporta reprodução de áudio. Tente pedir por um Echo speaker ou Fire TV.",
+  "VideoRequiresScreen": "Desculpe, este conteúdo requer um dispositivo com tela. Tente pedir por um Echo Show ou Fire TV.",
   "ErrorPermanentBackend": "Essa mídia não foi encontrada ou não está disponível.",
   "ErrorUserError": "Não consegui entender, por favor tente novamente.",
   "ErrorSkillError": "Algo deu errado. Por favor, tente novamente.",

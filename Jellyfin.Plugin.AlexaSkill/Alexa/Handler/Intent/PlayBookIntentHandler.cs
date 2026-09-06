@@ -278,8 +278,8 @@ public class PlayBookIntentHandler : BaseHandler
 
             bool resuming = startTicks > 0;
             SkillResponse response = resuming
-                ? BuildAudiobookResumeResponse(trackItems[startIndex], startTicks)
-                : BuildVideoAppAudioResponse(itemId, trackItems[startIndex], user);
+                ? BuildAudiobookResumeResponse(trackItems[startIndex], startTicks, user, context)
+                : BuildVideoAppAudioResponse(itemId, trackItems[startIndex], user, context: context);
 
             if (resuming)
             {

@@ -145,31 +145,6 @@ public class PlayVideoIntentHandler : BaseHandler
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = video;
 
-        var response = new SkillResponse
-        {
-            Version = "1.0",
-            Response = new ResponseBody
-            {
-                // VideoApp.Launch must NOT include shouldEndSession
-                ShouldEndSession = null,
-                Directives = new List<IDirective>
-                {
-                    new VideoAppLaunchDirective
-                    {
-                        VideoItem = new VideoItem
-                        {
-                            // JF-498: codec-routed static vs HLS remux source.
-                            Source = GetVideoAppLaunchUrl(video, user),
-                            Metadata = new VideoItemMetadata
-                            {
-                                Title = video.Name
-                            }
-                        }
-                    }
-                }
-            }
-        };
-
         // Check for existing playback progress and announce resume position.
         // Note: Alexa VideoApp does not support seek/offset natively, so the video
         // will start from the beginning, but we inform the user where they left off.
@@ -182,8 +157,12 @@ public class PlayVideoIntentHandler : BaseHandler
 
         // Alexa VideoApp does not support seek/offset natively (the video starts from the
         // beginning); the announce only informs the user where they left off.
-        response.Response.OutputSpeech = BuildVideoLaunchSpeech(video, locale, resumeTicks, GetAnnounceNowPlaying(user));
-
-        return response;
+        // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
+        return BuildVideoAppLaunchResponse(
+            context,
+            locale,
+            GetVideoAppLaunchUrl(video, user),
+            video.Name,
+            BuildVideoLaunchSpeech(video, locale, resumeTicks, GetAnnounceNowPlaying(user)));
     }
 }

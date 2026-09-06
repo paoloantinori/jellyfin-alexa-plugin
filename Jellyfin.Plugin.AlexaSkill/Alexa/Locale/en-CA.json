@@ -11,6 +11,7 @@
   "ArtistInfoGenreAlbums": "{0} is a {1} artist with {2} albums in your library.",
   "ArtistInfoGenreOnly": "{0} is a {1} artist.",
   "AudioPlayerNotSupported": "Sorry, this device doesn't support audio playback. Try asking from an Echo speaker or Fire TV.",
+  "VideoRequiresScreen": "Sorry, this content requires a device with a screen. Try asking from an Echo Show or Fire TV.",
   "BrowseItem": "{0}. {1}",
   "BrowseResults": "I found {0} results: {1}",
   "CancelSleepTimer": "Sleep timer cancelled.",

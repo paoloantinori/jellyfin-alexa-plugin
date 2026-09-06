@@ -67,6 +67,25 @@ public class LocaleStringsTests
         Assert.Contains("songs", ResponseStrings.Get("FindSongFoundMultiple", "en-US"));
     }
 
+    /// <summary>
+    /// JF-505: the screenless-device VideoApp capability Tell must resolve in every
+    /// locale (not fall back to the key name or en-US).
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(AllLocalesData))]
+    public void VideoRequiresScreen_ResolvesAllLocales(string locale)
+    {
+        string value = ResponseStrings.Get("VideoRequiresScreen", locale);
+        Assert.NotEqual("VideoRequiresScreen", value);
+        Assert.NotEmpty(value);
+    }
+
+    [Fact]
+    public void VideoRequiresScreen_ItItalian_UsesTaskWording()
+    {
+        Assert.Contains("dispositivo con schermo", ResponseStrings.Get("VideoRequiresScreen", "it-IT"));
+    }
+
     public static TheoryData<string> AllLocalesData()
     {
         var data = new TheoryData<string>();

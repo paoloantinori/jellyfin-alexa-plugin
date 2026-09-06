@@ -380,32 +380,13 @@ public class SearchMediaIntentHandler : BaseHandler
 
         if (IsVideoType(item))
         {
-            return new SkillResponse
-            {
-                Version = "1.0",
-                Response = new ResponseBody
-                {
-                    // VideoApp.Launch must NOT include shouldEndSession
-                    ShouldEndSession = null,
-                    OutputSpeech = BuildVideoLaunchSpeech(item, locale, _userDataManager, jellyfinUser, GetAnnounceNowPlaying(user)),
-                    Directives = new List<IDirective>
-                    {
-                        new VideoAppLaunchDirective
-                        {
-                            VideoItem = new VideoItem
-                            {
-                                // JF-498: codec-routed static vs HLS remux source (this
-                                // was the Audio stream URL, which cannot serve a movie/episode).
-                                Source = GetVideoAppLaunchUrl(item, user),
-                                Metadata = new VideoItemMetadata
-                                {
-                                    Title = item.Name
-                                }
-                            }
-                        }
-                    }
-                }
-            };
+            // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
+            return BuildVideoAppLaunchResponse(
+                context,
+                locale,
+                GetVideoAppLaunchUrl(item, user),
+                item.Name,
+                BuildVideoLaunchSpeech(item, locale, _userDataManager, jellyfinUser, GetAnnounceNowPlaying(user)));
         }
 
         return BuildAudioPlayerResponse(

@@ -125,6 +125,46 @@ internal static class TestHelpers
     }
 
     /// <summary>
+    /// JF-505: a screen-capable device (SupportedInterfaces reports the VideoApp key,
+    /// the Echo Show shape).
+    /// </summary>
+    internal static Context CreateContextWithVideoApp(string deviceId = "echo-show")
+    {
+        return new Context
+        {
+            System = new AlexaSystem
+            {
+                User = new global::Alexa.NET.Request.User { AccessToken = Guid.NewGuid().ToString() },
+                Device = new Device
+                {
+                    DeviceID = deviceId,
+                    SupportedInterfaces = new Dictionary<string, object> { { "VideoApp", new { } } }
+                }
+            }
+        };
+    }
+
+    /// <summary>
+    /// JF-505: a screenless device (it reports interfaces but NOT VideoApp, the Echo
+    /// Dot shape that rejects VideoApp.Launch with an audible platform error).
+    /// </summary>
+    internal static Context CreateScreenlessContext(string deviceId = "echo-dot")
+    {
+        return new Context
+        {
+            System = new AlexaSystem
+            {
+                User = new global::Alexa.NET.Request.User { AccessToken = Guid.NewGuid().ToString() },
+                Device = new Device
+                {
+                    DeviceID = deviceId,
+                    SupportedInterfaces = new Dictionary<string, object> { { "AudioPlayer", new { } } }
+                }
+            }
+        };
+    }
+
+    /// <summary>
     /// The first AudioPlayer.Play directive of a response, or null (shared by the
     /// cross-media fallback test suites).
     /// </summary>
@@ -503,4 +543,16 @@ internal sealed class SharedGateProbeHandler : BaseHandler
         => TryAlbumFallbackAsync(
             slotText, jellyfinUser, user, session, context, locale,
             libraryManager, userDataManager, null, logLabel, cancellationToken);
+
+    /// <summary>
+    /// JF-505: direct access to the shared VideoApp launch chokepoint for the
+    /// capability-gate tests (gate present/absent/fail-open shapes).
+    /// </summary>
+    public SkillResponse CallBuildVideoAppLaunchResponse(
+        Context? context,
+        string locale,
+        string sourceUrl,
+        string title,
+        IOutputSpeech? outputSpeech = null)
+        => BuildVideoAppLaunchResponse(context, locale, sourceUrl, title, outputSpeech);
 }

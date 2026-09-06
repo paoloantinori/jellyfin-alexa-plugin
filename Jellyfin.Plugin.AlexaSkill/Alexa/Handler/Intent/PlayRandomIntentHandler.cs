@@ -168,31 +168,13 @@ public class PlayRandomIntentHandler : BaseHandler
         if (firstItem is MediaBrowser.Controller.Entities.Movies.Movie
             or MediaBrowser.Controller.Entities.TV.Episode)
         {
-            var outputSpeech = BuildNowPlayingSpeech(firstItem.Name, locale, GetAnnounceNowPlaying(user));
-
-            return new SkillResponse
-            {
-                Version = "1.0",
-                Response = new ResponseBody
-                {
-                    // VideoApp.Launch must NOT include shouldEndSession
-                    ShouldEndSession = null,
-                    OutputSpeech = outputSpeech,
-                    Directives = new List<IDirective>
-                    {
-                        new Directive.VideoAppLaunchDirective
-                        {
-                            VideoItem = new Directive.VideoItem
-                            {
-                                // JF-498: codec-routed static vs HLS remux source (this
-                                // was the Audio stream URL, which cannot serve a movie/episode).
-                                Source = GetVideoAppLaunchUrl(firstItem, user),
-                                Metadata = new Directive.VideoItemMetadata { Title = firstItem.Name }
-                            }
-                        }
-                    }
-                }
-            };
+            // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
+            return BuildVideoAppLaunchResponse(
+                context,
+                locale,
+                GetVideoAppLaunchUrl(firstItem, user),
+                firstItem.Name,
+                BuildNowPlayingSpeech(firstItem.Name, locale, GetAnnounceNowPlaying(user)));
         }
 
         return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, firstItem, user, context);

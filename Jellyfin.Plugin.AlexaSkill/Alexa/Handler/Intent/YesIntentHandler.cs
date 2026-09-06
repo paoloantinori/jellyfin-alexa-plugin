@@ -150,10 +150,10 @@ public class YesIntentHandler : BaseHandler
             response = mediaType switch
             {
                 DisambiguationHelper.MediaTypeSong => PlaySong(item, user, session, context, locale),
-                DisambiguationHelper.MediaTypeAlbum => PlayAlbum(item, jellyfinUser!, user, session, locale),
-                DisambiguationHelper.MediaTypeArtist => PlayArtist(item, jellyfinUser!, user, session, locale),
-                DisambiguationHelper.MediaTypeVideo => PlayVideo(item, user, session, locale),
-                DisambiguationHelper.MediaTypePlaylist => PlayPlaylist(item, jellyfinUser!, user, session, locale),
+                DisambiguationHelper.MediaTypeAlbum => PlayAlbum(item, jellyfinUser!, user, session, locale, context),
+                DisambiguationHelper.MediaTypeArtist => PlayArtist(item, jellyfinUser!, user, session, locale, context),
+                DisambiguationHelper.MediaTypeVideo => PlayVideo(item, user, session, locale, context),
+                DisambiguationHelper.MediaTypePlaylist => PlayPlaylist(item, jellyfinUser!, user, session, locale, context),
                 _ => ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale))
             };
         }
@@ -210,7 +210,7 @@ public class YesIntentHandler : BaseHandler
                 startTicks = TimeSpan.FromMilliseconds(Math.Min(resumeState.OffsetMs, int.MaxValue)).Ticks;
             }
 
-            SkillResponse response = BuildAudiobookResumeResponse(item, startTicks);
+            SkillResponse response = BuildAudiobookResumeResponse(item, startTicks, user, context);
             response.Response.OutputSpeech = _config.ResumeAnnounceTitle
                 ? BuildOutputSpeech("ResumingSsml", "Resuming", locale, item.Name ?? ResponseStrings.Get("UnknownMedia", locale))
                 : BuildOutputSpeech("ResumeBriefSsml", "ResumeBrief", locale);
@@ -248,7 +248,7 @@ public class YesIntentHandler : BaseHandler
         return BuildSingleSongResponse(song, user, session, context, locale);
     }
 
-    private SkillResponse PlayAlbum(BaseItem album, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale)
+    private SkillResponse PlayAlbum(BaseItem album, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale, Context? context)
     {
         IReadOnlyList<BaseItem> albumItems = _libraryManager.GetItemList(new InternalItemsQuery()
         {
@@ -282,7 +282,7 @@ public class YesIntentHandler : BaseHandler
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = albumItems[0];
         string itemId = albumItems[0].Id.ToString();
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, albumItems[0], user);
+        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, albumItems[0], user, context);
     }
 
     /// <summary>
@@ -330,7 +330,7 @@ public class YesIntentHandler : BaseHandler
         // NativeControlsForBooks → VideoApp HLS concat (seek bar)
         if (Plugin.Instance?.Configuration?.NativeControlsForBooks == true)
         {
-            SkillResponse response = BuildVideoAppAudioResponse(itemId, trackItems[0], user);
+            SkillResponse response = BuildVideoAppAudioResponse(itemId, trackItems[0], user, locale, context);
             // Fresh-start audiobook via VideoApp: announce the book title.
             response.Response.OutputSpeech = BuildNowPlayingSpeech(book.Name, locale, GetAnnounceNowPlaying(user));
             return response;
@@ -339,7 +339,7 @@ public class YesIntentHandler : BaseHandler
         return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, trackItems[0], user, context);
     }
 
-    private SkillResponse PlayArtist(BaseItem artist, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale)
+    private SkillResponse PlayArtist(BaseItem artist, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale, Context? context)
     {
         var artistQuery = new InternalItemsQuery()
         {
@@ -362,43 +362,24 @@ public class YesIntentHandler : BaseHandler
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = artistItems[0];
         string itemId = artistItems[0].Id.ToString();
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, artistItems[0], user);
+        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, artistItems[0], user, context);
     }
 
-    private SkillResponse PlayVideo(BaseItem video, Entities.User user, SessionInfo session, string locale)
+    private SkillResponse PlayVideo(BaseItem video, Entities.User user, SessionInfo session, string locale, Context context)
     {
         session.NowPlayingQueue = new List<QueueItem> { new() { Id = video.Id } };
         session.FullNowPlayingItem = video;
 
-        return new SkillResponse
-        {
-            Version = "1.0",
-            Response = new ResponseBody
-            {
-                // VideoApp.Launch must NOT include shouldEndSession
-                ShouldEndSession = null,
-                OutputSpeech = BuildNowPlayingSpeech(video.Name, locale, GetAnnounceNowPlaying(user)),
-                Directives = new List<IDirective>
-                {
-                    new VideoAppDirective.VideoAppLaunchDirective
-                    {
-                        VideoItem = new VideoAppDirective.VideoItem
-                        {
-                            // JF-498: codec-routed static vs HLS remux source (this
-                            // was the Audio stream URL, which cannot serve a movie/episode).
-                            Source = GetVideoAppLaunchUrl(video, user),
-                            Metadata = new VideoAppDirective.VideoItemMetadata
-                            {
-                                Title = video.Name
-                            }
-                        }
-                    }
-                }
-            }
-        };
+        // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
+        return BuildVideoAppLaunchResponse(
+            context,
+            locale,
+            GetVideoAppLaunchUrl(video, user),
+            video.Name,
+            BuildNowPlayingSpeech(video.Name, locale, GetAnnounceNowPlaying(user)));
     }
 
-    private SkillResponse PlayPlaylist(BaseItem playlist, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale)
+    private SkillResponse PlayPlaylist(BaseItem playlist, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale, Context? context)
     {
         IReadOnlyList<BaseItem> playlistItems = ((Folder)playlist).GetItemList(new InternalItemsQuery()
         {
@@ -417,6 +398,6 @@ public class YesIntentHandler : BaseHandler
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = playlistItems[0];
         string itemId = playlistItems[0].Id.ToString();
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, playlistItems[0], user);
+        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, playlistItems[0], user, context);
     }
 }

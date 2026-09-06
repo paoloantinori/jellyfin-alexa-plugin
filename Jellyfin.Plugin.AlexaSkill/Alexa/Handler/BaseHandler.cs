@@ -691,6 +691,20 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// The ONE classification of "item kinds that ride the VideoApp launch path"
+    /// (JF-505 simplify: the predicate had drifted between the resume-offer gate,
+    /// which included LiveTvChannel, and the ResumeIntent router, which did not).
+    /// Every site deciding whether an item is launched/gated/offered as VIDEO
+    /// consumes this predicate; do not hand-write the type list again.
+    /// </summary>
+    /// <param name="item">The item to classify.</param>
+    /// <returns>True when the item launches via VideoApp on a capable device.</returns>
+    public static bool IsVideoAppLaunchItem(BaseItem? item)
+        => item is MediaBrowser.Controller.Entities.Movies.Movie
+            or MediaBrowser.Controller.Entities.TV.Episode
+            or MediaBrowser.Controller.LiveTv.LiveTvChannel;
+
+    /// <summary>
     /// Get the VideoApp.Launch source URL for a MOVIE or EPISODE item, routed by codec
     /// compatibility (JF-498): Echo-decodable sources (h264 video + aac/mp3/... audio)
     /// keep the static <c>/Videos/{id}/stream?static=true</c> URL; sources whose audio
@@ -718,6 +732,63 @@ public abstract class BaseHandler
         return decision.Route == VideoAppStreamRoute.HlsRemux
             ? GetEpisodeVideoAudioUrl(item.Id.ToString())
             : GetVideoStreamUrl(item.Id.ToString(), user);
+    }
+
+    /// <summary>
+    /// Build the canonical VideoApp.Launch response (JF-505 shared launch chokepoint).
+    /// Every Movie/Episode/live-TV launch site must build its response through this
+    /// helper so the screenless-device capability gate cannot drift between handlers:
+    /// a VideoApp.Launch sent to a device whose SupportedInterfaces lacks VideoApp (an
+    /// Echo Dot) is rejected by the platform with an audible directive error (device
+    /// evidence 2026-09-06), so without the interface NO directive is emitted and the
+    /// localized <c>VideoRequiresScreen</c> Tell answers instead.
+    /// </summary>
+    /// <param name="context">The Alexa context, for device capability detection.</param>
+    /// <param name="locale">The request locale, for the capability Tell string.</param>
+    /// <param name="sourceUrl">The VideoApp source URL (from <see cref="GetVideoAppLaunchUrl"/> or the live-TV resolver).</param>
+    /// <param name="title">The video item metadata title.</param>
+    /// <param name="outputSpeech">Optional now-playing announce.</param>
+    /// <returns>The VideoApp.Launch response, or the VideoRequiresScreen Tell on a device without the VideoApp interface.</returns>
+    protected SkillResponse BuildVideoAppLaunchResponse(
+        Context? context,
+        string locale,
+        string sourceUrl,
+        string title,
+        IOutputSpeech? outputSpeech = null)
+    {
+        if (!Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context))
+        {
+            Logger.LogDebug(
+                "VideoApp launch of '{Title}' skipped: device {DeviceId} does not support the VideoApp interface",
+                title,
+                context?.System?.Device?.DeviceID ?? "unknown");
+            return ResponseBuilder.Tell(ResponseStrings.Get("VideoRequiresScreen", locale));
+        }
+
+        return new SkillResponse
+        {
+            Version = "1.0",
+            Response = new ResponseBody
+            {
+                // VideoApp.Launch must NOT include shouldEndSession; Alexa rejects it.
+                ShouldEndSession = null,
+                OutputSpeech = outputSpeech,
+                Directives = new List<IDirective>
+                {
+                    new Directive.VideoAppLaunchDirective
+                    {
+                        VideoItem = new Directive.VideoItem
+                        {
+                            Source = sourceUrl,
+                            Metadata = new Directive.VideoItemMetadata
+                            {
+                                Title = title
+                            }
+                        }
+                    }
+                }
+            }
+        };
     }
 
     private string BuildStreamUrl(string pathSegment, string itemId, Entities.User user)
@@ -763,6 +834,16 @@ public abstract class BaseHandler
         session.NowPlayingQueue = new List<QueueItem> { new() { Id = channel.Id } };
         session.FullNowPlayingItem = channel;
 
+        // JF-505 simplify: the capability gate runs FIRST, before the stream resolver's
+        // bounded-5s PlaybackInfo round-trip: on a screenless device the whole resolution
+        // would be spent on a launch the shared builder then refuses. Refusing early also
+        // makes the last-played record below unconditional-for-capable-devices (a refused
+        // channel can no longer be recorded and later offered as an unplayable resume).
+        if (!Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context))
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("VideoRequiresScreen", locale));
+        }
+
         LiveTvStream? stream = await streamResolver.ResolveAsync(channel, user, cancellationToken).ConfigureAwait(false);
         if (stream is null)
         {
@@ -778,30 +859,12 @@ public abstract class BaseHandler
             Plugin.Instance?.DeviceQueueManager?.RecordLastPlayed(deviceId, channel.Id.ToString());
         }
 
-        return new SkillResponse
-        {
-            Version = "1.0",
-            Response = new ResponseBody
-            {
-                // VideoApp.Launch must NOT include shouldEndSession; Alexa rejects it.
-                ShouldEndSession = null,
-                OutputSpeech = BuildNowPlayingSpeech(channel.Name, locale, GetAnnounceNowPlaying(user)),
-                Directives = new List<IDirective>
-                {
-                    new Directive.VideoAppLaunchDirective
-                    {
-                        VideoItem = new Directive.VideoItem
-                        {
-                            Source = stream.Url,
-                            Metadata = new Directive.VideoItemMetadata
-                            {
-                                Title = channel.Name
-                            }
-                        }
-                    }
-                }
-            }
-        };
+        return BuildVideoAppLaunchResponse(
+            context,
+            locale,
+            stream.Url,
+            channel.Name,
+            BuildNowPlayingSpeech(channel.Name, locale, GetAnnounceNowPlaying(user)));
     }
 
     /// <summary>
@@ -975,6 +1038,13 @@ public abstract class BaseHandler
     /// <param name="user">The user for building the image URL.</param>
     /// <param name="offsetInMilliseconds">Resume offset in milliseconds (default 0).</param>
     /// <returns>A SkillResponse containing the AudioPlayer directive with metadata.</returns>
+    /// <summary>
+    /// Context-less convenience overload (JF-505 simplify note): PRODUCTION-DEAD since the
+    /// capability gate landed (every production caller passes the context so the
+    /// native-controls delegation gate evaluates); only pre-existing tests use it. The
+    /// hard-coded context:null means FAIL-OPEN (the VideoApp gate is skipped): do NOT
+    /// call this from production code, thread the context overload instead.
+    /// </summary>
     public SkillResponse BuildAudioPlayerResponse(PlayBehavior playBehavior, string streamUrl, string itemId, MediaBrowser.Controller.Entities.BaseItem? item, Entities.User user, int offsetInMilliseconds = 0)
     {
         return BuildAudioPlayerResponse(playBehavior, streamUrl, itemId, item, user, null, offsetInMilliseconds, announceLocale: null);
@@ -1028,9 +1098,13 @@ public abstract class BaseHandler
                 }
             }
 
-            if (wantsNativeControls)
+            // JF-505: native controls need the VideoApp interface; on a screenless device
+            // (no VideoApp in SupportedInterfaces) fall through to the plain AudioPlayer
+            // build below, which that device CAN play. This check is also the recursion
+            // break for BuildVideoAppAudioResponse's own screenless fallback.
+            if (wantsNativeControls && Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context))
             {
-                return BuildVideoAppAudioResponse(itemId, item, user, announceLocale);
+                return BuildVideoAppAudioResponse(itemId, item, user, announceLocale, context);
             }
         }
 
@@ -1146,9 +1220,35 @@ public abstract class BaseHandler
     /// Gives native progress bar / scrubber on Echo Show.
     /// For AudioBook items, uses a special concat HLS endpoint that joins all chapters
     /// into one continuous stream so the seek bar shows the full book duration.
+    /// JF-505: on a device without the VideoApp interface the directive is rejected by
+    /// the platform, and the content here is AUDIO, which a screenless speaker can
+    /// still play, so the builder degrades to the plain AudioPlayer response instead
+    /// of failing the play.
     /// </summary>
-    public SkillResponse BuildVideoAppAudioResponse(string itemId, BaseItem? item, Entities.User user, string? announceLocale = null)
+    /// <param name="itemId">The item ID to play.</param>
+    /// <param name="item">The media item for metadata.</param>
+    /// <param name="user">The user for the stream URL.</param>
+    /// <param name="announceLocale">Optional locale for the now-playing announce.</param>
+    /// <param name="context">The Alexa context, for the screenless-device check. Null (or a context without capability data) keeps the VideoApp path.</param>
+    /// <returns>A VideoApp.Launch response, or an AudioPlayer response on a screenless device.</returns>
+    public SkillResponse BuildVideoAppAudioResponse(string itemId, BaseItem? item, Entities.User user, string? announceLocale = null, Context? context = null)
     {
+        if (!Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context))
+        {
+            Logger.LogDebug(
+                "BuildVideoAppAudioResponse: device {DeviceId} has no VideoApp interface, item {ItemId} degrades to AudioPlayer",
+                context?.System?.Device?.DeviceID ?? "unknown", itemId);
+            return BuildAudioPlayerResponse(
+                PlayBehavior.ReplaceAll,
+                GetStreamUrl(itemId, user),
+                itemId,
+                item,
+                user,
+                context,
+                0,
+                announceLocale);
+        }
+
         bool isAudioBook = item != null && item.GetType().Name.Equals("AudioBook", StringComparison.Ordinal);
 
         string videoAudioUrl;
@@ -1199,14 +1299,39 @@ public abstract class BaseHandler
     /// <summary>
     /// Build a VideoApp.Launch response for an audiobook RESUME, pointing at the resume-aware
     /// HLS playlist (<c>?start=&lt;ticks&gt;</c>). The position is encoded in the playlist via
-    /// <c>#EXT-X-START</c> — VideoApp.Launch has no offset parameter, so this keeps the seek bar
+    /// <c>#EXT-X-START</c>; VideoApp.Launch has no offset parameter, so this keeps the seek bar
     /// AND resumes at position. Use the book's parent-folder ID for the concat stream.
+    /// JF-505: on a device without the VideoApp interface the directive is rejected by
+    /// the platform; audiobooks are audio, so the builder degrades to the AudioPlayer
+    /// resume (which supports an offset) instead of failing the play.
     /// </summary>
     /// <param name="item">An audiobook chapter item (its ParentId is the book folder).</param>
     /// <param name="startTicks">Resume position in .NET ticks.</param>
-    /// <returns>A VideoApp.Launch SkillResponse targeting the resume playlist.</returns>
-    public SkillResponse BuildAudiobookResumeResponse(MediaBrowser.Controller.Entities.BaseItem item, long startTicks)
+    /// <param name="user">The plugin user (fallback audio stream URL on screenless devices).</param>
+    /// <param name="context">The Alexa context, for the JF-505 screenless-device check. Null (or a context without capability data) keeps the VideoApp path.</param>
+    /// <returns>A VideoApp.Launch SkillResponse targeting the resume playlist, or an AudioPlayer resume on a screenless device.</returns>
+    public SkillResponse BuildAudiobookResumeResponse(
+        MediaBrowser.Controller.Entities.BaseItem item,
+        long startTicks,
+        Entities.User user,
+        Context? context)
     {
+        if (!Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context))
+        {
+            Logger.LogDebug(
+                "BuildAudiobookResumeResponse: device {DeviceId} has no VideoApp interface, book item {ItemId} degrades to AudioPlayer resume",
+                context?.System?.Device?.DeviceID ?? "unknown", item.Id);
+            int offsetMs = (int)Math.Min(TimeSpan.FromTicks(Math.Max(startTicks, 0)).TotalMilliseconds, int.MaxValue);
+            return BuildAudioPlayerResponse(
+                PlayBehavior.ReplaceAll,
+                GetStreamUrl(item.Id.ToString(), user),
+                item.Id.ToString(),
+                item,
+                user,
+                context,
+                offsetMs);
+        }
+
         Guid parentId = item.ParentId != Guid.Empty ? item.ParentId : item.Id;
         string videoAudioUrl = GetAudiobookResumeUrl(parentId.ToString(), startTicks);
 
@@ -2799,6 +2924,7 @@ public abstract class BaseHandler
     /// <param name="session">The Jellyfin session (now-playing queue).</param>
     /// <param name="series">The already-resolved series item.</param>
     /// <param name="locale">The request locale for response strings.</param>
+    /// <param name="context">The Alexa context (JF-505 screenless-device launch gate).</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The VideoApp launch response, or the localized NoNextEpisode Tell when the series has no playable episode.</returns>
     protected async Task<SkillResponse> PlayNextUpEpisodeAsync(
@@ -2810,6 +2936,7 @@ public abstract class BaseHandler
         SessionInfo session,
         BaseItem series,
         string locale,
+        Context context,
         CancellationToken cancellationToken)
     {
         var nextUpQuery = new NextUpQuery
@@ -2893,31 +3020,13 @@ public abstract class BaseHandler
                 : null;
         }
 
-        return new SkillResponse
-        {
-            Version = "1.0",
-            Response = new ResponseBody
-            {
-                // VideoApp.Launch must NOT include shouldEndSession
-                ShouldEndSession = null,
-                OutputSpeech = speech,
-                Directives = new List<IDirective>
-                {
-                    new Directive.VideoAppLaunchDirective
-                    {
-                        VideoItem = new Directive.VideoItem
-                        {
-                            // JF-498: codec-routed static vs HLS remux source.
-                            Source = GetVideoAppLaunchUrl(episode, user),
-                            Metadata = new Directive.VideoItemMetadata
-                            {
-                                Title = episode.Name
-                            }
-                        }
-                    }
-                }
-            }
-        };
+        // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
+        return BuildVideoAppLaunchResponse(
+            context,
+            locale,
+            GetVideoAppLaunchUrl(episode, user),
+            episode.Name,
+            speech);
     }
 
     /// <summary>

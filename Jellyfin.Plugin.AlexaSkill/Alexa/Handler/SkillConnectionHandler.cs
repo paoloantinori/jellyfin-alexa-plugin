@@ -105,8 +105,8 @@ public class SkillConnectionHandler : BaseHandler
         {
             SkillResponse response = taskName switch
             {
-                TaskNames.PlayFavorites => await HandlePlayFavoritesTask(user, session, locale, cancellationToken).ConfigureAwait(false),
-                TaskNames.PlayMedia => await HandlePlayMediaTask(launchRequest, user, session, locale, cancellationToken).ConfigureAwait(false),
+                TaskNames.PlayFavorites => await HandlePlayFavoritesTask(context, user, session, locale, cancellationToken).ConfigureAwait(false),
+                TaskNames.PlayMedia => await HandlePlayMediaTask(launchRequest, context, user, session, locale, cancellationToken).ConfigureAwait(false),
                 TaskNames.SearchLibrary => await HandleSearchLibraryTask(launchRequest, user, session, locale, cancellationToken).ConfigureAwait(false),
                 _ => BuildTaskErrorResponse(locale, $"Unknown task: {taskName}")
             };
@@ -121,7 +121,7 @@ public class SkillConnectionHandler : BaseHandler
         }
     }
 
-    private async Task<SkillResponse> HandlePlayFavoritesTask(Entities.User user, SessionInfo session, string locale, CancellationToken cancellationToken)
+    private async Task<SkillResponse> HandlePlayFavoritesTask(Context context, Entities.User user, SessionInfo session, string locale, CancellationToken cancellationToken)
     {
         var query = new InternalItemsQuery
         {
@@ -154,10 +154,10 @@ public class SkillConnectionHandler : BaseHandler
         session.FullNowPlayingItem = firstItem;
 
         string itemId = firstItem.Id.ToString();
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, firstItem, user);
+        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, firstItem, user, context);
     }
 
-    private Task<SkillResponse> HandlePlayMediaTask(LaunchRequest launchRequest, Entities.User user, SessionInfo session, string locale, CancellationToken cancellationToken)
+    private Task<SkillResponse> HandlePlayMediaTask(LaunchRequest launchRequest, Context context, Entities.User user, SessionInfo session, string locale, CancellationToken cancellationToken)
     {
         // PlayMedia task delegates to PlayIntent via a synthetic request
         // For now, return a prompt asking what to play since we need a media query

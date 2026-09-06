@@ -8,6 +8,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
+using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -123,7 +124,7 @@ public class LaunchRequestHandler : BaseHandler
             // check if we have any media in the queue (legacy Jellyfin session-based resume)
             if (session.NowPlayingQueue.Count > 0)
             {
-                return HandleSessionQueueResume(request, user, session);
+                return HandleSessionQueueResume(request, context, user, session);
             }
         }
 
@@ -133,7 +134,9 @@ public class LaunchRequestHandler : BaseHandler
 
     /// <summary>
     /// Handle the case where AudioPlayer context indicates prior playback.
-    /// Looks up the item, offers a resume confirmation prompt.
+    /// Looks up the item, offers a resume confirmation prompt. When the offer builder
+    /// declines to offer (JF-505: a video item on a screenless device with no audio
+    /// fallback), the welcome response answers instead.
     /// </summary>
     private async Task<SkillResponse> HandleResumeOfferAsync(
         Request request, Context context, Entities.User user, SessionInfo session,
@@ -152,7 +155,8 @@ public class LaunchRequestHandler : BaseHandler
                 cancellationToken).ConfigureAwait(false);
         }
 
-        return BuildResumeOfferResponse(item, itemId, offsetMs, user, locale, context);
+        SkillResponse? offer = BuildResumeOfferResponse(item, itemId, offsetMs, user, locale, context, session);
+        return offer ?? await BuildWelcomeResponseAsync(context, user, session, locale, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -248,18 +252,88 @@ public class LaunchRequestHandler : BaseHandler
         }
 
         int offsetMs = (int)Math.Min(TimeSpan.FromTicks(positionTicks).TotalMilliseconds, int.MaxValue);
-        return BuildResumeOfferResponse(item, lastPlayedItemId, offsetMs, user, locale, context, useResumePlaylist);
+        return BuildResumeOfferResponse(item, lastPlayedItemId, offsetMs, user, locale, context, session, useResumePlaylist);
+    }
+
+    /// <summary>
+    /// JF-505: a screenless device (no VideoApp interface) can never honor a resume of a
+    /// VIDEO item, so the offer builder declines it and falls back to the most recent
+    /// AUDIO item with progress in the per-user last-played ledger (Jellyfin UserData,
+    /// DatePlayed-descending). Device evidence 2026-09-06: the ledger offered a
+    /// Show-played episode to an Echo Dot, and the accepted offer could only fail there.
+    /// Returns null when no audio candidate exists, so the caller skips the offer
+    /// entirely (straight to welcome).
+    /// </summary>
+    /// <param name="session">The Jellyfin session (user resolution).</param>
+    /// <param name="user">The plugin user (library access filtering).</param>
+    /// <param name="locale">The request locale for response strings.</param>
+    /// <param name="context">The Alexa context (screenless detection).</param>
+    /// <returns>The audio resume offer, or null when there is nothing offerable.</returns>
+    private SkillResponse? BuildScreenlessAudioFallbackOffer(
+        SessionInfo session, Entities.User user, string locale, Context context)
+    {
+        var (jellyfinUser, _) = ResolveJellyfinUser(_userManager, session.UserId, locale);
+        if (jellyfinUser == null)
+        {
+            Logger.LogDebug("LaunchResume: screenless audio fallback: could not resolve Jellyfin user, no offer");
+            return null;
+        }
+
+        BaseItemKind[] audioKinds = FilterByContentAccess(new[] { BaseItemKind.Audio, BaseItemKind.AudioBook });
+        var (audioItem, audioTicks) = FindLastPlayedItemWithProgress(
+            jellyfinUser, _libraryManager, _userDataManager, user, audioKinds, Logger);
+        if (audioItem == null)
+        {
+            Logger.LogDebug("LaunchResume: screenless device, no audio item with progress to offer");
+            return null;
+        }
+
+        Logger.LogInformation(
+            "LaunchResume: screenless device, offering most recent audio item '{ItemName}' ({ItemId}) instead of the video item",
+            audioItem.Name, audioItem.Id);
+        // DELIBERATE (JF-505 simplify pin): the offset here is the plain UserData progress,
+        // NOT the AudiobookPositionTracker ticks the device-last-played offer prefers above.
+        // On a screenless device the audiobook resumes via plain AudioPlayer (useResumePlaylist
+        // stays false), and the sliced playlist machinery the tracker serves does not apply:
+        // UserData IS the honest position for this shape.
+        int audioOffsetMs = (int)Math.Min(TimeSpan.FromTicks(audioTicks).TotalMilliseconds, int.MaxValue);
+        return BuildResumeOfferResponse(audioItem, audioItem.Id.ToString(), audioOffsetMs, user, locale, context, session);
     }
 
     /// <summary>
     /// Build the resume-offer response: SSML/plain text prompt, APL screen, and
     /// session attributes storing the resume state for YesIntent confirmation.
     /// Shared by HandleResumeOfferAsync (AudioPlayer context) and ResolveActualLastPlayed (server-side).
+    /// JF-505: on a screenless device a VIDEO item (Movie/Episode) is never offered;
+    /// the audio fallback replaces it (or the offer is skipped when no audio exists).
     /// </summary>
-    private SkillResponse BuildResumeOfferResponse(
+    /// <param name="item">The item to offer.</param>
+    /// <param name="itemId">The item ID stored in the resume state.</param>
+    /// <param name="offsetMs">The resume offset.</param>
+    /// <param name="user">The plugin user.</param>
+    /// <param name="locale">The request locale.</param>
+    /// <param name="context">The Alexa context (screenless detection).</param>
+    /// <param name="session">The Jellyfin session (audio fallback lookup).</param>
+    /// <param name="useResumePlaylist">Whether YesIntent should resume via the audiobook playlist.</param>
+    /// <returns>The offer, or null when the device cannot play the offered item and no audio fallback exists.</returns>
+    private SkillResponse? BuildResumeOfferResponse(
         BaseItem? item, string itemId, long offsetMs,
-        Entities.User user, string locale, Context context, bool useResumePlaylist = false)
+        Entities.User user, string locale, Context context, SessionInfo session, bool useResumePlaylist = false)
     {
+        // JF-505: never offer a video resume to a device that cannot play it. LiveTvChannel
+        // rides the same VideoApp launch path (its static /Audio/ URL 500s on a live source,
+        // so confirming the offer on a screenless device can never succeed). The shared
+        // predicate owns the kind list.
+        if (item != null
+            && IsVideoAppLaunchItem(item)
+            && !Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context))
+        {
+            Logger.LogDebug(
+                "LaunchResume: last-played item '{ItemName}' is video but the device has no screen; trying the audio fallback",
+                item.Name);
+            return BuildScreenlessAudioFallbackOffer(session, user, locale, context);
+        }
+
         string title = item?.Name ?? ResponseStrings.Get("UnknownMedia", locale);
         SkillResponse response = AskLocalized(
             "ResumePromptSsml", "ResumePrompt", "ResumeReprompt", locale, title);
@@ -286,13 +360,13 @@ public class LaunchRequestHandler : BaseHandler
     /// <summary>
     /// Handle the legacy Jellyfin session-based queue resume (no confirmation prompt).
     /// </summary>
-    private SkillResponse HandleSessionQueueResume(Request request, Entities.User user, SessionInfo session)
+    private SkillResponse HandleSessionQueueResume(Request request, Context context, Entities.User user, SessionInfo session)
     {
         if (session.FullNowPlayingItem != null)
         {
             string item_id = session.FullNowPlayingItem.Id.ToString();
 
-            return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, session.FullNowPlayingItem, user);
+            return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, session.FullNowPlayingItem, user, context);
         }
         else
         {
@@ -305,7 +379,7 @@ public class LaunchRequestHandler : BaseHandler
             string item_id = item.Id.ToString();
             session.FullNowPlayingItem = item;
 
-            return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, item, user);
+            return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, item, user, context);
         }
     }
 

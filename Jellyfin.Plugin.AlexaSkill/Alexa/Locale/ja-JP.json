@@ -166,6 +166,7 @@
   "NoEpisodesInPodcast": "{0} のエピソードが見つかりませんでした。",
   "ServerUnavailable": "現在メディアサーバーに接続できません。しばらくしてからもう一度お試しください。",
   "AudioPlayerNotSupported": "申し訳ありませんが、このデバイスはオーディオ再生に対応していません。EchoスピーカーまたはFire TVからお試しください。",
+  "VideoRequiresScreen": "申し訳ありませんが、このコンテンツには画面付きのデバイスが必要です。Echo ShowまたはFire TVからお試しください。",
   "ErrorPermanentBackend": "そのメディアは見つからないか、利用できません。",
   "ErrorUserError": "理解できませんでした。もう一度お試しください。",
   "ErrorSkillError": "エラーが発生しました。もう一度お試しください。",
