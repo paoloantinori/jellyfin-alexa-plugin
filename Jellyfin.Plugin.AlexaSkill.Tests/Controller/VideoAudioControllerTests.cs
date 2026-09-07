@@ -415,6 +415,100 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// JF-518: when the startup wait window expires while ffmpeg is STILL RUNNING
+    /// (output file not created yet), the endpoint must take its designed graceful
+    /// path (500 + warning) instead of throwing InvalidOperationException from
+    /// reading ExitCode on a live process.
+    /// </summary>
+    [Fact]
+    public async Task StreamVideoAudio_FfmpegStillRunningAtWindowExpiry_Returns500()
+    {
+        // Create a fake audio item with media sources
+        var audioItem = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Test Song",
+            Id = Guid.NewGuid()
+        };
+
+        _libraryManagerMock.Setup(m => m.GetItemById(audioItem.Id)).Returns(audioItem);
+
+        // Fake ffmpeg that stays alive well past the ~1s startup window and never
+        // creates the output file.
+        string fakeFfmpegPath = Path.Combine(_tempDir, "fake-ffmpeg-slow-start");
+        string fakeFfmpegScript = "#!/bin/sh\n" +
+            "sleep 10\n" +
+            "exit 0\n";
+        File.WriteAllText(fakeFfmpegPath, fakeFfmpegScript);
+#pragma warning disable CA3003, CA1416 // test-created path; Unix-only test
+        File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+#pragma warning restore CA3003, CA1416
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(new CaptureLoggerProvider(logRecords));
+        });
+        var controller = CreateController(audioItem.Id.ToString(), loggerFactory);
+        controller.FfmpegPath = fakeFfmpegPath;
+
+        ActionResult result = await controller.StreamVideoAudio(audioItem.Id.ToString());
+
+        var error = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(500, error.StatusCode);
+
+        // Pin WHICH arm ran (both arms return the same 500): the still-running
+        // diagnostic, not the exit-code one (JF-518 review finding 2).
+        Assert.Contains(logRecords, r =>
+            r.Level == LogLevel.Warning && r.Message.Contains("still running after ~1s", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// JF-518 companion: when ffmpeg FAILS FAST (exits with a nonzero code before
+    /// creating any output), the endpoint takes the same graceful 500 path through
+    /// the exit-code diagnostic branch (the HasExited arm of the JF-518 guard).
+    /// </summary>
+    [Fact]
+    public async Task StreamVideoAudio_FfmpegFailsFastWithoutOutput_Returns500()
+    {
+        var audioItem = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Test Song",
+            Id = Guid.NewGuid()
+        };
+
+        _libraryManagerMock.Setup(m => m.GetItemById(audioItem.Id)).Returns(audioItem);
+
+        // Fake ffmpeg that exits immediately with a failure code and never creates
+        // the output file.
+        string fakeFfmpegPath = Path.Combine(_tempDir, "fake-ffmpeg-fast-fail");
+        string fakeFfmpegScript = "#!/bin/sh\n" +
+            "exit 3\n";
+        File.WriteAllText(fakeFfmpegPath, fakeFfmpegScript);
+#pragma warning disable CA3003, CA1416 // test-created path; Unix-only test
+        File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+#pragma warning restore CA3003, CA1416
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(new CaptureLoggerProvider(logRecords));
+        });
+        var controller = CreateController(audioItem.Id.ToString(), loggerFactory);
+        controller.FfmpegPath = fakeFfmpegPath;
+
+        ActionResult result = await controller.StreamVideoAudio(audioItem.Id.ToString());
+
+        var error = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(500, error.StatusCode);
+
+        // Pin WHICH arm ran: the exit-code diagnostic with the fake's code 3.
+        Assert.Contains(logRecords, r =>
+            r.Level == LogLevel.Warning && r.Message.Contains("exit code 3", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// Verify that on a cache hit, the controller returns a PhysicalFileResult
     /// (with range processing enabled for seeking), not a FileStreamResult.
     /// </summary>
@@ -446,13 +540,13 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.True(physicalResult.EnableRangeProcessing);
     }
 
-    private VideoAudioController CreateController(string? itemIdForToken = null)
+    private VideoAudioController CreateController(string? itemIdForToken = null, ILoggerFactory? loggerFactory = null)
     {
         var controller = new VideoAudioController(
             _libraryManagerMock.Object,
             _mediaEncoderMock.Object,
             _cache,
-            _loggerFactory);
+            loggerFactory ?? _loggerFactory);
 
         // Attach an HttpContext so ValidateStreamToken can read the query string.
         // When itemIdForToken is provided, mint a valid token for that item so the request passes
