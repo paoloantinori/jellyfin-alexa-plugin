@@ -157,7 +157,7 @@ public class SkillConnectionHandler : BaseHandler
         // JF-507: codec-gated audio-launch decision; an EAC3-family video item at the
         // head of the favorites queue routes to the audio-only transcode instead of
         // dying on the raw static bytes (JF-505 does not apply: audio-shaped launch).
-        AudioLaunchSource source = ResolveAudioLaunchSource(firstItem, itemId, user, 0);
+        AudioLaunchSource source = ResolveAudioLaunchSource(firstItem, itemId, user, 0, context?.System?.Device?.DeviceID);
         return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source.Url, itemId, firstItem, user, context);
     }
 

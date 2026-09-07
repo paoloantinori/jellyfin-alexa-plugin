@@ -110,7 +110,7 @@ public class JumpToPositionIntentHandler : BaseHandler
         // item-absolute, which is exactly the ?start= the transcoded shape wants; an
         // audio item keeps the raw static URL and the directive offset.
         string itemId = session.FullNowPlayingItem.Id.ToString();
-        AudioLaunchSource source = ResolveAudioLaunchSource(session.FullNowPlayingItem, itemId, user, offsetMs);
+        AudioLaunchSource source = ResolveAudioLaunchSource(session.FullNowPlayingItem, itemId, user, offsetMs, context?.System?.Device?.DeviceID);
         var response = BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll,
             source.Url,

@@ -155,7 +155,14 @@ public class LaunchRequestHandler : BaseHandler
                 cancellationToken).ConfigureAwait(false);
         }
 
-        SkillResponse? offer = BuildResumeOfferResponse(item, itemId, offsetMs, user, locale, context, session);
+        // JF-514: the AudioPlayer context offset is device-derived, i.e. relative to the
+        // previous playback's OUTPUT timeline (for a transcode-routed item that timeline
+        // starts at the stream's ?start= base). Flag it so the Yes-side resume rebases
+        // it against the recorded launch base instead of minting it as item-absolute.
+        Logger.LogDebug(
+            "LaunchResume: offering resume of {ItemId} from offset {OffsetMs}ms (provenance=AudioPlayer context, stream-relative)",
+            itemId, offsetMs);
+        SkillResponse? offer = BuildResumeOfferResponse(item, itemId, offsetMs, user, locale, context, session, offsetIsStreamRelative: true);
         return offer ?? await BuildWelcomeResponseAsync(context, user, session, locale, cancellationToken).ConfigureAwait(false);
     }
 
@@ -315,10 +322,11 @@ public class LaunchRequestHandler : BaseHandler
     /// <param name="context">The Alexa context (screenless detection).</param>
     /// <param name="session">The Jellyfin session (audio fallback lookup).</param>
     /// <param name="useResumePlaylist">Whether YesIntent should resume via the audiobook playlist.</param>
+    /// <param name="offsetIsStreamRelative">Whether <paramref name="offsetMs"/> is device-derived (AudioPlayer context seed) and needs the JF-514 rebase on confirm; the server-progress seeds leave it false.</param>
     /// <returns>The offer, or null when the device cannot play the offered item and no audio fallback exists.</returns>
     private SkillResponse? BuildResumeOfferResponse(
         BaseItem? item, string itemId, long offsetMs,
-        Entities.User user, string locale, Context context, SessionInfo session, bool useResumePlaylist = false)
+        Entities.User user, string locale, Context context, SessionInfo session, bool useResumePlaylist = false, bool offsetIsStreamRelative = false)
     {
         // JF-505: never offer a video resume to a device that cannot play it. LiveTvChannel
         // rides the same VideoApp launch path (its static /Audio/ URL 500s on a live source,
@@ -344,7 +352,8 @@ public class LaunchRequestHandler : BaseHandler
         {
             ItemId = itemId,
             OffsetMs = (int)Math.Min(offsetMs, int.MaxValue),
-            UseResumePlaylist = useResumePlaylist
+            UseResumePlaylist = useResumePlaylist,
+            OffsetIsStreamRelative = offsetIsStreamRelative
         };
 
         response.SessionAttributes = new Dictionary<string, object>
@@ -368,7 +377,7 @@ public class LaunchRequestHandler : BaseHandler
 
             // JF-507: shared codec-gated audio-launch decision (an EAC3-family video
             // item on the audio path routes to the audio-only episode HLS transcode).
-            AudioLaunchSource source = ResolveAudioLaunchSource(session.FullNowPlayingItem, item_id, user, 0);
+            AudioLaunchSource source = ResolveAudioLaunchSource(session.FullNowPlayingItem, item_id, user, 0, context?.System?.Device?.DeviceID);
             return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source.Url, item_id, session.FullNowPlayingItem, user, context);
         }
         else
@@ -382,7 +391,7 @@ public class LaunchRequestHandler : BaseHandler
             string item_id = item.Id.ToString();
             session.FullNowPlayingItem = item;
 
-            AudioLaunchSource source = ResolveAudioLaunchSource(item, item_id, user, 0);
+            AudioLaunchSource source = ResolveAudioLaunchSource(item, item_id, user, 0, context?.System?.Device?.DeviceID);
             return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source.Url, item_id, item, user, context);
         }
     }

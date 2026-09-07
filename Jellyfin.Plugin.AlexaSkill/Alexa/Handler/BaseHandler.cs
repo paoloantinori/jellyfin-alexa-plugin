@@ -15,6 +15,7 @@ using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -1302,7 +1303,7 @@ public abstract class BaseHandler
             Logger.LogDebug(
                 "BuildVideoAppAudioResponse: device {DeviceId} has no VideoApp interface, item {ItemId} degrades to AudioPlayer",
                 context?.System?.Device?.DeviceID ?? "unknown", itemId);
-            AudioLaunchSource source = ResolveAudioLaunchSource(item, itemId, user, 0);
+            AudioLaunchSource source = ResolveAudioLaunchSource(item, itemId, user, 0, context?.System?.Device?.DeviceID);
             return BuildAudioPlayerResponse(
                 PlayBehavior.ReplaceAll,
                 source.Url,
@@ -1388,29 +1389,104 @@ public abstract class BaseHandler
     /// AudioPlayer) so every audio-shaped launch of a video item benefits; the wired
     /// sites are the resume-yes path, the ResumeIntent tail, the session-queue resume,
     /// JumpToPosition (absolute target) and the degradation itself.
+    /// JF-514: every Movie/Episode resolution also RECORDS the launch base in the
+    /// device's queue (<paramref name="deviceId"/> + <paramref name="queueManager"/>):
+    /// the transcode route records the minted <c>?start=</c> base, the raw-static route
+    /// records 0, so a later resume can rebase a device-derived (stream-relative)
+    /// offset into the item-absolute position the next <c>?start=</c> wants.
     /// </summary>
     /// <param name="item">The item being launched (null keeps the raw static URL).</param>
     /// <param name="itemId">The item ID (stream token and URL path).</param>
     /// <param name="user">The user, for the raw static URL's api_key.</param>
     /// <param name="offsetMs">The resume offset the caller wants (item-relative). MUST be known item-absolute when the caller suspects the item routes to the transcode: a device/stream-relative offset minted into <c>?start=</c> seeks the wrong position (see ResumeIntentHandler's provenance gate).</param>
+    /// <param name="deviceId">The Alexa device ID the launch plays on (base-ledger key). Null (caller without device context) skips the ledger write; a later resume then takes the no-base rule.</param>
+    /// <param name="queueManager">The per-device queue manager holding the ledger. Null falls back to <c>Plugin.Instance</c>'s DI instance (the <c>RecordLastPlayed</c> chokepoint idiom); pass one explicitly to keep unit tests off the shared plugin instance.</param>
     /// <returns>The (URL, offset) pair for the AudioPlayer.Play directive; <see cref="AudioLaunchSource.RoutedToTranscode"/> tells the caller which timeline the offset semantics belong to.</returns>
-    protected AudioLaunchSource ResolveAudioLaunchSource(BaseItem? item, string itemId, Entities.User user, int offsetMs)
+    protected AudioLaunchSource ResolveAudioLaunchSource(BaseItem? item, string itemId, Entities.User user, int offsetMs, string? deviceId = null, DeviceQueueManager? queueManager = null)
     {
         if (item is MediaBrowser.Controller.Entities.Movies.Movie
             or MediaBrowser.Controller.Entities.TV.Episode)
         {
-            string? audioCodec = TryResolveAudioCodec(item);
-            if (VideoAppStreamPolicy.AudioRequiresTranscode(audioCodec))
+            if (RoutesToAudioTranscode(item, out string? audioCodec))
             {
                 long startTicks = Math.Max((long)offsetMs * TimeSpan.TicksPerMillisecond, 0);
                 Logger.LogDebug(
                     "Audio launch of video item {ItemId}: audio codec '{AudioCodec}' has no Echo decoder, routing to the audio-only HLS transcode (start={StartTicks} ticks)",
                     itemId, audioCodec, startTicks);
+                RecordAudioTranscodeBase(deviceId, queueManager, itemId, offsetMs);
                 return new AudioLaunchSource(GetEpisodeAudioUrl(itemId, startTicks), 0, RoutedToTranscode: true);
             }
+
+            // JF-514: a Movie/Episode riding the RAW STATIC audio URL plays the item
+            // timeline from 0, so the recorded launch base is 0 (this also invalidates
+            // any transcode base an older launch of the same item left behind).
+            RecordAudioTranscodeBase(deviceId, queueManager, itemId, 0);
         }
 
         return new AudioLaunchSource(GetStreamUrl(itemId, user), offsetMs, RoutedToTranscode: false);
+    }
+
+    /// <summary>
+    /// Pure routing probe of <see cref="ResolveAudioLaunchSource"/> (JF-514): true when
+    /// the item's audio-shaped launch would mint the audio-only transcode URL. Does NOT
+    /// touch the launch-base ledger (the resolve itself writes it), so a caller that
+    /// must read the PREVIOUS launch's base can probe first and only then resolve.
+    /// </summary>
+    /// <param name="item">The item to probe.</param>
+    /// <returns>True when the Movie/Episode's audio codec has no Echo decoder.</returns>
+    protected bool RoutesToAudioTranscode(BaseItem? item) => RoutesToAudioTranscode(item, out _);
+
+    /// <summary>
+    /// Same probe, handing back the resolved codec so callers that log it (the
+    /// resolve branch) do not pay a second media-streams DB read (JF-514 review).
+    /// </summary>
+    protected bool RoutesToAudioTranscode(BaseItem? item, out string? audioCodec)
+    {
+        audioCodec = null;
+        if (item is not (MediaBrowser.Controller.Entities.Movies.Movie
+            or MediaBrowser.Controller.Entities.TV.Episode))
+        {
+            return false;
+        }
+
+        audioCodec = TryResolveAudioCodec(item);
+        return VideoAppStreamPolicy.AudioRequiresTranscode(audioCodec);
+    }
+
+    /// <summary>
+    /// JF-514 ledger write behind <see cref="ResolveAudioLaunchSource"/>: records the
+    /// item-absolute base of the launch just resolved for the (device, item) pair, so
+    /// the next resume on that device can rebase its device-derived offset. No-op
+    /// without a device ID; the manager falls back to the DI instance when the caller
+    /// did not inject one (tests pass theirs to stay off the shared plugin instance).
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID, or null to skip the write.</param>
+    /// <param name="queueManager">The caller's queue manager, or null to use <c>Plugin.Instance</c>'s.</param>
+    /// <param name="itemId">The item ID whose launch minted the base.</param>
+    /// <param name="baseMs">The item-absolute launch base in milliseconds.</param>
+    private void RecordAudioTranscodeBase(string? deviceId, DeviceQueueManager? queueManager, string itemId, long baseMs)
+    {
+        if (string.IsNullOrEmpty(deviceId))
+        {
+            return;
+        }
+
+        (queueManager ?? Plugin.Instance?.DeviceQueueManager)?.RecordAudioTranscodeBase(deviceId, itemId, baseMs);
+    }
+
+    /// <summary>
+    /// Read-side twin of the record helper (JF-514): the recorded launch base for an
+    /// item on a device, or null when none (null device ID reads null, mirroring the
+    /// write side's skip).
+    /// </summary>
+    protected long? GetAudioTranscodeBase(string? deviceId, string itemId, DeviceQueueManager? queueManager = null)
+    {
+        if (string.IsNullOrEmpty(deviceId))
+        {
+            return null;
+        }
+
+        return (queueManager ?? Plugin.Instance?.DeviceQueueManager)?.GetAudioTranscodeBase(deviceId, itemId);
     }
 
     /// <summary>
