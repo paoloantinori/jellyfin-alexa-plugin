@@ -393,26 +393,6 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
     // ========== JF-498: codec-routed static-vs-HLS launch source ==========
 
     /// <summary>
-    /// Test seam for <c>BaseItem.GetMediaStreams()</c> (virtual): under the test host
-    /// there is no statically injected MediaSourceManager, so a plain item's probe
-    /// degrades to "unknown codecs" (static route). Overriding the streams lets the
-    /// wiring tests exercise the REAL probe + routing path.
-    /// </summary>
-    private sealed class MovieWithStreams : Movie
-    {
-        private readonly List<MediaStream> _streams;
-
-        public MovieWithStreams(string name, Guid id, params MediaStream[] streams)
-        {
-            Name = name;
-            Id = id;
-            _streams = streams.ToList();
-        }
-
-        public override IReadOnlyList<MediaStream> GetMediaStreams() => _streams;
-    }
-
-    /// <summary>
     /// The launch site is wired through BaseHandler.GetVideoAppLaunchUrl: an EAC3
     /// movie (the evidenced library shape) launches the HLS REMUX endpoint, not the
     /// static stream the Echo cannot decode.
@@ -421,11 +401,11 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
     public async Task Handle_Eac3Movie_LaunchesEpisodeHlsRemux()
     {
         var id = Guid.NewGuid();
-        var movie = new MovieWithStreams(
+        var movie = new TestHelpers.TestMovieWithStreams(
             "Adolescence S01E01",
             id,
-            new MediaStream { Type = MediaStreamType.Video, Codec = "h264" },
-            new MediaStream { Type = MediaStreamType.Audio, Codec = "eac3" });
+            TestHelpers.TestStream(MediaStreamType.Video, "h264"),
+            TestHelpers.TestStream(MediaStreamType.Audio, "eac3"));
 
         _fx.LibraryManager
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
@@ -451,11 +431,11 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
     public async Task Handle_AacMovie_KeepsStaticVideoStream()
     {
         var id = Guid.NewGuid();
-        var movie = new MovieWithStreams(
+        var movie = new TestHelpers.TestMovieWithStreams(
             "The Matrix",
             id,
-            new MediaStream { Type = MediaStreamType.Video, Codec = "h264" },
-            new MediaStream { Type = MediaStreamType.Audio, Codec = "aac" });
+            TestHelpers.TestStream(MediaStreamType.Video, "h264"),
+            TestHelpers.TestStream(MediaStreamType.Audio, "aac"));
 
         _fx.LibraryManager
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))

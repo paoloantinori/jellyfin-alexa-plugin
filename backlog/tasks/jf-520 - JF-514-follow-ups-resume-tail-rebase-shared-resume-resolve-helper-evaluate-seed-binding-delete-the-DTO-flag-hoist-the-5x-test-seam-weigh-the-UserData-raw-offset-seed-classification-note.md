@@ -34,13 +34,76 @@ JF-514 shipped the transcode-base rebase on the OFFER path only; ResumeIntentHan
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Tail adoption: ResumeIntentHandler's read side rebases device-derived offsets like YesIntentHandler (base+offset when a base is recorded, drop only as fallback), replacing the interim drop; announce path uses the effective offset
-- [ ] #2 The shared resume-resolve helper extracted to BaseHandler beside ResolveAudioLaunchSource (probe, ledger read, rebase-or-drop, single resolve) so the probe-before-resolve ordering rule becomes structural instead of comment-enforced at each caller
-- [ ] #3 Re-evaluate the seed-binding alternative (simplification finding): binding the rebase at the offer seed in HandleResumeOfferAsync would delete the OffsetIsStreamRelative DTO field and the Yes-side gate (~-50 lines); verify no future flow can mint a new base while an offer session stays open, then adopt or reject with the reasoning recorded
-- [ ] #4 Test-seam hoist: TestEpisodeWithStreams/TestMovieWithStreams/TestStream now exist as 5 copies across 4 test files; hoist into Unit/TestHelpers.cs and update the pre-existing files
-- [ ] #5 Weigh the cross-angle correctness note from the simplify pass: PlaybackStoppedEventHandler persists RAW device offsets into server UserData (lines ~69/103/141), so the UserData/server-progress seeds' item-absolute classification (OffsetIsStreamRelative=false) is not always true for items previously played audio-shaped through the transcode; if confirmed, either add base at that writer or re-classify those seeds
+- [x] #1 Tail adoption: ResumeIntentHandler's read side rebases device-derived offsets like YesIntentHandler (base+offset when a base is recorded, drop only as fallback), replacing the interim drop; announce path uses the effective offset
+- [x] #2 The shared resume-resolve helper extracted to BaseHandler beside ResolveAudioLaunchSource (probe, ledger read, rebase-or-drop, single resolve) so the probe-before-resolve ordering rule becomes structural instead of comment-enforced at each caller
+- [x] #3 Re-evaluate the seed-binding alternative (simplification finding): binding the rebase at the offer seed in HandleResumeOfferAsync would delete the OffsetIsStreamRelative DTO field and the Yes-side gate (~-50 lines); verify no future flow can mint a new base while an offer session stays open, then adopt or reject with the reasoning recorded
+- [x] #4 Test-seam hoist: TestEpisodeWithStreams/TestMovieWithStreams/TestStream now exist as 5 copies across 4 test files; hoist into Unit/TestHelpers.cs and update the pre-existing files
+- [x] #5 Weigh the cross-angle correctness note from the simplify pass: PlaybackStoppedEventHandler persists RAW device offsets into server UserData (lines ~69/103/141), so the UserData/server-progress seeds' item-absolute classification (OffsetIsStreamRelative=false) is not always true for items previously played audio-shaped through the transcode; if confirmed, either add base at that writer or re-classify those seeds
 - [ ] #6 Full suite green; /simplify + code-review high gates before merge
 <!-- AC:END -->
+
+## Implementation Notes (2026-09-08, branch fix/jf520-resume-followups)
+
+Deliverables 1-5 implemented; suite 3470/3470 (baseline 3466 + 4 new tests), Release build
+clean with -warnaserror. Gates (/simplify, code-review high) left for the orchestrator per
+the dispatch instructions.
+
+**AC#1+#2 (tail adoption + shared helper):** `BaseHandler.ResolveResumedAudioLaunch` now
+sits beside `ResolveAudioLaunchSource` and owns the whole shape: probe routing, read the
+ledger base, rebase base+offset when stream-relative with a base, drop to 0 when
+stream-relative without one, pass through when item-absolute, then ONE resolve. The
+ledger read is structurally INSIDE the helper immediately before the resolve that
+overwrites it (the JF-514 comment-enforced ordering is now impossible to violate at a
+caller). Consumers: YesIntentHandler's confirm (passes `resumeState.OffsetIsStreamRelative`)
+and ResumeIntentHandler's tail (passes true unconditionally; fallbacks 1-3 are all
+device-derived per the tail's own doc, and fallback 4 returns before the tail resolve).
+A paused-then-resumed transcode now continues from base+offset instead of restarting at 0.
+
+**AC#3 (seed-binding): REJECTED**, reasoning also recorded as a code comment at the Yes
+gate. The equivalence premise "no non-launch handler resolves between offer and confirm"
+is false: the AudioPlayer EVENT handlers (PlaybackStartedEventHandler ~line 339,
+PlaybackNearlyFinishedEventHandler ~line 214) call ResolveAudioLaunchSource for the NEXT
+queue item without ending the session, and on a wrapped queue (repeat-one / one-item) the
+resolved next item IS the offered item, clobbering its ledger base to 0 inside the offer
+window. With the flag shape the confirm then reads the clobbered base (a real race, though
+it favors seed-binding); with seed-binding the offer would have captured the pre-clobber
+base. Either way the two shapes are NOT behaviorally equivalent, so the "prove equivalence
+then adopt" bar is not met. Secondary reason: deleting the serialized
+`offsetIsStreamRelative` field is a contract change with a rolling-deploy transient
+(pre-deploy offers deserialize post-deploy losing provenance). The flag and the gate stay;
+the gate body shrank to one helper call.
+
+**AC#5 (UserData raw-offset seeds): re-classified at the seed (option chosen over adding
+the base at the writer).** `BuildDeviceLastPlayedOffer` (the UserData reader; also reached
+via the NativeControlsForAudio stale-token path) now classifies at seed time:
+`offsetIsStreamRelative = RoutesToAudioTranscode(item) && GetAudioTranscodeBase(deviceId,
+itemId).HasValue`. A recorded base is the transcode signature: raw-static audio launches
+record base 0 (rebase = no-op), VideoApp plays and other clients' progress record nothing
+(item-absolute pass-through stands), AudioBooks never route to the transcode (playlist
+resume unaffected). Fallback 4 in ResumeIntentHandler needed NO change, verified
+mechanically: its video branch (Movie/Episode) returns a VideoApp launch built from
+GetVideoAppLaunchUrl and never calls ResolveAudioLaunchSource (ledger writes exist ONLY at
+BaseHandler:1416/1423), and its audio branch serves only Audio/AudioBook via raw
+GetStreamUrl; neither branch can mint a ?start. BuildScreenlessAudioFallbackOffer likewise
+offers Audio/AudioBook only, so its flag=false is genuinely correct. Known residual
+(documented at the seed and in ResumeHelper): UserData is cross-client, so a transcode
+launch followed by a later play of the same item on another client leaves a stale base and
+the rebase would add it; the position sources cannot distinguish that corner. Accepted as
+the cost of fixing the common audio-shaped case.
+
+**AC#4 (test-seam hoist):** `TestHelpers.TestStream` / `TestHelpers.TestEpisodeWithStreams`
+/ `TestHelpers.TestMovieWithStreams` in Unit/TestHelpers.cs; the 5 private copies removed
+from YesIntentHandlerTests, ResumeIntentAudioVariantOffsetTests (x2),
+PlayVideoIntentHandlerTests, ResumeConfirmationTranscodeBaseTests; the inline
+`new MediaStream {...}` shapes in Yes/PlayVideo tests also now use the factory.
+
+**Tests added (4):** tail rebase via AudioPlayer context and via DeviceQueue
+(ResumeIntentAudioVariantOffsetTests; both pin the minted ?start=base+offset AND the
+post-mint ledger base, which implicitly pins the helper's read-before-resolve ordering);
+device-last-played offer seeds flag=true with a recorded base and composes end-to-end on
+confirm (ResumeConfirmationTranscodeBaseTests), and stays flag=false without a base. The
+pre-existing tail tests (drop when no base, raw-static pass-through) keep passing
+unchanged: the no-base rule matches the old interim drop.
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

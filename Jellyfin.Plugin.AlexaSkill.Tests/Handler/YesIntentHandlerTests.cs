@@ -466,26 +466,6 @@ public class YesIntentHandlerTests : PluginTestBase
 
     // ========== JF-507: codec-gated audio-launch URL on the resume-yes path ==========
 
-    /// <summary>
-    /// Test seam for <c>BaseItem.GetMediaStreams()</c> (virtual): under the test host
-    /// there is no statically injected MediaSourceManager, so a plain item's probe
-    /// degrades to "unknown codec" (raw static URL). Overriding the streams lets the
-    /// wiring tests exercise the REAL probe + routing decision.
-    /// </summary>
-    private sealed class EpisodeWithStreams : MediaBrowser.Controller.Entities.TV.Episode
-    {
-        private readonly List<MediaStream> _streams;
-
-        public EpisodeWithStreams(string name, Guid id, params MediaStream[] streams)
-        {
-            Name = name;
-            Id = id;
-            _streams = streams.ToList();
-        }
-
-        public override IReadOnlyList<MediaStream> GetMediaStreams() => _streams;
-    }
-
     private Dictionary<string, object> CreateResumeAttrs(Guid itemId, int offsetMs)
     {
         var resumeState = new ResumeHelper.ResumeState { ItemId = itemId.ToString(), OffsetMs = offsetMs };
@@ -505,11 +485,11 @@ public class YesIntentHandlerTests : PluginTestBase
     public async Task ResumeConfirmation_Eac3Episode_LaunchesAudioOnlyHlsTranscode()
     {
         var id = Guid.NewGuid();
-        var episode = new EpisodeWithStreams(
+        var episode = new TestHelpers.TestEpisodeWithStreams(
             "Ribs",
             id,
-            new MediaStream { Type = MediaStreamType.Video, Codec = "h264" },
-            new MediaStream { Type = MediaStreamType.Audio, Codec = "eac3" });
+            TestHelpers.TestStream(MediaStreamType.Video, "h264"),
+            TestHelpers.TestStream(MediaStreamType.Audio, "eac3"));
 
         _libraryManagerMock.Setup(lm => lm.GetItemById(id)).Returns(episode);
 
@@ -536,11 +516,11 @@ public class YesIntentHandlerTests : PluginTestBase
     public async Task ResumeConfirmation_AacEpisode_KeepsStaticAudioUrlAndOffset()
     {
         var id = Guid.NewGuid();
-        var episode = new EpisodeWithStreams(
+        var episode = new TestHelpers.TestEpisodeWithStreams(
             "FreeCommerce",
             id,
-            new MediaStream { Type = MediaStreamType.Video, Codec = "h264" },
-            new MediaStream { Type = MediaStreamType.Audio, Codec = "aac" });
+            TestHelpers.TestStream(MediaStreamType.Video, "h264"),
+            TestHelpers.TestStream(MediaStreamType.Audio, "aac"));
 
         _libraryManagerMock.Setup(lm => lm.GetItemById(id)).Returns(episode);
 

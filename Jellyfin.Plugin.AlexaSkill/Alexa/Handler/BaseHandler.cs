@@ -1398,16 +1398,18 @@ public abstract class BaseHandler
     /// <param name="item">The item being launched (null keeps the raw static URL).</param>
     /// <param name="itemId">The item ID (stream token and URL path).</param>
     /// <param name="user">The user, for the raw static URL's api_key.</param>
-    /// <param name="offsetMs">The resume offset the caller wants (item-relative). MUST be known item-absolute when the caller suspects the item routes to the transcode: a device/stream-relative offset minted into <c>?start=</c> seeks the wrong position (see ResumeIntentHandler's provenance gate).</param>
+    /// <param name="offsetMs">The resume offset the caller wants (item-relative). MUST be known item-absolute when the caller suspects the item routes to the transcode: a device/stream-relative offset minted into <c>?start=</c> seeks the wrong position (resume callers holding a stream-relative offset go through <see cref="ResolveResumedAudioLaunch"/> instead).</param>
     /// <param name="deviceId">The Alexa device ID the launch plays on (base-ledger key). Null (caller without device context) skips the ledger write; a later resume then takes the no-base rule.</param>
     /// <param name="queueManager">The per-device queue manager holding the ledger. Null falls back to <c>Plugin.Instance</c>'s DI instance (the <c>RecordLastPlayed</c> chokepoint idiom); pass one explicitly to keep unit tests off the shared plugin instance.</param>
+    /// <param name="knownAudioCodec">A codec the caller already resolved (JF-520: <see cref="ResolveResumedAudioLaunch"/> probes before delegating); null probes here. A legitimately-null fail-open probe result also arrives as null and re-probes - one extra read only in that rare case.</param>
     /// <returns>The (URL, offset) pair for the AudioPlayer.Play directive; <see cref="AudioLaunchSource.RoutedToTranscode"/> tells the caller which timeline the offset semantics belong to.</returns>
-    protected AudioLaunchSource ResolveAudioLaunchSource(BaseItem? item, string itemId, Entities.User user, int offsetMs, string? deviceId = null, DeviceQueueManager? queueManager = null)
+    protected AudioLaunchSource ResolveAudioLaunchSource(BaseItem? item, string itemId, Entities.User user, int offsetMs, string? deviceId = null, DeviceQueueManager? queueManager = null, string? knownAudioCodec = null)
     {
         if (item is MediaBrowser.Controller.Entities.Movies.Movie
             or MediaBrowser.Controller.Entities.TV.Episode)
         {
-            if (RoutesToAudioTranscode(item, out string? audioCodec))
+            string? audioCodec = knownAudioCodec;
+            if (audioCodec is null ? RoutesToAudioTranscode(item, out audioCodec) : VideoAppStreamPolicy.AudioRequiresTranscode(audioCodec))
             {
                 long startTicks = Math.Max((long)offsetMs * TimeSpan.TicksPerMillisecond, 0);
                 Logger.LogDebug(
@@ -1424,6 +1426,67 @@ public abstract class BaseHandler
         }
 
         return new AudioLaunchSource(GetStreamUrl(itemId, user), offsetMs, RoutedToTranscode: false);
+    }
+
+    /// <summary>
+    /// JF-520: the ONE resume-offset resolver, wrapping <see cref="ResolveAudioLaunchSource"/>
+    /// with the JF-514 provenance correction so every resume path (the Yes-side confirm of a
+    /// resume offer, the ResumeIntent tail) applies it identically. The caller states what it
+    /// knows about the offset's timeline: <paramref name="offsetIsStreamRelative"/> true means
+    /// device-derived (relative to the previous playback's OUTPUT timeline, which for a
+    /// transcode-routed Movie/Episode starts at that stream's <c>?start=</c> base), in which
+    /// case a recorded launch base is ADDED (minted <c>?start=</c> = base + offset, both terms
+    /// item-absolute) and a MISSING base drops the offset to 0 (never mint a stream-relative
+    /// value silently). False means item-absolute: pass through unchanged. Raw-static launches
+    /// keep the caller's offset on every path (the correction is transcode-routed only).
+    /// STRUCTURAL ORDERING (JF-520, was comment-enforced at the callers): the ledger read
+    /// happens INSIDE this helper, immediately before the resolve that overwrites it. Callers
+    /// must not read the launch-base ledger around this call: a read after it would observe
+    /// the base this very resolve just recorded.
+    /// </summary>
+    /// <param name="item">The item to resume (probe + resolve target).</param>
+    /// <param name="itemId">The item ID (ledger key + stream token).</param>
+    /// <param name="user">The user, for the raw static URL's api_key.</param>
+    /// <param name="offsetMs">The caller's resume offset (interpretation per <paramref name="offsetIsStreamRelative"/>).</param>
+    /// <param name="offsetIsStreamRelative">True when the offset counts the previous playback's output timeline.</param>
+    /// <param name="deviceId">The Alexa device ID (base-ledger key). Null skips the ledger entirely.</param>
+    /// <param name="queueManager">The per-device queue manager holding the ledger; null falls back to <c>Plugin.Instance</c>'s (tests pass theirs).</param>
+    /// <param name="logLabel">Caller identity for the rebase/drop log lines (the existing provenance-logging style).</param>
+    /// <returns>The resolved launch source; the resolve records the (possibly rebased) launch base.</returns>
+    protected AudioLaunchSource ResolveResumedAudioLaunch(
+        BaseItem? item,
+        string itemId,
+        Entities.User user,
+        int offsetMs,
+        bool offsetIsStreamRelative,
+        string? deviceId = null,
+        DeviceQueueManager? queueManager = null,
+        string logLabel = "Resume")
+    {
+        int effectiveOffsetMs = offsetMs;
+        string? probedCodec = null;
+        if (offsetIsStreamRelative && offsetMs > 0 && RoutesToAudioTranscode(item, out probedCodec))
+        {
+            long? transcodeBaseMs = GetAudioTranscodeBase(deviceId, itemId, queueManager);
+            if (transcodeBaseMs.HasValue)
+            {
+                effectiveOffsetMs = (int)Math.Min(transcodeBaseMs.Value + offsetMs, int.MaxValue);
+                Logger.LogInformation(
+                    "{Label}: item {ItemId} routes to the audio-only transcode and the resume offset ({OffsetMs}ms) is device-derived (stream-relative); recorded launch base {BaseMs}ms, minting ?start={StartMs}ms (item-absolute)",
+                    logLabel, itemId, offsetMs, transcodeBaseMs.Value, effectiveOffsetMs);
+            }
+            else
+            {
+                effectiveOffsetMs = 0;
+                Logger.LogInformation(
+                    "{Label}: item {ItemId} routes to the audio-only transcode but the resume offset ({OffsetMs}ms) is device-derived (stream-relative) and no launch base is recorded for device {DeviceId}; dropping it so playback restarts instead of minting a false ?start=",
+                    logLabel, itemId, offsetMs, deviceId);
+            }
+        }
+
+        // probedCodec (null on the fail-open path, where the resolve re-probes) saves
+        // the resolve's second media-streams DB read (JF-520 simplify finding E1).
+        return ResolveAudioLaunchSource(item, itemId, user, effectiveOffsetMs, deviceId, queueManager, probedCodec);
     }
 
     /// <summary>

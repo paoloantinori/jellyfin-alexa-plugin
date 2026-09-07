@@ -216,6 +216,9 @@ public class LaunchRequestHandler : BaseHandler
     /// last play was via VideoApp.Launch (audiobooks, native-controls audio), which never
     /// sets context.AudioPlayer.Token. Returns null if the item no longer exists so the
     /// caller can fall through to another path.
+    /// JF-520: the position is classified at seed time (a transcode-routed item with a
+    /// recorded launch base on this device flags the offer stream-relative so the
+    /// Yes-side confirm rebases it; the event writers persist the raw device offset).
     /// </summary>
     private SkillResponse? BuildDeviceLastPlayedOffer(
         Context context, Entities.User user, SessionInfo session, string locale, string lastPlayedItemId)
@@ -259,7 +262,32 @@ public class LaunchRequestHandler : BaseHandler
         }
 
         int offsetMs = (int)Math.Min(TimeSpan.FromTicks(positionTicks).TotalMilliseconds, int.MaxValue);
-        return BuildResumeOfferResponse(item, lastPlayedItemId, offsetMs, user, locale, context, session, useResumePlaylist);
+
+        // JF-520 provenance classification (the UserData seed's share of the JF-514
+        // residual): for a transcode-routed Movie/Episode the event writers persist
+        // the RAW device offset into UserData (stream-relative; see
+        // PlaybackStoppedEventHandler), so when THIS device's ledger carries a launch
+        // base for the item the position is stream-relative and the offer must flag
+        // it for the Yes-side rebase. The recorded-base test is the transcode
+        // signature: a raw-static audio launch records base 0 (rebase = no-op), a
+        // VideoApp play or another client's progress records nothing (item-absolute
+        // pass-through stands). AudioBooks never route to the transcode, so the
+        // playlist-resume shape is unaffected. Residual: a transcode launch followed
+        // by a LATER play of the same item on another client (or via VideoApp) leaves
+        // the stale base behind and the rebase would add it; UserData is cross-client
+        // so the sources cannot distinguish that corner - accepted as the cost of
+        // fixing the common audio-shaped case.
+        string? ledgerDeviceId = context.System?.Device?.DeviceID;
+        bool offsetIsStreamRelative = GetAudioTranscodeBase(ledgerDeviceId, lastPlayedItemId).HasValue
+            && RoutesToAudioTranscode(item);
+        if (offsetIsStreamRelative)
+        {
+            Logger.LogInformation(
+                "LaunchResume: device last-played item {ItemId} routes to the audio-only transcode and this device has a recorded launch base; the UserData position is stream-relative, flagging the offer for the confirm-side rebase",
+                lastPlayedItemId);
+        }
+
+        return BuildResumeOfferResponse(item, lastPlayedItemId, offsetMs, user, locale, context, session, useResumePlaylist: useResumePlaylist, offsetIsStreamRelative: offsetIsStreamRelative);
     }
 
     /// <summary>
@@ -322,7 +350,7 @@ public class LaunchRequestHandler : BaseHandler
     /// <param name="context">The Alexa context (screenless detection).</param>
     /// <param name="session">The Jellyfin session (audio fallback lookup).</param>
     /// <param name="useResumePlaylist">Whether YesIntent should resume via the audiobook playlist.</param>
-    /// <param name="offsetIsStreamRelative">Whether <paramref name="offsetMs"/> is device-derived (AudioPlayer context seed) and needs the JF-514 rebase on confirm; the server-progress seeds leave it false.</param>
+    /// <param name="offsetIsStreamRelative">Whether <paramref name="offsetMs"/> counts the previous playback's output timeline (device-derived) and needs the JF-514 rebase on confirm. Set by the AudioPlayer-context seed (always) and by the device-last-played seed when the item is transcode-routed with a recorded base (JF-520); the audio-only fallback seed never needs it (audio items never route to the transcode).</param>
     /// <returns>The offer, or null when the device cannot play the offered item and no audio fallback exists.</returns>
     private SkillResponse? BuildResumeOfferResponse(
         BaseItem? item, string itemId, long offsetMs,

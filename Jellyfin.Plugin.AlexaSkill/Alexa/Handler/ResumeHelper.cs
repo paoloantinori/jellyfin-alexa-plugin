@@ -34,15 +34,16 @@ internal static class ResumeHelper
 
         /// <summary>
         /// True when <see cref="OffsetMs"/> is DEVICE-DERIVED (seeded from the AudioPlayer
-        /// context offset) and therefore relative to the previous playback's OUTPUT
+        /// context offset, or from UserData for a transcode-routed item with a recorded
+        /// launch base, JF-520) and therefore relative to the previous playback's OUTPUT
         /// timeline: for a transcode-routed item that timeline starts at the stream's
         /// <c>?start=</c> base, so the Yes-side resume must rebase it (recorded base +
         /// offset) before minting the next <c>?start=</c>, or drop it when no base is
         /// recorded (JF-514). False (default, back-compatible: sessions offered before
-        /// the deploy deserialize without it) treats the offset as item-absolute. NOTE:
-        /// that is an approximation for the server-progress seeds - the device event
-        /// writers persist stream-relative offsets for transcode-routed items - so a
-        /// flag=false offer can still mint a wrong ?start (known residual, JF-520).
+        /// the deploy deserialize without it) treats the offset as item-absolute.
+        /// Residual (JF-520): UserData is cross-client, so a flag=false offer whose
+        /// position another client wrote after this device's transcode play can still
+        /// be misclassified - the sources cannot distinguish that corner.
         /// </summary>
         [JsonProperty("offsetIsStreamRelative")]
         public bool OffsetIsStreamRelative { get; set; }

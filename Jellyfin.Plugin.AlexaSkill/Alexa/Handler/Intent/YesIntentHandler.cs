@@ -225,49 +225,28 @@ public class YesIntentHandler : BaseHandler
         int offsetMs = (int)Math.Min(resumeState.OffsetMs, int.MaxValue);
         string? deviceId = context?.System?.Device?.DeviceID;
 
-        // Provenance gate (JF-514, the offer-path twin of ResumeIntentHandler's),
-        // BEFORE any resolve: the offer was seeded from the AudioPlayer CONTEXT offset,
-        // which is device-derived and therefore relative to the previous playback's
-        // OUTPUT timeline. For a transcode-routed item that timeline starts at the
-        // stream's ?start= base, so minting the raw offset seeks the wrong position (an
-        // episode started at absolute 20:00 and paused at stream 5:00 would silently
-        // skip BACK 15 minutes). The launch that minted that base recorded it in the
-        // device queue ledger (BaseHandler.ResolveAudioLaunchSource), so rebase:
-        // ?start = base + offset, both terms item-absolute. The probe-and-read must run
-        // BEFORE the resolve because the resolve WRITES the ledger; no recorded base
-        // (pre-deploy launch, ledger wiped, device unknown) falls back to the JF-507
-        // interim rule: drop the offset and restart, never mint a stream-relative value
-        // silently. Seeds with OffsetIsStreamRelative=false (server progress, device
-        // last-played) BYPASS this gate by design today, but their positions are NOT
-        // guaranteed item-absolute either: for a transcode-routed item the device event
-        // writers persist the raw stream-relative offset into server progress (see
-        // ResumeIntentHandler's class doc). That residual hole (a flag=false offer can
-        // still mint a stream-relative ?start) is tracked as JF-520.
-        int effectiveOffsetMs = offsetMs;
-        if (RoutesToAudioTranscode(item) && offsetMs > 0 && resumeState.OffsetIsStreamRelative)
-        {
-            long? transcodeBaseMs = GetAudioTranscodeBase(deviceId, itemId, _queueManager);
-            if (transcodeBaseMs.HasValue)
-            {
-                effectiveOffsetMs = (int)Math.Min(transcodeBaseMs.Value + offsetMs, int.MaxValue);
-                Logger.LogInformation(
-                    "ResumeConfirmation: item {ItemId} routes to the audio-only transcode and the offered offset ({OffsetMs}ms) is device-derived (stream-relative); recorded launch base {BaseMs}ms, minting ?start={StartMs}ms (item-absolute)",
-                    itemId, offsetMs, transcodeBaseMs.Value, effectiveOffsetMs);
-            }
-            else
-            {
-                effectiveOffsetMs = 0;
-                Logger.LogInformation(
-                    "ResumeConfirmation: item {ItemId} routes to the audio-only transcode but the offered offset ({OffsetMs}ms) is device-derived (stream-relative) and no launch base is recorded for device {DeviceId}; dropping it so playback restarts instead of minting a false ?start=",
-                    itemId, offsetMs, deviceId);
-            }
-        }
-
-        // JF-507: the shared codec-gated audio-launch decision. An EAC3-family video
-        // item resumed on the audio path (the 2026-09-06 corr=f0240020 Dot incident:
-        // raw static audio died at 1ms) routes to the audio-only episode HLS transcode
-        // with the offset baked into the URL (?start=) and directive offset 0.
-        AudioLaunchSource source = ResolveAudioLaunchSource(item, itemId, user, effectiveOffsetMs, deviceId, _queueManager);
+        // JF-514/JF-520 provenance gate, shared with the ResumeIntent tail via
+        // BaseHandler.ResolveResumedAudioLaunch: the flag tells the helper which
+        // timeline the offset counts (true = device-derived/stream-relative ->
+        // rebase against the recorded launch base, or drop to restart when none).
+        // Offer seeds classify at seed time: the AudioPlayer-context seed flags
+        // stream-relative; JF-520 has the device last-played seed probe the ledger
+        // too. Seed-binding (rebasing at the offer seed and deleting the flag) was
+        // evaluated for JF-520 and REJECTED: the equivalence premise "nothing mints
+        // a base between offer and confirm" is false - the AudioPlayer event
+        // handlers (PlaybackStarted/PlaybackNearlyFinished) resolve queue items
+        // WITHOUT ending the session, and on a wrapped queue (repeat / one-item)
+        // the resolved next item IS the offered item, clobbering its ledger base
+        // inside the offer window. Keep the flag; keep reading the ledger at
+        // confirm time.
+        //
+        // JF-507: the helper's resolve is the shared codec-gated audio-launch
+        // decision. An EAC3-family video item resumed on the audio path (the
+        // 2026-09-06 corr=f0240020 Dot incident: raw static audio died at 1ms)
+        // routes to the audio-only episode HLS transcode with the offset baked
+        // into the URL (?start=) and directive offset 0.
+        AudioLaunchSource source = ResolveResumedAudioLaunch(
+            item, itemId, user, offsetMs, resumeState.OffsetIsStreamRelative, deviceId, _queueManager, "ResumeConfirmation");
         SkillResponse standardResponse = BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll,
             source.Url,
