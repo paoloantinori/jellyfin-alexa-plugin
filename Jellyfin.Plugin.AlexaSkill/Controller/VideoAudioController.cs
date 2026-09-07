@@ -234,8 +234,12 @@ public class VideoAudioController : ControllerBase
                 // between process.Start() and the file appearing on disk.
                 // Also check if ffmpeg has already exited (e.g. invalid input) to avoid
                 // a 1-second spin-wait when the process fails fast.
+                // StartupWaitAttempts * StartupWaitDelayMs is the "~1s" the failure
+                // diagnostic below names; keep them in sync when tuning.
+                const int StartupWaitAttempts = 100;
+                const int StartupWaitDelayMs = 10;
                 bool fileAppeared = false;
-                for (int i = 0; i < 100; i++)
+                for (int i = 0; i < StartupWaitAttempts; i++)
                 {
                     if (System.IO.File.Exists(cachePath))
                     {
@@ -248,12 +252,31 @@ public class VideoAudioController : ControllerBase
                         break;
                     }
 
-                    await Task.Delay(10).ConfigureAwait(false);
+                    await Task.Delay(StartupWaitDelayMs).ConfigureAwait(false);
                 }
 
                 if (!fileAppeared)
                 {
-                    _logger.LogWarning("VideoAudio: ffmpeg failed to create output for item {ItemId} (exit code {ExitCode})", itemId, ffmpegProcess.ExitCode);
+                    // JF-518: ExitCode throws on a process that hasn't exited; the wait
+                    // window above can expire while ffmpeg is still starting up.
+                    if (ffmpegProcess.HasExited)
+                    {
+                        _logger.LogWarning("VideoAudio: ffmpeg failed to create output for item {ItemId} (exit code {ExitCode})", itemId, ffmpegProcess.ExitCode);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("VideoAudio: ffmpeg still running after ~1s without creating output for item {ItemId}", itemId);
+
+                        // Kill before Dispose (matching the catch path below and the HLS
+                        // sibling sites): Dispose alone orphans the process, which then
+                        // finishes writing a cache file this endpoint has abandoned and
+                        // can collide with a retry's fresh encode mid-write (JF-518 review).
+                        // Bare catch like the siblings: on Unix a raced exit does not
+                        // throw at all; the reachable shape is a non-ESRCH kill failure.
+                        try { ffmpegProcess.Kill(); }
+                        catch { /* raced to exit, or kill failed; Dispose follows either way */ }
+                    }
+
                     ffmpegProcess.Dispose();
                     return StatusCode(500, new { error = "Video generation failed" });
                 }
