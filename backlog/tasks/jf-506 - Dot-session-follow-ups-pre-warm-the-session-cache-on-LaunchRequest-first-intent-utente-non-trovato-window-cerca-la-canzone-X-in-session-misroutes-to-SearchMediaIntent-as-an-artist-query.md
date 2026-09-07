@@ -4,10 +4,10 @@ title: >-
   Dot session follow-ups: pre-warm the session cache on LaunchRequest
   (first-intent 'utente non trovato' window) + 'cerca la canzone X' in-session
   misroutes to SearchMediaIntent as an artist query
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-06 15:14'
-updated_date: '2026-09-07 04:46'
+updated_date: '2026-09-07 04:50'
 labels:
   - ux
   - nlu
@@ -168,3 +168,9 @@ per task rules). Run ./scripts/run_nlu_tests.sh -k "it-IT" after deploying.
 <!-- SECTION:NOTES:BEGIN -->
 Formal review dispositions (2026-09-07, orchestrator): P3-88 APPLIED as REMOVAL - the reviewer proved the pre-warm can never fire in production (the only dispatch into handlers is RequestPipeline->HandleRequestAsync, which stores-or-fails BEFORE HandleAsync; the incident itself was intent-first with no LaunchRequest at all), so WarmSessionCacheFireAndForget + PreWarmSessionCacheAsync + the LaunchRequestHandler call site + SessionPreWarmLaunchTests are all removed (66 lines + the test class). KEPT: the StartSessionLookup extraction (the reviewer's own recommendation: real shared value for ResolveSessionAsync and the warm-fill). P4 APPLIED: TrySongTitleRetry's unused user parameter dropped and its misleading doc line corrected. Part B fully verified clean by the review (the strict carrier move, the retry's scope discipline and JF-466 hard-zero, the mirrors byte-consistent). Suite after the removals: 3391/3391 (3395 minus the 4 pre-warm tests).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented, reviewed, committed, deployed 2026-09-07 (commit 35431c42; DLL deployed, it-IT model rebuilt SUCCEEDED). Part B: the 4 song-named carriers (Cerca/Trova la canzone/il brano {query}) moved from SearchMediaIntent to FindSongIntent via the template (strict move; the 17-model survey found the competition only in it-IT) + SearchMediaIntentHandler.TrySongTitleRetry on the confirmed not-found path (in-memory SongIndexSearch chain, JF-466 hard-zero, warming degraded; zero new DB queries on the miss path). LIVE-VERIFIED on the deployed model: 'cerca la canzone screenwriter's blues' -> FindSongIntent titleKeywords filled (the incident phrase), 'cerca una canzone dei soul coughing' -> FindSongByArtistIntent (the 65e7e811 regression phrase). Part A closed as NOT-A-DEFECT at review: the pre-warm could never fire in production (HandleRequestAsync stores-or-fails before HandleAsync on the only dispatch path; the incident was intent-first with no LaunchRequest), so the dead complexity was removed and only the StartSessionLookup extraction kept; the 'utente non trovato' first-request window on brand-new devices is inherent to the intent-first shape and already self-heals via the JF-477 warm-fill. Suite 3391/3391.
+<!-- SECTION:FINAL_SUMMARY:END -->
