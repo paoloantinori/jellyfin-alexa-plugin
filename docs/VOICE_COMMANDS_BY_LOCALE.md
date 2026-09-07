@@ -8286,10 +8286,6 @@ Complete phrase list (1435 phrases across 60 commands):
 - `Hai un contenuto <testo da cercare>`
 - `Voglio trovare un film <testo da cercare>`
 - `Puoi trovare un contenuto <testo da cercare>`
-- `Cerca il brano <testo da cercare>`
-- `Trova il brano <testo da cercare>`
-- `Cerca la canzone <testo da cercare>`
-- `Trova la canzone <testo da cercare>`
 
 **Find a song (multi-turn conversation)**
 
@@ -8308,6 +8304,10 @@ Complete phrase list (1435 phrases across 60 commands):
 - `trova la canzone chiamata <parole del titolo del brano>`
 - `cerca la canzone chiamata <parole del titolo del brano>`
 - `cerco una canzone chiamata <parole del titolo del brano>`
+- `cerca la canzone <parole del titolo del brano>`
+- `trova la canzone <parole del titolo del brano>`
+- `cerca il brano <parole del titolo del brano>`
+- `trova il brano <parole del titolo del brano>`
 
 **Find a song by an artist**
 

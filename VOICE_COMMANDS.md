@@ -661,7 +661,7 @@ Invocation name: **"mia collezione"**
 | Query Recently Added | `cosa c'è di nuovo` · `cosa è stato aggiunto di recente` · `ci sono novità` · `quali sono le novità` |
 | Recommend | `Consiglia {media_type}` · `Raccomanda {media_type}` · `Suggerisci {media_type}` · `Di consigliare {media_type}` · `Di raccomandare {media_type}` · `Di suggerire {media_type}` · `Consiglia un brano` · `Consiglia una canzone` · `Suggerisci un brano` · `Suggerisci un film` · `Raccomanda una canzone` |
 | Repeat Single On | `Ripeti la canzone` · `Ripeti la traccia` · `Ripeti il brano` · `Ripeti il video` · `di ripeter la canzone` · `di ripeter la traccia` · `di ripeter il brano` · `di ripeter il video` · `Ripetilo` · `Ripetila` · `di ripeterlo` · `di ripeterla` · `riplei` · `replei` · `Ripeti ancora` · `di ripetere ancora` |
-| Search Media | `Cerca il contenuto {query}` · `Trova il brano {query}` |
+| Search Media | `Cerca il contenuto {query}` · `Cerca un film {query}` |
 | Sleep Timer | `Imposta timer {duration_minutes}` · `Timer per dormire {duration_minutes}` · `Spegimento automatico {duration_minutes}` · `Ferma dopo {duration_minutes}` |
 | Set Reminder | `Ricordami tra {duration_minutes} minuti` · `Imposta un promemoria tra {duration_minutes} minuti` · `Ricordami alle {reminder_time}` · `Imposta un promemoria per le {reminder_time}` |
 | Turn Radio Off | `disattiva la radio` · `spegni la radio` |

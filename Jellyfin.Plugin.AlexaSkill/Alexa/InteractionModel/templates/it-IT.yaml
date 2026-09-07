@@ -277,10 +277,12 @@ explicit_intents:
       - Hai un contenuto {query}
       - Voglio trovare un film {query}
       - Puoi trovare un contenuto {query}
-      - Cerca il brano {query}
-      - Trova il brano {query}
-      - Cerca la canzone {query}
-      - Trova la canzone {query}
+      # JF-506: the song-named carriers (Cerca/Trova il brano/la canzone {query})
+      # moved to FindSongIntent. SearchMediaIntent's not-found path artist-searches
+      # the whole slot (corr=3240220d: "cerca la canzone screenwriter's blues"
+      # not-founded while the song exists), so the song-named shape must route to
+      # the intent that owns the song-title pipeline. Keeping them here made
+      # SearchMedia own the exact-string match and win every time.
     slots:
       - name: query
         type: AMAZON.SearchQuery
@@ -454,6 +456,15 @@ explicit_intents:
       - trova la canzone chiamata {titleKeywords}
       - cerca la canzone chiamata {titleKeywords}
       - cerco una canzone chiamata {titleKeywords}
+      # JF-506: plain definite-article carriers (no "chiamata"), moved from
+      # SearchMediaIntent. Device evidence corr=3240220d: the user said
+      # "cerca la canzone X" and SearchMedia's exact-string sample won the NLU,
+      # artist-searched the title, and not-founded. FindSong's n-gram/phonetic
+      # title pipeline is the correct landing for the song-named shape.
+      - cerca la canzone {titleKeywords}
+      - trova la canzone {titleKeywords}
+      - cerca il brano {titleKeywords}
+      - trova il brano {titleKeywords}
     slots:
       - name: titleKeywords
         type: AMAZON.SearchQuery

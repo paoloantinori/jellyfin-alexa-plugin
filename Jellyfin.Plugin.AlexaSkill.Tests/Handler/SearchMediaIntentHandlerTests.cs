@@ -10,6 +10,7 @@ using global::Alexa.NET.Response;
 using global::Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
@@ -39,6 +40,18 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
             _fx.LoggerFactory);
+    }
+
+    private SearchMediaIntentHandler CreateHandlerWithSongIndex(Mock<ISongNgramIndex> songIndex)
+    {
+        return new SearchMediaIntentHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory,
+            songNgramIndex: songIndex.Object);
     }
 
     private static IntentRequest CreateIntentRequest(string? query = null)
@@ -664,5 +677,136 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
         // the fuzzy chain either: results were non-empty so the chain never ran).
         Assert.DoesNotContain(capturedQueries, q =>
             q.IncludeItemTypes.Length == 1 && q.IncludeItemTypes[0] == BaseItemKind.Playlist);
+    }
+
+    // --- JF-506: song-title retry on the confirmed not-found path ---
+    // Live evidence corr=3240220d: a song title that reached this handler through a
+    // generic carrier dead-ended in MediaNotFound because the fuzzy pass scans only
+    // the first 500 rows. The n-gram index is the complete O(1) song-title lookup.
+
+    [Fact]
+    public async Task HandleAsync_ZeroResults_SongIndexHit_PlaysTheSong()
+    {
+        var songIndex = new Mock<ISongNgramIndex>();
+        var handler = CreateHandlerWithSongIndex(songIndex);
+        var request = CreateIntentRequest(query: "screenwriters blues");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+        _fx.SetupUserMock();
+
+        var song = new Audio { Name = "Screenwriter's Blues", Id = Guid.NewGuid() };
+        songIndex.Setup(i => i.Search(It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<Guid[]?>()))
+            .Returns(new List<(BaseItem, double)> { (song, 100.0) });
+
+        // Every DB pass misses: title search, artist fallback, and the fuzzy scan.
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        response.HasDirective<AudioPlayerPlayDirective>();
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Equal(song.Id, Assert.Single(session.NowPlayingQueue).Id);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ZeroResults_SongIndexMiss_StillReturnsMediaNotFound()
+    {
+        var songIndex = new Mock<ISongNgramIndex>();
+        var handler = CreateHandlerWithSongIndex(songIndex);
+        var request = CreateIntentRequest(query: "nonexistent");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+        _fx.SetupUserMock();
+
+        songIndex.Setup(i => i.Search(It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<Guid[]?>()))
+            .Returns(new List<(BaseItem, double)>());
+        songIndex.Setup(i => i.SearchPhonetic(It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<Guid[]?>()))
+            .Returns(new List<(BaseItem, double)>());
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        var speech = response.Tells<PlainTextOutputSpeech>();
+        Assert.Contains("not find", speech.Text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ZeroResults_SongIndexWarming_DegradesToNotFound()
+    {
+        // The retry is an opportunistic fallback, not a gated title-only path: a
+        // warming song index must degrade to the clean not-found, never surface as
+        // a warming refusal or a crash on a unified-content search.
+        var songIndex = new Mock<ISongNgramIndex>();
+        var handler = CreateHandlerWithSongIndex(songIndex);
+        var request = CreateIntentRequest(query: "screenwriters blues");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+        _fx.SetupUserMock();
+
+        songIndex.Setup(i => i.Search(It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<Guid[]?>()))
+            .Throws(new SkillWarmingUpException("song n-gram"));
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        var speech = response.Tells<PlainTextOutputSpeech>();
+        Assert.Contains("not find", speech.Text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ZeroResults_MusicDisabled_SkipsSongIndexRetry()
+    {
+        // JF-466 hard-zero contract: a music-disabled user must never see song
+        // results, so the index is not even consulted. FilterByContentAccess reads
+        // Plugin.Instance.Configuration, so the live instance must exist here
+        // (HandlerTestFixture does not create it and collection class order is
+        // nondeterministic).
+        TestHelpers.EnsurePluginInstance(
+            _fx.Config,
+            _fx.LoggerFactory,
+            _ => { },
+            "jf506-searchmedia-retry");
+        var songIndex = new Mock<ISongNgramIndex>();
+        var handler = CreateHandlerWithSongIndex(songIndex);
+        var request = CreateIntentRequest(query: "screenwriters blues");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+        _fx.SetupUserMock();
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var liveConfig = global::Jellyfin.Plugin.AlexaSkill.Plugin.Instance!.Configuration;
+        bool originalMusic = liveConfig.MusicEnabled;
+        liveConfig.MusicEnabled = false;
+
+        SkillResponse response;
+        try
+        {
+            response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+        }
+        finally
+        {
+            liveConfig.MusicEnabled = originalMusic;
+        }
+
+        Assert.NotNull(response);
+        var speech = response.Tells<PlainTextOutputSpeech>();
+        Assert.Contains("not find", speech.Text, StringComparison.OrdinalIgnoreCase);
+        songIndex.Verify(
+            i => i.Search(It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<Guid[]?>()),
+            Times.Never);
     }
 }

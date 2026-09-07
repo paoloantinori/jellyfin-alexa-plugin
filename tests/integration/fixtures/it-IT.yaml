@@ -987,6 +987,33 @@ tests:
     expected_slots:
       titleKeywords: {}
 
+  # JF-506: the plain definite-article song carriers moved from SearchMediaIntent
+  # to FindSongIntent (template regen 2026-09-07). Device evidence corr=3240220d:
+  # "cerca la canzone screenwriter's blues" hit SearchMedia's exact-string sample,
+  # which artist-searched the whole title and not-founded while the song existed.
+  # Intent-level only on the apostrophe titles: the fill is Amazon-statistical.
+  - utterance: "cerca la canzone screenwriter's blues"
+    expected_intent: FindSongIntent
+    expected_slots: {}
+
+  - utterance: "trova la canzone screenwriter's blues"
+    expected_intent: FindSongIntent
+    expected_slots: {}
+
+  # The phrase the June-2026 SearchMedia carriers were added for (65e7e811:
+  # "cerca il brano bohemian rhapsody" was unrouted). It must now land on the
+  # song-title pipeline, not back to unrouted.
+  - utterance: "cerca il brano bohemian rhapsody"
+    expected_intent: FindSongIntent
+    expected_slots:
+      titleKeywords: {}
+
+  # Negative guard: the generic content carriers stay on SearchMediaIntent.
+  - utterance: "Cerca il contenuto bohemian rhapsody"
+    expected_intent: SearchMediaIntent
+    expected_slots:
+      query: {}
+
   # -------------------------------------------------------------------------
   # 32. AMAZON.* built-in intents (regression guard)
   # -------------------------------------------------------------------------

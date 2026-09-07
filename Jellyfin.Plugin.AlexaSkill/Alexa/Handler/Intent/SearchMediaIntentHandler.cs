@@ -11,7 +11,9 @@ using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -74,6 +76,7 @@ public class SearchMediaIntentHandler : BaseHandler
     private readonly IUserManager _userManager;
     private readonly IUserDataManager _userDataManager;
     private readonly IArtistIndex? _artistIndex;
+    private readonly ISongNgramIndex? _songNgramIndex;
 
     public SearchMediaIntentHandler(
         ISessionManager sessionManager,
@@ -82,12 +85,14 @@ public class SearchMediaIntentHandler : BaseHandler
         IUserManager userManager,
         IUserDataManager userDataManager,
         ILoggerFactory loggerFactory,
-        IArtistIndex? artistIndex = null) : base(sessionManager, config, loggerFactory)
+        IArtistIndex? artistIndex = null,
+        ISongNgramIndex? songNgramIndex = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _userDataManager = userDataManager;
         _artistIndex = artistIndex;
+        _songNgramIndex = songNgramIndex;
     }
 
     /// <inheritdoc/>
@@ -174,8 +179,24 @@ public class SearchMediaIntentHandler : BaseHandler
             }
             else
             {
-                Logger.LogInformation("Search for '{Query}' returned no results", query);
-                return ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale));
+                // JF-506: song-title retry on the confirmed miss. Live evidence
+                // (corr=3240220d): a song title that reached this handler through a
+                // generic carrier ran the SearchTerm query (0), the 4-tier artist
+                // fallback (0), and the fuzzy pass, which scans only the FIRST 500
+                // rows of the playable kinds and so misses most of a large song
+                // catalog; the not-found fired while the song existed. The n-gram
+                // index is the O(1) complete song-title lookup (the same chain
+                // PlaySong's title fallback uses, JF-440); found songs feed the
+                // normal result flow below (single auto-play / fuzzy / disambiguate).
+                IReadOnlyList<BaseItem> songTitleHits = TrySongTitleRetry(query, locale, topParentIds);
+                if (songTitleHits.Count == 0)
+                {
+                    Logger.LogInformation("Search for '{Query}' returned no results", query);
+                    return ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale));
+                }
+
+                Logger.LogInformation("Song-title retry for '{Query}': matched {Count} songs via the n-gram index", query, songTitleHits.Count);
+                results = songTitleHits;
             }
         }
 
@@ -326,6 +347,53 @@ public class SearchMediaIntentHandler : BaseHandler
         }
 
         return scoped;
+    }
+
+    /// <summary>
+    /// JF-506: last-tier song-title recovery on the not-found path. Consults the
+    /// in-memory n-gram song index (exact bigram lookup, then the phonetic stage,
+    /// the SongIndexSearch chain shared with PlaySong/FindSong) because the fuzzy
+    /// pass above scans only the first 500 rows of the playable kinds and cannot
+    /// see most of a large song catalog. Bounded and self-protecting:
+    /// a null/disabled index returns empty (the extension's contract), a WARMING
+    /// index throws from the choke point and is caught here (this is an
+    /// opportunistic fallback, not a title-only path with an entry gate: a unified
+    /// search must not degrade to a warming refusal), and music-disabled configs
+    /// hard-zero via FilterByContentAccess before the index is touched.
+    /// </summary>
+    /// <param name="query">The raw query slot text.</param>
+    /// <param name="locale">The request locale (tokenizer).</param>
+    /// <param name="topParentIds">The library scope resolved once in HandleAsync.</param>
+    /// <returns>Scored song matches best-first, capped at MaxSearchResults; empty when nothing matched.</returns>
+    private IReadOnlyList<BaseItem> TrySongTitleRetry(string query, string locale, Guid[]? topParentIds)
+    {
+        // JF-466 contract: an empty FilterByContentAccess result is a hard zero, never
+        // a "no type filter" query. A music-disabled user must not get song results.
+        if (FilterByContentAccess(new[] { BaseItemKind.Audio }).Length == 0)
+        {
+            return Array.Empty<BaseItem>();
+        }
+
+        string[] keywordTokens = KeywordMatcher.Tokenize(query, locale);
+        if (keywordTokens.Length == 0)
+        {
+            return Array.Empty<BaseItem>();
+        }
+
+        List<(BaseItem Item, double Score)> scored;
+        try
+        {
+            scored = _songNgramIndex.SearchWithPhoneticFallback(
+                keywordTokens, locale, topParentIds, _config.PhoneticSongSearchEnabled);
+        }
+        catch (SkillWarmingUpException)
+        {
+            Logger.LogDebug("Song-title retry skipped for '{Query}': song index warming", query);
+            return Array.Empty<BaseItem>();
+        }
+
+        int cap = Plugin.Instance?.Configuration?.MaxSearchResults ?? 20;
+        return scored.Take(cap).Select(s => s.Item).ToList();
     }
 
     private async Task<IReadOnlyList<BaseItem>> SearchByArtistNameAsync(

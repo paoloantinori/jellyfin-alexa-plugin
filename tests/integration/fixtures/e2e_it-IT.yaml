@@ -177,10 +177,12 @@ tests:
     expected_response_type: any
 
   # --- Search ---
+  # JF-506: the song-named carriers moved from SearchMediaIntent to
+  # FindSongIntent; the phrase must land on the song-title pipeline.
   - utterance: "cerca il brano bohemian rhapsody"
-    expected_intent: SearchMediaIntent
+    expected_intent: FindSongIntent
     expected_slots:
-      query: {}
+      titleKeywords: {}
     expected_response_type: any
 
   # --- Play specific song (carrier phrase stripping) ---

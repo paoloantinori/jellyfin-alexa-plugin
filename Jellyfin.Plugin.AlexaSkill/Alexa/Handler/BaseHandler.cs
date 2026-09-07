@@ -503,18 +503,8 @@ public abstract class BaseHandler
     /// <returns>The live session, or null when the lookup missed or exceeded the budget.</returns>
     private async Task<SessionInfo?> ResolveSessionAsync(string? token, string deviceId, CancellationToken cancellationToken)
     {
-        // Task.Run dispatches the WHOLE delegate off the request thread (JF-477
-        // review P1): GetSessionByAuthenticationToken's synchronous prefix contains
-        // a blocking EF read (UserManager.GetUserById, verified at v10.11.11) that
-        // observes no cancellation token, so without this hop a hang there is
-        // unreachable by the WaitAsync budget, the retry budget, and the controller
-        // token alike, and the request hangs exactly as in the live incident.
-        Task<SessionInfo?> lookup = RetryHelper.ExecuteWithRetryAsync(
-            () => Task.Run(() => SessionManager.GetSessionByAuthenticationToken(token, deviceId, Plugin.Instance!.Configuration.ServerAddress)),
-            Logger,
-            "GetSessionByAuthToken",
-            cancellationToken: cancellationToken,
-            timeoutMs: SessionLookupTimeoutMs);
+        Task<SessionInfo?> lookup = StartSessionLookup(
+            token, deviceId, "GetSessionByAuthToken", SessionLookupTimeoutMs, cancellationToken);
 
         SessionInfo? session;
         try
@@ -538,6 +528,32 @@ public abstract class BaseHandler
         SessionReferenceCache.Store(token, deviceId, session);
         return session;
     }
+
+    /// <summary>
+    /// Starts one session lookup with the JF-477 dispatch shape, shared by the
+    /// request-path resolution and the JF-506 launch pre-warm. Task.Run dispatches
+    /// the WHOLE delegate off the calling thread (JF-477 review P1):
+    /// GetSessionByAuthenticationToken's synchronous prefix contains a blocking EF
+    /// read (UserManager.GetUserById, verified at v10.11.11) that observes no
+    /// cancellation token, so without this hop a hang there is unreachable by the
+    /// WaitAsync budget, the retry budget, and the controller token alike, and the
+    /// request hangs exactly as in the live incident.
+    /// </summary>
+    /// <param name="token">The user's Jellyfin access token.</param>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    /// <param name="operationName">Retry/logging label.</param>
+    /// <param name="timeoutMs">The retry helper's total timeout budget.</param>
+    /// <param name="cancellationToken">Cancellation token (None for background lookups).</param>
+    /// <returns>The in-flight lookup task.</returns>
+    private Task<SessionInfo?> StartSessionLookup(
+        string? token, string deviceId, string operationName, int timeoutMs, CancellationToken cancellationToken)
+        => RetryHelper.ExecuteWithRetryAsync(
+            () => Task.Run(() => SessionManager.GetSessionByAuthenticationToken(
+                token, deviceId, Plugin.Instance!.Configuration.ServerAddress)),
+            Logger,
+            operationName,
+            cancellationToken: cancellationToken,
+            timeoutMs: timeoutMs);
 
     /// <summary>
     /// Awaits an abandoned (budget-expired) session lookup and, when it eventually
