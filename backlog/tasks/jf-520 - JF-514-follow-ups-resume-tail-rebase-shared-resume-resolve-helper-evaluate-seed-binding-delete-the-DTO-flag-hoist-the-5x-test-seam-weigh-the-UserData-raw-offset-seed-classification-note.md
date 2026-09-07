@@ -4,9 +4,10 @@ title: >-
   JF-514 follow-ups: resume-tail rebase + shared resume-resolve helper; evaluate
   seed-binding (delete the DTO flag); hoist the 5x test seam; weigh the UserData
   raw-offset seed-classification note
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-07 21:50'
+updated_date: '2026-09-07 22:40'
 labels:
   - resume
   - video
