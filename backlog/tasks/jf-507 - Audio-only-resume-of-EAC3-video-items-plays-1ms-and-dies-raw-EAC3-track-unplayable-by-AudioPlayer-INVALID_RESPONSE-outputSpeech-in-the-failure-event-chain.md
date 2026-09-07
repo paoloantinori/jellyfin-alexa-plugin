@@ -4,10 +4,10 @@ title: >-
   Audio-only resume of EAC3 video items plays 1ms and dies (raw EAC3 track
   unplayable by AudioPlayer) + INVALID_RESPONSE outputSpeech in the failure
   event chain
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-06 15:24'
-updated_date: '2026-09-07 05:33'
+updated_date: '2026-09-07 20:52'
 labels:
   - video
   - audio
@@ -94,3 +94,9 @@ Codec/container caveat: for a video item with aac/mp3 audio the raw static URL i
 - On-device verification (Dot resume of the Ribs episode) pending deploy; the segment-fetch behavior of AudioPlayer against the live playlist is the thing to watch in `podman logs`.
 - `SkipForwardBackIntentHandler` during episode-audio playback (documented above).
 - Position recording for start-shifted streams is stream-relative (documented above); if that matters for cross-client progress, the composite-token route (`StreamTokenCodec`) is the known extension point.
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped 2026-09-07: audio resume of EAC3 video items routes through the audio-only episode HLS variant (ResolveAudioLaunchSource/GetEpisodeAudioUrl in BaseHandler, audio.m3u8 with -ss input seek and ?start= ticks); the Critical-review extension dropped ALL three device-derived fallback offsets (AudioPlayer context, session PlayState, DeviceQueue) for transcode-routed resumes since they are output-timeline-relative (stream-relative), eliminating the silent skip-back; raw-static launches keep caller offsets. Event-chain outputSpeech INVALID_RESPONSE resolved with the event-request keep-alive degradation. Merged 4adffeac (branch commit 772f2f9e), deployed to minix, live-verified on the Dot (the 1ms-die resume now plays). DoD 6/8 N/A (no model/locale changes). Residual: stream-relative-to-absolute correction (base-carrying B+O) is JF-514's scope for the offer path. Status reconciled to Done during the 2026-09-07 orchestration sweep (was left In Progress after delivery).
+<!-- SECTION:FINAL_SUMMARY:END -->

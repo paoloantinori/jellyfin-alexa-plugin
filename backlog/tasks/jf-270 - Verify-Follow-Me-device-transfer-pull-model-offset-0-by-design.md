@@ -1,10 +1,10 @@
 ---
 id: JF-270
 title: 'Verify Follow Me device transfer (pull model, offset-0 by design)'
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-06-08 09:31'
-updated_date: '2026-07-25 12:17'
+updated_date: '2026-09-07 21:04'
 labels:
   - e2e
   - playback
@@ -12,8 +12,6 @@ labels:
   - testing
 milestone: m-4
 dependencies: []
-modified_files:
-  - Jellyfin.Plugin.AlexaSkill/Alexa/Handler/Intent/FollowMeIntentHandler.cs
 priority: high
 ---
 
@@ -54,14 +52,7 @@ Existing tests: NONE — FollowMeIntentHandler has zero test coverage today.
 - [ ] #10 /code-review high passed (no blocking findings remaining, or findings applied/tracked)
 <!-- DOD:END -->
 
-## Comments
 
-<!-- COMMENTS:BEGIN -->
-created: 2026-07-25 12:17
----
-Session 2026-07-25: verified FollowMeIntentHandler already has 16 passing unit tests (FollowMeIntentHandlerTests.cs) covering queue selection, null/empty-queue handling, source-clear, directive construction, and now the offset-0 limitation (FollowMe_ResumesAtOffsetZero_ByDesign) and missing-item path. Hardened FollowMe_PicksMostRecentlyActiveQueue against DateTime.UtcNow tick-resolution flakiness by setting LastModifiedUtc explicitly. Corrected the misleading 'at the stored offset' class comment (the code resumes at offset 0) and documented the limitation in README. Remaining: AC #7-8 (2-Echo hardware test) are manual-only.
----
-<!-- COMMENTS:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->

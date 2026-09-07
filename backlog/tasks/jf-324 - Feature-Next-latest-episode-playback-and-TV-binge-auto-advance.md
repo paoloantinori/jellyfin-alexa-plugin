@@ -4,7 +4,7 @@ title: 'Feature: Next/latest-episode playback and TV binge auto-advance'
 status: In Progress
 assignee: []
 created_date: '2026-07-12 15:00'
-updated_date: '2026-09-05 10:28'
+updated_date: '2026-09-07 21:04'
 labels:
   - feature
   - tv
@@ -74,6 +74,8 @@ DONE, verified: `dotnet build` Debug + Release 0 errors 0 warnings; full `dotnet
 Not implemented: `PlaybackNearlyFinishedEventHandler`/`PlaybackFinishedEventHandler` still enqueue only music radio tracks. PART 2 must add the video auto-advance via the VideoApp launch path (within-session), respecting the AudioPlayer-event handler constraints documented in CLAUDE.md, plus AC#6/#7 completions (live NLU run, E2E test) and the DoD gates (#9 /simplify, #10 code-review) before this task can leave In Progress.
 
 Simplify watch-item (2026-09-05): the ~28-line series-resolution prelude (feature gate, series_name extraction, progressive response, user resolution, series resolve) now runs verbatim in both PlayEpisodeIntentHandler and PlayNextEpisodeIntentHandler; extracting it needs 6 parameters today (heavier than the duplication). Apply the extraction when PART 2 adds a third series path, not before. Also from the same pass: the VideoApp.Launch inline-response family (~11 sites) could be retired by a generic BuildVideoAppLaunchResponse builder; repo-wide refactor, deliberately out of scope here.
+
+PART 2 RE-SCOPE (2026-09-07, from the verified VideoApp research in claudedocs/research_alexa-videoapp-stop-routing_2026-09-07.md): the original PART 2 premise 'enqueue the next episode via the VideoApp launch path when an episode finishes, mirroring the music AutoPlay in PlaybackNearlyFinished' is PLATFORM-IMPOSSIBLE as written. The VideoApp interface has exactly ONE directive (Launch) and emits NO requests/events (verified against the current interface reference): the skill never learns that a VideoApp playback finished, so there is nothing to hook. Feasible shapes: (a) auto-advance ONLY for episode audio routed through AudioPlayer (the JF-507 audio-only variant and any AudioPlayer-routed tv content), where PlaybackNearlyFinished/PlaybackFinished do fire and the existing music AutoPlay machinery can be extended to enqueue the next EPISODE (VideoApp constraints do not apply to AudioPlayer.Play responses); (b) for the VideoApp video path, document the limit and lean on PART 1's PlayNextEpisode one-shot ('Alexa, chiedi a mia collezione di mettere il prossimo episodio di {series}', inside the 30s session window per the Stop/session reference in CLAUDE.md). The re-scoped PART 2 deliverable: episode-aware AutoPlay for AudioPlayer-routed tv content + the CLAUDE.md/README documentation of the VideoApp no-events limit + the PART 1 leftovers that remain valid (live NLU confirm of the new intent routing after a model deploy, E2E test, docs mirrors, DidNotCatchEpisodeNumber dead-key cleanup, /simplify + code-review gates on the whole task).
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
