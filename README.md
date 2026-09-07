@@ -86,7 +86,8 @@ Full custom utterances in 11 languages: English (5 variants), Spanish (3), Frenc
 13. [Development](#development)
 14. [Third Party Notices](#third-party-notices)
 15. [All Voice Commands by Language](VOICE_COMMANDS.md)
-16. [License](#license)
+16. [Voice Commands by Locale, complete (generated)](docs/VOICE_COMMANDS_BY_LOCALE.md)
+17. [License](#license)
 
 ## About
 
@@ -412,7 +413,7 @@ The skill supports **17 locales** across **11 languages**, each with full custom
 
 Each JSON file contains all 58 intents with locale-specific sample utterances. To see the complete list of voice commands for any language, open the corresponding interaction model file and look at the `samples` arrays within each intent.
 
-For a formatted reference of all voice commands by language, see [VOICE_COMMANDS.md](VOICE_COMMANDS.md).
+For a formatted reference of all voice commands by language, see [VOICE_COMMANDS.md](VOICE_COMMANDS.md). The complete, generated per-locale reference (every sample of every intent, regenerated from the models by `scripts/generate_voice_reference.py`) is [docs/VOICE_COMMANDS_BY_LOCALE.md](docs/VOICE_COMMANDS_BY_LOCALE.md).
 
 ## FAQ
 
