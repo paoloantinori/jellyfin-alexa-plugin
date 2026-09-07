@@ -4,10 +4,10 @@ title: >-
   VideoAudioController exit-path hygiene: extract the HasExited/ExitCode guard
   helper (3 copy-paste sites) + decide the Kill-before-Dispose asymmetry at
   StreamVideoAudio
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-07 21:09'
-updated_date: '2026-09-07 21:35'
+updated_date: '2026-09-07 22:40'
 labels:
   - cleanup
   - video
@@ -43,16 +43,22 @@ From the JF-518 /simplify pass (2026-09-07). Two same-file hygiene items deliber
 Additional observation from the JF-518 code review to fold into item (2)'s decision or a separate decision (pre-existing, unchanged by JF-518): a last-poll-gap partial file can survive the Kill - ffmpeg can create the output in the <=10ms gap between the final File.Exists poll and the Kill; a killed partial >=10KB then passes GetCachedFile's size-only validity check (VideoAudioCache.cs:139-175) and would be served as a cache hit until the art key changes (DeleteStubIfPresent only removes <10KB files). Same shape at the three HLS sibling sites.
 <!-- SECTION:NOTES:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped: internal static SafeExitCode(Process) helper owns the HasExited guard, replacing the three hand-rolled ternaries at the first-segment-wait warning sites (the copy-paste class that already bit once: JF-507 added the ternary while the fourth site sat unguarded - that fourth site was JF-518). The JF-518 if/else site deliberately keeps HasExited (its still-running diagnostic needs the branch), pointer comment added. AC#2 (Kill alignment) was found ALREADY SATISFIED: the JF-518 merge shipped Kill-before-Dispose at StreamVideoAudio before this task ran; recorded, no change needed. 4 tests pin the contract (exited=code, live=-1, disposed/never-started throw InvalidOperationException - types verified against the net9.0 runtime source; 12/12 flake probe on the live-process test). Gates: /simplify 4-angle combined agent (zero findings: no other HasExited ternary repo-wide, remaining ExitCode reads correctly unconverted, file-local home verified), code-review high SAFE TO MERGE (behavior equivalence at all 3 sites, process lifetime provably undisposed at every read). 3466/3466 on branch and main post-merge. Zero behavior change: deploy intentionally DEFERRED to the next functional DLL push (the running DLL differs only by dead-equivalent code; no restart imposed on the live box for a pure refactor). DoD 4-8 N/A (no DTO/HttpClient/model/locale changes; contract tests stand in for E2E).
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
 - [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
 - [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
 - [ ] #6 NLU test fixtures updated if interaction model changed
 - [ ] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
