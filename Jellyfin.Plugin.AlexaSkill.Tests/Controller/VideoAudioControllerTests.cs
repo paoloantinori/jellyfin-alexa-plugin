@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -2534,5 +2535,45 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     public void IsFfmpegErrorLine_RoutineLines_ReturnFalse(string line)
     {
         Assert.False(VideoAudioController.IsFfmpegErrorLine(line), $"expected routine classification: {line}");
+    }
+
+    /// <summary>
+    /// JF-519: SafeExitCode returns the real exit code of an exited process, the
+    /// -1 contract for a still-running one (ExitCode would throw there), and keeps
+    /// the inherited throw for a never-started or disposed Process (the wait sites
+    /// read the code before their Dispose).
+    /// </summary>
+    [Fact]
+    public void SafeExitCode_ExitedProcess_ReturnsExitCode()
+    {
+        using var process = Process.Start(new ProcessStartInfo("/bin/sh", "-c \"exit 3\""))!;
+        process.WaitForExit();
+        Assert.Equal(3, VideoAudioController.SafeExitCode(process));
+    }
+
+    [Fact]
+    public void SafeExitCode_DisposedAfterExit_Throws()
+    {
+        var process = Process.Start(new ProcessStartInfo("/bin/sh", "-c \"exit 3\""))!;
+        process.WaitForExit();
+        process.Dispose();
+        Assert.Throws<InvalidOperationException>(() => VideoAudioController.SafeExitCode(process));
+    }
+
+    [Fact]
+    public void SafeExitCode_LiveProcess_ReturnsMinusOne()
+    {
+        // 2s sleep: the process is deterministically alive at the check right after Start.
+        using var process = Process.Start(new ProcessStartInfo("/bin/sh", "-c \"sleep 2\""))!;
+        Assert.Equal(-1, VideoAudioController.SafeExitCode(process));
+        process.Kill();
+        process.WaitForExit();
+    }
+
+    [Fact]
+    public void SafeExitCode_NeverStartedProcess_Throws()
+    {
+        using var process = new Process();
+        Assert.Throws<InvalidOperationException>(() => VideoAudioController.SafeExitCode(process));
     }
 }

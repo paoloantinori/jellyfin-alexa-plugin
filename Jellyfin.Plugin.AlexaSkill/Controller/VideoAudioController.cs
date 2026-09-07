@@ -259,6 +259,7 @@ public class VideoAudioController : ControllerBase
                 {
                     // JF-518: ExitCode throws on a process that hasn't exited; the wait
                     // window above can expire while ffmpeg is still starting up.
+                    // Deliberately not SafeExitCode: the else arm needs HasExited itself.
                     if (ffmpegProcess.HasExited)
                     {
                         _logger.LogWarning("VideoAudio: ffmpeg failed to create output for item {ItemId} (exit code {ExitCode})", itemId, ffmpegProcess.ExitCode);
@@ -450,7 +451,7 @@ public class VideoAudioController : ControllerBase
 
                 if (!segmentAppeared)
                 {
-                    _logger.LogWarning("VideoAudio HLS: ffmpeg failed to create first segment for item {ItemId} (exit code {ExitCode})", itemId, ffmpegProcess.HasExited ? ffmpegProcess.ExitCode : -1);
+                    _logger.LogWarning("VideoAudio HLS: ffmpeg failed to create first segment for item {ItemId} (exit code {ExitCode})", itemId, SafeExitCode(ffmpegProcess));
                     try { ffmpegProcess.Kill(); } catch { /* already exited */ }
                     ffmpegProcess.Dispose();
                     return StatusCode(500, new { error = "HLS generation failed" });
@@ -672,7 +673,7 @@ public class VideoAudioController : ControllerBase
 
                 if (!segmentAppeared)
                 {
-                    _logger.LogWarning("VideoAudio episode HLS: ffmpeg failed to create first segment for item {ItemId} (exit code {ExitCode})", itemId, ffmpegProcess.HasExited ? ffmpegProcess.ExitCode : -1);
+                    _logger.LogWarning("VideoAudio episode HLS: ffmpeg failed to create first segment for item {ItemId} (exit code {ExitCode})", itemId, SafeExitCode(ffmpegProcess));
                     try { ffmpegProcess.Kill(); } catch { /* already exited */ }
                     ffmpegProcess.Dispose();
                     _activeEpisodeEncodes.TryRemove(itemId, out _);
@@ -910,7 +911,7 @@ public class VideoAudioController : ControllerBase
 
                 if (!segmentAppeared)
                 {
-                    _logger.LogWarning("VideoAudio episode AUDIO HLS: ffmpeg failed to create first segment for item {ItemId} (exit code {ExitCode})", itemId, ffmpegProcess.HasExited ? ffmpegProcess.ExitCode : -1);
+                    _logger.LogWarning("VideoAudio episode AUDIO HLS: ffmpeg failed to create first segment for item {ItemId} (exit code {ExitCode})", itemId, SafeExitCode(ffmpegProcess));
                     try { ffmpegProcess.Kill(); } catch { /* already exited */ }
                     ffmpegProcess.Dispose();
                     _activeEpisodeEncodes.TryRemove(cacheKey, out _);
@@ -2795,6 +2796,17 @@ public class VideoAudioController : ControllerBase
         long hours = (runtimeTicks + TimeSpan.TicksPerHour - 1) / TimeSpan.TicksPerHour;
         return Math.Max(bytesPerHour, hours * bytesPerHour);
     }
+
+    /// <summary>
+    /// JF-519: the guarded first-segment-wait exit-code read. <see cref="Process.ExitCode"/>
+    /// throws unless the process has exited, and those wait loops can give up while ffmpeg
+    /// is still starting, so a live process reports -1 by contract. An exited process
+    /// reports its real code; a never-started or disposed one still throws (the wait
+    /// sites read this before their Dispose).
+    /// </summary>
+    /// <param name="process">The ffmpeg process being waited on.</param>
+    internal static int SafeExitCode(Process process)
+        => process.HasExited ? process.ExitCode : -1;
 
     /// <param name="ffmpegPath">Path to ffmpeg binary.</param>
     /// <param name="arguments">ffmpeg command-line arguments as individual tokens.</param>
