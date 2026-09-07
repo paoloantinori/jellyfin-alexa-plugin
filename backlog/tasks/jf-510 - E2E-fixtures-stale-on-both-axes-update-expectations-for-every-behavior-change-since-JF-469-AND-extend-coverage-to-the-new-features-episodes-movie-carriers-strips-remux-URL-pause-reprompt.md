@@ -4,10 +4,10 @@ title: >-
   E2E fixtures stale on both axes: update expectations for every behavior change
   since JF-469 AND extend coverage to the new features (episodes, movie
   carriers, strips, remux URL, pause reprompt)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-06 19:10'
-updated_date: '2026-09-07 00:09'
+updated_date: '2026-09-07 00:10'
 labels:
   - e2e
   - tests
@@ -86,3 +86,9 @@ GATES: /simplify pass applied (shared _output_speech_text helper, marker early-r
 
 Formal review dispositions (2026-09-07, orchestrator): no findings at threshold. Sub-threshold landed same-turn: (1) the stale 'every e2e fixture is it-IT' comment in test_e2e.py fixed (false since May; en-US runs with the benign it-IT reset); (2) JF-508's note wording corrected (4 skip_reason entries point at JF-508; the thriller skip points at JF-470 landscape drift, which JF-508 sub-finding 4 already carries); (3) latent vacuity RECORDED: expected_end_session:false passes vacuously on an absent body - harmless today (the only user, the pause fixture, carries three other body-dependent markers) but any future false-end-session fixture must pair with a body marker; (4) conftest's e2e_ glob double-matches e2e_reliability_it-IT.yaml (its 3 utterances also run as full_chain cases: the pausa0/pausa1 log ids), wasting ~2 SMAPI calls per run - pre-existing, fix opportunistically when conftest is next touched (an exclusion must NOT drop the dedicated reliability suite).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed 2026-09-07 (commit a47d6777). Both axes done: Axis 1 - expectations updated for every behavior change since JF-469 (pause pinned to the full JF-488 reprompt shape with all four markers; stale en-US slot pins dropped); Axis 2 - +19 it-IT fixtures with specific markers covering next/latest/continua episodes (numbers-first and series-first), movie carriers incl. the h264+eac3 remux class, the album chiamato/che-si-chiama families, and a pink floyd artist replacement. Harness load-bearing fix: the response-body extraction path was structurally wrong (skillExecutionInfo is a sibling of alexaExecutionInfo), which is why every historical fixture used response_type:any; the fix unlocked real body assertions (speech/reprompt/end_session/stream_url markers), a conditional reliability reset (the pause session now stays open), and a bounded retry for the observed Amazon-side no-invocation throttle artifact. Final live suite: 70 passed, 7 skipped-with-evidence, 0 failed (22 min). The triage surfaced 5 REAL model regressions (the JF-508 family, now carrying the live catalog-shift evidence: JellyfinArtist v637/AlbumName v643/SeriesName v73) and corrected this task's own AXIS-1 assumption (the JF-505 gate is NOT fail-open in simulate-skill; the localized refusal Tell is the end-to-end marker, the remux URL stays unit-pinned). The review gate's 4 sub-threshold items landed same-turn.
+<!-- SECTION:FINAL_SUMMARY:END -->
