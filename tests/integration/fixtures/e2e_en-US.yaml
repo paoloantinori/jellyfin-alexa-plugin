@@ -13,11 +13,14 @@ tests:
       mood: {}
     expected_response_type: any
 
+  # "play random rock songs" matches the literal (non-slotted) model sample:
+  # NO slots are captured (the NLU fixture en-US.yaml documents the same
+  # shape). JF-510 (2026-09-06): the previous genre/media_type slot pins were
+  # stale, the slots resolve empty and the assertion failed on both live runs
+  # (2026-09-06 x2); intent routing is what this entry can pin.
   - utterance: "play random rock songs"
     expected_intent: PlayRandomIntent
-    expected_slots:
-      genre: {}
-      media_type: {}
+    expected_slots: {}
     expected_response_type: any
 
   - utterance: "play songs added this week"

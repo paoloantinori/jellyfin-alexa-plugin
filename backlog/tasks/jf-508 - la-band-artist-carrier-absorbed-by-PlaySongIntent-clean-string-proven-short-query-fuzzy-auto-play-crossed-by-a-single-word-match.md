@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-06 15:25'
+updated_date: '2026-09-07 00:09'
 labels:
   - nlu
   - fuzzy-matching
@@ -37,3 +38,11 @@ Two model/routing findings from the 2026-09-06 Dot session. (A) The artist_carri
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+EVIDENCE APPENDED (JF-510 e2e triage, 2026-09-06, all profile-nlu CLEAN strings, no session context): the family is broader than the original Dot-session report. (1) 'suona la band radiohead' -> NO selectedIntent (part A confirmed live). (2) 'metti una canzone dei beatles' and 'metti una canzone dei xyzzyfoo' -> PlaySongIntent with song='1 canzone dei X' wholesale (the 'Metti {song_noun} {song}' family absorbs the artist carrier for OUT-OF-CATALOG artists; in-catalog names still win via the JellyfinArtist anchor: 'metti una canzone dei soul coughing' and 'metti una canzone dei pink floyd' -> PlayArtistSongsIntent, the latter filling musician='P!nk floyd' from the catalog's phonetic variant). (3) NEW sub-finding: the 'suona i {artist}' JF-418 nominative-article family is dead in current statistics: 'suona i pink floyd' -> PlayAlbumIntent album='i P!nk floyd' (the AlbumName catalog's phonetic anchor STEALS the artist query), 'suona i radiohead' and 'suona i beatles' -> NO selection ('metti i led zep' still routes, so the metti variant lives). (4) Related album-domain drift: 'riproduci album thriller' and "riproduci l'album thriller" -> NO selection; 'metti il disco thriller' -> PlaySongIntent steal. Catalog versions on the live model at probe time: JellyfinArtist v637, AlbumName v643, SeriesName v73 (the JF-504 movie-carrier additions + repeated catalog re-injections shifted the statistics). E2E impact: 5 e2e_it-IT fixtures + the fast-mode xyzzyfoo param are skip_reason-marked pointing here; pink floyd artist coverage continues on the passing 'metti una canzone dei pink floyd'.
+
+Wording correction 2026-09-07 (from the JF-510 review): 4 of the 5 e2e skip_reason entries point here; the fifth (riproduci album thriller) points at the JF-470 definite-article landscape drift, whose evidence sub-finding 4 below already carries.
+<!-- SECTION:NOTES:END -->

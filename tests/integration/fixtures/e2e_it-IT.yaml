@@ -20,10 +20,19 @@ tests:
     expected_response_type: any
 
   # --- Playback controls ---
+  # JF-488 (2026-09-04, default ON since 2026-09-05): with PauseKeepsSession
+  # the pause response SPEAKS ('Pausa.') and carries a reprompt with the
+  # session open (shouldEndSession=false), so the platform does not close it
+  # with EXCEEDED_MAX_REPROMPTS. The pin: speech + reprompt + open session +
+  # the AudioPlayer.Stop directive (all paths still stop the audio).
   - utterance: "pausa"
     expected_intent: AMAZON.PauseIntent
     expected_slots: {}
-    expected_response_type: any
+    expected_response_type: directive
+    expected_directive_type: "AudioPlayer.Stop"
+    expected_speech_contains: "Pausa"
+    expected_reprompt: true
+    expected_end_session: false
 
   # --- State change intents ---
   - utterance: "aggiungi ai preferiti"
@@ -46,12 +55,39 @@ tests:
       musician: {}
     expected_response_type: any
 
-  # Exact match — different artist
+  # Exact match, different artist
+  # SKIPPED (JF-510 triage 2026-09-06, real model regression; evidence filed
+  # on JF-508): 'suona i pink floyd' now selects PlayAlbumIntent with
+  # album='i P!nk floyd' (the AlbumName catalog's phonetic anchor for Pink
+  # Floyd steals the nominative-article artist query). profile-nlu clean
+  # string confirms ('suona i radiohead' and 'suona i beatles' select NO
+  # intent at all: the whole 'suona i X' JF-418 family is dead in the current
+  # model statistics; 'metti i led zep' still routes). Artist-path coverage
+  # for Pink Floyd continues on 'metti una canzone dei pink floyd' below.
   - utterance: "suona i pink floyd"
     expected_intent: PlayArtistSongsIntent
     expected_slots:
       musician: {}
     expected_response_type: any
+    skip_reason: >
+      JF-508 family regression: PlayAlbumIntent steals the query via the
+      AlbumName catalog anchor (profile-nlu 2026-09-06); re-enable when the
+      model routing is fixed
+
+  # JF-510 (2026-09-06): replacement Pink Floyd coverage for the regressed
+  # 'suona i pink floyd' above. The catalog's phonetic anchor ('P!nk floyd')
+  # works FOR the artist path here: musician fills with the phonetic variant
+  # and the artist's songs play (verified live: 'Comfortably Numb'). Also the
+  # in-catalog control for the carrier shape the beatles/xyzzyfoo entries
+  # lost to PlaySongIntent.
+  - utterance: "metti una canzone dei pink floyd"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+    expected_response_type: directive
+    expected_directive_type: "AudioPlayer.Play"
+    expected_speech_contains: "In riproduzione"
+    expected_stream_url_contains: "/Audio/"
 
   # Misspelling — "pink floid" (typo: y→i) — NLU may not resolve heavy misspellings
   # Skipping: Alexa NLU cannot route this to any intent. Fuzzy matching is tested at unit level.
@@ -77,27 +113,54 @@ tests:
       musician: {}
     expected_response_type: any
 
-  # Different artist — The Beatles (multi-word with "The" prefix)
+  # Different artist, The Beatles (multi-word with "The" prefix)
+  # SKIPPED (JF-510 triage 2026-09-06, real model regression; evidence filed
+  # on JF-508): PlaySongIntent's 'Metti {song_noun} {song}' sample absorbs
+  # the whole phrase for OUT-OF-CATALOG artists (profile-nlu: song='1 canzone
+  # dei beatles', musician empty). In-catalog names still win via the
+  # JellyfinArtist anchor (soul coughing passes). Same root cause as the
+  # fast-mode xyzzyfoo skip in test_e2e.py.
   - utterance: "metti una canzone dei beatles"
     expected_intent: PlayArtistSongsIntent
     expected_slots:
       musician: {}
     expected_response_type: any
+    skip_reason: >
+      JF-508 family regression: PlaySongIntent absorbs the artist carrier
+      for out-of-catalog names (profile-nlu 2026-09-06); re-enable when the
+      model routing is fixed
 
-  # Not found — artist that doesn't exist in the library
+  # Not found, artist that doesn't exist in the library
+  # SKIPPED (JF-510 triage 2026-09-06): same PlaySongIntent carrier
+  # absorption as the beatles entry above (profile-nlu: song='1 canzone dei
+  # xyzzyfoo'). The not-found BEHAVIOR (xyzzyfoo matches nothing) remains
+  # covered at unit level and by the fast-mode skip marker; the handler-side
+  # response is unchanged, only the model routing drifted.
   - utterance: "metti una canzone dei xyzzyfoo"
     expected_intent: PlayArtistSongsIntent
     expected_slots:
       musician: {}
     expected_response_type: any
+    skip_reason: >
+      JF-508 family regression: PlaySongIntent absorbs the artist carrier
+      for out-of-catalog names (profile-nlu 2026-09-06); re-enable when the
+      model routing is fixed
 
   # --- Disambiguation carrier phrases (band/gruppo/cantante) ---
-  # "band" carrier — disambiguates from PlayRadioIntent
+  # "band" carrier, disambiguates from PlayRadioIntent
+  # SKIPPED (JF-510 triage 2026-09-06, real model regression; this is the
+  # JF-508 task's own clean-string evidence, now confirmed live): profile-nlu
+  # selects NO intent at all for 'suona la band radiohead' and simulate-skill
+  # fails to resolve the utterance entirely.
   - utterance: "suona la band radiohead"
     expected_intent: PlayArtistSongsIntent
     expected_slots:
       musician: {}
     expected_response_type: any
+    skip_reason: >
+      JF-508: the 'la band' artist carrier selects no intent at all
+      (profile-nlu 2026-09-06); re-enable when the carrier samples are
+      strengthened per the JF-508 fix
 
   # "gruppo" carrier — Italian for "group"
   - utterance: "metti il gruppo pink floyd"
@@ -154,6 +217,157 @@ tests:
     expected_slots:
       podcast_name: {}
     expected_response_type: any
+
+  # --- TV episodes (JF-324/JF-493, JF-510 AXIS 2) ---
+  # 'The Bear' and 'Murderbot' are real library series whose names fill the
+  # catalog-backed SeriesName slot (JF-493 series catalog). The response
+  # marker is the JF-505 VideoApp capability gate: the simulate-skill device
+  # reports interfaces WITHOUT VideoApp, so a video launch that RESOLVED the
+  # episode and reached the launch site is refused with the localized
+  # 'VideoRequiresScreen' Tell. That Tell is the specific pin that the whole
+  # chain (NLU -> series catalog fill -> NextUp/latest or explicit episode
+  # resolution -> launch decision) ran end to end.
+  # NOTE (JF-498 remux-vs-static): the stream-URL routing decision (HLS remux
+  # for eac3 sources vs /Videos/ static for compatible ones) happens inside
+  # GetVideoAppLaunchUrl BEFORE the gate and is NOT observable in the
+  # simulate-skill response (the gate suppresses the VideoApp.Launch
+  # directive). Murderbot S1E3 is h264+eac3 (the remux class) and the gate
+  # Tell proves the resolution; the URL choice itself is pinned by the
+  # PlayVideoIntentHandlerTests unit wiring, not here.
+  - utterance: "metti il prossimo episodio di the bear"
+    expected_intent: PlayNextEpisodeIntent
+    expected_slots:
+      series_name: {}
+    expected_response_type: speech
+    expected_speech_contains: "dispositivo con schermo"
+
+  # JF-493 infinitive one-shot twin (the prefixed form composes to the
+  # natural 'chiedi a mia collezione di riprodurre il prossimo episodio...').
+  - utterance: "riprodurre il prossimo episodio di the bear"
+    expected_intent: PlayNextEpisodeIntent
+    expected_slots:
+      series_name: {}
+    expected_response_type: speech
+    expected_speech_contains: "dispositivo con schermo"
+
+  # Latest-episode carrier.
+  - utterance: "l'ultimo episodio di the bear"
+    expected_intent: PlayNextEpisodeIntent
+    expected_slots:
+      series_name: {}
+    expected_response_type: speech
+    expected_speech_contains: "dispositivo con schermo"
+
+  # 'Guarda' verb variant of the next-episode carrier.
+  - utterance: "guarda il prossimo episodio di the bear"
+    expected_intent: PlayNextEpisodeIntent
+    expected_slots:
+      series_name: {}
+    expected_response_type: speech
+    expected_speech_contains: "dispositivo con schermo"
+
+  # JF-324 continue-watching shape.
+  - utterance: "continua a guardare the bear"
+    expected_intent: PlayNextEpisodeIntent
+    expected_slots:
+      series_name: {}
+    expected_response_type: speech
+    expected_speech_contains: "dispositivo con schermo"
+
+  # JF-493 'la serie' noun carrier (the noun stays in the carrier by design).
+  - utterance: "continua a guardare la serie the bear"
+    expected_intent: PlayNextEpisodeIntent
+    expected_slots:
+      series_name: {}
+    expected_response_type: speech
+    expected_speech_contains: "dispositivo con schermo"
+
+  # JF-493 numbers-first explicit shape (stagione/episodio before the series).
+  - utterance: "metti la stagione 1 episodio 1 di the bear"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
+      series_name: {}
+      season_number: {}
+      episode_number: {}
+    expected_response_type: speech
+    expected_speech_contains: "dispositivo con schermo"
+
+  # JF-493 numbers-first infinitive twin on an h264+eac3 series (the JF-498
+  # remux class; see the section note above for why the URL itself is not
+  # asserted here).
+  - utterance: "mettere la stagione 1 episodio 3 di murderbot"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
+      series_name: {}
+      season_number: {}
+      episode_number: {}
+    expected_response_type: speech
+    expected_speech_contains: "dispositivo con schermo"
+
+  # JF-324 series-first classic shape (curated Riproduci/Suona/Metti trio).
+  - utterance: "metti the bear stagione 1 episodio 1"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
+      series_name: {}
+      season_number: {}
+      episode_number: {}
+    expected_response_type: speech
+    expected_speech_contains: "dispositivo con schermo"
+
+  # --- Movies by title (JF-504/JF-509, JF-510 AXIS 2) ---
+  # 'Ada: My Mother the Architect' is a real library movie (h264+aac, the
+  # JF-498 static-URL class); 'Inside Out 2' is h264+eac3 (the remux class).
+  # Same JF-505 gate marker as the episode section: the gate Tell proves the
+  # title resolved and the launch decision was reached. The JF-509
+  # swallowed-noun healing (title 'film ada' -> searches 'ada') is unit-pinned
+  # (4 pin tests); today the fill is clean ('ada'), and if the fill drifts the
+  # strip recovers and the gate marker still holds.
+  - utterance: "voglio guardare il film ada"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+    expected_response_type: speech
+    expected_speech_contains: "dispositivo con schermo"
+
+  - utterance: "riproduci il film ada"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+    expected_response_type: speech
+    expected_speech_contains: "dispositivo con schermo"
+
+  # JF-504 cerca-as-play movie carrier.
+  - utterance: "cerca il film ada"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+    expected_response_type: speech
+    expected_speech_contains: "dispositivo con schermo"
+
+  # The h264+eac3 movie (JF-498 remux routing class).
+  - utterance: "metti il film inside out 2"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+    expected_response_type: speech
+    expected_speech_contains: "dispositivo con schermo"
+
+  # SKIPPED (JF-510 triage 2026-09-06): the invocation-wrapped INFINITIVE
+  # one-shot ('chiedi a mia collezione di riprodurre il film ada') still
+  # routes AMAZON.FallbackIntent in simulate-skill, the same open item JF-509
+  # documented on-device (live probe: FallbackIntent; profile-nlu selects the
+  # clean inner string 'di riprodurre il film ada' fine). Tracked as the open
+  # item on JF-504; the imperative/other carriers above all route.
+  - utterance: "riprodurre il film ada"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+    expected_response_type: speech
+    expected_speech_contains: "dispositivo con schermo"
+    skip_reason: >
+      JF-504 open item: the invocation-wrapped infinitive one-shot stays
+      Fallback in simulate-skill and on-device (2026-09-06); re-enable when
+      the infinitive movie carriers win the one-shot composition
 
   # --- Browse / Library ---
   # Browse albums (uses English plural "albums" per it-IT model)
@@ -235,20 +449,24 @@ tests:
     expected_response_type: any
 
   # --- Play album ---
-  # JF-470 (2026-09-03): 'riproduci album jazz cafe' now ties at Amazon's NLU (no
-  # selectedIntent, 2/2; the phrase reads as generic music-with-coffee). CAVEAT
-  # (JF-470 review + follow-up probes): thriller is NOT in the Jellyfin library (the
-  # ER anchor is the STATIC AlbumName seed baked into the model, not the
-  # library-synced catalog), so the full chain fuzzy-plays Girl Talk's 'Night Ripper'
-  # (verified on the live simulator): this entry pins ROUTING only, not exact-album
-  # playback. A clean-routing LIBRARY album was sought (article and bare carriers
-  # across many titles, 2026-09-03) and none exists in the current Amazon landscape
-  # (every shape ties or steals the slot): re-triage when the landscape shifts.
+  # JF-470 (2026-09-03): 'riproduci album jazz cafe' ties at Amazon's NLU, and
+  # thriller is NOT in the Jellyfin library (the ER anchor is the STATIC
+  # AlbumName seed baked into the model, not the library-synced catalog): the
+  # entry pinned ROUTING only. SKIPPED (JF-510 triage 2026-09-06): the
+  # landscape HAS shifted again, now to NO selection at all for
+  # 'riproduci album thriller' (profile-nlu; 'riproduci l'album thriller'
+  # also None, 'metti il disco thriller' steals to PlaySongIntent). PlayAlbum
+  # routing is pinned instead by the chiamato/che-si-chiama entries below,
+  # which fill the library-synced catalog deterministically.
   - utterance: "riproduci album thriller"
     expected_intent: PlayAlbumIntent
     expected_slots:
       album: {}
     expected_response_type: any
+    skip_reason: >
+      Amazon landscape drift (JF-470 tie became NO selection, 2026-09-06
+      profile-nlu): no album-routing shape survives for non-library titles;
+      re-triage when the model landscape shifts again
 
   # JF-469 (2026-09-04): the chiamato-family indefinite shape. Post-deploy probes on
   # the 2026-09-04 rebuilt model fill this cleanly (album "surfer rosa",
@@ -264,18 +482,70 @@ tests:
       album: {}
     expected_response_type: any
 
+  # --- Album calling-word family (JF-489/JF-492/JF-490, JF-510 AXIS 2) ---
+  # 'Surfer Rosa' is a real library MusicAlbum (first track 'Bone Machine'),
+  # so these pins assert the PLAY, not just routing: the announce speech and
+  # the AudioPlayer.Play stream URL on the /Audio/ static endpoint.
+  # JF-492: 'cerca un album chiamato X' is a PLAY shape. Today the fill is
+  # clean ('surfer rosa'); when the fill bleeds the calling word
+  # ('chiamato surfer rosa', the documented drift class) the handler-side
+  # strip recovers and the PLAY assertions still hold, which is exactly the
+  # behavior this family pins.
+  - utterance: "cerca un album chiamato surfer rosa"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+    expected_response_type: directive
+    expected_directive_type: "AudioPlayer.Play"
+    expected_speech_contains: "In riproduzione"
+    expected_stream_url_contains: "/Audio/"
+
+  # JF-490: bare 'che si chiama' carrier (device-evidenced shape).
+  - utterance: "un album che si chiama surfer rosa"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+    expected_response_type: directive
+    expected_directive_type: "AudioPlayer.Play"
+    expected_speech_contains: "In riproduzione"
+    expected_stream_url_contains: "/Audio/"
+
+  # JF-490 follow-up: the verb-ful 'che si chiama' form (the on-device ASR
+  # needed a verb anchor for this carrier).
+  - utterance: "metti un album che si chiama surfer rosa"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+    expected_response_type: directive
+    expected_directive_type: "AudioPlayer.Play"
+    expected_speech_contains: "In riproduzione"
+    expected_stream_url_contains: "/Audio/"
+
+  # JF-490: 'disco' noun variant of the che-si-chiama carrier.
+  - utterance: "un disco che si chiama surfer rosa"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+    expected_response_type: directive
+    expected_directive_type: "AudioPlayer.Play"
+    expected_speech_contains: "In riproduzione"
+    expected_stream_url_contains: "/Audio/"
+
   # --- Play by playlist (issue #10 regression coverage) ---
   # Playlist members are linked children, not ParentId-owned rows; the handler must
   # resolve them via Playlist.GetManageableItems() or the playlist reports empty.
   # Requires these playlists in the linked Jellyfin library:
-  #   "mad season" (≥1 audio track) — proves a real playlist plays (not "vuota")
-  #   "pearl jam soft" (0 tracks) — proves a genuinely-empty playlist still reports empty
+  #   "mad season" (>=1 audio track): proves a real playlist plays (not "vuota")
+  #   "pearl jam soft" (0 tracks): proves a genuinely-empty playlist still reports empty
   #
-  # response_type is "any" (not directive/speech) because simulate-skill does not expose
-  # the skill's directives/outputSpeech in the shape _parse_skill_response walks — the
-  # same reason every other entry here uses "any". The play-vs-empty distinction is
-  # verified via the plugin Simulator endpoint AND server logs:
-  #   mad season    -> "resolved 8 audio tracks … returning AudioPlayer"
+  # JF-510 (2026-09-06): the OLD claim that simulate-skill does not expose the
+  # skill's directives/outputSpeech was a harness path bug (_extract_skill_response
+  # read result.alexaExecutionInfo.skillExecutionInfo instead of the sibling
+  # result.skillExecutionInfo), now fixed; response-shape assertions work (see the
+  # marker keys above). These two entries stay response_type "any" deliberately:
+  # the interesting distinction here is play-vs-empty, verified via the plugin
+  # Simulator endpoint AND server logs:
+  #   mad season    -> "resolved 8 audio tracks ... returning AudioPlayer"
   #   pearl jam soft -> "resolved 0 audio tracks" -> "La playlist è vuota"
   # This e2e guards NLU routing to PlayPlaylistIntent and that the skill doesn't hard-error.
   - utterance: "riproduci la playlist mad season"
