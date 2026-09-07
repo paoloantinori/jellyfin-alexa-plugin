@@ -25,6 +25,7 @@ logger = logging.getLogger("e2e.test")
 RESPONSE_MARKER_KEYS = (
     "expected_speech_contains", "expected_reprompt",
     "expected_end_session", "expected_stream_url_contains",
+    "expected_play_or_gate_tell",
 )
 
 
@@ -45,9 +46,81 @@ def e2e_smapi_client(skill_id, smapi_delay, e2e_fixture):
     )
 
 
+# ---------------------------------------------------------------------------
+# Cross-test simulate-skill session tracking (locale-scoped, conditional)
+# ---------------------------------------------------------------------------
+
+# Locales whose most recent simulation in this process left the skill
+# session open (shouldEndSession != true). simulate-skill session state is
+# per device locale, so the tracking is keyed per locale.
+_open_sessions: set[str] = set()
+
+# Locales already given one unconditional reset in this process: the first
+# reset of a run guards against a stale open session left by an earlier
+# crashed run, where no in-process tracking exists.
+_reset_initialized: set[str] = set()
+
+
+def _request_locale(request: pytest.FixtureRequest) -> str:
+    """Resolve the locale under test from a test's parametrized fixtures.
+
+    The fixture-dict params (e2e/smoke/reliability) carry their locale
+    inside the dict; test_e2e_fast_mode parametrizes ``locale`` directly.
+    """
+    callspec = getattr(request.node, "callspec", None)
+    params = callspec.params if callspec is not None else {}
+    direct = params.get("locale")
+    if isinstance(direct, str) and direct:
+        return direct
+    for value in params.values():
+        if isinstance(value, dict) and isinstance(value.get("locale"), str):
+            return value["locale"]
+    return "it-IT"
+
+
+def _bare_stop(skill_id: str, locale: str, delay: float) -> None:
+    """Best-effort bare-'stop' close of a persistent simulate-skill session."""
+    client = SmapiClient(
+        skill_id=skill_id, locale=locale, delay=delay, invocation_name=""
+    )
+    try:
+        client.simulate("stop")
+    except Exception as exc:  # noqa: BLE001 - reset is best effort
+        logger.warning("Session reset simulation failed (%s, continuing): %s", locale, exc)
+
+
+def _record_session_state(locale: str, response: dict) -> None:
+    """Track whether the skill session was left open by *response*.
+
+    Drives the conditional reset: play responses and Tells end the session
+    themselves, so the next test pays no reset; only an actually-open
+    session (reprompt/disambiguation) does.
+    """
+    body = _extract_response_body(_extract_skill_response(response))
+    if body and body.get("shouldEndSession") is not True:
+        _open_sessions.add(locale)
+    else:
+        _open_sessions.discard(locale)
+
+
+def _ensure_session_closed(skill_id: str, locale: str, delay: float) -> None:
+    """The ONE reset policy: close an open session in *locale* if needed.
+
+    First use of a locale in the process always resets once (guards against
+    a stale open session left by an earlier crashed run, where no
+    in-process tracking exists); afterwards only when the previous
+    simulation in that locale left the session open (_record_session_state).
+    """
+    if locale in _reset_initialized and locale not in _open_sessions:
+        return
+    _reset_initialized.add(locale)
+    _open_sessions.discard(locale)
+    _bare_stop(skill_id, locale, delay)
+
+
 @pytest.fixture(autouse=True)
-def _reset_simulation_session(dry_run, skill_id, smapi_delay):
-    """End the persistent simulate-skill session before each E2E test.
+def _reset_simulation_session(dry_run, skill_id, smapi_delay, request):
+    """End a persistent open simulate-skill session before each E2E test.
 
     simulate-skill (development stage) PERSISTS the session across sequential
     simulations: a FindSong elicitation left open by one fixture rides along as
@@ -60,11 +133,16 @@ def _reset_simulation_session(dry_run, skill_id, smapi_delay):
     resets the state. Prefixed one-shots do NOT work here: the dialog capture includes
     the invocation prefix in the slot value. Best-effort: a failed reset surfaces
     downstream as the recognizable find-song-hijack pattern.
-    Known limitation: the reset hardcodes locale it-IT. The e2e en-US fixtures run
-    without a locale-scoped reset (the it-IT reset fires before them and fails
-    benignly); if a non-it-IT fixture opens a FindSong-style dialog, extend here with
-    a locale-scoped reset (cf. JF-400/JF-414; comment corrected 2026-09-07, the old
-    'every fixture is it-IT' premise had been false since e2e_en-US landed in May).
+
+    Locale-scoped and conditional since JF-511 (was hardcoded it-IT, which
+    made every non-it-IT fixture run with a reset that fired in the wrong
+    locale and failed benignly): the reset runs in the test's own locale and
+    only when needed. The first test in a locale always resets once (guards
+    against a stale open session from an earlier run); afterwards only when
+    the previous simulation in that locale left the session open (tracked by
+    _record_session_state). Smoke tests opt out entirely: their two-step
+    shape opens the skill fresh per test and manages its own cleanup, so the
+    open itself serves as the reset.
 
     No-op in dry-run mode: this autouse fixture fires BEFORE each test's own
     dry-run skip, so an unguarded simulate() here issued one real
@@ -72,17 +150,11 @@ def _reset_simulation_session(dry_run, skill_id, smapi_delay):
     """
     if dry_run:
         return
+    if "smoke_fixture" in request.fixturenames:
+        return
 
-    reset_client = SmapiClient(
-        skill_id=skill_id,
-        locale="it-IT",
-        delay=smapi_delay,
-        invocation_name="",
-    )
-    try:
-        reset_client.simulate("stop")
-    except Exception as exc:  # noqa: BLE001 - reset is best effort
-        logger.warning("Session reset simulation failed (continuing): %s", exc)
+    locale = _request_locale(request)
+    _ensure_session_closed(skill_id, locale, smapi_delay)
 
 
 @pytest.mark.e2e
@@ -148,23 +220,17 @@ def test_e2e_full_chain(dry_run, e2e_fixture, e2e_smapi_client, jellyfin_client)
         or any(k in e2e_fixture for k in RESPONSE_MARKER_KEYS)
     )
     try:
-        response = e2e_smapi_client.simulate(utterance)
-        attempts = 1
-        while (
-            needs_body
-            and attempts < 3
-            and not _extract_response_body(_extract_skill_response(response))
-        ):
-            logger.warning(
-                "  Skill not invoked for '%s' despite intent %s; "
-                "retrying (attempt %d/3)",
-                utterance, expected_intent, attempts + 1,
-            )
-            time.sleep(3.0)
-            response = e2e_smapi_client.simulate(utterance)
-            attempts += 1
+        response = _simulate_with_invocation_retry(
+            e2e_smapi_client, utterance, expected_intent, needs_body
+        )
     except SmapiError as exc:
+        # Session state after a failed simulation is unknown; assume open so
+        # the next test resets (preserves the unconditional-reset safety net
+        # that existed before the reset became conditional, JF-511).
+        _open_sessions.add(locale)
         pytest.fail(f"SMAPI simulation error for '{utterance}' ({locale}): {exc}")
+
+    _record_session_state(locale, response)
 
     # --- Parse NLU result ---
     result = SmapiClient.parse_nlu_result(response)
@@ -177,21 +243,7 @@ def test_e2e_full_chain(dry_run, e2e_fixture, e2e_smapi_client, jellyfin_client)
     )
 
     # --- Slot assertions ---
-    resolved_slots = result["slots"]
-    for slot_name, expected_val in expected_slots.items():
-        assert slot_name in resolved_slots, (
-            f"Missing slot '{slot_name}' for '{utterance}' ({locale}):\n"
-            f"  expected: {sorted(expected_slots.keys())}\n"
-            f"  resolved: {sorted(resolved_slots.keys())}"
-        )
-
-        # {} means "any non-empty value" — catch unfilled slots
-        if isinstance(expected_val, dict) and not expected_val:
-            resolved_val = resolved_slots[slot_name].get("value", "")
-            assert resolved_val, (
-                f"Slot '{slot_name}' resolved empty for '{utterance}' ({locale}):\n"
-                f"  NLU matched intent but did not fill the slot"
-            )
+    _assert_slots(utterance, locale, result["slots"], expected_slots)
 
     # --- Response assertions ---
     skill_response = _extract_skill_response(response)
@@ -267,6 +319,60 @@ def _output_speech_text(output_speech: object) -> str:
     if isinstance(output_speech, dict):
         return (output_speech.get("ssml") or output_speech.get("text") or "")
     return ""
+
+
+def _simulate_with_invocation_retry(
+    client: SmapiClient, utterance: str, expected_intent: str, needs_body: bool
+) -> dict:
+    """Simulate once, retrying when the skill resolved the intent but was
+    NOT invoked (empty skillExecutionInfo).
+
+    An intermittent simulation-side throttle artifact under sustained SMAPI
+    traffic (live 2026-09-07: consecutive no-invocation simulations for
+    'voglio guardare il film ada' inside a ~35s window that the next test's
+    retry escaped; ~1-2 tests per full run). 3 attempts with a settle pause
+    cover the observed window; a genuinely broken endpoint fails all
+    attempts, so this smooths infra flake only.
+    """
+    response = client.simulate(utterance)
+    attempts = 1
+    while (
+        needs_body
+        and attempts < 3
+        and not _extract_response_body(_extract_skill_response(response))
+    ):
+        logger.warning(
+            "  Skill not invoked for '%s' despite intent %s; "
+            "retrying (attempt %d/3)",
+            utterance, expected_intent, attempts + 1,
+        )
+        time.sleep(3.0)
+        response = client.simulate(utterance)
+        attempts += 1
+    return response
+
+
+def _assert_slots(
+    utterance: str,
+    locale: str,
+    resolved_slots: dict,
+    expected_slots: dict,
+) -> None:
+    """Assert every expected slot resolved; ``{}`` means any non-empty value."""
+    for slot_name, expected_val in expected_slots.items():
+        assert slot_name in resolved_slots, (
+            f"Missing slot '{slot_name}' for '{utterance}' ({locale}):\n"
+            f"  expected: {sorted(expected_slots.keys())}\n"
+            f"  resolved: {sorted(resolved_slots.keys())}"
+        )
+
+        # {} means "any non-empty value": catch unfilled slots
+        if isinstance(expected_val, dict) and not expected_val:
+            resolved_val = resolved_slots[slot_name].get("value", "")
+            assert resolved_val, (
+                f"Slot '{slot_name}' resolved empty for '{utterance}' ({locale}):\n"
+                f"  NLU matched intent but did not fill the slot"
+            )
 
 
 def _assert_response_markers(
@@ -744,3 +850,208 @@ def test_e2e_fast_mode(
         # Always reset back to global default (null = use global default)
         logger.info("FAST MODE: resetting user %s to global default", jellyfin_client.user_id)
         jellyfin_client.set_search_mode(None)
+
+
+# ---------------------------------------------------------------------------
+# Smoke E2E tests (JF-511 option b): two-step shape for the non-it locales
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def smoke_fixture(request):
+    """Indirect fixture: each parametrized case from e2e_smoke_*.yaml."""
+    return request.param
+
+
+def _assert_play_or_gate_tell(
+    utterance: str, locale: str, skill_response: dict, gate_substring: str
+) -> None:
+    """Random-play disjunction: AudioPlayer.Play on /Audio/ OR the localized
+    VideoRequiresScreen gate Tell.
+
+    For locales where the MediaType slot does not fill in-session (de-DE,
+    live evidence 2026-09-07: 'spiele zufällige musik' routes to
+    PlayRandomIntent with media_type='') the handler cannot be pinned to
+    audio kinds, so the honest pin is: the skill answered with a real play
+    or with the correct screen-gate Tell, and either way the session ends.
+    """
+    body = _extract_response_body(skill_response)
+    assert body.get("shouldEndSession") is True, (
+        f"Expected the session to end for '{utterance}' ({locale}), "
+        f"but shouldEndSession was {body.get('shouldEndSession')!r}"
+    )
+    play_urls = [
+        d.get("audioItem", {}).get("stream", {}).get("url", "")
+        for d in body.get("directives", [])
+        if isinstance(d, dict) and d.get("type") == "AudioPlayer.Play"
+    ]
+    speech = _output_speech_text(body.get("outputSpeech"))
+    played = any("/Audio/" in u for u in play_urls)
+    gated = gate_substring in speech
+    assert played or gated, (
+        f"Expected a music play or the '{gate_substring}' gate Tell for "
+        f"'{utterance}' ({locale}), but directives were "
+        f"{[d.get('type') for d in body.get('directives', [])]} and speech "
+        f"was {speech[:160]!r}"
+    )
+
+
+@pytest.mark.e2e
+def test_e2e_smoke_two_step(
+    dry_run, smoke_fixture, skill_id, smapi_delay
+):
+    """Two-step smoke: open the skill in the locale, then a bare command.
+
+    Why two steps (JF-511 measurement, 2026-09-07): the invocation-prefixed
+    one-shot composition is dead in the de/fr/es marketplaces (0/24 across
+    grammatical forms) while a bare in-session command after opening the
+    skill works. The open verb per locale is fixture data (open_utterance,
+    verified live per locale before authoring: 'launch' in en-US/en-IN and
+    fr-CA, where 'open' and 'ouvre' do not resolve).
+
+    Per test: (optional conditional bare-'stop' close) -> open -> bare
+    command -> intent/slot/response assertions. The open and the command
+    both cost a full simulation (~13s + ~7s), so the whole test stays well
+    inside the per-test SMAPI timeout.
+    """
+    fixture = smoke_fixture
+    utterance = fixture["utterance"]
+    expected_intent = fixture["expected_intent"]
+    expected_slots = fixture.get("expected_slots", {})
+    expected_response_type = fixture.get("expected_response_type", "any")
+    skip_reason = fixture.get("skip_reason", "")
+    locale = fixture["locale"]
+    open_utterance = fixture["open_utterance"]
+
+    if dry_run:
+        assert utterance, f"Empty utterance in {fixture.get('source', '?')}"
+        assert open_utterance, (
+            f"Missing open_utterance for the smoke file of {locale} "
+            f"({fixture.get('source', '?')})"
+        )
+        assert expected_intent, f"Missing expected_intent for '{utterance}'"
+        assert expected_response_type in ("any", "speech", "directive"), (
+            f"Invalid expected_response_type: {expected_response_type}"
+        )
+        if expected_response_type == "directive":
+            assert fixture.get("expected_directive_type"), (
+                f"expected_directive_type required when response_type is "
+                f"'directive' for '{utterance}'"
+            )
+        if "expected_end_session" in fixture:
+            assert isinstance(fixture["expected_end_session"], bool), (
+                f"expected_end_session must be a bool for '{utterance}'"
+            )
+        for str_key in (
+            "expected_speech_contains",
+            "expected_stream_url_contains",
+            "expected_play_or_gate_tell",
+        ):
+            val = fixture.get(str_key, "")
+            assert not val or isinstance(val, str), (
+                f"{str_key} must be a non-empty string or omitted for '{utterance}'"
+            )
+        if skip_reason:
+            assert isinstance(skip_reason, str) and skip_reason.strip(), (
+                f"skip_reason must be a non-empty string for '{utterance}'"
+            )
+        pytest.skip("dry-run mode: E2E simulation skipped")
+
+    # A tracked, documented non-passing state (known model regression,
+    # platform limitation): keep the fixture visible, record why it is not
+    # asserted today. Skipping costs no SMAPI call.
+    if skip_reason:
+        pytest.skip(f"'{utterance}' ({locale}): {skip_reason}")
+
+    client = SmapiClient(
+        skill_id=skill_id, locale=locale, delay=smapi_delay, invocation_name=""
+    )
+
+    # Close any session the previous test (or an earlier run) left open in
+    # this locale: an open dialog would capture the open utterance into its
+    # elicited slot. Same conditional policy as the one-shot autouse reset
+    # (first test in a locale always resets; afterwards only when tracked
+    # open, and the previous command normally ends the session itself, so
+    # this is usually free).
+    _ensure_session_closed(skill_id, locale, smapi_delay)
+
+    # --- Step 1: open the skill (the locale's invocation + open verb) ---
+    # One retry on a transient simulation error (the en-GB class: platform
+    # 'unexpected error' after ~21s, observed about once per ten opens,
+    # JF-511); a genuinely broken open shape fails on the retry too.
+    logger.info("SMOKE OPEN [%s] (%s)", open_utterance, locale)
+    try:
+        try:
+            open_response = client.simulate(open_utterance)
+        except SmapiError:
+            time.sleep(3.0)
+            open_response = client.simulate(open_utterance)
+    except SmapiError as exc:
+        pytest.fail(
+            f"Open simulation error for '{open_utterance}' ({locale}): {exc}"
+        )
+    # An open that did not invoke the skill leaves nothing for the command
+    # to ride on: fail here, with the considered intents, rather than as a
+    # confusing command-intent mismatch below.
+    considered = [
+        c.get("name")
+        for c in open_response.get("result", {})
+        .get("alexaExecutionInfo", {})
+        .get("consideredIntents", [])
+    ][:3]
+    assert _extract_response_body(_extract_skill_response(open_response)), (
+        f"Open utterance '{open_utterance}' ({locale}) did not invoke the "
+        f"skill (considered: {considered})"
+    )
+
+    # --- Step 2: the bare in-session command ---
+    logger.info(
+        "SMOKE CMD [%s] (%s) expecting %s (response: %s)",
+        utterance, locale, expected_intent, expected_response_type,
+    )
+    needs_body = (
+        expected_response_type != "any"
+        or any(k in fixture for k in RESPONSE_MARKER_KEYS)
+    )
+    try:
+        response = _simulate_with_invocation_retry(
+            client, utterance, expected_intent, needs_body
+        )
+    except SmapiError as exc:
+        _open_sessions.add(locale)
+        pytest.fail(f"SMAPI simulation error for '{utterance}' ({locale}): {exc}")
+
+    _record_session_state(locale, response)
+
+    result = SmapiClient.parse_nlu_result(response)
+    resolved_intent = result["intent"]
+
+    assert resolved_intent == expected_intent, (
+        f"Intent mismatch for '{utterance}' ({locale}, in-session after "
+        f"'{open_utterance}'):\n"
+        f"  expected: {expected_intent}\n"
+        f"  actual:   {resolved_intent}"
+    )
+
+    _assert_slots(utterance, locale, result["slots"], expected_slots)
+
+    skill_response = _extract_skill_response(response)
+    _assert_response_type(
+        utterance, locale, skill_response, expected_response_type, fixture
+    )
+    _assert_response_markers(utterance, locale, skill_response, fixture)
+    gate_substring = fixture.get("expected_play_or_gate_tell", "")
+    if gate_substring:
+        _assert_play_or_gate_tell(
+            utterance, locale, skill_response, gate_substring
+        )
+    _assert_ssml_valid(skill_response, utterance, locale)
+
+    logger.info("  SMOKE PASS: [%s] -> %s", utterance[:30], resolved_intent)
+
+    # If the command left the skill session open (reprompt/disambiguation),
+    # close it now so the next test's open starts clean; costs a simulation
+    # only when actually needed.
+    if locale in _open_sessions:
+        _bare_stop(skill_id, locale, smapi_delay)
+        _open_sessions.discard(locale)

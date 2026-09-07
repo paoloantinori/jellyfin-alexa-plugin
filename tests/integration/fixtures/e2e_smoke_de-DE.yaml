@@ -1,0 +1,109 @@
+# JF-511 smoke suite (option b): two-step shape for de-DE.
+# Step 1 opens the skill with the locale's invocation + open verb; step 2 is
+# the bare in-session command (the invocation-prefixed one-shot composition
+# is dead in the de marketplace: 0/10 across grammatical forms, JF-511).
+# Every command below was profile-nlu-verified AND live-probed (2026-09-07).
+#
+# REAL DEFECT, documented (2026-09-07 live two-step evidence): the de-DE
+# simulate engine does NOT fill the AMAZON.Musician or custom MediaType
+# slots in-session. 'starte musik von pink floyd' routes to
+# PlayArtistSongsIntent with musician='' (profile-nlu fills it; the same
+# command fills under en/fr/es), and every random-play variant (3 probed)
+# routes to PlayRandomIntent with media_type=''. With musician empty the
+# handler answers the DidNotCatchArtistName Tell, so the artist entries are
+# skip_reason fixtures; the not-found pin rides the video path (the
+# AMAZON.SearchQuery title slot DOES fill in de-DE), and random asserts the
+# play-or-gate-Tell disjunction because the audio pin cannot survive the
+# empty media_type.
+locale: de-DE
+invocation_name: jellyfin player
+open_utterance: "öffne jellyfin player"
+tests:
+  # (a) favorites play: measured live (JF-511 + first smoke run) ->
+  # AudioPlayer.Play, session ends.
+  - utterance: "spiele meine favoriten"
+    expected_intent: PlayFavoritesIntent
+    expected_slots: {}
+    expected_response_type: directive
+    expected_directive_type: "AudioPlayer.Play"
+    expected_end_session: true
+    expected_stream_url_contains: "/Audio/"
+
+  # (a) random play: the media pin is impossible in de-DE (media_type
+  # arrives EMPTY in-session, see header), so assert the disjunction the
+  # JF-511 study prescribed: a real music play OR the localized screen-gate
+  # Tell, either way ending the session.
+  - utterance: "spiele zufällige musik"
+    expected_intent: PlayRandomIntent
+    expected_slots: {}
+    expected_response_type: any
+    expected_end_session: true
+    expected_play_or_gate_tell: "Geraet mit Bildschirm"
+
+  # (b) artist play, in-library name: carrier verified via profile-nlu
+  # (the ONLY surviving de artist carrier of 14 probed; every
+  # 'spiele/hoere/gib ... von' shape is absorbed by PlaySongIntent or
+  # PlayFavoritesIntent(username)), but SKIPPED live: musician fills empty
+  # in the de-DE simulate engine and the handler answers
+  # DidNotCatchArtistName (JF-511 2026-09-07). Re-enable when de-DE
+  # in-session slot filling works.
+  - utterance: "starte musik von pink floyd"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+    expected_response_type: directive
+    expected_directive_type: "AudioPlayer.Play"
+    expected_end_session: true
+    expected_stream_url_contains: "/Audio/"
+    skip_reason: >
+      de-DE simulate no-fill: musician resolves empty in-session (routes
+      correctly, profile-nlu fills; JF-511 2026-09-07); handler answers
+      DidNotCatchArtistName
+      Re-enable when the de simulate engine fills Musician/MediaType in-session (re-probe: profile-nlu fills, simulate does not).
+
+  # (c) artist not-found: same no-fill, skipped (not-found pin moved to the
+  # video entry below).
+  - utterance: "starte musik von xyzzyfoo"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+    expected_response_type: speech
+    expected_speech_contains: "keinen Kuenstler mit dem Namen"
+    expected_end_session: true
+    skip_reason: >
+      de-DE simulate no-fill: musician resolves empty in-session (JF-511
+      2026-09-07); the localized not-found Tell is pinned via the video
+      path below instead
+      Re-enable when the de simulate engine fills Musician/MediaType in-session (re-probe: profile-nlu fills, simulate does not).
+
+  # (c, live) localized not-found via the video path: the SearchQuery title
+  # slot fills in de-DE (live-verified), so a garbage title yields the
+  # NotFoundVideo Tell.
+  - utterance: "spiele den film xyzzyfoo"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+    expected_response_type: speech
+    expected_speech_contains: "kein Video mit dem Titel"
+    expected_end_session: true
+
+  # (d) video ask, generic carrier: the JF-505 VideoRequiresScreen gate Tell
+  # (simulate-skill device reports no VideoApp); proves title resolution ran.
+  # 'barbie' (2023) is a real library movie. Titles with digits normalize
+  # badly in de NLU ('inside out 2' -> 'inside out zwei'), so word-only.
+  - utterance: "ich möchte barbie sehen"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+    expected_response_type: speech
+    expected_speech_contains: "Geraet mit Bildschirm"
+    expected_end_session: true
+
+  # (e) locale-specific carrier family: the 'den Film' noun carrier.
+  - utterance: "spiele den film barbie"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+    expected_response_type: speech
+    expected_speech_contains: "Geraet mit Bildschirm"
+    expected_end_session: true

@@ -1,0 +1,59 @@
+# JF-511 smoke suite (option b): two-step shape for en-AU.
+# All six commands profile-nlu-verified clean in en-AU (2026-09-07).
+locale: en-AU
+invocation_name: jellyfin player
+open_utterance: "open jellyfin player"
+tests:
+  - utterance: "play my favorites"
+    expected_intent: PlayFavoritesIntent
+    expected_slots: {}
+    expected_response_type: directive
+    expected_directive_type: "AudioPlayer.Play"
+    expected_end_session: true
+    expected_stream_url_contains: "/Audio/"
+
+  # 'music' is not in MediaTypeToItemKinds, so kinds resolve audio-only
+  # (JF-511 simulator quirk: unpinned random can pick video).
+  - utterance: "play random music"
+    expected_intent: PlayRandomIntent
+    expected_slots:
+      media_type: {}
+    expected_response_type: directive
+    expected_directive_type: "AudioPlayer.Play"
+    expected_end_session: true
+    expected_stream_url_contains: "/Audio/"
+
+  - utterance: "play songs by pink floyd"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+    expected_response_type: directive
+    expected_directive_type: "AudioPlayer.Play"
+    expected_end_session: true
+    expected_stream_url_contains: "/Audio/"
+
+  - utterance: "play music by xyzzyfoo"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+    expected_response_type: speech
+    expected_speech_contains: "find any artists with the name"
+    expected_end_session: true
+
+  # JF-505 gate Tell; word-only title ('barbie', 2023, real library movie).
+  - utterance: "watch barbie"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+    expected_response_type: speech
+    expected_speech_contains: "requires a device with a screen"
+    expected_end_session: true
+
+  # (e) locale-specific carrier family: the 'the movie' noun carrier.
+  - utterance: "play the movie barbie"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+    expected_response_type: speech
+    expected_speech_contains: "requires a device with a screen"
+    expected_end_session: true

@@ -1,0 +1,68 @@
+# JF-511 smoke suite (option b): two-step shape for es-ES.
+# Commands profile-nlu-verified before authoring (2026-09-07). Two es-specific
+# carrier findings baked into the fixtures:
+#   - artist: 'oye los {musician}' is the ONLY surviving artist carrier of 10
+#     probed ('reproduce musica/temas/canciones de X' -> PlayByGenreIntent,
+#     bare 'toca/escucha/pon/inicia X' -> PlaySongIntent; JF-508 family).
+#   - not-found: garbage in the artist carrier flips to PlayByDecadeIntent
+#     ('oye los xyzzyfoo' -> decade=xyzzyfoo), so the localized not-found pin
+#     rides the VIDEO path instead (title=xyzzyfoo -> NotFoundVideo).
+locale: es-ES
+invocation_name: jellyfin player
+open_utterance: "abre jellyfin player"
+tests:
+  - utterance: "reproduce mis favoritos"
+    expected_intent: PlayFavoritesIntent
+    expected_slots: {}
+    expected_response_type: directive
+    expected_directive_type: "AudioPlayer.Play"
+    expected_end_session: true
+    expected_stream_url_contains: "/Audio/"
+
+  # 'música' is not in MediaTypeToItemKinds (only unaccented 'musica'), so
+  # the kinds resolve audio-only; media pinned per the JF-511 simulator quirk.
+  - utterance: "reproduce música aleatoria"
+    expected_intent: PlayRandomIntent
+    expected_slots:
+      media_type: {}
+    expected_response_type: directive
+    expected_directive_type: "AudioPlayer.Play"
+    expected_end_session: true
+    expected_stream_url_contains: "/Audio/"
+
+  # (b)+(e) artist play via the locale-specific 'oye los' carrier family.
+  - utterance: "oye los pink floyd"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+    expected_response_type: directive
+    expected_directive_type: "AudioPlayer.Play"
+    expected_end_session: true
+    expected_stream_url_contains: "/Audio/"
+
+  # (c) localized not-found (video vehicle, see header note).
+  - utterance: "reproduce la película xyzzyfoo"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+    expected_response_type: speech
+    expected_speech_contains: "ningún vídeo con el título"
+    expected_end_session: true
+
+  # (d) video ask, JF-505 gate Tell ('la película' carrier).
+  - utterance: "reproduce la película barbie"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+    expected_response_type: speech
+    expected_speech_contains: "dispositivo con pantalla"
+    expected_end_session: true
+
+  # (e) second noun carrier of the película family.
+  - utterance: "quiero ver la película barbie"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+    expected_response_type: speech
+    expected_speech_contains: "dispositivo con pantalla"
+    expected_end_session: true

@@ -1,0 +1,57 @@
+# JF-511 smoke suite (option b): two-step shape for es-MX.
+# Same command set as es-ES (identical saved-model content, JF-511): every
+# command profile-nlu-verified in es-MX specifically (2026-09-07), including
+# the 'oye los' artist carrier and the video-path not-found vehicle.
+locale: es-MX
+invocation_name: jellyfin player
+open_utterance: "abre jellyfin player"
+tests:
+  - utterance: "reproduce mis favoritos"
+    expected_intent: PlayFavoritesIntent
+    expected_slots: {}
+    expected_response_type: directive
+    expected_directive_type: "AudioPlayer.Play"
+    expected_end_session: true
+    expected_stream_url_contains: "/Audio/"
+
+  - utterance: "reproduce música aleatoria"
+    expected_intent: PlayRandomIntent
+    expected_slots:
+      media_type: {}
+    expected_response_type: directive
+    expected_directive_type: "AudioPlayer.Play"
+    expected_end_session: true
+    expected_stream_url_contains: "/Audio/"
+
+  - utterance: "oye los pink floyd"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+    expected_response_type: directive
+    expected_directive_type: "AudioPlayer.Play"
+    expected_end_session: true
+    expected_stream_url_contains: "/Audio/"
+
+  - utterance: "reproduce la película xyzzyfoo"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+    expected_response_type: speech
+    expected_speech_contains: "ningún vídeo con el título"
+    expected_end_session: true
+
+  - utterance: "reproduce la película barbie"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+    expected_response_type: speech
+    expected_speech_contains: "dispositivo con pantalla"
+    expected_end_session: true
+
+  - utterance: "quiero ver la película barbie"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+    expected_response_type: speech
+    expected_speech_contains: "dispositivo con pantalla"
+    expected_end_session: true

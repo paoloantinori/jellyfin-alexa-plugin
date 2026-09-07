@@ -96,18 +96,24 @@ def smapi_delay() -> float:
 # ---------------------------------------------------------------------------
 
 
-def load_locale_fixtures(fixture_dir: Path,
-                         prefix: str = "",
-                         exclude_prefix: str = "e2e_") -> list[dict[str, Any]]:
+def load_locale_fixtures(
+    fixture_dir: Path,
+    prefix: str = "",
+    exclude_prefixes: tuple[str, ...] = ("e2e_",),
+) -> list[dict[str, Any]]:
     """Discover and parse YAML fixture files under *fixture_dir*.
 
     Args:
         prefix: Only load files starting with this prefix (empty = all).
-        exclude_prefix: Skip files starting with this prefix.
+        exclude_prefixes: Skip files starting with any of these prefixes
+            (tuple, because the e2e family now has three sub-families:
+            one-shot ``e2e_``, ``e2e_reliability_``, ``e2e_smoke_``).
 
     Each YAML file has a top-level ``locale``, ``invocation_name``, and
     a ``tests`` list.  This function flattens the structure so each
-    individual test case carries its locale and invocation name.
+    individual test case carries its locale and invocation name.  An
+    optional top-level ``open_utterance`` (smoke fixtures) is carried
+    onto each case the same way.
     """
     fixtures: list[dict[str, Any]] = []
     if not fixture_dir.is_dir():
@@ -117,7 +123,7 @@ def load_locale_fixtures(fixture_dir: Path,
         name = path.name
         if prefix and not name.startswith(prefix):
             continue
-        if exclude_prefix and name.startswith(exclude_prefix):
+        if any(name.startswith(ex) for ex in exclude_prefixes):
             continue
 
         with open(path, encoding="utf-8") as handle:
@@ -128,6 +134,7 @@ def load_locale_fixtures(fixture_dir: Path,
 
         locale = data.get("locale", "unknown")
         invocation_name = data.get("invocation_name", "")
+        open_utterance = data.get("open_utterance", "")
         test_cases = data.get("tests", [])
 
         for case in test_cases:
@@ -135,6 +142,7 @@ def load_locale_fixtures(fixture_dir: Path,
                 **case,
                 "locale": locale,
                 "invocation_name": invocation_name,
+                "open_utterance": open_utterance,
                 "source": str(path),
             })
 
@@ -316,15 +324,33 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
     if "e2e_fixture" in metafunc.fixturenames:
         _parametrize_fixtures(
             metafunc, "e2e_fixture",
-            load_locale_fixtures(FIXTURES_DIR, prefix="e2e_", exclude_prefix=""),
+            load_locale_fixtures(
+                FIXTURES_DIR, prefix="e2e_",
+                # The other two e2e sub-families have their own tests;
+                # before the smoke family existed, the reliability file
+                # leaked here too (each reliability utterance ran twice,
+                # once as a one-shot full-chain case).
+                exclude_prefixes=("e2e_reliability_", "e2e_smoke_"),
+            ),
             id_prefix="e2e",
         )
 
     if "reliability_fixture" in metafunc.fixturenames:
         _parametrize_fixtures(
             metafunc, "reliability_fixture",
-            load_locale_fixtures(FIXTURES_DIR, prefix="e2e_reliability_", exclude_prefix=""),
+            load_locale_fixtures(
+                FIXTURES_DIR, prefix="e2e_reliability_", exclude_prefixes=()
+            ),
             id_prefix="reliability",
+        )
+
+    if "smoke_fixture" in metafunc.fixturenames:
+        _parametrize_fixtures(
+            metafunc, "smoke_fixture",
+            load_locale_fixtures(
+                FIXTURES_DIR, prefix="e2e_smoke_", exclude_prefixes=()
+            ),
+            id_prefix="smoke",
         )
 
 
@@ -358,7 +384,7 @@ def _smapi_test_timeout(request: pytest.FixtureRequest, dry_run: bool) -> Any:
         yield
         return
 
-    timeout = request.config.getoption("--smapi-timeout", default=120.0)
+    timeout = request.config.getoption("--smapi-timeout", default=120.0) or 120.0
     old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
     signal.alarm(int(timeout))
     try:

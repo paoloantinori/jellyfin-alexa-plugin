@@ -4,10 +4,10 @@ title: >-
   E2E suite for the other 15 locales: design study (value vs cost vs
   simulate-skill reliability per locale; full mirror vs smoke subset vs family
   sampling)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-06 19:13'
-updated_date: '2026-09-07 00:25'
+updated_date: '2026-09-07 03:43'
 labels:
   - e2e
   - i18n
@@ -43,7 +43,7 @@ Deliverable: a decision document in the task notes (value/cost/risk per option, 
 - [ ] #6 NLU test fixtures updated if interaction model changed
 - [ ] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
@@ -101,4 +101,50 @@ Prerequisites, in order:
 5. Fixture authoring notes: pin media_type on random-play tests (simulator device is screenless); artist not-found probes should avoid hoere {musician}-shape carriers (observed NLU no-fill on garbage Musician tokens; mechanism unverified).
 
 Sequencing: JF-510 refresh -> manifest fix (prereq 1, own task) -> two-step harness + locale reset (prereqs 2-3) -> generate 5-8 test smokes per locale from the models' own samples. Status stays To Do; the orchestrator decides execution.
-<!-- SECTION:NOTES:END -->
+
+## Execution record (2026-09-07, option b implemented for the 11 reachable locales)
+
+Suite shape: two-step smoke (open the skill with the locale's open verb, then the BARE in-session command), 6-7 tests per locale. Fixtures: tests/integration/fixtures/e2e_smoke_<locale>.yaml x 11; test: test_e2e_smoke_two_step in tests/integration/test_e2e.py; runner unchanged (./scripts/run_e2e_tests.sh picks it up). Every command utterance was profile-nlu-verified BEFORE any live run (8 probe rounds, 134 profile-nlu calls + 25 live open/slot probes, SMAPI_DELAY=1.5, zero throttle events).
+
+Harness changes:
+- test_e2e_smoke_two_step: step 1 open (asserts the skill was actually invoked, dumping consideredIntents on failure), step 2 bare command with the JF-510 retry, then intent/slot/response-marker/SSML assertions. New marker expected_play_or_gate_tell: the random-play disjunction (AudioPlayer.Play on /Audio/ OR the localized VideoRequiresScreen Tell, session ends either way) for locales where the MediaType slot does not fill in-session (the study's prescribed fallback when a music pin is impossible).
+- Locale-scoped conditional session reset (the study's prereq 3): the autouse reset resolves the test's locale from its fixture params (was hardcoded it-IT) and fires only when needed: first test per locale always (stale-session guard), afterwards only when the previous response left the session open (tracked per locale via _record_session_state). Smoke tests opt out entirely (the per-test open is the reset).
+- conftest load_locale_fixtures: exclude_prefixes is now a tuple and open_utterance is passed through. Side fix: e2e_fixture collection now excludes e2e_reliability_ and e2e_smoke_; the reliability file had been leaking into full_chain since it landed (each reliability utterance ran twice; full_chain collected 72 -> 69).
+- it-IT one-shot path: fixtures and flow unchanged; its inline retry/slot blocks were factored into shared helpers (_simulate_with_invocation_retry, _assert_slots) used by both tests. Verified by a full live rerun (below).
+
+Open verbs, live-probed (the natural choice failed in 3 of 11 marketplaces): de-DE "öffne jellyfin player", fr-FR "ouvre", fr-CA "lance" (ouvre / ouvre jellyfin / demarre all fail to resolve in fr-CA), es-ES/es-MX/es-US "abre", en-GB/en-AU/en-CA "open", en-US/en-IN "launch" (open does not resolve there).
+
+Results (first live run 19:22, then the de-DE rework rerun; final state 67 tests):
+
+| locale | pass | skip | notes |
+|---|---|---|---|
+| de-DE | 5 | 2 | artist entries skipped: de-DE simulate no-fill (defect 1) |
+| fr-FR | 6 | 0 | |
+| fr-CA | 6 | 0 | |
+| es-ES | 6 | 0 | |
+| es-MX | 6 | 0 | |
+| es-US | 1 | 5 | es-US routing black hole (defect 4) |
+| en-US | 6 | 0 | |
+| en-GB | 6 | 0 | |
+| en-AU | 6 | 0 | |
+| en-CA | 6 | 0 | |
+| en-IN | 6 | 0 | |
+
+TOTAL: 60 pass, 7 documented skips, 0 fail. First run was 58/3/5; all 3 failures were the de-DE slot no-fill class, reworked the same day (random -> disjunction marker, artist -> skips, not-found -> video path). Zero per-test timeout alarms (the open+command pair fits comfortably in the 120s budget).
+
+Real defects found (documented in the fixtures and here, NOT masked):
+1. de-DE simulate no-fill: the de-DE simulate engine does not fill AMAZON.Musician or custom MediaType slots in-session. 'starte musik von pink floyd' routes to PlayArtistSongsIntent with musician='' (profile-nlu fills it; the same shapes fill live under en/fr/es), and all 3 random variants route to PlayRandomIntent with media_type=''. AMAZON.SearchQuery (video title) fills fine. With musician empty the handler answers the DidNotCatchArtistName Tell. Consequences: the 2 de-DE artist entries skip with evidence; random uses the disjunction marker.
+2. de-DE artist-carrier absorption (profile-nlu): 14 carriers probed; every spiele/hoere/gib/starte 'von' shape is absorbed by PlaySongIntent or PlayFavoritesIntent(username) (username resolved 'Felipe Colombo' for 'pink floyd'); only 'starte musik von X' survives profile-nlu (and then hits defect 1 live).
+3. es artist-carrier absorption: 'reproduce musica/temas/canciones de X' -> PlayByGenreIntent; bare toca/escucha/pon/inicia/dame X -> PlaySongIntent; 'oye los X' (a real model sample) is the only survivor. Garbage in that carrier flips to PlayByDecadeIntent (decade=xyzzyfoo), so the es not-found pin rides the video path (title=xyzzyfoo -> NotFoundVideo Tell).
+4. es-US routing black hole: nearly every non-static command is absorbed by PlaySongIntent's free-text song slot (4 random + 6 video + several artist carriers probed). The saved es-US interaction model BYTE-MATCHES the repo model (59 intents, sample counts identical; verified via get-interaction-model diff), while es-ES/es-MX with identical content route correctly: Amazon per-marketplace NLU behavior, not a stale deploy, not fixable plugin-side. 5 skip_reason fixtures keep it visible for re-triage.
+5. de/fr digit normalization: movie titles with digits get normalized by NLU ('inside out 2' -> 'inside out zwei' / 'deux'), breaking title resolution; the smoke uses word-only titles ('barbie', a real library movie).
+
+Blocked locales placeholder (documented, no fixtures): ja-JP, pt-BR, ar-SA, nl-NL, hi-IN are absent from the skill manifest, so simulate-skill refuses them entirely (JF-513 tracks the manifest fix). When JF-513 lands: add e2e_smoke_<locale>.yaml files in the same shape, live-verify each locale's open verb FIRST (the fr-CA/en-US lesson: the natural open verb can be dead per marketplace), then profile-nlu every command before running. REMINDER: ja-JP has NO NLU fixture at all today (16 locale NLU fixtures exist); NLU coverage is the prerequisite for e2e there and should land first.
+
+Verification tail:
+- Smoke suite live: first run 58 pass / 3 fail / 5 skip in 19:22; after the de-DE rework, de-DE rerun 5 pass / 2 skip (exit 0). Final totals 60 pass / 7 documented skips / 0 fail.
+- One-shot regression (my harness refactor): full_chain 69 + reliability 3 all PASSED live (0 failures, 12:42). fast-mode 'metti una canzone dei soul coughing' FAILED with FindSongByArtistIntent instead of PlayArtistSongsIntent: reproduced STANDALONE with a bare SmapiClient probe (top3: FindSongIntent with the invocation prefix swallowed into titleKeywords, FindSongByArtistIntent, PlaySongIntent), i.e. no harness code involved. This is the active it-IT landscape drift under JF-470 triage (the same drift that killed several it-IT fixture entries on 2026-09-03..06), not a regression of this change. It is NOT masked or skipped here; it stays owned by JF-470.
+- Dry-run: test_e2e.py collects 141 (69 full_chain + 3 reliability + 67 smoke + 2 fast_mode); test_nlu.py still collects exactly 860 = the NLU fixture case count (collection-neutral conftest change).
+- /simplify ran inline (no sub-agents per task rules) on the harness diff: factored the duplicated reset policy into _ensure_session_closed, dropped an unused fixture param, extracted the consideredIntents variable; noted-skip: reliability_session_reset could reuse _bare_stop (kept separate for its per-iteration client reuse and debug-level logging) and the smoke dry-run validation block intentionally does not share full_chain's (isolating the untouched one-shot path).
+- Gates: /simplify done; formal code-review is the orchestrator's dispatch per task rules. No C#, interaction-model, or manifest changes (DoD items 1-8 N/A; models untouched so NLU fixtures needed no updates).
+

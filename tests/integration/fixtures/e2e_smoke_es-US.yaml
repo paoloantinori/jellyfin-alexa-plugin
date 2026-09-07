@@ -1,0 +1,88 @@
+# JF-511 smoke suite (option b): two-step shape for es-US.
+# REAL DEFECT, documented (2026-09-07, all evidence profile-nlu on the live
+# saved model): in the es-US marketplace nearly every non-static command is
+# absorbed by PlaySongIntent's free-text song slot ('reproduce música
+# aleatoria' -> song='musica aleatoria'; 'reproduce la película barbie' ->
+# song='la pelicula barbie'; artist carriers -> PlayByGenre or PlaySong).
+# The saved es-US model BYTE-MATCHES the repo model (intent count and sample
+# counts identical), while es-ES/es-MX with the same content route correctly,
+# so this is Amazon per-marketplace NLU behavior, not a stale deploy and not
+# a fixture problem. The failing shapes are kept as skip_reason entries so
+# the regression stays visible; they fire no SMAPI call while skipped.
+locale: es-US
+invocation_name: jellyfin player
+open_utterance: "abre jellyfin player"
+tests:
+  - utterance: "reproduce mis favoritos"
+    expected_intent: PlayFavoritesIntent
+    expected_slots: {}
+    expected_response_type: directive
+    expected_directive_type: "AudioPlayer.Play"
+    expected_end_session: true
+    expected_stream_url_contains: "/Audio/"
+
+  - utterance: "reproduce música aleatoria"
+    expected_intent: PlayRandomIntent
+    expected_slots:
+      media_type: {}
+    expected_response_type: directive
+    expected_directive_type: "AudioPlayer.Play"
+    expected_end_session: true
+    expected_stream_url_contains: "/Audio/"
+    skip_reason: >
+      es-US routing black hole (JF-511 2026-09-07): absorbed by
+      PlaySongIntent (song='musica aleatoria'); 4 random carriers probed,
+      all absorbed. Re-triage when the es-US NLU landscape shifts.
+      Re-triage when the es-US marketplace NLU behavior changes (the model byte-matches the repo; re-probe with a bare simulate before re-enabling).
+
+  - utterance: "oye los pink floyd"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+    expected_response_type: directive
+    expected_directive_type: "AudioPlayer.Play"
+    expected_end_session: true
+    expected_stream_url_contains: "/Audio/"
+    skip_reason: >
+      es-US routing black hole (JF-511 2026-09-07): 'oye los pink floyd'
+      -> PlaySongIntent (song='los pink floyd'); the carrier that works in
+      es-ES/es-MX is absorbed here.
+      Re-triage when the es-US marketplace NLU behavior changes (the model byte-matches the repo; re-probe with a bare simulate before re-enabling).
+
+  - utterance: "reproduce la película xyzzyfoo"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+    expected_response_type: speech
+    expected_speech_contains: "ningún vídeo con el título"
+    expected_end_session: true
+    skip_reason: >
+      es-US routing black hole (JF-511 2026-09-07): absorbed by
+      PlaySongIntent (song='la pelicula xyzzyfoo').
+      Re-triage when the es-US marketplace NLU behavior changes (the model byte-matches the repo; re-probe with a bare simulate before re-enabling).
+
+  - utterance: "reproduce la película barbie"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+    expected_response_type: speech
+    expected_speech_contains: "dispositivo con pantalla"
+    expected_end_session: true
+    skip_reason: >
+      es-US routing black hole (JF-511 2026-09-07): 6 video carriers probed
+      ('reproduce/pon/mete el vídeo', 'reproduce/busca/quiero ver la
+      película'), all absorbed by PlaySongIntent; saved model byte-matches
+      repo, so marketplace NLU behavior, not a stale deploy.
+      Re-triage when the es-US marketplace NLU behavior changes (the model byte-matches the repo; re-probe with a bare simulate before re-enabling).
+
+  - utterance: "quiero ver la película barbie"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+    expected_response_type: speech
+    expected_speech_contains: "dispositivo con pantalla"
+    expected_end_session: true
+    skip_reason: >
+      es-US routing black hole (JF-511 2026-09-07): absorbed by
+      PlaySongIntent (song='quiero ver la pelicula barbie').
+      Re-triage when the es-US marketplace NLU behavior changes (the model byte-matches the repo; re-probe with a bare simulate before re-enabling).
