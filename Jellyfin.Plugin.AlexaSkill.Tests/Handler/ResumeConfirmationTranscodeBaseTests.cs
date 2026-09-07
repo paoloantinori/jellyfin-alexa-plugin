@@ -13,9 +13,11 @@ using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
+using Moq;
 using Newtonsoft.Json;
 using Xunit;
 
@@ -30,8 +32,12 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// the per-device queue ledger (device+item keyed), and the resume-yes confirm
 /// rebases: minted <c>?start=</c> = recorded base + device offset (item-absolute).
 /// No recorded base falls back to the JF-507 interim rule (drop the offset,
-/// restart at 0); server-progress seeds (flag absent/false) keep minting directly;
-/// raw-static launches keep the directive offset unchanged.
+/// restart at 0); raw-static launches keep the directive offset unchanged.
+/// JF-520: the correction is shared with the ResumeIntent tail via
+/// <c>BaseHandler.ResolveResumedAudioLaunch</c>, and the device-last-played
+/// (UserData) offer seed classifies its position at seed time: transcode-routed
+/// item + recorded base on the device flags the offer stream-relative too (the
+/// event writers persist the raw device offset into UserData).
 /// </summary>
 [Collection("Plugin")]
 public class ResumeConfirmationTranscodeBaseTests : PluginTestBase, IDisposable
@@ -41,6 +47,7 @@ public class ResumeConfirmationTranscodeBaseTests : PluginTestBase, IDisposable
     private readonly HandlerTestFixture _fx = new();
     private readonly DeviceQueueManager _queueManager;
     private readonly string _tempDir;
+    private readonly DeviceQueueManager? _previousPluginQueueManager;
 
     public ResumeConfirmationTranscodeBaseTests()
     {
@@ -53,10 +60,24 @@ public class ResumeConfirmationTranscodeBaseTests : PluginTestBase, IDisposable
             _fx.LoggerFactory,
             c => { },
             "resume-transcode-base-tests");
+
+        // The device-last-played offer path reads the ledger through Plugin.Instance
+        // (LaunchRequestHandler has no injected queue manager); point it at this
+        // suite's manager and restore the previous value on dispose.
+        _previousPluginQueueManager = Jellyfin.Plugin.AlexaSkill.Plugin.Instance?.DeviceQueueManager;
+        if (Jellyfin.Plugin.AlexaSkill.Plugin.Instance != null)
+        {
+            Jellyfin.Plugin.AlexaSkill.Plugin.Instance.DeviceQueueManager = _queueManager;
+        }
     }
 
     public void Dispose()
     {
+        if (Jellyfin.Plugin.AlexaSkill.Plugin.Instance != null)
+        {
+            Jellyfin.Plugin.AlexaSkill.Plugin.Instance.DeviceQueueManager = _previousPluginQueueManager;
+        }
+
         _queueManager.Dispose();
         try
         {
@@ -73,34 +94,13 @@ public class ResumeConfirmationTranscodeBaseTests : PluginTestBase, IDisposable
         GC.SuppressFinalize(this);
     }
 
-    /// <summary>
-    /// Test seam for <c>BaseItem.GetMediaStreams()</c> (virtual): overriding the streams
-    /// lets the tests exercise the REAL codec probe + routing decision (under the test
-    /// host a plain item's probe degrades to unknown codec and keeps the static URL).
-    /// </summary>
-    private sealed class EpisodeWithStreams : MediaBrowser.Controller.Entities.TV.Episode
-    {
-        private readonly List<MediaStream> _streams;
-
-        public EpisodeWithStreams(string name, Guid id, params MediaStream[] streams)
-        {
-            Name = name;
-            Id = id;
-            _streams = streams.ToList();
-        }
-
-        public override IReadOnlyList<MediaStream> GetMediaStreams() => _streams;
-    }
-
-    private static MediaStream Stream(MediaStreamType type, string codec) => new() { Type = type, Codec = codec };
-
     private static long MinutesToMs(double minutes) => (long)TimeSpan.FromMinutes(minutes).TotalMilliseconds;
 
-    private static EpisodeWithStreams Eac3Episode(Guid id)
-        => new("Ribs", id, Stream(MediaStreamType.Video, "h264"), Stream(MediaStreamType.Audio, "eac3"));
+    private static TestHelpers.TestEpisodeWithStreams Eac3Episode(Guid id)
+        => new("Ribs", id, TestHelpers.TestStream(MediaStreamType.Video, "h264"), TestHelpers.TestStream(MediaStreamType.Audio, "eac3"));
 
-    private static EpisodeWithStreams AacEpisode(Guid id)
-        => new("FreeCommerce", id, Stream(MediaStreamType.Video, "h264"), Stream(MediaStreamType.Audio, "aac"));
+    private static TestHelpers.TestEpisodeWithStreams AacEpisode(Guid id)
+        => new("FreeCommerce", id, TestHelpers.TestStream(MediaStreamType.Video, "h264"), TestHelpers.TestStream(MediaStreamType.Audio, "aac"));
 
     private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_fx.SessionManager.Object, _fx.LoggerFactory);
 
@@ -349,5 +349,109 @@ public class ResumeConfirmationTranscodeBaseTests : PluginTestBase, IDisposable
         Assert.Equal(itemId.ToString(), state!.ItemId);
         Assert.Equal(45000, state.OffsetMs);
         Assert.True(state.OffsetIsStreamRelative, "an offer seeded from the AudioPlayer context offset must flag it as stream-relative (JF-514)");
+    }
+
+    // ========== JF-520: the device-last-played (UserData) seed classifies at seed time ==========
+
+    /// <summary>
+    /// The JF-514 residual closed by JF-520: the device-last-played offer reads its
+    /// position from UserData, which the event writers filled with the RAW device
+    /// offset (stream-relative) for a transcode-routed item. When this device's
+    /// ledger carries a launch base, the seed flags the offer stream-relative and the
+    /// confirm composes end-to-end: minted ?start = base + position (item-absolute),
+    /// ledger advanced to the new base.
+    /// </summary>
+    [Fact]
+    public async Task DeviceLastPlayedOffer_TranscodeItemWithRecordedBase_FlagsStreamRelativeAndRebasesOnConfirm()
+    {
+        var id = Guid.NewGuid();
+        _fx.SetupUserMock();
+        _fx.Config.NativeControlsForAudio = true;
+        _fx.LibraryManager.Setup(lm => lm.GetItemById(id)).Returns(Eac3Episode(id));
+        _fx.UserDataManager
+            .Setup(u => u.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
+            .Returns(new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = TimeSpan.FromMinutes(5).Ticks });
+        _queueManager.RecordLastPlayed(DeviceId, id.ToString());
+        _queueManager.RecordAudioTranscodeBase(DeviceId, id.ToString(), MinutesToMs(20));
+
+        // Screen-capable device, no AudioPlayer token: the no-token NativeControlsForAudio
+        // route offers the device's last-played item from UserData.
+        SkillResponse offer = await CreateLaunchHandler().HandleAsync(
+            new LaunchRequest { Locale = "en-US" },
+            TestHelpers.CreateContextWithVideoApp(DeviceId),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            CancellationToken.None);
+
+        Assert.NotNull(offer.SessionAttributes);
+        Assert.True(offer.SessionAttributes.ContainsKey("resume_state"));
+        var state = JsonConvert.DeserializeObject<ResumeHelper.ResumeState>(
+            offer.SessionAttributes["resume_state"]!.ToString()!);
+        Assert.NotNull(state);
+        Assert.True(state!.OffsetIsStreamRelative, "a UserData position for a transcode-routed item with a recorded base is stream-relative (JF-520)");
+        Assert.Equal(MinutesToMs(5), state.OffsetMs);
+
+        // Confirming the offered state mints base + position and advances the ledger.
+        SkillResponse response = await CreateHandler().HandleAsync(
+            YesIntent(),
+            TestHelpers.CreateTestContext(DeviceId),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            offer.SessionAttributes!,
+            CancellationToken.None);
+
+        var directive = SinglePlayDirective(response);
+        Assert.Contains(
+            $"?start={TimeSpan.FromMilliseconds(MinutesToMs(25)).Ticks}&",
+            directive.AudioItem.Stream.Url,
+            StringComparison.Ordinal);
+        Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
+        Assert.Equal(MinutesToMs(25), _queueManager.GetAudioTranscodeBase(DeviceId, id.ToString()));
+    }
+
+    /// <summary>
+    /// The complement: with NO recorded base (the position came from a VideoApp play,
+    /// another client, or a pre-deploy launch) the UserData seed keeps the historical
+    /// item-absolute classification, and the confirm mints the position directly.
+    /// </summary>
+    [Fact]
+    public async Task DeviceLastPlayedOffer_TranscodeItemWithoutRecordedBase_StaysItemAbsolute()
+    {
+        var id = Guid.NewGuid();
+        _fx.SetupUserMock();
+        _fx.Config.NativeControlsForAudio = true;
+        _fx.LibraryManager.Setup(lm => lm.GetItemById(id)).Returns(Eac3Episode(id));
+        _fx.UserDataManager
+            .Setup(u => u.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
+            .Returns(new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = TimeSpan.FromMinutes(5).Ticks });
+        _queueManager.RecordLastPlayed(DeviceId, id.ToString());
+
+        SkillResponse offer = await CreateLaunchHandler().HandleAsync(
+            new LaunchRequest { Locale = "en-US" },
+            TestHelpers.CreateContextWithVideoApp(DeviceId),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            CancellationToken.None);
+
+        Assert.NotNull(offer.SessionAttributes);
+        Assert.True(offer.SessionAttributes.ContainsKey("resume_state"));
+        var state = JsonConvert.DeserializeObject<ResumeHelper.ResumeState>(
+            offer.SessionAttributes["resume_state"]!.ToString()!);
+        Assert.NotNull(state);
+        Assert.False(state!.OffsetIsStreamRelative, "no recorded base means the position keeps the item-absolute classification (JF-520)");
+
+        SkillResponse response = await CreateHandler().HandleAsync(
+            YesIntent(),
+            TestHelpers.CreateTestContext(DeviceId),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            offer.SessionAttributes!,
+            CancellationToken.None);
+
+        var directive = SinglePlayDirective(response);
+        Assert.Contains(
+            $"?start={TimeSpan.FromMilliseconds(MinutesToMs(5)).Ticks}&",
+            directive.AudioItem.Stream.Url,
+            StringComparison.Ordinal);
     }
 }

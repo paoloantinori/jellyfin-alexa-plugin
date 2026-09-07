@@ -21,6 +21,7 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Controller.TV;
+using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Serialization;
 using Microsoft.Extensions.Logging;
@@ -323,6 +324,55 @@ internal static class TestHelpers
 
         public List<(BaseItem Item, double Score)> Search(string[] keywordTokens, string locale, Guid[]? topParentIds = null) => _results;
         public List<(BaseItem Item, double Score)> SearchPhonetic(string[] keywordTokens, string locale, Guid[]? topParentIds = null) => _results;
+    }
+
+    /// <summary>
+    /// The ONE MediaStream factory (JF-520): was a private <c>Stream(...)</c> copy in
+    /// the resume suites; the other seam users built <c>new MediaStream {...}</c>
+    /// inline to the same shape.
+    /// </summary>
+    internal static MediaStream TestStream(MediaStreamType type, string codec) => new() { Type = type, Codec = codec };
+
+    /// <summary>
+    /// JF-520: the ONE <c>BaseItem.GetMediaStreams()</c> override seam (Episode twin).
+    /// Overriding the streams lets wiring tests exercise the REAL codec probe +
+    /// routing decision (under the test host there is no statically injected
+    /// MediaSourceManager, so a plain item's probe degrades to unknown codec and
+    /// keeps the static URL). Was 3 private <c>EpisodeWithStreams</c> copies across
+    /// the resume/yes suites; the Movie twin is <see cref="TestMovieWithStreams"/>.
+    /// </summary>
+    internal sealed class TestEpisodeWithStreams : MediaBrowser.Controller.Entities.TV.Episode
+    {
+        private readonly List<MediaStream> _streams;
+
+        public TestEpisodeWithStreams(string name, Guid id, params MediaStream[] streams)
+        {
+            Name = name;
+            Id = id;
+            _streams = streams.ToList();
+        }
+
+        public override IReadOnlyList<MediaStream> GetMediaStreams() => _streams;
+    }
+
+    /// <summary>
+    /// Movie twin of <see cref="TestEpisodeWithStreams"/> (ResolveAudioLaunchSource and
+    /// the VideoApp launch routing match Movie and Episode). Was 2 private copies
+    /// (MovieWithStreams in PlayVideoIntentHandlerTests, the awkwardly-named
+    /// EpisodeWithStreamsTestMovie in ResumeIntentAudioVariantOffsetTests).
+    /// </summary>
+    internal sealed class TestMovieWithStreams : MediaBrowser.Controller.Entities.Movies.Movie
+    {
+        private readonly List<MediaStream> _streams;
+
+        public TestMovieWithStreams(string name, Guid id, params MediaStream[] streams)
+        {
+            Name = name;
+            Id = id;
+            _streams = streams.ToList();
+        }
+
+        public override IReadOnlyList<MediaStream> GetMediaStreams() => _streams;
     }
 }
 

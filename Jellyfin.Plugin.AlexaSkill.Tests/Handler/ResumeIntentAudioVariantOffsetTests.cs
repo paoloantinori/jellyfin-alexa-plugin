@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -21,20 +20,21 @@ using Xunit;
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
 /// <summary>
-/// JF-507 critical-review fix, final form: NO tail offset may be minted into the
-/// audio-only transcode's <c>?start=</c> for a transcode-routed item. All three
-/// fallback offsets are DEVICE-DERIVED (the AudioPlayer context offset directly;
+/// JF-507 critical-review fix + the JF-520 tail adoption. All three fallback offsets
+/// are DEVICE-DERIVED (the AudioPlayer context offset directly;
 /// PlayState.PositionTicks and DeviceQueue.CurrentPositionTicks via the writers at
 /// PlaybackStoppedEventHandler/PlaybackStartedEventHandler, which persist the device
 /// offset without adding the transcode base), so for a transcode-routed item they are
 /// all relative to the previous playback's OUTPUT timeline, which starts at that
-/// stream's seek point. Corrected contract per fallback:
-/// - Fallback 1 (AudioPlayer context offset) -> NO ?start= (restart), directive offset 0.
-/// - Fallback 2 (session PlayState.PositionTicks) -> NO ?start= (restart), directive offset 0.
-/// - Fallback 3 (DeviceQueue.CurrentPositionTicks) -> NO ?start= (restart), directive offset 0.
+/// stream's seek point. Corrected contract per fallback (JF-520, via the shared
+/// BaseHandler.ResolveResumedAudioLaunch):
+/// - Fallback 1 (AudioPlayer context offset) -> ?start = recorded base + offset
+///   (item-absolute), directive offset 0; NO recorded base -> restart at 0.
+/// - Fallback 2 (session PlayState.PositionTicks) -> same rebase/drop rule.
+/// - Fallback 3 (DeviceQueue.CurrentPositionTicks) -> same rebase/drop rule.
 /// Raw-static launches (audio items, Echo-decodable video) keep the caller's offset
-/// unchanged on every fallback. The stream-relative-to-absolute correction that would
-/// let a transcode-routed resume restore its position is tracked in JF-514.
+/// unchanged on every fallback. The rebase mints the new base into the ledger, so
+/// the next resume cycle composes from it.
 /// </summary>
 [Collection("Plugin")]
 public class ResumeIntentAudioVariantOffsetTests : PluginTestBase, IDisposable
@@ -74,27 +74,6 @@ public class ResumeIntentAudioVariantOffsetTests : PluginTestBase, IDisposable
         GC.SuppressFinalize(this);
     }
 
-    /// <summary>
-    /// Test seam for <c>BaseItem.GetMediaStreams()</c> (virtual): overriding the streams
-    /// lets the tests exercise the REAL codec probe + routing decision (under the test
-    /// host a plain item's probe degrades to unknown codec and keeps the static URL).
-    /// </summary>
-    private sealed class EpisodeWithStreams : MediaBrowser.Controller.Entities.TV.Episode
-    {
-        private readonly List<MediaStream> _streams;
-
-        public EpisodeWithStreams(string name, Guid id, params MediaStream[] streams)
-        {
-            Name = name;
-            Id = id;
-            _streams = streams.ToList();
-        }
-
-        public override IReadOnlyList<MediaStream> GetMediaStreams() => _streams;
-    }
-
-    private static MediaStream Stream(MediaStreamType type, string codec) => new() { Type = type, Codec = codec };
-
     private SessionInfo CreateSessionWithNowPlaying(BaseItem item)
     {
         var session = TestHelpers.CreateTestSession(_fx.SessionManager.Object, _fx.LoggerFactory);
@@ -127,11 +106,11 @@ public class ResumeIntentAudioVariantOffsetTests : PluginTestBase, IDisposable
     public async Task Resume_Eac3Episode_ViaAudioPlayerContext_DropsStreamRelativeOffset()
     {
         var id = Guid.NewGuid();
-        var episode = new EpisodeWithStreams(
+        var episode = new TestHelpers.TestEpisodeWithStreams(
             "Ribs",
             id,
-            Stream(MediaStreamType.Video, "h264"),
-            Stream(MediaStreamType.Audio, "eac3"));
+            TestHelpers.TestStream(MediaStreamType.Video, "h264"),
+            TestHelpers.TestStream(MediaStreamType.Audio, "eac3"));
         var session = CreateSessionWithNowPlaying(episode);
 
         // Fallback 1: the device reports a stream-relative offset (previous playback
@@ -155,11 +134,11 @@ public class ResumeIntentAudioVariantOffsetTests : PluginTestBase, IDisposable
     public async Task Resume_Eac3Episode_ViaSessionPlayState_DropsDeviceDerivedTicks()
     {
         var id = Guid.NewGuid();
-        var episode = new EpisodeWithStreams(
+        var episode = new TestHelpers.TestEpisodeWithStreams(
             "Ribs",
             id,
-            Stream(MediaStreamType.Video, "h264"),
-            Stream(MediaStreamType.Audio, "eac3"));
+            TestHelpers.TestStream(MediaStreamType.Video, "h264"),
+            TestHelpers.TestStream(MediaStreamType.Audio, "eac3"));
         var session = CreateSessionWithNowPlaying(episode);
 
         // Fallback 2: the persisted play state carries the DEVICE offset in the real
@@ -186,11 +165,11 @@ public class ResumeIntentAudioVariantOffsetTests : PluginTestBase, IDisposable
     public async Task Resume_Eac3Episode_ViaDeviceQueue_DropsDeviceDerivedTicks()
     {
         var id = Guid.NewGuid();
-        var episode = new EpisodeWithStreams(
+        var episode = new TestHelpers.TestEpisodeWithStreams(
             "Ribs",
             id,
-            Stream(MediaStreamType.Video, "h264"),
-            Stream(MediaStreamType.Audio, "eac3"));
+            TestHelpers.TestStream(MediaStreamType.Video, "h264"),
+            TestHelpers.TestStream(MediaStreamType.Audio, "eac3"));
         var session = CreateSessionWithNowPlaying(episode);
 
         // Fallback 3: context offset 0 (cleared after pause); the DeviceQueue position
@@ -219,11 +198,11 @@ public class ResumeIntentAudioVariantOffsetTests : PluginTestBase, IDisposable
     public async Task Resume_AacEpisode_ViaAudioPlayerContext_KeepsStaticUrlAndOffset()
     {
         var id = Guid.NewGuid();
-        var episode = new EpisodeWithStreams(
+        var episode = new TestHelpers.TestEpisodeWithStreams(
             "FreeCommerce",
             id,
-            Stream(MediaStreamType.Video, "h264"),
-            Stream(MediaStreamType.Audio, "aac"));
+            TestHelpers.TestStream(MediaStreamType.Video, "h264"),
+            TestHelpers.TestStream(MediaStreamType.Audio, "aac"));
         var session = CreateSessionWithNowPlaying(episode);
 
         var context = CreateContext(id.ToString(), 300000);
@@ -245,11 +224,11 @@ public class ResumeIntentAudioVariantOffsetTests : PluginTestBase, IDisposable
     public async Task Resume_Eac3Movie_ViaAudioPlayerContext_DropsStreamRelativeOffset()
     {
         var id = Guid.NewGuid();
-        var movie = new EpisodeWithStreamsTestMovie(
+        var movie = new TestHelpers.TestMovieWithStreams(
             "Test Movie",
             id,
-            Stream(MediaStreamType.Video, "h264"),
-            Stream(MediaStreamType.Audio, "eac3"));
+            TestHelpers.TestStream(MediaStreamType.Video, "h264"),
+            TestHelpers.TestStream(MediaStreamType.Audio, "eac3"));
         var session = CreateSessionWithNowPlaying(movie);
 
         var context = CreateContext(id.ToString(), 300000);
@@ -267,18 +246,86 @@ public class ResumeIntentAudioVariantOffsetTests : PluginTestBase, IDisposable
         Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
     }
 
-    /// <summary>Movie twin of the episode stream seam (ResolveAudioLaunchSource matches Movie and Episode).</summary>
-    private sealed class EpisodeWithStreamsTestMovie : MediaBrowser.Controller.Entities.Movies.Movie
+    // ========== JF-520: the tail adopts the offer path's base+offset rebase ==========
+
+    /// <summary>
+    /// JF-520 spec case, tail side: a recorded base B (20:00) plus a device-derived
+    /// context offset O (5:00) mints ?start=B+O (25:00, item-absolute) on the transcode
+    /// URL, directive offset 0, and the resolve records the NEW base (25:00) in the
+    /// ledger so the next resume cycle composes from it (pins the helper's
+    /// read-before-resolve ordering: the minted start and the post-mint ledger base
+    /// agree, i.e. the resolve did not read back its own write).
+    /// </summary>
+    [Fact]
+    public async Task Resume_Eac3Episode_ViaAudioPlayerContext_RebasesAgainstRecordedBase()
     {
-        private readonly List<MediaStream> _streams;
+        var id = Guid.NewGuid();
+        var episode = new TestHelpers.TestEpisodeWithStreams(
+            "Ribs",
+            id,
+            TestHelpers.TestStream(MediaStreamType.Video, "h264"),
+            TestHelpers.TestStream(MediaStreamType.Audio, "eac3"));
+        var session = CreateSessionWithNowPlaying(episode);
 
-        public EpisodeWithStreamsTestMovie(string name, Guid id, params MediaStream[] streams)
-        {
-            Name = name;
-            Id = id;
-            _streams = streams.ToList();
-        }
+        // The previous playback launched at absolute 20:00 via the transcode; the
+        // device has counted 5:00 of stream time since.
+        _queueManager.RecordAudioTranscodeBase("test-device", id.ToString(), TimeSpan.FromMinutes(20).Ticks / TimeSpan.TicksPerMillisecond);
+        var context = CreateContext(id.ToString(), 300000);
 
-        public override IReadOnlyList<MediaStream> GetMediaStreams() => _streams;
+        var response = await CreateHandler().HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "AMAZON.ResumeIntent" } },
+            context,
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        long expectedMs = (long)TimeSpan.FromMinutes(25).TotalMilliseconds;
+        var directive = SinglePlayDirective(response);
+        Assert.Contains(
+            $"?start={TimeSpan.FromMilliseconds(expectedMs).Ticks}&",
+            directive.AudioItem.Stream.Url,
+            StringComparison.Ordinal);
+        Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
+        Assert.Equal(expectedMs, _queueManager.GetAudioTranscodeBase("test-device", id.ToString()));
+    }
+
+    /// <summary>
+    /// JF-520, DeviceQueue-sourced item_id path (fallback 3): the queue's item pointer
+    /// feeds the resume, and the rebase composes with it the same way (base+offset
+    /// minted, ledger advanced), proving the tail's adoption is not context-offset-only.
+    /// </summary>
+    [Fact]
+    public async Task Resume_Eac3Episode_ViaDeviceQueue_RebasesAgainstRecordedBase()
+    {
+        var id = Guid.NewGuid();
+        var episode = new TestHelpers.TestEpisodeWithStreams(
+            "Ribs",
+            id,
+            TestHelpers.TestStream(MediaStreamType.Video, "h264"),
+            TestHelpers.TestStream(MediaStreamType.Audio, "eac3"));
+        var session = CreateSessionWithNowPlaying(episode);
+
+        var queue = _queueManager.GetOrCreateQueue("test-device");
+        queue.CurrentItemId = id.ToString();
+        queue.CurrentPositionTicks = TimeSpan.FromMinutes(5).Ticks;
+        _queueManager.RecordAudioTranscodeBase("test-device", id.ToString(), TimeSpan.FromMinutes(20).Ticks / TimeSpan.TicksPerMillisecond);
+
+        var context = CreateContext(id.ToString(), 0);
+
+        var response = await CreateHandler().HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "AMAZON.ResumeIntent" } },
+            context,
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        long expectedMs = (long)TimeSpan.FromMinutes(25).TotalMilliseconds;
+        var directive = SinglePlayDirective(response);
+        Assert.Contains(
+            $"?start={TimeSpan.FromMilliseconds(expectedMs).Ticks}&",
+            directive.AudioItem.Stream.Url,
+            StringComparison.Ordinal);
+        Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
+        Assert.Equal(expectedMs, _queueManager.GetAudioTranscodeBase("test-device", id.ToString()));
     }
 }
