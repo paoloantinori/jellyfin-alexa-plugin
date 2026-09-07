@@ -2795,18 +2795,79 @@ public class VideoAudioController : ControllerBase
 
         process.Start();
 
-        // Drain stderr asynchronously to prevent deadlock
+        // Drain stderr asynchronously to prevent deadlock. JF-515: the old
+        // per-line Debug logging flooded the synchronous console sink (per-segment
+        // "Opening ... for writing" churn at ~16 lines/s per encode) and correlated
+        // with multi-second skill-request latency spikes. Errors are still logged
+        // immediately (Warning); routine lines aggregate into one Debug summary per
+        // 30s of draining plus a final total when the stream ends.
         _ = Task.Run(async () =>
         {
             using var reader = process.StandardError;
+            var summaryCadence = Stopwatch.StartNew();
+            long suppressedRoutine = 0;
+            long errorLines = 0;
             string? line;
             while ((line = await reader.ReadLineAsync().ConfigureAwait(false)) != null)
             {
-                _logger.LogDebug("ffmpeg stderr: {Line}", line);
+                if (IsFfmpegErrorLine(line))
+                {
+                    errorLines++;
+                    _logger.LogWarning("ffmpeg stderr: {Line}", line);
+                    continue;
+                }
+
+                suppressedRoutine++;
+                if (summaryCadence.Elapsed >= TimeSpan.FromSeconds(30))
+                {
+                    _logger.LogDebug(
+                        "ffmpeg stderr: {Suppressed} routine lines suppressed so far",
+                        suppressedRoutine);
+                    summaryCadence.Restart();
+                }
             }
+
+            _logger.LogDebug(
+                "ffmpeg stderr: drained {Total} lines ({Suppressed} routine suppressed, {Errors} errors logged)",
+                suppressedRoutine + errorLines,
+                suppressedRoutine,
+                errorLines);
         });
 
         return process;
+    }
+
+    /// <summary>
+    /// JF-515: classifies an ffmpeg stderr line as a real failure (true) or routine
+    /// progress noise (false). A leading ffmpeg component prefix ("[hls @ 0x7f...]")
+    /// is skipped before the StartsWith check so prefixed failures
+    /// ("[hls @ 0x7f] Error opening ...") classify like bare ones. Span-based: the
+    /// drain calls this per line (~16 lines/s per encode), so it must not allocate.
+    /// </summary>
+    /// <param name="line">One stderr line from ffmpeg.</param>
+    /// <returns>True when the line indicates a failure; false when routine.</returns>
+    internal static bool IsFfmpegErrorLine(string line)
+    {
+        ReadOnlySpan<char> payload = line.AsSpan().TrimStart();
+        if (payload.StartsWith('['))
+        {
+            int prefixEnd = payload.IndexOf(']');
+            if (prefixEnd >= 0)
+            {
+                payload = payload[(prefixEnd + 1)..].TrimStart();
+            }
+        }
+
+        return payload.StartsWith("Error", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("[error]", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("Conversion failed", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("Invalid data found", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("No such file or directory", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("Permission denied", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("Failed to open", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("moov atom", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("Header missing", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("No space left on device", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
