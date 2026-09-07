@@ -7,6 +7,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-07 21:09'
+updated_date: '2026-09-07 21:35'
 labels:
   - cleanup
   - video
@@ -35,6 +36,12 @@ From the JF-518 /simplify pass (2026-09-07). Two same-file hygiene items deliber
 - [ ] #2 Decision recorded in notes on the Kill-before-Dispose asymmetry: either align the StreamVideoAudio failure branch with the sibling HLS sites (Kill then Dispose when still running) with a test, or decline with the reasoning (gate poller releases the slot either way; encode finishes writing an abandoned cache file)
 - [ ] #3 Full suite green; /simplify + code-review high gates run before merge
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Additional observation from the JF-518 code review to fold into item (2)'s decision or a separate decision (pre-existing, unchanged by JF-518): a last-poll-gap partial file can survive the Kill - ffmpeg can create the output in the <=10ms gap between the final File.Exists poll and the Kill; a killed partial >=10KB then passes GetCachedFile's size-only validity check (VideoAudioCache.cs:139-175) and would be served as a cache hit until the art key changes (DeleteStubIfPresent only removes <10KB files). Same shape at the three HLS sibling sites.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

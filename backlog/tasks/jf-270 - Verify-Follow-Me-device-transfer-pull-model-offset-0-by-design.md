@@ -1,10 +1,10 @@
 ---
 id: JF-270
 title: 'Verify Follow Me device transfer (pull model, offset-0 by design)'
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-06-08 09:31'
-updated_date: '2026-09-07 21:04'
+updated_date: '2026-09-07 21:46'
 labels:
   - e2e
   - playback
@@ -40,29 +40,33 @@ Existing tests: NONE — FollowMeIntentHandler has zero test coverage today.
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
 - [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
 - [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
 - [ ] #6 NLU test fixtures updated if interaction model changed
 - [ ] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 12 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining, or findings applied/tracked)
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining, or findings applied/tracked)
 <!-- DOD:END -->
-
-
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Unit test (NEW, automatable): FollowMeIntentHandler picks the MOST RECENTLY MODIFIED queue from other devices when multiple exist — inject a fake/mock DeviceQueueManager returning two queues with different LastModifiedUtc, assert the later one's item is played
-- [ ] #2 Unit test (NEW, automatable): FollowMeIntentHandler returns FollowMeNothingPlaying when no other device has an active queue (GetAllActiveQueues returns empty)
-- [ ] #3 Unit test (NEW, automatable): FollowMeIntentHandler returns FollowMeNothingPlaying when DeviceQueueManager is null (DI not provided)
-- [ ] #4 Unit test (NEW, automatable): handler CLEARS the source device queue after transfer (SetQueue called on current device, Clear called on source device) — assert via mock verification
-- [ ] #5 Unit test (NEW, automatable): the response contains an AudioPlayer.Play directive pointed at the source queue's current item, AND the FollowMeSuccess speech (title interpolated)
+- [x] #1 Unit test (NEW, automatable): FollowMeIntentHandler picks the MOST RECENTLY MODIFIED queue from other devices when multiple exist — inject a fake/mock DeviceQueueManager returning two queues with different LastModifiedUtc, assert the later one's item is played
+- [x] #2 Unit test (NEW, automatable): FollowMeIntentHandler returns FollowMeNothingPlaying when no other device has an active queue (GetAllActiveQueues returns empty)
+- [x] #3 Unit test (NEW, automatable): FollowMeIntentHandler returns FollowMeNothingPlaying when DeviceQueueManager is null (DI not provided)
+- [x] #4 Unit test (NEW, automatable): handler CLEARS the source device queue after transfer (SetQueue called on current device, Clear called on source device) — assert via mock verification
+- [x] #5 Unit test (NEW, automatable): the response contains an AudioPlayer.Play directive pointed at the source queue's current item, AND the FollowMeSuccess speech (title interpolated)
 - [x] #6 Document the KNOWN LIMITATION honestly in code/docs: transfer resumes at offset 0, NOT at the saved playback position (DeviceQueueManager tracks per-item resume position, not cross-device transfer offset) — this is by-design, not a bug
 - [ ] #7 Hardware verification (manual, requires 2 Echos): start playback on device A, say 'ask <invocation> to follow me' on device B, confirm the current track resumes on B and device A stops — record the result (pass/fail + offset-0 observed) in the task notes
 - [ ] #8 Hardware verification (manual): after transfer, confirm voice commands (pause/next) work on device B from the transferred queue
 - [x] #9 Update the task title/description if 'resume from same position' phrasing remains anywhere — that behavior does not exist in code
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Automatable scope complete: 5 AC-exact unit tests for FollowMeIntentHandler (queue selection by pinned LastModifiedUtc with a winner-only-cleared discriminator; exact localized it-IT refusal speech for empty and null queue-manager; SetQueue+Clear state verification with non-vacuous preconditions verified impossible to satisfy vacuously; play-directive + SSML success speech with a credential-bound URL assert), and three pre-existing weaker tests removed after two independent agents plus the code review verified them strictly subsumed. Premise corrected along the way: the file had 16 tests since JF-130; the AC checkboxes were stale, not the coverage. Gates: /simplify (findings applied: Contains URL idiom, twin removal; skips reasoned: locale-dimension twins kept, template-regression Contains kept), code-review high SAFE TO MERGE with zero findings (deletion coverage-loss check passed). 3451/3451, merged ff0fc209 (branch be48a025). The two manual 2-Echo observations (AC#7/#8) are non-blocking by the task's own scoping and now live on the JF-405 on-device checklist. DoD 4-8 N/A (tests-only change).
+<!-- SECTION:FINAL_SUMMARY:END -->
