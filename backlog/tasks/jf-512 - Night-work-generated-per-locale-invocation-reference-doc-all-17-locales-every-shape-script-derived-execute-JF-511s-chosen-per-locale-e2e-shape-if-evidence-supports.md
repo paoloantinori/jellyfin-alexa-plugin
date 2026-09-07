@@ -7,7 +7,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-09-06 20:13'
-updated_date: '2026-09-07 01:56'
+updated_date: '2026-09-07 10:28'
 labels:
   - documentation
   - i18n
@@ -82,5 +82,5 @@ Formal review dispositions (2026-09-07, orchestrator): Important-85 APPLIED (the
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Both night directives delivered 2026-09-07. Part 2 (the doc, commit c0e14914): scripts/generate_voice_reference.py emits docs/VOICE_COMMANDS_BY_LOCALE.md from the 17 models (11,632 lines / 7,939 phrases; deterministic; --check drift guard; bidirectional locale-set + reverse-GROUPS validation from the review; README TOC wired; docs-site carries no obligation for a non-diagram doc). Part 1 (per-locale e2e) executed via JF-511 rather than duplicated here: the smoke suite for the 11 reachable locales is live-green (see JF-511); the 5 blocked locales await JF-513. This task's remaining residue is none; the doc half had no code beyond the generator (gates: /simplify worker-inline + formal review with the Important-85 hardening applied).
+Both night directives delivered 2026-09-07. Part 2 (the doc, commit c0e14914 + review-fix commit): scripts/generate_voice_reference.py emits docs/VOICE_COMMANDS_BY_LOCALE.md from the 17 models (11,632 lines / 7,939 phrases; deterministic; --check drift guard; bidirectional locale-set + reverse-GROUPS validation from the review; README TOC wired; docs-site carries no obligation for a non-diagram doc). Part 1 (per-locale e2e) executed via JF-511 rather than duplicated here: the smoke suite for the 11 reachable locales is live-green (60 pass / 7 skips-with-evidence / 0 fail; the 5 blocked locales await JF-513). The formal review of the doc found and I applied the Important-85 bidirectional locale guard; its sandbox incident on model_it-IT.json was verified resolved (byte-identical to HEAD).
 <!-- SECTION:FINAL_SUMMARY:END -->
