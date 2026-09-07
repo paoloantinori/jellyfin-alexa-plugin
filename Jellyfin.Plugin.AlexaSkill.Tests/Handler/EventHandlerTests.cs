@@ -935,8 +935,14 @@ public class EventHandlerTests : PluginTestBase
         Assert.False(handler.CanHandle(new IntentRequest()));
     }
 
+    /// <summary>
+    /// JF-507: System.ExceptionEncountered may not carry outputSpeech ("Your skill
+    /// can't return a response"); the previous Tell was itself an INVALID_RESPONSE
+    /// (live incident 2026-09-06 17:12:54 corr=e54b0532 answered "Qualcosa è andato
+    /// storto"). The handler still classifies and logs, but answers keep-alive.
+    /// </summary>
     [Fact]
-    public async Task ExceptionHandler_Handle_ReturnsErrorMessage()
+    public async Task ExceptionHandler_Handle_ReturnsKeepAliveWithoutOutputSpeech()
     {
         var handler = new ExceptionHandler(_sessionManagerMock.Object, _config, _loggerFactory);
         var response = await handler.HandleAsync(
@@ -945,8 +951,159 @@ public class EventHandlerTests : PluginTestBase
             TestHelpers.CreateTestUser(),
             CreateSession(),
             CancellationToken.None);
-        var speech = response.Tells<PlainTextOutputSpeech>();
 
-        Assert.Contains("wrong", speech.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.Null(response.Response.ShouldEndSession);
+        Assert.Empty(response.Response.Directives);
+    }
+
+    // ========== JF-507: degradation responses on event requests ==========
+
+    /// <summary>
+    /// Shared JF-507 harness: a Plugin.Instance (HandleRequestAsync needs it), a config
+    /// with one user, and a session manager whose lookup MISSES (the JF-477 fast-fail
+    /// degradation the incident exercised). The context carries the user's ID as the
+    /// access token so the user resolves and the session lookup is the failing step.
+    /// </summary>
+    private (PluginConfiguration Config, Entities.User User, Mock<ISessionManager> SessionManager, Context Context) CreateSessionMissHarness()
+    {
+        var tmpDir = TestHelpers.CreateRegisteredTempDir("jf507-event-shape");
+        var appPaths = new Mock<MediaBrowser.Common.Configuration.IApplicationPaths>();
+        appPaths.Setup(p => p.PluginsPath).Returns(tmpDir);
+        appPaths.Setup(p => p.PluginConfigurationsPath).Returns(tmpDir);
+        appPaths.Setup(p => p.DataPath).Returns(tmpDir);
+        appPaths.Setup(p => p.CachePath).Returns(tmpDir);
+        appPaths.Setup(p => p.LogDirectoryPath).Returns(tmpDir);
+        appPaths.Setup(p => p.ConfigurationDirectoryPath).Returns(tmpDir);
+        appPaths.Setup(p => p.SystemConfigurationFilePath).Returns(System.IO.Path.Combine(tmpDir, "system.xml"));
+        appPaths.Setup(p => p.ProgramDataPath).Returns(tmpDir);
+        appPaths.Setup(p => p.ProgramSystemPath).Returns(tmpDir);
+        appPaths.Setup(p => p.TempDirectory).Returns(tmpDir);
+        appPaths.Setup(p => p.VirtualDataPath).Returns(tmpDir);
+
+        var xmlSerializer = new Mock<MediaBrowser.Model.Serialization.IXmlSerializer>();
+        xmlSerializer
+            .Setup(x => x.DeserializeFromFile(typeof(PluginConfiguration), It.IsAny<string>()))
+            .Returns(new PluginConfiguration());
+
+        var userManager = new Mock<IUserManager>();
+        _ = new Plugin(appPaths.Object, xmlSerializer.Object, _loggerFactory, userManager.Object);
+
+        var config = new PluginConfiguration();
+        var user = new Entities.User { Id = Guid.NewGuid(), JellyfinToken = "jf507-token" };
+        config.AddUser(user);
+        TestHelpers.SetServerAddress(config, "https://test.example.com");
+
+        var sessionManager = new Mock<ISessionManager>();
+        sessionManager
+            .Setup(s => s.GetSessionByAuthenticationToken(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync((SessionInfo?)null);
+
+        var context = new Context
+        {
+            System = new global::Alexa.NET.Request.AlexaSystem
+            {
+                User = new global::Alexa.NET.Request.User { AccessToken = user.Id.ToString() },
+                Device = new Device { DeviceID = $"jf507-{Guid.NewGuid():N}" }
+            }
+        };
+
+        return (config, user, sessionManager, context);
+    }
+
+    /// <summary>
+    /// The incident shape (2026-09-06 17:12:52, requestId 970b119f): a PlaybackFailed
+    /// event whose session lookup missed (the JF-477 fast-fail degradation) must answer
+    /// with the empty keep-alive, NOT the UserNotFound Tell: Amazon rejects outputSpeech
+    /// on AudioPlayer event responses with INVALID_RESPONSE "Response may not contain
+    /// an outputSpeech".
+    /// </summary>
+    [Fact]
+    public async Task HandleRequestAsync_PlaybackFailed_SessionNotFound_ReturnsKeepAlive()
+    {
+        var (config, _, sessionManager, context) = CreateSessionMissHarness();
+        var handler = new PlaybackFailedEventHandler(sessionManager.Object, config, _loggerFactory);
+        var request = new AudioPlayerRequest
+        {
+            Type = "AudioPlayer.PlaybackFailed",
+            Token = Guid.NewGuid().ToString(),
+            OffsetInMilliseconds = 1
+        };
+
+        SkillResponse response = await handler.HandleRequestAsync(request, context, CancellationToken.None);
+
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.Null(response.Response.ShouldEndSession);
+        Assert.Empty(response.Response.Directives);
+    }
+
+    /// <summary>
+    /// The degradation keeps its UserNotFound Tell for NON-event requests (an intent
+    /// whose session lookup missed still speaks the re-link prompt).
+    /// </summary>
+    [Fact]
+    public async Task HandleRequestAsync_IntentRequest_SessionNotFound_KeepsUserNotFoundTell()
+    {
+        var (config, _, sessionManager, context) = CreateSessionMissHarness();
+        var handler = new PlaybackFailedEventHandler(sessionManager.Object, config, _loggerFactory);
+        var request = new IntentRequest { Intent = new Intent { Name = "WhoAmIIntent" } };
+
+        SkillResponse response = await handler.HandleRequestAsync(request, context, CancellationToken.None);
+
+        Assert.NotNull(response.Response.OutputSpeech);
+    }
+
+    /// <summary>
+    /// The predicate behind the degradation: every AudioPlayer event, SessionEnded, and
+    /// SystemExceptionEncountered is event-shaped; intents and launch requests are not.
+    /// </summary>
+    [Fact]
+    public void IsEventRequest_ClassifiesEventAndNonEventRequests()
+    {
+        Assert.True(BaseHandler.IsEventRequest(CreateAudioPlayerRequest("AudioPlayer.PlaybackFailed")));
+        Assert.True(BaseHandler.IsEventRequest(CreateAudioPlayerRequest("AudioPlayer.PlaybackStopped")));
+        Assert.True(BaseHandler.IsEventRequest(new SessionEndedRequest()));
+        Assert.True(BaseHandler.IsEventRequest(new SystemExceptionRequest()));
+
+        Assert.False(BaseHandler.IsEventRequest(new IntentRequest()));
+        Assert.False(BaseHandler.IsEventRequest(new LaunchRequest()));
+    }
+
+    /// <summary>
+    /// JF-507, interceptor level: an OPEN circuit must not short-circuit an AudioPlayer
+    /// event with the ServerUnavailable Tell (outputSpeech on an event response is an
+    /// INVALID_RESPONSE); the event passes through so its handler answers keep-alive.
+    /// An intent request is still short-circuited.
+    /// </summary>
+    [Fact]
+    public async Task CircuitBreaker_Open_PassesEventRequestsThrough_AndStillShortCircuitsIntents()
+    {
+        var breaker = new Jellyfin.Plugin.AlexaSkill.Alexa.CircuitBreaker();
+        TestHelpers.SetServerAddress(_config, $"https://{Guid.NewGuid():N}.example.com");
+        // The ServerAddress setter normalizes a trailing slash onto the value, so the
+        // breaker must key on the CONFIG's normalized form (the interceptor reads that).
+        string serverUrl = _config.ServerAddress;
+        for (int i = 0; i < 5; i++)
+        {
+            breaker.RecordFailure(serverUrl, _loggerFactory.CreateLogger<Jellyfin.Plugin.AlexaSkill.Alexa.CircuitBreaker>());
+        }
+
+        Assert.False(breaker.IsRequestAllowed(serverUrl), "expected the circuit to be OPEN");
+
+        var interceptor = new Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.CircuitBreakerInterceptor(
+            breaker, _config, _loggerFactory.CreateLogger<Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.CircuitBreakerInterceptor>());
+
+        var handler = CreateFailedHandler();
+        var eventContext = new Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.RequestContext(
+            CreateAudioPlayerRequest("AudioPlayer.PlaybackFailed"), CreateContext(), null, handler);
+        bool eventContinues = await interceptor.ProcessAsync(eventContext, CancellationToken.None);
+        Assert.True(eventContinues);
+        Assert.Null(eventContext.Response);
+
+        var intentContext = new Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.RequestContext(
+            new IntentRequest { Intent = new Intent { Name = "PlaySongIntent" } }, CreateContext(), null, handler);
+        bool intentContinues = await interceptor.ProcessAsync(intentContext, CancellationToken.None);
+        Assert.False(intentContinues);
+        Assert.NotNull(intentContext.Response?.Response?.OutputSpeech);
     }
 }

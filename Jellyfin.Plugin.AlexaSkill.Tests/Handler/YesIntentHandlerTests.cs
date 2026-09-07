@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
@@ -14,6 +15,7 @@ using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Entities.Movies;
+using MediaBrowser.Model.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
@@ -460,5 +462,100 @@ public class YesIntentHandlerTests : PluginTestBase
         Assert.True(captured!.IncludeItemTypes == null || captured.IncludeItemTypes.Length == 0,
             "PlayAlbum must use MediaTypes=Audio for the album/audiobook path, not IncludeItemTypes — AudioBook chapters are BaseItemKind.AudioBook and would be dropped.");
         response.HasDirective<AudioPlayerPlayDirective>();
+    }
+
+    // ========== JF-507: codec-gated audio-launch URL on the resume-yes path ==========
+
+    /// <summary>
+    /// Test seam for <c>BaseItem.GetMediaStreams()</c> (virtual): under the test host
+    /// there is no statically injected MediaSourceManager, so a plain item's probe
+    /// degrades to "unknown codec" (raw static URL). Overriding the streams lets the
+    /// wiring tests exercise the REAL probe + routing decision.
+    /// </summary>
+    private sealed class EpisodeWithStreams : MediaBrowser.Controller.Entities.TV.Episode
+    {
+        private readonly List<MediaStream> _streams;
+
+        public EpisodeWithStreams(string name, Guid id, params MediaStream[] streams)
+        {
+            Name = name;
+            Id = id;
+            _streams = streams.ToList();
+        }
+
+        public override IReadOnlyList<MediaStream> GetMediaStreams() => _streams;
+    }
+
+    private Dictionary<string, object> CreateResumeAttrs(Guid itemId, int offsetMs)
+    {
+        var resumeState = new ResumeHelper.ResumeState { ItemId = itemId.ToString(), OffsetMs = offsetMs };
+        return new Dictionary<string, object>
+        {
+            ["resume_state"] = JsonConvert.SerializeObject(resumeState)
+        };
+    }
+
+    /// <summary>
+    /// The incident shape (2026-09-06 corr=f0240020): accepting the resume offer for an
+    /// EAC3 episode on a screenless device must NOT build the raw static /Audio/ URL
+    /// (the Dot played 1ms and died); it routes to the audio-only episode HLS transcode
+    /// with the offset baked into the URL and directive offset 0.
+    /// </summary>
+    [Fact]
+    public async Task ResumeConfirmation_Eac3Episode_LaunchesAudioOnlyHlsTranscode()
+    {
+        var id = Guid.NewGuid();
+        var episode = new EpisodeWithStreams(
+            "Ribs",
+            id,
+            new MediaStream { Type = MediaStreamType.Video, Codec = "h264" },
+            new MediaStream { Type = MediaStreamType.Audio, Codec = "eac3" });
+
+        _libraryManagerMock.Setup(lm => lm.GetItemById(id)).Returns(episode);
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreateYesIntentRequest(),
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            CreateResumeAttrs(id, 300000),
+            CancellationToken.None);
+
+        var directive = response.HasDirective<AudioPlayerPlayDirective>();
+        Assert.Contains($"/alexaskill/api/video-audio/episode/{id}/audio.m3u8?start=", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.DoesNotContain("/Audio/", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
+    }
+
+    /// <summary>
+    /// The compatible shape (h264 + aac) keeps the raw static /Audio/ URL and the
+    /// directive offset: zero change for sources that already play.
+    /// </summary>
+    [Fact]
+    public async Task ResumeConfirmation_AacEpisode_KeepsStaticAudioUrlAndOffset()
+    {
+        var id = Guid.NewGuid();
+        var episode = new EpisodeWithStreams(
+            "FreeCommerce",
+            id,
+            new MediaStream { Type = MediaStreamType.Video, Codec = "h264" },
+            new MediaStream { Type = MediaStreamType.Audio, Codec = "aac" });
+
+        _libraryManagerMock.Setup(lm => lm.GetItemById(id)).Returns(episode);
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreateYesIntentRequest(),
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            CreateResumeAttrs(id, 300000),
+            CancellationToken.None);
+
+        var directive = response.HasDirective<AudioPlayerPlayDirective>();
+        Assert.Contains($"/Audio/{id}/stream?static=true&api_key=", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.DoesNotContain("video-audio", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.Equal(300000, directive.AudioItem.Stream.OffsetInMilliseconds);
     }
 }

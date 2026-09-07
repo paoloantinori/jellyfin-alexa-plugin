@@ -1,10 +1,9 @@
 using System.Threading;
 using System.Threading.Tasks;
-using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
-using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
@@ -35,21 +34,24 @@ public class ExceptionHandler : BaseHandler
     }
 
     /// <summary>
-    /// Log the occured exception and notify user with a category-appropriate message.
+    /// Log the occured exception with a category-appropriate level. The response is the
+    /// empty keep-alive shape, NOT a Tell: Amazon's AudioPlayer event restrictions apply
+    /// to System.ExceptionEncountered too ("Your skill can't return a response"), and the
+    /// previous outputSpeech Tell was itself an INVALID_RESPONSE (JF-507, live incident
+    /// 2026-09-06 17:12:54 corr=e54b0532: "Qualcosa è andato storto" answered the
+    /// ExceptionEncountered caused by the PlaybackFailed one).
     /// </summary>
     /// <param name="request">The skill intent request which should be handled.</param>
     /// <param name="context">The context of the skill intent request.</param>
     /// <param name="user">The user instance.</param>
     /// <param name="session">The session instance.</param>
     /// <param name="cancellationToken">Cancellation token for request timeout.</param>
-    /// <returns>Notification about an error.</returns>
+    /// <returns>The empty keep-alive response Amazon requires for event requests.</returns>
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         SystemExceptionRequest exceptionRequest = (SystemExceptionRequest)request;
-        string locale = GetLocale(request);
 
         ErrorCategory category = ErrorClassifier.ClassifyAlexaError(exceptionRequest.Error.Type.ToString());
-        string localeKey = ErrorCategoryInfo.LocaleKey(category);
         LogLevel logLevel = ErrorCategoryInfo.LogLevel(category);
 
         Logger.Log(
@@ -61,6 +63,6 @@ public class ExceptionHandler : BaseHandler
             request.RequestId,
             context.System.Device?.DeviceID);
 
-        return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get(localeKey, locale)));
+        return Task.FromResult<SkillResponse>(BuildKeepAliveResponse());
     }
 }

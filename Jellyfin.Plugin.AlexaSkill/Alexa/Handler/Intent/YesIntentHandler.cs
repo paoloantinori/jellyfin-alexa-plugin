@@ -218,14 +218,20 @@ public class YesIntentHandler : BaseHandler
         }
 
         int offsetMs = (int)Math.Min(resumeState.OffsetMs, int.MaxValue);
+
+        // JF-507: the shared codec-gated audio-launch decision. An EAC3-family video
+        // item resumed on the audio path (the 2026-09-06 corr=f0240020 Dot incident:
+        // raw static audio died at 1ms) routes to the audio-only episode HLS transcode
+        // with the offset baked into the URL (?start=) and directive offset 0.
+        AudioLaunchSource source = ResolveAudioLaunchSource(item, itemId, user, offsetMs);
         SkillResponse standardResponse = BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll,
-            GetStreamUrl(itemId, user),
+            source.Url,
             itemId,
             item,
             user,
             context,
-            offsetMs);
+            source.OffsetMs);
 
         // Replace default speech with resume announcement
         if (_config.ResumeAnnounceTitle)

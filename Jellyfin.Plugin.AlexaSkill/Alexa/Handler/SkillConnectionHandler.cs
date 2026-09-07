@@ -154,7 +154,11 @@ public class SkillConnectionHandler : BaseHandler
         session.FullNowPlayingItem = firstItem;
 
         string itemId = firstItem.Id.ToString();
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, firstItem, user, context);
+        // JF-507: codec-gated audio-launch decision; an EAC3-family video item at the
+        // head of the favorites queue routes to the audio-only transcode instead of
+        // dying on the raw static bytes (JF-505 does not apply: audio-shaped launch).
+        AudioLaunchSource source = ResolveAudioLaunchSource(firstItem, itemId, user, 0);
+        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source.Url, itemId, firstItem, user, context);
     }
 
     private Task<SkillResponse> HandlePlayMediaTask(LaunchRequest launchRequest, Context context, Entities.User user, SessionInfo session, string locale, CancellationToken cancellationToken)
