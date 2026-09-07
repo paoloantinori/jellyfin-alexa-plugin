@@ -4,7 +4,7 @@ title: Migrate plugin to Jellyfin 12.0 (net10.0) — ABI 12.0.0.0 port
 status: To Do
 assignee: []
 created_date: '2026-07-03 21:10'
-updated_date: '2026-07-13 20:17'
+updated_date: '2026-09-07 08:18'
 labels: []
 dependencies: []
 references:
@@ -23,13 +23,7 @@ documentation:
   - >-
     CLAUDE.md → Key Gotchas (stream endpoints, IUserDataManager usage, plugin
     container file access)
-modified_files:
-  - Jellyfin.Plugin.AlexaSkill/Jellyfin.Plugin.AlexaSkill.csproj
-  - manifest.json
-  - build.yaml
-  - Directory.Build.props
-  - .github/workflows/ci.yml
-priority: medium
+priority: high
 ---
 
 ## Description
@@ -65,6 +59,12 @@ This task is intentionally queued ahead of stable so it's ready to execute the m
 - [ ] #7 CI pipelines (`ci.yml`, `dev-build.yml`, `release-build.yml`) build and test under net10.0 and produce net10.0 artifacts
 - [ ] #8 Simulator + E2E verification passes on a 12.0 server for at least: play song, play artist, play playlist (incl. shuffle-at-start), and audiobook seek/resume (JF-292 path)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+PRIORITIZED 2026-09-07 by Paolo: validation against jellyfin 12.0.0-RC7 (verified on NuGet: the 12.0.x tail is rc3..rc7; the task's RC2 references are stale) in a DEDICATED WORKTREE. Co-existence is the explicit goal: 'nella speranza che il codice sia compatibile con entrambe le versioni, o dobbiamo avere una strategia per la co-esistenza'. The candidate strategy (to be PROVEN by the spike, not assumed): multi-target net9.0+net10.0 with Condition'd PackageReference (10.11.8 for net9.0, 12.0.0-rc7 for net10.0) and a second manifest entry targetAbi 12.0.0.0 - the pattern the official plugin ecosystem uses. The spike's first question: does the source compile under BOTH TFMs unchanged (the hoped-for outcome), or which files need #if/net10 branches, or is a hard fork unavoidable (the dis-preferred outcome).
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
