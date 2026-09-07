@@ -7,7 +7,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-09-06 19:13'
-updated_date: '2026-09-07 03:43'
+updated_date: '2026-09-07 01:55'
 labels:
   - e2e
   - i18n
@@ -49,6 +49,7 @@ Deliverable: a decision document in the task notes (value/cost/risk per option, 
 
 ## Implementation Notes
 
+<!-- SECTION:NOTES:BEGIN -->
 <!-- SECTION:NOTES:BEGIN -->
 ## Decision document (measurement phase, 2026-09-07, live evidence)
 
@@ -147,4 +148,10 @@ Verification tail:
 - Dry-run: test_e2e.py collects 141 (69 full_chain + 3 reliability + 67 smoke + 2 fast_mode); test_nlu.py still collects exactly 860 = the NLU fixture case count (collection-neutral conftest change).
 - /simplify ran inline (no sub-agents per task rules) on the harness diff: factored the duplicated reset policy into _ensure_session_closed, dropped an unused fixture param, extracted the consideredIntents variable; noted-skip: reliability_session_reset could reuse _bare_stop (kept separate for its per-iteration client reuse and debug-level logging) and the smoke dry-run validation block intentionally does not share full_chain's (isolating the untouched one-shot path).
 - Gates: /simplify done; formal code-review is the orchestrator's dispatch per task rules. No C#, interaction-model, or manifest changes (DoD items 1-8 N/A; models untouched so NLU fixtures needed no updates).
+<!-- SECTION:NOTES:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Executed and closed 2026-09-07 (commit 1c381eba). The measurement chose option (b), a smoke subset in the two-step shape, on decisive evidence: one-shot simulate-skill is broken for de/fr/es marketplaces (0/6-0/10; es-MX succeeds with the identical Spanish model, isolating the behavior to Amazon's per-marketplace invocation grammar) while the open+bare-in-session-command shape works everywhere probed; 5 locales (nl/pt/ar/hi/ja) are IMPOSSIBLE until JF-513 (the repo manifest declares only 12 locales); family sampling was rejected on measured divergence inside families. Delivered: the two-step harness mode (open asserts real invocation; bounded en-GB retry), locale-scoped conditional resets replacing the it-IT hardcode, the conftest reliability-leak fix, and 67 fixtures across the 11 reachable locales (every utterance profile-nlu-verified first). Live: 60 pass / 7 skips-with-inline-evidence / 0 fail (~20 min). Five real cross-marketplace defects documented in the task (de simulate no-fill for Musician/MediaType, de/es carrier absorption, the es-US PlaySong black hole with a byte-matching model, de/fr digit normalization). The ja-JP NLU-fixture gap (16 locale NLU fixtures, not 17) is recorded as a prerequisite for any ja-JP e2e after JF-513.
+<!-- SECTION:FINAL_SUMMARY:END -->
