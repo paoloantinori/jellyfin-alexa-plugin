@@ -336,7 +336,7 @@ public class PlaybackStartedEventHandler : BaseHandler
         // JF-507: codec-gated audio-launch decision; an EAC3-family video item in the
         // queue routes to the audio-only transcode instead of dying on the raw static
         // bytes when the cache hit is served (JF-505 does not apply: audio-shaped launch).
-        AudioLaunchSource source = ResolveAudioLaunchSource(item, nextId.ToString(), user, 0);
+        AudioLaunchSource source = ResolveAudioLaunchSource(item, nextId.ToString(), user, 0, deviceId);
         string streamUrl = source.Url;
 
         NextTrackPrecomputeCache.Store(deviceId, currentToken, nextId, item, streamUrl);

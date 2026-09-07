@@ -111,6 +111,88 @@ public sealed class DeviceQueueManager : IDisposable
     }
 
     /// <summary>
+    /// Records the item-absolute base (milliseconds) of the last audio-only transcode
+    /// launch minted for an item on a device (JF-514). Written at the
+    /// <c>BaseHandler.ResolveAudioLaunchSource</c> chokepoint every time a Movie/Episode
+    /// resolves an audio-shaped launch: the transcode route records the minted
+    /// <c>?start=</c> base, the raw-static route records 0 (that timeline IS the item
+    /// timeline, and the write invalidates any stale transcode base). Keyed
+    /// device+item so a later resume finds the base of the playback its device-derived
+    /// offset is relative to. Short-circuits when the value is unchanged (the
+    /// <see cref="RecordLastPlayed"/> shape) to avoid persist churn.
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    /// <param name="itemId">The item ID whose launch minted the base.</param>
+    /// <param name="baseMs">The item-absolute base in milliseconds.</param>
+    public void RecordAudioTranscodeBase(string deviceId, string itemId, long baseMs)
+    {
+        DeviceQueue queue = GetOrCreateQueue(deviceId);
+
+        if (queue.AudioTranscodeBaseMs.TryGetValue(itemId, out long existing) && existing == baseMs)
+        {
+            return;
+        }
+
+        queue.AudioTranscodeBaseMs[itemId] = baseMs;
+        TrimAudioTranscodeBaseIfNeeded(queue);
+        SchedulePersistInternal(deviceId);
+
+        _logger.LogDebug(
+            "Recorded audio transcode base for device {DeviceId}: item={ItemId}, base={BaseMs}ms",
+            deviceId, itemId, baseMs);
+    }
+
+    /// <summary>
+    /// Bounds the ledger exactly like the sibling ItemPositionState trim (JF-514
+    /// review): over the cap, remove the oldest entries whose item is not in the
+    /// current queue; entries for queued items all stay. Without this, queue_*.json
+    /// (rewritten on every debounced persist) grows without bound on long-lived
+    /// devices. Mirrors PlaybackStoppedEventHandler.TrimItemPositionState.
+    /// </summary>
+    private const int MaxAudioTranscodeBaseEntries = 200;
+
+    private static void TrimAudioTranscodeBaseIfNeeded(DeviceQueue queue)
+    {
+        if (queue.AudioTranscodeBaseMs.Count <= MaxAudioTranscodeBaseEntries)
+        {
+            return;
+        }
+
+        HashSet<string> queuedItems = new(queue.ItemIds, StringComparer.OrdinalIgnoreCase);
+        List<string> keysToRemove = new();
+        foreach (var kvp in queue.AudioTranscodeBaseMs)
+        {
+            if (!queuedItems.Contains(kvp.Key))
+            {
+                keysToRemove.Add(kvp.Key);
+            }
+        }
+
+        // Remove oldest non-queued entries until under cap
+        int toRemove = queue.AudioTranscodeBaseMs.Count - MaxAudioTranscodeBaseEntries;
+        foreach (string key in keysToRemove.Take(toRemove))
+        {
+            queue.AudioTranscodeBaseMs.Remove(key);
+        }
+    }
+
+    /// <summary>
+    /// Read-side counterpart to <see cref="RecordAudioTranscodeBase"/>: the recorded
+    /// transcode-launch base for an item on a device, without creating a queue entry.
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    /// <param name="itemId">The item ID to look up.</param>
+    /// <returns>The recorded base in milliseconds, or null when this device has no
+    /// recorded launch base for the item (a recorded base of 0 is distinct from none).</returns>
+    public long? GetAudioTranscodeBase(string deviceId, string itemId)
+    {
+        return _queues.TryGetValue(deviceId, out DeviceQueue? queue)
+            && queue.AudioTranscodeBaseMs.TryGetValue(itemId, out long baseMs)
+            ? baseMs
+            : null;
+    }
+
+    /// <summary>
     /// Sets the queue for a device and schedules a debounced persist to disk.
     /// </summary>
     /// <param name="deviceId">The Alexa device ID.</param>
@@ -122,9 +204,11 @@ public sealed class DeviceQueueManager : IDisposable
     {
         // Preserve ItemPositionState across queue resets (survives audiobook switches)
         Dictionary<string, long>? existingPositions = null;
+        Dictionary<string, long>? existingTranscodeBases = null;
         if (_queues.TryGetValue(deviceId, out DeviceQueue? oldQueue))
         {
             existingPositions = oldQueue.ItemPositionState;
+            existingTranscodeBases = oldQueue.AudioTranscodeBaseMs;
         }
 
         var queue = new DeviceQueue
@@ -134,7 +218,8 @@ public sealed class DeviceQueueManager : IDisposable
             RepeatMode = repeatMode,
             PlaybackOrder = playbackOrder,
             LastModifiedUtc = DateTime.UtcNow,
-            ItemPositionState = existingPositions ?? new Dictionary<string, long>()
+            ItemPositionState = existingPositions ?? new Dictionary<string, long>(),
+            AudioTranscodeBaseMs = existingTranscodeBases ?? new Dictionary<string, long>()
         };
 
         _queues[deviceId] = queue;
@@ -162,9 +247,11 @@ public sealed class DeviceQueueManager : IDisposable
         Random random = rng ?? Random.Shared;
 
         Dictionary<string, long>? existingPositions = null;
+        Dictionary<string, long>? existingTranscodeBases = null;
         if (_queues.TryGetValue(deviceId, out DeviceQueue? oldQueue))
         {
             existingPositions = oldQueue.ItemPositionState;
+            existingTranscodeBases = oldQueue.AudioTranscodeBaseMs;
         }
 
         List<string> original = new List<string>(itemIds);
@@ -179,7 +266,8 @@ public sealed class DeviceQueueManager : IDisposable
             RepeatMode = "None",
             PlaybackOrder = "Shuffle",
             LastModifiedUtc = DateTime.UtcNow,
-            ItemPositionState = existingPositions ?? new Dictionary<string, long>()
+            ItemPositionState = existingPositions ?? new Dictionary<string, long>(),
+            AudioTranscodeBaseMs = existingTranscodeBases ?? new Dictionary<string, long>()
         };
 
         _queues[deviceId] = queue;

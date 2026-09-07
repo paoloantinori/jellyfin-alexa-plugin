@@ -211,7 +211,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         // queue routes to the audio-only transcode instead of dying on the raw static
         // bytes (JF-505 does not apply: this launch is audio-shaped). Offset 0: a fresh
         // queue advance always plays from the item start.
-        AudioLaunchSource source = ResolveAudioLaunchSource(item, itemId, user, 0);
+        AudioLaunchSource source = ResolveAudioLaunchSource(item, itemId, user, 0, context?.System?.Device?.DeviceID);
         string audioUrl = source.Url;
 
         Logger.LogInformation(

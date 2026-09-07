@@ -34,12 +34,16 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// codec is an item property: whenever the item routes to the transcode NOW, its
 /// prior playback rode the transcode too). The writers (PlaybackStoppedEventHandler,
 /// PlaybackStartedEventHandler) persist the device offset without adding the
-/// transcode base, so the persisted positions are stream-relative as well; the
-/// stream-relative-to-absolute correction is tracked in JF-514. Until it exists, a
-/// transcode-routed resume restarts from 0, and raw-static launches (audio items,
-/// Echo-decodable video) keep the caller's offset unchanged. Fallback 4 is
-/// structurally safe: its video branch launches via the VideoApp path and its audio
-/// branch uses the raw static URL (audio items never transcode).
+/// transcode base, so the persisted positions are stream-relative as well. JF-514
+/// shipped the stream-relative-to-absolute correction on the OFFER path only (the
+/// launch base is recorded per device+item at the ResolveAudioLaunchSource
+/// chokepoint and YesIntentHandler's confirm rebases base+offset); this tail keeps
+/// the interim rule by scope decision: a transcode-routed resume restarts from 0
+/// (the restart mint still records base 0, so the NEXT offer-path resume composes),
+/// and raw-static launches (audio items, Echo-decodable video) keep the caller's
+/// offset unchanged. Fallback 4 is structurally safe: its video branch launches via
+/// the VideoApp path and its audio branch uses the raw static URL (audio items never
+/// transcode).
 /// </summary>
 public class ResumeIntentHandler : BaseHandler
 {
@@ -124,8 +128,8 @@ public class ResumeIntentHandler : BaseHandler
             // Fallback 1: Alexa AudioPlayer context (most accurate when device retains state).
             // The device offset is relative to the PREVIOUS playback's output timeline,
             // which for a transcode-routed item starts at that stream's ?start= point.
-            // The tail's gate drops it for transcode-routed items (JF-514 tracks the
-            // stream-relative-to-absolute correction that would let it resume).
+            // The tail's gate drops it for transcode-routed items (the base+offset
+            // rebase shipped on the offer/Yes path in JF-514; this tail still drops).
             if (context.AudioPlayer != null && context.AudioPlayer.OffsetInMilliseconds > 0)
             {
                 offset = (int)context.AudioPlayer.OffsetInMilliseconds;
@@ -240,33 +244,32 @@ public class ResumeIntentHandler : BaseHandler
             return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale)));
         }
 
-        // JF-507: the shared codec-gated audio-launch decision (an EAC3-family video
-        // item on the audio path routes to the audio-only episode HLS transcode).
-        AudioLaunchSource source = ResolveAudioLaunchSource(
-            session?.FullNowPlayingItem, item_id!, user, offset);
-
-        // Provenance gate (JF-507 critical review, final form): the transcode's
-        // ?start= is an item-absolute ffmpeg -ss seek, but EVERY tail offset is
+        // Provenance gate (JF-507 critical review; probe-first shape per JF-514): the
+        // transcode's ?start= is an item-absolute ffmpeg -ss seek, but EVERY tail
+        // offset (AudioPlayer context, session PlayState, DeviceQueue) is
         // device-derived and therefore relative to the previous playback's OUTPUT
-        // timeline. For a transcode-routed item that timeline starts at the stream's
-        // ?start= point, and none of the writers (PlaybackStoppedEventHandler,
-        // PlaybackStartedEventHandler) add the transcode base back, so fallbacks 1, 2
-        // and 3 are ALL stream-relative here. Example: an episode first started at
-        // absolute 20:00 via a ?start= transcode, paused at stream 5:00; minting
-        // ?start=300s would silently skip BACK 15 minutes plus burn a fresh encode
-        // under a new cache key. Until a stream-relative-to-absolute correction exists
-        // (JF-514), drop the offset whenever the launch routed to the transcode:
-        // playback restarts from the item start, the paired directive offset stays 0,
-        // and no false position is announced. Raw-static launches (audio items,
-        // Echo-decodable video) keep the offset unchanged: their timeline is the same
-        // one the device was counting.
-        if (source.RoutedToTranscode && offset > 0)
+        // timeline, which for a transcode-routed item starts at that stream's ?start=
+        // base (the event writers never add the base back). Minting such an offset
+        // would silently skip BACK (an episode started at absolute 20:00 via ?start=,
+        // paused at stream 5:00, would seek to 5:00). This tail keeps the interim DROP
+        // by scope decision (the base+offset rebase lives on the offer/Yes path);
+        // probing BEFORE the resolve keeps the ledger clean: resolving first would
+        // record a base minted from the very offset being dropped, then repair it with
+        // a second resolve (double codec probe, discarded URL mint). Raw-static
+        // launches keep the offset: their timeline is the one the device was counting.
+        if (offset > 0 && RoutesToAudioTranscode(session?.FullNowPlayingItem))
         {
             Logger.LogInformation(
                 "ResumeIntent: item {ItemId} routes to the audio-only transcode but the offset ({OffsetMs}ms) is device-derived and output-timeline-relative; dropping it so playback restarts instead of minting a false ?start=",
                 item_id, offset);
-            source = ResolveAudioLaunchSource(session?.FullNowPlayingItem, item_id!, user, 0);
+            offset = 0;
         }
+
+        // JF-507/JF-514: the shared codec-gated audio-launch decision; the single
+        // resolve records the launch base in the device ledger (base 0 on the drop
+        // path above, so the next offer-path resume composes from it).
+        AudioLaunchSource source = ResolveAudioLaunchSource(
+            session?.FullNowPlayingItem, item_id!, user, offset, context?.System?.Device?.DeviceID, _queueManager);
 
         var response = BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll,

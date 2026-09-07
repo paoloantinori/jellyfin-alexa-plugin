@@ -65,6 +65,19 @@ public sealed class DeviceQueue
     public Dictionary<string, long> ItemPositionState { get; set; } = new();
 
     /// <summary>
+    /// Gets or sets per-item audio-transcode launch bases (itemId → milliseconds, JF-514).
+    /// When an audio-shaped launch of a Movie/Episode mints the audio-only HLS
+    /// transcode's <c>?start=</c> seek, that base is recorded here so a later resume on
+    /// the same device can rebase a device-derived (stream-relative) offset into the
+    /// item-absolute position the seek wants. A raw-static launch of the same item
+    /// records base 0: its output timeline IS the item timeline, and the write also
+    /// invalidates any stale transcode base left by an older launch. Keyed device+item,
+    /// so entries never bleed across devices or items; survives queue resets like
+    /// <see cref="ItemPositionState"/>.
+    /// </summary>
+    public Dictionary<string, long> AudioTranscodeBaseMs { get; set; } = new();
+
+    /// <summary>
     /// Gets or sets the item ID of the last user-initiated play on this device.
     /// Recorded at two sites: audio (incl. audiobooks, with chapter precision) in
     /// <c>BaseHandler.BuildAudioPlayerResponse</c>, and video (movies/episodes) in

@@ -86,7 +86,7 @@ public class PreviousIntentHandler : BaseHandler
                 // JF-507: codec-gated audio-launch decision; an EAC3-family video item in
                 // the queue routes to the audio-only transcode instead of dying on the raw
                 // static bytes (JF-505 does not apply: this launch is audio-shaped).
-                AudioLaunchSource source = ResolveAudioLaunchSource(prevItem, item_id, user, 0);
+                AudioLaunchSource source = ResolveAudioLaunchSource(prevItem, item_id, user, 0, context?.System?.Device?.DeviceID);
                 return Task.FromResult<SkillResponse>(BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source.Url, item_id, prevItem, user, context));
             }
         }

@@ -10,6 +10,7 @@ using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -30,6 +31,7 @@ public class YesIntentHandler : BaseHandler
 {
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
+    private readonly DeviceQueueManager? _queueManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="YesIntentHandler"/> class.
@@ -39,15 +41,18 @@ public class YesIntentHandler : BaseHandler
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
+    /// <param name="queueManager">Optional per-device queue manager (JF-514: the transcode-base ledger behind the resume offset rebase).</param>
     public YesIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
+        ILoggerFactory loggerFactory,
+        DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
+        _queueManager = queueManager;
     }
 
     /// <inheritdoc/>
@@ -218,12 +223,51 @@ public class YesIntentHandler : BaseHandler
         }
 
         int offsetMs = (int)Math.Min(resumeState.OffsetMs, int.MaxValue);
+        string? deviceId = context?.System?.Device?.DeviceID;
+
+        // Provenance gate (JF-514, the offer-path twin of ResumeIntentHandler's),
+        // BEFORE any resolve: the offer was seeded from the AudioPlayer CONTEXT offset,
+        // which is device-derived and therefore relative to the previous playback's
+        // OUTPUT timeline. For a transcode-routed item that timeline starts at the
+        // stream's ?start= base, so minting the raw offset seeks the wrong position (an
+        // episode started at absolute 20:00 and paused at stream 5:00 would silently
+        // skip BACK 15 minutes). The launch that minted that base recorded it in the
+        // device queue ledger (BaseHandler.ResolveAudioLaunchSource), so rebase:
+        // ?start = base + offset, both terms item-absolute. The probe-and-read must run
+        // BEFORE the resolve because the resolve WRITES the ledger; no recorded base
+        // (pre-deploy launch, ledger wiped, device unknown) falls back to the JF-507
+        // interim rule: drop the offset and restart, never mint a stream-relative value
+        // silently. Seeds with OffsetIsStreamRelative=false (server progress, device
+        // last-played) BYPASS this gate by design today, but their positions are NOT
+        // guaranteed item-absolute either: for a transcode-routed item the device event
+        // writers persist the raw stream-relative offset into server progress (see
+        // ResumeIntentHandler's class doc). That residual hole (a flag=false offer can
+        // still mint a stream-relative ?start) is tracked as JF-520.
+        int effectiveOffsetMs = offsetMs;
+        if (RoutesToAudioTranscode(item) && offsetMs > 0 && resumeState.OffsetIsStreamRelative)
+        {
+            long? transcodeBaseMs = GetAudioTranscodeBase(deviceId, itemId, _queueManager);
+            if (transcodeBaseMs.HasValue)
+            {
+                effectiveOffsetMs = (int)Math.Min(transcodeBaseMs.Value + offsetMs, int.MaxValue);
+                Logger.LogInformation(
+                    "ResumeConfirmation: item {ItemId} routes to the audio-only transcode and the offered offset ({OffsetMs}ms) is device-derived (stream-relative); recorded launch base {BaseMs}ms, minting ?start={StartMs}ms (item-absolute)",
+                    itemId, offsetMs, transcodeBaseMs.Value, effectiveOffsetMs);
+            }
+            else
+            {
+                effectiveOffsetMs = 0;
+                Logger.LogInformation(
+                    "ResumeConfirmation: item {ItemId} routes to the audio-only transcode but the offered offset ({OffsetMs}ms) is device-derived (stream-relative) and no launch base is recorded for device {DeviceId}; dropping it so playback restarts instead of minting a false ?start=",
+                    itemId, offsetMs, deviceId);
+            }
+        }
 
         // JF-507: the shared codec-gated audio-launch decision. An EAC3-family video
         // item resumed on the audio path (the 2026-09-06 corr=f0240020 Dot incident:
         // raw static audio died at 1ms) routes to the audio-only episode HLS transcode
         // with the offset baked into the URL (?start=) and directive offset 0.
-        AudioLaunchSource source = ResolveAudioLaunchSource(item, itemId, user, offsetMs);
+        AudioLaunchSource source = ResolveAudioLaunchSource(item, itemId, user, effectiveOffsetMs, deviceId, _queueManager);
         SkillResponse standardResponse = BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll,
             source.Url,
