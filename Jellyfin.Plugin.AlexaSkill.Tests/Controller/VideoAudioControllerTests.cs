@@ -148,11 +148,11 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// A segment request with no token must be rejected (401).
     /// </summary>
     [Fact]
-    public void GetSegment_NoToken_Returns401()
+    public async Task GetSegment_NoToken_Returns401()
     {
         var controller = CreateController(); // no token
 
-        ActionResult result = controller.GetSegment(Guid.NewGuid().ToString(), "seg_0000.ts");
+        ActionResult result = await controller.GetSegment(Guid.NewGuid().ToString(), "seg_0000.ts");
 
         Assert.IsType<UnauthorizedObjectResult>(result);
     }
@@ -865,11 +865,11 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// Verify that the segment endpoint returns 400 for an invalid itemId.
     /// </summary>
     [Fact]
-    public void GetSegment_InvalidItemId_Returns400()
+    public async Task GetSegment_InvalidItemId_Returns400()
     {
         var controller = CreateController();
 
-        ActionResult result = controller.GetSegment("not-a-guid", "seg_000.ts");
+        ActionResult result = await controller.GetSegment("not-a-guid", "seg_000.ts");
 
         Assert.IsType<BadRequestObjectResult>(result);
     }
@@ -879,31 +879,31 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// (directory traversal prevention).
     /// </summary>
     [Fact]
-    public void GetSegment_InvalidSegmentName_Returns400()
+    public async Task GetSegment_InvalidSegmentName_Returns400()
     {
         string itemId = Guid.NewGuid().ToString();
         var controller = CreateController(itemId);
 
         // Test various traversal and injection attempts
-        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(itemId, "../etc/passwd"));
-        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(itemId, "../../secret"));
-        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(itemId, "seg_000.ts/../../etc/passwd"));
-        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(itemId, ""));
-        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(itemId, "seg_00.ts"));
-        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(itemId, "seg_00000.ts"));   // 5 digits
-        Assert.IsType<BadRequestObjectResult>(controller.GetSegment(itemId, "segment.ts"));
+        Assert.IsType<BadRequestObjectResult>(await controller.GetSegment(itemId, "../etc/passwd"));
+        Assert.IsType<BadRequestObjectResult>(await controller.GetSegment(itemId, "../../secret"));
+        Assert.IsType<BadRequestObjectResult>(await controller.GetSegment(itemId, "seg_000.ts/../../etc/passwd"));
+        Assert.IsType<BadRequestObjectResult>(await controller.GetSegment(itemId, ""));
+        Assert.IsType<BadRequestObjectResult>(await controller.GetSegment(itemId, "seg_00.ts"));
+        Assert.IsType<BadRequestObjectResult>(await controller.GetSegment(itemId, "seg_00000.ts"));   // 5 digits
+        Assert.IsType<BadRequestObjectResult>(await controller.GetSegment(itemId, "segment.ts"));
     }
 
     /// <summary>
     /// Verify that the segment endpoint returns 404 when the segment file doesn't exist.
     /// </summary>
     [Fact]
-    public void GetSegment_SegmentNotFound_Returns404()
+    public async Task GetSegment_SegmentNotFound_Returns404()
     {
         string itemId = Guid.NewGuid().ToString();
         var controller = CreateController(itemId);
 
-        ActionResult result = controller.GetSegment(itemId, "seg_000.ts");
+        ActionResult result = await controller.GetSegment(itemId, "seg_000.ts");
 
         Assert.IsType<NotFoundObjectResult>(result);
     }
@@ -913,7 +913,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// when the segment exists in the HLS cache directory.
     /// </summary>
     [Fact]
-    public void GetSegment_ValidSegment_ReturnsFile()
+    public async Task GetSegment_ValidSegment_ReturnsFile()
     {
         Guid itemId = Guid.NewGuid();
         string itemIdStr = itemId.ToString("D");
@@ -927,11 +927,279 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         var controller = CreateController(itemIdStr);
 
-        ActionResult result = controller.GetSegment(itemIdStr, "seg_000.ts");
+        ActionResult result = await controller.GetSegment(itemIdStr, "seg_000.ts");
 
         var physicalResult = Assert.IsType<PhysicalFileResult>(result);
         Assert.Equal("video/mp2t", physicalResult.ContentType);
         Assert.True(physicalResult.EnableRangeProcessing);
+    }
+
+    // ========== JF-503 Hold-For-Segment Tests ==========
+
+    /// <summary>
+    /// JF-503: a near-ahead miss (highest+1) for an item with an ACTIVE encode is
+    /// HELD: the segment file written by a background task during the poll window is
+    /// served instead of a 404 (the encode runs ~20x realtime, so the segment is
+    /// imminent).
+    /// </summary>
+    [Fact]
+    public async Task GetSegment_NearAheadMiss_ActiveEncode_HoldsUntilSegmentAppears()
+    {
+        Guid itemId = Guid.NewGuid();
+        string itemIdStr = itemId.ToString("D");
+
+        // Encode head at seg_0000.ts; the player asks for the next one (seek just
+        // past the head of a running encode).
+        string hlsDir = _cache.GetHlsDirectoryPath(itemIdStr, 0);
+        Directory.CreateDirectory(hlsDir);
+        await File.WriteAllTextAsync(Path.Combine(hlsDir, "seg_0000.ts"), new string('x', 1024));
+        _cache.RegisterHlsDirectory(itemIdStr, 0);
+
+        VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: true);
+
+        var controller = CreateController(itemIdStr);
+        controller.SegmentHoldBudget = TimeSpan.FromSeconds(5);
+        controller.SegmentHoldPollInterval = TimeSpan.FromMilliseconds(20);
+
+        // Simulate ffmpeg finishing the requested segment shortly after the hold
+        // starts: the file AND its live-playlist entry (the completion signal).
+        string targetPath = Path.Combine(hlsDir, "seg_0001.ts");
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(100);
+            await File.WriteAllTextAsync(targetPath, new string('x', 512));
+            await File.WriteAllTextAsync(
+                Path.Combine(hlsDir, "stream.m3u8"),
+                "#EXTM3U\n#EXTINF:4.000,\nseg_0001.ts\n");
+        });
+
+        ActionResult result = await controller.GetSegment(itemIdStr, "seg_0001.ts");
+
+        var physicalResult = Assert.IsType<PhysicalFileResult>(result);
+        Assert.Equal("video/mp2t", physicalResult.ContentType);
+        Assert.Equal(targetPath, physicalResult.FileName);
+
+        VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: false);
+    }
+
+    /// <summary>
+    /// JF-503: a near-ahead miss that never appears returns 404 only AFTER the bounded
+    /// hold budget expires (the encode did not catch up in time).
+    /// </summary>
+    [Fact]
+    public async Task GetSegment_NearAheadMiss_ActiveEncode_Returns404AfterBoundedBudget()
+    {
+        Guid itemId = Guid.NewGuid();
+        string itemIdStr = itemId.ToString("D");
+
+        string hlsDir = _cache.GetHlsDirectoryPath(itemIdStr, 0);
+        Directory.CreateDirectory(hlsDir);
+        await File.WriteAllTextAsync(Path.Combine(hlsDir, "seg_0000.ts"), new string('x', 1024));
+
+        VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: true);
+
+        var controller = CreateController(itemIdStr);
+        controller.SegmentHoldBudget = TimeSpan.FromMilliseconds(250);
+        controller.SegmentHoldPollInterval = TimeSpan.FromMilliseconds(25);
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        ActionResult result = await controller.GetSegment(itemIdStr, "seg_0001.ts");
+        stopwatch.Stop();
+
+        Assert.IsType<NotFoundObjectResult>(result);
+        // The 404 came from the EXPIRED hold, not an immediate miss.
+        Assert.True(stopwatch.ElapsedMilliseconds >= 150,
+            $"expected the bounded hold (~250ms) before the 404, took {stopwatch.ElapsedMilliseconds}ms");
+
+        VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: false);
+    }
+
+    /// <summary>
+    /// JF-503: a seek FAR ahead of the encode head (beyond the +2 lookahead) is never
+    /// held, even with an active encode: the 404 is immediate (a bounded wait cannot
+    /// serve a jump into unencoded minutes).
+    /// </summary>
+    [Fact]
+    public async Task GetSegment_FarAheadMiss_ActiveEncode_Returns404Immediately()
+    {
+        Guid itemId = Guid.NewGuid();
+        string itemIdStr = itemId.ToString("D");
+
+        string hlsDir = _cache.GetHlsDirectoryPath(itemIdStr, 0);
+        Directory.CreateDirectory(hlsDir);
+        await File.WriteAllTextAsync(Path.Combine(hlsDir, "seg_0000.ts"), new string('x', 1024));
+
+        VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: true);
+
+        var controller = CreateController(itemIdStr);
+        controller.SegmentHoldBudget = TimeSpan.FromSeconds(5); // a hold would blow the assert below
+        controller.SegmentHoldPollInterval = TimeSpan.FromMilliseconds(20);
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        ActionResult result = await controller.GetSegment(itemIdStr, "seg_0500.ts");
+        stopwatch.Stop();
+
+        Assert.IsType<NotFoundObjectResult>(result);
+        Assert.True(stopwatch.ElapsedMilliseconds < 1000,
+            $"far-ahead miss must 404 immediately, took {stopwatch.ElapsedMilliseconds}ms");
+
+        VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: false);
+    }
+
+    /// <summary>
+    /// JF-503: a miss with NO active encode (stale cache debris, e.g. after a server
+    /// restart mid-encode) 404s immediately: the hold keys on the active-encode flags,
+    /// so a dead cache never imposes a wait.
+    /// </summary>
+    [Fact]
+    public async Task GetSegment_Miss_NoActiveEncode_Returns404Immediately()
+    {
+        Guid itemId = Guid.NewGuid();
+        string itemIdStr = itemId.ToString("D");
+
+        // A stale cache directory WITHOUT an active encode flag.
+        string hlsDir = _cache.GetHlsDirectoryPath(itemIdStr, 0);
+        Directory.CreateDirectory(hlsDir);
+        await File.WriteAllTextAsync(Path.Combine(hlsDir, "seg_0000.ts"), new string('x', 1024));
+
+        var controller = CreateController(itemIdStr);
+        controller.SegmentHoldBudget = TimeSpan.FromSeconds(5); // a hold would blow the assert below
+        controller.SegmentHoldPollInterval = TimeSpan.FromMilliseconds(20);
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        ActionResult result = await controller.GetSegment(itemIdStr, "seg_0001.ts");
+        stopwatch.Stop();
+
+        Assert.IsType<NotFoundObjectResult>(result);
+        Assert.True(stopwatch.ElapsedMilliseconds < 1000,
+            $"no-active-encode miss must 404 immediately, took {stopwatch.ElapsedMilliseconds}ms");
+    }
+
+    /// <summary>
+    /// JF-503: the AUDIOBOOK active-encode flag drives the same hold (the pre-written
+    /// event playlist lists every segment from first play, so a seek past the encode
+    /// head of a running audiobook hits the same listed-but-missing 404).
+    /// </summary>
+    [Fact]
+    public async Task GetSegment_NearAheadMiss_ActiveAudiobookEncode_HoldsUntilSegmentAppears()
+    {
+        Guid parentId = Guid.NewGuid();
+        string parentIdStr = parentId.ToString("D");
+
+        string hlsDir = _cache.GetHlsDirectoryPath(parentIdStr, 0);
+        Directory.CreateDirectory(hlsDir);
+        await File.WriteAllTextAsync(Path.Combine(hlsDir, "seg_0007.ts"), new string('x', 1024));
+        _cache.RegisterHlsDirectory(parentIdStr, 0);
+
+        VideoAudioController.SetEncodeActiveForTest(parentIdStr, active: true, audiobook: true);
+
+        var controller = CreateController(parentIdStr);
+        controller.SegmentHoldBudget = TimeSpan.FromSeconds(5);
+        controller.SegmentHoldPollInterval = TimeSpan.FromMilliseconds(20);
+
+        string targetPath = Path.Combine(hlsDir, "seg_0008.ts");
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(100);
+            await File.WriteAllTextAsync(targetPath, new string('x', 512));
+            await File.WriteAllTextAsync(
+                Path.Combine(hlsDir, "stream.m3u8"),
+                "#EXTM3U\n#EXTINF:10.000,\nseg_0008.ts\n");
+        });
+
+        ActionResult result = await controller.GetSegment(parentIdStr, "seg_0008.ts");
+
+        var physicalResult = Assert.IsType<PhysicalFileResult>(result);
+        Assert.Equal(targetPath, physicalResult.FileName);
+
+        VideoAudioController.SetEncodeActiveForTest(parentIdStr, active: false, audiobook: true);
+    }
+
+    /// <summary>
+    /// JF-503 observability: every GetSegment miss logs at Debug with the requested
+    /// segment name and the highest existing segment number, so a device session can
+    /// confirm the seek-head mechanism from the logs.
+    /// </summary>
+    [Fact]
+    public async Task GetSegment_Miss_LogsRequestedSegmentAndHighestExistingAtDebug()
+    {
+        Guid itemId = Guid.NewGuid();
+        string itemIdStr = itemId.ToString("D");
+
+        // Head at seg_0007.ts; the player requests far-ahead seg_0100.ts.
+        string hlsDir = _cache.GetHlsDirectoryPath(itemIdStr, 0);
+        Directory.CreateDirectory(hlsDir);
+        await File.WriteAllTextAsync(Path.Combine(hlsDir, "seg_0007.ts"), new string('x', 1024));
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(new CaptureLoggerProvider(logRecords));
+        });
+
+        var controller = new VideoAudioController(
+            _libraryManagerMock.Object, _mediaEncoderMock.Object, _cache, loggerFactory);
+        string token = StreamTokenHelper.Mint(itemIdStr, _config.StreamTokenSecret);
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                Request =
+                {
+                    Query = new QueryCollection(
+                        new Dictionary<string, Microsoft.Extensions.Primitives.StringValues> { ["token"] = token })
+                }
+            }
+        };
+
+        ActionResult result = await controller.GetSegment(itemIdStr, "seg_0100.ts");
+
+        Assert.IsType<NotFoundObjectResult>(result);
+        var missLogs = logRecords
+            .Where(r => r.Message.Contains("GetSegment miss", StringComparison.Ordinal))
+            .ToList();
+        Assert.True(missLogs.Count > 0, "a GetSegment miss must be logged");
+        Assert.All(missLogs, r => Assert.Equal(LogLevel.Debug, r.Level));
+        Assert.Contains("seg_0100.ts", missLogs[0].Message, StringComparison.Ordinal);
+        Assert.Contains("highest existing segment 7", missLogs[0].Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Capture logger provider so tests can assert on Debug log output (same shape as
+    /// SkillResponseLoggingTests' CaptureLoggerProvider).
+    /// </summary>
+    private class CaptureLoggerProvider : ILoggerProvider
+    {
+        private readonly List<(LogLevel Level, string Message)> _records;
+
+        public CaptureLoggerProvider(List<(LogLevel Level, string Message)> records)
+        {
+            _records = records;
+        }
+
+        public ILogger CreateLogger(string categoryName) => new CaptureLogger(_records);
+
+        public void Dispose() { }
+    }
+
+    private class CaptureLogger : ILogger
+    {
+        private readonly List<(LogLevel Level, string Message)> _records;
+
+        public CaptureLogger(List<(LogLevel Level, string Message)> records)
+        {
+            _records = records;
+        }
+
+        IDisposable? ILogger.BeginScope<TState>(TState state) => null;
+
+        bool ILogger.IsEnabled(LogLevel logLevel) => true;
+
+        void ILogger.Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            _records.Add((logLevel, formatter(state, exception)));
+        }
     }
 
     // ========== VideoAudioCache HLS Tests ==========

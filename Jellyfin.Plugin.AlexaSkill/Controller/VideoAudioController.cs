@@ -1021,13 +1021,16 @@ public class VideoAudioController : ControllerBase
     /// Serve an individual HLS segment (.ts) file for a given item.
     /// The segment name is validated against a strict pattern (seg_NNN.ts) to prevent
     /// directory traversal attacks. The segment directory is resolved via the cache service.
+    /// On a miss for an item with an ACTIVE encode, a NEAR-AHEAD segment request is held
+    /// briefly for ffmpeg to write the file instead of 404-ing (JF-503; see
+    /// <see cref="TryHoldForNearAheadSegmentAsync"/> for the boundary).
     /// </summary>
     /// <param name="itemId">The Jellyfin audio item ID.</param>
     /// <param name="segmentName">The segment file name (e.g. "seg_0000.ts").</param>
     /// <returns>The segment file.</returns>
     [HttpGet("{itemId}/segments/{segmentName}")]
     [AllowAnonymous]
-    public ActionResult GetSegment([FromRoute] string itemId, [FromRoute] string segmentName)
+    public async Task<ActionResult> GetSegment([FromRoute] string itemId, [FromRoute] string segmentName)
     {
         if (string.IsNullOrWhiteSpace(itemId) || !Guid.TryParse(itemId, out _))
         {
@@ -1060,12 +1063,41 @@ public class VideoAudioController : ControllerBase
         string? segmentPath = _cache.FindSegmentPath(itemId, segmentName);
         if (segmentPath == null)
         {
-            return NotFound(new { error = "Segment not found" });
+            segmentPath = await TryHoldForNearAheadSegmentAsync(itemId, segmentName, HttpContext.RequestAborted).ConfigureAwait(false);
+            if (segmentPath == null)
+            {
+                return NotFound(new { error = "Segment not found" });
+            }
         }
 
 #pragma warning disable CA3003 // segmentPath validated via GUID itemId + strict segment name pattern
         return PhysicalFile(segmentPath, "video/mp2t", enableRangeProcessing: true);
 #pragma warning restore CA3003
+    }
+
+    /// <summary>
+    /// Parse the segment number out of a <c>seg_NNN[N].ts</c> name. Shared by the
+    /// audiobook position tracker and the JF-503 hold-for-segment head computation.
+    /// </summary>
+    /// <param name="segmentName">The segment file name (e.g. "seg_0042.ts").</param>
+    /// <param name="segmentNumber">The parsed number, or -1 when the name is not a segment.</param>
+    /// <returns>True when the name parsed to a number.</returns>
+    private static bool TryParseSegmentNumber(string segmentName, out int segmentNumber)
+    {
+        // Format: "seg_" + digits + ".ts"  → digits span [4, Length-3)
+        if (segmentName.Length < 8 || !segmentName.StartsWith("seg_", StringComparison.Ordinal) || !segmentName.EndsWith(".ts", StringComparison.Ordinal))
+        {
+            segmentNumber = -1;
+            return false;
+        }
+
+        if (int.TryParse(segmentName.AsSpan(4, segmentName.Length - 7), out segmentNumber))
+        {
+            return true;
+        }
+
+        segmentNumber = -1;
+        return false;
     }
 
     /// <summary>
@@ -1076,16 +1108,231 @@ public class VideoAudioController : ControllerBase
     /// </summary>
     private void RecordSegmentForTracking(string itemId, string segmentName)
     {
-        // Format: "seg_" + digits + ".ts"  → digits span [4, Length-3)
-        if (segmentName.Length < 8 || !segmentName.StartsWith("seg_", StringComparison.Ordinal) || !segmentName.EndsWith(".ts", StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        string digits = segmentName.Substring(4, segmentName.Length - 7);
-        if (int.TryParse(digits, out int segmentNumber))
+        if (TryParseSegmentNumber(segmentName, out int segmentNumber))
         {
             Plugin.Instance?.AudiobookPositionTracker?.RecordSegment(itemId, segmentNumber);
+        }
+    }
+
+    /// <summary>
+    /// Total time a near-ahead segment request waits for a running encode to write the
+    /// file (JF-503). Internal test hook (the InternalsVisibleTo seam, same shape as
+    /// <see cref="VideoAudioCache.PlaybackEvictionExemptionTtl"/>): production ~3.5s,
+    /// tests shrink it to milliseconds.
+    /// </summary>
+    internal TimeSpan SegmentHoldBudget { get; set; } = TimeSpan.FromMilliseconds(3500);
+
+    /// <summary>
+    /// Poll interval of the hold-for-segment loop (JF-503). Internal test hook: tests
+    /// shrink it together with <see cref="SegmentHoldBudget"/>.
+    /// </summary>
+    internal TimeSpan SegmentHoldPollInterval { get; set; } = TimeSpan.FromMilliseconds(200);
+
+    /// <summary>
+    /// How many segments beyond the highest existing one a GetSegment request may name
+    /// and still be held for (JF-503). +2 covers a seek landing just past the running
+    /// encode's head (~8s of 4s episode segments, ~20s of 10s audiobook segments);
+    /// anything farther is a jump into unencoded minutes that no bounded wait can serve.
+    /// </summary>
+    internal const int SegmentHoldLookahead = 2;
+
+    /// <summary>
+    /// JF-503 hold-for-segment: when a GetSegment request names a segment that does not
+    /// exist yet while an encode is ACTIVE for the item, and the requested segment is
+    /// the next expected one (within <see cref="SegmentHoldLookahead"/> of the highest
+    /// existing segment), block bounded for ffmpeg to write the file and serve it
+    /// instead of 404-ing immediately. ExoPlayer errors hard on a missing segment, so
+    /// during the first minutes of an encode (remux at ~20x realtime) a seek that lands
+    /// just past the encoded head kills playback without this smoothing. Completion is
+    /// gated on ffmpeg's live playlist LISTING the segment (the write-completion
+    /// signal), never on the file merely existing: see
+    /// <see cref="IsSegmentListedInLivePlaylistAsync"/>.
+    ///
+    /// USER-VISIBLE BOUNDARY (stated plainly):
+    /// - Seeks WITHIN the encoded head, or roughly 3 seconds beyond it, are smoothed:
+    ///   the request waits briefly and then serves the freshly written segment.
+    /// - Seeks FAR beyond the head of a running encode (e.g. to minute 30 of an episode
+    ///   that has only encoded 5 minutes) still fail: the endpoint answers 404 as
+    ///   before and the player errors until the encode catches up. No bounded wait can
+    ///   serve a jump into unencoded content.
+    /// - After the encode completes (~2-3 minutes for a 45min episode at ~20x realtime,
+    ///   the 2026-09-06 Silo measurement) every seek works.
+    ///
+    /// Scoping across the three encode families: the hold keys on the ACTIVE-encode
+    /// flags, so it covers the EPISODE remux (<see cref="_activeEpisodeEncodes"/>, the
+    /// JF-503 device failure) and the AUDIOBOOK concat
+    /// (<see cref="_activeAudiobookEncodes"/>: its pre-written event playlist lists
+    /// every segment from first play, so a seek during the first minutes hits the same
+    /// listed-but-missing 404). The single-item SONG path is deliberately NOT covered:
+    /// it sets no active-encode flag, its encode finishes within seconds, and it serves
+    /// ffmpeg's live playlist which only lists existing segments, so the near-ahead
+    /// window is sub-second and unreported.
+    /// </summary>
+    /// <param name="itemId">The GUID-validated item ID the segment URL carries.</param>
+    /// <param name="segmentName">The validated segment name that was not found.</param>
+    /// <param name="cancellationToken">Aborts the hold when the client goes away.</param>
+    /// <returns>The segment path once it appears within the budget, or null to 404.</returns>
+    private async Task<string?> TryHoldForNearAheadSegmentAsync(string itemId, string segmentName, CancellationToken cancellationToken)
+    {
+        // Resolve the item's HLS directory to compute the encode HEAD (the highest
+        // segment number on disk). Same resolution order FindSegmentPath uses.
+        string? hlsDir = _cache.FindHlsDirectory(itemId);
+        int requested = TryParseSegmentNumber(segmentName, out int requestedNumber) ? requestedNumber : -1;
+        int highest = GetHighestSegmentNumber(hlsDir);
+
+        bool encodeActive = _activeEpisodeEncodes.ContainsKey(itemId)
+            || _activeAudiobookEncodes.ContainsKey(itemId);
+
+        // Hold only for the next expected segment(s) of a live encode. A miss with no
+        // active encode is stale debris (or a wrong GUID), and a miss BEHIND the head
+        // (requested <= highest) can never be backfilled: ffmpeg writes sequentially.
+        bool holdEligible = encodeActive
+            && hlsDir != null
+            && requested > highest
+            && requested <= highest + SegmentHoldLookahead;
+
+        // JF-503 observability: every GetSegment miss logs the requested name and the
+        // highest existing segment, so the next device session can confirm the
+        // seek-head mechanism from the logs (this endpoint is the only segment 404 source).
+        _logger.LogDebug(
+            "GetSegment miss: item {ItemId} requested {SegmentName}, highest existing segment {Highest}, activeEncode {ActiveEncode}, holdEligible {HoldEligible}",
+            itemId, segmentName, highest, encodeActive, holdEligible);
+
+        if (!holdEligible)
+        {
+            return null;
+        }
+
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            while (stopwatch.Elapsed < SegmentHoldBudget)
+            {
+                // Wait at most one poll interval, and never past the budget.
+                TimeSpan remaining = SegmentHoldBudget - stopwatch.Elapsed;
+                TimeSpan wait = remaining < SegmentHoldPollInterval ? remaining : SegmentHoldPollInterval;
+                await Task.Delay(wait, cancellationToken).ConfigureAwait(false);
+
+                // Completion gate: the segment must be LISTED in ffmpeg's live
+                // playlist, not merely present on disk. The HLS muxer rewrites
+                // stream.m3u8 only after a segment file is fully written and closed,
+                // while File.Exists alone can catch the segment mid-write and serve a
+                // truncated .ts (review finding on the first JF-503 cut).
+                if (await IsSegmentListedInLivePlaylistAsync(hlsDir!, segmentName).ConfigureAwait(false))
+                {
+                    string? path = _cache.FindSegmentPath(itemId, segmentName);
+                    if (path != null)
+                    {
+                        _logger.LogDebug(
+                            "GetSegment hold: {SegmentName} appeared after {HeldMs}ms for item {ItemId} (encode caught up)",
+                            segmentName, (int)stopwatch.Elapsed.TotalMilliseconds, itemId);
+                        return path;
+                    }
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Client went away mid-hold; nobody will read the 404 either.
+            _logger.LogDebug(
+                "GetSegment hold aborted (client disconnected) after {HeldMs}ms for item {ItemId}: {SegmentName}",
+                (int)stopwatch.Elapsed.TotalMilliseconds, itemId, segmentName);
+            return null;
+        }
+
+        _logger.LogDebug(
+            "GetSegment hold expired after {HeldMs}ms for item {ItemId}: {SegmentName} still not written (budget {BudgetMs}ms)",
+            (int)stopwatch.Elapsed.TotalMilliseconds, itemId, segmentName, (int)SegmentHoldBudget.TotalMilliseconds);
+        return null;
+    }
+
+    /// <summary>
+    /// Whether ffmpeg's LIVE playlist (stream.m3u8 in the item's HLS directory) already
+    /// lists the segment. The HLS muxer rewrites the playlist only AFTER a segment file
+    /// is fully written and closed, so a playlist entry is the segment-completion
+    /// signal; File.Exists alone can catch a segment mid-write. False when the playlist
+    /// does not exist yet or is mid-rename (the caller keeps polling).
+    /// </summary>
+    /// <param name="hlsDir">The item's HLS cache directory.</param>
+    /// <param name="segmentName">The segment file name (e.g. "seg_0001.ts").</param>
+    /// <returns>True when the live playlist lists the segment.</returns>
+    private static async Task<bool> IsSegmentListedInLivePlaylistAsync(string hlsDir, string segmentName)
+    {
+        try
+        {
+#pragma warning disable CA3003 // hlsDir resolved by the cache from a GUID-validated itemId
+            string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
+            if (!System.IO.File.Exists(playlistPath))
+            {
+                return false;
+            }
+
+            string content = await System.IO.File.ReadAllTextAsync(playlistPath).ConfigureAwait(false);
+            return content.Contains(segmentName, StringComparison.Ordinal);
+#pragma warning restore CA3003
+        }
+        catch (IOException)
+        {
+            // Playlist vanished (eviction) or is mid-rename; treat as not ready.
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Highest segment number present in an HLS cache directory (-1 when the directory
+    /// is missing or holds no segments). JF-503: defines the running encode's HEAD for
+    /// the hold-for-segment near-ahead test. Called only on a GetSegment miss (never on
+    /// the per-segment hot path), so a directory enumeration here is fine.
+    /// </summary>
+    /// <param name="hlsDir">The item's HLS cache directory, or null when none exists.</param>
+    /// <returns>The highest segment number on disk, or -1.</returns>
+    private static int GetHighestSegmentNumber(string? hlsDir)
+    {
+        if (hlsDir == null)
+        {
+            return -1;
+        }
+
+        int highest = -1;
+        try
+        {
+#pragma warning disable CA3003 // hlsDir resolved by the cache from a GUID-validated itemId
+            foreach (string file in Directory.EnumerateFiles(hlsDir, "seg_*.ts"))
+#pragma warning restore CA3003
+            {
+                if (TryParseSegmentNumber(Path.GetFileName(file), out int number) && number > highest)
+                {
+                    highest = number;
+                }
+            }
+        }
+        catch (DirectoryNotFoundException)
+        {
+            // Evicted between resolution and enumeration; treat as empty.
+        }
+
+        return highest;
+    }
+
+    /// <summary>
+    /// Internal test seam (JF-503, InternalsVisibleTo): set or clear the active-encode
+    /// flag the hold-for-segment path keys on, without a live ffmpeg process.
+    /// <paramref name="audiobook"/> selects the audiobook registry instead of the
+    /// episode one, mirroring which endpoint would have set it in production.
+    /// </summary>
+    /// <param name="itemId">The item ID (episode itemId or audiobook parentId).</param>
+    /// <param name="active">True to mark an encode active, false to clear it.</param>
+    /// <param name="audiobook">True to target the audiobook registry (default episode).</param>
+    internal static void SetEncodeActiveForTest(string itemId, bool active, bool audiobook = false)
+    {
+        var registry = audiobook ? _activeAudiobookEncodes : _activeEpisodeEncodes;
+        if (active)
+        {
+            registry.TryAdd(itemId, true);
+        }
+        else
+        {
+            registry.TryRemove(itemId, out _);
         }
     }
 

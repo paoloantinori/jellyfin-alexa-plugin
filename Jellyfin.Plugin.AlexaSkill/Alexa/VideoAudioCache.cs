@@ -835,35 +835,16 @@ public class VideoAudioCache
             return null;
         }
 
-        // Fast path: in-memory lookup (O(1), no filesystem access)
-#pragma warning disable CA3003 // cachedDir is populated from GUID-validated itemId paths
-        if (_hlsDirLookup.TryGetValue(itemId, out string? cachedDir)
-            && Directory.Exists(cachedDir))
-        {
-            string segmentPath = Path.Combine(cachedDir, segmentName);
-#pragma warning disable CA3003
-            if (File.Exists(segmentPath))
-            {
-                RecordAccess(cachedDir);
-                return segmentPath;
-            }
-
-            return null;
-#pragma warning restore CA3003 // cachedDir from GUID-validated itemId paths
-        }
-
-        // Slow path: filesystem scan (fallback after restart or cache miss)
-        string? hlsDir = FindHlsDirectoryByScan(itemId);
+        // Directory resolution (in-memory O(1) lookup, filesystem scan fallback) is
+        // owned by FindHlsDirectory.
+        string? hlsDir = FindHlsDirectory(itemId);
         if (hlsDir == null)
         {
             return null;
         }
 
-        // Populate the in-memory cache for future requests
-        _hlsDirLookup.TryAdd(itemId, hlsDir);
-
+#pragma warning disable CA3003 // hlsDir resolved from GUID-validated itemId paths
         string path = Path.Combine(hlsDir, segmentName);
-#pragma warning disable CA3003
         if (File.Exists(path))
         {
             RecordAccess(hlsDir);
@@ -911,6 +892,34 @@ public class VideoAudioCache
             _logger.LogDebug(ex, "Error scanning cache directory for HLS directory lookup");
             return null;
         }
+    }
+
+    /// <summary>
+    /// Resolve the HLS cache directory for an item: the in-memory O(1) lookup first
+    /// (populated by <see cref="RegisterHlsDirectory"/>), falling back to the
+    /// filesystem scan (e.g. after a restart). Same resolution order as
+    /// <see cref="FindSegmentPath"/>. Returns null when no directory exists.
+    /// JF-503: used by the controller's hold-for-segment path to compute the running
+    /// encode's head (the highest existing segment number in the directory).
+    /// </summary>
+    /// <param name="itemId">The Jellyfin item ID.</param>
+    /// <returns>The HLS directory path, or null when none exists.</returns>
+    internal string? FindHlsDirectory(string itemId)
+    {
+#pragma warning disable CA3003 // cachedDir is populated from GUID-validated itemId paths (same shape as FindSegmentPath)
+        if (_hlsDirLookup.TryGetValue(itemId, out string? cachedDir) && Directory.Exists(cachedDir))
+        {
+            return cachedDir;
+        }
+#pragma warning restore CA3003
+
+        string? hlsDir = FindHlsDirectoryByScan(itemId);
+        if (hlsDir != null)
+        {
+            _hlsDirLookup.TryAdd(itemId, hlsDir);
+        }
+
+        return hlsDir;
     }
 
     /// <summary>
