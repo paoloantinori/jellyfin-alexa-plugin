@@ -198,4 +198,39 @@ public class VideoAppStreamPolicyTests
         Assert.Null(video);
         Assert.Null(audio);
     }
+
+    // ========== JF-507: the audio-only launch gate ==========
+
+    /// <summary>
+    /// JF-507: the audio-only launch (AudioPlayer resume of a video item on a screenless
+    /// device) needs the AAC transcode for exactly the Echo-undecodable audio codecs; the
+    /// video codec is NOT consulted (an audio-only stream has no video track).
+    /// </summary>
+    [Theory]
+    [InlineData("eac3")]
+    [InlineData("ac3")]
+    [InlineData("truehd")]
+    [InlineData("dts")]
+    [InlineData("dtshd")]
+    [InlineData("dts-hd")]
+    [InlineData("EAC3")]
+    public void AudioRequiresTranscode_EchoUndecodableCodecs_True(string audioCodec)
+    {
+        Assert.True(VideoAppStreamPolicy.AudioRequiresTranscode(audioCodec));
+    }
+
+    /// <summary>
+    /// JF-507: decodable audio keeps the raw static URL, and an UNKNOWN codec keeps it
+    /// too (the probe may only ADD the transcode route, never break the launch path).
+    /// </summary>
+    [Theory]
+    [InlineData("aac")]
+    [InlineData("mp3")]
+    [InlineData("flac")]
+    [InlineData(null)]
+    [InlineData("")]
+    public void AudioRequiresTranscode_DecodableOrUnknownCodecs_False(string? audioCodec)
+    {
+        Assert.False(VideoAppStreamPolicy.AudioRequiresTranscode(audioCodec));
+    }
 }

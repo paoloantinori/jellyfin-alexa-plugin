@@ -27,6 +27,19 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// 2. Jellyfin session play state
 /// 3. DeviceQueue persisted state (survives device state loss after pause)
 /// 4. Jellyfin server-side progress (queries last played item with resume position)
+/// JF-507 critical review: NONE of the fallback 1-3 offsets may be minted into the
+/// audio-only transcode's ?start= for a transcode-routed item. All three are
+/// DEVICE-DERIVED, so they are relative to the previous playback's OUTPUT timeline,
+/// which for a transcode-routed item starts at that stream's ?start= seek point (the
+/// codec is an item property: whenever the item routes to the transcode NOW, its
+/// prior playback rode the transcode too). The writers (PlaybackStoppedEventHandler,
+/// PlaybackStartedEventHandler) persist the device offset without adding the
+/// transcode base, so the persisted positions are stream-relative as well; the
+/// stream-relative-to-absolute correction is tracked in JF-514. Until it exists, a
+/// transcode-routed resume restarts from 0, and raw-static launches (audio items,
+/// Echo-decodable video) keep the caller's offset unchanged. Fallback 4 is
+/// structurally safe: its video branch launches via the VideoApp path and its audio
+/// branch uses the raw static URL (audio items never transcode).
 /// </summary>
 public class ResumeIntentHandler : BaseHandler
 {
@@ -108,22 +121,30 @@ public class ResumeIntentHandler : BaseHandler
 
         if (!string.IsNullOrEmpty(item_id))
         {
-            // Fallback 1: Alexa AudioPlayer context (most accurate when device retains state)
+            // Fallback 1: Alexa AudioPlayer context (most accurate when device retains state).
+            // The device offset is relative to the PREVIOUS playback's output timeline,
+            // which for a transcode-routed item starts at that stream's ?start= point.
+            // The tail's gate drops it for transcode-routed items (JF-514 tracks the
+            // stream-relative-to-absolute correction that would let it resume).
             if (context.AudioPlayer != null && context.AudioPlayer.OffsetInMilliseconds > 0)
             {
                 offset = (int)context.AudioPlayer.OffsetInMilliseconds;
-                Logger.LogDebug("ResumeIntent: using AudioPlayer context offset={OffsetMs}ms", offset);
+                Logger.LogDebug("ResumeIntent: using AudioPlayer context offset={OffsetMs}ms (device-derived, output-timeline-relative)", offset);
             }
-            // Fallback 2: Jellyfin session play state
+            // Fallback 2: Jellyfin session play state. Written from the device offset
+            // (PlaybackStoppedEventHandler), so it is output-timeline-relative too for
+            // a transcode-routed item; the tail's gate drops it the same way.
             else if (session?.PlayState != null)
             {
                 offset = (int)TimeSpan.FromTicks(session.PlayState?.PositionTicks ?? 0).TotalMilliseconds;
                 Logger.LogDebug(
-                    "ResumeIntent: using session playState offset={OffsetMs}ms (ticks={Ticks})",
+                    "ResumeIntent: using session playState offset={OffsetMs}ms (ticks={Ticks}, device-derived)",
                     offset, session.PlayState?.PositionTicks);
             }
 
-            // Fallback 3: DeviceQueue persisted state (survives after AudioPlayer.Stop clears context)
+            // Fallback 3: DeviceQueue persisted state (survives after AudioPlayer.Stop clears context).
+            // Same device-derived provenance as fallbacks 1-2 (PlaybackStoppedEventHandler
+            // writes the device offset into CurrentPositionTicks); the tail's gate drops it.
             if (offset == 0 && _queueManager != null)
             {
                 var queue = _queueManager.GetOrCreateQueue(context.System.Device.DeviceID);
@@ -219,26 +240,56 @@ public class ResumeIntentHandler : BaseHandler
             return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale)));
         }
 
+        // JF-507: the shared codec-gated audio-launch decision (an EAC3-family video
+        // item on the audio path routes to the audio-only episode HLS transcode).
+        AudioLaunchSource source = ResolveAudioLaunchSource(
+            session?.FullNowPlayingItem, item_id!, user, offset);
+
+        // Provenance gate (JF-507 critical review, final form): the transcode's
+        // ?start= is an item-absolute ffmpeg -ss seek, but EVERY tail offset is
+        // device-derived and therefore relative to the previous playback's OUTPUT
+        // timeline. For a transcode-routed item that timeline starts at the stream's
+        // ?start= point, and none of the writers (PlaybackStoppedEventHandler,
+        // PlaybackStartedEventHandler) add the transcode base back, so fallbacks 1, 2
+        // and 3 are ALL stream-relative here. Example: an episode first started at
+        // absolute 20:00 via a ?start= transcode, paused at stream 5:00; minting
+        // ?start=300s would silently skip BACK 15 minutes plus burn a fresh encode
+        // under a new cache key. Until a stream-relative-to-absolute correction exists
+        // (JF-514), drop the offset whenever the launch routed to the transcode:
+        // playback restarts from the item start, the paired directive offset stays 0,
+        // and no false position is announced. Raw-static launches (audio items,
+        // Echo-decodable video) keep the offset unchanged: their timeline is the same
+        // one the device was counting.
+        if (source.RoutedToTranscode && offset > 0)
+        {
+            Logger.LogInformation(
+                "ResumeIntent: item {ItemId} routes to the audio-only transcode but the offset ({OffsetMs}ms) is device-derived and output-timeline-relative; dropping it so playback restarts instead of minting a false ?start=",
+                item_id, offset);
+            source = ResolveAudioLaunchSource(session?.FullNowPlayingItem, item_id!, user, 0);
+        }
+
         var response = BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll,
-            GetStreamUrl(item_id!, user),
+            source.Url,
             item_id!,
             session?.FullNowPlayingItem,
             user,
             context,
-            offset);
+            source.OffsetMs);
 
         Logger.LogDebug(
             "ResumeIntent: final response itemId={ItemId}, offset={OffsetMs}ms",
-            item_id, offset);
+            item_id, source.OffsetMs);
 
-        // Proactive position announcement when enabled and we have a non-zero offset
-        if (offset > 0)
+        // Proactive position announcement when enabled and we have a non-zero offset.
+        // Uses the EFFECTIVE offset (source.OffsetMs): a dropped stream-relative offset
+        // must not be announced as the position playback restarts from.
+        if (source.OffsetMs > 0)
         {
             Entities.User? pluginUser = _config.GetUserById(user.Id);
             if (pluginUser?.AnnouncePositionOnResume == true)
             {
-                string positionStr = FormatTimeSpan(TimeSpan.FromMilliseconds(offset), locale);
+                string positionStr = FormatTimeSpan(TimeSpan.FromMilliseconds(source.OffsetMs), locale);
                 response.Response.OutputSpeech = new PlainTextOutputSpeech
                 {
                     Text = ResponseStrings.Get("ResumingAtPosition", locale, positionStr)

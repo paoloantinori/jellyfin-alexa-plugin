@@ -714,6 +714,258 @@ public class VideoAudioController : ControllerBase
     }
 
     /// <summary>
+    /// Cache key of the AUDIO-ONLY episode variant (JF-507): deliberately distinct from
+    /// the bare itemId the video remux keys on, so the two encodes of the same item can
+    /// never collide (the in-memory directory lookup and the <c>{key}_*</c> filesystem
+    /// scan both key on this string), and distinct per start position because a
+    /// <c>-ss</c>-seeked encode serves a different timeline than a from-zero one.
+    /// </summary>
+    /// <param name="itemId">GUID-validated item ID.</param>
+    /// <param name="startTicks">The encode's start position (0 for a from-zero encode).</param>
+    /// <returns>The variant cache key string.</returns>
+    internal static string EpisodeAudioCacheKey(string itemId, long startTicks)
+        => startTicks > 0 ? $"{itemId}-audio-{startTicks}" : $"{itemId}-audio";
+
+    /// <summary>
+    /// Stream an AUDIO-ONLY HLS transcode of a movie/episode (JF-507): the item's first
+    /// audio track mapped alone (-map 0:a:0, AAC stereo) for AudioPlayer launches on
+    /// screenless devices, whose raw <c>/Audio/{id}/stream?static=true</c> URL serves the
+    /// source bytes (an EAC3 track the Dot cannot decode; live incident 2026-09-06
+    /// corr=f0240020: playback died at 1ms). Optional <c>?start=&lt;ticks&gt;</c> seeks the
+    /// encode (ffmpeg -ss): the served timeline STARTS at that position, so the
+    /// AudioPlayer.Play directive must carry offset 0 for a start-shifted URL (a from-zero
+    /// encode runs at ~49x realtime, measured on the incident episode, so the segment a
+    /// deep offset maps to does not exist on the player's first fetch).
+    /// Mirrors <see cref="StreamHlsEpisodeCore"/>: per-item cache dir, per-item lock,
+    /// first-segment wait, partial playlist, background monitor, encode gate.
+    /// </summary>
+    /// <param name="itemId">The Jellyfin video item ID.</param>
+    /// <param name="startTicks">Optional resume position in .NET ticks (0 to play from the start).</param>
+    /// <returns>An HLS playlist (.m3u8) file.</returns>
+    [HttpGet("episode/{itemId}/audio.m3u8")]
+    [AllowAnonymous]
+    public async Task<ActionResult> StreamHlsEpisodeAudio(
+        [FromRoute] string itemId,
+        [FromQuery(Name = "start")] long? startTicks = null)
+    {
+        if (Guid.TryParse(itemId, out _))
+        {
+            ActionResult? tokenError = ValidateStreamToken(itemId);
+            if (tokenError != null)
+            {
+                return tokenError;
+            }
+        }
+
+        return await StreamHlsEpisodeAudioCore(itemId, startTicks ?? 0).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Build and serve the audio-only episode HLS playlist: the same cache/lock/gate/
+    /// monitor machinery as the episode remux, with the audio-only ffmpeg arguments and
+    /// the variant cache key (so it can never collide with the video remux of the same
+    /// item, and different start positions cache apart).
+    /// </summary>
+    /// <param name="itemId">GUID-validated item ID.</param>
+    /// <param name="startTicks">Encode start position in ticks (0 = from the beginning).</param>
+    /// <returns>The playlist, or an error result.</returns>
+    private async Task<ActionResult> StreamHlsEpisodeAudioCore(string itemId, long startTicks)
+    {
+        var validation = ValidateVideoAudioRequest(itemId);
+        if (validation.Error != null)
+        {
+            return validation.Error;
+        }
+
+        long artModifiedTicks = GetArtModifiedTicks(validation.Item);
+        string cacheKey = EpisodeAudioCacheKey(itemId, startTicks);
+
+        // Same cache-validity rule as the remux: completed (ENDLIST) or actively encoding.
+        FileInfo? cached = await _cache.GetCachedHlsPlaylist(cacheKey, artModifiedTicks).ConfigureAwait(false);
+        if (cached != null)
+        {
+            cached = await ValidateEpisodeCacheAsync(cached, cacheKey).ConfigureAwait(false);
+            if (cached != null)
+            {
+                _logger.LogDebug("VideoAudio episode AUDIO HLS: serving cached playlist for item {ItemId} (start={StartTicks})", itemId, startTicks);
+#pragma warning disable CA3003 // path derived from GUID-validated itemId
+                return ServePlaylistWithToken(cached.FullName);
+#pragma warning restore CA3003
+            }
+        }
+
+        using (await _cache.LockItemAsync(cacheKey, artModifiedTicks).ConfigureAwait(false))
+        {
+            _cache.CleanupHlsStub(cacheKey, artModifiedTicks);
+
+            cached = await _cache.GetCachedHlsPlaylist(cacheKey, artModifiedTicks).ConfigureAwait(false);
+            if (cached != null)
+            {
+                cached = await ValidateEpisodeCacheAsync(cached, cacheKey).ConfigureAwait(false);
+                if (cached != null)
+                {
+                    _logger.LogDebug("VideoAudio episode AUDIO HLS: serving playlist generated by concurrent request for item {ItemId} (start={StartTicks})", itemId, startTicks);
+#pragma warning disable CA3003
+                    return ServePlaylistWithToken(cached.FullName);
+#pragma warning restore CA3003
+                }
+            }
+
+            // Re-probe server-side (the handler-side probe only picked the route): copy
+            // for the muxer-compatible codecs (mp3/aac), AAC re-encode for everything
+            // else, which is the family this endpoint exists for.
+            string? sourceAudioCodec = ResolveSourceAudioCodec(validation.Item);
+            _logger.LogDebug(
+                "VideoAudio episode AUDIO HLS: itemId={ItemId}, startTicks={StartTicks}, sourceAudioCodec={AudioCodec}",
+                itemId, startTicks, sourceAudioCodec ?? "(unknown)");
+
+#pragma warning disable CA3003 // paths derived from GUID-validated itemId
+            string hlsDir = _cache.GetHlsDirectoryPath(cacheKey, artModifiedTicks);
+            Directory.CreateDirectory(hlsDir);
+
+            string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
+            // 10-second segments (the audio-rate value; a 45min episode is ~270 segments
+            // and %04d caps at 9999). Fewer, larger fetches through the public URL than
+            // the remux's 4s, and audio-only has no keyframe constraint.
+            string segmentPath = Path.Combine(hlsDir, "seg_%04d.ts");
+            // Segment URLs point at the dedicated audio-segments route: it embeds the
+            // start position (the directory key) in the path, and never touches the
+            // generic segments route the video remux serves through.
+            string hlsBaseUrl = $"/alexaskill/api/video-audio/episode/{itemId}/audio-segments/{startTicks}/";
+
+            string videoUrl = $"{validation.ServerUrl}/Videos/{itemId}/stream?static=true";
+
+            var ffmpegArgs = BuildEpisodeAudioHlsFfmpegArguments(videoUrl, startTicks, playlistPath, segmentPath, hlsBaseUrl, sourceAudioCodec);
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug("VideoAudio episode AUDIO HLS: ffmpeg arguments: {Args}", string.Join(" ", ffmpegArgs));
+            }
+
+            // Per-file debris cleanup so ffmpeg always starts over a clean target (the
+            // JF-498 review I1 concern, same as the remux path).
+            _cache.DeleteHlsEncodeDebris(cacheKey, artModifiedTicks);
+
+            _activeEpisodeEncodes.TryAdd(cacheKey, true);
+
+            Process ffmpegProcess;
+            try
+            {
+                ffmpegProcess = await StartFfmpegProcessGatedAsync(
+                    validation.FfmpegPath,
+                    ffmpegArgs,
+                    EstimateEpisodeAudioEncodeBytes(validation.Item.RunTimeTicks ?? 0),
+                    hlsDir).ConfigureAwait(false);
+            }
+            catch
+            {
+                _activeEpisodeEncodes.TryRemove(cacheKey, out _);
+                throw;
+            }
+
+            try
+            {
+                // Audio-only AAC encodes at ~49x realtime (measured on the incident
+                // episode, 2026-09-07), so the first 10s segment is on disk well under a
+                // second; the ceiling only guards pathological cases.
+                string firstSegmentPath = Path.Combine(hlsDir, "seg_0000.ts");
+                bool segmentAppeared = false;
+                for (int i = 0; i < 200; i++)
+                {
+                    if (System.IO.File.Exists(firstSegmentPath) && System.IO.File.Exists(playlistPath))
+                    {
+                        segmentAppeared = true;
+                        break;
+                    }
+
+                    if (ffmpegProcess.HasExited)
+                    {
+                        break;
+                    }
+
+                    await Task.Delay(100).ConfigureAwait(false);
+                }
+
+                if (!segmentAppeared)
+                {
+                    _logger.LogWarning("VideoAudio episode AUDIO HLS: ffmpeg failed to create first segment for item {ItemId} (exit code {ExitCode})", itemId, ffmpegProcess.HasExited ? ffmpegProcess.ExitCode : -1);
+                    try { ffmpegProcess.Kill(); } catch { /* already exited */ }
+                    ffmpegProcess.Dispose();
+                    _activeEpisodeEncodes.TryRemove(cacheKey, out _);
+                    return StatusCode(500, new { error = "Episode audio HLS generation failed" });
+                }
+
+                _cache.RegisterHlsDirectory(cacheKey, artModifiedTicks);
+
+                _ = MonitorFfmpegHlsAsync(ffmpegProcess, hlsDir, cacheKey, artModifiedTicks, "EpisodeAudio", _activeEpisodeEncodes);
+
+                _logger.LogDebug("VideoAudio episode AUDIO HLS: serving partial playlist for item {ItemId} (start={StartTicks})", itemId, startTicks);
+                return ServePlaylistWithToken(playlistPath);
+            }
+            catch
+            {
+                try { ffmpegProcess.Kill(); } catch { /* already exited */ }
+                ffmpegProcess.Dispose();
+                _activeEpisodeEncodes.TryRemove(cacheKey, out _);
+                throw;
+            }
+#pragma warning restore CA3003
+        }
+    }
+
+    /// <summary>
+    /// Serve an individual HLS segment of the audio-only episode variant (JF-507). A
+    /// dedicated route (not the generic <c>{itemId}/segments</c> one) because the cache
+    /// directory is keyed by the variant key, which embeds the start position: the path
+    /// carries <paramref name="startTicks"/> so the key can be recomputed. Skips the
+    /// audiobook position tracking the generic route performs (episode keys are never
+    /// read there); keeps its token validation, segment-name validation, and the JF-503
+    /// hold-for-near-ahead-segment behavior of a running encode.
+    /// </summary>
+    /// <param name="itemId">The Jellyfin video item ID (GUID-validated, token-scoped).</param>
+    /// <param name="startTicks">The encode start position carried in the playlist's segment URLs.</param>
+    /// <param name="segmentName">The segment file name (e.g. "seg_0000.ts").</param>
+    /// <returns>The segment file.</returns>
+    [HttpGet("episode/{itemId}/audio-segments/{startTicks:long}/{segmentName}")]
+    [AllowAnonymous]
+    public async Task<ActionResult> GetEpisodeAudioSegment(
+        [FromRoute] string itemId,
+        [FromRoute] long startTicks,
+        [FromRoute] string segmentName)
+    {
+        if (string.IsNullOrWhiteSpace(itemId) || !Guid.TryParse(itemId, out _))
+        {
+            return BadRequest(new { error = "Invalid itemId format" });
+        }
+
+        ActionResult? tokenError = ValidateStreamToken(itemId);
+        if (tokenError != null)
+        {
+            return tokenError;
+        }
+
+        if (!VideoAudioCache.IsValidSegmentName(segmentName))
+        {
+            _logger.LogWarning("VideoAudio episode AUDIO HLS: rejected invalid segment name '{SegmentName}' for item {ItemId}", segmentName, itemId);
+            return BadRequest(new { error = "Invalid segment name" });
+        }
+
+        string cacheKey = EpisodeAudioCacheKey(itemId, startTicks);
+        string? segmentPath = _cache.FindSegmentPath(cacheKey, segmentName);
+        if (segmentPath == null)
+        {
+            segmentPath = await TryHoldForNearAheadSegmentAsync(cacheKey, segmentName, HttpContext.RequestAborted).ConfigureAwait(false);
+            if (segmentPath == null)
+            {
+                return NotFound(new { error = "Segment not found" });
+            }
+        }
+
+#pragma warning disable CA3003 // segmentPath validated via GUID itemId + strict segment name pattern upstream
+        return PhysicalFile(segmentPath, "video/mp2t", enableRangeProcessing: true);
+#pragma warning restore CA3003
+    }
+
+    /// <summary>
     /// Stream an HLS playlist that concatenates all chapters of an audiobook into
     /// one continuous stream. Gives the full book duration in the Echo Show seek bar
     /// and allows seeking across the entire book via VideoApp.Launch.
@@ -2028,6 +2280,108 @@ public class VideoAudioController : ControllerBase
 
         long hours = (runtimeTicks + TimeSpan.TicksPerHour - 1) / TimeSpan.TicksPerHour;
         return Math.Max(flatBytesPerHour, hours * flatBytesPerHour);
+    }
+
+    /// <summary>
+    /// Build ffmpeg argument list for the AUDIO-ONLY episode HLS variant (JF-507): the
+    /// item's first audio stream ALONE mapped into MPEG-TS (-map 0:a:0, NO video track),
+    /// for AudioPlayer launches of video items whose audio codec has no Echo decoder.
+    /// Optional <paramref name="startTicks"/> becomes an input seek (-ss BEFORE -i:
+    /// container-level, so the encode starts at the resume position instead of decoding
+    /// through everything before it) and shifts the served timeline to start there.
+    /// Audio codec selection mirrors <see cref="BuildEpisodeAudioCodecArgs"/>: copy for
+    /// mp3/aac, AAC 192k stereo for everything else (the EAC3 family this endpoint
+    /// exists for). 10-second segments, event-style growth (append_list), no -shortest.
+    /// </summary>
+    /// <param name="videoUrl">Static stream URL of the source item (ffmpeg input; ffmpeg
+    /// maps its audio stream, so the video bytes are never decoded or emitted).</param>
+    /// <param name="startTicks">Resume position in .NET ticks (0 to encode from the start).</param>
+    /// <param name="playlistPath">Output playlist file path.</param>
+    /// <param name="segmentPath">Segment filename template (e.g. "seg_%04d.ts").</param>
+    /// <param name="hlsBaseUrl">Base URL prefix for segment references in the playlist.</param>
+    /// <param name="sourceAudioCodec">Source audio codec (e.g. "eac3") for the copy
+    /// decision, or null/unknown to transcode to AAC.</param>
+    /// <returns>List of ffmpeg arguments (one token per entry).</returns>
+    internal static List<string> BuildEpisodeAudioHlsFfmpegArguments(
+        string videoUrl,
+        long startTicks,
+        string playlistPath,
+        string segmentPath,
+        string hlsBaseUrl,
+        string? sourceAudioCodec = null)
+    {
+        var args = new List<string>();
+
+        // Input seek BEFORE -i: starts reading at the resume position (the player
+        // receives offset 0 with this stream, so the directive offset cannot do it and
+        // a from-zero encode cannot serve a deep offset's segment on the first fetch).
+        if (startTicks > 0)
+        {
+            args.Add("-ss");
+            args.Add(FormatSecondsInvariant(startTicks));
+        }
+
+        args.Add("-i");
+        args.Add(videoUrl);
+
+        // Audio ONLY: no video mapping (AudioPlayer plays audio streams; the remux's
+        // 0:v:0 copy would waste the encode budget and is what the OTHER endpoint is for).
+        args.Add("-map");
+        args.Add("0:a:0");
+
+        // Audio: copy when the source is mp3/aac, else AAC 192k stereo (same selection
+        // as the remux; the stereo downmix matters for the 5.1 EAC3 family).
+        args.AddRange(BuildEpisodeAudioCodecArgs(sourceAudioCodec));
+
+        // 10-second segments: the audio-rate value (a 45min episode is ~270 segments;
+        // %04d caps at 9999 = ~27h). append_list keeps written segments listed while
+        // the playlist grows (the event-playlist shape the Echo family tolerates).
+        args.Add("-hls_time");
+        args.Add("10");
+        args.Add("-hls_list_size");
+        args.Add("0");
+        args.Add("-hls_flags");
+        args.Add("append_list");
+        args.Add("-hls_segment_type");
+        args.Add("mpegts");
+
+        args.Add("-hls_segment_filename");
+        args.Add(segmentPath);
+
+        args.Add("-hls_base_url");
+        args.Add(hlsBaseUrl);
+
+        // No -shortest: one finite input, one mapped stream.
+        args.Add(playlistPath);
+
+        return args;
+    }
+
+    /// <summary>
+    /// Format a .NET ticks duration as an ffmpeg seconds argument, invariant-culture,
+    /// millisecond precision (e.g. "83.25"). Shared by the episode audio variant's
+    /// -ss seek.
+    /// </summary>
+    /// <param name="ticks">Duration in .NET ticks.</param>
+    /// <returns>The seconds string.</returns>
+    internal static string FormatSecondsInvariant(long ticks)
+        => (ticks / (double)TimeSpan.TicksPerSecond).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// JF-507 on-disk size estimate for the audio-only episode encode: measured 60MB for
+    /// the 39-minute incident episode (AAC 192k stereo + MPEG-TS overhead ≈ 92MB/h), so
+    /// the flat rate is 96MB/h with the same round-UP-to-hours/floor shape as
+    /// <see cref="EstimateEncodeBytes"/>. A resume encode (-ss) covers less content but
+    /// reserves the full runtime: conservative is the right direction for the JF-428
+    /// pre-encode headroom.
+    /// </summary>
+    /// <param name="runtimeTicks">Content duration (item runtime).</param>
+    /// <returns>Estimated bytes the encode writes.</returns>
+    internal static long EstimateEpisodeAudioEncodeBytes(long runtimeTicks)
+    {
+        const long bytesPerHour = 96L * 1024 * 1024;
+        long hours = (runtimeTicks + TimeSpan.TicksPerHour - 1) / TimeSpan.TicksPerHour;
+        return Math.Max(bytesPerHour, hours * bytesPerHour);
     }
 
     /// <summary>

@@ -36,8 +36,12 @@ public class CircuitBreakerInterceptor : IRequestInterceptor
     /// <inheritdoc />
     public Task<bool> ProcessAsync(RequestContext context, CancellationToken cancellationToken)
     {
-        // Don't circuit-break system requests (exceptions, launch requests without backend calls)
-        if (context.SkillRequest is SystemExceptionRequest or LaunchRequest)
+        // Don't circuit-break system requests (exceptions, launch requests without backend
+        // calls) or EVENT requests (JF-507): the short-circuit below answers with a Tell,
+        // and outputSpeech on an AudioPlayer event response is an INVALID_RESPONSE
+        // ("Response may not contain an outputSpeech"). An open circuit during a
+        // PlaybackStopped/Failed event would compound the original failure with one.
+        if (context.SkillRequest is LaunchRequest || BaseHandler.IsEventRequest(context.SkillRequest))
         {
             return Task.FromResult(true);
         }

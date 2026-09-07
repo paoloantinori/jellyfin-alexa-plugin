@@ -2107,6 +2107,221 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.Equal(expectedBytes, VideoAudioController.EstimateEpisodeEncodeBytes(runtimeTicks, totalBitRateBps));
     }
 
+    // ========== JF-507: the audio-only episode HLS variant ==========
+
+    /// <summary>
+    /// JF-507 args, resume shape (start &gt; 0): an input seek (-ss BEFORE -i), the
+    /// audio stream mapped ALONE (no 0:v:0, no -c:v), AAC stereo downmix at 192k,
+    /// 10-second MPEG-TS segments, and the base URL pointing at the dedicated
+    /// audio-segments route with the start position in the path.
+    /// </summary>
+    [Fact]
+    public void BuildEpisodeAudioHlsFfmpegArguments_Eac3SourceWithStart_MapsAudioOnlyAndSeeks()
+    {
+        string videoUrl = "http://localhost:8096/Videos/abc/stream?static=true";
+        long startTicks = TimeSpan.FromMinutes(5).Ticks;
+
+        List<string> args = VideoAudioController.BuildEpisodeAudioHlsFfmpegArguments(
+            videoUrl, startTicks, "/tmp/hls/stream.m3u8", "/tmp/hls/seg_%04d.ts",
+            "/alexaskill/api/video-audio/abc/audio-segments/30000000000/", "eac3");
+
+        // Input seek BEFORE -i, so the encode starts at the resume position
+        int ssIdx = args.IndexOf("-ss");
+        Assert.True(ssIdx >= 0, "expected -ss for a start-shifted encode");
+        Assert.Equal(videoUrl, args[ssIdx + 3]);
+        Assert.Equal("-i", args[ssIdx + 2]);
+        Assert.Equal(
+            (startTicks / (double)TimeSpan.TicksPerSecond).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture),
+            args[ssIdx + 1]);
+
+        // ONE map: audio only. No video mapping, no video codec args.
+        Assert.Equal("0:a:0", args[args.IndexOf("-map") + 1]);
+        Assert.Equal(1, args.Count(a => a == "-map"));
+        Assert.DoesNotContain("0:v:0", args);
+        Assert.Null(args.FirstOrDefault(a => a == "-c:v"));
+
+        // Audio: AAC stereo downmix at 192k (the EAC3 family has no Echo decoder)
+        Assert.Equal("aac", args[args.IndexOf("-c:a") + 1]);
+        Assert.Equal("2", args[args.IndexOf("-ac") + 1]);
+        Assert.Equal("192k", args[args.IndexOf("-b:a") + 1]);
+
+        // HLS: 10-second MPEG-TS segments, event-style growth
+        Assert.Equal("10", args[args.IndexOf("-hls_time") + 1]);
+        Assert.Equal("0", args[args.IndexOf("-hls_list_size") + 1]);
+        Assert.Equal("append_list", args[args.IndexOf("-hls_flags") + 1]);
+        Assert.Equal("mpegts", args[args.IndexOf("-hls_segment_type") + 1]);
+        Assert.Equal("/tmp/hls/seg_%04d.ts", args[args.IndexOf("-hls_segment_filename") + 1]);
+        Assert.Equal("/alexaskill/api/video-audio/abc/audio-segments/30000000000/", args[args.IndexOf("-hls_base_url") + 1]);
+
+        // No -shortest (one finite input), playlist is the positional output
+        Assert.DoesNotContain("-shortest", args);
+        Assert.Equal("/tmp/hls/stream.m3u8", args[^1]);
+    }
+
+    /// <summary>A from-zero encode carries no -ss (the fresh-listen shape).</summary>
+    [Fact]
+    public void BuildEpisodeAudioHlsFfmpegArguments_FromZero_HasNoSeek()
+    {
+        List<string> args = VideoAudioController.BuildEpisodeAudioHlsFfmpegArguments(
+            "http://localhost:8096/Videos/abc/stream?static=true",
+            0, "/tmp/hls/stream.m3u8", "/tmp/hls/seg_%04d.ts", "/alexaskill/api/video-audio/abc/audio-segments/0/", "eac3");
+
+        Assert.DoesNotContain("-ss", args);
+        Assert.Equal("-i", args[0]);
+    }
+
+    /// <summary>A copy-compatible source (aac/mp3) streams audio as-is, mirroring the remux's selection.</summary>
+    [Fact]
+    public void BuildEpisodeAudioHlsFfmpegArguments_AacSource_CopiesAudio()
+    {
+        List<string> args = VideoAudioController.BuildEpisodeAudioHlsFfmpegArguments(
+            "http://localhost:8096/Videos/abc/stream?static=true",
+            0, "/tmp/hls/stream.m3u8", "/tmp/hls/seg_%04d.ts", "/alexaskill/api/video-audio/abc/audio-segments/0/", "aac");
+
+        Assert.Equal("copy", args[args.IndexOf("-c:a") + 1]);
+        Assert.Null(args.FirstOrDefault(a => a == "-b:a"));
+    }
+
+    /// <summary>
+    /// JF-507 size estimate: measured 60MB for the 39-minute incident episode (~92MB/h),
+    /// so the flat rate is 96MB/h with the round-UP/floor shape of EstimateEncodeBytes.
+    /// </summary>
+    [Theory]
+    [InlineData(0L, 96L * 1024 * 1024)]
+    [InlineData(39L * TimeSpan.TicksPerMinute, 96L * 1024 * 1024)]
+    [InlineData(90L * TimeSpan.TicksPerMinute, 192L * 1024 * 1024)]
+    [InlineData(2L * TimeSpan.TicksPerHour, 192L * 1024 * 1024)]
+    public void EstimateEpisodeAudioEncodeBytes_ScalesWithRuntime_FloorsAtOneHour(long runtimeTicks, long expectedBytes)
+    {
+        Assert.Equal(expectedBytes, VideoAudioController.EstimateEpisodeAudioEncodeBytes(runtimeTicks));
+    }
+
+    /// <summary>
+    /// The variant cache key is distinct from the video remux's bare-itemId key (no
+    /// collision in the in-memory lookup or the {key}_* directory scan) and distinct per
+    /// start position (a seeked encode serves a different timeline).
+    /// </summary>
+    [Fact]
+    public void EpisodeAudioCacheKey_DistinctFromRemuxKeyAndPerStart()
+    {
+        string id = Guid.NewGuid().ToString();
+        long startTicks = TimeSpan.FromMinutes(5).Ticks;
+
+        Assert.NotEqual(id, VideoAudioController.EpisodeAudioCacheKey(id, 0));
+        Assert.Equal($"{id}-audio", VideoAudioController.EpisodeAudioCacheKey(id, 0));
+        Assert.Equal($"{id}-audio-{startTicks}", VideoAudioController.EpisodeAudioCacheKey(id, startTicks));
+        Assert.NotEqual(VideoAudioController.EpisodeAudioCacheKey(id, 0), VideoAudioController.EpisodeAudioCacheKey(id, startTicks));
+    }
+
+    /// <summary>A bare-GUID audio-variant playlist request with no token must be rejected (401).</summary>
+    [Fact]
+    public async Task StreamHlsEpisodeAudio_NoToken_Returns401()
+    {
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+
+        var controller = CreateController();
+
+        ActionResult result = await controller.StreamHlsEpisodeAudio(Guid.NewGuid().ToString());
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+    }
+
+    /// <summary>Invalid GUID: 400 before anything else.</summary>
+    [Fact]
+    public async Task StreamHlsEpisodeAudio_InvalidItemId_Returns400()
+    {
+        var controller = CreateController();
+
+        ActionResult result = await controller.StreamHlsEpisodeAudio("not-a-guid");
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.NotNull(badRequest.Value);
+    }
+
+    /// <summary>
+    /// Cache-miss flow of the audio variant: ffmpeg is fed the item's STATIC /Videos/
+    /// stream, maps ONLY the audio track (no 0:v:0, no -c:v), seeks by the start
+    /// position, and writes into the VARIANT cache directory; the partial playlist is
+    /// served with the token injected into the audio-segments URLs.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisodeAudio_CacheMiss_MapsAudioOnlyIntoVariantDirectory()
+    {
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "The Bear S01E02 Ribs",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(39).Ticks
+        };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(episode.Id)).Returns(episode);
+
+        string fakeFfmpegPath = Path.Combine(_tempDir, "fake-ffmpeg-episode-audio");
+        long startTicks = TimeSpan.FromMinutes(5).Ticks;
+        string fakeFfmpegScript = "#!/bin/sh\n" +
+            "for last_arg in \"$@\"; do :; done\n" +
+            "dir=$(dirname \"$last_arg\")\n" +
+            "printf '%s\\n' \"$@\" > \"$dir/episode-audio-args.txt\"\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
+            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:10.000,\\nseg_0000.ts\\n' > \"$last_arg\"\n" +
+            "exit 0\n";
+        File.WriteAllText(fakeFfmpegPath, fakeFfmpegScript);
+#pragma warning disable CA3003, CA1416 // test-created path; Unix-only test
+        File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+#pragma warning restore CA3003, CA1416
+
+        var controller = CreateController(episode.Id.ToString());
+        controller.FfmpegPath = fakeFfmpegPath;
+
+        ActionResult result = await controller.StreamHlsEpisodeAudio(episode.Id.ToString(), startTicks);
+
+        var content = Assert.IsType<ContentResult>(result);
+        Assert.Equal("application/vnd.apple.mpegurl", content.ContentType);
+        Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
+
+        // The encode ran in the VARIANT directory (not the remux's bare-itemId one)
+        string hlsDir = _cache.GetHlsDirectoryPath(VideoAudioController.EpisodeAudioCacheKey(episode.Id.ToString(), startTicks), 0);
+        string recordedArgs = File.ReadAllText(Path.Combine(hlsDir, "episode-audio-args.txt"));
+
+        Assert.Contains($"/Videos/{episode.Id}/stream?static=true", recordedArgs, StringComparison.Ordinal);
+        Assert.Contains("-ss", recordedArgs, StringComparison.Ordinal);
+        Assert.Contains("0:a:0", recordedArgs, StringComparison.Ordinal);
+        Assert.DoesNotContain("0:v:0", recordedArgs, StringComparison.Ordinal);
+        Assert.DoesNotContain("-c:v", recordedArgs, StringComparison.Ordinal);
+        Assert.Contains($"/alexaskill/api/video-audio/episode/{episode.Id}/audio-segments/{startTicks}/", recordedArgs, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The audio-segments route resolves the VARIANT directory (start position in the
+    /// path), serves its segments, and rejects a missing token.
+    /// </summary>
+    [Fact]
+    public async Task GetEpisodeAudioSegment_ServesVariantDirectory_AndRejectsMissingToken()
+    {
+        string itemId = Guid.NewGuid().ToString();
+        long startTicks = TimeSpan.FromMinutes(5).Ticks;
+
+        string hlsDir = _cache.GetHlsDirectoryPath(VideoAudioController.EpisodeAudioCacheKey(itemId, startTicks), 0);
+        Directory.CreateDirectory(hlsDir);
+        string segPath = Path.Combine(hlsDir, "seg_0000.ts");
+        File.WriteAllText(segPath, "segment-bytes");
+
+        var authorized = CreateController(itemId);
+        ActionResult served = await authorized.GetEpisodeAudioSegment(itemId, startTicks, "seg_0000.ts");
+        var file = Assert.IsType<PhysicalFileResult>(served);
+        Assert.Equal("video/mp2t", file.ContentType);
+
+        // A different start position is a DIFFERENT directory: not found
+        ActionResult wrongStart = await authorized.GetEpisodeAudioSegment(itemId, 0, "seg_0000.ts");
+        Assert.IsType<NotFoundObjectResult>(wrongStart);
+
+        // No token: rejected
+        var anonymous = CreateController();
+        ActionResult rejected = await anonymous.GetEpisodeAudioSegment(itemId, startTicks, "seg_0000.ts");
+        Assert.IsType<UnauthorizedObjectResult>(rejected);
+    }
+
     /// <summary>
     /// JF-498 review I1, endpoint level: a re-encode over interrupted-encode debris
     /// (non-empty playlist WITHOUT ENDLIST, no active encode) must start ffmpeg over a

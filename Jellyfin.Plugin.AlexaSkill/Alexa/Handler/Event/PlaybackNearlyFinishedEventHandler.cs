@@ -207,9 +207,12 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         // Update the device queue pointer for crash recovery (guarded, JF-424.1).
         UpdateRecoveryPointer(deviceId, itemId, context, itemNameForLog: null);
 
-        // Use the optimized /stream?static=true endpoint for pre-fetched playback
-        // (the original /universal endpoint adds an extra redirect hop)
-        string audioUrl = GetStreamUrl(itemId, user);
+        // JF-507: codec-gated audio-launch decision; an EAC3-family video item in the
+        // queue routes to the audio-only transcode instead of dying on the raw static
+        // bytes (JF-505 does not apply: this launch is audio-shaped). Offset 0: a fresh
+        // queue advance always plays from the item start.
+        AudioLaunchSource source = ResolveAudioLaunchSource(item, itemId, user, 0);
+        string audioUrl = source.Url;
 
         Logger.LogInformation(
             "Pre-fetching next track for gapless playback: {ItemName} ({ItemId}), loop={LoopMode}, shuffle={Shuffle} (reshuffledQueue={Reshuffled})",

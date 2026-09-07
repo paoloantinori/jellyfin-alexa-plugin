@@ -106,14 +106,19 @@ public class JumpToPositionIntentHandler : BaseHandler
         int offsetMs = (int)TimeSpan.FromTicks(targetTicks).TotalMilliseconds;
         string positionStr = FormatTimeSpan(TimeSpan.FromTicks(targetTicks), locale);
 
+        // JF-507: shared codec-gated audio-launch decision. The jump target is
+        // item-absolute, which is exactly the ?start= the transcoded shape wants; an
+        // audio item keeps the raw static URL and the directive offset.
+        string itemId = session.FullNowPlayingItem.Id.ToString();
+        AudioLaunchSource source = ResolveAudioLaunchSource(session.FullNowPlayingItem, itemId, user, offsetMs);
         var response = BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll,
-            GetStreamUrl(session.FullNowPlayingItem.Id.ToString(), user),
-            session.FullNowPlayingItem.Id.ToString(),
+            source.Url,
+            itemId,
             session.FullNowPlayingItem,
             user,
             context,
-            offsetMs);
+            source.OffsetMs);
 
         response.Response.OutputSpeech = new PlainTextOutputSpeech
         {

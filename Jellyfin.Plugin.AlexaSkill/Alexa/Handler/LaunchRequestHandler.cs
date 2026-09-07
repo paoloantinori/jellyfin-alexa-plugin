@@ -366,7 +366,10 @@ public class LaunchRequestHandler : BaseHandler
         {
             string item_id = session.FullNowPlayingItem.Id.ToString();
 
-            return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, session.FullNowPlayingItem, user, context);
+            // JF-507: shared codec-gated audio-launch decision (an EAC3-family video
+            // item on the audio path routes to the audio-only episode HLS transcode).
+            AudioLaunchSource source = ResolveAudioLaunchSource(session.FullNowPlayingItem, item_id, user, 0);
+            return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source.Url, item_id, session.FullNowPlayingItem, user, context);
         }
         else
         {
@@ -379,7 +382,8 @@ public class LaunchRequestHandler : BaseHandler
             string item_id = item.Id.ToString();
             session.FullNowPlayingItem = item;
 
-            return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, item, user, context);
+            AudioLaunchSource source = ResolveAudioLaunchSource(item, item_id, user, 0);
+            return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source.Url, item_id, item, user, context);
         }
     }
 

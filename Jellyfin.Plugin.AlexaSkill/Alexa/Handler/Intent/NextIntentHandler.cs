@@ -83,7 +83,11 @@ public class NextIntentHandler : BaseHandler
                 session.FullNowPlayingItem = nextItem;
 
                 Logger.LogDebug("NextIntent: playing next item '{ItemName}' ({ItemId})", nextItem.Name, nextItemId);
-                return Task.FromResult<SkillResponse>(BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, nextItem, user, context));
+                // JF-507: codec-gated audio-launch decision; an EAC3-family video item in
+                // the queue routes to the audio-only transcode instead of dying on the raw
+                // static bytes (JF-505 does not apply: this launch is audio-shaped).
+                AudioLaunchSource source = ResolveAudioLaunchSource(nextItem, item_id, user, 0);
+                return Task.FromResult<SkillResponse>(BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source.Url, item_id, nextItem, user, context));
             }
         }
 

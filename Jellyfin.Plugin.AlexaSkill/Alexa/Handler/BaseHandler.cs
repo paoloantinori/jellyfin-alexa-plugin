@@ -434,7 +434,7 @@ public abstract class BaseHandler
         {
             if (!Guid.TryParse(context.System!.User!.AccessToken, out Guid userId))
             {
-                return ResponseBuilder.Tell(ResponseStrings.Get("UserNotFound", GetLocale(request)));
+                return BuildUserNotFoundResponse(request);
             }
 
             user = _config.GetUserById(userId);
@@ -444,7 +444,7 @@ public abstract class BaseHandler
         {
             Logger.LogError("User not found for access token or person ID");
 
-            return ResponseBuilder.Tell(ResponseStrings.Get("UserNotFound", GetLocale(request)));
+            return BuildUserNotFoundResponse(request);
         }
 
         // JF-477: the session lookup runs on EVERY request of every dialog turn, and
@@ -470,7 +470,7 @@ public abstract class BaseHandler
         if (session == null)
         {
             Logger.LogError("Session not found for user {UserId}", user.Id);
-            return ResponseBuilder.Tell(ResponseStrings.Get("UserNotFound", GetLocale(request)));
+            return BuildUserNotFoundResponse(request);
         }
 
         try
@@ -680,6 +680,27 @@ public abstract class BaseHandler
     /// <returns>URL to the episode remux HLS endpoint.</returns>
     public string GetEpisodeVideoAudioUrl(string itemId)
         => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/episode/{itemId}/stream.m3u8?token={StreamTokenHelper.Mint(itemId, _config.StreamTokenSecret)}").ToString();
+
+    /// <summary>
+    /// Get the video-audio URL for the AUDIO-ONLY episode transcode (JF-507): the item's
+    /// audio track alone (-map 0:a:0, AAC stereo) as an HLS stream, for AudioPlayer
+    /// launches of video items whose audio codec has no Echo decoder (the raw
+    /// <c>/Audio/{id}/stream?static=true</c> URL serves the undecodable bytes and the Dot
+    /// dies at 1ms). Optional <paramref name="startTicks"/> seeks the encode (ffmpeg -ss):
+    /// the returned stream's timeline starts AT that position, so the AudioPlayer.Play
+    /// directive must carry offset 0 for it. Token is the same item-scoped HMAC as the
+    /// other video-audio endpoints (JF-309).
+    /// </summary>
+    /// <param name="itemId">Id of the video item.</param>
+    /// <param name="startTicks">Resume position in .NET ticks (0 to play from the start).</param>
+    /// <returns>URL to the audio-only episode HLS endpoint.</returns>
+    public string GetEpisodeAudioUrl(string itemId, long startTicks = 0)
+    {
+        string query = startTicks > 0
+            ? $"?start={startTicks}&token={StreamTokenHelper.Mint(itemId, _config.StreamTokenSecret)}"
+            : $"?token={StreamTokenHelper.Mint(itemId, _config.StreamTokenSecret)}";
+        return new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/episode/{itemId}/audio.m3u8{query}").ToString();
+    }
 
     /// <summary>
     /// Resolve the static-vs-HLS-remux decision for a VideoApp launch by probing the
@@ -952,6 +973,33 @@ public abstract class BaseHandler
             }
         };
     }
+
+    /// <summary>
+    /// Whether the request is an Alexa EVENT/system request whose response may not
+    /// carry outputSpeech, card, or reprompt (JF-507): every AudioPlayer event
+    /// (PlaybackStarted/Finished/NearlyFinished/Stopped/Failed), SessionEndedRequest,
+    /// and SystemExceptionRequest. Amazon rejects any other shape with INVALID_RESPONSE
+    /// "The following directives are not supported: Response may not contain an
+    /// outputSpeech" (live incident 2026-09-06 17:12:52, corr=e54b0532/1eab419e: the
+    /// JF-477 session-lookup fast-fail degraded a PlaybackFailed event to the
+    /// UserNotFound Tell). Shared with the controller's own degradation sites.
+    /// </summary>
+    /// <param name="request">The incoming skill request.</param>
+    /// <returns>True when the response must be the empty keep-alive shape.</returns>
+    public static bool IsEventRequest(Request request)
+        => request is AudioPlayerRequest or SessionEndedRequest or SystemExceptionRequest;
+
+    /// <summary>
+    /// The user/session-resolution degradation in the legal shape for the request:
+    /// event requests (<see cref="IsEventRequest"/>) get the empty keep-alive
+    /// response; every other request gets the localized UserNotFound Tell (JF-507).
+    /// </summary>
+    /// <param name="request">The incoming skill request.</param>
+    /// <returns>The degradation response.</returns>
+    private SkillResponse BuildUserNotFoundResponse(Request request)
+        => IsEventRequest(request)
+            ? BuildKeepAliveResponse()
+            : ResponseBuilder.Tell(ResponseStrings.Get("UserNotFound", GetLocale(request)));
 
     /// <summary>
     /// Build a response that ends the skill session, causing APL documents to dismiss.
@@ -1254,14 +1302,15 @@ public abstract class BaseHandler
             Logger.LogDebug(
                 "BuildVideoAppAudioResponse: device {DeviceId} has no VideoApp interface, item {ItemId} degrades to AudioPlayer",
                 context?.System?.Device?.DeviceID ?? "unknown", itemId);
+            AudioLaunchSource source = ResolveAudioLaunchSource(item, itemId, user, 0);
             return BuildAudioPlayerResponse(
                 PlayBehavior.ReplaceAll,
-                GetStreamUrl(itemId, user),
+                source.Url,
                 itemId,
                 item,
                 user,
                 context,
-                0,
+                source.OffsetMs,
                 announceLocale);
         }
 
@@ -1310,6 +1359,79 @@ public abstract class BaseHandler
 
         AttachAnnounceIfEnabled(response, item, user, announceLocale);
         return response;
+    }
+
+    /// <summary>
+    /// The resolved stream source of an AUDIO-SHAPED launch (AudioPlayer.Play): the URL
+    /// plus the offset the directive must carry for it (JF-507).
+    /// </summary>
+    /// <param name="Url">The stream URL (raw static or the audio-only episode transcode).</param>
+    /// <param name="OffsetMs">The offsetInMilliseconds the AudioPlayer.Play directive must carry with that URL.</param>
+    /// <param name="RoutedToTranscode">True when the URL is the audio-only episode transcode whose output timeline STARTS at the <c>?start=</c> seek point (the offset moved into the URL, directive offset 0).</param>
+    protected readonly record struct AudioLaunchSource(string Url, int OffsetMs, bool RoutedToTranscode);
+
+    /// <summary>
+    /// JF-507 decision point for every AUDIO-SHAPED launch of an item: which stream URL
+    /// the AudioPlayer.Play directive should point at, and the offset to pair with it.
+    /// A VIDEO item (Movie/Episode) whose audio codec has no Echo decoder (eac3/ac3/
+    /// truehd/dts) cannot ride the raw static <c>/Audio/{id}/stream?static=true</c> URL:
+    /// that endpoint serves the source bytes (here the whole MKV with its EAC3 track)
+    /// and the Dot's AudioPlayer dies at 1ms (live incident 2026-09-06 corr=f0240020,
+    /// MEDIA_ERROR_SERVICE_UNAVAILABLE). Those items route to the audio-only episode
+    /// HLS transcode instead, and the offset moves into the URL (<c>?start=</c>, an
+    /// ffmpeg -ss seek at encode time: a from-zero encode runs at ~49x realtime, so the
+    /// segment a deep offset maps to does not exist on the first fetch), so the paired
+    /// offset is 0. Everything else (audio items, video items with decodable audio)
+    /// keeps today's raw static URL and the caller's offset unchanged.
+    /// Sits next to <see cref="BuildVideoAppAudioResponse"/>'s screenless degradation
+    /// (its mirror case: a VideoApp-shaped launch of audio content degrading to
+    /// AudioPlayer) so every audio-shaped launch of a video item benefits; the wired
+    /// sites are the resume-yes path, the ResumeIntent tail, the session-queue resume,
+    /// JumpToPosition (absolute target) and the degradation itself.
+    /// </summary>
+    /// <param name="item">The item being launched (null keeps the raw static URL).</param>
+    /// <param name="itemId">The item ID (stream token and URL path).</param>
+    /// <param name="user">The user, for the raw static URL's api_key.</param>
+    /// <param name="offsetMs">The resume offset the caller wants (item-relative). MUST be known item-absolute when the caller suspects the item routes to the transcode: a device/stream-relative offset minted into <c>?start=</c> seeks the wrong position (see ResumeIntentHandler's provenance gate).</param>
+    /// <returns>The (URL, offset) pair for the AudioPlayer.Play directive; <see cref="AudioLaunchSource.RoutedToTranscode"/> tells the caller which timeline the offset semantics belong to.</returns>
+    protected AudioLaunchSource ResolveAudioLaunchSource(BaseItem? item, string itemId, Entities.User user, int offsetMs)
+    {
+        if (item is MediaBrowser.Controller.Entities.Movies.Movie
+            or MediaBrowser.Controller.Entities.TV.Episode)
+        {
+            string? audioCodec = TryResolveAudioCodec(item);
+            if (VideoAppStreamPolicy.AudioRequiresTranscode(audioCodec))
+            {
+                long startTicks = Math.Max((long)offsetMs * TimeSpan.TicksPerMillisecond, 0);
+                Logger.LogDebug(
+                    "Audio launch of video item {ItemId}: audio codec '{AudioCodec}' has no Echo decoder, routing to the audio-only HLS transcode (start={StartTicks} ticks)",
+                    itemId, audioCodec, startTicks);
+                return new AudioLaunchSource(GetEpisodeAudioUrl(itemId, startTicks), 0, RoutedToTranscode: true);
+            }
+        }
+
+        return new AudioLaunchSource(GetStreamUrl(itemId, user), offsetMs, RoutedToTranscode: false);
+    }
+
+    /// <summary>
+    /// Handler-side probe of an item's first audio stream codec (JF-507). Fail-open:
+    /// any failure (no statically injected MediaSourceManager under tests, DB read
+    /// error) yields null so the launch keeps the raw static URL; the transcode
+    /// endpoint re-probes server-side and picks its own ffmpeg arguments.
+    /// </summary>
+    /// <param name="item">The item to probe.</param>
+    /// <returns>Lowercase audio codec, or null when unavailable.</returns>
+    private string? TryResolveAudioCodec(BaseItem item)
+    {
+        try
+        {
+            return VideoAppStreamPolicy.ExtractCodecs(item.GetMediaStreams()).AudioCodec;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Audio launch codec probe: could not read media streams for item {ItemId}", item.Id);
+            return null;
+        }
     }
 
     /// <summary>

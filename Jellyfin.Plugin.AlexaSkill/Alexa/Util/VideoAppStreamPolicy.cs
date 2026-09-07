@@ -95,6 +95,24 @@ public static class VideoAppStreamPolicy
     }
 
     /// <summary>
+    /// Whether an AUDIO-ONLY launch of an item (JF-507: the AudioPlayer resume of a
+    /// video item on a screenless device) needs the AAC transcode instead of the raw
+    /// static <c>/Audio/{id}/stream?static=true</c> URL: the source audio codec has no
+    /// decoder on the Echo, so the raw bytes die at ~1ms (live incident 2026-09-06
+    /// corr=f0240020: an EAC3 episode audio-resumed on a Dot, MEDIA_ERROR_SERVICE_UNAVAILABLE
+    /// at offsetInMilliseconds=1). The video codec is deliberately NOT consulted: an
+    /// audio-only stream carries no video track, so a non-H.264 video codec (which forces
+    /// Static on the VideoApp path because that path copies video) is no obstacle here.
+    /// An unknown codec (null) keeps the static URL: the probe may only ADD the
+    /// transcode route, never break the launch path (same fail-open shape as
+    /// <see cref="Decide"/>, and the endpoint re-probes server-side anyway).
+    /// </summary>
+    /// <param name="audioCodec">First audio stream codec, or null when unknown.</param>
+    /// <returns>True when the audio-only launch must route to the AAC transcode.</returns>
+    public static bool AudioRequiresTranscode(string? audioCodec)
+        => !string.IsNullOrWhiteSpace(audioCodec) && EchoIncompatibleAudioCodecs.Contains(audioCodec);
+
+    /// <summary>
     /// Extract the first video and first audio codec from an item's media streams.
     /// Used by every caller that holds a <see cref="MediaStream"/> list (the handler
     /// side via <c>BaseItem.GetMediaStreams()</c>, the controller side via
