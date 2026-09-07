@@ -4,10 +4,10 @@ title: >-
   Night work: generated per-locale invocation reference doc (all 17 locales,
   every shape, script-derived) + execute JF-511's chosen per-locale e2e shape if
   evidence supports
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-06 20:13'
-updated_date: '2026-09-07 00:51'
+updated_date: '2026-09-07 01:56'
 labels:
   - documentation
   - i18n
@@ -78,3 +78,9 @@ Gate incident (disclosed, resolved): the gate's sandbox symlinked the 17 real mo
 
 Formal review dispositions (2026-09-07, orchestrator): Important-85 APPLIED (the locale-set validation is now bidirectional: a NEW locale model file fails generation loudly instead of being silently omitted while the doc claims completeness); the reverse-GROUPS guard APPLIED (an intent removed from every model aborts instead of rendering a phantom appendix row); the notes' union count corrected (64 distinct intents, not 61 - 61 was the en-US count). Reviewer's sandbox incident verified resolved: model_it-IT.json is byte-identical to HEAD (no residual diff). The doc regenerated after hardening: md5 unchanged (eb8cc311...), confirming the guards are pure validation with no output change. Remaining Pyright hints are intentional underscore unpacking placeholders.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Both night directives delivered 2026-09-07. Part 2 (the doc, commit c0e14914): scripts/generate_voice_reference.py emits docs/VOICE_COMMANDS_BY_LOCALE.md from the 17 models (11,632 lines / 7,939 phrases; deterministic; --check drift guard; bidirectional locale-set + reverse-GROUPS validation from the review; README TOC wired; docs-site carries no obligation for a non-diagram doc). Part 1 (per-locale e2e) executed via JF-511 rather than duplicated here: the smoke suite for the 11 reachable locales is live-green (see JF-511); the 5 blocked locales await JF-513. This task's remaining residue is none; the doc half had no code beyond the generator (gates: /simplify worker-inline + formal review with the Important-85 hardening applied).
+<!-- SECTION:FINAL_SUMMARY:END -->
