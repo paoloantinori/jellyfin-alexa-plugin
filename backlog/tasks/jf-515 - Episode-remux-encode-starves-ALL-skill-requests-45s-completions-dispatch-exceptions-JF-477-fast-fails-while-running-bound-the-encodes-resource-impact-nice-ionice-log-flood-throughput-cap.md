@@ -4,9 +4,10 @@ title: >-
   Episode remux encode starves ALL skill requests (45s completions, dispatch
   exceptions, JF-477 fast-fails) while running: bound the encode's resource
   impact (nice/ionice, log flood, throughput cap)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-07 12:18'
+updated_date: '2026-09-07 19:42'
 labels:
   - performance
   - video
@@ -46,3 +47,9 @@ FIX DIRECTIONS (pick with measurement): (1) lower the ffmpeg process priority (n
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+REPRODUCTION + LEVER MEASUREMENTS (2026-09-07 evening, controlled runs on minix, PlayArtistSongs via Simulator as the probe, baseline idle 0.20-0.21s): R1 encode alone (Despicable Me 4, -c:v copy + AAC, ~65x realtime, 111% CPU=1 core of 4, load peak 1.8): 0.25-0.34s, NO starvation. R2 encode + device-like segment fetch via PUBLIC url + plugin Debug logging (box standing config: Serilog sync Console sink, only File is Async): spike class 4.31s reproduced (server-side gap INSIDE the Jellyfin items query, Completed=4304.7ms corr=02e83234), stderr flood measured 982 lines/60s. A second sporadic 4.44s spike at load 3.1-3.5 with two encodes. EXPERIMENT B, same encode+traffic with plugin override at Information (flood to console = 0): 10 queries, median 0.47s, MAX 1.39s, no 4s-class spike. EXPERIMENT P (priority): renice +19 + ionice idle on the live ffmpeg (succeeded as abc user after the first attempt hit the wrong PID): NO measurable improvement (0.03-1.96s with spikes persisting at load 3-4; the encode is not CPU-dominant). VERDICT: the stderr flood (16 lines/s at Debug on the sync console sink) is the measured lever; ffmpeg priority is RULED OUT by measurement (do not add nice/ionice without new evidence). 1-2s spike class persists even at Information at load 3+ (Jellyfin items query stalls under concurrent encode I/O + segment serving); untested candidate levers for that class, filed for follow-up: (a) ffmpeg source read via localhost instead of the public https URL (currently hairpins through Cloudflare+TLS; the plugin runs in-process so 127.0.0.1 is always reachable), (b) -readrate cap. FIX IMPLEMENTED: aggregating stderr drain in StartFfmpegProcess (errors immediate at Warning, routine lines counted with 30s Debug summaries + final summary). Box state during the work: plugin logging override temporarily at Information for experiments; RESTORE to Debug before closing.
+<!-- SECTION:NOTES:END -->
