@@ -9,6 +9,7 @@ using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
 using global::Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
@@ -224,46 +225,6 @@ public class FollowMeIntentHandlerTests : PluginTestBase, IDisposable
     }
 
     [Fact]
-    public async Task FollowMe_PicksMostRecentlyActiveQueue()
-    {
-        var handler = CreateHandler();
-        var session = CreateSession();
-        var context = CreateContext("device-kitchen");
-
-        var recentItemId = Guid.NewGuid();
-        var olderItemId = Guid.NewGuid();
-        var recentItem = new Audio { Id = recentItemId, Name = "Recent Song" };
-        var olderItem = new Audio { Id = olderItemId, Name = "Older Song" };
-
-        // Set up two devices: older one first, then a more recent one
-        _queueManager.SetQueue("device-bedroom", new List<string> { olderItemId.ToString() }, 0);
-
-        // Slightly later, set up the living room queue
-        _queueManager.SetQueue("device-livingroom", new List<string> { recentItemId.ToString() }, 0);
-
-        // SetQueue stamps DateTime.UtcNow; two back-to-back calls can collide within a
-        // single tick, making the ordering nondeterministic. Pin explicit timestamps so
-        // the "most recently modified" selection is deterministic regardless of clock
-        // resolution (the handler orders by Queue.LastModifiedUtc descending).
-        _queueManager.GetQueue("device-bedroom")!.LastModifiedUtc = DateTime.UtcNow.AddMinutes(-10);
-        _queueManager.GetQueue("device-livingroom")!.LastModifiedUtc = DateTime.UtcNow;
-
-        _libraryManagerMock.Setup(l => l.GetItemById(recentItemId)).Returns(recentItem);
-        _libraryManagerMock.Setup(l => l.GetItemById(olderItemId)).Returns(olderItem);
-
-        var response = await handler.HandleAsync(
-            new IntentRequest { Intent = new Intent { Name = "FollowMeIntent" } },
-            context,
-            TestHelpers.CreateTestUser(),
-            session,
-            CancellationToken.None);
-
-        // Should pick the most recently modified queue (livingroom)
-        var text = TestHelpers.GetSpeechText(response);
-        Assert.Contains("Recent Song", text);
-    }
-
-    [Fact]
     public async Task FollowMe_DoesNotPickCurrentDeviceQueue()
     {
         var handler = CreateHandler();
@@ -295,31 +256,6 @@ public class FollowMeIntentHandlerTests : PluginTestBase, IDisposable
     // =====================================================================
     // Edge cases
     // =====================================================================
-
-    [Fact]
-    public async Task FollowMe_SourceQueueClearedAfterTransfer()
-    {
-        var handler = CreateHandler();
-        var session = CreateSession();
-        var context = CreateContext("device-kitchen");
-
-        var itemId = Guid.NewGuid();
-        var item = new Audio { Id = itemId, Name = "Song" };
-
-        _queueManager.SetQueue("device-livingroom", new List<string> { itemId.ToString() }, 0);
-        _libraryManagerMock.Setup(l => l.GetItemById(itemId)).Returns(item);
-
-        await handler.HandleAsync(
-            new IntentRequest { Intent = new Intent { Name = "FollowMeIntent" } },
-            context,
-            TestHelpers.CreateTestUser(),
-            session,
-            CancellationToken.None);
-
-        // Source device should have no active queue anymore
-        var sourceQueues = _queueManager.GetAllActiveQueues(excludeDeviceId: "device-kitchen");
-        Assert.Empty(sourceQueues);
-    }
 
     /// <summary>
     /// Documents the by-design offset-0 limitation: follow-me resumes the current item
@@ -380,31 +316,6 @@ public class FollowMeIntentHandlerTests : PluginTestBase, IDisposable
         Assert.DoesNotContain(response.Response.Directives ?? new List<IDirective>(), d => d is AudioPlayerPlayDirective);
         // Source queue must survive: the transfer did not complete.
         Assert.NotEmpty(_queueManager.GetAllActiveQueues(excludeDeviceId: "device-kitchen"));
-    }
-
-    [Fact]
-    public async Task FollowMe_TransfersRepeatAndShuffleSettings()
-    {
-        var handler = CreateHandler();
-        var session = CreateSession();
-        var context = CreateContext("device-kitchen");
-
-        var itemId = Guid.NewGuid();
-        var item = new Audio { Id = itemId, Name = "Song" };
-
-        _queueManager.SetQueue("device-livingroom", new List<string> { itemId.ToString() }, 0, "All", "Shuffle");
-        _libraryManagerMock.Setup(l => l.GetItemById(itemId)).Returns(item);
-
-        await handler.HandleAsync(
-            new IntentRequest { Intent = new Intent { Name = "FollowMeIntent" } },
-            context,
-            TestHelpers.CreateTestUser(),
-            session,
-            CancellationToken.None);
-
-        var kitchenQueue = _queueManager.GetOrCreateQueue("device-kitchen");
-        Assert.Equal("All", kitchenQueue.RepeatMode);
-        Assert.Equal("Shuffle", kitchenQueue.PlaybackOrder);
     }
 
     [Fact]
@@ -469,5 +380,210 @@ public class FollowMeIntentHandlerTests : PluginTestBase, IDisposable
         var result = _queueManager.GetAllActiveQueues();
         Assert.Single(result);
         Assert.Equal("device-ok", result[0].DeviceId);
+    }
+
+    // =====================================================================
+    // JF-270 acceptance criteria (spec-exact)
+    //
+    // Moq CANNOT intercept DeviceQueueManager (DeviceQueueManager.cs: sealed class,
+    // non-virtual members), so the AC's "mock DeviceQueueManager / mock verification"
+    // is implemented against the real instance: GetAllActiveQueues inputs are set up
+    // through SetQueue + explicitly pinned LastModifiedUtc, and SetQueue/Clear calls
+    // are verified from the manager's observable post-state (a pre-call null-check on
+    // the target device's queue makes each assertion non-vacuous: only SetQueue can
+    // create it, only Clear can remove it).
+    // =====================================================================
+
+    /// <summary>
+    /// JF-270 AC #1: with multiple other-device queues, the handler plays the MOST
+    /// RECENTLY MODIFIED queue's CURRENT item (not the first item). LastModifiedUtc is
+    /// pinned explicitly (SetQueue stamps DateTime.UtcNow; back-to-back calls can
+    /// collide within one clock tick).
+    /// </summary>
+    [Fact]
+    public async Task FollowMe_MultipleOtherDeviceQueues_PlaysMostRecentlyModifiedQueueCurrentItem()
+    {
+        var handler = CreateHandler();
+        var session = CreateSession();
+        var context = CreateContext("device-kitchen");
+
+        var olderItemId = Guid.NewGuid();
+        var laterFirstItemId = Guid.NewGuid();
+        var laterCurrentItemId = Guid.NewGuid();
+        var laterCurrentItem = new Audio { Id = laterCurrentItemId, Name = "Later Current Song" };
+
+        _queueManager.SetQueue("device-bedroom", new List<string> { olderItemId.ToString() }, 0);
+        _queueManager.SetQueue("device-livingroom", new List<string> { laterFirstItemId.ToString(), laterCurrentItemId.ToString() }, 1);
+        _queueManager.GetQueue("device-bedroom")!.LastModifiedUtc = DateTime.UtcNow.AddMinutes(-10);
+        _queueManager.GetQueue("device-livingroom")!.LastModifiedUtc = DateTime.UtcNow;
+
+        _libraryManagerMock.Setup(l => l.GetItemById(laterCurrentItemId)).Returns(laterCurrentItem);
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "FollowMeIntent" } },
+            context,
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        var playDirective = Assert.IsType<AudioPlayerPlayDirective>(
+            Assert.Single(response.Response.Directives!.Where(d => d is AudioPlayerPlayDirective)));
+
+        // The played item is the LATER queue's CURRENT item (index 1), not the older
+        // queue's item and not the later queue's first item.
+        Assert.Equal(laterCurrentItemId.ToString(), playDirective.AudioItem.Stream.Token);
+        Assert.Contains($"/Audio/{laterCurrentItemId}/stream", playDirective.AudioItem.Stream.Url, StringComparison.Ordinal);
+
+        // Independent selection signal: only the winning source queue gets cleared.
+        Assert.Null(_queueManager.GetQueue("device-livingroom"));
+        Assert.NotNull(_queueManager.GetQueue("device-bedroom"));
+    }
+
+    /// <summary>
+    /// JF-270 AC #2: when GetAllActiveQueues returns no OTHER-device queues (only the
+    /// current device has an active queue), the response speaks the localized
+    /// FollowMeNothingPlaying for the request locale. it-IT is pinned so the assert
+    /// cannot pass via the en-US fallback.
+    /// </summary>
+    [Fact]
+    public async Task FollowMe_NoOtherDeviceQueues_SpeaksLocalizedFollowMeNothingPlaying()
+    {
+        var handler = CreateHandler();
+        var session = CreateSession();
+        var context = CreateContext("device-kitchen");
+
+        // Only the CURRENT device has a queue: GetAllActiveQueues("device-kitchen") is empty.
+        _queueManager.SetQueue("device-kitchen", new List<string> { Guid.NewGuid().ToString() }, 0);
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "FollowMeIntent" }, Locale = "it-IT" },
+            context,
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        Assert.Equal(
+            ResponseStrings.Get("FollowMeNothingPlaying", "it-IT"),
+            TestHelpers.GetSpeechText(response));
+    }
+
+    /// <summary>
+    /// JF-270 AC #3: a null DeviceQueueManager (the optional DI dependency was not
+    /// provided) returns the localized FollowMeNothingPlaying instead of crashing.
+    /// </summary>
+    [Fact]
+    public async Task FollowMe_NullQueueManager_SpeaksLocalizedFollowMeNothingPlaying()
+    {
+        var handler = new FollowMeIntentHandler(
+            _sessionManagerMock.Object,
+            _config,
+            _libraryManagerMock.Object,
+            _userManagerMock.Object,
+            _loggerFactory,
+            queueManager: null);
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "FollowMeIntent" }, Locale = "it-IT" },
+            CreateContext("device-kitchen"),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            CancellationToken.None);
+
+        Assert.Equal(
+            ResponseStrings.Get("FollowMeNothingPlaying", "it-IT"),
+            TestHelpers.GetSpeechText(response));
+        Assert.Empty(response.Response.Directives);
+    }
+
+    /// <summary>
+    /// JF-270 AC #4: after a successful transfer, SetQueue is called on the CURRENT
+    /// device (queue lands with the source's items, index, repeat mode and playback
+    /// order) and Clear is called on the SOURCE device's queue.
+    /// </summary>
+    [Fact]
+    public async Task FollowMe_SuccessfulTransfer_SetsQueueOnCurrentDeviceAndClearsSourceQueue()
+    {
+        var handler = CreateHandler();
+        var session = CreateSession();
+        var context = CreateContext("device-kitchen");
+
+        var firstItemId = Guid.NewGuid();
+        var currentItemId = Guid.NewGuid();
+        var item = new Audio { Id = currentItemId, Name = "Song" };
+
+        _queueManager.SetQueue("device-livingroom", new List<string> { firstItemId.ToString(), currentItemId.ToString() }, 1, "All", "Shuffle");
+        _libraryManagerMock.Setup(l => l.GetItemById(currentItemId)).Returns(item);
+
+        // Preconditions that make the post-state assertions non-vacuous: the kitchen has
+        // no queue yet (only the handler's SetQueue can create it) and the living room
+        // has one (only the handler's Clear can remove it).
+        Assert.Null(_queueManager.GetQueue("device-kitchen"));
+
+        await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "FollowMeIntent" } },
+            context,
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        // SetQueue ran on the current device with the source queue's full state.
+        DeviceQueue? kitchenQueue = _queueManager.GetQueue("device-kitchen");
+        Assert.NotNull(kitchenQueue);
+        Assert.Equal(new List<string> { firstItemId.ToString(), currentItemId.ToString() }, kitchenQueue.ItemIds);
+        Assert.Equal(1, kitchenQueue.CurrentIndex);
+        Assert.Equal("All", kitchenQueue.RepeatMode);
+        Assert.Equal("Shuffle", kitchenQueue.PlaybackOrder);
+
+        // Clear ran on the source device's queue.
+        Assert.Null(_queueManager.GetQueue("device-livingroom"));
+    }
+
+    /// <summary>
+    /// JF-270 AC #5: the success response carries an AudioPlayer.Play directive whose
+    /// stream points at the source queue's CURRENT item (token plus the /Audio/{id}/stream
+    /// URL with the user's api_key) AND the localized FollowMeSuccess speech with the
+    /// title interpolated (SSML variant, the shape the handler builds for locales that
+    /// define FollowMeSuccessSsml).
+    /// </summary>
+    [Fact]
+    public async Task FollowMe_Success_PlaysSourceCurrentItemAndSpeaksLocalizedFollowMeSuccess()
+    {
+        var handler = CreateHandler();
+        var session = CreateSession();
+        var context = CreateContext("device-kitchen");
+        var user = TestHelpers.CreateTestUser(jellyfinToken: "test-token");
+
+        const string title = "Current Song";
+        var firstItemId = Guid.NewGuid();
+        var currentItemId = Guid.NewGuid();
+        var item = new Audio { Id = currentItemId, Name = title };
+
+        _queueManager.SetQueue("device-livingroom", new List<string> { firstItemId.ToString(), currentItemId.ToString() }, 1);
+        _libraryManagerMock.Setup(l => l.GetItemById(currentItemId)).Returns(item);
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "FollowMeIntent" }, Locale = "en-US" },
+            context,
+            user,
+            session,
+            CancellationToken.None);
+
+        var playDirective = Assert.IsType<AudioPlayerPlayDirective>(
+            Assert.Single(response.Response.Directives!.Where(d => d is AudioPlayerPlayDirective)));
+
+        // The directive plays the source queue's current item (index 1), not its first item.
+        Assert.Equal(currentItemId.ToString(), playDirective.AudioItem.Stream.Token);
+        Assert.Contains(
+            $"/Audio/{currentItemId}/stream?static=true&api_key={user.JellyfinToken}",
+            playDirective.AudioItem.Stream.Url,
+            StringComparison.Ordinal);
+
+        // The speech is the localized FollowMeSuccess with the title interpolated.
+        // The title has no XML-reserved characters, so EscapeXml is the identity here.
+        var speech = Assert.IsType<SsmlOutputSpeech>(response.Response.OutputSpeech);
+        Assert.Equal(
+            $"<speak>{BaseHandler.GetSsml("FollowMeSuccessSsml", "en-US", title)}</speak>",
+            speech.Ssml);
+        Assert.Contains(title, TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
     }
 }
