@@ -4,10 +4,10 @@ title: >-
   Seek on the episode HLS errors out when it lands beyond the running encode's
   head: hold-for-segment for near-ahead seeks + document the boundary + log
   segment 404s
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-06 08:48'
-updated_date: '2026-09-07 04:33'
+updated_date: '2026-09-07 04:34'
 labels:
   - video
   - hls
@@ -121,3 +121,9 @@ are the mechanism probe).
 <!-- SECTION:NOTES:BEGIN -->
 Formal review dispositions (2026-09-07, orchestrator): NO findings at threshold; all six lenses verified against the surrounding production code (the playlist-listing gate's grammar-anchored match, the zero-segment first-request shape, the pin/finally eviction interplay, the converted tests' assertion preservation, the audiobook disk-head boundary matching the documented contract, the FindHlsDirectory hoist behavior-preserving). Two below-threshold observations recorded here per the landing rule: SetEncodeActiveForTest leaks the static registry entry on assertion failure only (per-test random GUIDs, no cross-test interference) - acceptable; the two hold-appears tests carry a 5s/100ms timing bound consistent with the repo's other timing tests.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented, reviewed, committed 2026-09-07 (commit a9bdcd34; deploy rides the next batch with the concurrent JF-506 DLL). GetSegment holds bounded (3.5s/200ms, RequestAborted-aware) for imminent segment misses (highest < n <= highest+2) on active episode and audiobook encodes, releasing only when ffmpeg's live playlist LISTS the segment (the completion gate from the review-90 fix: File.Exists would stream a truncated .ts); behind-head and far-ahead misses 404 immediately; every miss logs requested/highest/eligibility at Debug for the next device session's mechanism confirmation. The user-visible boundary documented at the hold site (smoothed within head or ~3s beyond; far-ahead still 404 until the encode catches up; after completion ~2-3min all seeks work). Songs excluded by design. FindHlsDirectory hoisted as the single cache-dir resolution. 6 new tests + 5 converted to the async endpoint; suite 3395/3395; formal review no findings at threshold with six lenses verified. On-device confirmation pending (needs the Debug override + a seek during the first minutes of an episode).
+<!-- SECTION:FINAL_SUMMARY:END -->
