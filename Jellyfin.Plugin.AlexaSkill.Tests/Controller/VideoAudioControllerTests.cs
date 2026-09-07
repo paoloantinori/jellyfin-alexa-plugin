@@ -2396,4 +2396,49 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.DoesNotContain("STALE-PLAYLIST", snapshot, StringComparison.Ordinal);
         Assert.DoesNotContain("STALE-SEGMENT", snapshot, StringComparison.Ordinal);
     }
+
+    // ========== JF-515: ffmpeg stderr aggregating drain ==========
+
+    /// <summary>
+    /// Real ffmpeg failure lines must classify as errors so the drain logs them
+    /// immediately at Warning instead of aggregating them (JF-515).
+    /// </summary>
+    [Theory]
+    [InlineData("Error opening 'http://localhost:8096/Videos/abc/stream': server returned 404")] // bare StartsWith
+    [InlineData("error: no decoder for stream")] // mixed-case StartsWith
+    [InlineData("ERROR while opening output")] // all-caps StartsWith
+    [InlineData("[hls @ 0x7f8b2400] Error opening '/cache/x/seg_0001.ts'")] // component prefix + StartsWith
+    [InlineData("[mov,mp4,m4a,3gp,3g2,mj2 @ 0x5591c0a1e400] moov atom not found")] // real mov.c:11603 shape, contains 'moov atom'
+    [InlineData("[error] unable to parse option value")] // contains [error]
+    [InlineData("Conversion failed!")] // contains, bare
+    [InlineData("conversion FAILED: unknown option '-foo'")] // contains, mixed case
+    [InlineData("[mp3 @ 0x7f8b2c0d0e80] Invalid data found when processing input")] // contains, prefixed
+    [InlineData("Cannot open '/cache/xyz/stream.m3u8': No such file or directory")] // contains
+    [InlineData("Cannot open '/cache/xyz/seg_0001.ts': Permission denied")] // contains
+    [InlineData("[hls @ 0x7f8b2400] Failed to open file '/cache/xxx/seg_0001.ts'")] // real hlsenc.c segment-open failure
+    [InlineData("[mp3 @ 0x7f8b2c0d0e80] Header missing")] // truncated mp3, mpegaudiodec_template.c
+    [InlineData("Cannot open '/cache/x/seg_0002.ts': No space left on device")] // ENOSPC (JF-428 cache-budget condition)
+    public void IsFfmpegErrorLine_FailureLines_ReturnTrue(string line)
+    {
+        Assert.True(VideoAudioController.IsFfmpegErrorLine(line), $"expected error classification: {line}");
+    }
+
+    /// <summary>
+    /// Routine progress chatter must classify as non-errors so the drain aggregates
+    /// it into the periodic summaries instead of logging per line (JF-515).
+    /// </summary>
+    [Theory]
+    [InlineData("Opening 'seg_0001.ts' for writing")] // the flood line, bare form
+    [InlineData("[hls @ 0x7f8b2400] Opening '/cache/xyz_1337/seg_0001.ts' for writing")] // the flood line, prefixed form
+    [InlineData("frame= 123 fps=45 q=-1.0")]
+    [InlineData("size=N/A time=00:01:23 bitrate=N/A speed=2.5x")]
+    [InlineData("Output #0, hls, to '/cache/xyz/stream.m3u8':")]
+    [InlineData("  Metadata:")]
+    [InlineData("Stream mapping:")]
+    [InlineData("   ")] // empty-ish whitespace
+    [InlineData("")] // empty
+    public void IsFfmpegErrorLine_RoutineLines_ReturnFalse(string line)
+    {
+        Assert.False(VideoAudioController.IsFfmpegErrorLine(line), $"expected routine classification: {line}");
+    }
 }
