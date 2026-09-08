@@ -6,7 +6,6 @@ using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
-using Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Newtonsoft.Json;
@@ -225,8 +224,8 @@ internal static class DisambiguationHelper
 
     // ========== Shared pick-words machinery (JF-407 item 2, moved from FindSongIntentHandler) ==========
     // Cardinal/ordinal answer words, the JF-395 negative-exit, and the numbered-candidate
-    // resolver for DisambiguationHelper-based pickers. FindSongIntentHandler keeps thin
-    // delegators so its call sites and direct tests stay stable.
+    // resolver for DisambiguationHelper-based pickers. Candidate-agnostic since JF-524:
+    // callers pass the candidate NAMES, so any picker (song, album, artist, ...) can use it.
     /// <summary>
     /// Cardinal pick words for the candidate picker, all supported locales (JF-396).
     /// Maps the spoken count word to the 0-based candidate index.
@@ -312,18 +311,19 @@ internal static class DisambiguationHelper
 
     /// <summary>
     /// Resolve which candidate the user picked by number, ordinal word, or partial title match.
-    /// Returns a 0-based index, or null if no match.
+    /// Returns a 0-based index into <paramref name="candidateNames"/>, or null if no match.
     /// </summary>
-    internal static int? ResolvePick(string input, List<FindSongCandidate> candidates, string locale)
+    internal static int? ResolvePick(string input, IReadOnlyList<string> candidateNames, string locale)
     {
-        if (string.IsNullOrWhiteSpace(input) || candidates.Count == 0)
+        if (string.IsNullOrWhiteSpace(input) || candidateNames.Count == 0)
         {
             return null;
         }
         string trimmed = input.Trim();
         string[] tokens = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
-        // 1. Direct digits: "1", "2" (1-4, matching the top-4 candidate cap).
+        // 1. Direct digits: "1", "2" (ranks 1-4, the extent of the pick-word tables
+        // below; title matching is NOT rank-capped).
         if (int.TryParse(trimmed, out int num) && num >= 1 && num <= 4)
         {
             return num - 1;
@@ -344,7 +344,7 @@ internal static class DisambiguationHelper
         // multi-token answer that matches a candidate title ("Second Chance") must win
         // over the rank the stem would otherwise hijack it to (review finding: title
         // picks containing ordinal words resolved as ranks).
-        int? titlePick = TryMatchByTitle(trimmed, candidates);
+        int? titlePick = TryMatchByTitle(trimmed, candidateNames);
         if (titlePick.HasValue)
         {
             return titlePick;
@@ -383,14 +383,14 @@ internal static class DisambiguationHelper
         return CardinalPickWords.TryGetValue(lower, out int index) ? index : null;
     }
 
-    private static int? TryMatchByTitle(string input, List<FindSongCandidate> candidates)
+    private static int? TryMatchByTitle(string input, IReadOnlyList<string> candidateNames)
     {
         string lower = input.ToLowerInvariant();
 
-        for (int i = 0; i < candidates.Count; i++)
+        for (int i = 0; i < candidateNames.Count; i++)
         {
-            if (!string.IsNullOrEmpty(candidates[i].Name)
-                && candidates[i].Name!.Contains(lower, StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrEmpty(candidateNames[i])
+                && candidateNames[i].Contains(lower, StringComparison.OrdinalIgnoreCase))
             {
                 return i;
             }
@@ -400,14 +400,14 @@ internal static class DisambiguationHelper
         var inputWords = lower.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (inputWords.Length > 0)
         {
-            for (int i = 0; i < candidates.Count; i++)
+            for (int i = 0; i < candidateNames.Count; i++)
             {
-                if (string.IsNullOrEmpty(candidates[i].Name))
+                if (string.IsNullOrEmpty(candidateNames[i]))
                 {
                     continue;
                 }
 
-                string candidateLower = candidates[i].Name!.ToLowerInvariant();
+                string candidateLower = candidateNames[i].ToLowerInvariant();
                 if (inputWords.Any(w => w.Length >= 3 && candidateLower.Contains(w, StringComparison.OrdinalIgnoreCase)))
                 {
                     return i;

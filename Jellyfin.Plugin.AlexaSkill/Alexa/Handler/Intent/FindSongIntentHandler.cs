@@ -385,14 +385,15 @@ public class FindSongIntentHandler : BaseHandler
         // Rain", "Nowhere Man"). Multi-token negatives still resolve after ResolvePick
         // so "no, the second one" keeps picking.
         string[] inputTokens = input.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (inputTokens.Length == 1 && IsNegativeAnswer(input))
+        if (inputTokens.Length == 1 && DisambiguationHelper.IsNegativeAnswer(input))
         {
             Logger.LogDebug("FindSong: disambiguation declined (single-token negative), ending search");
             return ResponseBuilder.Tell(ResponseStrings.Get("FindSongDisambigAbandoned", locale));
         }
 
         // Try to match by number, ordinal, or partial title
-        int? pickIndex = ResolvePick(input, sessionData.Candidates, locale);
+        int? pickIndex = DisambiguationHelper.ResolvePick(
+            input, sessionData.Candidates.Select(c => c.Name).ToList(), locale);
 
         if (!pickIndex.HasValue || pickIndex.Value < 0 || pickIndex.Value >= sessionData.Candidates.Count)
         {
@@ -400,7 +401,7 @@ public class FindSongIntentHandler : BaseHandler
             // from the picker, not another invalid pick. Checked AFTER ResolvePick so a
             // phrasing that both starts with a negative and resolves a candidate
             // ("no, the second one") still picks.
-            if (IsNegativeAnswer(input))
+            if (DisambiguationHelper.IsNegativeAnswer(input))
             {
                 Logger.LogDebug("FindSong: disambiguation declined (negative answer), ending search");
                 return ResponseBuilder.Tell(ResponseStrings.Get("FindSongDisambigAbandoned", locale));
@@ -652,15 +653,6 @@ public class FindSongIntentHandler : BaseHandler
             ?? (item is MediaBrowser.Controller.Entities.Audio.Audio audio && audio.AlbumArtists is { Count: > 0 }
                 ? audio.AlbumArtists[0]
                 : null);
-
-    /// <summary>
-    /// Shared pick-words machinery lives in DisambiguationHelper (JF-407 item 2);
-    /// these delegators keep the existing FindSong call sites and direct tests stable.
-    /// </summary>
-    internal static bool IsNegativeAnswer(string input) => DisambiguationHelper.IsNegativeAnswer(input);
-
-    internal static int? ResolvePick(string input, List<FindSongCandidate> candidates, string locale)
-        => DisambiguationHelper.ResolvePick(input, candidates, locale);
 
     /// <summary>
     /// Extract a slot value from the intent request, or null if the slot is missing/empty.
