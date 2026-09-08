@@ -1,10 +1,10 @@
 ---
 id: JF-324
 title: 'Feature: Next/latest-episode playback and TV binge auto-advance'
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-07-12 15:00'
-updated_date: '2026-09-08 05:54'
+updated_date: '2026-09-08 09:08'
 labels:
   - feature
   - tv
@@ -34,13 +34,13 @@ Respect platform constraints already documented in CLAUDE.md: VideoApp.Launch fo
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 User can say 'play the next episode of {series}' and get the correct next unwatched episode via Jellyfin NextUp
-- [ ] #2 User can say 'play the latest episode of {series}' and get the most recent episode
-- [ ] #3 PlayEpisode still supports explicit season+episode, and no longer hard-fails when only a series is given (falls back to next-up)
+- [x] #1 User can say 'play the next episode of {series}' and get the correct next unwatched episode via Jellyfin NextUp
+- [x] #2 User can say 'play the latest episode of {series}' and get the most recent episode
+- [x] #3 PlayEpisode still supports explicit season+episode, and no longer hard-fails when only a series is given (falls back to next-up)
 - [ ] #4 When a video episode finishes during a session, the next episode auto-advances via VideoApp without a manual command
-- [ ] #5 Per-user watched state and library/content-access gating are respected in episode selection
-- [ ] #6 Samples added to all 17 locales (it-IT via YAML template) with locale response strings
-- [ ] #7 Unit and NLU tests cover next/latest-episode routing and the auto-advance path
+- [x] #5 Per-user watched state and library/content-access gating are respected in episode selection
+- [x] #6 Samples added to all 17 locales (it-IT via YAML template) with locale response strings
+- [x] #7 Unit and NLU tests cover next/latest-episode routing and the auto-advance path
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -80,16 +80,22 @@ PART 2 RE-SCOPE (2026-09-07, from the verified VideoApp research in claudedocs/r
 PART 1 LIVE-CONFIRM COMPLETE (2026-09-08, deferred deliverable closed): live profile-nlu against the deployed model (33dfacd5): the PlayNextEpisode family GREEN on it-IT (next/latest + one-shot infinitives) and the e2e suite 10/10 (simulate-skill, invocation context). Four fixtures refreshed with probe evidence (commit f0741139): 2 it-IT season/episode cases swapped to the tail shape (the prefix shape '{series} stagione N...' stopped filling series_name, 7/7 probes - Amazon-side catalog-slot position sensitivity), 'Continua a guardare {series}' pinned to ContinueWatchingIntent for BARE utterances (the slotless intent's precedence wins; the invocation-context e2e keeps PlayNextEpisodeIntent - the JF-298 profile-nlu-vs-device divergence, both contexts now pinned in their own suites), es-MX word 'uno' season-slot asymmetry documented. NEW FINDING tracked as JF-523: on en-* the bare episode phrasings are stolen wholesale by free-text sibling slots (PlaySong/PlayVideo/PlayNextIntent/PlayPodcast); only the invocation-prefixed one-shot form routes correctly; the 7 red en-* tests live there with the countermeasure decision.
 <!-- SECTION:NOTES:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED across both parts. PART 1 (2026-09-05): PlayNextEpisodeIntent (next/latest/continue-watching via Jellyfin NextUp, all 17 locales, content-gated) + PlayEpisode series-only fallback. PART 1 live-confirm closed 2026-09-08: NLU family green on it-IT, e2e 10/10 (invocation context), 4 fixtures refreshed with probe evidence (commit f0741139), the en-* bare-phrase theft discovered and tracked as JF-523. PART 2 (2026-09-08, re-scoped on the verified VideoApp no-events limit): episode auto-advance at AudioPlayer queue exhaustion when PostPlay=AutoPlay - one direct series-scoped ordered-unplayed query (specials excluded, season-then-index, server-source-verified semantics) picks the first candidate outside the current+queued skip-set, appended gaplessly via the existing Enqueue tail. AC#4 AS WRITTEN (auto-advance via VideoApp) is PLATFORM-IMPOSSIBLE (VideoApp emits no events; documented in CLAUDE.md THE REFERENCE) and is superseded by this AudioPlayer-path delivery plus the PlayNextEpisode one-shot for the video path. The original NextUp-based design was a CONFIRMED no-op caught by the code review (C1: SeriesId-scoped GetNextUp returns at most one episode on 10.11, always the finishing one) - replaced before merge. Drive-by: three raw Guid.Parse token sites migrated to StreamTokenCodec (a real composite-sleep-token crash in the music populate, a queue-index exhaustion misread, NoMediaPlaying under loop intents). Cleanups: DidNotCatchEpisodeNumber removed from all 17 locales; playback-lifecycle mirrors + graphs + docs-site data.json extended for the new intent. Gates: /simplify (2 agents; batch applied 9/10, E1a reverted on the pin-test premise, A3 extraction ruled not-applicable), code-review high (FIX FIRST C1 -> direct query; re-review FIX FIRST F1 -> specials exclusion applied + matcher pinned, F2 backward-jump trade-off accepted and documented). Tests 3481/3481 branch and main post-merge (8 new, real-contract mocks). Deployed to minix (symbol verified, config intact, smoke clean, zero errors). Known follow-ups: JF-523 (en-* phrase theft), JF-496 (PlayEpisode diagram absence, queue-radio label).
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
 - [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
 - [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining, or findings applied/tracked)
+- [x] #6 NLU test fixtures updated if interaction model changed
+- [x] #7 E2E test added for new intent or handler logic
+- [x] #8 Locale response strings added to all 17 locales
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining, or findings applied/tracked)
 <!-- DOD:END -->
