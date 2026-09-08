@@ -212,13 +212,14 @@ public class LaunchRequestHandler : BaseHandler
 
     /// <summary>
     /// Build a resume offer for the device's last-played item, looking up its best-known
-    /// position from UserData. Used when there is no reliable AudioPlayer token — e.g. the
-    /// last play was via VideoApp.Launch (audiobooks, native-controls audio), which never
-    /// sets context.AudioPlayer.Token. Returns null if the item no longer exists so the
+    /// position from UserData. Used when there is no reliable AudioPlayer token, e.g. the
+    /// last play was via VideoApp.Launch for an audiobook or native-controls audio, which
+    /// never sets context.AudioPlayer.Token. Returns null if the item no longer exists so the
     /// caller can fall through to another path.
-    /// JF-520: the position is classified at seed time (a transcode-routed item with a
-    /// recorded launch base on this device flags the offer stream-relative so the
-    /// Yes-side confirm rebases it; the event writers persist the raw device offset).
+    /// JF-520/JF-521: the position is classified at seed time; stream-relative only when
+    /// the item is transcode-routed, this device's ledger holds a launch base, AND the
+    /// UserData position tick-equals this device's own last recorded raw offset (the same
+    /// stop event wrote both; a different value was advanced by another client, JF-521 F1).
     /// </summary>
     private SkillResponse? BuildDeviceLastPlayedOffer(
         Context context, Entities.User user, SessionInfo session, string locale, string lastPlayedItemId)
@@ -263,28 +264,65 @@ public class LaunchRequestHandler : BaseHandler
 
         int offsetMs = (int)Math.Min(TimeSpan.FromTicks(positionTicks).TotalMilliseconds, int.MaxValue);
 
-        // JF-520 provenance classification (the UserData seed's share of the JF-514
-        // residual): for a transcode-routed Movie/Episode the event writers persist
-        // the RAW device offset into UserData (stream-relative; see
-        // PlaybackStoppedEventHandler), so when THIS device's ledger carries a launch
-        // base for the item the position is stream-relative and the offer must flag
-        // it for the Yes-side rebase. The recorded-base test is the transcode
-        // signature: a raw-static audio launch records base 0 (rebase = no-op), a
-        // VideoApp play or another client's progress records nothing (item-absolute
-        // pass-through stands). AudioBooks never route to the transcode, so the
-        // playlist-resume shape is unaffected. Residual: a transcode launch followed
-        // by a LATER play of the same item on another client (or via VideoApp) leaves
-        // the stale base behind and the rebase would add it; UserData is cross-client
-        // so the sources cannot distinguish that corner - accepted as the cost of
-        // fixing the common audio-shaped case.
+        // JF-520/JF-521 provenance classification (the UserData seed's share of the
+        // JF-514 residual). For a transcode-routed Movie/Episode the event writers
+        // persist the RAW device offset into UserData (stream-relative; see
+        // PlaybackStoppedEventHandler), so the offer must flag those positions for the
+        // Yes-side rebase. JF-520 classified on "this device's ledger has a base AND the
+        // item routes to the transcode"; the JF-520 review (F1) showed that composes a
+        // FORWARD skip whenever UserData was later advanced by ANOTHER source (a phone
+        // play, a VideoApp session) while the device's base stays stale: base 20min +
+        // phone-watched 40min minted ?start=60min on a 40min-true position.
+        //
+        // JF-521 DESIGN DECISION: fix the READER (this classification), not the writer.
+        // The writer-side alternative (event handlers persist item-absolute positions by
+        // adding the recorded launch base at stop time) was evaluated and rejected: (1)
+        // the writers feed four stores (server PlayState, DeviceQueue.CurrentPositionTicks,
+        // ItemPositionState, Jellyfin UserData) read by ~19 sites, and every compensating
+        // reader would have to flip in the same change or double-add; most sharply the
+        // ResumeIntent tail, whose streamRelative=true is unconditional for three
+        // fallbacks of which only two are plugin-written (the AudioPlayer context offset
+        // is written by AMAZON and stays stream-relative); (2) the stop-time base read is
+        // unsafe: the ledger is a last-RESOLVE ledger, and PlaybackNearlyFinished
+        // resolves the wrapped/repeat-one next item (the SAME item, at offset 0) during
+        // playback, zeroing its base mid-playback (the JF-520 seed-binding refutation
+        // race), so the writer would persist a wrong "item-absolute" value; (3) those
+        // errors land in server-PERSISTENT UserData (cross-client visible, survives
+        // restarts) and a rolling deploy leaves pre-deploy stream-relative values with
+        // no provenance flag. A misclassification HERE costs one transient ?start=.
+        //
+        // The discriminator that closes F1: TICK-EXACT EQUALITY against THIS device's own
+        // last-persisted raw offset (ItemPositionState, same stop event that filled
+        // UserData). PlaybackStoppedEventHandler writes the SAME raw ticks into both, so
+        // UserData == the device's recorded offset iff the last UserData write was THIS
+        // device's audio-shaped stop (stream-relative); any other value was advanced by
+        // another source (item-absolute, no rebase). The JF-520 recorded-base test stays
+        // as a precondition (a raw-static audio launch records base 0 = no-op rebase, so
+        // only a base > 0 can matter), the equality check runs second, and the codec DB
+        // probe runs last (the JF-520 ledger-first operand order). Residuals, all bounded
+        // and conservative (restart earlier by the base, never the F1 forward skip):
+        // ItemPositionState trimmed (cap 200) or cleared while the base survives reads
+        // null -> item-absolute; a second Echo's stop also breaks equality; a
+        // ms-exact coincidence (another client stopping at exactly the device's raw
+        // offset) still composes, and the runtime clamp in ResolveResumedAudioLaunch
+        // bounds whatever it mints.
         string? ledgerDeviceId = context.System?.Device?.DeviceID;
-        bool offsetIsStreamRelative = GetAudioTranscodeBase(ledgerDeviceId, lastPlayedItemId).HasValue
+        long? recordedBaseMs = GetAudioTranscodeBase(ledgerDeviceId, lastPlayedItemId);
+        bool offsetIsStreamRelative = recordedBaseMs is > 0
+            && positionTicks > 0
+            && GetRecordedDeviceOffsetTicks(ledgerDeviceId, lastPlayedItemId) == positionTicks
             && RoutesToAudioTranscode(item);
         if (offsetIsStreamRelative)
         {
             Logger.LogInformation(
-                "LaunchResume: device last-played item {ItemId} routes to the audio-only transcode and this device has a recorded launch base; the UserData position is stream-relative, flagging the offer for the confirm-side rebase",
-                lastPlayedItemId);
+                "LaunchResume: device last-played item {ItemId} routes to the audio-only transcode, this device has a recorded launch base ({BaseMs}ms), and the UserData position matches this device's own last recorded offset; the position is stream-relative, flagging the offer for the confirm-side rebase",
+                lastPlayedItemId, recordedBaseMs!.Value);
+        }
+        else if (recordedBaseMs is > 0)
+        {
+            Logger.LogInformation(
+                "LaunchResume: device last-played item {ItemId} has a recorded launch base ({BaseMs}ms) but the UserData position ({PositionTicks} ticks) does not match this device's own last recorded offset; another source advanced it, so it is item-absolute and must NOT be rebased over the stale base (JF-521 F1)",
+                lastPlayedItemId, recordedBaseMs.Value, positionTicks);
         }
 
         return BuildResumeOfferResponse(item, lastPlayedItemId, offsetMs, user, locale, context, session, useResumePlaylist: useResumePlaylist, offsetIsStreamRelative: offsetIsStreamRelative);
@@ -350,7 +388,7 @@ public class LaunchRequestHandler : BaseHandler
     /// <param name="context">The Alexa context (screenless detection).</param>
     /// <param name="session">The Jellyfin session (audio fallback lookup).</param>
     /// <param name="useResumePlaylist">Whether YesIntent should resume via the audiobook playlist.</param>
-    /// <param name="offsetIsStreamRelative">Whether <paramref name="offsetMs"/> counts the previous playback's output timeline (device-derived) and needs the JF-514 rebase on confirm. Set by the AudioPlayer-context seed (always) and by the device-last-played seed when the item is transcode-routed with a recorded base (JF-520); the audio-only fallback seed never needs it (audio items never route to the transcode).</param>
+    /// <param name="offsetIsStreamRelative">Whether <paramref name="offsetMs"/> counts the previous playback's output timeline (device-derived) and needs the JF-514 rebase on confirm. Set by the AudioPlayer-context seed (always) and by the device-last-played seed when the item is transcode-routed with a recorded base whose UserData position matches this device's own last recorded raw offset (JF-520/JF-521); the audio-only fallback seed never needs it (audio items never route to the transcode).</param>
     /// <returns>The offer, or null when the device cannot play the offered item and no audio fallback exists.</returns>
     private SkillResponse? BuildResumeOfferResponse(
         BaseItem? item, string itemId, long offsetMs,

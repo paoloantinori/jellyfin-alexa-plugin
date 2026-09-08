@@ -177,6 +177,23 @@ public sealed class DeviceQueueManager : IDisposable
     }
 
     /// <summary>
+    /// JF-521: this device's last-persisted raw playback offset for an item from
+    /// ItemPositionState (the PlaybackStoppedEventHandler write, "N"-format key),
+    /// without creating a queue entry; unparsable item IDs read null.
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    /// <param name="itemId">The item ID in any GUID format (normalized to "N").</param>
+    /// <returns>The recorded raw offset in ticks, or null when none.</returns>
+    public long? GetItemPositionTicks(string deviceId, string itemId)
+    {
+        return Guid.TryParse(itemId, out Guid parsedItemId)
+            && _queues.TryGetValue(deviceId, out DeviceQueue? queue)
+            && queue.ItemPositionState.TryGetValue(parsedItemId.ToString("N"), out long ticks)
+            ? ticks
+            : null;
+    }
+
+    /// <summary>
     /// Read-side counterpart to <see cref="RecordAudioTranscodeBase"/>: the recorded
     /// transcode-launch base for an item on a device, without creating a queue entry.
     /// </summary>

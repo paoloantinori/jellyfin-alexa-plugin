@@ -354,12 +354,14 @@ public class ResumeConfirmationTranscodeBaseTests : PluginTestBase, IDisposable
     // ========== JF-520: the device-last-played (UserData) seed classifies at seed time ==========
 
     /// <summary>
-    /// The JF-514 residual closed by JF-520: the device-last-played offer reads its
-    /// position from UserData, which the event writers filled with the RAW device
-    /// offset (stream-relative) for a transcode-routed item. When this device's
-    /// ledger carries a launch base, the seed flags the offer stream-relative and the
-    /// confirm composes end-to-end: minted ?start = base + position (item-absolute),
-    /// ledger advanced to the new base.
+    /// The JF-514 residual closed by JF-520, refined by JF-521: the device-last-played
+    /// offer reads its position from UserData, which the event writers filled with the
+    /// RAW device offset (stream-relative) for a transcode-routed item. The stop event
+    /// wrote the SAME raw ticks into the device's ItemPositionState, so when the ledger
+    /// carries a launch base AND UserData tick-equals the device's own recorded offset
+    /// (this test's shape), the seed flags the offer stream-relative and the confirm
+    /// composes end-to-end: minted ?start = base + position (item-absolute), ledger
+    /// advanced to the new base.
     /// </summary>
     [Fact]
     public async Task DeviceLastPlayedOffer_TranscodeItemWithRecordedBase_FlagsStreamRelativeAndRebasesOnConfirm()
@@ -373,6 +375,9 @@ public class ResumeConfirmationTranscodeBaseTests : PluginTestBase, IDisposable
             .Returns(new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = TimeSpan.FromMinutes(5).Ticks });
         _queueManager.RecordLastPlayed(DeviceId, id.ToString());
         _queueManager.RecordAudioTranscodeBase(DeviceId, id.ToString(), MinutesToMs(20));
+        // JF-521 provenance twin of the UserData value: the device's own stop wrote the
+        // same 5:00 raw offset into its per-item position state.
+        _queueManager.GetOrCreateQueue(DeviceId).ItemPositionState[id.ToString("N")] = TimeSpan.FromMinutes(5).Ticks;
 
         // Screen-capable device, no AudioPlayer token: the no-token NativeControlsForAudio
         // route offers the device's last-played item from UserData.
@@ -453,5 +458,170 @@ public class ResumeConfirmationTranscodeBaseTests : PluginTestBase, IDisposable
             $"?start={TimeSpan.FromMilliseconds(MinutesToMs(5)).Ticks}&",
             directive.AudioItem.Stream.Url,
             StringComparison.Ordinal);
+    }
+
+    // ========== JF-521: stale base + cross-client UserData must not compose a forward skip ==========
+
+    /// <summary>
+    /// The F1 walk (JF-520 review, closed by JF-521): the DEVICE launched the item
+    /// audio-shaped through the transcode (base 20:00 recorded; the device then stopped
+    /// at its own 5:00 stream-relative offset, which the stop event wrote into BOTH
+    /// UserData and the device's ItemPositionState), and a LATER play of the same item
+    /// on another client advanced UserData to 40:00 ITEM-ABSOLUTE while the device's
+    /// ledger base stayed stale. The JF-520 classification (base recorded + transcode-
+    /// routed) would flag the 40:00 stream-relative and the confirm would mint
+    /// 20:00 + 40:00 = 60:00: a forward skip of exactly the stale base. The JF-521
+    /// equality gate classifies item-absolute (40:00 != the device's own 5:00), so the
+    /// confirm mints the true 40:00 and never the composed 60:00.
+    /// </summary>
+    [Fact]
+    public async Task DeviceLastPlayedOffer_UserDataAdvancedByAnotherClient_NotRebased_NoForwardSkip()
+    {
+        var id = Guid.NewGuid();
+        _fx.SetupUserMock();
+        _fx.Config.NativeControlsForAudio = true;
+        _fx.LibraryManager.Setup(lm => lm.GetItemById(id)).Returns(Eac3Episode(id));
+        // UserData was last written by the PHONE at 40:00 item-absolute.
+        _fx.UserDataManager
+            .Setup(u => u.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
+            .Returns(new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = TimeSpan.FromMinutes(40).Ticks });
+        _queueManager.RecordLastPlayed(DeviceId, id.ToString());
+        // The device's OWN audio-shaped transcode launch left the stale base...
+        _queueManager.RecordAudioTranscodeBase(DeviceId, id.ToString(), MinutesToMs(20));
+        // ...and its own stop persisted a 5:00 raw offset the phone's 40:00 no longer matches.
+        _queueManager.GetOrCreateQueue(DeviceId).ItemPositionState[id.ToString("N")] = TimeSpan.FromMinutes(5).Ticks;
+
+        SkillResponse offer = await CreateLaunchHandler().HandleAsync(
+            new LaunchRequest { Locale = "en-US" },
+            TestHelpers.CreateContextWithVideoApp(DeviceId),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            CancellationToken.None);
+
+        Assert.NotNull(offer.SessionAttributes);
+        Assert.True(offer.SessionAttributes.ContainsKey("resume_state"));
+        var state = JsonConvert.DeserializeObject<ResumeHelper.ResumeState>(
+            offer.SessionAttributes["resume_state"]!.ToString()!);
+        Assert.NotNull(state);
+        Assert.False(state!.OffsetIsStreamRelative, "a UserData position that differs from the device's own last recorded raw offset was advanced by another client and is item-absolute (JF-521)");
+        Assert.Equal(MinutesToMs(40), state.OffsetMs);
+
+        SkillResponse response = await CreateHandler().HandleAsync(
+            YesIntent(),
+            TestHelpers.CreateTestContext(DeviceId),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            offer.SessionAttributes!,
+            CancellationToken.None);
+
+        var directive = SinglePlayDirective(response);
+        // The true 40:00 position mints; the composed 60:00 forward skip must NOT.
+        Assert.Contains(
+            $"?start={TimeSpan.FromMinutes(40).Ticks}&",
+            directive.AudioItem.Stream.Url,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            $"?start={TimeSpan.FromMinutes(60).Ticks}&",
+            directive.AudioItem.Stream.Url,
+            StringComparison.Ordinal);
+        Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
+    }
+
+    /// <summary>
+    /// JF-521 hard clamp: a composed base+offset that reaches or exceeds the item's
+    /// runtime is never minted (a legitimate composition cannot get there; the
+    /// stream-relative offset counts at most the remaining runtime past the base), so
+    /// the caller's raw offset wins as the more conservative truth. Runtime 30:00,
+    /// base 20:00, stream-relative offset 15:00: composed 35:00 >= 30:00, so the mint
+    /// is the raw 15:00 and the ledger carries what was actually minted. Also bounds
+    /// the F2 retry walk (each retry's composition grows; at the runtime it clamps).
+    /// </summary>
+    [Fact]
+    public async Task ConfirmResume_ComposedStartReachesItemRuntime_ClampsToRawOffset()
+    {
+        var id = Guid.NewGuid();
+        // Inline confirm (not ConfirmResumeAsync): the fixture helper re-registers a
+        // fresh episode mock, which would drop the runtime this test needs.
+        var episode = Eac3Episode(id);
+        episode.RunTimeTicks = TimeSpan.FromMinutes(30).Ticks;
+        _fx.LibraryManager.Setup(lm => lm.GetItemById(id)).Returns(episode);
+        _queueManager.RecordAudioTranscodeBase(DeviceId, id.ToString(), MinutesToMs(20));
+
+        SkillResponse response = await CreateHandler().HandleAsync(
+            YesIntent(),
+            TestHelpers.CreateTestContext(DeviceId),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            ResumeAttrs(id, MinutesToMs(15), streamRelative: true),
+            CancellationToken.None);
+
+        var directive = SinglePlayDirective(response);
+        Assert.Contains(
+            $"?start={TimeSpan.FromMilliseconds(MinutesToMs(15)).Ticks}&",
+            directive.AudioItem.Stream.Url,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            $"?start={TimeSpan.FromMilliseconds(MinutesToMs(35)).Ticks}&",
+            directive.AudioItem.Stream.Url,
+            StringComparison.Ordinal);
+        Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
+        // The resolve records the base it actually minted, not the rejected composition.
+        Assert.Equal(MinutesToMs(15), _queueManager.GetAudioTranscodeBase(DeviceId, id.ToString()));
+    }
+
+    /// <summary>
+    /// AC#4 regression guard, end to end: the screenless-Dot common path exactly as
+    /// JF-520 shipped it. An offer seeded from the AudioPlayer CONTEXT carries the
+    /// device's stream-relative offset and flags the resume state; the confirm rebases
+    /// it against the recorded base (base 20:00 + context 5:00 = 25:00 item-absolute)
+    /// and advances the ledger. The JF-521 reader fix must not touch this shape: the
+    /// context seed flags stream-relative unconditionally (Amazon wrote the offset),
+    /// and no runtime is known here, so the clamp stays out of the way.
+    /// </summary>
+    [Fact]
+    public async Task LaunchResumeOffer_FromAudioPlayerContext_OnTranscodeItem_ConfirmRebases()
+    {
+        var id = Guid.NewGuid();
+        var episode = Eac3Episode(id);
+        _fx.LibraryManager.Setup(lm => lm.GetItemById(id)).Returns(episode);
+        _queueManager.RecordAudioTranscodeBase(DeviceId, id.ToString(), MinutesToMs(20));
+
+        var context = TestHelpers.CreateContextWithVideoApp(DeviceId);
+        context.AudioPlayer = new PlaybackState
+        {
+            Token = id.ToString(),
+            OffsetInMilliseconds = MinutesToMs(5)
+        };
+
+        SkillResponse offer = await CreateLaunchHandler().HandleAsync(
+            new LaunchRequest { Locale = "en-US" },
+            context,
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            CancellationToken.None);
+
+        Assert.NotNull(offer.SessionAttributes);
+        Assert.True(offer.SessionAttributes.ContainsKey("resume_state"));
+        var state = JsonConvert.DeserializeObject<ResumeHelper.ResumeState>(
+            offer.SessionAttributes["resume_state"]!.ToString()!);
+        Assert.NotNull(state);
+        Assert.True(state!.OffsetIsStreamRelative, "the AudioPlayer-context seed flags stream-relative unconditionally (JF-514/JF-520)");
+        Assert.Equal(MinutesToMs(5), state.OffsetMs);
+
+        SkillResponse response = await CreateHandler().HandleAsync(
+            YesIntent(),
+            TestHelpers.CreateTestContext(DeviceId),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            offer.SessionAttributes!,
+            CancellationToken.None);
+
+        var directive = SinglePlayDirective(response);
+        Assert.Contains(
+            $"?start={TimeSpan.FromMilliseconds(MinutesToMs(25)).Ticks}&",
+            directive.AudioItem.Stream.Url,
+            StringComparison.Ordinal);
+        Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
+        Assert.Equal(MinutesToMs(25), _queueManager.GetAudioTranscodeBase(DeviceId, id.ToString()));
     }
 }

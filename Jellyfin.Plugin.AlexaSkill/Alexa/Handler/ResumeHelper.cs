@@ -34,16 +34,17 @@ internal static class ResumeHelper
 
         /// <summary>
         /// True when <see cref="OffsetMs"/> is DEVICE-DERIVED (seeded from the AudioPlayer
-        /// context offset, or from UserData for a transcode-routed item with a recorded
-        /// launch base, JF-520) and therefore relative to the previous playback's OUTPUT
-        /// timeline: for a transcode-routed item that timeline starts at the stream's
-        /// <c>?start=</c> base, so the Yes-side resume must rebase it (recorded base +
-        /// offset) before minting the next <c>?start=</c>, or drop it when no base is
-        /// recorded (JF-514). False (default, back-compatible: sessions offered before
-        /// the deploy deserialize without it) treats the offset as item-absolute.
-        /// Residual (JF-520): UserData is cross-client, so a flag=false offer whose
-        /// position another client wrote after this device's transcode play can still
-        /// be misclassified - the sources cannot distinguish that corner.
+        /// context offset, or from UserData for a transcode-routed item whose position
+        /// tick-equals this device's own last recorded raw offset, JF-520/JF-521) and
+        /// therefore relative to the previous playback's OUTPUT timeline: for a
+        /// transcode-routed item that timeline starts at the stream's <c>?start=</c>
+        /// base, so the Yes-side resume must rebase it (recorded base + offset) before
+        /// minting the next <c>?start=</c>, or drop it when no base is recorded
+        /// (JF-514). False (default, back-compatible: sessions offered before the
+        /// deploy deserialize without it) treats the offset as item-absolute.
+        /// JF-521: the cross-client residual is closed at the seed (the equality check
+        /// above), and the rebase helper hard-clamps any composition that reaches the
+        /// item runtime, so a misclassified flag can no longer mint past the end.
         /// </summary>
         [JsonProperty("offsetIsStreamRelative")]
         public bool OffsetIsStreamRelative { get; set; }
