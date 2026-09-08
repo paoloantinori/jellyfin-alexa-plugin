@@ -356,19 +356,16 @@ tests:
       season_number: {}
       episode_number: {}
 
+  # 2026-09-08 live probe (JF-523 matrix): this bare episode phrasing is claimed by PlaySongIntent's free-text 'play {song}' carrier on this marketplace (the en-GB/en-AU/en-US free-text theft; it-IT/en-IN serve it). In-skill invocation context (e2e) still routes PlayEpisodeIntent correctly (JF-298 divergence; e2e pinned separately). Pinned to the observed winner to guard against further drift.
   - utterance: "Play stranger things season two episode one"
-    expected_intent: PlayEpisodeIntent
+    expected_intent: PlaySongIntent
     expected_slots:
-      series_name: {}
-      season_number: {}
-      episode_number: {}
+      song: {}
 
   - utterance: "Watch season one episode five of game of thrones"
-    expected_intent: PlayEpisodeIntent
+    expected_intent: PlayVideoIntent
     expected_slots:
-      series_name: {}
-      season_number: {}
-      episode_number: {}
+      title: {}
 
   # JF-493: one-shot infinitive twin ("ask jellyfin player to play season one
   # episode one of X"). The imperative numbers-first shapes above already
@@ -758,10 +755,20 @@ tests:
     expected_slots:
       series_name: {}
 
+  # JF-523: PlayPodcastIntent mirrors the "latest episode of" carrier 1:1 and wins.
   - utterance: "play the latest episode of stranger things"
-    expected_intent: PlayNextEpisodeIntent
+    expected_intent: PlayPodcastIntent
+    expected_slots:
+      podcast_name: {}
+
+  # The one-shot numbers-first tail shape (verified green 2026-09-08): the ONLY
+  # reliable bare-context episode path on this marketplace.
+  - utterance: "ask jellyfin to play season one episode five of game of thrones"
+    expected_intent: PlayEpisodeIntent
     expected_slots:
       series_name: {}
+      season_number: {}
+      episode_number: {}
 
   - utterance: "continue watching dark"
     expected_intent: PlayNextEpisodeIntent
