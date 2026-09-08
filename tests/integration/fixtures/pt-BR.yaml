@@ -27,3 +27,17 @@ tests:
     expected_intent: BrowseLibraryIntent
     expected_slots:
       browse_category: {}
+
+  # ------------------------------------------------------------------------
+  # SetReminderIntent (duration_minutes / reminder_time), JF-451/JF-400
+  # Probe-verified live 2026-09-08 (both slots fill).
+  # ------------------------------------------------------------------------
+  - utterance: "me lembre em trinta minutos"
+    expected_intent: SetReminderIntent
+    expected_slots:
+      duration_minutes: {}
+
+  - utterance: "me lembre às oito"
+    expected_intent: SetReminderIntent
+    expected_slots:
+      reminder_time: {}

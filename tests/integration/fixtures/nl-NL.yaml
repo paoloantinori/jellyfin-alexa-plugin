@@ -18,3 +18,17 @@ tests:
     expected_intent: PlayAlbumIntent
     expected_slots:
       musician: {}
+
+  # ------------------------------------------------------------------------
+  # SetReminderIntent (duration_minutes / reminder_time), JF-451/JF-400
+  # Probe-verified live 2026-09-08 (both slots fill).
+  # ------------------------------------------------------------------------
+  - utterance: "herinner me over dertig minuten"
+    expected_intent: SetReminderIntent
+    expected_slots:
+      duration_minutes: {}
+
+  - utterance: "herinner me om acht uur"
+    expected_intent: SetReminderIntent
+    expected_slots:
+      reminder_time: {}

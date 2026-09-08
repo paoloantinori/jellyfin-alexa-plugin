@@ -13,3 +13,19 @@ tests:
     expected_intent: PlayAlbumIntent
     expected_slots:
       musician: {}
+
+  # ------------------------------------------------------------------------
+  # SetReminderIntent (duration_minutes / reminder_time), JF-451/JF-400
+  # Probe-verified live 2026-09-08. The '{reminder_time} का रिमाइंडर सेट करो'
+  # sample form fills the slot; the '{reminder_time} पर मुझे याद दिलाओ' form
+  # leaves reminder_time empty on the deployed model (2026-09-08 probe).
+  # ------------------------------------------------------------------------
+  - utterance: "तीस मिनट में मुझे याद दिलाओ"
+    expected_intent: SetReminderIntent
+    expected_slots:
+      duration_minutes: {}
+
+  - utterance: "आठ बजे का रिमाइंडर सेट करो"
+    expected_intent: SetReminderIntent
+    expected_slots:
+      reminder_time: {}
