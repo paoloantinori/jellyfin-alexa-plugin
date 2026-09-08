@@ -3,10 +3,10 @@ id: JF-500
 title: >-
   HEVC video sources still cannot play on the Echo Show (static kept with
   warning): add the video transcode tier to the episode HLS path
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-05 20:32'
-updated_date: '2026-09-08 19:10'
+updated_date: '2026-09-08 20:00'
 labels:
   - tv
   - video
@@ -27,16 +27,16 @@ Follow-up from JF-498's live verification (2026-09-05): the routing policy works
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
 - [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
 - [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
 - [ ] #6 NLU test fixtures updated if interaction model changed
 - [ ] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
 ## Implementation Notes
@@ -64,3 +64,9 @@ R8 (design note): the new HlsTranscode enum value is behaviorally identical to H
 
 Test-side cleanups (inline-copy migrations, concurrency-test skeleton sharing, triple media-stream probe fold) are tracked in JF-525.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped, measured, live-verified autonomously up to the endpoint. MEASUREMENT (2026-09-08, real box, Adolescence E1 1080p HEVC): libx264 ultrafast CRF23 = 4.40x realtime (veryfast 2.12x rejected on margin); live sustained rate on the deployed build = 3.5x with the box also serving. ROUTING: VideoAppStreamPolicy.Decide sends known non-h264 video to the new HlsTranscode route; BaseHandler.GetVideoAppLaunchUrl is the single chokepoint (all 11 Movie/Episode launch sites); the endpoint picks the tier by codec - remux ONLY on known h264, unknown/null fails toward the TRANSCODE (asymmetric cost: an extra encode vs a copy-remux of undecodable bytes cached forever, review R1). Attached-picture covers (mjpeg/png) skipped on both the codec pick and the args map (0:V:0; ffmpeg semantics probed). ARGS: libx264 ultrafast CRF23 g48 + pix_fmt yuv420p (10-bit High-10 guard, probed) + UNCONDITIONAL scale=-2:min(ih\,1080) clamp. SAFETY: monitor kill scaled per tier (runtime/2.0x + 10min, 30 floor, 120 unknown-runtime; review F1 - the old flat 30min killed >2h12m movies mid-encode); one transcode at a time via a dedicated slot before the shared gate (review F2 - two concurrent encodes blocked music paths). CACHE: 3072MB/h flat estimate via the shared FlatHourlyEncodeBytes. HOTFIX on the first deploy (live-caught): the clamp token had shell-style quotes (ArgumentList passes them literally: 'Error initializing filters') and a dropped 'ih,' inside min() - corrected to the escaped-comma form, verified with a real encode before and the failing request after. Gates: /simplify (2 passes), code-review high (FIX FIRST F1/F2/R1-R4 all applied, several empirically probed; R5 skipped-documented; R6-R8 -> JF-525), tests 3520/3520 branch+main. LIVE VERIFICATION (autonomous maximum): playlist 200 + valid HLS headers, live process carries the full measured arg set, 3.5x sustained, tier decision logged, stderr aggregation 0 lines. REMAINING (device, needs Paolo): the acceptance 'Adolescence plays end-to-end on the Echo Show with video visible' - the episode will be fully cached when tested. DoD 4-8 N/A.
+<!-- SECTION:FINAL_SUMMARY:END -->
