@@ -3,10 +3,10 @@ id: JF-521
 title: >-
   Stale ledger base + cross-client UserData progress composes a forward skip on
   the device-last-played resume offer (JF-520 F1); fix the writer or the reader
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-07 23:45'
-updated_date: '2026-09-07 23:52'
+updated_date: '2026-09-08 00:56'
 labels:
   - resume
   - transcoding
@@ -37,6 +37,12 @@ Also record from the same review, finding F2 (PLAUSIBLE, narrow, one-sentence no
 - [ ] #4 Regression guard: the screenless-Dot common path (context seed, flag=true, rebase) unaffected
 - [ ] #5 Full suite green; /simplify + code-review high gates before merge
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped (reader-side, decision (b) with a three-point refutation of the writer shape recorded in the notes; the structural writer fix filed as JF-522): the device-last-played seed classifies stream-relative ONLY when the UserData position tick-EQUALS this device's own last recorded raw offset (DeviceQueueManager.GetItemPositionTicks, the new read-only accessor; the stop event writes identical ticks into both stores, so equality proves provenance; any other value came from another client and is item-absolute). All residual misclassification paths verified to fail CONSERVATIVE (restart earlier by the base, never the F1 forward skip): trim eviction reads null, a second Echo writes only its own queue, VideoApp plays write neither store, PlaybackFinished writes no ItemPositionState. ResolveResumedAudioLaunch gained a hard runtime clamp (composed ?start= at/beyond item runtime never mints; raw offset wins; ledger stays consistent with the minted stream; also bounds the F2 retry walk). F1 walk pinned red-verified: base 20:00 + phone 40:00 now mints 40:00, never 60:00; clamp pinned red-verified (35:00 composition -> 15:00); common-path regression guard green. Gates: /simplify (R1 accessor on the manager, S1 no-op removed, S2 doc dedup, S3 comment refresh; A1 -> JF-522), code-review high SAFE TO MERGE (equality gate verified against every writer; clamp math + ledger interaction traced). Tests 3473/3473 branch and main post-merge; deployed to minix (symbol verified in the running DLL, config intact, play+resume smoke clean, zero errors). DoD 4-8 N/A.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Implementation Notes (2026-09-08, branch fix/jf521-stale-base-cross-client)
 
@@ -133,14 +139,14 @@ the dispatch.
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
 - [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
 - [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
 - [ ] #6 NLU test fixtures updated if interaction model changed
 - [ ] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
