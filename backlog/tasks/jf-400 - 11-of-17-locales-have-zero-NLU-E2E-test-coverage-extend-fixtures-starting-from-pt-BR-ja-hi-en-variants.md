@@ -3,10 +3,10 @@ id: JF-400
 title: >-
   11 of 17 locales have zero NLU/E2E test coverage - extend fixtures starting
   from pt-BR, ja, hi, en-variants
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-08-23 05:57'
-updated_date: '2026-09-02 16:49'
+updated_date: '2026-09-08 12:04'
 labels:
   - testing
   - nlu
@@ -55,3 +55,9 @@ PER-USER NOTE for fixture extension: always probe-verify each utterance bare on 
 
 JF-450/451 follow-up (2026-09-02): SetReminderIntent is now declared in all 17 models; NLU fixtures gained routing entries for 11 locales + an e2e_it-IT routing entry, but es-US/pt-BR/nl-NL/hi-IN/ar-SA have no SetReminder fixture entries yet (their seeds lack SleepTimer entries too). Extend under this program using the existing probe-verify-first rule.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED: NLU coverage is complete for every live locale (16/17; ja-JP is vendor-disabled and tracked in JF-414). Timeline: the original 6-locale state grew through four extension waves (en-AU/CA/IN from en-GB; es-MX+fr-CA; es-US+pt-BR+nl-NL+hi-IN+ar-SA created and probe-verified; SetReminder routing entries extended 2026-09-08 to pt-BR/nl-NL/hi-IN/ar-SA, 10/10 live green, commit ea28f640). Residuals documented, both tracked elsewhere: (1) ja-JP fixtures need the vendor locale enabled (JF-414); (2) es-US SetReminder phrasings diverge systematically (duration form -> SleepTimerIntent, time form -> PlaySongIntent; alternate forms probed and also diverging) - the JF-406 documented class, no entries asserted for that locale. Method note that held across the whole program: ALWAYS probe-verify each utterance bare on profile-nlu before writing the expectation; the sample vocabulary alone does not predict routing (three divergences found this way: es-US imperative album, ar-SA bare album, hi-IN time form).
+<!-- SECTION:FINAL_SUMMARY:END -->
