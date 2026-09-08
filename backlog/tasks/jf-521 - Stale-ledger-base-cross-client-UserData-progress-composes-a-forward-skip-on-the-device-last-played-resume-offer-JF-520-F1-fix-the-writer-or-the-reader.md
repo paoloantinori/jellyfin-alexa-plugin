@@ -3,9 +3,10 @@ id: JF-521
 title: >-
   Stale ledger base + cross-client UserData progress composes a forward skip on
   the device-last-played resume offer (JF-520 F1); fix the writer or the reader
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-07 23:45'
+updated_date: '2026-09-07 23:52'
 labels:
   - resume
   - transcoding
