@@ -332,4 +332,155 @@ public class DisambiguationHelperTests
         // (items will just display without images)
         Assert.NotEmpty(response.Response.Directives);
     }
+
+    // ========== ResolvePick (candidate-names picker; moved from FindSongIntentHandlerTests, JF-524) ==========
+
+    private static List<string> CreateTestCandidateNames(int count)
+    {
+        return Enumerable.Range(0, count)
+            .Select(i => $"Song {i + 1}")
+            .ToList();
+    }
+
+    [Fact]
+    public void ResolvePick_ByNumber_ReturnsCorrectIndex()
+    {
+        var candidateNames = CreateTestCandidateNames(4);
+        var result = DisambiguationHelper.ResolvePick("1", candidateNames, "en-US");
+        Assert.Equal(0, result);
+    }
+
+    [Fact]
+    public void ResolvePick_ByNumberTwo_ReturnsIndex1()
+    {
+        var candidateNames = CreateTestCandidateNames(4);
+        var result = DisambiguationHelper.ResolvePick("2", candidateNames, "en-US");
+        Assert.Equal(1, result);
+    }
+
+    [Fact]
+    public void ResolvePick_ByOrdinalOne_ReturnsIndex0()
+    {
+        var candidateNames = CreateTestCandidateNames(4);
+        var result = DisambiguationHelper.ResolvePick("one", candidateNames, "en-US");
+        Assert.Equal(0, result);
+    }
+
+    [Fact]
+    public void ResolvePick_ByOrdinalTwo_ReturnsIndex1()
+    {
+        var candidateNames = CreateTestCandidateNames(4);
+        var result = DisambiguationHelper.ResolvePick("two", candidateNames, "en-US");
+        Assert.Equal(1, result);
+    }
+
+    // ========== JF-396: cardinal + ordinal pick words for es/pt/fr/nl ==========
+
+    [Theory]
+    [InlineData("dos", 1)]          // es cardinal
+    [InlineData("tres", 2)]
+    [InlineData("cuatro", 3)]
+    [InlineData("segundo", 1)]      // es ordinal
+    [InlineData("la tercera", 2)]
+    [InlineData("el cuarto", 3)]
+    [InlineData("dois", 1)]         // pt cardinal
+    [InlineData("três", 2)]
+    [InlineData("o terceiro", 2)]   // pt ordinal
+    [InlineData("a quarta", 3)]
+    [InlineData("deuxième", 1)]     // fr ordinal
+    [InlineData("le premier", 0)]
+    [InlineData("le troisième", 2)]
+    [InlineData("le quatrième", 3)]
+    [InlineData("tweede", 1)]       // nl ordinal
+    [InlineData("derde", 2)]
+    [InlineData("vierde", 3)]
+    [InlineData("eerste", 0)]       // nl eerste contains erste, was already matched
+    public void ResolvePick_EsPtFrNl_Answers_ResolveCorrectIndex(string input, int expected)
+    {
+        var candidateNames = CreateTestCandidateNames(4);
+        var result = DisambiguationHelper.ResolvePick(input, candidateNames, "es-ES");
+        Assert.Equal(expected, result);
+    }
+
+    // Guards: existing en/it behavior unchanged after the refactor
+    [Theory]
+    [InlineData("the second one", 1)]
+    [InlineData("il terzo", 2)]
+    [InlineData("zweite", 1)]
+    [InlineData("un", 0)]
+    [InlineData("quattro", 3)]
+    [InlineData("no", null)]        // negative answers are NOT picks (JF-395 exit path)
+    [InlineData("banana", null)]    // non-matching word is not a pick
+    public void ResolvePick_ExistingWords_Unchanged(string input, int? expected)
+    {
+        var candidateNames = CreateTestCandidateNames(4);
+        var result = DisambiguationHelper.ResolvePick(input, candidateNames, "en-US");
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void ResolvePick_ByPartialTitle_ReturnsMatchingIndex()
+    {
+        var candidateNames = new List<string> { "Hey Jude", "Let It Be" };
+
+        var result = DisambiguationHelper.ResolvePick("jude", candidateNames, "en-US");
+        Assert.Equal(0, result);
+    }
+
+    [Fact]
+    public void ResolvePick_NoMatch_ReturnsNull()
+    {
+        var candidateNames = CreateTestCandidateNames(4);
+        var result = DisambiguationHelper.ResolvePick("something unrelated", candidateNames, "en-US");
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ResolvePick_TheFirstOne_ReturnsIndex0()
+    {
+        var candidateNames = CreateTestCandidateNames(4);
+        var result = DisambiguationHelper.ResolvePick("the first one", candidateNames, "en-US");
+        Assert.Equal(0, result);
+    }
+
+    [Fact]
+    public void ResolvePick_IlPrimo_ReturnsIndex0()
+    {
+        var candidateNames = CreateTestCandidateNames(4);
+        var result = DisambiguationHelper.ResolvePick("il primo", candidateNames, "it-IT");
+        Assert.Equal(0, result);
+    }
+
+    [Fact]
+    public void ResolvePick_EmptyInput_ReturnsNull()
+    {
+        var candidateNames = CreateTestCandidateNames(2);
+        Assert.Null(DisambiguationHelper.ResolvePick("", candidateNames, "en-US"));
+        Assert.Null(DisambiguationHelper.ResolvePick("   ", candidateNames, "en-US"));
+    }
+
+    [Fact]
+    public void ResolvePick_EmptyCandidates_ReturnsNull()
+    {
+        var candidateNames = new List<string>();
+        Assert.Null(DisambiguationHelper.ResolvePick("1", candidateNames, "en-US"));
+    }
+
+    // Review regression: a multi-token answer matching a candidate TITLE must win over
+    // the ordinal stem it contains ("Second Chance" is a title, not rank 2).
+    [Fact]
+    public void ResolvePick_TitleWithOrdinalWord_TitleWinsOverRank()
+    {
+        var candidateNames = new List<string> { "First Cut Is the Deepest", "Second Chance" };
+
+        // "second chance" must pick the TITLE at index 1 because it is the second
+        // candidate, NOT because "second" maps to rank 1: verify with the title at a
+        // different position too.
+        var result = DisambiguationHelper.ResolvePick("second chance", candidateNames, "en-US");
+        Assert.Equal(1, result);
+
+        var reordered = new List<string> { candidateNames[1], candidateNames[0] };
+        var result2 = DisambiguationHelper.ResolvePick("second chance", reordered, "en-US");
+        Assert.Equal(0, result2); // the title, wherever it sits
+    }
 }
