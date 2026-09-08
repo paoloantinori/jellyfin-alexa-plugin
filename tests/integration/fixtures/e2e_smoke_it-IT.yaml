@@ -1,0 +1,21 @@
+# JF-413 closure suite: the it-IT two-step smoke pins the CONTEXT-PRESERVING
+# elicit round-trip (the defect class this task audited): a bare-song opener
+# elicits, and the bare in-session title follow-up is captured by the dialog
+# (no fall-through to general NLU). Live-verified 2026-09-08 before pinning:
+# T1 'chiedi a mia collezione di mettere una canzone' -> Dialog.ElicitSlot
+# ('Quali parole ricordi del titolo?'), T2 'waltz for koop' -> FindSongIntent
+# titleKeywords='waltz for koop', AudioPlayer.Play, session ends.
+locale: it-IT
+invocation_name: mia collezione
+open_utterance: "chiedi a mia collezione di mettere una canzone"
+tests:
+  # The elicit round-trip itself: the regression guard for the 2026-08-28
+  # defect class (plain Ask losing the thread).
+  - utterance: "waltz for koop"
+    expected_intent: FindSongIntent
+    expected_slots:
+      titleKeywords: {}
+    expected_response_type: directive
+    expected_directive_type: "AudioPlayer.Play"
+    expected_end_session: true
+    expected_stream_url_contains: "/Audio/"
