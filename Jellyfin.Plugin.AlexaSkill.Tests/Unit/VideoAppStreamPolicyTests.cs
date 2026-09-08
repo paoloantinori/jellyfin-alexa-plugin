@@ -7,10 +7,11 @@ using Xunit;
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 
 /// <summary>
-/// Tests for <see cref="VideoAppStreamPolicy"/> (JF-498): the codec probe that
-/// decides static-vs-HLS-remux for every Movie/Episode VideoApp launch. The Echo
-/// Show decodes H.264 video only and has no EAC3/AC3/TrueHD/DTS audio decoder, so
-/// the static byte stream never starts for such sources.
+/// Tests for <see cref="VideoAppStreamPolicy"/> (JF-498/JF-500): the codec probe
+/// that decides static-vs-HLS (remux or video transcode tier) for every
+/// Movie/Episode VideoApp launch. The Echo Show decodes H.264 video only and has
+/// no EAC3/AC3/TrueHD/DTS audio decoder, so the static byte stream never starts
+/// for such sources.
 /// </summary>
 public class VideoAppStreamPolicyTests
 {
@@ -27,7 +28,6 @@ public class VideoAppStreamPolicyTests
         VideoAppStreamDecision decision = VideoAppStreamPolicy.Decide("h264", "eac3", "mkv");
 
         Assert.Equal(VideoAppStreamRoute.HlsRemux, decision.Route);
-        Assert.False(decision.LogWarning);
         Assert.Contains("eac3", decision.Reason, StringComparison.Ordinal);
     }
 
@@ -38,7 +38,6 @@ public class VideoAppStreamPolicyTests
         VideoAppStreamDecision decision = VideoAppStreamPolicy.Decide("h264", "aac", "mp4");
 
         Assert.Equal(VideoAppStreamRoute.Static, decision.Route);
-        Assert.False(decision.LogWarning);
     }
 
     /// <summary>
@@ -68,7 +67,7 @@ public class VideoAppStreamPolicyTests
     {
         Assert.Equal(VideoAppStreamRoute.HlsRemux, VideoAppStreamPolicy.Decide("h264", "eac3", container).Route);
         Assert.Equal(VideoAppStreamRoute.Static, VideoAppStreamPolicy.Decide("h264", "aac", container).Route);
-        Assert.Equal(VideoAppStreamRoute.Static, VideoAppStreamPolicy.Decide("hevc", "aac", container).Route);
+        Assert.Equal(VideoAppStreamRoute.HlsTranscode, VideoAppStreamPolicy.Decide("hevc", "aac", container).Route);
     }
 
     // ========== Incompatible audio codecs ==========
@@ -85,7 +84,6 @@ public class VideoAppStreamPolicyTests
         VideoAppStreamDecision decision = VideoAppStreamPolicy.Decide("h264", audioCodec);
 
         Assert.Equal(VideoAppStreamRoute.HlsRemux, decision.Route);
-        Assert.False(decision.LogWarning);
     }
 
     /// <summary>
@@ -119,31 +117,84 @@ public class VideoAppStreamPolicyTests
         VideoAppStreamDecision decision = VideoAppStreamPolicy.Decide("h264", null);
 
         Assert.Equal(VideoAppStreamRoute.Static, decision.Route);
-        Assert.False(decision.LogWarning);
     }
 
-    // ========== Non-h264 video: no video transcode path in this first cut ==========
+    // ========== Non-h264 video: the JF-500 transcode tier ==========
 
+    /// <summary>
+    /// JF-500: a KNOWN non-h264 video codec routes to the episode HLS video
+    /// TRANSCODE tier (H.264 re-encode) instead of the first cut's warned static
+    /// fallback: these sources now play. AV1 rides the same tier. The reason
+    /// names the codec so triage knows what re-encodes.
+    /// </summary>
     [Theory]
     [InlineData("hevc")]
     [InlineData("av1")]
     [InlineData("mpeg2video")]
     [InlineData("vp9")]
-    public void Decide_NonH264Video_KeepsStaticStreamAndWarns(string videoCodec)
+    public void Decide_NonH264Video_RoutesToHlsTranscode(string videoCodec)
     {
         VideoAppStreamDecision decision = VideoAppStreamPolicy.Decide(videoCodec, "eac3");
 
-        // A remux cannot fix a video codec the Echo cannot decode, and this build
-        // has no video transcode path: keep today's static URL and warn (the reason
-        // must name the codec so triage knows what to look at).
-        Assert.Equal(VideoAppStreamRoute.Static, decision.Route);
-        Assert.True(decision.LogWarning);
+        Assert.Equal(VideoAppStreamRoute.HlsTranscode, decision.Route);
         Assert.Contains(videoCodec, decision.Reason, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// An UNKNOWN video codec also keeps the static stream: the remux output cannot
-    /// be guaranteed Echo-decodable when the source video codec was never read.
+    /// The transcode tier is picked for a non-h264 source REGARDLESS of the audio
+    /// codec: even a hevc+aac source (Echo-decodable audio) cannot play statically
+    /// because the video track is undecodable.
+    /// </summary>
+    [Fact]
+    public void Decide_HevcWithCompatibleAudio_StillRoutesToHlsTranscode()
+    {
+        VideoAppStreamDecision decision = VideoAppStreamPolicy.Decide("hevc", "aac");
+
+        Assert.Equal(VideoAppStreamRoute.HlsTranscode, decision.Route);
+    }
+
+    /// <summary>
+    /// The HANDLER-side tier predicate (used by Decide): true for every KNOWN
+    /// non-h264 codec, false for h264 and for an unknown codec (fail-open, may
+    /// only ADD the route).
+    /// </summary>
+    [Theory]
+    [InlineData("hevc", true)]
+    [InlineData("av1", true)]
+    [InlineData("HEVC", true)]
+    [InlineData("h264", false)]
+    [InlineData("H264", false)]
+    [InlineData(null, false)]
+    [InlineData("", false)]
+    [InlineData(" ", false)]
+    public void VideoRequiresTranscode_KnownNonH264Only(string? videoCodec, bool expected)
+    {
+        Assert.Equal(expected, VideoAppStreamPolicy.VideoRequiresTranscode(videoCodec));
+    }
+
+    /// <summary>
+    /// JF-500 review R1: the CONTROLLER-side tier predicate, the deliberate inverse
+    /// of <see cref="VideoRequiresTranscode"/>: true ONLY for a known h264 codec,
+    /// so an unknown codec maps to the transcode tier at the endpoint instead of a
+    /// copy remux of unverifiable bytes (a completed remux is cached forever).
+    /// </summary>
+    [Theory]
+    [InlineData("h264", true)]
+    [InlineData("H264", true)]
+    [InlineData("hevc", false)]
+    [InlineData("av1", false)]
+    [InlineData("mjpeg", false)]
+    [InlineData(null, false)]
+    [InlineData("", false)]
+    [InlineData(" ", false)]
+    public void VideoSupportsRemux_KnownH264Only(string? videoCodec, bool expected)
+    {
+        Assert.Equal(expected, VideoAppStreamPolicy.VideoSupportsRemux(videoCodec));
+    }
+
+    /// <summary>
+    /// An UNKNOWN video codec still keeps the static stream: the transcode cannot
+    /// be guaranteed to start when the source video codec was never read.
     /// </summary>
     [Fact]
     public void Decide_UnknownVideoCodec_KeepsStaticStreamEvenWithIncompatibleAudio()
@@ -151,7 +202,6 @@ public class VideoAppStreamPolicyTests
         VideoAppStreamDecision decision = VideoAppStreamPolicy.Decide(null, "eac3");
 
         Assert.Equal(VideoAppStreamRoute.Static, decision.Route);
-        Assert.False(decision.LogWarning);
     }
 
     // ========== Codec extraction from media streams ==========

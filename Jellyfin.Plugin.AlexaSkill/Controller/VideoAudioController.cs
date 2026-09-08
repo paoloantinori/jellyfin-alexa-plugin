@@ -496,11 +496,29 @@ public class VideoAudioController : ControllerBase
     private static readonly ConcurrentDictionary<string, bool> _episodeHlsItems = new();
 
     /// <summary>
-    /// Stream an HLS REMUX of a movie/episode whose audio codec has no decoder on the
-    /// Echo Show (JF-498): video stream copy + audio AAC transcode into MPEG-TS
-    /// segments, served stream-while-writing like the song path. Launch sites route
-    /// here via <c>BaseHandler.GetVideoAppLaunchUrl</c>; the endpoint re-probes the
-    /// codecs server-side to pick its own ffmpeg arguments (audio copy vs AAC).
+    /// Attached-picture COVER codecs seen as VIDEO streams in tagged files (JF-500
+    /// review R2): an embedded mjpeg/png cover can sit ahead of the real track in
+    /// the stream list, and a cover that won the codec pick would misroute the
+    /// episode tier decision below (mjpeg is "not h264" -> transcode of a static
+    /// image). <see cref="ResolveSourceVideoCodec"/> skips these codecs, and the
+    /// ffmpeg mapping (<c>-map 0:V:0</c>, capital V: ffmpeg video streams EXCLUDING
+    /// attached pictures, verified on ffmpeg 8.1.2) drops them at the encode level.
+    /// </summary>
+    private static readonly HashSet<string> EpisodeCoverVideoCodecs = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "mjpeg",
+        "png"
+    };
+
+    /// <summary>
+    /// Stream an HLS REMUX or video TRANSCODE of a movie/episode (JF-498/JF-500):
+    /// sources whose audio codec has no decoder on the Echo Show (eac3 family) get a
+    /// video stream copy + audio AAC transcode; sources whose VIDEO codec the Echo
+    /// cannot decode (hevc/av1) get an H.264 re-encode instead of the copy. Both
+    /// tiers land in MPEG-TS segments served stream-while-writing like the song
+    /// path. Launch sites route here via <c>BaseHandler.GetVideoAppLaunchUrl</c>;
+    /// the endpoint re-probes the codecs server-side to pick its own ffmpeg
+    /// arguments (video copy vs transcode, audio copy vs AAC).
     /// </summary>
     /// <param name="itemId">The Jellyfin video item ID.</param>
     /// <returns>An HLS playlist (.m3u8) file.</returns>
@@ -521,11 +539,12 @@ public class VideoAudioController : ControllerBase
     }
 
     /// <summary>
-    /// Build and serve the episode remux HLS playlist. Mirrors
+    /// Build and serve the episode remux/transcode HLS playlist. Mirrors
     /// <see cref="StreamHlsVideoAudioCore"/> (per-item cache dir, per-item lock,
     /// first-segment wait, partial playlist, background monitor) with the video input
-    /// and full-framerate stream-copy arguments of
-    /// <see cref="BuildEpisodeHlsFfmpegArguments"/>.
+    /// and the full-framerate arguments of <see cref="BuildEpisodeHlsFfmpegArguments"/>
+    /// (stream copy) or <see cref="BuildEpisodeHlsTranscodeFfmpegArguments"/> (H.264
+    /// re-encode, JF-500).
     /// </summary>
     private async Task<ActionResult> StreamHlsEpisodeCore(string itemId)
     {
@@ -573,17 +592,23 @@ public class VideoAudioController : ControllerBase
             }
 
             // Re-probe server-side to build the ffmpeg arguments (the handler-side
-            // probe only picked the route). A non-h264 video source still remuxes
-            // (same on-device outcome the static stream would have), but is logged
-            // loudly: the handler-side probe keeps such items on the static route.
+            // probe only picked the route). Video tier (JF-500): only a KNOWN h264
+            // source is remuxed; every other video codec (hevc, av1, ...) is
+            // re-encoded to H.264. An UNKNOWN codec (null) takes the TRANSCODE tier
+            // too, inverting the handler-side route pick's fail-open on purpose: the
+            // endpoint owns the cache, and a copy remux of undecodable video bytes
+            // COMPLETES with ENDLIST, which ValidateEpisodeCacheAsync accepts, and
+            // the cache-hit path never re-probes, so the broken copy would be served
+            // forever. The wrong-tier cost is asymmetric the other way: transcoding
+            // an actually-h264 source costs one extra encode, not a cached dud.
             string? sourceVideoCodec = ResolveSourceVideoCodec(validation.Item);
             string? sourceAudioCodec = ResolveSourceAudioCodec(validation.Item);
-            if (!string.IsNullOrEmpty(sourceVideoCodec)
-                && !string.Equals(sourceVideoCodec, "h264", StringComparison.OrdinalIgnoreCase))
+            bool videoTranscodeTier = !VideoAppStreamPolicy.VideoSupportsRemux(sourceVideoCodec);
+            if (videoTranscodeTier)
             {
-                _logger.LogWarning(
-                    "VideoAudio episode HLS: item {ItemId} video codec '{VideoCodec}' is not h264; the Echo cannot decode the remux output either (no video transcode path in this build, JF-498 first cut)",
-                    itemId, sourceVideoCodec);
+                _logger.LogInformation(
+                    "VideoAudio episode HLS: item {ItemId} video codec '{VideoCodec}' is not known h264; using the video transcode tier (libx264 ultrafast CRF 23, measured 4.40x realtime on the minix 2026-09-08, JF-500)",
+                    itemId, sourceVideoCodec ?? "(unknown)");
             }
 
             _logger.LogDebug(
@@ -608,7 +633,14 @@ public class VideoAudioController : ControllerBase
             // cannot).
             string videoUrl = $"{validation.ServerUrl}/Videos/{itemId}/stream?static=true";
 
-            var ffmpegArgs = BuildEpisodeHlsFfmpegArguments(videoUrl, playlistPath, segmentPath, hlsBaseUrl, sourceAudioCodec);
+            var ffmpegArgs = videoTranscodeTier
+                ? BuildEpisodeHlsTranscodeFfmpegArguments(
+                    videoUrl,
+                    playlistPath,
+                    segmentPath,
+                    hlsBaseUrl,
+                    sourceAudioCodec)
+                : BuildEpisodeHlsFfmpegArguments(videoUrl, playlistPath, segmentPath, hlsBaseUrl, sourceAudioCodec);
             if (_logger.IsEnabled(LogLevel.Debug))
             {
                 _logger.LogDebug("VideoAudio episode HLS: ffmpeg arguments: {Args}", string.Join(" ", ffmpegArgs));
@@ -636,10 +668,13 @@ public class VideoAudioController : ControllerBase
                 ffmpegProcess = await StartFfmpegProcessGatedAsync(
                     validation.FfmpegPath,
                     ffmpegArgs,
-                    EstimateEpisodeEncodeBytes(
-                        validation.Item.RunTimeTicks ?? 0,
-                        ResolveTotalMediaBitrateBps(validation.Item)),
-                    hlsDir).ConfigureAwait(false);
+                    videoTranscodeTier
+                        ? EstimateEpisodeTranscodeEncodeBytes(validation.Item.RunTimeTicks ?? 0)
+                        : EstimateEpisodeEncodeBytes(
+                            validation.Item.RunTimeTicks ?? 0,
+                            ResolveTotalMediaBitrateBps(validation.Item)),
+                    hlsDir,
+                    videoTranscodeTier ? _episodeTranscodeSlot : null).ConfigureAwait(false);
             }
             catch
             {
@@ -651,8 +686,11 @@ public class VideoAudioController : ControllerBase
             {
                 // Wait for the first segment + playlist to appear. A remux is
                 // I/O-bound (tens of x realtime), so the first 4s segment is on disk
-                // in well under a second; the ~20s ceiling only guards pathological
-                // cases (network-attached library, cold cache).
+                // in well under a second; a video-transcode encode (JF-500) at the
+                // measured 4.40x realtime needs ~1s of encode for the first 4s
+                // segment plus ffmpeg startup, still far inside the window. The
+                // ~20s ceiling only guards pathological cases (network-attached
+                // library, cold cache).
                 string firstSegmentPath = Path.Combine(hlsDir, "seg_0000.ts");
                 bool segmentAppeared = false;
                 for (int i = 0; i < 200; i++)
@@ -684,8 +722,18 @@ public class VideoAudioController : ControllerBase
                 _cache.RegisterHlsDirectory(itemId, artModifiedTicks);
 
                 // Monitor ffmpeg in the background: wait for completion, log errors,
-                // trigger eviction, clear the active-encode flag.
-                _ = MonitorFfmpegHlsAsync(ffmpegProcess, hlsDir, itemId, artModifiedTicks, "Episode", _activeEpisodeEncodes);
+                // trigger eviction, clear the active-encode flag. The transcode tier
+                // carries the item runtime so the monitor kill scales with it (JF-500
+                // review F1); the remux tier keeps the fixed ceiling.
+                _ = MonitorFfmpegHlsAsync(
+                    ffmpegProcess,
+                    hlsDir,
+                    itemId,
+                    artModifiedTicks,
+                    "Episode",
+                    _activeEpisodeEncodes,
+                    videoTranscodeTier,
+                    validation.Item.RunTimeTicks);
 
                 // Serve the partial playlist immediately; the Echo Show fetches
                 // segments and re-requests the playlist as it grows.
@@ -1828,15 +1876,39 @@ public class VideoAudioController : ControllerBase
         => ResolveSourceCodec(item, MediaStreamType.Audio);
 
     /// <summary>
-    /// Resolve the source VIDEO codec for an item by reading its first video media
-    /// stream (JF-498). Mirrors <see cref="ResolveSourceAudioCodec"/>. Returns null
-    /// when the codec cannot be determined (media source manager unavailable, no
-    /// video stream, or a DB read failure).
+    /// Resolve the source VIDEO codec for an item by reading its first REAL video
+    /// stream (JF-498). Video streams with a BLANK codec are skipped rather than
+    /// nulling the probe: the same skip-blank semantics as the handler-side
+    /// <see cref="VideoAppStreamPolicy.ExtractCodecs"/>, so the two probes cannot
+    /// disagree on a stream list whose first video entry carries no codec (JF-500
+    /// review R1). Attached-picture covers (<see cref="EpisodeCoverVideoCodecs"/>,
+    /// JF-500 review R2) are skipped too, so a cover cannot win the pick over the
+    /// real track and misroute the endpoint's tier decision. Returns null when the
+    /// codec cannot be determined (media source manager unavailable, no real video
+    /// stream, or a DB read failure).
     /// </summary>
     /// <param name="item">The Jellyfin video item.</param>
     /// <returns>Lowercase video codec string (e.g. "h264", "hevc"), or null.</returns>
     internal string? ResolveSourceVideoCodec(MediaBrowser.Controller.Entities.BaseItem item)
-        => ResolveSourceCodec(item, MediaStreamType.Video);
+    {
+        var streams = TryGetMediaStreams(item);
+        if (streams == null)
+        {
+            return null;
+        }
+
+        foreach (MediaStream stream in streams)
+        {
+            if (stream.Type == MediaStreamType.Video
+                && !string.IsNullOrWhiteSpace(stream.Codec)
+                && !EpisodeCoverVideoCodecs.Contains(stream.Codec))
+            {
+                return stream.Codec.ToLowerInvariant();
+            }
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// Shared body of the media-stream readers: fetch the item's media streams as a
@@ -2177,54 +2249,7 @@ public class VideoAudioController : ControllerBase
         string segmentPath,
         string hlsBaseUrl,
         string? sourceAudioCodec = null)
-    {
-        var args = new List<string>();
-
-        // Input 0: the item's own static stream (raw container; ffmpeg's demuxers
-        // handle mkv/mp4/webm regardless of what ExoPlayer supports).
-        args.Add("-i");
-        args.Add(videoUrl);
-
-        // Explicit mapping: FIRST video + FIRST audio stream only. Drops subtitle
-        // streams (PGS/SRT inside MKV cannot be muxed into MPEG-TS and would fail
-        // the encode) and any attached-picture/attachment streams.
-        args.Add("-map");
-        args.Add("0:v:0");
-        args.Add("-map");
-        args.Add("0:a:0");
-
-        // Video: stream copy (the policy routes only H.264 sources here).
-        args.AddRange(EpisodeVideoCopyArgs);
-
-        // Audio: copy when the source is mp3/aac, else transcode to AAC.
-        args.AddRange(BuildEpisodeAudioCodecArgs(sourceAudioCodec));
-
-        // HLS flags. 4-second segments (the JF-292 family value for full-framerate
-        // content; 10s is the audiobook value and the ceiling ExoPlayer wants).
-        // append_list keeps already-written segments listed while the playlist grows.
-        args.Add("-hls_time");
-        args.Add("4");
-        args.Add("-hls_list_size");
-        args.Add("0");
-        args.Add("-hls_flags");
-        args.Add("append_list");
-        args.Add("-hls_segment_type");
-        args.Add("mpegts");
-
-        // Segment file name template
-        args.Add("-hls_segment_filename");
-        args.Add(segmentPath);
-
-        // Base URL for segment references in the playlist
-        args.Add("-hls_base_url");
-        args.Add(hlsBaseUrl);
-
-        // No -shortest: both output streams come from ONE finite input (the
-        // audiobook path needs -shortest only because its art input loops forever).
-        args.Add(playlistPath);
-
-        return args;
-    }
+        => BuildEpisodeHlsArgumentsCore(videoUrl, playlistPath, segmentPath, hlsBaseUrl, sourceAudioCodec, EpisodeVideoCopyArgs);
 
     /// <summary>
     /// Video codec arguments for the episode remux: stream copy plus the GOP hint.
@@ -2265,6 +2290,224 @@ public class VideoAudioController : ControllerBase
         => !string.IsNullOrWhiteSpace(sourceAudioCodec) && CopyCompatibleAudioCodecs.Contains(sourceAudioCodec)
             ? AudioCopyArgs
             : EpisodeAudioCodecArgs;
+
+    /// <summary>
+    /// Shared body of the two episode HLS builders (the JF-498 remux and the
+    /// JF-500 transcode tier): one static input, the explicit first-video +
+    /// first-audio mapping, the per-tier VIDEO arguments, the shared audio
+    /// selection (<see cref="BuildEpisodeAudioCodecArgs"/>), and the identical
+    /// HLS/segment/playlist tails (4s MPEG-TS, append_list event growth, no
+    /// -shortest). Each tier passes only its own video tokens; the transcode's
+    /// conditional scale rides inside its video token list.
+    /// </summary>
+    /// <param name="videoUrl">Static stream URL of the source item (ffmpeg input).</param>
+    /// <param name="playlistPath">Output playlist file path.</param>
+    /// <param name="segmentPath">Segment filename template (e.g. "seg_%04d.ts").</param>
+    /// <param name="hlsBaseUrl">Base URL prefix for segment references in the playlist.</param>
+    /// <param name="sourceAudioCodec">Source audio codec for the copy decision, or
+    /// null/unknown to transcode to AAC.</param>
+    /// <param name="videoArgs">The tier's video codec arguments (copy set or the
+    /// measured H.264 re-encode set, plus the transcode's scale filter when it fires).</param>
+    /// <returns>List of ffmpeg arguments (one token per entry).</returns>
+    private static List<string> BuildEpisodeHlsArgumentsCore(
+        string videoUrl,
+        string playlistPath,
+        string segmentPath,
+        string hlsBaseUrl,
+        string? sourceAudioCodec,
+        IReadOnlyList<string> videoArgs)
+    {
+        var args = new List<string>();
+
+        // Input 0: the item's own static stream (raw container; ffmpeg's demuxers
+        // handle mkv/mp4/webm regardless of what ExoPlayer supports).
+        args.Add("-i");
+        args.Add(videoUrl);
+
+        // Explicit mapping: FIRST video + FIRST audio stream only. Drops subtitle
+        // streams (PGS/SRT inside MKV cannot be muxed into MPEG-TS and would fail
+        // the encode) and any attached-picture/attachment streams. Capital V
+        // (JF-500 review R2): ffmpeg's 'V' specifier matches video streams
+        // EXCLUDING attached pictures/thumbnails/cover art ('v' matches all video
+        // streams, verified on ffmpeg 8.1.2), so an embedded cover cannot steal
+        // the video slot from the real track; for normal files V:0 selects exactly
+        // what v:0 did.
+        args.Add("-map");
+        args.Add("0:V:0");
+        args.Add("-map");
+        args.Add("0:a:0");
+
+        // Video: the per-tier arguments (stream copy for the remux, the measured
+        // H.264 re-encode set for the transcode, plus its conditional scale).
+        args.AddRange(videoArgs);
+
+        // Audio: copy when the source is mp3/aac, else transcode to AAC.
+        args.AddRange(BuildEpisodeAudioCodecArgs(sourceAudioCodec));
+
+        // HLS flags. 4-second segments (the JF-292 family value for full-framerate
+        // content; 10s is the audiobook value and the ceiling ExoPlayer wants).
+        // append_list keeps already-written segments listed while the playlist grows.
+        args.Add("-hls_time");
+        args.Add("4");
+        args.Add("-hls_list_size");
+        args.Add("0");
+        args.Add("-hls_flags");
+        args.Add("append_list");
+        args.Add("-hls_segment_type");
+        args.Add("mpegts");
+
+        // Segment file name template
+        args.Add("-hls_segment_filename");
+        args.Add(segmentPath);
+
+        // Base URL for segment references in the playlist
+        args.Add("-hls_base_url");
+        args.Add(hlsBaseUrl);
+
+        // No -shortest: both output streams come from ONE finite input (the
+        // audiobook path needs -shortest only because its art input loops forever).
+        args.Add(playlistPath);
+
+        return args;
+    }
+
+    /// <summary>
+    /// Build ffmpeg argument list for the EPISODE HLS VIDEO TRANSCODE tier (JF-500):
+    /// the item's video re-encoded to H.264 (the sources routed here are
+    /// hevc/av1/...: the Echo decodes H.264 only, and a remux would copy the
+    /// undecodable bytes), with audio EXACTLY as the remux pipeline
+    /// (<see cref="BuildEpisodeAudioCodecArgs"/>: AAC 192k stereo for the
+    /// Echo-undecodable family, copy for mp3/aac).
+    /// Measured parameter set (2026-09-08, minix, Adolescence E1 1080p HEVC):
+    /// ultrafast CRF 23 sustains 4.40x realtime (veryfast measured 2.12x and was
+    /// rejected on margin), so playback never catches the encode head and the
+    /// first 4s segment lands in ~1s, far inside the first-segment wait.
+    /// <c>-g 48</c> is LIVE here (an encoder option, unlike its inert copy-path
+    /// twin): a keyframe at least every 48 frames (~2s at the 24-30fps TV rates)
+    /// so the HLS muxer can cut 4-second segments at GOP boundaries. The scale
+    /// clamp is UNCONDITIONAL (<c>scale=-2:'min(ih,1080)'</c> in
+    /// <see cref="EpisodeVideoTranscodeArgs"/>: a no-op at &lt;=1080p) so a
+    /// taller-than-ceiling source is always clamped: the height probe that used
+    /// to gate the filter could fail open on an unprobed 4K source, whose decode
+    /// cost would break the realtime margin and hit the monitor kill.
+    /// Segment/playlist/cache machinery is the remux's, unchanged (same 4s
+    /// hls_time, append_list event growth, MPEG-TS segments, token rewriting).
+    /// </summary>
+    /// <param name="videoUrl">Static stream URL of the source item (ffmpeg input).</param>
+    /// <param name="playlistPath">Output playlist file path.</param>
+    /// <param name="segmentPath">Segment filename template (e.g. "seg_%04d.ts").</param>
+    /// <param name="hlsBaseUrl">Base URL prefix for segment references in the playlist.</param>
+    /// <param name="sourceAudioCodec">Source audio codec for the copy decision, or
+    /// null/unknown to transcode to AAC.</param>
+    /// <returns>List of ffmpeg arguments (one token per entry).</returns>
+    internal static List<string> BuildEpisodeHlsTranscodeFfmpegArguments(
+        string videoUrl,
+        string playlistPath,
+        string segmentPath,
+        string hlsBaseUrl,
+        string? sourceAudioCodec = null)
+        => BuildEpisodeHlsArgumentsCore(videoUrl, playlistPath, segmentPath, hlsBaseUrl, sourceAudioCodec, EpisodeVideoTranscodeArgs);
+
+    /// <summary>
+    /// Video codec arguments for the episode transcode tier (JF-500): the measured
+    /// set (libx264 ultrafast CRF 23, GOP 48) that sustains 4.40x realtime on the
+    /// minix for a 1080p HEVC source. Not to be re-tuned without a new on-box
+    /// measurement (veryfast was measured at 2.12x and rejected on margin).
+    /// <c>-pix_fmt yuv420p</c> is a correctness guard, not a tuning knob: a no-op
+    /// for 8-bit sources, it converts a 10-bit HEVC source to a profile the Echo
+    /// decodes (without it libx264 keeps the 10-bit depth and emits High-10
+    /// H.264; ffmpeg 8.1.2 probe). The file's other two libx264 sets
+    /// (<see cref="PixelFormatArgs"/> and the audiobook path) carry it too.
+    /// The trailing <c>-vf scale=-2:'min(ih,1080)'</c> (JF-500 review R3) is the
+    /// UNCONDITIONAL height clamp: a no-op for &lt;=1080p sources, it scales taller
+    /// ones down to <see cref="MaxEpisodeTranscodeHeight"/> without needing a height
+    /// probe. The single quotes are ffmpeg filtergraph-level quoting (they protect
+    /// the comma inside <c>min()</c> from the filter separator), not shell quoting:
+    /// the token passes through <c>ArgumentList</c> verbatim (verified on ffmpeg
+    /// 8.1.2: 3840x2160 -> 1920x1080, 1280x720 -> 1280x720).
+    /// </summary>
+    private static readonly string[] EpisodeVideoTranscodeArgs =
+        ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-g", "48", "-pix_fmt", "yuv420p", "-vf", $"scale=-2:'min({MaxEpisodeTranscodeHeight})'"];
+
+    /// <summary>
+    /// Height ceiling of the episode transcode tier (JF-500): the transcode args
+    /// clamp every source to this height (<c>-vf scale=-2:'min(ih,1080)'</c>, a
+    /// no-op at &lt;=1080p) because a 4K HEVC decode would not sustain the measured
+    /// realtime margin. 1080 matches the Echo Show's screen, so no visible quality
+    /// is lost on the target device.
+    /// </summary>
+    internal const int MaxEpisodeTranscodeHeight = 1080;
+
+    /// <summary>
+    /// Shared body of the flat hourly encode-size estimates: reserve
+    /// <paramref name="bytesPerHour"/> per rounded-UP hour of content, floored at
+    /// one hour's worth.
+    /// </summary>
+    /// <param name="runtimeTicks">Content duration (item runtime).</param>
+    /// <param name="bytesPerHour">Conservative bytes-per-hour rate.</param>
+    /// <returns>Estimated bytes the encode writes.</returns>
+    internal static long FlatHourlyEncodeBytes(long runtimeTicks, long bytesPerHour)
+    {
+        long hours = (runtimeTicks + TimeSpan.TicksPerHour - 1) / TimeSpan.TicksPerHour;
+        return Math.Max(bytesPerHour, hours * bytesPerHour);
+    }
+
+    /// <summary>
+    /// JF-500: conservative on-disk size estimate for the episode video transcode.
+    /// The tier re-encodes at a fixed CRF, so the output size is driven by content
+    /// complexity, NOT by the source bitrate: the remux's bitrate-aware scaling
+    /// (<see cref="EstimateEpisodeEncodeBytes"/>) does not apply. H.264 CRF 23 at
+    /// 1080p lands ~2-3GB/h, so the flat rate is 3GB/h with the same
+    /// round-UP-to-hours/floor shape as <see cref="EstimateEncodeBytes"/>. The
+    /// reserve drives the JF-428 pre-encode headroom: the eviction sweep must empty
+    /// enough of the cache before a multi-GB transcode starts (the playback pin
+    /// still protects the entry being watched). Default-cap interaction: at the
+    /// default <c>VideoAudioCacheSizeMB</c> of 2048, any episode of ~45min or
+    /// longer outgrows the cap, so the JF-428 half-cap floor becomes the
+    /// steady-state eviction target; sites doing regular HEVC transcodes should
+    /// raise the cap.
+    /// </summary>
+    /// <param name="runtimeTicks">Content duration (item runtime).</param>
+    /// <returns>Estimated bytes the encode writes.</returns>
+    internal static long EstimateEpisodeTranscodeEncodeBytes(long runtimeTicks)
+        => FlatHourlyEncodeBytes(runtimeTicks, 3072L * 1024 * 1024);
+
+    /// <summary>
+    /// Wall-clock minutes the HLS background monitor waits before killing ffmpeg
+    /// (JF-500 review F1). The remux and audio tiers are I/O-bound and finish
+    /// audiobook-length content in minutes (~21x realtime), so they keep the
+    /// historical 30-minute ceiling unchanged. The video TRANSCODE tier runs at a
+    /// MEASURED 4.40x realtime (minix, 2026-09-08): 30 wall minutes only covers
+    /// ~132 minutes of content, so any longer HEVC movie was hard-killed
+    /// mid-encode, its playlist left without ENDLIST (cache invalidation), and
+    /// every retry churned a fresh multi-GB re-encode. Its timeout therefore
+    /// scales from the item runtime: half the measured speed (2.0x, the
+    /// conservative floor for concurrent-load slowdown) plus 10 minutes of
+    /// ffmpeg startup/slack, floored at the 30-minute default for short content.
+    /// A transcode tier with an UNKNOWN runtime (missing metadata) gets 120
+    /// minutes (JF-500 review R4), not the 30-minute default: 30 would still
+    /// hard-kill any movie longer than ~132 minutes, while 120 bounds how long a
+    /// hung encode may hold its transcode slot before the monitor reclaims it.
+    /// </summary>
+    /// <param name="videoTranscodeTier">Whether the monitored encode is the
+    /// episode video-transcode tier (HEVC re-encode).</param>
+    /// <param name="runTimeTicks">The item's runtime, or null/&lt;=0 when unknown.</param>
+    /// <returns>Monitor timeout in minutes.</returns>
+    internal static int HlsMonitorTimeoutMinutes(bool videoTranscodeTier, long? runTimeTicks)
+    {
+        if (!videoTranscodeTier)
+        {
+            return 30;
+        }
+
+        if (runTimeTicks is not > 0)
+        {
+            return 120;
+        }
+
+        double runtimeMinutes = TimeSpan.FromTicks(runTimeTicks.Value).TotalMinutes;
+        return Math.Max(30, (int)Math.Ceiling(runtimeMinutes / 2.0) + 10);
+    }
 
     /// <summary>
     /// Container overhead margin applied on top of the source bitrate when estimating
@@ -2349,7 +2592,7 @@ public class VideoAudioController : ControllerBase
         args.Add(videoUrl);
 
         // Audio ONLY: no video mapping (AudioPlayer plays audio streams; the remux's
-        // 0:v:0 copy would waste the encode budget and is what the OTHER endpoint is for).
+        // 0:V:0 copy would waste the encode budget and is what the OTHER endpoint is for).
         args.Add("-map");
         args.Add("0:a:0");
 
@@ -2402,11 +2645,7 @@ public class VideoAudioController : ControllerBase
     /// <param name="runtimeTicks">Content duration (item runtime).</param>
     /// <returns>Estimated bytes the encode writes.</returns>
     internal static long EstimateEpisodeAudioEncodeBytes(long runtimeTicks)
-    {
-        const long bytesPerHour = 96L * 1024 * 1024;
-        long hours = (runtimeTicks + TimeSpan.TicksPerHour - 1) / TimeSpan.TicksPerHour;
-        return Math.Max(bytesPerHour, hours * bytesPerHour);
-    }
+        => FlatHourlyEncodeBytes(runtimeTicks, 96L * 1024 * 1024);
 
     /// <summary>
     /// Resolve the combined video+audio source bitrate (bits per second) of an item
@@ -2667,6 +2906,39 @@ public class VideoAudioController : ControllerBase
     private static readonly object _gateSwapLock = new();
 
     /// <summary>
+    /// Serializes the episode video-TRANSCODE tier to ONE encode at a time (JF-500
+    /// review F2). A full HEVC re-encode holds its shared <see cref="_encodeGate"/>
+    /// slot for 15-30 minutes (measured 4.40x realtime): with the default gate
+    /// capacity of 2, two concurrent transcodes (a household starting one on the
+    /// Show while another begins on the Dot-fed Fire TV) would occupy BOTH slots
+    /// and leave music/audiobook requests waiting on the gate, with no
+    /// cancellation, for the whole encode window. The slot is acquired BEFORE the
+    /// shared gate and released AFTER it, so a queued second transcode holds NO
+    /// gate slot and the shorter paths always find one. The remux tier and every
+    /// other gated path bypass it.
+    /// </summary>
+    private static readonly SemaphoreSlim _episodeTranscodeSlot = new(1, 1);
+
+    /// <summary>
+    /// Read-only probe of <see cref="_episodeTranscodeSlot"/> (internal test hook,
+    /// the InternalsVisibleTo seam): true when no episode transcode holds the slot.
+    /// Try-acquire based, so it reads correctly regardless of waiter queue depth.
+    /// </summary>
+    internal static bool EpisodeTranscodeSlotFree
+    {
+        get
+        {
+            if (!_episodeTranscodeSlot.Wait(0))
+            {
+                return false;
+            }
+
+            _episodeTranscodeSlot.Release();
+            return true;
+        }
+    }
+
+    /// <summary>
     /// Rebuilds the encode gate when the CONFIGURED cap changes (called from the
     /// per-request config sync; a no-op unless the config value differs from
     /// <see cref="_encodeGateCapacity"/>). Drain-safe: in-flight holders and waiting
@@ -2690,15 +2962,31 @@ public class VideoAudioController : ControllerBase
     /// <summary>
     /// Starts ffmpeg under the encode gate: the slot is held for the lifetime of the
     /// spawned process (all HLS/song encode paths; the lightweight faststart remux
-    /// calls StartFfmpegProcess directly instead).
+    /// calls StartFfmpegProcess directly instead). An optional
+    /// <paramref name="serializeSlot"/> (the episode transcode tier's
+    /// <see cref="_episodeTranscodeSlot"/>, JF-500 review F2) is acquired BEFORE the
+    /// gate and released AFTER it, in the same structures, so its ordering against
+    /// the gate is fixed and inverse on release.
     /// </summary>
     private async Task<Process> StartFfmpegProcessGatedAsync(
         string ffmpegPath,
         List<string> arguments,
         long estimatedEncodeBytes,
         string pinPath,
+        SemaphoreSlim? serializeSlot = null,
         CancellationToken cancellationToken = default)
     {
+        // JF-500 review F2: acquire the serialize slot (when requested) FIRST, before
+        // the pin, the budget sweep, and the shared gate. Before the gate so a queued
+        // episode transcode holds NO gate slot while it waits and the other gated
+        // paths always find one; before the sweep so a queued encode's multi-GB
+        // headroom reservation (JF-428) is made immediately before ITS encode starts,
+        // not up to one full encode-length earlier.
+        if (serializeSlot != null)
+        {
+            await serializeSlot.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+
         // JF-310/JF-428 (+review round 2): PIN the entry being written BEFORE the
         // eviction sweep runs, not after the gate is acquired: the creation-to-pin
         // window let a concurrent request's sweep delete another request's
@@ -2715,6 +3003,7 @@ public class VideoAudioController : ControllerBase
             // The sweep threw before any of the downstream Unpin sites could run;
             // without this the leaked pin would keep the half-created entry
             // undeletable for the process lifetime.
+            serializeSlot?.Release();
             _cache.Unpin(pinPath);
             throw;
         }
@@ -2730,6 +3019,7 @@ public class VideoAudioController : ControllerBase
         }
         catch
         {
+            serializeSlot?.Release();
             _cache.Unpin(pinPath);
             throw;
         }
@@ -2742,6 +3032,7 @@ public class VideoAudioController : ControllerBase
         catch
         {
             gate.Release();
+            serializeSlot?.Release();
             _cache.Unpin(pinPath);
             throw;
         }
@@ -2772,6 +3063,14 @@ public class VideoAudioController : ControllerBase
                     try { gate.Release(); }
                     catch (SemaphoreFullException) { /* defensive: double-release */ }
 
+                    // Inverse order of acquisition (JF-500 review F2): the serialize
+                    // slot frees only after the gate slot does.
+                    if (serializeSlot != null)
+                    {
+                        try { serializeSlot.Release(); }
+                        catch (SemaphoreFullException) { /* defensive: double-release */ }
+                    }
+
                     // Encode finished: the entry becomes an ordinary LRU citizen.
                     _cache.Unpin(pinPath);
                 }
@@ -2791,11 +3090,7 @@ public class VideoAudioController : ControllerBase
     /// </summary>
     /// <param name="runtimeTicks">Total content duration (item runtime or chapters sum).</param>
     internal static long EstimateEncodeBytes(long runtimeTicks)
-    {
-        const long bytesPerHour = 64L * 1024 * 1024;
-        long hours = (runtimeTicks + TimeSpan.TicksPerHour - 1) / TimeSpan.TicksPerHour;
-        return Math.Max(bytesPerHour, hours * bytesPerHour);
-    }
+        => FlatHourlyEncodeBytes(runtimeTicks, 64L * 1024 * 1024);
 
     /// <summary>
     /// JF-519: the guarded first-segment-wait exit-code read. <see cref="Process.ExitCode"/>
@@ -2961,10 +3256,10 @@ public class VideoAudioController : ControllerBase
 
     /// <summary>
     /// Monitor an HLS ffmpeg process running in the background. Waits for the process
-    /// to exit (with a long timeout for audiobook-length content), logs the outcome,
-    /// and triggers cache eviction. Disposes the process when done.
-    /// Unlike <see cref="MonitorFfmpegAndRemuxAsync"/>, there is no remux step —
-    /// HLS segments are already seekable individually.
+    /// to exit (with a tier-sized timeout, see <see cref="HlsMonitorTimeoutMinutes"/>),
+    /// logs the outcome, and triggers cache eviction. Disposes the process when done.
+    /// Unlike <see cref="MonitorFfmpegAndRemuxAsync"/>, there is no remux step: HLS
+    /// segments are already seekable individually.
     /// </summary>
     /// <param name="process">The ffmpeg process (started, not yet awaited).</param>
     /// <param name="hlsDir">The HLS directory containing playlist and segments.</param>
@@ -2975,6 +3270,10 @@ public class VideoAudioController : ControllerBase
     /// this process exits (<see cref="_activeAudiobookEncodes"/> or
     /// <see cref="_activeEpisodeEncodes"/>); defaults to the audiobook registry so
     /// existing callers keep their behavior.</param>
+    /// <param name="videoTranscodeTier">Whether this encode is the episode
+    /// video-transcode tier (JF-500); only that tier scales its timeout from the
+    /// runtime, the others keep the fixed 30-minute ceiling.</param>
+    /// <param name="runTimeTicks">The item's runtime, used only by the transcode tier.</param>
     /// <returns>A task representing the background monitoring operation.</returns>
     private async Task MonitorFfmpegHlsAsync(
         Process process,
@@ -2982,13 +3281,17 @@ public class VideoAudioController : ControllerBase
         string itemId,
         long artModifiedTicks,
         string label,
-        ConcurrentDictionary<string, bool>? activeEncodesTracker = null)
+        ConcurrentDictionary<string, bool>? activeEncodesTracker = null,
+        bool videoTranscodeTier = false,
+        long? runTimeTicks = null)
     {
         var activeEncodes = activeEncodesTracker ?? _activeAudiobookEncodes;
+        int timeoutMinutes = HlsMonitorTimeoutMinutes(videoTranscodeTier, runTimeTicks);
         try
         {
-            // Long timeout for audiobook-length content (hours at 21x speed = minutes)
-            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(30));
+            // Tier-sized ceiling: see HlsMonitorTimeoutMinutes (JF-500 review F1)
+            // for the sizing rationale and arithmetic.
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(timeoutMinutes));
             await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
 
             // Post-completion diagnostics — gather metrics for structured logging
@@ -3070,7 +3373,7 @@ public class VideoAudioController : ControllerBase
         }
         catch (OperationCanceledException)
         {
-            _logger.LogWarning("{Label} HLS encoding TIMED OUT (30 min) for {ParentId}", label, itemId);
+            _logger.LogWarning("{Label} HLS encoding TIMED OUT ({TimeoutMinutes} min) for {ParentId}", label, timeoutMinutes, itemId);
             try { process.Kill(); } catch { /* already exited */ }
         }
         catch (Exception ex)

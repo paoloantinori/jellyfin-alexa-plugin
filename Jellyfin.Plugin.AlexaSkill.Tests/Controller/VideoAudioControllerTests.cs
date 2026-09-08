@@ -541,13 +541,28 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.True(physicalResult.EnableRangeProcessing);
     }
 
-    private VideoAudioController CreateController(string? itemIdForToken = null, ILoggerFactory? loggerFactory = null)
+    private VideoAudioController CreateController(
+        string? itemIdForToken = null,
+        ILoggerFactory? loggerFactory = null,
+        Mock<IMediaSourceManager>? mediaSourceManager = null,
+        string? ffmpegPath = null)
     {
-        var controller = new VideoAudioController(
-            _libraryManagerMock.Object,
-            _mediaEncoderMock.Object,
-            _cache,
-            loggerFactory ?? _loggerFactory);
+        var controller = mediaSourceManager == null
+            ? new VideoAudioController(
+                _libraryManagerMock.Object,
+                _mediaEncoderMock.Object,
+                _cache,
+                loggerFactory ?? _loggerFactory)
+            : new VideoAudioController(
+                _libraryManagerMock.Object,
+                _mediaEncoderMock.Object,
+                _cache,
+                loggerFactory ?? _loggerFactory,
+                mediaSourceManager.Object);
+        if (ffmpegPath != null)
+        {
+            controller.FfmpegPath = ffmpegPath;
+        }
 
         // Attach an HttpContext so ValidateStreamToken can read the query string.
         // When itemIdForToken is provided, mint a valid token for that item so the request passes
@@ -1935,8 +1950,10 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
     /// <summary>
     /// EAC3 source (the evidenced library shape): video stream COPY at full
-    /// framerate, audio transcode to AAC 192k, 4s segments, explicit v:0/a:0
-    /// mapping, and NO -shortest (both streams come from one finite input).
+    /// framerate, audio transcode to AAC 192k, 4s segments, explicit V:0/a:0
+    /// mapping (capital V: ffmpeg video streams EXCLUDING attached pictures, so
+    /// an embedded cover cannot steal the video slot), and NO -shortest (both
+    /// streams come from one finite input).
     /// </summary>
     [Fact]
     public void BuildEpisodeHlsFfmpegArguments_Eac3Source_CopiesVideoAndTranscodesAudio()
@@ -1949,10 +1966,11 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         // Input: the item's own static stream
         Assert.Contains(videoUrl, args);
 
-        // Explicit mapping: first video + first audio only (drops subtitles)
+        // Explicit mapping: first video + first audio only (drops subtitles and
+        // attached-picture covers)
         int mapIdx = args.IndexOf("-map");
         Assert.True(mapIdx >= 0, "expected explicit -map");
-        Assert.Equal("0:v:0", args[mapIdx + 1]);
+        Assert.Equal("0:V:0", args[mapIdx + 1]);
         Assert.Equal("-map", args[mapIdx + 2]);
         Assert.Equal("0:a:0", args[mapIdx + 3]);
 
@@ -2055,7 +2073,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// the first segment, and serves the partial playlist with the stream token
     /// injected into the segment lines. The recorded ffmpeg arguments must target
     /// the item's STATIC /Videos/ stream as input (the no-auth shape the song path
-    /// uses for /Audio/) with the video-copy argument set.
+    /// uses for /Audio/) with the video-copy argument set: a KNOWN h264 source
+    /// (probed via the media source manager) keeps the remux tier.
     /// </summary>
     [Fact]
     public async Task StreamHlsEpisode_CacheMiss_ServesPartialPlaylistAndFeedsStaticVideoUrlToFfmpeg()
@@ -2066,6 +2085,15 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             Id = Guid.NewGuid(),
             RunTimeTicks = TimeSpan.FromMinutes(45).Ticks
         };
+
+        var mediaSourceManager = new Mock<IMediaSourceManager>();
+        mediaSourceManager
+            .Setup(m => m.GetMediaStreams(episode.Id))
+            .Returns(new List<MediaStream>
+            {
+                new() { Type = MediaStreamType.Video, Codec = "h264", Height = 1080 },
+                new() { Type = MediaStreamType.Audio, Codec = "eac3" }
+            });
 
         _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
         _libraryManagerMock.Setup(m => m.GetItemById(episode.Id)).Returns(episode);
@@ -2085,15 +2113,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
 #pragma warning restore CA3003, CA1416
 
-        var controller = CreateController(episode.Id.ToString());
-        controller.FfmpegPath = fakeFfmpegPath;
-        controller.ControllerContext.HttpContext = new DefaultHttpContext
-        {
-            Request =
-            {
-                Query = controller.ControllerContext.HttpContext.Request.Query
-            }
-        };
+        var controller = CreateController(episode.Id.ToString(), null, mediaSourceManager, fakeFfmpegPath);
 
         ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString());
 
@@ -2108,13 +2128,187 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.Contains($"/Videos/{episode.Id}/stream?static=true", recordedArgs, StringComparison.Ordinal);
         Assert.Contains("-c:v", recordedArgs, StringComparison.Ordinal);
         Assert.Contains("copy", recordedArgs, StringComparison.Ordinal);
-        Assert.Contains("0:v:0", recordedArgs, StringComparison.Ordinal);
+        Assert.Contains("0:V:0", recordedArgs, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-500: the same cache-miss flow with an HEVC video source (read via the
+    /// media source manager) runs the video TRANSCODE tier: the recorded ffmpeg
+    /// arguments carry the measured libx264 ultrafast CRF 23 set and AAC stereo
+    /// audio, NOT the remux's video copy, plus the UNCONDITIONAL height clamp.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_HevcSource_BuildsVideoTranscodeArgs()
+    {
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Adolescence S01E01",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(45).Ticks
+        };
+
+        var mediaSourceManager = new Mock<IMediaSourceManager>();
+        mediaSourceManager
+            .Setup(m => m.GetMediaStreams(episode.Id))
+            .Returns(new List<MediaStream>
+            {
+                new() { Type = MediaStreamType.Video, Codec = "hevc", Height = 1080 },
+                new() { Type = MediaStreamType.Audio, Codec = "eac3" }
+            });
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(episode.Id)).Returns(episode);
+
+        string fakeFfmpegPath = Path.Combine(_tempDir, "fake-ffmpeg-hevc");
+        string fakeFfmpegScript = "#!/bin/sh\n" +
+            "for last_arg in \"$@\"; do :; done\n" +
+            "dir=$(dirname \"$last_arg\")\n" +
+            "printf '%s\\n' \"$@\" > \"$dir/episode-args.txt\"\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
+            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:4.000,\\nseg_0000.ts\\n' > \"$last_arg\"\n" +
+            "exit 0\n";
+        File.WriteAllText(fakeFfmpegPath, fakeFfmpegScript);
+#pragma warning disable CA3003, CA1416 // test-created path; Unix-only test
+        File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+#pragma warning restore CA3003, CA1416
+
+        var controller = new VideoAudioController(
+            _libraryManagerMock.Object, _mediaEncoderMock.Object, _cache, _loggerFactory, mediaSourceManager.Object);
+        controller.FfmpegPath = fakeFfmpegPath;
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                Request =
+                {
+                    Query = new QueryCollection(new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>
+                    {
+                        ["token"] = StreamTokenHelper.Mint(episode.Id.ToString(), _config.StreamTokenSecret)
+                    })
+                }
+            }
+        };
+
+        ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString());
+
+        var content = Assert.IsType<ContentResult>(result);
+        Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
+
+        string hlsDir = _cache.GetHlsDirectoryPath(episode.Id.ToString(), 0);
+        string[] tokens = File.ReadAllLines(Path.Combine(hlsDir, "episode-args.txt"));
+        Assert.Equal("libx264", tokens[Array.IndexOf(tokens, "-c:v") + 1]);
+        Assert.Equal("ultrafast", tokens[Array.IndexOf(tokens, "-preset") + 1]);
+        Assert.Equal("23", tokens[Array.IndexOf(tokens, "-crf") + 1]);
+        Assert.Equal("48", tokens[Array.IndexOf(tokens, "-g") + 1]);
+        Assert.Equal("aac", tokens[Array.IndexOf(tokens, "-c:a") + 1]);
+        Assert.DoesNotContain("copy", tokens);
+        Assert.Contains("0:V:0", tokens);
+        Assert.Equal($"scale=-2:'min({VideoAudioController.MaxEpisodeTranscodeHeight})'", tokens[Array.IndexOf(tokens, "-vf") + 1]);
+    }
+
+    /// <summary>
+    /// JF-500 review R1: an UNKNOWN video codec (here: no media source manager at
+    /// all, the transient stream-read failure shape) takes the TRANSCODE tier, not
+    /// the copy remux. The endpoint owns the cache: a copy remux of undecodable
+    /// bytes completes with ENDLIST and would be served forever by the cache-hit
+    /// path, which never re-probes.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_UnknownVideoCodec_BuildsVideoTranscodeArgs()
+    {
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Unprobed S01E01",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(45).Ticks
+        };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(episode.Id)).Returns(episode);
+
+        // No media source manager (4-arg ctor): the codec probe returns null.
+        var controller = CreateController(episode.Id.ToString(), null, null, WriteRecordingFakeFfmpeg("fake-ffmpeg-unknown"));
+
+        ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString());
+
+        Assert.IsType<ContentResult>(result);
+
+        string hlsDir = _cache.GetHlsDirectoryPath(episode.Id.ToString(), 0);
+        string[] tokens = File.ReadAllLines(Path.Combine(hlsDir, "episode-args.txt"));
+        Assert.Equal("libx264", tokens[Array.IndexOf(tokens, "-c:v") + 1]);
+        Assert.DoesNotContain("copy", tokens);
+        Assert.Contains("0:V:0", tokens);
+    }
+
+    /// <summary>
+    /// JF-500 reviews R1/R2: video streams with a BLANK codec are skipped (the
+    /// handler-side ExtractCodecs semantics, so the two probes cannot disagree)
+    /// and an attached-picture mjpeg cover ahead of the real track cannot win the
+    /// pick: the REAL h264 track decides, and the endpoint builds REMUX args.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_BlankAndCoverStreamsFirst_BuildsRemuxArgs()
+    {
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Cover-First S01E01",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(45).Ticks
+        };
+
+        var mediaSourceManager = new Mock<IMediaSourceManager>();
+        mediaSourceManager
+            .Setup(m => m.GetMediaStreams(episode.Id))
+            .Returns(new List<MediaStream>
+            {
+                new() { Type = MediaStreamType.Video, Codec = string.Empty },
+                new() { Type = MediaStreamType.Video, Codec = "mjpeg" },
+                new() { Type = MediaStreamType.Video, Codec = "h264", Height = 1080 },
+                new() { Type = MediaStreamType.Audio, Codec = "eac3" }
+            });
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(episode.Id)).Returns(episode);
+
+        var controller = CreateController(episode.Id.ToString(), null, mediaSourceManager, WriteRecordingFakeFfmpeg("fake-ffmpeg-coverfirst"));
+
+        ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString());
+
+        Assert.IsType<ContentResult>(result);
+
+        string hlsDir = _cache.GetHlsDirectoryPath(episode.Id.ToString(), 0);
+        string[] tokens = File.ReadAllLines(Path.Combine(hlsDir, "episode-args.txt"));
+        Assert.Equal("copy", tokens[Array.IndexOf(tokens, "-c:v") + 1]);
+        Assert.DoesNotContain("libx264", tokens);
+        Assert.Contains("0:V:0", tokens);
+    }
+
+    /// <summary>
+    /// Fake ffmpeg for the tier-pick tests: records its arguments next to the
+    /// output playlist, creates the first segment + playlist, exits 0 (the
+    /// first-segment wait then succeeds immediately).
+    /// </summary>
+    private string WriteRecordingFakeFfmpeg(string name)
+    {
+        string fakeFfmpegPath = Path.Combine(_tempDir, name);
+        string fakeFfmpegScript = "#!/bin/sh\n" +
+            "for last_arg in \"$@\"; do :; done\n" +
+            "dir=$(dirname \"$last_arg\")\n" +
+            "printf '%s\\n' \"$@\" > \"$dir/episode-args.txt\"\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
+            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:4.000,\\nseg_0000.ts\\n' > \"$last_arg\"\n" +
+            "exit 0\n";
+        File.WriteAllText(fakeFfmpegPath, fakeFfmpegScript);
+#pragma warning disable CA3003, CA1416 // test-created path; Unix-only test
+        File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+#pragma warning restore CA3003, CA1416
+        return fakeFfmpegPath;
     }
 
     /// <summary>
     /// JF-498 review C1b: the bitrate resolver sums the FIRST video stream's BitRate
     /// and the FIRST audio stream's BitRate; later audio streams and subtitle streams
-    /// are ignored (the remux maps 0:v:0 + 0:a:0).
+    /// are ignored (the remux maps 0:V:0 + 0:a:0).
     /// </summary>
     [Fact]
     public void ResolveTotalMediaBitrateBps_SumsFirstVideoAndAudioStreams()
@@ -2202,11 +2396,377 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.Equal(expectedBytes, VideoAudioController.EstimateEpisodeEncodeBytes(runtimeTicks, totalBitRateBps));
     }
 
+    // ========== JF-500: episode HLS video transcode tier (hevc/av1 sources) ==========
+
+    /// <summary>
+    /// The measured transcode parameter set (2026-09-08, minix, Adolescence E1
+    /// 1080p HEVC): libx264 ultrafast CRF 23 with a live GOP of 48 (a keyframe at
+    /// least every ~2s at TV framerates so the muxer can cut 4s segments), audio
+    /// exactly as the remux pipeline (AAC 192k stereo for the EAC3 family), and the
+    /// shared segment/playlist machinery (4s MPEG-TS, append_list, no -shortest).
+    /// The UNCONDITIONAL height clamp rides in the video token list: a no-op at
+    /// &lt;=1080p, it removes the height-probe dependency entirely (R3; a >1080p
+    /// source whose probe failed open used to run unscaled and hit the monitor
+    /// kill). Verified on ffmpeg 8.1.2: 3840x2160 -> 1920x1080, 1280x720 unchanged.
+    /// </summary>
+    [Fact]
+    public void BuildEpisodeHlsTranscodeFfmpegArguments_HevcSource_UsesMeasuredParameterSet()
+    {
+        string videoUrl = "http://localhost:8096/Videos/abc/stream?static=true";
+
+        List<string> args = VideoAudioController.BuildEpisodeHlsTranscodeFfmpegArguments(
+            videoUrl, "/tmp/hls/stream.m3u8", "/tmp/hls/seg_%04d.ts", "/alexaskill/api/video-audio/abc/segments/", "eac3");
+
+        // Input: the item's own static stream (same input as the remux)
+        Assert.Contains(videoUrl, args);
+
+        // Explicit mapping: first video + first audio only (drops subtitles and
+        // attached-picture covers: capital V excludes them)
+        int mapIdx = args.IndexOf("-map");
+        Assert.True(mapIdx >= 0, "expected explicit -map");
+        Assert.Equal("0:V:0", args[mapIdx + 1]);
+        Assert.Equal("-map", args[mapIdx + 2]);
+        Assert.Equal("0:a:0", args[mapIdx + 3]);
+
+        // Video: the MEASURED H.264 re-encode set (not the remux's copy)
+        Assert.Equal("libx264", args[args.IndexOf("-c:v") + 1]);
+        Assert.Equal("ultrafast", args[args.IndexOf("-preset") + 1]);
+        Assert.Equal("23", args[args.IndexOf("-crf") + 1]);
+        Assert.Equal("48", args[args.IndexOf("-g") + 1]);
+
+        // Pixel format: forced 8-bit 4:2:0 so a 10-bit HEVC source transcodes to
+        // a profile the Echo decodes (libx264 would otherwise emit High-10 H.264)
+        Assert.Equal("yuv420p", args[args.IndexOf("-pix_fmt") + 1]);
+
+        // The constant height clamp (always present, no probe dependency)
+        Assert.Equal($"scale=-2:'min({VideoAudioController.MaxEpisodeTranscodeHeight})'", args[args.IndexOf("-vf") + 1]);
+
+        // Audio: exactly the remux pipeline's selection (AAC stereo downmix at 192k)
+        Assert.Equal("aac", args[args.IndexOf("-c:a") + 1]);
+        Assert.Equal("2", args[args.IndexOf("-ac") + 1]);
+        Assert.Equal("192k", args[args.IndexOf("-b:a") + 1]);
+
+        // HLS machinery shared with the remux, unchanged
+        Assert.Equal("4", args[args.IndexOf("-hls_time") + 1]);
+        Assert.Equal("0", args[args.IndexOf("-hls_list_size") + 1]);
+        Assert.Equal("append_list", args[args.IndexOf("-hls_flags") + 1]);
+        Assert.Equal("mpegts", args[args.IndexOf("-hls_segment_type") + 1]);
+        Assert.Equal("/tmp/hls/seg_%04d.ts", args[args.IndexOf("-hls_segment_filename") + 1]);
+        Assert.Equal("/alexaskill/api/video-audio/abc/segments/", args[args.IndexOf("-hls_base_url") + 1]);
+        Assert.DoesNotContain("-shortest", args);
+        Assert.Equal("/tmp/hls/stream.m3u8", args[^1]);
+    }
+
+    /// <summary>A copy-compatible source audio codec (aac/mp3) streams audio as-is, mirroring the remux's selection.</summary>
+    [Fact]
+    public void BuildEpisodeHlsTranscodeFfmpegArguments_AacSource_CopiesAudio()
+    {
+        List<string> args = VideoAudioController.BuildEpisodeHlsTranscodeFfmpegArguments(
+            "http://localhost:8096/Videos/abc/stream?static=true",
+            "/tmp/hls/stream.m3u8", "/tmp/hls/seg_%04d.ts", "/alexaskill/api/video-audio/abc/segments/", "aac");
+
+        Assert.Equal("copy", args[args.IndexOf("-c:a") + 1]);
+        Assert.Null(args.FirstOrDefault(a => a == "-b:a"));
+    }
+
+    /// <summary>
+    /// JF-500 size estimate: CRF output size is complexity-driven, not
+    /// bitrate-driven, so the tier reserves a flat 3GB/h (~2-3GB/h measured band
+    /// for H.264 CRF 23 at 1080p) with the round-UP/floor shape of the other
+    /// estimates. Drives the JF-428 pre-encode headroom for multi-GB transcodes.
+    /// </summary>
+    [Theory]
+    [InlineData(0L, 3072L * 1024 * 1024)]
+    [InlineData(45L * TimeSpan.TicksPerMinute, 3072L * 1024 * 1024)]  // 45min rounds UP to 1h
+    [InlineData(90L * TimeSpan.TicksPerMinute, 6144L * 1024 * 1024)]  // 1.5h rounds UP to 2h
+    [InlineData(2L * TimeSpan.TicksPerHour, 6144L * 1024 * 1024)]
+    public void EstimateEpisodeTranscodeEncodeBytes_ScalesWithRuntime_FloorsAtOneHour(long runtimeTicks, long expectedBytes)
+    {
+        Assert.Equal(expectedBytes, VideoAudioController.EstimateEpisodeTranscodeEncodeBytes(runtimeTicks));
+    }
+
+    /// <summary>
+    /// JF-500 reviews R1/R2: the video codec probe SKIPS streams with a blank
+    /// codec (the handler-side <c>ExtractCodecs</c> semantics, so the two probes
+    /// cannot disagree and diverge the route from the tier) and attached-picture
+    /// covers (mjpeg/png ahead of the real track), landing on the REAL track's
+    /// codec. No manager (the 4-arg ctor) yields null, which the endpoint maps to
+    /// the transcode tier.
+    /// </summary>
+    [Fact]
+    public void ResolveSourceVideoCodec_SkipsBlankAndCoverStreams_PicksTheRealTrack()
+    {
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Adolescence S01E04",
+            Id = Guid.NewGuid()
+        };
+
+        var mediaSourceManager = new Mock<IMediaSourceManager>();
+        mediaSourceManager
+            .Setup(m => m.GetMediaStreams(episode.Id))
+            .Returns(new List<MediaStream>
+            {
+                new() { Type = MediaStreamType.Video, Codec = string.Empty },
+                new() { Type = MediaStreamType.Video, Codec = "mjpeg" },
+                new() { Type = MediaStreamType.Video, Codec = " " },
+                new() { Type = MediaStreamType.Video, Codec = "H264" },
+                new() { Type = MediaStreamType.Audio, Codec = "eac3" }
+            });
+
+        var controller = new VideoAudioController(
+            _libraryManagerMock.Object, _mediaEncoderMock.Object, _cache, _loggerFactory, mediaSourceManager.Object);
+        Assert.Equal("h264", controller.ResolveSourceVideoCodec(episode));
+
+        // No manager (the 4-arg ctor): unknown (null).
+        Assert.Null(CreateController().ResolveSourceVideoCodec(episode));
+    }
+
+    /// <summary>
+    /// JF-500 review F1: the monitor kill timeout is sized for the tier. The remux
+    /// and audio tiers keep the historical 30-minute ceiling regardless of runtime
+    /// (byte-unchanged behavior); the transcode tier (measured 4.40x realtime)
+    /// scales from the item runtime at the conservative 2.0x floor plus 10 minutes
+    /// of startup slack, floored at 30 minutes for short content. A transcode tier
+    /// with an UNKNOWN runtime (null/&lt;=0, review R4) gets 120 minutes, not 30:
+    /// 30 would still hard-kill any movie longer than the ~132-minute boundary,
+    /// while 120 bounds how long a hung encode holds its transcode slot. 132
+    /// minutes is the old kill boundary (30 wall min at 4.40x): it now clears it
+    /// with margin.
+    /// </summary>
+    [Theory]
+    [InlineData(false, null, 30)]
+    [InlineData(false, 65L * TimeSpan.TicksPerMinute, 30)]
+    [InlineData(true, null, 120)]
+    [InlineData(true, 0L, 120)]
+    [InlineData(true, 10L * TimeSpan.TicksPerMinute, 30)]
+    [InlineData(true, 45L * TimeSpan.TicksPerMinute, 33)]
+    [InlineData(true, 65L * TimeSpan.TicksPerMinute, 43)]
+    [InlineData(true, 132L * TimeSpan.TicksPerMinute, 76)]
+    [InlineData(true, 150L * TimeSpan.TicksPerMinute, 85)]
+    public void HlsMonitorTimeoutMinutes_RemuxKeepsCeiling_TranscodeScalesWithRuntime(bool videoTranscodeTier, long? runTimeTicks, int expectedMinutes)
+    {
+        Assert.Equal(expectedMinutes, VideoAudioController.HlsMonitorTimeoutMinutes(videoTranscodeTier, runTimeTicks));
+    }
+
+    /// <summary>
+    /// JF-500 review F2: two concurrent HEVC transcodes run ONE ffmpeg at a time.
+    /// The second request waits on the dedicated transcode slot while holding NO
+    /// shared gate slot, and proceeds only after the first encode finishes (the
+    /// release file makes the fake ffmpeg exit, which frees the slot).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_TwoConcurrentTranscodes_SecondWaitsForTheSlot()
+    {
+        // The "one spawn" premise needs the gate at its default capacity even if an
+        // earlier test in this collection failed before restoring its own override.
+        VideoAudioController.UpdateEncodeGateCapacity(2);
+
+        string spawnLog = Path.Combine(_tempDir, "transcode-spawns.log");
+        string releaseFile = Path.Combine(_tempDir, "transcode-release");
+        string fakeFfmpegPath = WriteBlockingFakeFfmpeg(spawnLog, releaseFile);
+
+        var episodeA = NewHevcEpisode("Adolescence S01E01");
+        var episodeB = NewHevcEpisode("Adolescence S01E02");
+        var mediaSourceManager = SetupEpisodeMediaStreams(episodeA, episodeB);
+        SetupLibraryItems(episodeA, episodeB);
+
+        try
+        {
+            // First transcode: acquires the slot, spawns its ffmpeg, serves the playlist.
+            var controllerA = CreateEpisodeController(mediaSourceManager, episodeA.Id.ToString(), fakeFfmpegPath);
+            Task<ActionResult> taskA = controllerA.StreamHlsEpisode(episodeA.Id.ToString());
+            ActionResult resultA = await taskA.WaitAsync(TimeSpan.FromSeconds(20));
+            Assert.IsType<ContentResult>(resultA);
+            Assert.Equal(1, CountFfmpegSpawns(spawnLog));
+
+            // Second transcode for a DIFFERENT item (no per-item lock sharing): it must
+            // wait on the transcode slot without spawning a second ffmpeg.
+            var controllerB = CreateEpisodeController(mediaSourceManager, episodeB.Id.ToString(), fakeFfmpegPath);
+            Task<ActionResult> taskB = controllerB.StreamHlsEpisode(episodeB.Id.ToString());
+            await Task.Delay(1500);
+            Assert.False(taskB.IsCompleted, "second transcode should still be waiting on the slot");
+            Assert.Equal(1, CountFfmpegSpawns(spawnLog));
+
+            // First encode finishes: the slot frees and the queued transcode proceeds.
+            File.WriteAllText(releaseFile, "go");
+            ActionResult resultB = await taskB.WaitAsync(TimeSpan.FromSeconds(20));
+            Assert.IsType<ContentResult>(resultB);
+            Assert.Equal(2, CountFfmpegSpawns(spawnLog));
+
+            await AssertTranscodeSlotReleasedAsync();
+        }
+        finally
+        {
+            // Even on an assertion failure, let the fake ffmpeg exit so its static
+            // slot/gate hold cannot cascade into the next test of this collection.
+            File.WriteAllText(releaseFile, "go");
+        }
+    }
+
+    /// <summary>
+    /// JF-500 review F2, the household-collision scenario: with one transcode
+    /// running and a second queued on the slot, a MUSIC-path gated start still
+    /// proceeds immediately (the queued transcode holds no shared gate slot, so
+    /// the default-capacity-2 gate always has a slot for the shorter paths).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_MusicStartProceedsWhileTranscodesOccupyTheTier()
+    {
+        // See the companion test: the gate must be at its default capacity.
+        VideoAudioController.UpdateEncodeGateCapacity(2);
+
+        string spawnLog = Path.Combine(_tempDir, "transcode-spawns.log");
+        string releaseFile = Path.Combine(_tempDir, "transcode-release");
+        string fakeFfmpegPath = WriteBlockingFakeFfmpeg(spawnLog, releaseFile);
+
+        var episodeA = NewHevcEpisode("Adolescence S01E03");
+        var episodeB = NewHevcEpisode("Adolescence S01E04");
+        var mediaSourceManager = SetupEpisodeMediaStreams(episodeA, episodeB);
+
+        var audioItem = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Test Song",
+            Id = Guid.NewGuid()
+        };
+        mediaSourceManager
+            .Setup(m => m.GetMediaStreams(audioItem.Id))
+            .Returns(new List<MediaStream> { new() { Type = MediaStreamType.Audio, Codec = "mp3" } });
+        SetupLibraryItems(episodeA, episodeB, audioItem);
+
+        try
+        {
+            // Transcode running (slot + one gate slot) + a second one queued on the slot.
+            var controllerA = CreateEpisodeController(mediaSourceManager, episodeA.Id.ToString(), fakeFfmpegPath);
+            Task<ActionResult> taskA = controllerA.StreamHlsEpisode(episodeA.Id.ToString());
+            Assert.IsType<ContentResult>(await taskA.WaitAsync(TimeSpan.FromSeconds(20)));
+
+            var controllerB = CreateEpisodeController(mediaSourceManager, episodeB.Id.ToString(), fakeFfmpegPath);
+            Task<ActionResult> taskB = controllerB.StreamHlsEpisode(episodeB.Id.ToString());
+            await Task.Delay(1500);
+            Assert.Equal(1, CountFfmpegSpawns(spawnLog));
+
+            // Music path: must start and complete while the second transcode still waits.
+            var musicController = CreateEpisodeController(mediaSourceManager, audioItem.Id.ToString(), fakeFfmpegPath);
+            Task<ActionResult> musicTask = musicController.StreamHlsVideoAudio(audioItem.Id.ToString());
+            ActionResult musicResult = await musicTask.WaitAsync(TimeSpan.FromSeconds(20));
+            Assert.IsType<ContentResult>(musicResult);
+            Assert.False(taskB.IsCompleted, "second transcode should still be waiting on the slot");
+            Assert.Equal(2, CountFfmpegSpawns(spawnLog));
+
+            // Cleanup: let both queued/running encodes finish.
+            File.WriteAllText(releaseFile, "go");
+            Assert.IsType<ContentResult>(await taskB.WaitAsync(TimeSpan.FromSeconds(20)));
+            await AssertTranscodeSlotReleasedAsync();
+        }
+        finally
+        {
+            // See the companion test: release the fakes even on failure.
+            File.WriteAllText(releaseFile, "go");
+        }
+    }
+
+    private static MediaBrowser.Controller.Entities.TV.Episode NewHevcEpisode(string name)
+        => new()
+        {
+            Name = name,
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(45).Ticks
+        };
+
+    /// <summary>Serves the given items from the shared library manager mock.</summary>
+    private void SetupLibraryItems(params MediaBrowser.Controller.Entities.BaseItem[] items)
+    {
+        var byId = items.ToDictionary(i => i.Id);
+        _libraryManagerMock
+            .Setup(m => m.GetItemById(It.IsAny<Guid>()))
+            .Returns((Guid id) => byId.TryGetValue(id, out var item) ? item : null);
+    }
+
+    /// <summary>
+    /// Media-stream mock giving both episodes the HEVC shape that routes them to
+    /// the video transcode tier.
+    /// </summary>
+    private static Mock<IMediaSourceManager> SetupEpisodeMediaStreams(
+        params MediaBrowser.Controller.Entities.TV.Episode[] episodes)
+    {
+        var mediaSourceManager = new Mock<IMediaSourceManager>();
+        foreach (var episode in episodes)
+        {
+            mediaSourceManager
+                .Setup(m => m.GetMediaStreams(episode.Id))
+                .Returns(new List<MediaStream>
+                {
+                    new() { Type = MediaStreamType.Video, Codec = "hevc", Height = 1080 },
+                    new() { Type = MediaStreamType.Audio, Codec = "eac3" }
+                });
+        }
+
+        return mediaSourceManager;
+    }
+
+    /// <summary>
+    /// A controller for the episode tests: 5-arg ctor (with the media source
+    /// manager the codec probe needs) plus a fake ffmpeg path, on the shared
+    /// <see cref="CreateController"/> factory (which mints the stream token).
+    /// </summary>
+    private VideoAudioController CreateEpisodeController(
+        Mock<IMediaSourceManager> mediaSourceManager,
+        string itemId,
+        string fakeFfmpegPath)
+    {
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        return CreateController(itemId, null, mediaSourceManager, fakeFfmpegPath);
+    }
+
+    /// <summary>
+    /// Fake ffmpeg for the transcode-slot tests: records its spawn (one line per
+    /// invocation), creates the first segment + playlist for BOTH the episode
+    /// (seg_0000.ts) and the song (seg_000.ts) wait loops, then stays alive until
+    /// the release file appears so the encode holds its slot + gate. The wait is
+    /// bounded (60s) so an aborted test cannot leave a fake ffmpeg holding the
+    /// static gate/slot forever; a passing run releases it within ~5s.
+    /// </summary>
+    private string WriteBlockingFakeFfmpeg(string spawnLog, string releaseFile)
+    {
+        string fakeFfmpegPath = Path.Combine(_tempDir, "fake-ffmpeg-transcode-" + Guid.NewGuid().ToString("N"));
+        string fakeFfmpegScript = "#!/bin/sh\n" +
+            "printf 'spawn\\n' >> \"" + spawnLog + "\"\n" +
+            "for last_arg in \"$@\"; do :; done\n" +
+            "dir=$(dirname \"$last_arg\")\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
+            "cp \"$dir/seg_0000.ts\" \"$dir/seg_000.ts\"\n" +
+            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:4.000,\\nseg_0000.ts\\n' > \"$last_arg\"\n" +
+            "i=0\n" +
+            "while [ ! -e \"" + releaseFile + "\" ] && [ \"$i\" -lt 60 ]; do sleep 1; i=$((i+1)); done\n" +
+            "exit 0\n";
+        File.WriteAllText(fakeFfmpegPath, fakeFfmpegScript);
+#pragma warning disable CA3003, CA1416 // test-created path; Unix-only test
+        File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+#pragma warning restore CA3003, CA1416
+        return fakeFfmpegPath;
+    }
+
+    private static int CountFfmpegSpawns(string spawnLog)
+        => File.Exists(spawnLog) ? File.ReadAllLines(spawnLog).Length : 0;
+
+    /// <summary>
+    /// The transcode slot is STATIC: prove both encodes released it (the exit poll
+    /// frees it within ~500ms of ffmpeg exiting) so later tests in this collection
+    /// start from a free slot.
+    /// </summary>
+    private static async Task AssertTranscodeSlotReleasedAsync()
+    {
+        Assert.True(
+            await WaitUntilAsync(() => VideoAudioController.EpisodeTranscodeSlotFree).ConfigureAwait(false),
+            "episode transcode slot was not released after the encodes exited");
+    }
+
     // ========== JF-507: the audio-only episode HLS variant ==========
 
     /// <summary>
     /// JF-507 args, resume shape (start &gt; 0): an input seek (-ss BEFORE -i), the
-    /// audio stream mapped ALONE (no 0:v:0, no -c:v), AAC stereo downmix at 192k,
+    /// audio stream mapped ALONE (no 0:V:0, no -c:v), AAC stereo downmix at 192k,
     /// 10-second MPEG-TS segments, and the base URL pointing at the dedicated
     /// audio-segments route with the start position in the path.
     /// </summary>
@@ -2232,7 +2792,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         // ONE map: audio only. No video mapping, no video codec args.
         Assert.Equal("0:a:0", args[args.IndexOf("-map") + 1]);
         Assert.Equal(1, args.Count(a => a == "-map"));
-        Assert.DoesNotContain("0:v:0", args);
+        Assert.DoesNotContain("0:V:0", args);
         Assert.Null(args.FirstOrDefault(a => a == "-c:v"));
 
         // Audio: AAC stereo downmix at 192k (the EAC3 family has no Echo decoder)
@@ -2335,7 +2895,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
     /// <summary>
     /// Cache-miss flow of the audio variant: ffmpeg is fed the item's STATIC /Videos/
-    /// stream, maps ONLY the audio track (no 0:v:0, no -c:v), seeks by the start
+    /// stream, maps ONLY the audio track (no 0:V:0, no -c:v), seeks by the start
     /// position, and writes into the VARIANT cache directory; the partial playlist is
     /// served with the token injected into the audio-segments URLs.
     /// </summary>
@@ -2382,7 +2942,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.Contains($"/Videos/{episode.Id}/stream?static=true", recordedArgs, StringComparison.Ordinal);
         Assert.Contains("-ss", recordedArgs, StringComparison.Ordinal);
         Assert.Contains("0:a:0", recordedArgs, StringComparison.Ordinal);
-        Assert.DoesNotContain("0:v:0", recordedArgs, StringComparison.Ordinal);
+        Assert.DoesNotContain("0:V:0", recordedArgs, StringComparison.Ordinal);
         Assert.DoesNotContain("-c:v", recordedArgs, StringComparison.Ordinal);
         Assert.Contains($"/alexaskill/api/video-audio/episode/{episode.Id}/audio-segments/{startTicks}/", recordedArgs, StringComparison.Ordinal);
     }

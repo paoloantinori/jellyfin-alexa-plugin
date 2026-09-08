@@ -452,4 +452,36 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
         Assert.Contains($"/Videos/{id}/stream?static=true&api_key=", directive.VideoItem.Source, StringComparison.Ordinal);
         Assert.DoesNotContain("video-audio", directive.VideoItem.Source, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// JF-500: an HEVC-video movie (the Adolescence library shape) launches the
+    /// episode HLS endpoint too: the endpoint re-probes and runs the video
+    /// TRANSCODE tier (H.264 re-encode) instead of the remux. The first cut kept
+    /// these on the warned static URL, which never started on the Echo Show.
+    /// </summary>
+    [Fact]
+    public async Task Handle_HevcMovie_LaunchesEpisodeHlsTranscode()
+    {
+        var id = Guid.NewGuid();
+        var movie = new TestHelpers.TestMovieWithStreams(
+            "Adolescence S01E02",
+            id,
+            TestHelpers.TestStream(MediaStreamType.Video, "hevc"),
+            TestHelpers.TestStream(MediaStreamType.Audio, "eac3"));
+
+        _fx.LibraryManager
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { movie });
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreatePlayVideoRequest("Adolescence"),
+            _fx.CreateContext(),
+            TestHelpers.CreateTestUser(),
+            _fx.CreateSession(), CancellationToken.None);
+
+        var directive = response.HasDirective<VideoAppLaunchDirective>();
+        Assert.Contains($"/alexaskill/api/video-audio/episode/{id}/stream.m3u8?token=", directive.VideoItem.Source, StringComparison.Ordinal);
+        Assert.DoesNotContain("/Videos/", directive.VideoItem.Source, StringComparison.Ordinal);
+    }
 }

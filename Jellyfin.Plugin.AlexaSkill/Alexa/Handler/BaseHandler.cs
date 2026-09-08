@@ -746,30 +746,25 @@ public abstract class BaseHandler
     /// Get the VideoApp.Launch source URL for a MOVIE or EPISODE item, routed by codec
     /// compatibility (JF-498): Echo-decodable sources (h264 video + aac/mp3/... audio)
     /// keep the static <c>/Videos/{id}/stream?static=true</c> URL; sources whose audio
-    /// has no Echo decoder (eac3/ac3/truehd/dts) get the HLS remux URL instead. Every
-    /// VideoApp launch site that launches a Movie or Episode item must go through this
-    /// helper so the routing cannot drift between handlers (live incident 2026-09-05
+    /// has no Echo decoder (eac3/ac3/truehd/dts) get the HLS remux URL instead; sources
+    /// whose VIDEO codec the Echo cannot decode (hevc/av1, JF-500) get the same HLS
+    /// endpoint URL (the endpoint re-probes and re-encodes the video). Every VideoApp
+    /// launch site that launches a Movie or Episode item must go through this helper
+    /// so the routing cannot drift between handlers (live incident 2026-09-05
     /// corr=d9f848a7: the whole PlayNextEpisode chain was correct and the video never
     /// started because the static URL served raw EAC3 bytes).
     /// </summary>
     /// <param name="item">The Movie/Episode item to launch.</param>
     /// <param name="user">The user for the static stream URL (api_key).</param>
-    /// <returns>The VideoApp source URL (static or episode HLS remux).</returns>
+    /// <returns>The VideoApp source URL (static or an episode HLS tier).</returns>
     public string GetVideoAppLaunchUrl(BaseItem item, Entities.User user)
     {
         VideoAppStreamDecision decision = ResolveVideoAppStreamDecision(item);
-        if (decision.LogWarning)
-        {
-            Logger.LogWarning("VideoApp launch routing for '{ItemName}' ({ItemId}): {Reason}", item.Name, item.Id, decision.Reason);
-        }
-        else
-        {
-            Logger.LogDebug("VideoApp launch routing for '{ItemName}' ({ItemId}): {Reason}", item.Name, item.Id, decision.Reason);
-        }
+        Logger.LogDebug("VideoApp launch routing for '{ItemName}' ({ItemId}): {Reason}", item.Name, item.Id, decision.Reason);
 
-        return decision.Route == VideoAppStreamRoute.HlsRemux
-            ? GetEpisodeVideoAudioUrl(item.Id.ToString())
-            : GetVideoStreamUrl(item.Id.ToString(), user);
+        return decision.Route == VideoAppStreamRoute.Static
+            ? GetVideoStreamUrl(item.Id.ToString(), user)
+            : GetEpisodeVideoAudioUrl(item.Id.ToString());
     }
 
     /// <summary>
