@@ -230,7 +230,8 @@ public class YesIntentHandler : BaseHandler
         // timeline the offset counts (true = device-derived/stream-relative ->
         // rebase against the recorded launch base, or drop to restart when none).
         // Offer seeds classify at seed time: the AudioPlayer-context seed flags
-        // stream-relative; JF-520 has the device last-played seed probe the ledger
+        // stream-relative; JF-521 has the device last-played seed probe the ledger
+        // AND tick-match this device's own last recorded raw offset
         // too. Seed-binding (rebasing at the offer seed and deleting the flag) was
         // evaluated for JF-520 and REJECTED: the equivalence premise "nothing mints
         // a base between offer and confirm" is false - the AudioPlayer event

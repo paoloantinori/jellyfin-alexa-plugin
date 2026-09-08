@@ -1439,6 +1439,10 @@ public abstract class BaseHandler
     /// item-absolute) and a MISSING base drops the offset to 0 (never mint a stream-relative
     /// value silently). False means item-absolute: pass through unchanged. Raw-static launches
     /// keep the caller's offset on every path (the correction is transcode-routed only).
+    /// JF-521 hard clamp: when the item's runtime is known, a composed base+offset that
+    /// reaches or exceeds it is never minted (the raw offset wins); a legitimate
+    /// composition cannot get there, so that shape means a stale base or a foreign
+    /// position (the JF-520 review's F1 residual and F2 retry walk).
     /// STRUCTURAL ORDERING (JF-520, was comment-enforced at the callers): the ledger read
     /// happens INSIDE this helper, immediately before the resolve that overwrites it. Callers
     /// must not read the launch-base ledger around this call: a read after it would observe
@@ -1470,10 +1474,32 @@ public abstract class BaseHandler
             long? transcodeBaseMs = GetAudioTranscodeBase(deviceId, itemId, queueManager);
             if (transcodeBaseMs.HasValue)
             {
-                effectiveOffsetMs = (int)Math.Min(transcodeBaseMs.Value + offsetMs, int.MaxValue);
-                Logger.LogInformation(
-                    "{Label}: item {ItemId} routes to the audio-only transcode and the resume offset ({OffsetMs}ms) is device-derived (stream-relative); recorded launch base {BaseMs}ms, minting ?start={StartMs}ms (item-absolute)",
-                    logLabel, itemId, offsetMs, transcodeBaseMs.Value, effectiveOffsetMs);
+                long composedMs = Math.Min(transcodeBaseMs.Value + offsetMs, int.MaxValue);
+                // JF-521 hard clamp: a legitimate composition can never reach the item's
+                // runtime (the stream-relative offset counts at most the REMAINING
+                // runtime past the base), so a composed ?start= at or beyond it means a
+                // stale base or a foreign position is in play (the JF-520 review's F1/F2
+                // shapes). Never mint it; the caller's raw offset is the more
+                // conservative truth. Also bounds the F2 retry walk (a resolve whose
+                // directive never played advances the ledger while the offset source
+                // stays frozen): once a walk's composition reaches the runtime it clamps
+                // and stops growing.
+                long? runtimeTicks = item?.RunTimeTicks;
+                if (runtimeTicks is > 0 && composedMs * TimeSpan.TicksPerMillisecond >= runtimeTicks.Value)
+                {
+                    // effectiveOffsetMs keeps the initializer's raw offsetMs: the raw
+                    // offset is the conservative truth when the composition is stale.
+                    Logger.LogInformation(
+                        "{Label}: composed ?start= of {ComposedMs}ms (launch base {BaseMs}ms + stream-relative offset {OffsetMs}ms) for item {ItemId} reaches or exceeds the item runtime ({RuntimeMs}ms); a legitimate composition cannot, so a stale base or foreign position is in play; clamping to the raw {OffsetMs}ms offset as the more conservative truth",
+                        logLabel, composedMs, transcodeBaseMs.Value, offsetMs, itemId, runtimeTicks.Value / TimeSpan.TicksPerMillisecond, offsetMs);
+                }
+                else
+                {
+                    effectiveOffsetMs = (int)composedMs;
+                    Logger.LogInformation(
+                        "{Label}: item {ItemId} routes to the audio-only transcode and the resume offset ({OffsetMs}ms) is device-derived (stream-relative); recorded launch base {BaseMs}ms, minting ?start={StartMs}ms (item-absolute)",
+                        logLabel, itemId, offsetMs, transcodeBaseMs.Value, effectiveOffsetMs);
+                }
             }
             else
             {
@@ -1550,6 +1576,24 @@ public abstract class BaseHandler
         }
 
         return (queueManager ?? Plugin.Instance?.DeviceQueueManager)?.GetAudioTranscodeBase(deviceId, itemId);
+    }
+
+    /// <summary>
+    /// JF-521 provenance probe: THIS device's own last-persisted raw playback offset
+    /// for an item (the per-device ItemPositionState), or null when none recorded.
+    /// Wrapper shape mirrors <see cref="GetAudioTranscodeBase"/> (null device reads
+    /// null; manager falls back to <c>Plugin.Instance</c>'s). The tick-equality
+    /// provenance argument lives at its decision site: the device-last-played seed in
+    /// LaunchRequestHandler (JF-521).
+    /// </summary>
+    protected long? GetRecordedDeviceOffsetTicks(string? deviceId, string itemId, DeviceQueueManager? queueManager = null)
+    {
+        if (string.IsNullOrEmpty(deviceId))
+        {
+            return null;
+        }
+
+        return (queueManager ?? Plugin.Instance?.DeviceQueueManager)?.GetItemPositionTicks(deviceId, itemId);
     }
 
     /// <summary>

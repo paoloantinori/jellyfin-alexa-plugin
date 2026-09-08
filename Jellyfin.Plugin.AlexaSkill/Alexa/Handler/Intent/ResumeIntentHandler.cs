@@ -44,6 +44,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// records the new base, so the next cycle composes), while a stream-relative offset
 /// with NO recorded base still drops to a 0-restart (never mint silently) and
 /// raw-static launches (audio items, Echo-decodable video) keep the caller's offset.
+/// JF-521: a composition that reaches or exceeds the item's runtime (when known) is
+/// never minted; the raw offset wins (a legitimate composition cannot get there, so
+/// that shape means a stale base or a foreign position).
 /// Fallback 4 is structurally safe: its video branch launches via the VideoApp path
 /// (never resolves an audio launch, never records a base) and its audio branch uses
 /// the raw static URL (audio items never transcode).
