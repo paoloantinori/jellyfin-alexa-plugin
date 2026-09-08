@@ -5,10 +5,12 @@ using MediaBrowser.Model.Entities;
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
 /// <summary>
-/// Static policy that decides static-vs-HLS-remux for a VideoApp launch, from the
-/// item's media stream codecs (JF-498: MKV/H.264/EAC3 episodes never started; the
-/// Echo Show's ExoPlayer has no EAC3 decoder, so the audio renderer cannot initialize
-/// and the static byte stream never begins playing).
+/// Static policy that decides static-vs-HLS for a VideoApp launch (remux or video
+/// transcode tier), from the item's media stream codecs (JF-498: MKV/H.264/EAC3
+/// episodes never started; the Echo Show's ExoPlayer has no EAC3 decoder, so the
+/// audio renderer cannot initialize and the static byte stream never begins playing.
+/// JF-500: HEVC/AV1 video sources route to the transcode tier instead of the
+/// warned static fallback of the first cut).
 /// </summary>
 /// <remarks>
 /// Policy, from the on-device evidence (corr=d9f848a7):
@@ -17,12 +19,12 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// decoder: they trigger the HLS remux (video copy + AAC audio).</item>
 /// <item>H.264 is the only video codec the Echo advertises for third-party VideoApp
 /// playback. A non-H.264 video codec (hevc, av1, ...) cannot be fixed by a REMUX:
-/// this first cut deliberately has no video transcode path, so such items keep the
-/// static URL (today's behavior, no regression) and the decision carries a warning
-/// naming the codec.</item>
+/// JF-500 routes such items through the episode HLS video TRANSCODE tier (H.264
+/// re-encode instead of copy) when the codec is KNOWN; the previously spoken
+/// warning-shaped static fallback is gone because these sources now play.</item>
 /// <item>The remux additionally requires the video codec to be KNOWN h264: with an
-/// unknown video codec the remux output might be an undecodable stream, so the
-/// decision falls back to static.</item>
+/// unknown video codec the transcode output cannot be guaranteed to start, so the
+/// decision falls back to static (the fail-open shape the probe has always had).</item>
 /// </list>
 /// Container note: the container (mkv/mp4/...) deliberately does NOT trigger the
 /// remux. ExoPlayer extracts Matroska natively and the evidenced failure is
@@ -74,12 +76,11 @@ public static class VideoAppStreamPolicy
                 $"video codec unknown; keeping the static stream (cannot guarantee an Echo-decodable remux), audio={audioCodec ?? "unknown"}");
         }
 
-        if (!string.Equals(videoCodec, EchoCompatibleVideoCodec, StringComparison.OrdinalIgnoreCase))
+        if (VideoRequiresTranscode(videoCodec))
         {
             return new VideoAppStreamDecision(
-                VideoAppStreamRoute.Static,
-                $"video codec '{videoCodec}' is not h264; the Echo only decodes H.264 and this build has no video transcode path, so the static stream is kept (playback will fail on-device like today)",
-                LogWarning: true);
+                VideoAppStreamRoute.HlsTranscode,
+                $"video codec '{videoCodec}' has no Echo decoder; routing through the episode HLS video transcode (libx264 ultrafast, measured 4.40x realtime, JF-500), audio={audioCodec ?? "unknown"}");
         }
 
         if (!string.IsNullOrWhiteSpace(audioCodec) && EchoIncompatibleAudioCodecs.Contains(audioCodec))
@@ -93,6 +94,38 @@ public static class VideoAppStreamPolicy
             VideoAppStreamRoute.Static,
             $"h264 video + '{audioCodec ?? "unknown"}' audio is Echo-compatible; keeping the static stream, container={container ?? "unknown"}");
     }
+
+    /// <summary>
+    /// Whether a KNOWN video codec needs the H.264 transcode tier of the episode HLS
+    /// path (JF-500): anything that is not h264 (hevc, av1, mpeg2video, ...) must be
+    /// re-encoded, because the Echo decodes H.264 only and a remux copies the
+    /// undecodable bytes. Null/empty (unknown codec) is FALSE: the probe may only
+    /// ADD the transcode route, never break the launch path (the endpoint re-probes
+    /// server-side anyway). Used by <see cref="Decide"/>; the controller-side tier
+    /// pick uses the inverted <see cref="VideoSupportsRemux"/> instead (see its doc
+    /// for why the two fail directions deliberately differ).
+    /// </summary>
+    /// <param name="videoCodec">First video stream codec, or null when unknown.</param>
+    /// <returns>True when the source video must be re-encoded to H.264.</returns>
+    public static bool VideoRequiresTranscode(string? videoCodec)
+        => !string.IsNullOrWhiteSpace(videoCodec)
+            && !string.Equals(videoCodec, EchoCompatibleVideoCodec, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether a video codec is KNOWN h264, the only shape the episode HLS endpoint
+    /// may stream-copy (JF-500 review R1). This is the CONTROLLER-side tier
+    /// predicate and deliberately inverts the fail direction of
+    /// <see cref="VideoRequiresTranscode"/>: null/empty/unknown returns FALSE, so the
+    /// endpoint takes the TRANSCODE tier instead of copying bytes it cannot verify
+    /// are h264. A copy remux of undecodable video COMPLETES with ENDLIST and is
+    /// then served forever by the endpoint's cache-hit path, which never re-probes;
+    /// the handler-side <see cref="Decide"/> keeps its own unknown-to-static
+    /// fail-open because it may only ADD routes, never break the launch path.
+    /// </summary>
+    /// <param name="videoCodec">First video stream codec, or null when unknown.</param>
+    /// <returns>True only when the codec is known to be h264 (remux-safe).</returns>
+    public static bool VideoSupportsRemux(string? videoCodec)
+        => string.Equals(videoCodec, EchoCompatibleVideoCodec, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Whether an AUDIO-ONLY launch of an item (JF-507: the AudioPlayer resume of a
@@ -169,7 +202,15 @@ public enum VideoAppStreamRoute
     /// MPEG-TS segments): used when the source audio codec has no decoder on the
     /// Echo Show, so the static URL plays nothing.
     /// </summary>
-    HlsRemux
+    HlsRemux,
+
+    /// <summary>
+    /// The episode HLS video TRANSCODE tier (JF-500), same endpoint as
+    /// <see cref="HlsRemux"/>: the endpoint re-probes server-side and re-encodes the
+    /// video to H.264 (libx264 ultrafast) instead of copying it, for sources whose
+    /// VIDEO codec the Echo cannot decode (hevc, av1, ...).
+    /// </summary>
+    HlsTranscode
 }
 
 /// <summary>
@@ -178,8 +219,4 @@ public enum VideoAppStreamRoute
 /// </summary>
 /// <param name="Route">The source route to use.</param>
 /// <param name="Reason">Human-readable reason for the decision (codec names included).</param>
-/// <param name="LogWarning">
-/// True when the decision should be logged at WARNING level: the item cannot play on
-/// the Echo with either route (non-H.264 video), and the user should see it in the logs.
-/// </param>
-public sealed record VideoAppStreamDecision(VideoAppStreamRoute Route, string Reason, bool LogWarning = false);
+public sealed record VideoAppStreamDecision(VideoAppStreamRoute Route, string Reason);
