@@ -2385,7 +2385,7 @@ public class VideoAudioController : ControllerBase
     /// <c>-g 48</c> is LIVE here (an encoder option, unlike its inert copy-path
     /// twin): a keyframe at least every 48 frames (~2s at the 24-30fps TV rates)
     /// so the HLS muxer can cut 4-second segments at GOP boundaries. The scale
-    /// clamp is UNCONDITIONAL (<c>scale=-2:'min(ih,1080)'</c> in
+    /// clamp is UNCONDITIONAL (<c>scale=-2:min(ih\,1080)</c> in
     /// <see cref="EpisodeVideoTranscodeArgs"/>: a no-op at &lt;=1080p) so a
     /// taller-than-ceiling source is always clamped: the height probe that used
     /// to gate the filter could fail open on an unprobed 4K source, whose decode
@@ -2418,20 +2418,23 @@ public class VideoAudioController : ControllerBase
     /// decodes (without it libx264 keeps the 10-bit depth and emits High-10
     /// H.264; ffmpeg 8.1.2 probe). The file's other two libx264 sets
     /// (<see cref="PixelFormatArgs"/> and the audiobook path) carry it too.
-    /// The trailing <c>-vf scale=-2:'min(ih,1080)'</c> (JF-500 review R3) is the
+    /// The trailing <c>-vf scale=-2:min(ih\,1080)</c> (JF-500 review R3) is the
     /// UNCONDITIONAL height clamp: a no-op for &lt;=1080p sources, it scales taller
     /// ones down to <see cref="MaxEpisodeTranscodeHeight"/> without needing a height
-    /// probe. The single quotes are ffmpeg filtergraph-level quoting (they protect
-    /// the comma inside <c>min()</c> from the filter separator), not shell quoting:
-    /// the token passes through <c>ArgumentList</c> verbatim (verified on ffmpeg
-    /// 8.1.2: 3840x2160 -> 1920x1080, 1280x720 -> 1280x720).
+    /// probe. The comma inside <c>min()</c> is BACKSLASH-ESCAPED, not quoted:
+    /// there is no shell between <c>ArgumentList</c> and ffmpeg, so quote
+    /// characters would pass through as literals and the filtergraph parser
+    /// rejects them ("Error initializing filters", live 2026-09-08); the escaped
+    /// comma is ffmpeg's own graph-level escaping. Verified on the container's
+    /// ffmpeg via the exact ArgumentList token: 12s HEVC encode, exit 0, no
+    /// filter errors.
     /// </summary>
     private static readonly string[] EpisodeVideoTranscodeArgs =
-        ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-g", "48", "-pix_fmt", "yuv420p", "-vf", $"scale=-2:'min({MaxEpisodeTranscodeHeight})'"];
+        ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-g", "48", "-pix_fmt", "yuv420p", "-vf", $"scale=-2:min(ih\\,{MaxEpisodeTranscodeHeight})"];
 
     /// <summary>
     /// Height ceiling of the episode transcode tier (JF-500): the transcode args
-    /// clamp every source to this height (<c>-vf scale=-2:'min(ih,1080)'</c>, a
+    /// clamp every source to this height (<c>-vf scale=-2:min(ih\,1080)</c>, a
     /// no-op at &lt;=1080p) because a 4K HEVC decode would not sustain the measured
     /// realtime margin. 1080 matches the Echo Show's screen, so no visible quality
     /// is lost on the target device.

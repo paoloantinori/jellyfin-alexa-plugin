@@ -2203,7 +2203,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.Equal("aac", tokens[Array.IndexOf(tokens, "-c:a") + 1]);
         Assert.DoesNotContain("copy", tokens);
         Assert.Contains("0:V:0", tokens);
-        Assert.Equal($"scale=-2:'min({VideoAudioController.MaxEpisodeTranscodeHeight})'", tokens[Array.IndexOf(tokens, "-vf") + 1]);
+        Assert.Equal($"scale=-2:min(ih\\,{VideoAudioController.MaxEpisodeTranscodeHeight})", tokens[Array.IndexOf(tokens, "-vf") + 1]);
     }
 
     /// <summary>
@@ -2439,7 +2439,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.Equal("yuv420p", args[args.IndexOf("-pix_fmt") + 1]);
 
         // The constant height clamp (always present, no probe dependency)
-        Assert.Equal($"scale=-2:'min({VideoAudioController.MaxEpisodeTranscodeHeight})'", args[args.IndexOf("-vf") + 1]);
+        Assert.Equal($"scale=-2:min(ih\\,{VideoAudioController.MaxEpisodeTranscodeHeight})", args[args.IndexOf("-vf") + 1]);
 
         // Audio: exactly the remux pipeline's selection (AAC stereo downmix at 192k)
         Assert.Equal("aac", args[args.IndexOf("-c:a") + 1]);
