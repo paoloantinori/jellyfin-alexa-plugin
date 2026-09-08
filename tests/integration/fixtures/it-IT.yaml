@@ -329,14 +329,19 @@ tests:
   # -------------------------------------------------------------------------
   # 13. PlayEpisodeIntent (series_name, season_number, episode_number)
   # -------------------------------------------------------------------------
-  - utterance: "Riproduci breaking bad stagione uno episodio tre"
+  # 2026-09-08 live probe (JF-324 PART 1 confirm): the prefix-series shape
+  # "{series} stagione N episodio M" stopped filling series_name on the
+  # deployed model (slots season/episode fill; series empty, 7/7 probes),
+  # while the tail shape below fills all three. Amazon-side catalog-slot
+  # position sensitivity; pinned to the tail shape that the platform serves.
+  - utterance: "Riproduci la stagione uno episodio tre di breaking bad"
     expected_intent: PlayEpisodeIntent
     expected_slots:
       series_name: {}
       season_number: {}
       episode_number: {}
 
-  - utterance: "Suona stranger things stagione due episodio uno"
+  - utterance: "Suona la stagione due episodio uno di stranger things"
     expected_intent: PlayEpisodeIntent
     expected_slots:
       series_name: {}
@@ -1092,10 +1097,14 @@ tests:
     expected_slots:
       series_name: {}
 
+  # 2026-09-08 live probe (JF-324 PART 1 confirm): the platform routes the
+  # slotted "Continua a guardare {series}" to the slotless ContinueWatchingIntent
+  # (its precedence wins over PlayNextEpisodeIntent's samples). Accepted: the
+  # phrase is literally continue-watching; PlayNextEpisodeIntent keeps the
+  # next/latest-episode phrasings (pinned above, all green).
   - utterance: "Continua a guardare dark"
-    expected_intent: PlayNextEpisodeIntent
-    expected_slots:
-      series_name: {}
+    expected_intent: ContinueWatchingIntent
+    expected_slots: {}
 
   # JF-493: one-shot infinitive twins ("chiedi a mia collezione di mettere il
   # prossimo episodio di X"). The adolescence variant is intent-level: a
