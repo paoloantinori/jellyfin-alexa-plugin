@@ -11,11 +11,16 @@ using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
+using Jellyfin.Data.Enums;
+using Jellyfin.Database.Implementations.Enums;
+using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
+using JellyfinUser = Jellyfin.Database.Implementations.Entities.User;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
@@ -24,6 +29,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// Pre-fetches and enqueues the next stream URL for gapless playback transitions.
 /// Supports loop modes (RepeatOne replays the same track, RepeatAll wraps around),
 /// shuffle order, and radio mode auto-population when the queue runs out.
+/// JF-324: when the finishing item is an Episode played through AudioPlayer, it also
+/// auto-advances to the series' next episode (the only episode auto-advance path;
+/// VideoApp playback emits no events).
 /// </summary>
 #pragma warning disable CA1711
 public class PlaybackNearlyFinishedEventHandler : BaseHandler
@@ -32,6 +40,13 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
     private readonly DeviceQueueManager? _queueManager;
+
+    /// <summary>
+    /// Bound on the episode auto-advance's unplayed-episodes query: one screen of
+    /// candidates in season-then-episode order is far more than a single gapless
+    /// advance needs, and the bound keeps the query cost flat on huge series.
+    /// </summary>
+    private const int EpisodeCandidateQueryLimit = 32;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PlaybackNearlyFinishedEventHandler"/> class.
@@ -163,26 +178,46 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             // Clean up continuation state when queue is exhausted
             QueueContinuationStore.Remove(session.UserId, deviceId);
 
-            // PostPlay only when radio mode is NOT active.
-            // Radio mode handles its own continuation; PostPlay is for single-track
-            // playback that reaches queue exhaustion without radio.
-            bool radioActive = RadioModeState.IsEnabled(session.UserId, deviceId);
-            if (!radioActive)
-            {
-                var postPlayMode = GetPostPlayBehavior(user);
+            var postPlayMode = GetPostPlayBehavior(user);
 
-                if (postPlayMode == PostPlayBehavior.AutoPlay)
-                {
-                    // AutoPlay: find similar tracks and enqueue for gapless transition.
-                    // PlaybackNearlyFinished can return AudioPlayer.Play but NOT speech,
-                    // so the music continues seamlessly without announcement.
-                    string? currentItemId = context.AudioPlayer?.Token;
-                    if (!string.IsNullOrEmpty(currentItemId))
-                    {
-                        nextItemId = await AutoPopulatePostPlayTracks(
-                            currentItemId, session, user, context, cancellationToken).ConfigureAwait(false);
-                    }
-                }
+            // Music PostPlay populate only runs when radio mode is NOT active: radio
+            // mode handles its own continuation above, and plain PostPlay is for
+            // single-track playback that reaches queue exhaustion without radio. The
+            // episode advance below deliberately ignores radioActive (a leftover radio
+            // flag from earlier music must not stop a TV binge).
+            bool radioActive = RadioModeState.IsEnabled(session.UserId, deviceId);
+
+            // ONE current-item resolution shared by both AutoPlay branches below
+            // (music populate and episode advance): the AudioPlayer token parsed
+            // through the shared codec (composite sleep tokens included, JF-447),
+            // with the session's now-playing item as fallback when there is no token.
+            BaseItem? currentItem = StreamTokenCodec.TryGetItemId(context.AudioPlayer?.Token, out Guid currentItemId)
+                ? _libraryManager.GetItemById(currentItemId)
+                : session.FullNowPlayingItem;
+
+            if (!radioActive && postPlayMode == PostPlayBehavior.AutoPlay)
+            {
+                // AutoPlay: find similar tracks and enqueue for gapless transition.
+                // PlaybackNearlyFinished can return AudioPlayer.Play but NOT speech,
+                // so the music continues seamlessly without announcement.
+                nextItemId = await AutoPopulatePostPlayTracks(
+                    currentItem, session, user, context, cancellationToken).ConfigureAwait(false);
+            }
+
+            // JF-324 episode auto-advance (AudioPlayer-routed TV): when the finishing
+            // item is an Episode (the JF-507 audio-shaped launch of an EAC3 episode,
+            // or any video item launched audio-shaped), resolve the next episode of
+            // its series and enqueue it gaplessly. VideoApp playback emits NO events
+            // at all (see CLAUDE.md "Stop / Session Routing During Playback"), so
+            // this is the only path where episode auto-advance can exist. Deliberately
+            // NOT gated on radioActive: radio mode is a MUSIC continuation state that
+            // only TurnRadioOff ever clears, its populate above no-ops for a non-Audio
+            // item, and a leftover radio flag from earlier music must not stop a TV
+            // binge. The branch itself never touches RadioModeState.
+            if (nextItemId == null)
+            {
+                nextItemId = await TryAutoAdvanceNextEpisodeAsync(
+                    currentItem, session, user, cancellationToken).ConfigureAwait(false);
             }
 
             if (nextItemId == null)
@@ -191,7 +226,8 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
                 return ResponseBuilder.Empty();
             }
 
-            // PostPlay AutoPlay found tracks — fall through to enqueue below
+            // PostPlay AutoPlay found a next item (music radio tracks or the next
+            // episode); fall through to enqueue below
         }
 
         // Pre-fetch the next item from the library to resolve metadata eagerly
@@ -271,7 +307,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
 
         // Append new items to the queue (deduplicating)
         var queue = new List<QueueItem>(session.NowPlayingQueue);
-        var seen = new HashSet<Guid>(queue.Select(q => q.Id));
+        var seen = SessionQueue.IdSet(session);
 
         if (continuation.Shuffle)
         {
@@ -323,9 +359,10 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     /// <summary>
     /// Finds the currently playing item's position in the session queue, or -1 when
     /// it cannot be located. Resolution order (the session's now-playing item first,
-    /// then the AudioPlayer token parsed as a bare item GUID) is shared by the
-    /// queue-continuation fetch and <see cref="ResolveNextItemId"/>, so both agree on
-    /// "current item". The JF-424.1 precompute-cache validation deliberately resolves
+    /// then the AudioPlayer token parsed through the shared stream-token codec) is
+    /// shared by the queue-continuation fetch and <see cref="ResolveNextItemId"/>,
+    /// so both agree on "current item". The JF-424.1 precompute-cache validation
+    /// deliberately resolves
     /// TOKEN-FIRST instead (see <see cref="CachedNextStillFollowsCurrent"/>) to match
     /// the store side.
     /// </summary>
@@ -335,9 +372,11 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     private int FindCurrentQueueIndex(SessionInfo session, Context context)
     {
         Guid? currentItemId = session.FullNowPlayingItem?.Id;
-        if (currentItemId == null && context.AudioPlayer?.Token != null
-            && Guid.TryParse(context.AudioPlayer.Token, out Guid parsedToken))
+        if (currentItemId == null
+            && StreamTokenCodec.TryGetItemId(context.AudioPlayer?.Token, out Guid parsedToken))
         {
+            // Shared codec: composite sleep tokens ("{guid}|sleep:{ticks}") resolve too; a raw
+            // Guid.TryParse fails them and makes a live queue look exhausted.
             currentItemId = parsedToken;
         }
 
@@ -502,6 +541,16 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     }
 
     /// <summary>
+    /// Resolves the session's Jellyfin user via <see cref="IUserManager"/>, shared by
+    /// the radio, PostPlay, and episode-advance branches (each caller keeps its own
+    /// null guard: the branch cannot run without a user).
+    /// </summary>
+    /// <param name="session">The session whose user to resolve.</param>
+    /// <returns>The Jellyfin user, or null when the manager has no such user.</returns>
+    private JellyfinUser? ResolveJellyfinUser(SessionInfo session)
+        => _userManager.GetUserById(session.UserId);
+
+    /// <summary>
     /// Find similar tracks to the current item and append them to the queue.
     /// Returns the first new track ID, or null if no tracks found.
     /// </summary>
@@ -513,7 +562,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             return null;
         }
 
-        Jellyfin.Database.Implementations.Entities.User? jellyfinUser = _userManager.GetUserById(session.UserId);
+        JellyfinUser? jellyfinUser = ResolveJellyfinUser(session);
         if (jellyfinUser == null)
         {
             return null;
@@ -531,7 +580,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         List<BaseItem> shuffled = ShuffleAndCap(similar, 15);
 
         var queue = new List<QueueItem>(session.NowPlayingQueue);
-        var seen = new HashSet<Guid>(queue.Select(q => q.Id));
+        var seen = SessionQueue.IdSet(session);
         Guid? firstNewId = null;
         int addedCount = 0;
 
@@ -558,22 +607,24 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     /// Find similar tracks to the specified item and append them to the queue
     /// for PostPlay AutoPlay gapless transition. Enables RadioModeState for
     /// subsequent continuation via the existing AutoPopulateRadioTracks flow.
+    /// The current item is resolved ONCE by the caller (HandleAsync's shared
+    /// resolution, token-first with the session fallback) and passed in; a
+    /// non-Audio item no-ops via the cast.
     /// </summary>
     private async Task<Guid?> AutoPopulatePostPlayTracks(
-        string currentItemId,
+        BaseItem? currentItem,
         SessionInfo session,
         Entities.User user,
         Context context,
         CancellationToken cancellationToken)
     {
-        BaseItem? item = _libraryManager.GetItemById(Guid.Parse(currentItemId));
-        var currentAudio = item as MediaBrowser.Controller.Entities.Audio.Audio;
+        var currentAudio = currentItem as MediaBrowser.Controller.Entities.Audio.Audio;
         if (currentAudio == null)
         {
             return null;
         }
 
-        Jellyfin.Database.Implementations.Entities.User? jellyfinUser = _userManager.GetUserById(session.UserId);
+        JellyfinUser? jellyfinUser = ResolveJellyfinUser(session);
         if (jellyfinUser == null)
         {
             return null;
@@ -592,7 +643,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         List<BaseItem> shuffled = ShuffleAndCap(similar, 15);
 
         var queue = new List<QueueItem>(session.NowPlayingQueue);
-        var seen = new HashSet<Guid>(queue.Select(q => q.Id));
+        var seen = SessionQueue.IdSet(session);
         Guid? firstNewId = null;
         int addedCount = 0;
 
@@ -614,5 +665,170 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         }
 
         return firstNewId;
+    }
+
+    /// <summary>
+    /// JF-324 episode auto-advance: resolve the next episode of the finishing
+    /// episode's series with ONE direct ordered-unplayed query scoped to the series
+    /// (AncestorIds + IsPlayed=false, season-then-episode order) and append the
+    /// first candidate outside the skip-set (current + queued ids) to the session
+    /// queue for a gapless AudioPlayer transition. Movies and every non-Episode
+    /// item return null (a movie has no natural next; music keeps the radio/PostPlay
+    /// paths above). End of series returns null so the caller falls through to
+    /// today's end-of-queue behavior, and the intent path's "latest episode"
+    /// fallback is deliberately NOT applied here: re-serving an already-watched
+    /// episode right after it finished would loop the binge.
+    /// WHY a direct query and not NextUp (C1): Jellyfin's SeriesId-scoped GetNextUp
+    /// returns AT MOST ONE episode (the server resolves a single
+    /// presentationUniqueKey, runs one next-up pass whose episode query takes
+    /// FirstOrDefault, and Limit only truncates afterwards; see
+    /// Emby.Server.Implementations/TV/TVSeriesManager.cs in 10.11), and on this
+    /// event path that single answer IS the finishing episode (its stop is reported
+    /// only on PlaybackStopped, which has not fired yet, so it is still the first
+    /// unwatched). The skip-set filters it out, so a NextUp-based advance would
+    /// never fire in production. The direct query handles everything NextUp
+    /// could not here: the finishing episode itself (still unplayed, first
+    /// candidate, skipped), cross-season succession (season-then-episode order),
+    /// and partially-watched series (first unplayed in order after the skipped
+    /// ones). Gating mirrors PlayNextEpisodeIntentHandler: the PostPlay mode, the
+    /// VideoPlaybackEnabled feature flag, and the VideosEnabled content gate
+    /// (FilterByContentAccess hard-zero, JF-466) all skip the branch before any
+    /// library query, and the series is authorized with the same content-gated,
+    /// library-filtered series query shape the intent path resolves names through
+    /// (ApplyLibraryFilter TopParentIds), scoped by id instead of name. No
+    /// announcement: the enqueue is gapless, exactly like the music radio path.
+    /// </summary>
+    /// <param name="currentItem">The finishing item, resolved once by the caller (token-first, session fallback).</param>
+    /// <param name="session">The current Jellyfin session (user + now-playing queue).</param>
+    /// <param name="user">The plugin user (PostPlay mode + library scope).</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The next episode's item ID (appended to the queue), or null when the branch does not apply.</returns>
+    private async Task<Guid?> TryAutoAdvanceNextEpisodeAsync(
+        BaseItem? currentItem,
+        SessionInfo session,
+        Entities.User user,
+        CancellationToken cancellationToken)
+    {
+        // Config gates first, before any library work (gate-before-query): the
+        // PostPlay mode, the VideoPlaybackEnabled feature flag, and the VideosEnabled
+        // content gate (JF-466 hard-zero contract) all skip the branch without
+        // touching the library, mirroring the intent path. An event response cannot
+        // speak, so a disabled configuration just skips the advance.
+        if (GetPostPlayBehavior(user) != PostPlayBehavior.AutoPlay)
+        {
+            return null;
+        }
+
+        if (Plugin.Instance?.Configuration is { } liveConfig && !liveConfig.VideoPlaybackEnabled)
+        {
+            Logger.LogInformation("Episode auto-advance: video playback disabled via configuration, skipping");
+            return null;
+        }
+
+        if (FilterByContentAccess(new[] { BaseItemKind.Episode }).Length == 0)
+        {
+            Logger.LogInformation("Episode auto-advance: episodes disabled via configuration, skipping");
+            return null;
+        }
+
+        if (currentItem is not Episode episode)
+        {
+            return null;
+        }
+
+        Guid seriesId = episode.SeriesId;
+        if (seriesId == Guid.Empty)
+        {
+            Logger.LogDebug("Episode auto-advance: episode '{EpisodeName}' has no series, skipping", episode.Name);
+            return null;
+        }
+
+        JellyfinUser? jellyfinUser = ResolveJellyfinUser(session);
+        if (jellyfinUser == null)
+        {
+            return null;
+        }
+
+        // Per-user library authorization (the ApplyLibraryFilter equivalent of the
+        // intent path's series resolution): the series must survive the same
+        // content-gated, library-scoped query, scoped by id instead of search term.
+        var accessQuery = new InternalItemsQuery
+        {
+            User = jellyfinUser,
+            ItemIds = new[] { seriesId },
+            IncludeItemTypes = new[] { BaseItemKind.Series },
+            DtoOptions = new DtoOptions(true)
+        };
+        ApplyLibraryFilter(accessQuery, user, _libraryManager, Logger);
+        IReadOnlyList<BaseItem> authorized = await RetryAsync(
+            () => _libraryManager.GetItemList(accessQuery),
+            "SeriesAccessCheck",
+            cancellationToken).ConfigureAwait(false);
+        if (authorized.Count == 0)
+        {
+            Logger.LogInformation(
+                "Episode auto-advance: series of '{EpisodeName}' is outside the user's allowed libraries, skipping",
+                episode.Name);
+            return null;
+        }
+
+        // Direct unplayed-episodes query (C1, see the doc comment): ordered
+        // season-then-episode so cross-season succession and partially-watched
+        // series both resolve to the first unplayed episode after the skip-set.
+        // IsPlayed=false includes the in-progress/resumable episode (the 10.11
+        // server filter reads only UserData.Played, never the position), so the
+        // finishing episode itself is the query's first candidate and is skipped;
+        // the queue may still hold earlier episodes whose stops were never reported
+        // to Jellyfin (the JF-409 self-reenqueue class). The first candidate
+        // outside that skip-set is the true next. TRADE-OFF vs the intent path's
+        // NextUp (review JF-324 F2): with an unplayed WATCH-HOLE below the
+        // finishing episode (out-of-order watching), the ordered query surfaces
+        // the older episode first and the advance jumps BACK to it (from offset
+        // 0) instead of forward; accepted as 'next unplayed in order' semantics.
+        var candidatesQuery = new InternalItemsQuery
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            AncestorIds = new[] { seriesId },
+            IncludeItemTypes = new[] { BaseItemKind.Episode },
+            IsPlayed = false,
+            IsVirtualItem = false,
+            // Season-0 specials sort before every real season and would win the
+            // advance; the server's own next-up excludes them the same way
+            // (TVSeriesManager: ParentIndexNumberNotEquals = 0), review JF-324 F1.
+            ParentIndexNumberNotEquals = 0,
+            OrderBy = new[] { (ItemSortBy.ParentIndexNumber, SortOrder.Ascending), (ItemSortBy.IndexNumber, SortOrder.Ascending) },
+            Limit = EpisodeCandidateQueryLimit,
+            DtoOptions = new DtoOptions(true)
+        };
+        Logger.LogDebug(
+            "Episode auto-advance: querying unplayed episodes of seriesId={SeriesId} (limit={Limit})",
+            seriesId, EpisodeCandidateQueryLimit);
+        IReadOnlyList<BaseItem> candidates = await RetryAsync(
+            () => _libraryManager.GetItemList(candidatesQuery),
+            "GetNextEpisodes",
+            cancellationToken).ConfigureAwait(false);
+
+        var skip = SessionQueue.IdSet(session);
+        skip.Add(episode.Id);
+        BaseItem? next = candidates.FirstOrDefault(c => !skip.Contains(c.Id));
+        if (next == null)
+        {
+            Logger.LogInformation(
+                "Episode auto-advance: no next episode after '{EpisodeName}' (end of series or all candidates already queued)",
+                episode.Name);
+            return null;
+        }
+
+        // Append to the session queue so the NEXT advance (and the queue-position
+        // machinery above) sees the finishing item's successor in place.
+        var queue = new List<QueueItem>(session.NowPlayingQueue) { new QueueItem { Id = next.Id } };
+        session.NowPlayingQueue = queue;
+
+        Logger.LogInformation(
+            "Episode auto-advance: enqueuing next episode '{NextEpisodeName}' after '{EpisodeName}' (gapless, no announcement)",
+            next.Name,
+            episode.Name);
+        return next.Id;
     }
 }

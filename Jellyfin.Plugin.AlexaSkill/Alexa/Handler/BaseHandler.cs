@@ -2907,8 +2907,9 @@ public abstract class BaseHandler
         Logger.LogDebug("{Label}: entered, token={Token}, offset={OffsetMs}ms", label, requestState?.Token, requestState?.OffsetInMilliseconds);
 
         // The intent can arrive from an open session with nothing playing: there is
-        // no item to attach the repeat mode to.
-        if (requestState?.Token == null || !Guid.TryParse(requestState.Token, out Guid itemId))
+        // no item to attach the repeat mode to. Composite sleep tokens
+        // ("{guid}|sleep:{ticks}") must resolve too; raw Guid.TryParse fails them.
+        if (requestState?.Token == null || !StreamTokenCodec.TryGetItemId(requestState.Token, out Guid itemId))
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", GetLocale(request)));
         }
@@ -3226,6 +3227,58 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// JF-324 shared NextUp query core: Jellyfin's per-user next-unwatched episodes of
+    /// a series via <c>ITVSeriesManager.GetNextUp</c> (EnableResumable so an in-progress
+    /// episode counts as the next one). INTENT-PATH core only (single candidate,
+    /// <see cref="PlayNextUpEpisodeAsync"/>): PlaybackNearlyFinishedEventHandler's
+    /// episode auto-advance deliberately does NOT use NextUp, because a
+    /// SeriesId-scoped GetNextUp returns at most one item on Jellyfin 10.11 and on
+    /// the event path that item is always the finishing episode itself; the event
+    /// path queries the series' unplayed episodes directly instead (C1).
+    /// Content and library gating stay in the caller: the intent path gates at series
+    /// resolution (<see cref="ResolveSeriesForPlaybackAsync"/>).
+    /// </summary>
+    /// <param name="tvSeriesManager">The Jellyfin TV series manager (NextUp source).</param>
+    /// <param name="jellyfinUser">The Jellyfin user (per-user watched state).</param>
+    /// <param name="seriesId">The series to advance within.</param>
+    /// <param name="seriesName">The series name (logging only).</param>
+    /// <param name="limit">How many next-up candidates to return.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The next-up episodes in Jellyfin's order (possibly empty, never null).</returns>
+    protected async Task<IReadOnlyList<BaseItem>> GetNextUpEpisodesAsync(
+        ITVSeriesManager tvSeriesManager,
+        JellyfinUser jellyfinUser,
+        Guid seriesId,
+        string? seriesName,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        var nextUpQuery = new NextUpQuery
+        {
+            User = jellyfinUser,
+            SeriesId = seriesId,
+            Limit = limit,
+            EnableResumable = true
+        };
+        Logger.LogDebug("NextUp: querying NextUp for seriesId={SeriesId}, enableResumable=true, limit={Limit}", seriesId, limit);
+        var nextUpSw = System.Diagnostics.Stopwatch.StartNew();
+        QueryResult<BaseItem> nextUp = await RetryAsync(
+            () => tvSeriesManager.GetNextUp(nextUpQuery, new DtoOptions(true)),
+            "GetNextUp",
+            cancellationToken).ConfigureAwait(false);
+        nextUpSw.Stop();
+        // Stage timing (device session 2026-09-06: four requests spent 6-26s between
+        // these two lines while a remux and the startup catalog sync ran; controlled
+        // re-runs under the same encode load measured 91-131ms, so the spikes were a
+        // transient that left no trace. This line makes the next occurrence readable
+        // from the logs instead of inferred).
+        Logger.LogInformation(
+            "NextUp: GetNextUp took {ElapsedMs}ms for series '{SeriesName}' ({ResultCount} results)",
+            nextUpSw.ElapsedMilliseconds, seriesName, nextUp?.Items?.Count ?? 0);
+        return nextUp?.Items ?? Array.Empty<BaseItem>();
+    }
+
+    /// <summary>
     /// JF-324 shared next-up episode launch: resolves the next unwatched episode of a
     /// series via Jellyfin's NextUp (per-user watched state; EnableResumable so an
     /// in-progress episode counts as the next one, which is what both "next episode"
@@ -3260,29 +3313,9 @@ public abstract class BaseHandler
         Context context,
         CancellationToken cancellationToken)
     {
-        var nextUpQuery = new NextUpQuery
-        {
-            User = jellyfinUser,
-            SeriesId = series.Id,
-            Limit = 1,
-            EnableResumable = true
-        };
-        Logger.LogDebug("NextUp: querying NextUp for seriesId={SeriesId}, enableResumable=true", series.Id);
-        var nextUpSw = System.Diagnostics.Stopwatch.StartNew();
-        QueryResult<BaseItem> nextUp = await RetryAsync(
-            () => tvSeriesManager.GetNextUp(nextUpQuery, new DtoOptions(true)),
-            "GetNextUp",
-            cancellationToken).ConfigureAwait(false);
-        nextUpSw.Stop();
-        // Stage timing (device session 2026-09-06: four requests spent 6-26s between
-        // these two lines while a remux and the startup catalog sync ran; controlled
-        // re-runs under the same encode load measured 91-131ms, so the spikes were a
-        // transient that left no trace. This line makes the next occurrence readable
-        // from the logs instead of inferred).
-        Logger.LogInformation(
-            "NextUp: GetNextUp took {ElapsedMs}ms for series '{SeriesName}' ({ResultCount} results)",
-            nextUpSw.ElapsedMilliseconds, series.Name, nextUp?.Items?.Count ?? 0);
-        BaseItem? episode = nextUp?.Items?.FirstOrDefault();
+        IReadOnlyList<BaseItem> nextUpEpisodes = await GetNextUpEpisodesAsync(
+            tvSeriesManager, jellyfinUser, series.Id, series.Name, 1, cancellationToken).ConfigureAwait(false);
+        BaseItem? episode = nextUpEpisodes.FirstOrDefault();
         bool latestFallback = episode == null;
 
         if (episode == null)

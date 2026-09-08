@@ -1,5 +1,7 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using MediaBrowser.Controller.Session;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
@@ -31,4 +33,14 @@ internal static class SessionQueue
 
         return -1;
     }
+
+    /// <summary>
+    /// The ids of every item currently in the session's now-playing queue, for
+    /// deduplication checks against the live queue (the copy shared by the
+    /// continuation fetch and the radio/PostPlay/episode-advance populates).
+    /// </summary>
+    /// <param name="session">The session whose queue ids to collect.</param>
+    /// <returns>A set of the queued item ids.</returns>
+    internal static HashSet<Guid> IdSet(SessionInfo session)
+        => new(session.NowPlayingQueue.Select(q => q.Id));
 }

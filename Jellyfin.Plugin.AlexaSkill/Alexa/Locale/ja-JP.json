@@ -77,7 +77,6 @@
   "InProgressList": "{0} 個の進行中のアイテムがあります: {1}",
   "InProgressItemWithPosition": "{0} の {1}",
   "DidNotCatchSeriesName": "シリーズ名が聞き取れませんでした。どのシリーズを見たいですか？",
-  "DidNotCatchEpisodeNumber": "シーズンまたはエピソード番号が聞き取れませんでした。シーズンとエピソードを言ってください。",
   "NotFoundSeries": "{0} というシリーズが見つかりませんでした。",
   "NotFoundEpisode": "{2} のシーズン {0} エピソード {1} が見つかりませんでした。",
   "PlayingNextEpisode": "次のエピソードを再生します: {0}",

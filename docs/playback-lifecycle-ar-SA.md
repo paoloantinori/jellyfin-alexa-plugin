@@ -11,6 +11,7 @@ graph TD
     Idle -->|"play {book}"| PlayBook["PlayBookIntent"]
     Idle -->|"شغل البودكاست {podcast_name}"| PlayPodcast["PlayPodcastIntent"]
     Idle -->|"شغل الفيديو {title}"| PlayVideo["PlayVideoIntent"]
+    Idle -->|"شغل الحلقة التالية من {series_name}"| PlayNextEpisode["PlayNextEpisodeIntent"]
     Idle -->|"شغل شيء عشوائي"| PlayRandom["PlayRandomIntent"]
 
     PlayArtist --> Playing
@@ -20,6 +21,7 @@ graph TD
     PlayBook --> Playing
     PlayPodcast --> Playing
     PlayVideo --> Playing
+    PlayNextEpisode --> Playing
     PlayRandom --> Playing
 
     Playing["يعمل الآن"] -->|"إيقاف مؤقت"| Paused["متوقف مؤقتاً"]

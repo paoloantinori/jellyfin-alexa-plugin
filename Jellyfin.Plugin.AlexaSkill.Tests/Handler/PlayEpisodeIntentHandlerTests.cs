@@ -304,8 +304,9 @@ public class PlayEpisodeIntentHandlerTests : PluginTestBase
     {
         // JF-451 adoption: the it-IT model types season_number and episode_number as
         // the custom ItalianNumber slot, so spoken numbers arrive as WORDS ("due",
-        // "dieci"), which bare int.TryParse rejects with DidNotCatchEpisodeNumber.
-        // The word forms must resolve the episode exactly like "2"/"10".
+        // "dieci"), which bare int.TryParse rejects (the miss falls back to the
+        // next-up core, JF-324 AC#3). The word forms must resolve the episode
+        // exactly like "2"/"10".
         var handler = CreateHandler();
         var request = CreateIntentRequest(seriesName: "The Office", seasonNumber: "due", episodeNumber: "dieci");
         var context = CreateContext();

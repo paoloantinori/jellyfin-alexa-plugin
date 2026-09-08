@@ -11,6 +11,7 @@ graph TD
     Idle -->|"play {book}"| PlayBook["PlayBookIntent"]
     Idle -->|"speel de podcast {podcast_name}"| PlayPodcast["PlayPodcastIntent"]
     Idle -->|"speel de video {title}"| PlayVideo["PlayVideoIntent"]
+    Idle -->|"speel de volgende aflevering van {series_name}"| PlayNextEpisode["PlayNextEpisodeIntent"]
     Idle -->|"speel iets willekeurigs"| PlayRandom["PlayRandomIntent"]
 
     PlayArtist --> Playing
@@ -20,6 +21,7 @@ graph TD
     PlayBook --> Playing
     PlayPodcast --> Playing
     PlayVideo --> Playing
+    PlayNextEpisode --> Playing
     PlayRandom --> Playing
 
     Playing["Wordt afgespeeld"] -->|"pauze"| Paused["Gepauzeerd"]

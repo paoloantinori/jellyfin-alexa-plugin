@@ -85,7 +85,6 @@
   "InProgressList": "Tienes {0} elementos en progreso: {1}",
   "InProgressItemWithPosition": "{0} en {1}",
   "DidNotCatchSeriesName": "No entendí el nombre de la serie. ¿Qué serie te gustaría ver?",
-  "DidNotCatchEpisodeNumber": "No entendí el número de temporada o episodio. Por favor di la temporada y el episodio.",
   "NotFoundSeries": "No pude encontrar una serie llamada {0}.",
   "NotFoundEpisode": "No pude encontrar la temporada {0} episodio {1} de {2}.",
   "PlayingNextEpisode": "Reproduciendo el próximo episodio: {0}",

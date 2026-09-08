@@ -15,8 +15,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 /// Finished and Stopped handlers before their keep-alive ack. Every EVENT handler now
 /// shares this codec so the format has one definition and composite tokens parse on
 /// every event path. Known non-migrated sites (intent decision, flagged in the JF-447
-/// task): the shuffle/loop toggle paths still parse bare GUIDs
-/// (ShuffleOn/ShuffleOff/ApplyRepeatModeAsync) and degrade to the NoMediaPlaying tell
+/// task): the shuffle toggle paths still parse bare GUIDs
+/// (ShuffleOn/ShuffleOff) and degrade to the NoMediaPlaying tell
 /// mid-sleep rather than crashing.
 /// Unknown suffixes ("<c>{guid}|other</c>") are treated as unparseable rather than
 /// split, so a future suffix owner must extend this codec instead of ad-hoc parsing.
