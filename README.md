@@ -456,6 +456,17 @@ Workarounds:
 - If "stop" does nothing, try it again a moment later. Stop routing to the skill is intermittent: sometimes the utterance reaches the skill immediately, sometimes it is claimed by the default music service or lost in routing, with no pattern we or other Alexa skill developers have been able to pin down. "Pause" is the dependable alternative.
 - Force the skill with its invocation name: English *"Alexa, ask Jellyfin Player to stop"*, Italian *"Alexa, chiedi a Mia Collezione ferma"* (use the imperative **ferma**/**stop**, not the infinitive "fermare").
 
+### Why does "play <series> season 2 episode 1" search for a song instead of playing the episode?
+
+On several marketplaces (measured live across the en-* locales in September 2026), the bare phrasing **"play <series> season N episode M"** is claimed by Alexa's music resolution before the skill's episode intent can match: the request arrives as a **song search** (or a podcast search for the "latest episode" variant). This is a per-marketplace NLU precedence behavior, not a plugin bug: the same phrasing routes correctly on other locales (Italian serves all the episode shapes) and inside an active skill session.
+
+Two reliable shapes for episode playback:
+
+- **Open the skill first, then ask** (the in-skill session routes episode phrasings correctly on every tested marketplace): *"Alexa, open Jellyfin Player"* → *"play the next episode of <series>"* / *"play season 2 episode 1 of <series>"*.
+- **Use the one-shot numbers-first form with the invocation name**: *"Alexa, ask Jellyfin Player to play season 2 episode 1 of <series>"*.
+
+"Play the **next** episode of \<series\>" works bare on most marketplaces but is claimed on some; if it does nothing, use one of the two shapes above. Italian-locale users are unaffected: every episode phrasing routes correctly bare.
+
 ### Why is there no progress bar / scrubber when music plays?
 
 Music playback through this skill uses Amazon's `AudioPlayer` interface, which only provides play/pause/next/previous controls. The native music player with the seek bar is reserved for the Music/Radio/Podcast Skill API, which requires an Amazon partnership and is not available to custom skills. Every third-party Jellyfin (or Plex) skill has the same limitation; it is not a plugin bug.
