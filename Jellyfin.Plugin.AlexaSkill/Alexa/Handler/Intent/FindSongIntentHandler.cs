@@ -34,41 +34,6 @@ public class FindSongIntentHandler : BaseHandler
 {
     internal const string SessionDataKey = "FindSongSessionData";
 
-    /// <summary>
-    /// Cardinal pick words for the candidate picker, all supported locales (JF-396).
-    /// Maps the spoken count word to the 0-based candidate index.
-    /// </summary>
-    private static readonly Dictionary<string, int> CardinalPickWords = new(StringComparer.OrdinalIgnoreCase)
-    {
-        // en
-        ["one"] = 0, ["two"] = 1, ["three"] = 2, ["four"] = 3,
-        // it
-        ["uno"] = 0, ["due"] = 1, ["tre"] = 2, ["quattro"] = 3,
-        // de
-        ["eins"] = 0, ["zwei"] = 1, ["drei"] = 2, ["vier"] = 3,
-        // fr
-        ["un"] = 0, ["une"] = 0, ["deux"] = 1, ["trois"] = 2, ["quatre"] = 3,
-        // es (uno/dos/tres/cuatro)
-        ["dos"] = 1, ["tres"] = 2, ["cuatro"] = 3,
-        // pt (um/uma, dois/duas, três, quatro)
-        ["um"] = 0, ["uma"] = 0, ["dois"] = 1, ["duas"] = 1, ["três"] = 2, ["quatro"] = 3,
-        // nl (een/twee/drie; "vier" already covered by the German entry, same index)
-        ["een"] = 0, ["twee"] = 1, ["drie"] = 2
-    };
-
-    /// <summary>
-    /// Ordinal word stems per rank (1st..4th) across the supported locales (JF-396).
-    /// Substring match, so gendered variants ("segunda"/"segundo") share a stem where
-    /// possible; "quarto" (it) and "cuarto"/"quarta" (es/pt) are listed separately.
-    /// </summary>
-    private static readonly string[][] OrdinalStemsByRank = new[]
-    {
-        new[] { "first", "primo", "erste", "premier", "primera", "primeira" },
-        new[] { "second", "secondo", "zweite", "deuxième", "segund", "tweede" },
-        new[] { "third", "terzo", "dritte", "troisième", "tercer", "terceir", "derde" },
-        new[] { "fourth", "quarto", "cuarto", "quarta", "vierte", "quatrième", "vierde" }
-    };
-
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
     private readonly IUserDataManager _userDataManager;
@@ -689,160 +654,13 @@ public class FindSongIntentHandler : BaseHandler
                 : null);
 
     /// <summary>
-    /// Negative answer words for the disambiguation picker, across the supported locales
-    /// (JF-395). A negative answer is a clean exit from the candidate list; the user cannot
-    /// otherwise say "none of them" (the picker looped on FindSongInvalidPick forever).
+    /// Shared pick-words machinery lives in DisambiguationHelper (JF-407 item 2);
+    /// these delegators keep the existing FindSong call sites and direct tests stable.
     /// </summary>
-    private static readonly HashSet<string> NegativeAnswerWords = new(StringComparer.OrdinalIgnoreCase)
-    {
-        // en
-        "no", "nope", "none", "neither", "nor",
-        // it
-        "no", "nessuna", "nessuno", "nessun",
-        // de
-        "nein", "kein", "keine",
-        // fr
-        "non", "aucun", "aucune",
-        // es
-        "ninguna", "ninguno", "ningún",
-        // pt
-        "não", "nenhuma", "nenhum",
-        // nl
-        "nee", "geen",
-        // ja / hi / ar
-        "いいえ", "नहीं", "لا"
-    };
+    internal static bool IsNegativeAnswer(string input) => DisambiguationHelper.IsNegativeAnswer(input);
 
-    /// <summary>
-    /// True when the utterance is a negative answer to the candidate picker: either a
-    /// single negative word, or a short phrase (up to 4 tokens) that STARTS with one
-    /// ("none of them", "nessuno di questi"). Longer utterances are treated as attempted
-    /// picks, not exits.
-    /// </summary>
-    /// <param name="input">The trimmed user input from the disambiguation turn.</param>
-    internal static bool IsNegativeAnswer(string input)
-    {
-        if (string.IsNullOrWhiteSpace(input))
-        {
-            return false;
-        }
-
-        string[] tokens = input.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (tokens.Length == 0 || tokens.Length > 4)
-        {
-            return false;
-        }
-
-        return NegativeAnswerWords.Contains(tokens[0].Trim('?', '.', '!', ','));
-    }
-
-    /// <summary>
-    /// Resolve which candidate the user picked by number, ordinal word, or partial title match.
-    /// Returns a 0-based index, or null if no match.
-    /// </summary>
     internal static int? ResolvePick(string input, List<FindSongCandidate> candidates, string locale)
-    {
-        if (string.IsNullOrWhiteSpace(input) || candidates.Count == 0)
-        {
-            return null;
-        }
-        string trimmed = input.Trim();
-        string[] tokens = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-
-        // 1. Direct digits: "1", "2" (1-4, matching the top-4 candidate cap).
-        if (int.TryParse(trimmed, out int num) && num >= 1 && num <= 4)
-        {
-            return num - 1;
-        }
-
-        // 2. SINGLE-token cardinal ("two", "dos", "dois") or ordinal word ("second",
-        // "segunda"): a lone pick word is a rank, never a title.
-        if (tokens.Length == 1)
-        {
-            int? single = TryParseCardinalWord(trimmed) ?? TryParseOrdinalStem(trimmed);
-            if (single.HasValue)
-            {
-                return single;
-            }
-        }
-
-        // 3. Title match BEFORE ordinal phrases: ordinal stems substring-match, so a
-        // multi-token answer that matches a candidate title ("Second Chance") must win
-        // over the rank the stem would otherwise hijack it to (review finding: title
-        // picks containing ordinal words resolved as ranks).
-        int? titlePick = TryMatchByTitle(trimmed, candidates);
-        if (titlePick.HasValue)
-        {
-            return titlePick;
-        }
-
-        // 4. Ordinal phrases LAST: "the second one", "il primo", "le deuxième".
-        return TryParseOrdinalStem(trimmed);
-    }
-
-    /// <summary>
-    /// Match an ordinal phrase ("the second one", "la segunda") to its rank via the
-    /// per-locale stems. Substring-based, so it must run AFTER title matching.
-    /// </summary>
-    private static int? TryParseOrdinalStem(string input)
-    {
-        string lower = input.ToLowerInvariant();
-
-        for (int rank = 0; rank < OrdinalStemsByRank.Length; rank++)
-        {
-            foreach (string stem in OrdinalStemsByRank[rank])
-            {
-                if (lower.Contains(stem, StringComparison.Ordinal))
-                {
-                    return rank;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    private static int? TryParseCardinalWord(string input)
-    {
-        string lower = input.ToLowerInvariant().Trim();
-
-        return CardinalPickWords.TryGetValue(lower, out int index) ? index : null;
-    }
-
-    private static int? TryMatchByTitle(string input, List<FindSongCandidate> candidates)
-    {
-        string lower = input.ToLowerInvariant();
-
-        for (int i = 0; i < candidates.Count; i++)
-        {
-            if (!string.IsNullOrEmpty(candidates[i].Name)
-                && candidates[i].Name!.Contains(lower, StringComparison.OrdinalIgnoreCase))
-            {
-                return i;
-            }
-        }
-
-        // Also try: does the input contain words from the candidate name?
-        var inputWords = lower.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (inputWords.Length > 0)
-        {
-            for (int i = 0; i < candidates.Count; i++)
-            {
-                if (string.IsNullOrEmpty(candidates[i].Name))
-                {
-                    continue;
-                }
-
-                string candidateLower = candidates[i].Name!.ToLowerInvariant();
-                if (inputWords.Any(w => w.Length >= 3 && candidateLower.Contains(w, StringComparison.OrdinalIgnoreCase)))
-                {
-                    return i;
-                }
-            }
-        }
-
-        return null;
-    }
+        => DisambiguationHelper.ResolvePick(input, candidates, locale);
 
     /// <summary>
     /// Extract a slot value from the intent request, or null if the slot is missing/empty.
