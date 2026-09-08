@@ -11,6 +11,7 @@ graph TD
     Idle -->|"play {book}"| PlayBook["PlayBookIntent"]
     Idle -->|"ポッドキャスト {podcast_name} を再生して"| PlayPodcast["PlayPodcastIntent"]
     Idle -->|"ビデオ {title} を再生して"| PlayVideo["PlayVideoIntent"]
+    Idle -->|"{series_name} の次のエピソードを再生して"| PlayNextEpisode["PlayNextEpisodeIntent"]
     Idle -->|"ランダムに何か再生して"| PlayRandom["PlayRandomIntent"]
 
     PlayArtist --> Playing
@@ -20,6 +21,7 @@ graph TD
     PlayBook --> Playing
     PlayPodcast --> Playing
     PlayVideo --> Playing
+    PlayNextEpisode --> Playing
     PlayRandom --> Playing
 
     Playing["再生中"] -->|"一時停止"| Paused["一時停止"]

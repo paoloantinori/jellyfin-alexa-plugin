@@ -77,7 +77,6 @@
   "InProgressList": "Je hebt {0} items in behandeling: {1}",
   "InProgressItemWithPosition": "{0} op {1}",
   "DidNotCatchSeriesName": "Ik heb de serienaam niet goed verstaan. Welke serie wil je kijken?",
-  "DidNotCatchEpisodeNumber": "Ik heb het seizoen- of afleveringsnummer niet goed verstaan. Zeg het seizoen en de aflevering.",
   "NotFoundSeries": "Ik kon geen serie vinden genaamd {0}.",
   "NotFoundEpisode": "Ik kon seizoen {0} aflevering {1} van {2} niet vinden.",
   "PlayingNextEpisode": "De volgende aflevering afspelen: {0}",

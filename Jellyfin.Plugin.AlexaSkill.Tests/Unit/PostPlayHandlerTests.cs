@@ -14,6 +14,7 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Entities;
+using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
@@ -213,6 +214,262 @@ public class PlaybackNearlyFinishedPostPlayTests : PluginTestBase, IDisposable
         // Radio mode handles its own continuation, not PostPlay
         Assert.Empty(response.Response.Directives ?? Array.Empty<IDirective>());
     }
+
+    // =====================================================================
+    // JF-324 episode auto-advance (AudioPlayer-routed TV content)
+    // =====================================================================
+
+    [Fact]
+    public async Task EpisodeFinishing_AutoPlayMode_EnqueuesNextEpisode()
+    {
+        var seriesId = Guid.NewGuid();
+        var currentId = Guid.NewGuid();
+        var nextId = Guid.NewGuid();
+        var (currentEpisode, request, context, user, session) = SetupFinishingEpisode(currentId, seriesId, "S03E05");
+
+        var nextEpisode = CreateEpisodeItem(nextId, seriesId, "S03E06");
+        _libraryManagerMock.Setup(lm => lm.GetItemById(nextId)).Returns(nextEpisode);
+
+        // Real direct-query shape: the finishing episode is STILL unplayed (its stop
+        // is not reported yet), so it is the query's first answer; the branch must
+        // skip it and enqueue the true next.
+        SetupUnplayedEpisodes(currentEpisode, nextEpisode);
+
+        SkillResponse response = await _handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        var playDirective = response.Response.Directives?.OfType<AudioPlayerPlayDirective>().FirstOrDefault();
+        Assert.NotNull(playDirective);
+        Assert.Equal(PlayBehavior.Enqueue, playDirective.PlayBehavior);
+        Assert.Equal(nextId.ToString(), playDirective.AudioItem.Stream.Token);
+        Assert.Equal(currentId.ToString(), playDirective.AudioItem.Stream.ExpectedPreviousToken);
+        Assert.Contains("stream", playDirective.AudioItem.Stream.Url, StringComparison.OrdinalIgnoreCase);
+
+        // Gapless: no announcement, and the next episode joined the session queue so
+        // the following advance resolves from it.
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.Equal(2, session.NowPlayingQueue.Count);
+        Assert.Equal(nextId, session.NowPlayingQueue[1].Id);
+
+        // JF-299 event-response shape: AudioPlayer.Play only, session-ending.
+        Assert.True(response.Response.ShouldEndSession);
+        Assert.All(response.Response.Directives!, d => Assert.IsType<AudioPlayerPlayDirective>(d));
+    }
+
+    [Fact]
+    public async Task EpisodeFinishing_AlreadyQueuedEpisodesSkipped()
+    {
+        // JF-409 self-reenqueue guard: the query may return episodes that are already
+        // in the queue (their stops were never reported to Jellyfin); the branch must
+        // pick the first candidate that is neither queued nor the finishing item.
+        var seriesId = Guid.NewGuid();
+        var earlierId = Guid.NewGuid();
+        var currentId = Guid.NewGuid();
+        var nextId = Guid.NewGuid();
+        var (currentEpisode, request, context, user, session) = SetupFinishingEpisode(currentId, seriesId, "S03E05");
+
+        var earlierEpisode = CreateEpisodeItem(earlierId, seriesId, "S03E04");
+        var nextEpisode = CreateEpisodeItem(nextId, seriesId, "S03E06");
+        session.NowPlayingQueue = new List<QueueItem>
+        {
+            new() { Id = earlierId },
+            new() { Id = currentId }
+        };
+
+        _libraryManagerMock.Setup(lm => lm.GetItemById(nextId)).Returns(nextEpisode);
+
+        SetupUnplayedEpisodes(earlierEpisode, currentEpisode, nextEpisode);
+
+        SkillResponse response = await _handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        var playDirective = response.Response.Directives?.OfType<AudioPlayerPlayDirective>().FirstOrDefault();
+        Assert.NotNull(playDirective);
+        Assert.Equal(nextId.ToString(), playDirective.AudioItem.Stream.Token);
+    }
+
+    [Fact]
+    public async Task EpisodeFinishing_NoNextEpisode_PreservesEndOfQueue()
+    {
+        var seriesId = Guid.NewGuid();
+        var currentId = Guid.NewGuid();
+        var (_, request, context, user, session) = SetupFinishingEpisode(currentId, seriesId, "Series finale");
+
+        // True end of series: the unplayed-episodes query answers NOTHING for this
+        // user. (A finale whose stop has not been reported yet answers [finale];
+        // the skip-set resolves that shape to the same no-op.)
+        SetupUnplayedEpisodes();
+
+        SkillResponse response = await _handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.Empty(response.Response.Directives ?? Array.Empty<IDirective>());
+        Assert.Single(session.NowPlayingQueue);
+        Assert.Equal(currentId, session.NowPlayingQueue[0].Id);
+    }
+
+    [Fact]
+    public async Task MovieFinishing_AutoPlayMode_NoEpisodeAdvance()
+    {
+        // A movie has no natural next: the branch must not run for non-Episode items.
+        _config.DefaultPostPlayBehavior = PostPlayBehavior.AutoPlay;
+        var movieId = Guid.NewGuid();
+        var (request, context, user, session) = CreatePlaybackNearlyFinishedContext(movieId.ToString());
+
+        var movie = new MediaBrowser.Controller.Entities.Movies.Movie { Id = movieId, Name = "Test Movie" };
+        session.NowPlayingQueue = new List<QueueItem> { new() { Id = movieId } };
+        session.FullNowPlayingItem = movie;
+        _libraryManagerMock.Setup(lm => lm.GetItemById(movieId)).Returns(movie);
+
+        SkillResponse response = await _handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.Empty(response.Response.Directives ?? Array.Empty<IDirective>());
+        VerifyNoEpisodeQuery();
+    }
+
+    [Fact]
+    public async Task EpisodeFinishing_StopMode_NoEpisodeAdvance()
+    {
+        var seriesId = Guid.NewGuid();
+        var currentId = Guid.NewGuid();
+        var (_, request, context, user, session) = SetupFinishingEpisode(currentId, seriesId, "S03E05");
+        _config.DefaultPostPlayBehavior = PostPlayBehavior.Stop;
+
+        SkillResponse response = await _handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.Empty(response.Response.Directives ?? Array.Empty<IDirective>());
+        VerifyNoEpisodeQuery();
+    }
+
+    [Fact]
+    public async Task EpisodeFinishing_VideosDisabled_SkipsAdvance()
+    {
+        var seriesId = Guid.NewGuid();
+        var currentId = Guid.NewGuid();
+        var (_, request, context, user, session) = SetupFinishingEpisode(currentId, seriesId, "S03E05");
+
+        TestHelpers.EnsurePluginInstance(
+            _config, _loggerFactory, c => c.VideosEnabled = false, "pnf-postplay-test");
+        try
+        {
+            SkillResponse response = await _handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            Assert.Empty(response.Response.Directives ?? Array.Empty<IDirective>());
+            VerifyNoEpisodeQuery();
+            _libraryManagerMock.Verify(l => l.GetItemList(It.IsAny<InternalItemsQuery>()), Times.Never);
+        }
+        finally
+        {
+            TestHelpers.EnsurePluginInstance(
+                _config, _loggerFactory, c => c.VideosEnabled = true, "pnf-postplay-test");
+        }
+    }
+
+    [Fact]
+    public async Task EpisodeFinishing_SeriesOutsideAllowedLibraries_SkipsAdvance()
+    {
+        // Per-user library authorization: the series must survive the same
+        // library-filtered series query the intent path resolves names through.
+        var seriesId = Guid.NewGuid();
+        var currentId = Guid.NewGuid();
+        var (_, request, context, user, session) = SetupFinishingEpisode(currentId, seriesId, "S03E05");
+
+        // Authorization query finds nothing: the series lives outside the user's
+        // allowed libraries.
+        _libraryManagerMock.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>().AsReadOnly());
+
+        SkillResponse response = await _handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.Empty(response.Response.Directives ?? Array.Empty<IDirective>());
+        VerifyNoEpisodeQuery();
+        Assert.Single(session.NowPlayingQueue);
+    }
+
+    [Fact]
+    public async Task QueueExhausted_AutoPlayMode_SleepToken_EnqueuesSimilarTracks()
+    {
+        // JF-447 regression: the raw event token may carry a sleep suffix; the music
+        // PostPopulate path must parse it via the shared codec instead of Guid.Parse,
+        // which threw on the composite form at queue exhaustion.
+        _config.DefaultPostPlayBehavior = PostPlayBehavior.AutoPlay;
+        var itemId = Guid.NewGuid();
+        var radioTrackId = Guid.NewGuid();
+        string sleepToken = StreamTokenCodec.MintSleepTimerToken(itemId, DateTimeOffset.UtcNow.AddHours(1).UtcTicks);
+        var (request, context, user, session) = CreatePlaybackNearlyFinishedContext(sleepToken);
+
+        session.NowPlayingQueue = new List<QueueItem> { new() { Id = itemId } };
+        session.FullNowPlayingItem = CreateAudioItem(itemId, new[] { "Rock" });
+        _libraryManagerMock.Setup(lm => lm.GetItemById(itemId)).Returns(CreateAudioItem(itemId, new[] { "Rock" }));
+        _userManagerMock.Setup(um => um.GetUserById(_userId))
+            .Returns(new JellyfinUser("test", "test", "test") { Id = _userId });
+
+        var radioTrack = CreateAudioItem(radioTrackId);
+        _libraryManagerMock.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { radioTrack }.AsReadOnly());
+        _libraryManagerMock.Setup(lm => lm.GetItemById(radioTrackId)).Returns(radioTrack);
+
+        SkillResponse response = await _handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        var playDirective = response.Response.Directives?.OfType<AudioPlayerPlayDirective>().FirstOrDefault();
+        Assert.NotNull(playDirective);
+        Assert.Equal(PlayBehavior.Enqueue, playDirective.PlayBehavior);
+        Assert.Equal(radioTrackId.ToString(), playDirective.AudioItem.Stream.Token);
+    }
+
+    private static global::MediaBrowser.Controller.Entities.TV.Episode CreateEpisodeItem(Guid id, Guid seriesId, string name)
+    {
+        return new global::MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Id = id,
+            Name = name,
+            SeriesId = seriesId,
+            SeriesName = "Test Show"
+        };
+    }
+
+    /// <summary>
+    /// Common arrange for the episode auto-advance tests: AutoPlay config, a
+    /// nearly-finished context for the episode, a single-item now-playing queue with
+    /// the episode as the now-playing item, and the GetItemById/GetUserById/
+    /// series-authorization setups. A test overrides on top of this whatever differs
+    /// (queue contents, unplayed-episode answers, authorization result, PostPlay mode).
+    /// </summary>
+    private (global::MediaBrowser.Controller.Entities.TV.Episode episode, Request request, Context context, Entities.User user, SessionInfo session)
+        SetupFinishingEpisode(Guid currentId, Guid seriesId, string name)
+    {
+        _config.DefaultPostPlayBehavior = PostPlayBehavior.AutoPlay;
+        var (request, context, user, session) = CreatePlaybackNearlyFinishedContext(currentId.ToString());
+
+        var currentEpisode = CreateEpisodeItem(currentId, seriesId, name);
+        session.NowPlayingQueue = new List<QueueItem> { new() { Id = currentId } };
+        session.FullNowPlayingItem = currentEpisode;
+
+        _libraryManagerMock.Setup(lm => lm.GetItemById(currentId)).Returns(currentEpisode);
+        _userManagerMock.Setup(um => um.GetUserById(_userId))
+            .Returns(new JellyfinUser("test", "test", "test") { Id = _userId });
+
+        // Series authorization query returns the series (user may access it).
+        _libraryManagerMock.Setup(lm => lm.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes.Contains(BaseItemKind.Series))))
+            .Returns(new List<BaseItem> { new global::MediaBrowser.Controller.Entities.TV.Series { Id = seriesId, Name = "Test Show" } }.AsReadOnly());
+
+        return (currentEpisode, request, context, user, session);
+    }
+
+    /// <summary>
+    /// Answers the episode auto-advance's direct unplayed-episodes query (the real
+    /// C1 contract: GetItemList with the series-scoped Episode filter, NOT NextUp,
+    /// which returns at most one item when scoped by SeriesId) with the given
+    /// candidates in order. No arguments means the query answers empty (end of
+    /// series).
+    /// </summary>
+    private void SetupUnplayedEpisodes(params BaseItem[] episodes)
+        => _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes.Contains(BaseItemKind.Episode) && q.IsPlayed == false && q.AncestorIds.Length == 1 && q.ParentIndexNumberNotEquals == 0)))
+            .Returns(episodes.ToList().AsReadOnly());
+
+    private void VerifyNoEpisodeQuery()
+        => _libraryManagerMock.Verify(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes.Contains(BaseItemKind.Episode) && q.IsPlayed == false && q.AncestorIds.Length == 1 && q.ParentIndexNumberNotEquals == 0)), Times.Never);
 
     private (Request request, Context context, Entities.User user, SessionInfo session)
         CreatePlaybackNearlyFinishedContext(string tokenId)

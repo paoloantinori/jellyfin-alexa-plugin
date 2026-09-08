@@ -12856,6 +12856,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayNextEpisode",
+            "label": "PlayNextEpisodeIntent"
+          },
+          {
             "id": "PlayRandom",
             "label": "PlayRandomIntent"
           },
@@ -12989,6 +12993,12 @@
           },
           {
             "source": "Idle",
+            "target": "PlayNextEpisode",
+            "label": "شغل الحلقة التالية من {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
             "target": "PlayRandom",
             "label": "شغل شيء عشوائي",
             "style": "solid"
@@ -13031,6 +13041,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayNextEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -13209,6 +13225,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayNextEpisode",
+            "label": "PlayNextEpisodeIntent"
+          },
+          {
             "id": "PlayRandom",
             "label": "PlayRandomIntent"
           },
@@ -13338,6 +13358,12 @@
           },
           {
             "source": "Idle",
+            "target": "PlayNextEpisode",
+            "label": "spiele die nächste folge von {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
             "target": "PlayVideo",
             "label": "Ich möchte {title} sehen",
             "style": "solid"
@@ -13386,6 +13412,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayNextEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -13558,6 +13590,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayNextEpisode",
+            "label": "PlayNextEpisodeIntent"
+          },
+          {
             "id": "PlayRandom",
             "label": "PlayRandomIntent"
           },
@@ -13691,6 +13727,12 @@
           },
           {
             "source": "Idle",
+            "target": "PlayNextEpisode",
+            "label": "play the next episode of {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
             "target": "PlayVideo",
             "label": "watch {title}",
             "style": "solid"
@@ -13745,6 +13787,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayNextEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -13923,6 +13971,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayNextEpisode",
+            "label": "PlayNextEpisodeIntent"
+          },
+          {
             "id": "PlayRandom",
             "label": "PlayRandomIntent"
           },
@@ -14056,6 +14108,12 @@
           },
           {
             "source": "Idle",
+            "target": "PlayNextEpisode",
+            "label": "play the next episode of {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
             "target": "PlayVideo",
             "label": "watch {title}",
             "style": "solid"
@@ -14110,6 +14168,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayNextEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -14288,6 +14352,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayNextEpisode",
+            "label": "PlayNextEpisodeIntent"
+          },
+          {
             "id": "PlayRandom",
             "label": "PlayRandomIntent"
           },
@@ -14421,6 +14489,12 @@
           },
           {
             "source": "Idle",
+            "target": "PlayNextEpisode",
+            "label": "play the next episode of {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
             "target": "PlayRandom",
             "label": "play a random {media_type}",
             "style": "solid"
@@ -14463,6 +14537,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayNextEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -14641,6 +14721,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayNextEpisode",
+            "label": "PlayNextEpisodeIntent"
+          },
+          {
             "id": "PlayRandom",
             "label": "PlayRandomIntent"
           },
@@ -14774,6 +14858,12 @@
           },
           {
             "source": "Idle",
+            "target": "PlayNextEpisode",
+            "label": "play the next episode of {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
             "target": "PlayVideo",
             "label": "watch {title}",
             "style": "solid"
@@ -14828,6 +14918,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayNextEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -15006,6 +15102,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayNextEpisode",
+            "label": "PlayNextEpisodeIntent"
+          },
+          {
             "id": "PlayRandom",
             "label": "PlayRandomIntent"
           },
@@ -15139,6 +15239,12 @@
           },
           {
             "source": "Idle",
+            "target": "PlayNextEpisode",
+            "label": "play the next episode of {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
             "target": "PlayRandom",
             "label": "play a random {media_type}",
             "style": "solid"
@@ -15181,6 +15287,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayNextEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -15359,6 +15471,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayNextEpisode",
+            "label": "PlayNextEpisodeIntent"
+          },
+          {
             "id": "PlayRandom",
             "label": "PlayRandomIntent"
           },
@@ -15492,6 +15608,12 @@
           },
           {
             "source": "Idle",
+            "target": "PlayNextEpisode",
+            "label": "reproduce el próximo episodio de {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
             "target": "PlayRandom",
             "label": "Reproduce algo aleatorio",
             "style": "solid"
@@ -15534,6 +15656,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayNextEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -15712,6 +15840,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayNextEpisode",
+            "label": "PlayNextEpisodeIntent"
+          },
+          {
             "id": "PlayRandom",
             "label": "PlayRandomIntent"
           },
@@ -15845,6 +15977,12 @@
           },
           {
             "source": "Idle",
+            "target": "PlayNextEpisode",
+            "label": "reproduce el próximo episodio de {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
             "target": "PlayRandom",
             "label": "Reproduce algo aleatorio",
             "style": "solid"
@@ -15887,6 +16025,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayNextEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -16065,6 +16209,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayNextEpisode",
+            "label": "PlayNextEpisodeIntent"
+          },
+          {
             "id": "PlayRandom",
             "label": "PlayRandomIntent"
           },
@@ -16198,6 +16346,12 @@
           },
           {
             "source": "Idle",
+            "target": "PlayNextEpisode",
+            "label": "reproduce el próximo episodio de {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
             "target": "PlayRandom",
             "label": "Reproduce algo aleatorio",
             "style": "solid"
@@ -16240,6 +16394,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayNextEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -16418,6 +16578,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayNextEpisode",
+            "label": "PlayNextEpisodeIntent"
+          },
+          {
             "id": "PlayRandom",
             "label": "PlayRandomIntent"
           },
@@ -16551,6 +16715,12 @@
           },
           {
             "source": "Idle",
+            "target": "PlayNextEpisode",
+            "label": "joue le prochain épisode de {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
             "target": "PlayVideo",
             "label": "Je veux regarder {title}",
             "style": "solid"
@@ -16599,6 +16769,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayNextEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -16777,6 +16953,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayNextEpisode",
+            "label": "PlayNextEpisodeIntent"
+          },
+          {
             "id": "PlayRandom",
             "label": "PlayRandomIntent"
           },
@@ -16910,6 +17090,12 @@
           },
           {
             "source": "Idle",
+            "target": "PlayNextEpisode",
+            "label": "joue le prochain épisode de {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
             "target": "PlayVideo",
             "label": "Je veux regarder {title}",
             "style": "solid"
@@ -16958,6 +17144,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayNextEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -17136,6 +17328,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayNextEpisode",
+            "label": "PlayNextEpisodeIntent"
+          },
+          {
             "id": "PlayRandom",
             "label": "PlayRandomIntent"
           },
@@ -17269,6 +17465,12 @@
           },
           {
             "source": "Idle",
+            "target": "PlayNextEpisode",
+            "label": "{series_name} का अगला एपिसोड चलाओ",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
             "target": "PlayRandom",
             "label": "कुछ रैंडम चलाओ",
             "style": "solid"
@@ -17311,6 +17513,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayNextEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -17489,6 +17697,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayNextEpisode",
+            "label": "PlayNextEpisodeIntent"
+          },
+          {
             "id": "PlayRandom",
             "label": "PlayRandomIntent"
           },
@@ -17618,6 +17830,12 @@
           },
           {
             "source": "Idle",
+            "target": "PlayNextEpisode",
+            "label": "Riproduci il prossimo episodio di {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
             "target": "PlayVideo",
             "label": "voglio guardare {title}",
             "style": "solid"
@@ -17666,6 +17884,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayNextEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -17838,6 +18062,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayNextEpisode",
+            "label": "PlayNextEpisodeIntent"
+          },
+          {
             "id": "PlayRandom",
             "label": "PlayRandomIntent"
           },
@@ -17971,6 +18199,12 @@
           },
           {
             "source": "Idle",
+            "target": "PlayNextEpisode",
+            "label": "{series_name} の次のエピソードを再生して",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
             "target": "PlayRandom",
             "label": "ランダムに何か再生して",
             "style": "solid"
@@ -18013,6 +18247,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayNextEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -18191,6 +18431,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayNextEpisode",
+            "label": "PlayNextEpisodeIntent"
+          },
+          {
             "id": "PlayRandom",
             "label": "PlayRandomIntent"
           },
@@ -18324,6 +18568,12 @@
           },
           {
             "source": "Idle",
+            "target": "PlayNextEpisode",
+            "label": "speel de volgende aflevering van {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
             "target": "PlayRandom",
             "label": "speel iets willekeurigs",
             "style": "solid"
@@ -18366,6 +18616,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayNextEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -18544,6 +18800,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayNextEpisode",
+            "label": "PlayNextEpisodeIntent"
+          },
+          {
             "id": "PlayRandom",
             "label": "PlayRandomIntent"
           },
@@ -18677,6 +18937,12 @@
           },
           {
             "source": "Idle",
+            "target": "PlayNextEpisode",
+            "label": "tocar o próximo episódio de {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
             "target": "PlayRandom",
             "label": "tocar algo aleatório",
             "style": "solid"
@@ -18719,6 +18985,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayNextEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"

@@ -77,7 +77,6 @@
   "InProgressList": "You have {0} items in progress: {1}",
   "InProgressItemWithPosition": "{0} at {1}",
   "DidNotCatchSeriesName": "I didn't catch the series name. Which series would you like to watch?",
-  "DidNotCatchEpisodeNumber": "I didn't catch the season or episode number. Please say the season and episode.",
   "NotFoundSeries": "I couldn't find a series called {0}.",
   "NotFoundEpisode": "I couldn't find season {0} episode {1} of {2}.",
   "PlayingNextEpisode": "Playing the next episode: {0}",

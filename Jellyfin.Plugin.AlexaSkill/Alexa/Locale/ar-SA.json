@@ -77,7 +77,6 @@
   "InProgressList": "لديك {0} عناصر قيد التقدم: {1}",
   "InProgressItemWithPosition": "{0} عند {1}",
   "DidNotCatchSeriesName": "لم أسمع اسم المسلسل بوضوح. أي مسلسل تريد مشاهدته؟",
-  "DidNotCatchEpisodeNumber": "لم أسمع رقم الموسم أو الحلقة بوضوح. يرجى ذكر الموسم والحلقة.",
   "NotFoundSeries": "لم أجد مسلسلاً باسم {0}.",
   "NotFoundEpisode": "لم أجد الموسم {0} الحلقة {1} من {2}.",
   "PlayingNextEpisode": "أشغل الحلقة التالية: {0}",
