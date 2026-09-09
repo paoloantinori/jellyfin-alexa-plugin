@@ -1,4 +1,6 @@
 {
+  "AccountRelinkRequired": "La connexion à votre serveur Jellyfin ne fonctionne plus. Cela peut arriver après une mise à jour du serveur. Ouvrez les paramètres de la skill Alexa dans le tableau de bord Jellyfin et reliez votre compte.",
+  "AccountRelinkCardTitle": "Relier votre compte",
   "UserNotFound": "Utilisateur introuvable. Veuillez lier à nouveau votre compte.",
   "MediaNotFound": "Désolé, je n'ai pas trouvé le média.",
   "AddedToFavorites": "Média ajouté aux favoris.",

@@ -1,4 +1,6 @@
 {
+  "AccountRelinkRequired": "Jellyfinサーバーとの接続が切断されました。これはサーバーの更新後に発生することがあります。JellyfinのダッシュボードでAlexaスキルの設定ページを開き、アカウントを再リンクしてください。",
+  "AccountRelinkCardTitle": "アカウントを再リンク",
   "UserNotFound": "ユーザーが見つかりません。アカウントを再リンクしてください。",
   "MediaNotFound": "申し訳ありませんが、メディアが見つかりませんでした。",
   "AddedToFavorites": "メディアをお気に入りに追加しました。",

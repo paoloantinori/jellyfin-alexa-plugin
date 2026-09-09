@@ -471,7 +471,7 @@ public abstract class BaseHandler
         if (session == null)
         {
             Logger.LogError("Session not found for user {UserId}", user.Id);
-            return BuildUserNotFoundResponse(request);
+            return BuildSessionMissResponse(request, user, deviceId);
         }
 
         try
@@ -996,6 +996,62 @@ public abstract class BaseHandler
         => IsEventRequest(request)
             ? BuildKeepAliveResponse()
             : ResponseBuilder.Tell(ResponseStrings.Get("UserNotFound", GetLocale(request)));
+
+    /// <summary>
+    /// JF-527: the session-miss degradation, discriminated by evidence of a dead token.
+    /// A Jellyfin server update (e.g. the 12.0 auto-update) invalidates per-user
+    /// JellyfinTokens; those users previously heard the generic UserNotFound tell, which
+    /// names no cause and no remedy. When the user HAS a token AND the device has a
+    /// recorded previous play (DeviceQueueManager's persisted last-played item), the miss
+    /// is a token that used to work: speak the actionable AccountRelinkRequired tell with
+    /// a card pointing at the plugin settings page. Empty token or no play history keeps
+    /// the existing UserNotFound tell. Event requests keep the keep-alive shape (JF-507)
+    /// in every branch.
+    /// </summary>
+    /// <param name="request">The incoming skill request.</param>
+    /// <param name="user">The resolved plugin user (user resolution succeeded; the session lookup missed).</param>
+    /// <param name="deviceId">The Alexa device ID the request came from.</param>
+    /// <returns>The degradation response.</returns>
+    private SkillResponse BuildSessionMissResponse(Request request, Entities.User user, string deviceId)
+    {
+        if (IsEventRequest(request))
+        {
+            return BuildKeepAliveResponse();
+        }
+
+        bool hadPreviousPlay = Plugin.Instance?.DeviceQueueManager?.GetLastPlayedItemId(deviceId) != null;
+        if (!string.IsNullOrEmpty(user.JellyfinToken) && hadPreviousPlay)
+        {
+            Logger.LogInformation(
+                "AccountRelink: dead Jellyfin token for user {UserId} on device {DeviceId} (token fingerprint {TokenFingerprint}, previous play on record: {HadPreviousPlay})",
+                user.Id,
+                deviceId,
+                TokenFingerprint(user.JellyfinToken!),
+                hadPreviousPlay);
+
+            string locale = GetLocale(request);
+            string message = ResponseStrings.Get("AccountRelinkRequired", locale);
+            SkillResponse response = ResponseBuilder.Tell(message);
+            response.Response.Card = new StandardCard
+            {
+                Title = ResponseStrings.Get("AccountRelinkCardTitle", locale),
+                Content = message
+            };
+            return response;
+        }
+
+        return ResponseBuilder.Tell(ResponseStrings.Get("UserNotFound", GetLocale(request)));
+    }
+
+    /// <summary>
+    /// Non-reversible log fingerprint of a secret token: 12 hex chars of the SHA-256
+    /// digest. Unlike a first-chars slice this leaks nothing about the token's content
+    /// while still letting triage correlate repeated misses across requests (JF-527).
+    /// </summary>
+    /// <param name="token">The secret token.</param>
+    /// <returns>The hex fingerprint.</returns>
+    private static string TokenFingerprint(string token)
+        => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token)))[..12];
 
     /// <summary>
     /// Build a response that ends the skill session, causing APL documents to dismiss.
