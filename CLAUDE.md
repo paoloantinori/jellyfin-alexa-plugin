@@ -1,9 +1,16 @@
 # Jellyfin Alexa Skill Plugin
 
-C# Jellyfin plugin (net9.0) exposing an Alexa skill for media playback, search, and library management. Targets Jellyfin 10.11+.
+C# Jellyfin plugin exposing an Alexa skill for media playback, search, and library management. Dual-target: net9.0 (Jellyfin 10.11.x, the shipping line) + net10.0 (Jellyfin 12.0, pre-release line).
 
 ## Build & Test
 
+**Dual-target build (JF-307 Phase-2, landed 2026-09-09):** both csprojs are `net9.0;net10.0` with Condition'd Jellyfin refs (10.11.8 for net9.0, 12.0.0-rc7 for net10.0). The SYSTEM SDK 9 cannot restore the multi-target project (NETSDK1045): full builds need SDK 10 (`~/.dotnet-jf307`, 10.0.400, or CI's 10.0.x). The system-SDK net9.0 recipe: `dotnet restore <proj> -p:TargetFramework=net9.0` then `dotnet build <proj> -f net9.0 --no-restore`. XML comments in csproj files must NOT contain `--` (MSB4025). NoWarn: CS1591;CS1573;CA1873 (519-site log-argument churn contradicts the debug-logging policy); NU1904 (Refit 4.7.51 GHSA advisory, pinned by Alexa.NET.Management - the library update is the tracked fix, NOT bumped: SMAPI runtime risk). CA2025 is NOT suppressed: fixed properly (JF-307 Phase-2).
+
+**Jellyfin 12.0 auth change (live-verified 2026-09-09 on the production 12.0.0 box):** the `X-Emby-Token` header and lowercase `api_key` query are REJECTED (401) on the general API surface; working shapes are `?ApiKey=<key>` (capital) and `Authorization: MediaBrowser Token="<key>"`. The e2e/simulator tooling needed this switch. CAVEAT: the stream endpoint (`/Videos/{id}/stream`) does not authenticate the param at all, any garbage key streams (200): a 12.0 server-side regression, report upstream; plugin stream URLs keep working regardless.
+
+**/tmp per-user quota failure mode:** silent shell deaths (every command exit-1, no output) + a previously-green suite going mass-red = the per-user /tmp tmpfs quota (12.7G) is full. Check `quota -s` and `df -h /tmp` FIRST. Cause class: dispatched workers each exporting their own NuGet cache copy (~414-535M each). Dedupe down to the canonical `/tmp/nuget-pkgs`; never let a worker invent its own cache path. `/tmp` also holds other projects' artifacts (ML models, wt-* worktrees) - look before deleting.
+
+**Coverage caveat:**
 **Coverage caveat:** unit tests (below) and E2E tests (`run_e2e_tests.sh`) assert response *correctness*, not response *latency*. They will NOT catch a play-path regression that exceeds Alexa's ~8s response window (→ `INVALID_RESPONSE` on-device). The only guard for that is `RetryHelperTests.Sync_AlwaysTransient_StopsWithinTimeoutBudget` — it locks the invariant that `RetryAsync` stops retrying once its timeout budget (`AlexaRequestTimeoutMs`=6000) is exhausted, which is the mechanism that keeps throwing/slow play-path queries from blowing the Alexa budget (JF-358/JF-359). A live-timing E2E assertion is intentionally not used — it's flaky and environment-dependent.
 
 ```bash
