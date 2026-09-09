@@ -134,7 +134,7 @@ public class PlayVideoIntentHandler : BaseHandler
                 // Architect' existed and fuzzy-on-'ada' is the high-confidence hit).
                 string fuzzyQuery = strippedTitle ?? titleQuery;
                 Logger.LogDebug("PlayVideo: fuzzy fallback on '{FuzzyQuery}' (JF-509)", fuzzyQuery);
-                var fuzzy = await SearchItemsFuzzyAsync(fuzzyQuery, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.Movie, BaseItemKind.Episode }, cancellationToken, "PlayVideoFuzzyFallback").ConfigureAwait(false);
+                var fuzzy = await SearchItemsFuzzyAsync(fuzzyQuery, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.Movie, BaseItemKind.Episode }, cancellationToken, "PlayVideoFuzzyFallback", locale: locale).ConfigureAwait(false);
                 if (fuzzy != null)
                 {
                     videos = new List<BaseItem> { fuzzy.Value.Item };

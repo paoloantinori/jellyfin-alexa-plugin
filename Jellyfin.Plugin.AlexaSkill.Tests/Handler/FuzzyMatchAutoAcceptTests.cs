@@ -7,10 +7,14 @@ using global::Alexa.NET;
 using global::Alexa.NET.Request;
 using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
+using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Audio;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -626,6 +630,129 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
         Assert.True(autoPlayCalled, "AutoPlay-behavior opt-in keeps auto-playing partial-coverage short queries");
     }
 
+    // --- JF-526: sibling auto-play sites + diacritic-insensitive membership ---
+
+    /// <summary>
+    /// JF-526: the zero-result fuzzy fallback (SearchItemsFuzzyAsync) feeds callers
+    /// that auto-play the returned item; the JF-508 gate now applies to the match
+    /// return too, so the "soul coffee" misfire returns null (the site's existing
+    /// below-threshold outcome) instead of a partial-coverage pick.
+    /// </summary>
+    [Fact]
+    public async Task SearchItemsFuzzyAsync_TwoWordPartialCoverage_ReturnsNullInsteadOfMatch()
+    {
+        var libraryManager = new Mock<ILibraryManager>();
+        libraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>
+            {
+                new Audio { Name = "Starfish & Coffee", Id = Guid.NewGuid() },
+                new Audio { Name = "Coffee & TV", Id = Guid.NewGuid() },
+            });
+
+        // Mechanism precondition (mirrors the JF-508 test): the matcher would return
+        // "Starfish & Coffee" above the default threshold without the gate.
+        var items = new List<BaseItem>
+        {
+            new Audio { Name = "Starfish & Coffee", Id = Guid.NewGuid() },
+            new Audio { Name = "Coffee & TV", Id = Guid.NewGuid() },
+        };
+        var best = FuzzyMatcher.FindBestMatchWithScore("soul coffee", items, i => i.Name!);
+        Assert.NotNull(best);
+        Assert.InRange(best!.Value.Score, FuzzyMatcher.DefaultThreshold, FuzzyMatcher.ContainmentScore - 1);
+
+        var harness = CreateHarness(new PluginConfiguration());
+        var match = await harness.CallSearchItemsFuzzyAsync(
+            "soul coffee", null, new Entities.User(), libraryManager.Object,
+            new[] { BaseItemKind.Audio }, "en-US", CancellationToken.None);
+
+        Assert.Null(match);
+    }
+
+    /// <summary>
+    /// JF-526 review F1: AutoPlay users are exempt from the coverage gate at the
+    /// SearchItemsFuzzyAsync site too (policy parity with HandleFuzzyMiss's AutoPlay
+    /// disjunct): the partial-coverage match is returned with the announcement path,
+    /// not degraded to not-found.
+    /// </summary>
+    [Fact]
+    public async Task SearchItemsFuzzyAsync_PartialCoverage_AutoPlayBehaviorOptIn_StillMatches()
+    {
+        var libraryManager = new Mock<ILibraryManager>();
+        libraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { new Audio { Name = "Starfish & Coffee", Id = Guid.NewGuid() } });
+
+        var autoPlayUser = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.AutoPlay };
+        var harness = CreateHarness(new PluginConfiguration());
+        var match = await harness.CallSearchItemsFuzzyAsync(
+            "soul coffee", null, autoPlayUser, libraryManager.Object,
+            new[] { BaseItemKind.Audio }, "en-US", CancellationToken.None);
+
+        Assert.NotNull(match);
+        Assert.Equal("Starfish & Coffee", match!.Value.Item.Name);
+    }
+
+    /// <summary>
+    /// JF-526 counter-case: a fully-covered 2-word query still matches through the
+    /// fallback; the gate withholds only unaccounted words.
+    /// </summary>
+    [Fact]
+    public async Task SearchItemsFuzzyAsync_FullCoverage_StillMatches()
+    {
+        var libraryManager = new Mock<ILibraryManager>();
+        libraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { new Audio { Name = "Coffee & TV", Id = Guid.NewGuid() } });
+
+        var harness = CreateHarness(new PluginConfiguration());
+        var match = await harness.CallSearchItemsFuzzyAsync(
+            "coffee tv", null, new Entities.User(), libraryManager.Object,
+            new[] { BaseItemKind.Audio }, "en-US", CancellationToken.None);
+
+        Assert.NotNull(match);
+        Assert.Equal("Coffee & TV", match!.Value.Item.Name);
+    }
+
+    /// <summary>
+    /// JF-526 diacritic fold inside the shared gate: "besame mucho" vs "Bésame
+    /// Mucho" is full coverage (accent-only difference), so the fallback keeps
+    /// returning the match instead of degrading to not-found.
+    /// </summary>
+    [Fact]
+    public async Task SearchItemsFuzzyAsync_DiacriticFullCoverage_StillMatches()
+    {
+        var libraryManager = new Mock<ILibraryManager>();
+        libraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { new Audio { Name = "Bésame Mucho", Id = Guid.NewGuid() } });
+
+        var harness = CreateHarness(new PluginConfiguration());
+        var match = await harness.CallSearchItemsFuzzyAsync(
+            "besame mucho", null, new Entities.User(), libraryManager.Object,
+            new[] { BaseItemKind.Audio }, "en-US", CancellationToken.None);
+
+        Assert.NotNull(match);
+        Assert.Equal("Bésame Mucho", match!.Value.Item.Name);
+    }
+
+    /// <summary>
+    /// JF-526: the diacritic fold restores the pre-JF-508B silent play for accent-only
+    /// differences on HandleFuzzyMiss's score bar too ("besame mucho" vs "Bésame
+    /// Mucho" scores 91, above ContainmentScore, previously a silent play that the
+    /// exact-byte gate demoted to a prompt).
+    /// </summary>
+    [Fact]
+    public void TwoWordQuery_DiacriticFullCoverage_HighScore_StillAutoPlays()
+    {
+        var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
+        var candidates = new List<TestCandidate> { new("Bésame Mucho", Guid.NewGuid()) };
+
+        AssertScoreInRange("besame mucho", candidates, "Bésame Mucho",
+            FuzzyMatcher.ContainmentScore, 100);
+
+        var (autoPlayCalled, _, response) = RunFuzzyMiss(new PluginConfiguration(), user, "besame mucho", candidates);
+
+        Assert.True(autoPlayCalled, "accent-only difference must count as full coverage (JF-526 fold)");
+        Assert.Null(response!.SessionAttributes?["disambig_matches"]);
+    }
+
     // --- Helpers ---
 
     /// <summary>
@@ -825,5 +952,19 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
             var (outcome, response) = HandleFuzzyMiss(query, candidates, selector, matchExtractor, mediaType, locale, autoPlayFunc, user);
             return (outcome.ToString(), response);
         }
+
+        /// <summary>
+        /// JF-526: expose the shared zero-result fuzzy fallback for the sibling-gate
+        /// tests (SearchItemsFuzzyAsync had no test harness of its own).
+        /// </summary>
+        public Task<(BaseItem Item, int Score)?> CallSearchItemsFuzzyAsync(
+            string query,
+            Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
+            Entities.User user,
+            ILibraryManager libraryManager,
+            BaseItemKind[] itemTypes,
+            string locale,
+            CancellationToken cancellationToken)
+            => SearchItemsFuzzyAsync(query, jellyfinUser, user, libraryManager, itemTypes, cancellationToken, locale: locale);
     }
 }

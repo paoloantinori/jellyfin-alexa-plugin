@@ -722,4 +722,62 @@ public class KeywordMatcherTests
         Assert.Empty(KeywordMatcher.Score(songs, keywordTokens, "en-US"));
         Assert.Empty(KeywordMatcher.ScorePhonetic(songs, keywordTokens, "en-US"));
     }
+
+    // ─── JF-508/JF-526: short-query full-coverage gate (HasFullKeywordCoverage) ───
+
+    [Fact]
+    public void HasFullKeywordCoverage_TwoWordPartialCoverage_Fails()
+    {
+        // The JF-508 misfire shape: "soul" matched nothing in the title (1/2 = 50%).
+        var queryTokens = KeywordMatcher.Tokenize("soul coffee", "en-US");
+        Assert.False(KeywordMatcher.HasFullKeywordCoverage(queryTokens, "Starfish & Coffee", "en-US"));
+    }
+
+    [Fact]
+    public void HasFullKeywordCoverage_TwoWordFullCoverage_Passes()
+    {
+        var queryTokens = KeywordMatcher.Tokenize("coffee tv", "en-US");
+        Assert.True(KeywordMatcher.HasFullKeywordCoverage(queryTokens, "Coffee & TV", "en-US"));
+    }
+
+    [Fact]
+    public void HasFullKeywordCoverage_ThreeWordQuery_NotGated()
+    {
+        // Short-query-only scope: 3+ tokens keep the pre-JF-508 behavior.
+        var queryTokens = KeywordMatcher.Tokenize("soul coffee deluxe", "en-US");
+        Assert.True(KeywordMatcher.HasFullKeywordCoverage(queryTokens, "Starfish & Coffee", "en-US"));
+    }
+
+    [Fact]
+    public void HasFullKeywordCoverage_DiacriticOnlyDifference_Passes()
+    {
+        // JF-526: "besame mucho" vs "Bésame Mucho" (live score 91, above
+        // ContainmentScore) was demoted to a prompt by JF-508's exact byte
+        // membership; the diacritic fold restores full coverage (silent play).
+        var queryTokens = KeywordMatcher.Tokenize("besame mucho", "en-US");
+        Assert.True(KeywordMatcher.HasFullKeywordCoverage(queryTokens, "Bésame Mucho", "en-US"));
+    }
+
+    [Fact]
+    public void HasFullKeywordCoverage_CafeDelMar_FoldsAccentsOnBothSides()
+    {
+        // "del" is an it-IT stop word: the query is 2 tokens post-strip. The accent
+        // sits on the candidate in the first assertion and on the query in the
+        // second (ASR can emit either side accented).
+        var plain = KeywordMatcher.Tokenize("cafe del mar", "it-IT");
+        Assert.Equal(new[] { "cafe", "mar" }, plain);
+        Assert.True(KeywordMatcher.HasFullKeywordCoverage(plain, "Café del Mar", "it-IT"));
+
+        var accented = KeywordMatcher.Tokenize("café del mar", "it-IT");
+        Assert.True(KeywordMatcher.HasFullKeywordCoverage(accented, "Cafe del Mar", "it-IT"));
+    }
+
+    [Fact]
+    public void HasFullKeywordCoverage_PhoneticEqualDifferentSpelling_Fails()
+    {
+        // "coop" vs "Koop": Double Metaphone codes both KP, but the gate is
+        // token-based, not phonetic (JF-526): phonetic equality is NOT coverage.
+        var queryTokens = KeywordMatcher.Tokenize("coop", "en-US");
+        Assert.False(KeywordMatcher.HasFullKeywordCoverage(queryTokens, "Koop", "en-US"));
+    }
 }

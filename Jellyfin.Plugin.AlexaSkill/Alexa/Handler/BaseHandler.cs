@@ -2494,6 +2494,7 @@ public abstract class BaseHandler
     /// <param name="itemTypes">The item types to search (e.g. Audio, MusicAlbum). Queries whose kinds are ALL out-of-library skip the TopParentIds filter (<see cref="Util.LibraryFilter.IsOutOfLibraryKind"/>, JF-456).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <param name="operationLabel">Label for logging.</param>
+    /// <param name="locale">The request locale, for the JF-508/JF-526 short-query coverage gate on the match return.</param>
     /// <returns>The best match + score, or null if nothing above threshold.</returns>
     protected async Task<(BaseItem Item, int Score)?> SearchItemsFuzzyAsync(
         string query,
@@ -2505,7 +2506,8 @@ public abstract class BaseHandler
         string operationLabel = "FuzzyFallback",
         Guid[]? artistIds = null,
         int minQueryLength = 3,
-        MediaType[]? mediaTypes = null)
+        MediaType[]? mediaTypes = null,
+        string locale = "en-US")
     {
         if (string.IsNullOrWhiteSpace(query) || query.Length < minQueryLength)
         {
@@ -2543,12 +2545,32 @@ public abstract class BaseHandler
         }
 
         var match = FuzzyMatcher.FindBestMatchWithScore(query, allItems, item => item.Name);
+        // JF-526 (JF-508 sibling): this zero-result fallback feeds callers that
+        // auto-play the returned item (PlayBook/PlayPodcast/PlayVideo/PlayPlaylist/
+        // SearchMedia/SeriesFuzzyFallback), so the short-query full-coverage gate
+        // applies to the match return too. A gated miss returns null, this method's
+        // existing below-threshold outcome: callers speak their own not-found instead
+        // of auto-playing a partial-coverage pick ("soul coffee" -> "Starfish & Coffee").
         if (match.HasValue && match.Value.Score >= FuzzyMatcher.GetDefaultThreshold(user))
         {
-            Logger.LogInformation(
-                "{Op}: fuzzy fallback matched '{Name}' score={Score} for query='{Query}'",
+            // AutoPlay users are exempt from the coverage gate (they asked to never
+            // be prompted): the same exemption HandleFuzzyMiss's AutoPlay disjunct
+            // and PlayAlbum's guard apply (JF-526 review F1 - policy parity).
+            if (KeywordMatcher.HasFullKeywordCoverage(KeywordMatcher.Tokenize(query, locale), match.Value.Item.Name, locale)
+                || (user?.FuzzyMatchBehavior ?? FuzzyMatchBehavior.Confirm) == FuzzyMatchBehavior.AutoPlay)
+            {
+                Logger.LogInformation(
+                    "{Op}: fuzzy fallback matched '{Name}' score={Score} for query='{Query}'",
+                    operationLabel, match.Value.Item.Name, match.Value.Score, query);
+                return match;
+            }
+
+            // JF-526: the score bar was crossed but the gate withheld the auto-play
+            // (partial keyword coverage on a short query). Logged so triage can tell
+            // a withheld match from a below-threshold one (the JF-508/corr=269e622d class).
+            Logger.LogDebug(
+                "{Op}: coverage gate withheld partial-coverage match '{Name}' score={Score} for query='{Query}'",
                 operationLabel, match.Value.Item.Name, match.Value.Score, query);
-            return match;
         }
 
         return null;
@@ -2790,9 +2812,11 @@ public abstract class BaseHandler
         // it, so the cost of the extra turn is one word. 3+ word queries are unchanged
         // (each word carries less identifying meaning), and the explicit
         // FuzzyMatchBehavior.AutoPlay opt-in is deliberately NOT gated: the user asked
-        // to never be prompted.
+        // to never be prompted. JF-526: the predicate lives in
+        // KeywordMatcher.HasFullKeywordCoverage (diacritic-insensitive, the ONE
+        // definition) and is applied at the sibling auto-play sites too.
         bool autoAccept = (score >= FuzzyMatcher.GetDefaultThreshold(user)
-                           && PassesShortQueryFullCoverageGate(query, selector(best), locale))
+                           && KeywordMatcher.HasFullKeywordCoverage(KeywordMatcher.Tokenize(query, locale), selector(best), locale))
             || (behavior == FuzzyMatchBehavior.AutoPlay && autoPlayFunc != null);
 
         if (autoAccept && autoPlayFunc != null)
@@ -2840,46 +2864,6 @@ public abstract class BaseHandler
         // JF-398: activating the disambiguation flow supersedes any other flow's state.
         ConversationalFlows.MarkOthersInactive(response, ConversationalFlows.DisambiguationKeys);
         return (FuzzyMissOutcome.SuggestionHandled, response);
-    }
-
-    /// <summary>
-    /// JF-508 short-query coverage gate for <see cref="HandleFuzzyMiss"/>'s score-bar
-    /// auto-accept: for queries of at most 2 tokens (after <see cref="KeywordMatcher.Tokenize"/>'s
-    /// locale + English stop-word stripping, the same normalization the song search uses),
-    /// every query token must appear in the candidate's tokenized name (full keyword
-    /// coverage). Coverage is exact token membership, mirroring how KeywordMatcher.Score
-    /// counts keywords ("soul" vs "Starfish &amp; Coffee" = 1/2 = 50%, the misfire shape).
-    /// Returns true when the gate does not apply (0 tokens after stripping, or 3+ tokens
-    /// where partial coverage is acceptable) or coverage is full; false only for a
-    /// 1-2 token query with an unaccounted word, which routes the caller to the
-    /// yes/no disambiguation prompt instead of auto-play.
-    /// </summary>
-    /// <summary>
-    /// JF-508: the short-query scope of the full-coverage gate in <see cref="HandleFuzzyMiss"/>
-    /// (queries of at most this many tokens, post-Tokenizer, require every token present
-    /// in the candidate). Pinned by the 2-vs-3 boundary test.
-    /// </summary>
-    private const int ShortQueryFullCoverageMaxTokens = 2;
-
-    private static bool PassesShortQueryFullCoverageGate(string query, string candidateName, string locale)
-    {
-        string[] queryTokens = KeywordMatcher.Tokenize(query, locale);
-        if (queryTokens.Length == 0 || queryTokens.Length > ShortQueryFullCoverageMaxTokens)
-        {
-            return true;
-        }
-
-        // Tokenize lowercases both sides, so ordinal set membership is case-insensitive.
-        var nameTokens = new HashSet<string>(KeywordMatcher.Tokenize(candidateName, locale), StringComparer.Ordinal);
-        foreach (string token in queryTokens)
-        {
-            if (!nameTokens.Contains(token))
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     /// <summary>
@@ -3337,7 +3321,7 @@ public abstract class BaseHandler
             return (seriesList[0], null);
         }
 
-        var fuzzy = await SearchItemsFuzzyAsync(seriesName, jellyfinUser, user, libraryManager, seriesKinds, cancellationToken, "SeriesFuzzyFallback").ConfigureAwait(false);
+        var fuzzy = await SearchItemsFuzzyAsync(seriesName, jellyfinUser, user, libraryManager, seriesKinds, cancellationToken, "SeriesFuzzyFallback", locale: locale).ConfigureAwait(false);
         if (fuzzy != null)
         {
             return (fuzzy.Value.Item, null);
@@ -4888,7 +4872,7 @@ public abstract class BaseHandler
 
         if (playlists.TotalRecordCount == 0)
         {
-            var fuzzy = await SearchItemsFuzzyAsync(playlistName, jellyfinUser, user, libraryManager, new[] { BaseItemKind.Playlist }, cancellationToken, "PlayPlaylistFuzzyFallback").ConfigureAwait(false);
+            var fuzzy = await SearchItemsFuzzyAsync(playlistName, jellyfinUser, user, libraryManager, new[] { BaseItemKind.Playlist }, cancellationToken, "PlayPlaylistFuzzyFallback", locale: locale).ConfigureAwait(false);
             if (fuzzy != null)
             {
                 playlists = new QueryResult<BaseItem> { Items = new List<BaseItem> { fuzzy.Value.Item }, TotalRecordCount = 1 };
@@ -4904,7 +4888,11 @@ public abstract class BaseHandler
         {
             Logger.LogDebug("PlayPlaylist: {Count} playlists matched, running disambiguation", playlists.TotalRecordCount);
             BaseItem? topMatch = FuzzyMatch(playlistName, playlists.Items, p => p.Name, user);
-            if (topMatch != null)
+            // JF-526 (JF-508 sibling): this site-level pre-check returns before
+            // HandleFuzzyMiss, so the short-query full-coverage gate must be applied
+            // here too; a gated miss falls into HandleFuzzyMiss below, whose Confirm
+            // mode asks the yes/no "did you mean" prompt.
+            if (topMatch != null && KeywordMatcher.HasFullKeywordCoverage(KeywordMatcher.Tokenize(playlistName, locale), topMatch.Name, locale))
             {
                 playlistMatch = topMatch;
             }
