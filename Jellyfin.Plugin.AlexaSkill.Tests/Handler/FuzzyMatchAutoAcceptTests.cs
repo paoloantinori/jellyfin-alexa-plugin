@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using global::Alexa.NET;
@@ -8,6 +9,7 @@ using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
@@ -450,7 +452,227 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
         Assert.Contains("closest match", speechText, StringComparison.OrdinalIgnoreCase);
     }
 
+    // --- JF-508: short-query full-coverage gate on the score-bar auto-accept ---
+
+    /// <summary>
+    /// JF-508 reproduction (device 2026-09-06, corr=269e622d): the 2-word query
+    /// "soul coffee" auto-played "Starfish &amp; Coffee" with the closest-match announce
+    /// although "soul" matched nothing in the title. PartialRatio's sliding window
+    /// aligned the query against "sh &amp; coffee" - 3 char edits stand in for the whole
+    /// missing word - scoring above DefaultThreshold. The short-query gate must route
+    /// this shape to the "did you mean" prompt (one "yes" plays it) instead.
+    /// </summary>
+    [Fact]
+    public void TwoWordQuery_OneWordMatched_HighScore_PromptsInsteadOfAutoPlaying()
+    {
+        var config = new PluginConfiguration();
+        var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
+        var harness = CreateHarness(config);
+
+        var candidates = new List<TestCandidate>
+        {
+            new("Starfish & Coffee", Guid.NewGuid()),
+            new("Coffee & TV", Guid.NewGuid()),
+        };
+
+        // Mechanism preconditions: the plain FindBestMatchWithScore (what
+        // HandleFuzzyMiss uses) must pick "Starfish & Coffee" at a score that crosses
+        // the default threshold but stays under the no-qualifier bar, and the query
+        // must be a 2-token query with 50% keyword coverage. If these drift, the test
+        // is no longer the reproduction and must be re-pinned, not deleted.
+        var best = FuzzyMatcher.FindBestMatchWithScore("soul coffee", candidates, c => c.Name);
+        Assert.NotNull(best);
+        Assert.Equal("Starfish & Coffee", best!.Value.Item.Name);
+        Assert.InRange(best.Value.Score, FuzzyMatcher.DefaultThreshold, FuzzyMatcher.ContainmentScore - 1);
+
+        var queryTokens = KeywordMatcher.Tokenize("soul coffee", "en-US");
+        var titleTokens = KeywordMatcher.Tokenize("Starfish & Coffee", "en-US");
+        Assert.Equal(2, queryTokens.Length);
+        Assert.Equal(1, queryTokens.Count(t => titleTokens.Contains(t)));
+
+        bool autoPlayCalled = false;
+        Func<TestCandidate, SkillResponse> autoPlayFunc = _ =>
+        {
+            autoPlayCalled = true;
+            return ResponseBuilder.Empty();
+        };
+
+        var (outcome, response) = harness.CallHandleFuzzyMiss(
+            query: "soul coffee",
+            candidates: candidates,
+            selector: c => c.Name,
+            matchExtractor: c => new List<(Guid, string)> { (c.Id, c.Name) },
+            mediaType: "song",
+            locale: "en-US",
+            autoPlayFunc: autoPlayFunc,
+            user: user);
+
+        Assert.False(autoPlayCalled, "2-word query with only one word accounted for must not auto-play at the score bar (JF-508)");
+        Assert.Equal("SuggestionHandled", outcome);
+        Assert.NotNull(response);
+        Assert.NotNull(response.SessionAttributes);
+        Assert.True(response.SessionAttributes.ContainsKey("disambig_matches"),
+            "Partial-coverage short query should get the yes/no disambiguation prompt");
+    }
+
+    /// <summary>
+    /// JF-508 counter-case: a 2-word query where BOTH words are covered by the
+    /// candidate name keeps auto-playing at the score bar. The gate withholds
+    /// auto-play only for an unaccounted word, not for fuzzy-but-complete coverage.
+    /// The score precondition pins the play to the fuzzy band so it exercises the
+    /// gated score-bar disjunct (not the containment shortcut).
+    /// </summary>
+    [Fact]
+    public void TwoWordQuery_FullCoverage_FuzzyScore_StillAutoPlays()
+    {
+        var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
+        var candidates = new List<TestCandidate> { new("U2 - Beautiful Day", Guid.NewGuid()) };
+
+        AssertScoreInRange("u2 beautiful", candidates, "U2 - Beautiful Day",
+            FuzzyMatcher.DefaultThreshold, FuzzyMatcher.ContainmentScore - 1);
+
+        var (autoPlayCalled, _, response) = RunFuzzyMiss(new PluginConfiguration(), user, "u2 beautiful", candidates);
+
+        Assert.True(autoPlayCalled, "2-word query with both words covered must still auto-play (JF-508 gates only unaccounted words)");
+        Assert.Null(response!.SessionAttributes?["disambig_matches"]);
+    }
+
+    /// <summary>
+    /// JF-508 scope guard: the full-coverage requirement is short-query-only. A
+    /// 4-word query with 75% keyword coverage and a score above the bar keeps the
+    /// pre-JF-508 auto-play behavior.
+    /// </summary>
+    [Fact]
+    public void ThreePlusWordQuery_PartialCoverage_HighScore_StillAutoPlays()
+    {
+        var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
+        var candidates = new List<TestCandidate> { new("One Two Three Four", Guid.NewGuid()) };
+
+        AssertScoreInRange("one two three zzz", candidates, "One Two Three Four",
+            FuzzyMatcher.DefaultThreshold, FuzzyMatcher.ContainmentScore - 1);
+
+        var (autoPlayCalled, _, response) = RunFuzzyMiss(new PluginConfiguration(), user, "one two three zzz", candidates);
+
+        Assert.True(autoPlayCalled, "3+ word queries keep the pre-JF-508 auto-play behavior");
+        Assert.Null(response!.SessionAttributes?["disambig_matches"]);
+    }
+
+    /// <summary>
+    /// JF-508 boundary: the SAME candidate with the SAME unmatched word ("soul")
+    /// prompts at exactly 2 query words and auto-plays at 3, pinning the gate's
+    /// short-query scope to the 2-word misfire shape from corr=269e622d.
+    /// </summary>
+    [Fact]
+    public void ShortQueryGate_Boundary_TwoWordsPrompt_ThreeWordsPlay()
+    {
+        var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
+        var candidates = new List<TestCandidate> { new("Starfish & Coffee Deluxe", Guid.NewGuid()) };
+
+        AssertScoreInRange("soul coffee", candidates, "Starfish & Coffee Deluxe",
+            FuzzyMatcher.DefaultThreshold, FuzzyMatcher.ContainmentScore - 1);
+        AssertScoreInRange("soul coffee deluxe", candidates, "Starfish & Coffee Deluxe",
+            FuzzyMatcher.DefaultThreshold, FuzzyMatcher.ContainmentScore - 1);
+
+        var (twoWordPlayed, _, twoWordResponse) = RunFuzzyMiss(new PluginConfiguration(), user, "soul coffee", candidates);
+        Assert.False(twoWordPlayed, "exactly-2-word query with an unaccounted word prompts");
+        Assert.NotNull(twoWordResponse!.SessionAttributes);
+        Assert.True(twoWordResponse.SessionAttributes.ContainsKey("disambig_matches"),
+            "exactly-2-word partial-coverage query should get the yes/no prompt");
+
+        var (threeWordPlayed, _, _) = RunFuzzyMiss(new PluginConfiguration(), user, "soul coffee deluxe", candidates);
+        Assert.True(threeWordPlayed, "3-word query auto-plays unchanged (gate is short-query-only)");
+    }
+
+    /// <summary>
+    /// JF-508 scope note: the "&lt;= 2 tokens" rule includes 1-word queries. A single
+    /// word that is not present exactly (a pure fuzzy pick among candidates, e.g. an
+    /// ASR typo like "Symphonz") now prompts instead of auto-playing; the one-word
+    /// containment shape ("cup" inside "Porcupine Tree", the JF-377 coincidental-
+    /// containment class) hits the same gate. One "yes" plays the pick.
+    /// </summary>
+    [Fact]
+    public void OneWordQuery_WordNotExactlyPresent_PromptsInsteadOfAutoPlaying()
+    {
+        var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
+        var candidates = new List<TestCandidate> { new("Symphony", Guid.NewGuid()) };
+
+        AssertScoreInRange("Symphonz", candidates, "Symphony",
+            FuzzyMatcher.DefaultThreshold, FuzzyMatcher.ContainmentScore - 1);
+
+        var (autoPlayCalled, _, response) = RunFuzzyMiss(new PluginConfiguration(), user, "Symphonz", candidates);
+
+        Assert.False(autoPlayCalled, "1-word query with the word not present exactly must confirm first (JF-508 <=2-token scope)");
+        Assert.True(response!.SessionAttributes!.ContainsKey("disambig_matches"),
+            "1-word pure-fuzzy pick should get the yes/no prompt");
+    }
+
+    /// <summary>
+    /// JF-508: the explicit FuzzyMatchBehavior.AutoPlay opt-in is deliberately not
+    /// gated - the user asked to never be prompted, so even a partial-coverage short
+    /// query auto-plays under that behavior.
+    /// </summary>
+    [Fact]
+    public void TwoWordQuery_PartialCoverage_AutoPlayBehaviorOptIn_StillAutoPlays()
+    {
+        var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.AutoPlay };
+        var candidates = new List<TestCandidate>
+        {
+            new("Starfish & Coffee", Guid.NewGuid()),
+            new("Coffee & TV", Guid.NewGuid()),
+        };
+
+        var (autoPlayCalled, _, _) = RunFuzzyMiss(new PluginConfiguration(), user, "soul coffee", candidates);
+
+        Assert.True(autoPlayCalled, "AutoPlay-behavior opt-in keeps auto-playing partial-coverage short queries");
+    }
+
     // --- Helpers ---
+
+    /// <summary>
+    /// Runs HandleFuzzyMiss with the standard test wiring and reports whether the
+    /// auto-play callback fired (the JF-508 gate's observable).
+    /// </summary>
+    private (bool AutoPlayCalled, string Outcome, SkillResponse? Response) RunFuzzyMiss(
+        PluginConfiguration config,
+        Entities.User user,
+        string query,
+        List<TestCandidate> candidates,
+        string locale = "en-US")
+    {
+        var harness = CreateHarness(config);
+        bool autoPlayCalled = false;
+        Func<TestCandidate, SkillResponse> autoPlayFunc = _ =>
+        {
+            autoPlayCalled = true;
+            return ResponseBuilder.Empty();
+        };
+
+        var (outcome, response) = harness.CallHandleFuzzyMiss(
+            query: query,
+            candidates: candidates,
+            selector: c => c.Name,
+            matchExtractor: c => new List<(Guid, string)> { (c.Id, c.Name) },
+            mediaType: "song",
+            locale: locale,
+            autoPlayFunc: autoPlayFunc,
+            user: user);
+
+        return (autoPlayCalled, outcome, response);
+    }
+
+    /// <summary>
+    /// Pins the mechanism preconditions for the JF-508 tests: the plain matcher (the
+    /// one HandleFuzzyMiss uses) must pick <paramref name="expectedBest"/> with a
+    /// score in the given band. If this fails, the strings drifted and the test no
+    /// longer reproduces its band; re-pin the strings rather than deleting the test.
+    /// </summary>
+    private static void AssertScoreInRange(string query, List<TestCandidate> candidates, string expectedBest, int low, int high)
+    {
+        var best = FuzzyMatcher.FindBestMatchWithScore(query, candidates, c => c.Name);
+        Assert.NotNull(best);
+        Assert.Equal(expectedBest, best!.Value.Item.Name);
+        Assert.InRange(best.Value.Score, low, high);
+    }
 
     /// <summary>
     /// Creates a query/candidate pair that produces a borderline fuzzy score
