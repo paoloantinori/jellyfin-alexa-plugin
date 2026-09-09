@@ -2707,7 +2707,22 @@ public abstract class BaseHandler
         // sub-threshold scores, so GetEffectiveThreshold does not apply here; the
         // no-qualifier bar's comment below records the composite.
         FuzzyMatchBehavior behavior = user?.FuzzyMatchBehavior ?? FuzzyMatchBehavior.Confirm;
-        bool autoAccept = score >= FuzzyMatcher.GetDefaultThreshold(user)
+        // JF-508: PartialRatio's sliding window cannot see word boundaries, so a short
+        // query with one entirely-absent word can still cross the score bar: "soul
+        // coffee" vs "Starfish & Coffee" scored 72 by aligning against the window
+        // "sh & coffee" (3 char edits standing in for the whole missing word "soul";
+        // device 2026-09-06 corr=269e622d auto-played it with the closest-match
+        // announce). For short queries (<= 2 tokens after KeywordMatcher.Tokenize, the
+        // same locale stop-word stripping the song search uses) the score-bar
+        // auto-accept therefore additionally requires FULL keyword coverage: every
+        // query token must appear in the best candidate's tokenized name. Partial
+        // coverage falls through to the "did you mean" prompt below; one "yes" plays
+        // it, so the cost of the extra turn is one word. 3+ word queries are unchanged
+        // (each word carries less identifying meaning), and the explicit
+        // FuzzyMatchBehavior.AutoPlay opt-in is deliberately NOT gated: the user asked
+        // to never be prompted.
+        bool autoAccept = (score >= FuzzyMatcher.GetDefaultThreshold(user)
+                           && PassesShortQueryFullCoverageGate(query, selector(best), locale))
             || (behavior == FuzzyMatchBehavior.AutoPlay && autoPlayFunc != null);
 
         if (autoAccept && autoPlayFunc != null)
@@ -2755,6 +2770,46 @@ public abstract class BaseHandler
         // JF-398: activating the disambiguation flow supersedes any other flow's state.
         ConversationalFlows.MarkOthersInactive(response, ConversationalFlows.DisambiguationKeys);
         return (FuzzyMissOutcome.SuggestionHandled, response);
+    }
+
+    /// <summary>
+    /// JF-508 short-query coverage gate for <see cref="HandleFuzzyMiss"/>'s score-bar
+    /// auto-accept: for queries of at most 2 tokens (after <see cref="KeywordMatcher.Tokenize"/>'s
+    /// locale + English stop-word stripping, the same normalization the song search uses),
+    /// every query token must appear in the candidate's tokenized name (full keyword
+    /// coverage). Coverage is exact token membership, mirroring how KeywordMatcher.Score
+    /// counts keywords ("soul" vs "Starfish &amp; Coffee" = 1/2 = 50%, the misfire shape).
+    /// Returns true when the gate does not apply (0 tokens after stripping, or 3+ tokens
+    /// where partial coverage is acceptable) or coverage is full; false only for a
+    /// 1-2 token query with an unaccounted word, which routes the caller to the
+    /// yes/no disambiguation prompt instead of auto-play.
+    /// </summary>
+    /// <summary>
+    /// JF-508: the short-query scope of the full-coverage gate in <see cref="HandleFuzzyMiss"/>
+    /// (queries of at most this many tokens, post-Tokenizer, require every token present
+    /// in the candidate). Pinned by the 2-vs-3 boundary test.
+    /// </summary>
+    private const int ShortQueryFullCoverageMaxTokens = 2;
+
+    private static bool PassesShortQueryFullCoverageGate(string query, string candidateName, string locale)
+    {
+        string[] queryTokens = KeywordMatcher.Tokenize(query, locale);
+        if (queryTokens.Length == 0 || queryTokens.Length > ShortQueryFullCoverageMaxTokens)
+        {
+            return true;
+        }
+
+        // Tokenize lowercases both sides, so ordinal set membership is case-insensitive.
+        var nameTokens = new HashSet<string>(KeywordMatcher.Tokenize(candidateName, locale), StringComparer.Ordinal);
+        foreach (string token in queryTokens)
+        {
+            if (!nameTokens.Contains(token))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>
