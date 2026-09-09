@@ -1610,6 +1610,289 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         Assert.Equal(FindSongState.AwaitingArtist, sessionData.State);
     }
 
+    // ========== JF-530: retry answers after a no-match must reach the search ==========
+
+    [Fact]
+    public async Task ArtistAnswerNoMatch_ThenRetryAnswer_SearchesFreshSlotValueNotStaleKeywords()
+    {
+        // Live chain (2026-09-09 it-IT, corr a39e9b55 -> 1113ebfe -> 514443a3):
+        // turn 1 stored Keywords="what's for cooking" and the broad match set
+        // State=AwaitingArtist (TooManyNarrow). The artist answer "Koop" resolved and
+        // searched the STALE keywords (0 songs); the no-match prompt asked for "altre
+        // parole" (keywords) but left State=AwaitingArtist, so the retry answers
+        // ("cup", "walls for") were parsed as ARTIST names and the dead keywords were
+        // searched forever. The fix: the no-match re-prompt resets State to
+        // AwaitingKeywords, whose path stores the fresh slot value before searching.
+        var koopId = Guid.NewGuid();
+        var koop = new MusicArtist();
+        typeof(BaseItem).GetProperty("Id")!.SetValue(koop, koopId);
+        typeof(BaseItem).GetProperty("Name")!.SetValue(koop, "Koop");
+        var cup = CreateAudioItem(Guid.NewGuid(), "Cup");
+        cup.Artists = new[] { "Koop" };
+
+        SetupJellyfinUser();
+        _fx.LibraryManager.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                bool isArtistQuery = q.IncludeItemTypes != null
+                    && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist);
+                if (isArtistQuery)
+                {
+                    return new List<BaseItem> { koop }.AsReadOnly();
+                }
+
+                // The artist-scoped song search finds "Cup" ONLY for the fresh
+                // keyword: a search with the stale "what's for cooking" (first token
+                // "cooking") returns nothing, on both the NameContains pre-filter and
+                // the JF-383 unfiltered retry (NameContains == null).
+                bool isArtistScopedAudio = q.ArtistIds != null && q.ArtistIds.Length > 0
+                    && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio);
+                if (isArtistScopedAudio && q.NameContains == "cup")
+                {
+                    return new List<BaseItem> { cup }.AsReadOnly();
+                }
+
+                return new List<BaseItem>().AsReadOnly();
+            });
+
+        var user = CreateTestUser();
+        var session = _fx.CreateSession();
+
+        // Turn A: the live post-broad-match session (State=0 = AwaitingArtist) with
+        // the artist answer arriving in the elicit-captured titleKeywords slot.
+        var attrs = BuildSessionAttributes(new FindSongSessionData
+        {
+            State = FindSongState.AwaitingArtist,
+            Keywords = "what's for cooking"
+        });
+        var turnA = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
+        {
+            ["titleKeywords"] = "Koop"
+        });
+
+        SkillResponse responseA = await _handler.HandleAsync(turnA, _fx.CreateContext(), user, session, attrs, CancellationToken.None);
+
+        // No-match on the stored keywords, but the re-prompt now elicits KEYWORDS.
+        Assert.False(responseA.Response.ShouldEndSession);
+        string speechA = TestHelpers.GetSpeechText(responseA);
+        Assert.Contains("couldn't find a match", speechA);
+        var sessionDataA = ReadSessionData(responseA);
+        Assert.NotNull(sessionDataA);
+        Assert.Equal(FindSongState.AwaitingKeywords, sessionDataA.State);
+        Assert.Equal("Koop", sessionDataA.ArtistName);
+        // The artist answer must NOT clobber the stored keywords on its own turn.
+        Assert.Equal("what's for cooking", sessionDataA.Keywords);
+
+        // Turn B: the user's retry with fresh keywords, fed through turn A's real
+        // session attributes. The search must use "cup" (with the stored artist).
+        var turnB = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
+        {
+            ["titleKeywords"] = "cup"
+        });
+
+        SkillResponse responseB = await _handler.HandleAsync(turnB, _fx.CreateContext(), user, session, responseA.SessionAttributes, CancellationToken.None);
+
+        Assert.True(responseB.Response?.Directives?.Any(d => d.Type == "AudioPlayer.Play") == true,
+            "the retry answer's fresh keywords must reach the search and play the match");
+        Assert.True(responseB.Response.ShouldEndSession);
+        string speechB = TestHelpers.GetSpeechText(responseB);
+        Assert.Contains("Cup by Koop", speechB);
+    }
+
+    [Fact]
+    public async Task StoredKeywordsTooVague_AfterArtistAnswer_RePromptsAsKeywords()
+    {
+        // The JF-530 invariant on the too-vague branch: the stored keywords tokenize
+        // to zero (first invocation stores the slot value unvalidated), so the search
+        // entered from an AwaitingArtist turn must still re-prompt in the
+        // AwaitingKeywords state, or the next answer is parsed as an artist name.
+        var koopId = Guid.NewGuid();
+        SetupJellyfinUser();
+        SetupArtistSearch(koopId, "Koop");
+
+        var user = CreateTestUser();
+        var session = _fx.CreateSession();
+        var attrs = BuildSessionAttributes(new FindSongSessionData
+        {
+            State = FindSongState.AwaitingArtist,
+            Keywords = "the a an of"
+        });
+
+        var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
+        {
+            ["musician"] = "Koop"
+        });
+
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, attrs, CancellationToken.None);
+
+        Assert.False(response.Response.ShouldEndSession);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("more specific words", speech);
+        var sessionData = ReadSessionData(response);
+        Assert.NotNull(sessionData);
+        Assert.Equal(FindSongState.AwaitingKeywords, sessionData.State);
+    }
+
+    [Fact]
+    public async Task RetryWithEmptySlot_KeepsStoredKeywords()
+    {
+        // The stored Keywords are the fallback ONLY when the incoming slot is empty:
+        // an answerless turn re-prompts and keeps the session's keywords for the
+        // artist-scoped retry that follows.
+        SetupJellyfinUser();
+        var user = CreateTestUser();
+        var session = _fx.CreateSession();
+        var attrs = BuildSessionAttributes(new FindSongSessionData
+        {
+            State = FindSongState.AwaitingKeywords,
+            Keywords = "waltz koop",
+            ArtistId = Guid.NewGuid(),
+            ArtistName = "Koop"
+        });
+
+        var request = CreateIntentRequest("FindSongIntent");
+
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, attrs, CancellationToken.None);
+
+        Assert.False(response.Response.ShouldEndSession);
+        var sessionData = ReadSessionData(response);
+        Assert.NotNull(sessionData);
+        Assert.Equal(FindSongState.AwaitingKeywords, sessionData.State);
+        Assert.Equal("waltz koop", sessionData.Keywords);
+        Assert.NotNull(sessionData.ArtistId);
+    }
+
+    [Fact]
+    public async Task ArtistScopedRetry_FreshKeywords_ComposedWithStoredArtist()
+    {
+        // AC #4: a retry in the keywords-answering state must compose the FRESH slot
+        // value with the STORED artist. The mock only serves the song to an
+        // ArtistIds-filtered query with NameContains == the fresh first token, so a
+        // pass proves both halves of the composition.
+        var koopId = Guid.NewGuid();
+        var koop = new MusicArtist();
+        typeof(BaseItem).GetProperty("Id")!.SetValue(koop, koopId);
+        typeof(BaseItem).GetProperty("Name")!.SetValue(koop, "Koop");
+        var cup = CreateAudioItem(Guid.NewGuid(), "Cup");
+        cup.Artists = new[] { "Koop" };
+
+        SetupJellyfinUser();
+        _fx.LibraryManager.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                bool isArtistQuery = q.IncludeItemTypes != null
+                    && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist);
+                if (isArtistQuery)
+                {
+                    return new List<BaseItem> { koop }.AsReadOnly();
+                }
+
+                bool isArtistScopedAudio = q.ArtistIds != null && q.ArtistIds.Length > 0
+                    && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio);
+                if (isArtistScopedAudio && q.NameContains == "cup")
+                {
+                    return new List<BaseItem> { cup }.AsReadOnly();
+                }
+
+                return new List<BaseItem>().AsReadOnly();
+            });
+
+        var user = CreateTestUser();
+        var session = _fx.CreateSession();
+        var attrs = BuildSessionAttributes(new FindSongSessionData
+        {
+            State = FindSongState.AwaitingKeywords,
+            Keywords = "old stale words",
+            ArtistId = koopId,
+            ArtistName = "Koop"
+        });
+
+        var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
+        {
+            ["titleKeywords"] = "cup"
+        });
+
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, attrs, CancellationToken.None);
+
+        Assert.True(response.Response?.Directives?.Any(d => d.Type == "AudioPlayer.Play") == true,
+            "fresh keywords + stored artist must search composed and play the match");
+        Assert.True(response.Response.ShouldEndSession);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Cup by Koop", speech);
+    }
+
+    [Fact]
+    public async Task Disambiguating_InvalidPickAnswer_DoesNotOverwriteStoredKeywords()
+    {
+        // A pick is NOT a retry: an unparsable answer during disambiguation re-prompts
+        // for the pick and must leave the stored Keywords untouched (the JF-530 refresh
+        // lives in the keywords-answering states only).
+        SetupJellyfinUser();
+        var user = CreateTestUser();
+        var session = _fx.CreateSession();
+        var attrs = BuildSessionAttributes(new FindSongSessionData
+        {
+            State = FindSongState.Disambiguating,
+            Keywords = "hey jude",
+            Candidates = new List<FindSongCandidate>
+            {
+                new(Guid.NewGuid(), "Hey Jude", "The Beatles", 95),
+                new(Guid.NewGuid(), "Hey There", "The Beatles", 85)
+            }
+        });
+
+        var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
+        {
+            ["titleKeywords"] = "banana"
+        });
+
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, attrs, CancellationToken.None);
+
+        Assert.False(response.Response.ShouldEndSession);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("didn't catch that", speech);
+        var sessionData = ReadSessionData(response);
+        Assert.NotNull(sessionData);
+        Assert.Equal(FindSongState.Disambiguating, sessionData.State);
+        Assert.Equal("hey jude", sessionData.Keywords);
+    }
+
+    [Fact]
+    public async Task Disambiguating_PickAnswer_PlaysCandidate_NotAKeywordsSearch()
+    {
+        // The pick flow stays intact: a numeric answer during disambiguation consumes
+        // the slot as a PICK (plays the candidate), never as fresh keywords (a
+        // keywords search for "2" finds nothing and would re-prompt instead).
+        var songId = Guid.NewGuid();
+        var song = CreateAudioItem(songId, "Hey There");
+        SetupJellyfinUser();
+        _fx.LibraryManager.Setup(lm => lm.GetItemById(songId)).Returns(song);
+
+        var user = CreateTestUser();
+        var session = _fx.CreateSession();
+        var attrs = BuildSessionAttributes(new FindSongSessionData
+        {
+            State = FindSongState.Disambiguating,
+            Keywords = "hey jude",
+            Candidates = new List<FindSongCandidate>
+            {
+                new(Guid.NewGuid(), "Hey Jude", "The Beatles", 95),
+                new(songId, "Hey There", "The Beatles", 85)
+            }
+        });
+
+        var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
+        {
+            ["titleKeywords"] = "2"
+        });
+
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, attrs, CancellationToken.None);
+
+        Assert.True(response.Response?.Directives?.Any(d => d.Type == "AudioPlayer.Play") == true,
+            "a numeric pick must play the candidate");
+        Assert.True(response.Response.ShouldEndSession);
+    }
+
     // ========== Helper Methods ==========
 
     private static IntentRequest CreateIntentRequest(string intentName, Dictionary<string, string?>? slots = null)
