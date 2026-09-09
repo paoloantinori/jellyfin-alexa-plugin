@@ -3,10 +3,10 @@ id: JF-508
 title: >-
   'la band' artist carrier absorbed by PlaySongIntent (clean-string proven) +
   short-query fuzzy auto-play crossed by a single-word match
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-06 15:25'
-updated_date: '2026-09-09 02:30'
+updated_date: '2026-09-09 05:24'
 labels:
   - nlu
   - fuzzy-matching
@@ -27,17 +27,24 @@ Two model/routing findings from the 2026-09-06 Dot session. (A) The artist_carri
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
 - [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
 - [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
 - [ ] #6 NLU test fixtures updated if interaction model changed
 - [ ] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Acceptance Criteria
+<!-- AC:BEGIN -->
+- [ ] #1 Part A: mechanism understood and reassigned to JF-415 (catalog-backed musician slot, it-IT extension)
+- [ ] #2 Part B: the short-query full-coverage gate shipped with gates and is deployed
+- [ ] #3 The residual sibling-bypass and diacritic items tracked (JF-526)
+<!-- AC:END -->
 
 ## Implementation Notes
 
@@ -48,3 +55,9 @@ Wording correction 2026-09-07 (from the JF-510 review): 4 of the 5 e2e skip_reas
 
 PART A MECHANISM FULLY UNDERSTOOD (2026-09-09, template + model + catalog analysis): PlaySongIntent has NO bare carrier (every sample carries a song_noun; 80 samples) - the absorption of 'suona la band X' into song='la band X' is pure STATISTICAL matching against 'Suona la canzone {song}'. The carrier samples ('Suona la band {musician}') exist and lose for NON-KG artists because the musician slot is AMAZON.Musician (free-text + Amazon knowledge-graph entities): a KG-known artist (P!nk floyd->P!nk) anchors the entity and flips routing to PlayArtistSongs; an obscure in-library artist (soul coughing) has NO KG entity, no anchor, and the free-text song slot wins statistically. it-IT has only AlbumName (PlayAlbum) and SeriesName as catalog-backed slot types - NO JellyfinArtist anywhere in the model. THE STRUCTURAL FIX is JF-415's architecture (catalog-backed JellyfinArtist musician slot) EXTENDED TO it-IT: the weekly CatalogSyncTask + phonetic variants would anchor every in-library artist (soul coughing included), which is exactly the anchor the KG provides for free for famous ones. Trade-off to design: catalog-backed slots stop filling for out-of-library names (xyzzyfoo routing dies) - the not-found UX must move (elicitation or a documented no-match). Part A is therefore REASSIGNED to JF-415's scope (it-IT extension, mechanism citation this note); JF-508 keeps part B (the fuzzy bar) and closes with it.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED in two halves. PART A (the 'la band' carrier absorption): mechanism FULLY understood and reassigned to JF-415's scope (2026-09-09) - PlaySong's statistical absorption wins for non-KG artists because AMAZON.Musician only anchors via Amazon's knowledge graph; the structural fix is the catalog-backed JellyfinArtist musician slot extended to it-IT, with the not-found-UX design trade-off JF-415 already carries. The sub-findings from the JF-510 triage (nominative-article family dead, album-domain drift) ride JF-415/JF-470 as documented there. PART B (the short-query fuzzy auto-play bar): SHIPPED, MERGED (fbd1c735 + merge f110e013), DEPLOYED - for queries of <=2 tokens the score-bar auto-accept additionally requires full keyword coverage (every query token present in the candidate's name; 'soul coffee' vs 'Starfish & Coffee' at score 72 now prompts instead of playing; one 'yes' plays it); 3+ word queries and the AutoPlay opt-in unchanged. Gates: /simplify (S1 fold, S4, A1 applied; R1/S3/E2 -> JF-526), code-review high SAFE TO MERGE (symmetric tokenization, null-safe, no phonetic-floor conflict, tests non-vacuous; the two conditions - three sibling auto-play paths bypassing the gate + diacritic demotion - filed as JF-526 the same turn). Tests 3526/3526 (verified independently twice). Deploy landed on the Jellyfin 12.0.0 boot (gate symbol in the running DLL). The ASR chain (coughing/coffin/coffee across devices) remains JF-379's strongest evidence.
+<!-- SECTION:FINAL_SUMMARY:END -->
