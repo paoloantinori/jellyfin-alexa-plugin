@@ -82,7 +82,7 @@ def test_stream_video_audio_wrong_item_token_returns_401(jellyfin_client):
 
     # Read the server secret from the plugin config (the test has the Jellyfin API key).
     config_url = f"{jellyfin_client.base_url}/Plugins/c5df7de087774b3ca70d5c3dae359c9e/Configuration"
-    config_resp = requests.get(config_url, headers={"X-Emby-Token": jellyfin_client.api_key}, timeout=10)
+    config_resp = requests.get(config_url, headers={"Authorization": f'MediaBrowser Token="{jellyfin_client.api_key}"'}, timeout=10)
     secret = config_resp.json().get("StreamTokenSecret", "")
     if not secret:
         pytest.skip("StreamTokenSecret not configured on the live server")

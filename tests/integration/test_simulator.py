@@ -37,7 +37,7 @@ def sim_headers(jellyfin_api_key):
     """HTTP headers with auth token."""
     assert jellyfin_api_key, "JELLYFIN_API_KEY is required for simulator tests"
     return {
-        "X-Emby-Token": jellyfin_api_key,
+        "Authorization": f'MediaBrowser Token="{jellyfin_api_key}"',
         "Content-Type": "application/json",
     }
 
