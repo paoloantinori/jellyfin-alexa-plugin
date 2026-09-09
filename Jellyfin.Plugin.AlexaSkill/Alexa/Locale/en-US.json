@@ -1,4 +1,6 @@
 {
+  "AccountRelinkRequired": "The link to your Jellyfin server has stopped working. This can happen after a server update. Open the Alexa Skill settings page in your Jellyfin dashboard and link your account again.",
+  "AccountRelinkCardTitle": "Relink Your Account",
   "UserNotFound": "User not found. Please relink your account.",
   "MediaNotFound": "Sorry, I could not find the media.",
   "AddedToFavorites": "Media added to favorites list.",

@@ -1,4 +1,6 @@
 {
+  "AccountRelinkRequired": "The link to your Jellyfin server has stopped working. This can happen after a server update. Open the Alexa Skill settings page in your Jellyfin dashboard and link your account again.",
+  "AccountRelinkCardTitle": "Relink Your Account",
   "AddedToFavorites": "Media added to favorites list.",
   "AddedToQueue": "Added {0} to your queue.",
   "AlbumsByArtistList": "You have {1} albums by {0}: {2}.",

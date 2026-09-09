@@ -7,6 +7,7 @@ using global::Alexa.NET.Request;
 using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
@@ -1051,6 +1052,111 @@ public class EventHandlerTests : PluginTestBase
         SkillResponse response = await handler.HandleRequestAsync(request, context, CancellationToken.None);
 
         Assert.NotNull(response.Response.OutputSpeech);
+    }
+
+    // ========== JF-527: dead-token discrimination on the session-miss path ==========
+
+    /// <summary>
+    /// Shared JF-527 seam: attach a DeviceQueueManager to the harness plugin instance
+    /// (the property's internal setter is the InternalsVisibleTo seam) and record a
+    /// previous play for the harness device, the evidence that the user's JellyfinToken
+    /// used to work before the server update killed it.
+    /// </summary>
+    private void RecordPreviousPlayOnHarnessDevice(Context context)
+    {
+        string tmpDir = TestHelpers.CreateRegisteredTempDir("jf527-dq");
+        var queueManager = new DeviceQueueManager(
+            tmpDir,
+            LoggerFactory.Create(b => { }).CreateLogger<DeviceQueueManager>());
+        Plugin.Instance!.DeviceQueueManager = queueManager;
+        queueManager.RecordLastPlayed(context.System.Device.DeviceID, Guid.NewGuid().ToString());
+    }
+
+    /// <summary>
+    /// The dead-token shape (2026-09-08 12.0 incident): non-empty JellyfinToken plus a
+    /// recorded previous play on the device. The miss must speak the actionable
+    /// AccountRelinkRequired tell and attach a card carrying the same message.
+    /// </summary>
+    [Fact]
+    public async Task HandleRequestAsync_IntentRequest_SessionNotFound_DeadTokenWithPlayHistory_SpeaksRelinkTellWithCard()
+    {
+        var (config, _, sessionManager, context) = CreateSessionMissHarness();
+        RecordPreviousPlayOnHarnessDevice(context);
+        var handler = new PlaybackFailedEventHandler(sessionManager.Object, config, _loggerFactory);
+        var request = new IntentRequest { Intent = new Intent { Name = "WhoAmIIntent" } };
+
+        SkillResponse response = await handler.HandleRequestAsync(request, context, CancellationToken.None);
+
+        string expected = ResponseStrings.Get("AccountRelinkRequired", "en-US");
+        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        Assert.Equal(expected, speech.Text);
+        var card = Assert.IsType<StandardCard>(response.Response.Card);
+        Assert.Equal(ResponseStrings.Get("AccountRelinkCardTitle", "en-US"), card.Title);
+        Assert.Equal(expected, card.Content);
+    }
+
+    /// <summary>
+    /// An empty token means the account was never linked: keep the generic
+    /// UserNotFound tell, no card.
+    /// </summary>
+    [Fact]
+    public async Task HandleRequestAsync_IntentRequest_SessionNotFound_EmptyToken_KeepsUserNotFoundTell()
+    {
+        var (config, user, sessionManager, context) = CreateSessionMissHarness();
+        RecordPreviousPlayOnHarnessDevice(context);
+        user.JellyfinToken = null;
+        var handler = new PlaybackFailedEventHandler(sessionManager.Object, config, _loggerFactory);
+        var request = new IntentRequest { Intent = new Intent { Name = "WhoAmIIntent" } };
+
+        SkillResponse response = await handler.HandleRequestAsync(request, context, CancellationToken.None);
+
+        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        Assert.Equal(ResponseStrings.Get("UserNotFound", "en-US"), speech.Text);
+        Assert.Null(response.Response.Card);
+    }
+
+    /// <summary>
+    /// A token with NO play history on the device is not evidenced as previously
+    /// working: keep the generic UserNotFound tell, no card.
+    /// </summary>
+    [Fact]
+    public async Task HandleRequestAsync_IntentRequest_SessionNotFound_TokenWithoutPlayHistory_KeepsUserNotFoundTell()
+    {
+        var (config, _, sessionManager, context) = CreateSessionMissHarness();
+        var handler = new PlaybackFailedEventHandler(sessionManager.Object, config, _loggerFactory);
+        var request = new IntentRequest { Intent = new Intent { Name = "WhoAmIIntent" } };
+
+        SkillResponse response = await handler.HandleRequestAsync(request, context, CancellationToken.None);
+
+        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        Assert.Equal(ResponseStrings.Get("UserNotFound", "en-US"), speech.Text);
+        Assert.Null(response.Response.Card);
+    }
+
+    /// <summary>
+    /// Event requests keep the JF-507 keep-alive shape even in the dead-token shape:
+    /// outputSpeech on an AudioPlayer event response is an INVALID_RESPONSE, so the
+    /// relink tell must not ride on events regardless of the evidence.
+    /// </summary>
+    [Fact]
+    public async Task HandleRequestAsync_EventRequest_SessionNotFound_DeadToken_KeepsKeepAlive()
+    {
+        var (config, _, sessionManager, context) = CreateSessionMissHarness();
+        RecordPreviousPlayOnHarnessDevice(context);
+        var handler = new PlaybackFailedEventHandler(sessionManager.Object, config, _loggerFactory);
+        var request = new AudioPlayerRequest
+        {
+            Type = "AudioPlayer.PlaybackFailed",
+            Token = Guid.NewGuid().ToString(),
+            OffsetInMilliseconds = 1
+        };
+
+        SkillResponse response = await handler.HandleRequestAsync(request, context, CancellationToken.None);
+
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.Null(response.Response.ShouldEndSession);
+        Assert.Null(response.Response.Card);
+        Assert.Empty(response.Response.Directives);
     }
 
     /// <summary>
