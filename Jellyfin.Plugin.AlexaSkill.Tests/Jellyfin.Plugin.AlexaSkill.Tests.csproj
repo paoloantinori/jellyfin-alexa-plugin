@@ -1,7 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <!-- JF-307: dual-target, mirroring the plugin csproj (net9.0 on Jellyfin 10.11.8,
+         net10.0 on Jellyfin 12.0.0-rc7; the two cannot share one Jellyfin version). -->
+    <TargetFrameworks>net9.0;net10.0</TargetFrameworks>
     <Nullable>enable</Nullable>
     <NoWarn>CS8602;CS8604;CS8620;CS1998</NoWarn>
     <IsPackable>false</IsPackable>
@@ -22,8 +24,10 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Jellyfin.Controller" Version="10.11.8" />
-    <PackageReference Include="Jellyfin.Model" Version="10.11.8" />
+    <PackageReference Include="Jellyfin.Controller" Version="10.11.8" Condition="'$(TargetFramework)'=='net9.0'" />
+    <PackageReference Include="Jellyfin.Model" Version="10.11.8" Condition="'$(TargetFramework)'=='net9.0'" />
+    <PackageReference Include="Jellyfin.Controller" Version="12.0.0-rc7" Condition="'$(TargetFramework)'=='net10.0'" />
+    <PackageReference Include="Jellyfin.Model" Version="12.0.0-rc7" Condition="'$(TargetFramework)'=='net10.0'" />
   </ItemGroup>
 
   <ItemGroup>

@@ -522,7 +522,7 @@ public abstract class BaseHandler
                 "Session lookup exceeded the {BudgetMs}ms fast-fail budget for device {DeviceId}; degrading to the not-found response (JF-477)",
                 SessionLookupTimeoutMs,
                 deviceId);
-            RunFireAndForget(WarmFillAbandonedLookupAsync(lookup, token, deviceId), "SessionLookupWarmFill");
+            WarmFillAbandonedLookupInBackground(lookup, token, deviceId);
             return null;
         }
 
@@ -582,6 +582,20 @@ public abstract class BaseHandler
             Logger.LogWarning(ex, "Abandoned session lookup faulted for device {DeviceId}", deviceId);
         }
     }
+
+    /// <summary>
+    /// CA2025 ownership boundary: the abandoned lookup task (a Task, which is
+    /// IDisposable) is passed to the fire-and-forget warm-fill ONLY here, in a body
+    /// with no disposal of its own. ResolveSessionAsync's budget CTS is disposed in
+    /// that method on every exit path, and the analyzer cannot prove the background
+    /// task's captures are disjoint from it, so the unawaited start is confined to
+    /// this helper. After this call the background task alone observes the lookup.
+    /// </summary>
+    /// <param name="lookup">The still-running lookup task.</param>
+    /// <param name="token">The user's Jellyfin access token.</param>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    private void WarmFillAbandonedLookupInBackground(Task<SessionInfo?> lookup, string? token, string deviceId)
+        => RunFireAndForget(WarmFillAbandonedLookupAsync(lookup, token, deviceId), "SessionLookupWarmFill");
 
     /// <summary>
     /// Determines whether this instance can handle the skill request.
