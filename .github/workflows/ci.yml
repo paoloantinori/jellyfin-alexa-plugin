@@ -16,10 +16,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup .NET 9.0
+      # JF-307 dual-target: SDK 10 builds both TFMs (net9.0 + net10.0); the 9.0.x
+      # SDK ships the net9.0 runtime the net9.0 testhost needs (SDK 10 alone has
+      # only the 10.x runtime, and dotnet test runs BOTH TFMs of the suite).
+      - name: Setup .NET (10.x SDK + 9.x runtime)
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "9.0.x"
+          dotnet-version: |
+            9.0.x
+            10.0.x
 
       - name: Restore
         run: dotnet restore

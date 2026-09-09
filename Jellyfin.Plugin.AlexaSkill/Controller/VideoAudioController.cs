@@ -227,6 +227,7 @@ public class VideoAudioController : ControllerBase
                 EstimateEncodeBytes(validation.Item.RunTimeTicks ?? 0),
                 cachePath).ConfigureAwait(false);
 
+            FileStream stream;
             try
             {
                 // Wait for ffmpeg to create the output file (it opens the file on startup).
@@ -282,7 +283,7 @@ public class VideoAudioController : ControllerBase
                     return StatusCode(500, new { error = "Video generation failed" });
                 }
 
-                var stream = new FileStream(
+                stream = new FileStream(
                     cachePath,
                     new FileStreamOptions
                     {
@@ -292,29 +293,34 @@ public class VideoAudioController : ControllerBase
                         Options = FileOptions.Asynchronous | FileOptions.SequentialScan
                     });
 
-                // Kill ffmpeg if the client disconnects mid-stream
+                // Kill ffmpeg if the client disconnects mid-stream. Registered BEFORE the
+                // monitor handoff below; on a raced disposal the bare catch absorbs the
+                // ObjectDisposedException, and the monitor's own timeout remains as backstop.
                 HttpContext.RequestAborted.Register(static state =>
                 {
                     var proc = (Process)state!;
                     try { proc.Kill(); }
                     catch { /* already exited */ }
                 }, ffmpegProcess);
-
-                // Monitor ffmpeg completion in the background: trigger remux + cleanup
-                // FileStreamResult owns the stream lifetime — monitor must NOT dispose it.
-                _ = MonitorFfmpegAndRemuxAsync(ffmpegProcess, validation.FfmpegPath, cachePath, itemId, artModifiedTicks);
-#pragma warning restore CA3003
-
-                _logger.LogDebug("VideoAudio: streaming generated file for item {ItemId}", itemId);
-                return new FileStreamResult(stream, "video/mp4");
             }
             catch
             {
-                // FileStream creation failed — kill and clean up the ffmpeg process
+                // Pre-handoff failure: this scope still owns the process
+                // (FileStream creation failed), so kill and clean up here.
                 try { ffmpegProcess.Kill(); } catch { /* already exited */ }
                 ffmpegProcess.Dispose();
                 throw;
             }
+
+            // Monitor ffmpeg completion in the background: trigger remux + cleanup.
+            // FileStreamResult owns the stream lifetime; the monitor must NOT dispose it.
+            // CA2025: the guarded (disposing) scope ends above; the monitor start lives in
+            // StartSongMonitor so no disposing code path can run after the handoff.
+            StartSongMonitor(ffmpegProcess, validation.FfmpegPath, cachePath, itemId, artModifiedTicks);
+#pragma warning restore CA3003
+
+            _logger.LogDebug("VideoAudio: streaming generated file for item {ItemId}", itemId);
+            return new FileStreamResult(stream, "video/mp4");
         }
     }
 
@@ -459,21 +465,26 @@ public class VideoAudioController : ControllerBase
 
                 // Register the HLS directory for fast segment lookups (avoids filesystem scan per segment)
                 _cache.RegisterHlsDirectory(itemId, artModifiedTicks);
-
-                // Monitor ffmpeg in the background: wait for completion, log errors, trigger eviction.
-                _ = MonitorFfmpegHlsAsync(ffmpegProcess, hlsDir, itemId, artModifiedTicks, "Song");
-
-                // Serve the partial playlist immediately — the Echo Show will start
-                // fetching segments and re-request the playlist for updates.
-                _logger.LogDebug("VideoAudio HLS: serving partial playlist for item {ItemId}", itemId);
-                return ServePlaylistWithToken(playlistPath, overrideToken);
             }
             catch
             {
+                // Pre-handoff failure: this scope still owns the process.
                 try { ffmpegProcess.Kill(); } catch { /* already exited */ }
                 ffmpegProcess.Dispose();
                 throw;
             }
+
+            // Monitor ffmpeg in the background: wait for completion, log errors, trigger
+            // eviction. CA2025: started via the boundary helper AFTER the disposing
+            // scope above closed, so no later exception (e.g. the playlist re-read in
+            // ServePlaylistWithToken racing ffmpeg's rewrite) can dispose the process
+            // under the running monitor.
+            StartHlsMonitor(ffmpegProcess, hlsDir, itemId, artModifiedTicks, "Song");
+
+            // Serve the partial playlist immediately; the Echo Show will start
+            // fetching segments and re-request the playlist for updates.
+            _logger.LogDebug("VideoAudio HLS: serving partial playlist for item {ItemId}", itemId);
+            return ServePlaylistWithToken(playlistPath, overrideToken);
 #pragma warning restore CA3003
         }
     }
@@ -720,33 +731,36 @@ public class VideoAudioController : ControllerBase
 
                 // Register the HLS directory for fast segment lookups.
                 _cache.RegisterHlsDirectory(itemId, artModifiedTicks);
-
-                // Monitor ffmpeg in the background: wait for completion, log errors,
-                // trigger eviction, clear the active-encode flag. The transcode tier
-                // carries the item runtime so the monitor kill scales with it (JF-500
-                // review F1); the remux tier keeps the fixed ceiling.
-                _ = MonitorFfmpegHlsAsync(
-                    ffmpegProcess,
-                    hlsDir,
-                    itemId,
-                    artModifiedTicks,
-                    "Episode",
-                    _activeEpisodeEncodes,
-                    videoTranscodeTier,
-                    validation.Item.RunTimeTicks);
-
-                // Serve the partial playlist immediately; the Echo Show fetches
-                // segments and re-requests the playlist as it grows.
-                _logger.LogDebug("VideoAudio episode HLS: serving partial playlist for item {ItemId}", itemId);
-                return ServePlaylistWithToken(playlistPath);
             }
             catch
             {
+                // Pre-handoff failure: this scope still owns the process.
                 try { ffmpegProcess.Kill(); } catch { /* already exited */ }
                 ffmpegProcess.Dispose();
                 _activeEpisodeEncodes.TryRemove(itemId, out _);
                 throw;
             }
+
+            // Monitor ffmpeg in the background: wait for completion, log errors,
+            // trigger eviction, clear the active-encode flag (its finally owns both
+            // the flag clear and the process disposal from here on). The transcode
+            // tier carries the item runtime so the monitor kill scales with it (JF-500
+            // review F1); the remux tier keeps the fixed ceiling. CA2025: started via
+            // the boundary helper AFTER the disposing scope above closed.
+            StartHlsMonitor(
+                ffmpegProcess,
+                hlsDir,
+                itemId,
+                artModifiedTicks,
+                "Episode",
+                _activeEpisodeEncodes,
+                videoTranscodeTier,
+                validation.Item.RunTimeTicks);
+
+            // Serve the partial playlist immediately; the Echo Show fetches
+            // segments and re-requests the playlist as it grows.
+            _logger.LogDebug("VideoAudio episode HLS: serving partial playlist for item {ItemId}", itemId);
+            return ServePlaylistWithToken(playlistPath);
 #pragma warning restore CA3003
         }
     }
@@ -967,19 +981,22 @@ public class VideoAudioController : ControllerBase
                 }
 
                 _cache.RegisterHlsDirectory(cacheKey, artModifiedTicks);
-
-                _ = MonitorFfmpegHlsAsync(ffmpegProcess, hlsDir, cacheKey, artModifiedTicks, "EpisodeAudio", _activeEpisodeEncodes);
-
-                _logger.LogDebug("VideoAudio episode AUDIO HLS: serving partial playlist for item {ItemId} (start={StartTicks})", itemId, startTicks);
-                return ServePlaylistWithToken(playlistPath);
             }
             catch
             {
+                // Pre-handoff failure: this scope still owns the process.
                 try { ffmpegProcess.Kill(); } catch { /* already exited */ }
                 ffmpegProcess.Dispose();
                 _activeEpisodeEncodes.TryRemove(cacheKey, out _);
                 throw;
             }
+
+            // CA2025: monitor started via the boundary helper AFTER the disposing scope
+            // above closed; the monitor's finally owns the flag clear and the disposal.
+            StartHlsMonitor(ffmpegProcess, hlsDir, cacheKey, artModifiedTicks, "EpisodeAudio", _activeEpisodeEncodes);
+
+            _logger.LogDebug("VideoAudio episode AUDIO HLS: serving partial playlist for item {ItemId} (start={StartTicks})", itemId, startTicks);
+            return ServePlaylistWithToken(playlistPath);
 #pragma warning restore CA3003
         }
     }
@@ -1294,8 +1311,12 @@ public class VideoAudioController : ControllerBase
             // Mark this audiobook as actively encoding to prevent concurrent ffmpeg launches.
             _activeAudiobookEncodes.TryAdd(parentId, true);
 
-            // Monitor ffmpeg in background — logs errors, triggers eviction when done.
-            _ = MonitorFfmpegHlsAsync(ffmpegProcess, hlsDir, parentId, artModifiedTicks, "Audiobook");
+            // Monitor ffmpeg in background: logs errors, triggers eviction when done.
+            // CA2025: started via the boundary helper (this method never disposes the
+            // process). The HasExited/ExitCode reads below are best-effort; their
+            // InvalidOperationException catch already tolerates the monitor's raced
+            // disposal (the monitor's finally is the sole owner).
+            StartHlsMonitor(ffmpegProcess, hlsDir, parentId, artModifiedTicks, "Audiobook");
 
             // Wait briefly for the first segment to appear so we don't serve a playlist
             // that references zero actual segment files (Echo Show would fail immediately).
@@ -3202,6 +3223,32 @@ public class VideoAudioController : ControllerBase
             || line.Contains("Header missing", StringComparison.OrdinalIgnoreCase)
             || line.Contains("No space left on device", StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// CA2025 ownership boundary: the ONLY place the song-path ffmpeg Process is handed
+    /// to an unawaited monitor task. Callers whose body disposes the process (their
+    /// startup-wait failure paths and catches do) start the monitor through this
+    /// wrapper, never inline: the analyzer flags any method that both disposes a
+    /// disposable and passes one to an unawaited task. After this call the monitor
+    /// owns the process (dispose in its finally); the caller must not touch it again.
+    /// </summary>
+    private void StartSongMonitor(Process process, string ffmpegPath, string cachePath, string itemId, long artModifiedTicks)
+        => _ = MonitorFfmpegAndRemuxAsync(process, ffmpegPath, cachePath, itemId, artModifiedTicks);
+
+    /// <summary>
+    /// CA2025 ownership boundary for every HLS path: see <see cref="StartSongMonitor"/>.
+    /// Optional parameters mirror <see cref="MonitorFfmpegHlsAsync"/> 1:1.
+    /// </summary>
+    private void StartHlsMonitor(
+        Process process,
+        string hlsDir,
+        string itemId,
+        long artModifiedTicks,
+        string label,
+        ConcurrentDictionary<string, bool>? activeEncodesTracker = null,
+        bool videoTranscodeTier = false,
+        long? runTimeTicks = null)
+        => _ = MonitorFfmpegHlsAsync(process, hlsDir, itemId, artModifiedTicks, label, activeEncodesTracker, videoTranscodeTier, runTimeTicks);
 
     /// <summary>
     /// Monitor an ffmpeg process that was started by <see cref="StartFfmpegProcess"/>.

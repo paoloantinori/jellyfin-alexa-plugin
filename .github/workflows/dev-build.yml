@@ -18,10 +18,15 @@ jobs:
         id: version-string
         run: echo "VERSION_STRING="${{ steps.version.outputs.VERSION }}-$(date +%s)-dev >> $GITHUB_OUTPUT
 
-      - name: Setup .NET SDK 9.0
+      # JF-307 dual-target: SDK 10 builds both TFMs; 9.0.x provides the net9.0
+      # testhost runtime. The artifact still ships the net9.0 publish below (the
+      # Jellyfin 10.11 runtime line; the net10 line enters via the release flow).
+      - name: Setup .NET (10.x SDK + 9.x runtime)
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.x'
+          dotnet-version: |
+            9.0.x
+            10.0.x
 
       - name: Build
         run: dotnet publish --configuration Debug

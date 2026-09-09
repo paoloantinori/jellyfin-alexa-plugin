@@ -1,10 +1,26 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <!-- JF-307: dual-target. net9.0 + Jellyfin 10.11.x is the shipping line (manifest
+         targetAbi today); net10.0 + Jellyfin 12.0.0-rc7 is the pre-release line. The
+         two TFMs cannot share one Jellyfin package version (12.0.0-rc7 ships
+         net10.0-only libs), hence the Condition'd PackageReferences below. 
+      Local SDK 9 recipe (when the multi-target build fights you): dotnet restore -p:TargetFramework=net9.0, then dotnet build -f net9.0 with the no-restore flag (see docs/jf307-rc7-spike-findings.md).
+-->
+    <TargetFrameworks>net9.0;net10.0</TargetFrameworks>
     <RootNamespace>Jellyfin.Plugin.AlexaSkill</RootNamespace>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <NoWarn>CS1591;CS1573</NoWarn>
+    <!-- CA1873 (non-guarded log-argument evaluation; 519 sites under the .NET 10
+         analyzer set): the project's debug-logging policy deliberately keeps LogDebug
+         calls unconditional for triage (CLAUDE.md "Debug Logging Policy"), so a
+         519-site IsEnabled rewrite contradicts the policy; the rule is suppressed
+         project-wide instead.
+         NU1904 (Refit 4.7.51, GHSA-3hxg-fxwm-8gf7, CRLF injection in Refit
+         attributes): pulled in transitively by the Alexa.NET.Management 5.10.0 exact
+         Refit pin, which is the root cause. The real fix is the library update
+         (tracked as the JF-307 follow-up; carries SMAPI runtime risk), not this
+         NoWarn; suppressed until that update lands. -->
+    <NoWarn>CS1591;CS1573;CA1873;NU1904</NoWarn>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Nullable>enable</Nullable>
     <AnalysisMode>AllEnabledByDefault</AnalysisMode>
@@ -20,10 +36,16 @@
   <ItemGroup>
     <PackageReference Include="Alexa.NET.Profile" Version="1.0.0" />
     <PackageReference Include="Alexa.NET.Reminders" Version="*" />
-    <PackageReference Include="Jellyfin.Controller" Version="10.11.8">
+    <PackageReference Include="Jellyfin.Controller" Version="10.11.8" Condition="'$(TargetFramework)'=='net9.0'">
       <ExcludeAssets>runtime</ExcludeAssets>
     </PackageReference>
-    <PackageReference Include="Jellyfin.Model" Version="10.11.8">
+    <PackageReference Include="Jellyfin.Model" Version="10.11.8" Condition="'$(TargetFramework)'=='net9.0'">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+    <PackageReference Include="Jellyfin.Controller" Version="12.0.0-rc7" Condition="'$(TargetFramework)'=='net10.0'">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+    <PackageReference Include="Jellyfin.Model" Version="12.0.0-rc7" Condition="'$(TargetFramework)'=='net10.0'">
       <ExcludeAssets>runtime</ExcludeAssets>
     </PackageReference>
   </ItemGroup>

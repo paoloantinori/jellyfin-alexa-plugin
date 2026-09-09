@@ -26,10 +26,16 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         run: if ! diff <(echo "${GITHUB_REF##*/}") <(echo "${{ steps.version.outputs.VERSION }}"); then exit 1; fi
 
-      - name: Setup .NET SDK 9.0
+      # JF-307 dual-target: SDK 10 builds both TFMs; 9.0.x provides the net9.0
+      # testhost runtime. The zip below still packs the net9.0 publish (the
+      # manifest's 10.11 targetAbi line; the net10 entry lands with the 12.0
+      # release per the release flow).
+      - name: Setup .NET (10.x SDK + 9.x runtime)
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 9.x
+          dotnet-version: |
+            9.0.x
+            10.0.x
 
       - uses: actions/setup-python@v5
         with:
