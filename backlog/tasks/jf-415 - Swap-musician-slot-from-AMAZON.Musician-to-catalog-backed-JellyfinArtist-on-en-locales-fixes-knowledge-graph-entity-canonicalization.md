@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-08-30 06:08'
+updated_date: '2026-09-09 02:31'
 labels: []
 dependencies: []
 priority: medium
@@ -29,6 +30,12 @@ Mitigation: swap the musician slot to the catalog-backed JellyfinArtist custom t
 - [ ] #6 Full NLU suite green on the swapped locales
 - [ ] #7 Research report referenced: claudedocs/research_amazon_musician_entity_canonicalization_2026-08-30.md
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+SCOPE EXTENSION (2026-09-09, from JF-508 part A): the same catalog-backed slot swap is now needed on it-IT, with the mechanism fully understood there (JF-508's notes carry the full analysis): 'suona la band {obscure artist}' loses to PlaySong's statistical 'Suona la canzone {song}' absorption because AMAZON.Musician only anchors via Amazon's knowledge graph (works for famous artists: 'pink floyd'->KG entity; fails for in-library obscure ones: 'soul coughing'). A catalog-backed JellyfinArtist musician slot (weekly CatalogSyncTask + phonetic variants) anchors EVERY in-library artist. The it-IT template change is one slot-type line, but the design trade-off this task already names applies: out-of-library names stop filling the slot (the xyzzyfoo not-found e2e class) - the not-found UX must be designed with the swap (elicitation or documented no-match). Probe-verify-first rule applies (the JF-400 method note).
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
