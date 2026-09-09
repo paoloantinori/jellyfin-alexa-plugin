@@ -451,6 +451,12 @@ public class FindSongIntentHandler : BaseHandler
 
         if (keywordTokens.Length == 0)
         {
+            // JF-530: this prompt elicits the titleKeywords slot AS KEYWORDS, so the next
+            // answer must be parsed as keywords. Same invariant as the no-match branch
+            // below; reachable here from an AwaitingArtist turn with stored keywords
+            // that tokenize to zero (HandleFirstInvocationAsync stores the first
+            // keywords unvalidated).
+            sessionData.State = FindSongState.AwaitingKeywords;
             string vagueMsg = ResponseStrings.Get("FindSongTooVague", locale);
             return ElicitTitleKeywords(vagueMsg,
                 sessionData);
@@ -549,6 +555,21 @@ public class FindSongIntentHandler : BaseHandler
                 }
             }
 
+            // JF-530 (live 2026-09-09, it-IT, corr 1113ebfe/514443a3): this prompt
+            // elicits the titleKeywords slot AS KEYWORDS ("try other words"), so the
+            // state machine must treat the NEXT answer as fresh keywords. Reached from
+            // HandleAwaitingArtistAsync (an artist answer was resolved but the stored
+            // keywords missed), the state used to stay AwaitingArtist, so every retry
+            // answer was parsed as an ARTIST name and the same dead keywords were
+            // searched again forever: "cup" resolved to Koop, "walls for" resolved to
+            // Sator, both searching the stale turn-one keywords. AwaitingKeywords
+            // restores recovery: HandleAwaitingKeywordsAsync stores the fresh slot
+            // value before searching, and the artist-scoped branch below composes it
+            // with the stored ArtistId. The stored keywords themselves stay untouched
+            // on THIS turn: in the AwaitingArtist state the fresh slot value IS the
+            // artist answer (ElicitArtist captures into titleKeywords), so replacing
+            // the keywords with it would break the narrow-by-artist search.
+            sessionData.State = FindSongState.AwaitingKeywords;
             string noMatchMsg = ResponseStrings.Get("FindSongNoMatch", locale);
             return ElicitTitleKeywords(noMatchMsg,
                 sessionData);
