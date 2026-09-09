@@ -4,9 +4,10 @@ title: >-
   JF-508B follow-ups: the full-coverage gate reaches only HandleFuzzyMiss -
   three sibling auto-play paths bypass it; diacritic membership demotes accent
   matches to prompts
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-09 05:17'
+updated_date: '2026-09-09 15:48'
 labels:
   - fuzzy-matching
   - routing
@@ -39,16 +40,22 @@ From the JF-508 part B code review (2026-09-09, SAFE TO MERGE with same-turn tra
 - [ ] #5 Full suite green; /simplify + code-review high gates before merge
 <!-- AC:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped, merged (6396c671 + merge), deployed (md5 54373dd4, clean boot on the 12.0 box, 24 queues, zero FTL, play smoke green after settle). The short-query full-coverage gate now lives in ONE definition, KeywordMatcher.HasFullKeywordCoverage, applied at ALL FOUR auto-play decision points: HandleFuzzyMiss's score-bar disjunct (delegates), SearchMedia's site-level pre-check and PlayPlaylist's pre-check (both fall into HandleFuzzyMiss's yes/no prompt on a gated miss - verified: single prompt, no double-prompt, nothing dropped), and SearchItemsFuzzyAsync's zero-result fallback (feeds 10 handler families: gated miss logs a withhold LogDebug and returns null = the below-threshold outcome, indistinguishable no more). Membership is diacritic-folded (FormD + strip NonSpacingMark, coverage-only, documented why NOT Jellyfin.Extensions' table-based RemoveDiacritics): 'besame mucho' vs 'Bésame Mucho' (91) silently plays again, 'cafe del mar' it-IT passes, 'coop' vs 'Koop' still fails (phonetic-equality is not membership). AutoPlay users are exempt at all four sites (review F1: the code-review caught the policy contradiction at the fourth site - fixed with the guard + regression test; parity with HandleFuzzyMiss's disjunct and PlayAlbum's guard). 15 tests (14 worker + 1 F1; the three sibling tests adversarially verified to bite). Gates: /simplify (A1 withhold-log + R1 fold-doc applied; S2 rejected with the CA1068/CS1737 mechanism - the required-locale reorder is analyzer-incompatible with the method's existing token-mid-list shape, documented), code-review high FIX FIRST (single finding F1, applied). Tests 3545/3545 on BOTH TFMs. DoD 4-8 N/A.
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
 - [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
 - [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
 - [ ] #6 NLU test fixtures updated if interaction model changed
 - [ ] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
