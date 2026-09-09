@@ -4,7 +4,7 @@ title: Migrate plugin to Jellyfin 12.0 (net10.0) — ABI 12.0.0.0 port
 status: To Do
 assignee: []
 created_date: '2026-07-03 21:10'
-updated_date: '2026-09-07 08:18'
+updated_date: '2026-09-09 05:24'
 labels: []
 dependencies: []
 references:
@@ -64,6 +64,8 @@ This task is intentionally queued ahead of stable so it's ready to execute the m
 
 <!-- SECTION:NOTES:BEGIN -->
 PRIORITIZED 2026-09-07 by Paolo: validation against jellyfin 12.0.0-RC7 (verified on NuGet: the 12.0.x tail is rc3..rc7; the task's RC2 references are stale) in a DEDICATED WORKTREE. Co-existence is the explicit goal: 'nella speranza che il codice sia compatibile con entrambe le versioni, o dobbiamo avere una strategia per la co-esistenza'. The candidate strategy (to be PROVEN by the spike, not assumed): multi-target net9.0+net10.0 with Condition'd PackageReference (10.11.8 for net9.0, 12.0.0-rc7 for net10.0) and a second manifest entry targetAbi 12.0.0.0 - the pattern the official plugin ecosystem uses. The spike's first question: does the source compile under BOTH TFMs unchanged (the hoped-for outcome), or which files need #if/net10 branches, or is a hard fork unavoidable (the dis-preferred outcome).
+
+PRODUCTION REALITY CHANGE (2026-09-09 ~07:20): the minix server AUTO-UPDATED to Jellyfin 12.0.0 (linuxserver/jellyfin:latest pulled the major; /System/Info/Public confirms Version 12.0.0). LIVE FINDINGS from the boot logs: (1) plugin 0.12.1.0 (net9.0, built against the 10.11 ABI) LOADS AND STARTS CLEANLY on 12.0 - 'AlexaSkill plugin loaded v0.12.1.0', PluginManager 'Loaded plugin: AlexaSkill 0.12.1.0', DeviceQueueManager restored 10+ device queues from disk, ZERO FTL/ERR lines. Assembly-level compat holds at startup. (2) The ADMIN API KEY WAS INVALIDATED by the migration: the previously-working key gets 401 on every auth shape (X-Emby-Token, X-MediaBrowser, Bearer, api_key query) - a fresh key must be generated in the 12.0 dashboard (needs Paolo or dashboard access). (3) CONSEQUENT RISK, UNVERIFIED: the skill's per-user JellyfinTokens (plugin XML config) may be equally dead -> stream-URL auth for playback could fail until users re-link; the simulator/e2e verification paths are all key-based and blocked until a fresh key exists. (4) The JF-508B deploy LANDED on the 12.0 boot (md5 b96db630, PassesShortQueryFullCoverageGate symbol present, clean start). NEXT STEPS (morning, mostly blocked on a fresh admin key): new key -> plugin config Users token check (re-link if dead) -> full unit+e2e battery against 12.0 -> then this task's spike becomes the structured compat validation with a REAL 12.0 production box (better than any container probe). The .NET 10 SDK question (the original blocker) may be moot for 12.0 if the 10.11-built plugin passes the battery: single-codebase compat is now the live hypothesis with supporting evidence.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
