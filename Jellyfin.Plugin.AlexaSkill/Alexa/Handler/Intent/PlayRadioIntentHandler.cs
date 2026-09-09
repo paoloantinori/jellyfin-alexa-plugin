@@ -166,7 +166,7 @@ public class PlayRadioIntentHandler : BaseHandler
                 return userError;
             }
 
-            BaseItem? channel = await FindRadioChannelAsync(station!, jellyfinUser!, user, cancellationToken).ConfigureAwait(false);
+            BaseItem? channel = await FindRadioChannelAsync(station!, jellyfinUser!, user, locale, cancellationToken).ConfigureAwait(false);
             if (channel != null)
             {
                 Logger.LogInformation("PlayRadio: station '{ChannelName}' matched live-TV radio channel {ChannelId}", channel.Name, channel.Id);
@@ -319,12 +319,14 @@ public class PlayRadioIntentHandler : BaseHandler
     /// <param name="station">The captured station word.</param>
     /// <param name="jellyfinUser">The Jellyfin user for the query.</param>
     /// <param name="user">The plugin user (library access filtering).</param>
+    /// <param name="locale">The request locale, for the fuzzy fallback's JF-526 coverage gate.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The matched channel, or null when no channel matches.</returns>
     private async Task<BaseItem?> FindRadioChannelAsync(
         string station,
         Jellyfin.Database.Implementations.Entities.User jellyfinUser,
         Entities.User user,
+        string locale,
         CancellationToken cancellationToken)
     {
         IReadOnlyList<BaseItem>? channels = await QueryRadioChannelsAsync(jellyfinUser, user, station, 1, cancellationToken).ConfigureAwait(false);
@@ -335,7 +337,7 @@ public class PlayRadioIntentHandler : BaseHandler
 
         var fuzzy = await SearchItemsFuzzyAsync(
             station, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.LiveTvChannel },
-            cancellationToken, "PlayRadioStationFuzzyFallback", mediaTypes: new[] { MediaType.Audio }).ConfigureAwait(false);
+            cancellationToken, "PlayRadioStationFuzzyFallback", mediaTypes: new[] { MediaType.Audio }, locale: locale).ConfigureAwait(false);
         return fuzzy?.Item;
     }
 

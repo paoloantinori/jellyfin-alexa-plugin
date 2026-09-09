@@ -155,7 +155,7 @@ public class BrowseLibraryIntentHandler : BaseHandler
 
         if (items.Count == 0)
         {
-            var fuzzy = await SearchItemsFuzzyAsync(filter ?? string.Empty, resolvedUser, user, _libraryManager, new[] { itemKind.Value }, cancellationToken, "BrowseLibraryFuzzyFallback").ConfigureAwait(false);
+            var fuzzy = await SearchItemsFuzzyAsync(filter ?? string.Empty, resolvedUser, user, _libraryManager, new[] { itemKind.Value }, cancellationToken, "BrowseLibraryFuzzyFallback", locale: locale).ConfigureAwait(false);
             if (fuzzy != null)
             {
                 items = new List<BaseItem> { fuzzy.Value.Item };

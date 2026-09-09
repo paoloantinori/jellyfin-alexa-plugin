@@ -1,7 +1,9 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Text;
 using MediaBrowser.Controller.Entities;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
@@ -276,6 +278,82 @@ internal static class KeywordMatcher
         }
 
         return tokens.ToArray();
+    }
+
+    /// <summary>
+    /// JF-508: the short-query scope of the full-coverage gate (queries of at most
+    /// this many tokens, post-Tokenizer, require every token present in the
+    /// candidate). Pinned by the 2-vs-3 boundary test in FuzzyMatchAutoAcceptTests.
+    /// </summary>
+    private const int ShortQueryFullCoverageMaxTokens = 2;
+
+    /// <summary>
+    /// JF-508/JF-526 short-query full-coverage gate, the ONE shared definition for
+    /// every score-bar auto-play decision point: HandleFuzzyMiss's auto-accept plus
+    /// the sibling sites the JF-508B review found bypassing it (SearchMedia's
+    /// site-level FuzzyMatch pre-check, BuildPlaylistPlayResponseAsync's pre-check,
+    /// and SearchItemsFuzzyAsync's zero-result fallback). For queries of at most 2
+    /// tokens (after <see cref="Tokenize"/>'s locale + English stop-word stripping,
+    /// the same normalization the song search uses), every query token must appear
+    /// in the candidate's tokenized name (full keyword coverage): PartialRatio's
+    /// sliding window cannot see word boundaries, so a short query with one
+    /// entirely-absent word can still cross the score bar ("soul coffee" vs
+    /// "Starfish &amp; Coffee" = 1/2 = 50%, the misfire shape from corr=269e622d).
+    /// Membership is diacritic-insensitive (JF-526): both sides fold via
+    /// <see cref="FoldDiacritics"/>, so "besame" covers "Bésame" while a
+    /// phonetic-equal but differently-spelled word ("coop" vs "Koop") still fails;
+    /// the gate is token-based, not phonetic. Returns true when the gate does not
+    /// apply (0 tokens after stripping, or 3+ tokens where partial coverage is
+    /// acceptable) or coverage is full; false only for a 1-2 token query with an
+    /// unaccounted word, which routes the caller to a prompt instead of auto-play.
+    /// </summary>
+    /// <param name="queryTokens">Pre-tokenized query tokens (from <see cref="Tokenize"/>).</param>
+    /// <param name="candidateName">The candidate's display name (tokenized here with the same locale).</param>
+    /// <param name="locale">The locale string (e.g. "en-US") used to resolve stop words.</param>
+    /// <returns>Whether the candidate fully accounts for every short-query token.</returns>
+    public static bool HasFullKeywordCoverage(string[] queryTokens, string candidateName, string locale)
+    {
+        if (queryTokens.Length == 0 || queryTokens.Length > ShortQueryFullCoverageMaxTokens)
+        {
+            return true;
+        }
+
+        // Tokenize lowercases both sides, so ordinal set membership is case-insensitive;
+        // each side then folds diacritics for accent-insensitive membership (JF-526).
+        var nameTokens = new HashSet<string>(Tokenize(candidateName, locale).Select(FoldDiacritics), StringComparer.Ordinal);
+        foreach (string token in queryTokens)
+        {
+            if (!nameTokens.Contains(FoldDiacritics(token)))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// JF-526: folds a token to its accent-insensitive base form (Unicode Normalize
+    /// FormD, then strip the combining marks) so gate membership treats "besame" and
+    /// "bésame" as the same word. Coverage-only: <see cref="Tokenize"/> and the
+    /// Score/ScorePhonetic semantics are deliberately unchanged.
+    /// NOT Jellyfin.Extensions' RemoveDiacritics: that helper is table-based (Diacritics
+    /// 4.x) and folds ligatures/strokes FormD cannot, while FormD folds non-Latin
+    /// decomposables the Latin table cannot; the edges differ, do not swap blindly.
+    /// </summary>
+    private static string FoldDiacritics(string token)
+    {
+        string formD = token.Normalize(NormalizationForm.FormD);
+        var sb = new StringBuilder(formD.Length);
+        foreach (char c in formD)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+            {
+                sb.Append(c);
+            }
+        }
+
+        return sb.ToString();
     }
 
     /// <summary>

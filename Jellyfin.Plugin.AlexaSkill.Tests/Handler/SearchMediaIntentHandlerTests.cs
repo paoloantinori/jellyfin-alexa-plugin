@@ -265,6 +265,62 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
         Assert.True(response.SessionAttributes.ContainsKey("disambig_matches"));
     }
 
+    // JF-526 (JF-508 sibling): the site-level FuzzyMatch pre-check below returns
+    // BEFORE HandleFuzzyMiss, so without the shared gate here a 2-word partial-coverage
+    // hit ("soul coffee" -> "Starfish & Coffee", score 72) auto-played ungated.
+    [Fact]
+    public async Task HandleAsync_TwoWordPartialCoverageFuzzyHit_PromptsInsteadOfAutoPlaying()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(query: "soul coffee");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+
+        _fx.SetupUserMock();
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>
+            {
+                new Audio { Name = "Starfish & Coffee", Id = Guid.NewGuid() },
+                new Audio { Name = "Coffee & TV", Id = Guid.NewGuid() }
+            });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.False(response.Response.ShouldEndSession);
+        Assert.NotNull(response.SessionAttributes);
+        Assert.True(response.SessionAttributes.ContainsKey("disambig_matches"),
+            "the site-level pre-check must not auto-play a partial-coverage short query (JF-526)");
+    }
+
+    [Fact]
+    public async Task HandleAsync_TwoWordFullCoverageFuzzyHit_StillAutoPlays()
+    {
+        // Counter-case: both query words covered by the best candidate, so the
+        // pre-check keeps its auto-play (the gate withholds only unaccounted words).
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(query: "coffee tv");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+
+        _fx.SetupUserMock();
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>
+            {
+                new Audio { Name = "Starfish & Coffee", Id = Guid.NewGuid() },
+                new Audio { Name = "Coffee & TV", Id = Guid.NewGuid() }
+            });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        response.HasDirective<AudioPlayerPlayDirective>();
+    }
+
     [Fact]
     public async Task HandleAsync_SetsQueueAndNowPlayingItem()
     {

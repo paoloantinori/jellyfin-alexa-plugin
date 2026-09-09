@@ -101,7 +101,7 @@ public class PlayPodcastIntentHandler : BaseHandler
 
         if (podcasts.Count == 0)
         {
-            var fuzzy = await SearchItemsFuzzyAsync(podcastName, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.MusicAlbum }, cancellationToken, "PlayPodcastFuzzyFallback").ConfigureAwait(false);
+            var fuzzy = await SearchItemsFuzzyAsync(podcastName, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.MusicAlbum }, cancellationToken, "PlayPodcastFuzzyFallback", locale: locale).ConfigureAwait(false);
             if (fuzzy != null)
             {
                 podcasts = new List<BaseItem> { fuzzy.Value.Item };
