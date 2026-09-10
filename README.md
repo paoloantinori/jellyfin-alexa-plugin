@@ -429,6 +429,16 @@ If you're unsure whether a name will work, test it in the [Alexa Developer Conso
 
 You can also change the invocation name from the plugin configuration: saving redeploys it to Amazon automatically (~15–30s while the models rebuild). Leave the field empty to use the locale defaults (Italian: "Mia Collezione"; other locales: "Jellyfin Player"), or set a custom name that applies to every locale — no need to edit the Alexa Developer Console manually.
 
+### The skill stopped working after a Jellyfin server update ("Sorry, I'm having trouble")
+
+A Jellyfin server update, especially a major one (10.11 to 12.0 for example), can invalidate the linking token the skill stored for your user. Every request then fails before it reaches your library, and Alexa answers with a generic *"Sorry, I'm having trouble, please try in a little while."* The plugin's **Test connection** button stays green in this state because it checks the server connection, not the per-user link.
+
+The fix is to link the account again: open the Jellyfin dashboard, go to **Plugins > Alexa Skill**, open your user's settings and run the account linking again (the same flow as the initial setup), then try the skill.
+
+Depending on your plugin version you will hear one of two things when this happens: releases up to 0.12.1.0 answer with the generic "having trouble" message above; newer releases detect the dead link and say so out loud (*"the link to your Jellyfin server stopped working; open the Alexa skill settings page and link your account again"*). Either way the remedy is the same re-link.
+
+If the skill still fails after re-linking, look at the Jellyfin log right after a failed request: the plugin logs each request's handling quite verbosely (search for `Jellyfin.Plugin.AlexaSkill`), and those lines show exactly where it stops. Paste them if you open an issue.
+
 ### How do I verify that my utterances route to the correct intent?
 
 Use the **Alexa Developer Console** simulator. Go to your skill → **test** → enable **Development** mode → type or speak an utterance. The simulator shows which intent Alexa resolved, the extracted slot values, and the full request JSON. This is the fastest way to confirm that a new utterance or invocation name works before trying it on a real device.
