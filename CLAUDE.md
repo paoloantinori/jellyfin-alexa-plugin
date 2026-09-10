@@ -77,7 +77,7 @@ Divergence to keep honest: the docs say next/previous/startover/repeat/cancel ro
 
 ## CI
 
-GitHub Actions runs the validation/build pipeline on **PRs to main** and via manual `workflow_dispatch` — it does **not** rebuild on every push to main. Release builds run only on tag push (see [Release](#release)). Pipelines:
+GitHub Actions runs the validation/build pipeline on **push to main**, PRs to main, and manual `workflow_dispatch`. Release builds run only on tag push (see [Release](#release)). The build-and-test job **installs ffmpeg** (apt) because ubuntu-latest runner images no longer ship it and `ResolveFfmpegPath` File.Exists-gates the mocked `/usr/bin/ffmpeg`: a test that depends on an ambient ffmpeg binary passes locally and 503s on CI (confirmed 2026-09-10). Prefer injecting a fake-script path (`WriteRecordingFakeFfmpeg`) over relying on the ambient one. Pipelines:
 - `ci.yml` — PR-gated: **build-and-test** (Release build with `-warnaserror` + full test suite), **validate-models** (advisory), **validate-locales** (baseline-aware), **validate-versions**, **validate-build-yaml**
 - `dev-build.yml` — manual-only (`workflow_dispatch`): downloadable dev DLL artifact zip
 - `release-build.yml` — tag push only: build + test + zip + GitHub release + manifest update

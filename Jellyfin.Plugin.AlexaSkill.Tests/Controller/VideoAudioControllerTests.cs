@@ -3237,7 +3237,10 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             TimeSpan.FromMinutes(45).Ticks,
             token: null);
 
-        var controller = CreateController(itemIdStr);
+        // ffmpeg path injected even though this test never encodes: request
+        // validation File.Exists-gates the encoder path, and CI runners do not
+        // ship /usr/bin/ffmpeg (the ambient-binary CI divergence class).
+        var controller = CreateController(itemIdStr, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf531-completed"));
 
         ActionResult result = await controller.StreamHlsEpisode(itemIdStr);
 
@@ -3285,7 +3288,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: true);
         try
         {
-            var controller = CreateController(itemIdStr);
+            // Same ambient-ffmpeg note as the completed-encode test above.
+            var controller = CreateController(itemIdStr, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf531-midencode"));
 
             ActionResult result = await controller.StreamHlsEpisode(itemIdStr);
 
