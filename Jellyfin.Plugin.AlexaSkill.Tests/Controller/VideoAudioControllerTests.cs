@@ -3052,6 +3052,286 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.DoesNotContain("STALE-SEGMENT", snapshot, StringComparison.Ordinal);
     }
 
+    // ========== JF-531: pre-written full episode listing (live-edge fix) ==========
+
+    /// <summary>
+    /// Shared endpoint-test setup for the JF-531 episode family: an Episode with the
+    /// given codec (1080p video + eac3 audio streams), the encoder path, and the
+    /// GetItemById wiring.
+    /// </summary>
+    private (MediaBrowser.Controller.Entities.TV.Episode Episode, Mock<IMediaSourceManager> MediaSources)
+        SetupEpisodeForHls(string name, string videoCodec, TimeSpan? runtime)
+    {
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = name,
+            Id = Guid.NewGuid(),
+            RunTimeTicks = runtime?.Ticks
+        };
+
+        var mediaSourceManager = new Mock<IMediaSourceManager>();
+        mediaSourceManager
+            .Setup(m => m.GetMediaStreams(episode.Id))
+            .Returns(new List<MediaStream>
+            {
+                new() { Type = MediaStreamType.Video, Codec = videoCodec, Height = 1080 },
+                new() { Type = MediaStreamType.Audio, Codec = "eac3" }
+            });
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(episode.Id)).Returns(episode);
+        return (episode, mediaSourceManager);
+    }
+
+
+    /// <summary>
+    /// JF-531 unit level: WriteEpisodePlaylist lists ceil(runtime/4s) segments whose
+    /// EXTINF durations sum to the full runtime (what the seekbar shows), with the
+    /// event-playlist header, NO #EXT-X-ENDLIST and NO per-segment
+    /// #EXT-X-DISCONTINUITY (one continuous encode, unlike audiobook chapter
+    /// boundaries), and the stream token embedded on segment lines.
+    /// </summary>
+    [Fact]
+    public void WriteEpisodePlaylist_FullListing_NoEndList_SumsToRuntime()
+    {
+        string playlistPath = Path.Combine(_tempDir, "playlist-full-unit-test.m3u8");
+
+        // The live-incident shape: Adolescence E2, 51 minutes (corr=c0c21c6a).
+        long runtimeTicks = TimeSpan.FromMinutes(51).Ticks;
+        VideoAudioController.WriteEpisodePlaylist(
+            playlistPath, "/alexaskill/api/video-audio/ITEM/segments/", runtimeTicks, "tok123");
+
+        string content = File.ReadAllText(playlistPath);
+        string[] lines = content.Split('\n');
+
+        Assert.StartsWith("#EXTM3U", lines[0], StringComparison.Ordinal);
+        Assert.Contains("#EXT-X-VERSION:3", content, StringComparison.Ordinal);
+        Assert.Contains("#EXT-X-TARGETDURATION:4", content, StringComparison.Ordinal);
+        Assert.Contains("#EXT-X-MEDIA-SEQUENCE:0", content, StringComparison.Ordinal);
+
+        // 51 min = 3060s at 4s per segment = 765 entries: seg_0000..seg_0764.
+        string[] extInfLines = lines.Where(l => l.StartsWith("#EXTINF:", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(765, extInfLines.Length);
+        Assert.Contains("/alexaskill/api/video-audio/ITEM/segments/seg_0000.ts?token=tok123", content, StringComparison.Ordinal);
+        Assert.Contains("/alexaskill/api/video-audio/ITEM/segments/seg_0764.ts?token=tok123", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("seg_0765", content, StringComparison.Ordinal);
+
+        // Event playlist (no ENDLIST) and a continuous timeline (no discontinuities).
+        Assert.DoesNotContain("#EXT-X-ENDLIST", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("#EXT-X-DISCONTINUITY", content, StringComparison.Ordinal);
+
+        double totalSeconds = extInfLines.Sum(l =>
+            double.Parse(l["#EXTINF:".Length..].TrimEnd(','), System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal(3060.0, totalSeconds, 3);
+    }
+
+    /// <summary>
+    /// JF-531 endpoint level: on a cache miss the FIRST serve returns the pre-written
+    /// FULL listing (every segment name, durations summing to the runtime, no
+    /// ENDLIST), not ffmpeg's growing stream.m3u8, whose no-ENDLIST partial shape
+    /// ExoPlayer treats as LIVE (playback at the live edge, partial seekbar).
+    /// ffmpeg still writes its own stream.m3u8: it remains the recorded target.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_CacheMiss_ServesPrewrittenFullListingNotLiveEdge()
+    {
+        var (episode, mediaSourceManager) = SetupEpisodeForHls("Adolescence S01E02", "h264", TimeSpan.FromMinutes(45));
+
+        string fakeFfmpegPath = WriteRecordingFakeFfmpeg("fake-ffmpeg-jf531-remux");
+
+        var controller = CreateController(episode.Id.ToString(), null, mediaSourceManager, fakeFfmpegPath);
+
+        ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString());
+
+        var content = Assert.IsType<ContentResult>(result);
+        Assert.Equal("application/vnd.apple.mpegurl", content.ContentType);
+
+        // The FULL listing: 45 min = 2700s / 4s = 675 segments (seg_0000..seg_0674),
+        // no ENDLIST (event playlist), token injected on the segment lines.
+        Assert.DoesNotContain("#EXT-X-ENDLIST", content.Content, StringComparison.Ordinal);
+        Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.Contains("seg_0674.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("seg_0675", content.Content, StringComparison.Ordinal);
+        Assert.Equal(675, VideoAudioController.CountSegmentsInPlaylist(content.Content));
+
+        // The pre-written file exists next to ffmpeg's own target, and ffmpeg was
+        // still pointed at stream.m3u8 (the prewrite never feeds ffmpeg's file).
+        string hlsDir = _cache.GetHlsDirectoryPath(episode.Id.ToString(), 0);
+        Assert.True(File.Exists(Path.Combine(hlsDir, "playlist-full.m3u8")), "pre-written listing must exist");
+        string[] recordedArgs = File.ReadAllLines(Path.Combine(hlsDir, "episode-args.txt"));
+        Assert.Equal("stream.m3u8", Path.GetFileName(recordedArgs[^1]));
+    }
+
+    /// <summary>
+    /// JF-531 AC#1: the TRANSCODE tier gets the same pre-written listing at first
+    /// serve. The live-edge mechanism is tier-independent (any no-ENDLIST partial
+    /// playlist is treated as live), and the incident episode itself was
+    /// transcode-tier HEVC.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_TranscodeTier_FirstServeIsTheFullListing()
+    {
+        var (episode, mediaSourceManager) = SetupEpisodeForHls("Adolescence S01E02", "hevc", TimeSpan.FromMinutes(51));
+
+        var controller = CreateController(
+            episode.Id.ToString(), null, mediaSourceManager, WriteRecordingFakeFfmpeg("fake-ffmpeg-jf531-hevc"));
+
+        ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString());
+
+        var content = Assert.IsType<ContentResult>(result);
+        // 51 min = 3060s / 4s = 765 segments, no ENDLIST.
+        Assert.DoesNotContain("#EXT-X-ENDLIST", content.Content, StringComparison.Ordinal);
+        Assert.Equal(765, VideoAudioController.CountSegmentsInPlaylist(content.Content));
+        Assert.Contains("seg_0764.ts?token=", content.Content, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-531 cache completion: once the encode completes (ENDLIST in stream.m3u8, no
+    /// active flag), the served playlist is ffmpeg's COMPLETE one. The pre-written
+    /// listing that stays on disk must not shadow it (the active-flag gate on the
+    /// pre-written serve path).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_EncodeCompleted_ServesEndlistPlaylistNotStalePrewritten()
+    {
+        Guid itemId = Guid.NewGuid();
+        string itemIdStr = itemId.ToString("D");
+
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Adolescence S01E02",
+            Id = itemId,
+            RunTimeTicks = TimeSpan.FromMinutes(45).Ticks
+        };
+        _libraryManagerMock.Setup(m => m.GetItemById(itemId)).Returns(episode);
+
+        string hlsDir = _cache.GetHlsDirectoryPath(itemIdStr, 0);
+        Directory.CreateDirectory(hlsDir);
+
+        // A completed encode leaves BOTH files behind: ffmpeg's ENDLIST playlist and
+        // the pre-written listing (never deleted post-encode, like the audiobook path).
+        await File.WriteAllTextAsync(
+            Path.Combine(hlsDir, "stream.m3u8"),
+            "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:4.000,\nseg_0000.ts\n#EXTINF:4.000,\nseg_0001.ts\n#EXT-X-ENDLIST\n");
+        VideoAudioController.WriteEpisodePlaylist(
+            Path.Combine(hlsDir, "playlist-full.m3u8"),
+            $"/alexaskill/api/video-audio/{itemIdStr}/segments/",
+            TimeSpan.FromMinutes(45).Ticks,
+            token: null);
+
+        var controller = CreateController(itemIdStr);
+
+        ActionResult result = await controller.StreamHlsEpisode(itemIdStr);
+
+        var content = Assert.IsType<ContentResult>(result);
+        Assert.Contains("#EXT-X-ENDLIST", content.Content, StringComparison.Ordinal);
+        Assert.Contains("seg_0001.ts?token=", content.Content, StringComparison.Ordinal);
+
+        // NOT the pre-written full listing (its exclusive tail segment is absent).
+        Assert.DoesNotContain("seg_0674", content.Content, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-531 mid-encode fetch: while the encode flag is up, a playlist re-fetch (the
+    /// player polls an event playlist) returns the full pre-written listing, which
+    /// still includes the segments ffmpeg has already appended. Append semantics are
+    /// preserved: the listing never drops a segment that was listed before.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_ActiveEncode_MidEncodeFetchServesStableFullListing()
+    {
+        Guid itemId = Guid.NewGuid();
+        string itemIdStr = itemId.ToString("D");
+
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Adolescence S01E02",
+            Id = itemId,
+            RunTimeTicks = TimeSpan.FromMinutes(45).Ticks
+        };
+        _libraryManagerMock.Setup(m => m.GetItemById(itemId)).Returns(episode);
+
+        string hlsDir = _cache.GetHlsDirectoryPath(itemIdStr, 0);
+        Directory.CreateDirectory(hlsDir);
+
+        // ffmpeg's live playlist has appended two segments so far.
+        await File.WriteAllTextAsync(
+            Path.Combine(hlsDir, "stream.m3u8"),
+            "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:4.000,\nseg_0000.ts\n#EXTINF:4.000,\nseg_0001.ts\n");
+        VideoAudioController.WriteEpisodePlaylist(
+            Path.Combine(hlsDir, "playlist-full.m3u8"),
+            $"/alexaskill/api/video-audio/{itemIdStr}/segments/",
+            TimeSpan.FromMinutes(45).Ticks,
+            token: null);
+
+        VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: true);
+        try
+        {
+            var controller = CreateController(itemIdStr);
+
+            ActionResult result = await controller.StreamHlsEpisode(itemIdStr);
+
+            var content = Assert.IsType<ContentResult>(result);
+            // The already-appended segments stay listed, and the full runtime tail is
+            // there too, with no ENDLIST (encode still running).
+            Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
+            Assert.Contains("seg_0001.ts?token=", content.Content, StringComparison.Ordinal);
+            Assert.Contains("seg_0674.ts?token=", content.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("#EXT-X-ENDLIST", content.Content, StringComparison.Ordinal);
+        }
+        finally
+        {
+            VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: false);
+        }
+    }
+
+    /// <summary>
+    /// JF-531 fallback: an item with no runtime cannot have an honest full listing;
+    /// the first serve falls back to ffmpeg's live playlist (the pre-JF-531
+    /// behavior) and no pre-written file is left for the active-encode guard to serve.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_NoRuntime_ServesLivePlaylistAndWritesNoPrewrittenFile()
+    {
+        var (episode, mediaSourceManager) = SetupEpisodeForHls("Unprobed Runtime S01E01", "h264", null);
+
+        var controller = CreateController(episode.Id.ToString(), null, mediaSourceManager, WriteRecordingFakeFfmpeg("fake-ffmpeg-jf531-noruntime"));
+
+        ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString());
+
+        // ffmpeg's own (partial) playlist is served, not a full listing.
+        var content = Assert.IsType<ContentResult>(result);
+        Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("seg_0674", content.Content, StringComparison.Ordinal);
+
+        string hlsDir = _cache.GetHlsDirectoryPath(episode.Id.ToString(), 0);
+        Assert.False(File.Exists(Path.Combine(hlsDir, "playlist-full.m3u8")), "no pre-written listing without a runtime");
+    }
+
+    /// <summary>
+    /// JF-531 no-runtime fallback, stale-listing half: a leftover playlist-full.m3u8
+    /// from an earlier encode must be DELETED when the new encode cannot write an
+    /// honest listing, so the active-encode guard can never serve a listing this
+    /// encode did not write (review coverage nit).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_NoRuntime_DeletesStalePrewrittenListing()
+    {
+        var (episode, mediaSourceManager) = SetupEpisodeForHls("Stale Listing S01E01", "h264", null);
+
+        string hlsDir = _cache.GetHlsDirectoryPath(episode.Id.ToString(), 0);
+        Directory.CreateDirectory(hlsDir);
+        string staleListing = Path.Combine(hlsDir, "playlist-full.m3u8");
+        File.WriteAllText(staleListing, "#EXTM3U\n#EXT-X-ENDLIST\n");
+
+        var controller = CreateController(episode.Id.ToString(), null, mediaSourceManager, WriteRecordingFakeFfmpeg("fake-ffmpeg-jf531-stale"));
+
+        ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString());
+
+        Assert.IsType<ContentResult>(result);
+        Assert.False(File.Exists(staleListing), "a stale pre-written listing must not survive a no-runtime encode start");
+    }
+
     // ========== JF-515: ffmpeg stderr aggregating drain ==========
 
     /// <summary>
