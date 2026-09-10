@@ -659,20 +659,20 @@ public class VideoAudioController : ControllerBase
             // the cache-hit path never re-probes, so the broken copy would be served
             // forever. The wrong-tier cost is asymmetric the other way: transcoding
             // an actually-h264 source costs one extra encode, not a cached dud.
-            var (sourceVideoCodec, sourceAudioCodec) = ResolveSourceCodecs(validation.Item);
-            bool videoTranscodeTier = !VideoAppStreamPolicy.VideoSupportsRemux(sourceVideoCodec);
+            var sourceMedia = ResolveSourceCodecs(validation.Item);
+            bool videoTranscodeTier = !VideoAppStreamPolicy.VideoSupportsRemux(sourceMedia.Video);
             if (videoTranscodeTier)
             {
                 _logger.LogInformation(
                     "VideoAudio episode HLS: item {ItemId} video codec '{VideoCodec}' is not known h264; using the video transcode tier (libx264 ultrafast CRF 23, measured 4.40x realtime on the minix 2026-09-08, JF-500)",
-                    itemId, sourceVideoCodec ?? "(unknown)");
+                    itemId, sourceMedia.Video ?? "(unknown)");
             }
 
             _logger.LogDebug(
                 "VideoAudio episode HLS: itemId={ItemId}, sourceVideoCodec={VideoCodec}, sourceAudioCodec={AudioCodec}",
                 itemId,
-                sourceVideoCodec ?? "(unknown)",
-                sourceAudioCodec ?? "(unknown)");
+                sourceMedia.Video ?? "(unknown)",
+                sourceMedia.Audio ?? "(unknown)");
 
 #pragma warning disable CA3003 // paths derived from GUID-validated itemId
             string hlsDir = _cache.GetHlsDirectoryPath(itemId, artModifiedTicks);
@@ -696,8 +696,8 @@ public class VideoAudioController : ControllerBase
                     playlistPath,
                     segmentPath,
                     hlsBaseUrl,
-                    sourceAudioCodec)
-                : BuildEpisodeHlsFfmpegArguments(videoUrl, playlistPath, segmentPath, hlsBaseUrl, sourceAudioCodec);
+                    sourceMedia.Audio)
+                : BuildEpisodeHlsFfmpegArguments(videoUrl, playlistPath, segmentPath, hlsBaseUrl, sourceMedia.Audio);
             if (_logger.IsEnabled(LogLevel.Debug))
             {
                 _logger.LogDebug("VideoAudio episode HLS: ffmpeg arguments: {Args}", string.Join(" ", ffmpegArgs));
@@ -762,7 +762,7 @@ public class VideoAudioController : ControllerBase
                         ? EstimateEpisodeTranscodeEncodeBytes(validation.Item.RunTimeTicks ?? 0)
                         : EstimateEpisodeEncodeBytes(
                             validation.Item.RunTimeTicks ?? 0,
-                            ResolveTotalMediaBitrateBps(validation.Item)),
+                            sourceMedia.TotalBitrateBps),
                     hlsDir,
                     videoTranscodeTier ? _episodeTranscodeSlot : null).ConfigureAwait(false);
             }
@@ -2039,31 +2039,58 @@ public class VideoAudioController : ControllerBase
     }
 
     /// <summary>
-    /// Combined source-codec probe (JF-525): the episode HLS tier decision needs
-    /// BOTH the video and the audio codec, and resolving them through the
-    /// individual resolvers cost one
-    /// <see cref="IMediaSourceManager.GetMediaStreams(Guid)"/> read each. This resolves
-    /// both sides from ONE stream read, each side keeping its individual
-    /// resolver's semantics: the video side skips blank codecs and
-    /// attached-picture covers (<see cref="EpisodeCoverVideoCodecs"/>), the audio
-    /// side takes the first audio stream with a non-blank codec. Fail-open shapes
-    /// are unchanged: null media source manager or a read failure returns
-    /// (null, null), and a missing stream of either type leaves that side null.
+    /// The resolved source-media probe of <see cref="ResolveSourceCodecs"/>: both
+    /// source codecs plus the combined source bitrate, all from ONE media-stream read.
+    /// </summary>
+    /// <param name="Video">Lowercase video codec, or null when unknown (no video stream, only attached-picture covers, or a failed stream read).</param>
+    /// <param name="Audio">Lowercase audio codec, or null when unknown.</param>
+    /// <param name="TotalBitrateBps">Combined video+audio source bitrate in bits per second, or null when no stream of either type carries a <see cref="MediaStream.BitRate"/>.</param>
+    internal readonly record struct SourceMediaProbe(string? Video, string? Audio, long? TotalBitrateBps);
+
+    /// <summary>
+    /// Combined source-media probe (JF-525; bitrate folded in JF-539): the episode
+    /// HLS path needs the video codec (tier decision), the audio codec (ffmpeg
+    /// arguments), and the combined bitrate (remux cache-size estimate), and
+    /// resolving them through individual resolvers cost one
+    /// <see cref="IMediaSourceManager.GetMediaStreams(Guid)"/> read each. This
+    /// resolves all three sides from ONE stream read, each side keeping its
+    /// individual resolver's semantics: the video-codec side skips blank codecs
+    /// and attached-picture covers (<see cref="EpisodeCoverVideoCodecs"/>), the
+    /// audio-codec side takes the first audio stream with a non-blank codec, and
+    /// the bitrate side (no codec filtering: a blank-codec or cover stream still
+    /// carries source bytes) sums the first video and first audio stream that
+    /// carry a <see cref="MediaStream.BitRate"/>, null when neither does.
+    /// Fail-open shapes are unchanged: null media source manager or a read
+    /// failure returns an all-null probe, and a missing stream of a type leaves
+    /// that side null.
     /// </summary>
     /// <param name="item">The item whose streams to read.</param>
-    /// <returns>Lowercase (video codec, audio codec), either side null when unknown.</returns>
-    internal (string? Video, string? Audio) ResolveSourceCodecs(MediaBrowser.Controller.Entities.BaseItem item)
+    /// <returns>The source-media probe; either codec side and the bitrate null when unknown.</returns>
+    internal SourceMediaProbe ResolveSourceCodecs(MediaBrowser.Controller.Entities.BaseItem item)
     {
         var streams = TryGetMediaStreams(item);
         if (streams == null)
         {
-            return (null, null);
+            return default;
         }
 
         string? videoCodec = null;
         string? audioCodec = null;
+        int? videoBitrateBps = null;
+        int? audioBitrateBps = null;
         foreach (MediaStream stream in streams)
         {
+            // Bitrate side first: it must NOT inherit the codec-side skips below
+            // (a blank-codec or cover stream's bytes still count toward the reserve).
+            if (stream.Type == MediaStreamType.Video)
+            {
+                videoBitrateBps ??= stream.BitRate;
+            }
+            else if (stream.Type == MediaStreamType.Audio)
+            {
+                audioBitrateBps ??= stream.BitRate;
+            }
+
             if (string.IsNullOrWhiteSpace(stream.Codec))
             {
                 continue;
@@ -2078,13 +2105,17 @@ public class VideoAudioController : ControllerBase
                 audioCodec = stream.Codec.ToLowerInvariant();
             }
 
-            if (videoCodec != null && audioCodec != null)
+            if (videoCodec != null && audioCodec != null && videoBitrateBps != null && audioBitrateBps != null)
             {
                 break;
             }
         }
 
-        return (videoCodec, audioCodec);
+        // MediaStream.BitRate is int?; the sum widens to long? for the caller's
+        // byte arithmetic. Null (no stream carried a BitRate) resolves to the
+        // caller's flat-estimate fallback.
+        long? totalBitrateBps = (videoBitrateBps ?? 0) + (audioBitrateBps ?? 0);
+        return new SourceMediaProbe(videoCodec, audioCodec, totalBitrateBps > 0 ? totalBitrateBps : null);
     }
 
     /// <summary>
@@ -2661,7 +2692,7 @@ public class VideoAudioController : ControllerBase
     /// </summary>
     /// <param name="runtimeTicks">Content duration (item runtime).</param>
     /// <param name="totalBitRateBps">Combined video+audio source bitrate in bits per
-    /// second (from <see cref="ResolveTotalMediaBitrateBps"/>), or null/0 when unknown.</param>
+    /// second (from <see cref="SourceMediaProbe.TotalBitrateBps"/>), or null/0 when unknown.</param>
     internal static long EstimateEpisodeEncodeBytes(long runtimeTicks, long? totalBitRateBps = null)
     {
         const long flatBytesPerHour = 1280L * 1024 * 1024;
@@ -2774,46 +2805,6 @@ public class VideoAudioController : ControllerBase
     /// <returns>Estimated bytes the encode writes.</returns>
     internal static long EstimateEpisodeAudioEncodeBytes(long runtimeTicks)
         => FlatHourlyEncodeBytes(runtimeTicks, 96L * 1024 * 1024);
-
-    /// <summary>
-    /// Resolve the combined video+audio source bitrate (bits per second) of an item
-    /// for <see cref="EstimateEpisodeEncodeBytes"/> (JF-498 review C1b): the FIRST
-    /// video stream's <see cref="MediaStream.BitRate"/> plus the FIRST audio stream's.
-    /// Summing the source audio bitrate slightly over-reserves when it is transcoded
-    /// down to AAC 192k; conservative is the right direction for a headroom reserve.
-    /// Returns null when the media source manager is unavailable, the read fails, or
-    /// neither stream carries a BitRate, so the caller falls back to the flat estimate.
-    /// </summary>
-    /// <param name="item">The Jellyfin video item.</param>
-    /// <returns>Total bitrate in bits per second, or null when unavailable.</returns>
-    internal long? ResolveTotalMediaBitrateBps(MediaBrowser.Controller.Entities.BaseItem item)
-    {
-        var streams = TryGetMediaStreams(item);
-        if (streams == null)
-        {
-            return null;
-        }
-
-        int? video = null;
-        int? audio = null;
-        foreach (var stream in streams)
-        {
-            if (stream.Type == MediaStreamType.Video)
-            {
-                video ??= stream.BitRate;
-            }
-            else if (stream.Type == MediaStreamType.Audio)
-            {
-                audio ??= stream.BitRate;
-            }
-        }
-
-        // MediaStream.BitRate is int?; the sum widens to long? for the caller's
-        // byte arithmetic. Null (no stream carried a BitRate) resolves to the
-        // caller's flat-estimate fallback.
-        long? total = (video ?? 0) + (audio ?? 0);
-        return total > 0 ? total : null;
-    }
 
     /// <summary>
     /// Pre-write a complete HLS playlist for an audiobook with all segment durations.
