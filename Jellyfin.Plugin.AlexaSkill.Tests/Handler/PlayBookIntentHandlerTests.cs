@@ -34,7 +34,11 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
     public PlayBookIntentHandlerTests()
     {
         var queueLogger = new Mock<ILogger<DeviceQueueManager>>();
-        _queueManager = new DeviceQueueManager(System.IO.Path.GetTempPath(), queueLogger.Object);
+        // JF-535b: per-fixture registered temp dir (the JF-486 belt), not the bare
+        // shared root; the ctor loads every queue_*.json in its data dir, so a shared root made
+        // each fixture cross-load (and PersistAll rewrite) the whole accumulating pool at every
+        // teardown.
+        _queueManager = new DeviceQueueManager(TestHelpers.CreateRegisteredTempDir("PlayBookIntentHandlerTests-dq"), queueLogger.Object);
 
         TestHelpers.EnsurePluginInstance(
             _fx.Config, _fx.LoggerFactory, c => { }, "playbook-tests");

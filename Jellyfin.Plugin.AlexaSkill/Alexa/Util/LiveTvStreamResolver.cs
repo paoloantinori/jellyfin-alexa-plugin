@@ -56,7 +56,7 @@ public class LiveTvStreamResolver : ILiveTvStreamResolver
     {
         string? server = _config.ServerAddress;
         string? token = user.JellyfinToken;
-        if (string.IsNullOrWhiteSpace(server) || string.IsNullOrWhiteSpace(token))
+        if (string.IsNullOrWhiteSpace(server) || !user.HasJellyfinToken)
         {
             _logger.LogDebug("ResolveAsync: missing ServerAddress or JellyfinToken — cannot resolve channel");
             return null;

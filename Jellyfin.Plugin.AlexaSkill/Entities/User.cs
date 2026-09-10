@@ -1,6 +1,7 @@
 #pragma warning disable CS8618
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
@@ -40,6 +41,19 @@ public class User
     /// </summary>
     [JsonIgnore]
     public string? JellyfinToken { get; set; }
+
+    /// <summary>
+    /// True when a usable Jellyfin token is stored. The ONE named form of the token-presence
+    /// discriminator (JF-535b): three call sites carried hand-rolled emptiness checks that had
+    /// drifted between IsNullOrEmpty and IsNullOrWhiteSpace (User.TryTransitionToReady,
+    /// BaseHandler.BuildSessionMissResponse, LiveTvStreamResolver); route new checks through
+    /// here. Serialized shapes: System.Text.Json is this entity's payload serializer (the
+    /// config API), so the ignore attribute is STJ's; the on-disk XmlSerializer omits get-only
+    /// properties on its own.
+    /// </summary>
+    [JsonIgnore]
+    [MemberNotNullWhen(true, nameof(JellyfinToken))]
+    public bool HasJellyfinToken => !string.IsNullOrWhiteSpace(JellyfinToken);
 
     /// <summary>
     /// Gets or sets the device token for accessing SMAPI.
@@ -160,7 +174,7 @@ public class User
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(JellyfinToken))
+        if (!HasJellyfinToken)
         {
             return false;
         }
