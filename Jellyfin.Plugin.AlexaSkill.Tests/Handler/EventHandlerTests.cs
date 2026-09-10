@@ -52,7 +52,7 @@ public class EventHandlerTests : PluginTestBase, IDisposable
         _queueManager = new DeviceQueueManager(TestHelpers.CreateRegisteredTempDir("EventHandlerTests-dq"), queueLogger.Object);
     }
 
-    // JF-535: dispose so the 2s debounce flush cannot fire post-test into the shared temp root.
+    // JF-535: dispose so the 2s debounce flush runs deterministically at test end (no post-test straggler).
     public void Dispose() => _queueManager.Dispose();
 
     private static Context CreateContext() => TestHelpers.CreateTestContext();

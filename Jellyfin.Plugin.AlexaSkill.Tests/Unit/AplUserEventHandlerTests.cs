@@ -70,7 +70,7 @@ public class AplUserEventHandlerTests : PluginTestBase, IDisposable
         _context = new Context();
     }
 
-    // JF-535: dispose so the 2s debounce flush cannot fire post-test into the shared temp root.
+    // JF-535: dispose so the 2s debounce flush runs deterministically at test end (no post-test straggler).
     public void Dispose() => _queueManager.Dispose();
 
     private static SessionInfo CreateSession()
@@ -835,7 +835,7 @@ public class AplUserEventHandlerVideoAppTests : PluginTestBase, IDisposable
         _user = new Entities.User { Id = Guid.NewGuid(), JellyfinToken = "test-token" };
     }
 
-    // JF-535: dispose so the 2s debounce flush cannot fire post-test into the shared temp root.
+    // JF-535: dispose so the 2s debounce flush runs deterministically at test end (no post-test straggler).
     public void Dispose() => _queueManager.Dispose();
 
     private static SessionInfo CreateSession()

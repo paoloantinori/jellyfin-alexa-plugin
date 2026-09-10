@@ -50,7 +50,7 @@ public class PlayBookResumeTests : PluginTestBase, IDisposable
             _fx.Config, _fx.LoggerFactory, c => { }, "playbook-resume-tests");
     }
 
-    // JF-535: dispose so the 2s debounce flush cannot fire post-test into the shared temp root.
+    // JF-535: dispose so the 2s debounce flush runs deterministically at test end (no post-test straggler).
     public void Dispose() => _queueManager.Dispose();
 
     private PlayBookIntentHandler CreateHandler()

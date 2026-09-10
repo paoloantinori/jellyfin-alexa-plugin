@@ -1,8 +1,8 @@
 #pragma warning disable CS8618
 
 using System;
-using System.Diagnostics.CodeAnalysis;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -164,7 +164,7 @@ public class User
 
     /// <summary>
     /// Transitions skill status from AccountLinkPending to Ready if the user
-    /// has completed account linking (JellyfinToken is present).
+    /// has completed account linking (a usable JellyfinToken is stored).
     /// </summary>
     /// <returns>True if the status was transitioned, false otherwise.</returns>
     public bool TryTransitionToReady()
