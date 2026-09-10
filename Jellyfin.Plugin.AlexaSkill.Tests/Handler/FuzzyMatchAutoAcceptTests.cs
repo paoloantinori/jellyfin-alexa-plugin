@@ -80,7 +80,7 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
     /// Exact match (score 100) with Confirm behavior should auto-play, not ask for confirmation.
     /// </summary>
     [Fact]
-    public void HighScore_AutoAccepts_EvenWithConfirmBehavior()
+    public async Task HighScore_AutoAccepts_EvenWithConfirmBehavior()
     {
         var config = new PluginConfiguration();
         var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
@@ -92,13 +92,13 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
         };
 
         bool autoPlayCalled = false;
-        Func<TestCandidate, SkillResponse> autoPlayFunc = _ =>
+        Func<TestCandidate, Task<SkillResponse>> autoPlayFunc = _ =>
         {
             autoPlayCalled = true;
-            return ResponseBuilder.Empty();
+            return Task.FromResult<SkillResponse>(ResponseBuilder.Empty());
         };
 
-        var (outcome, response) = harness.CallHandleFuzzyMiss(
+        var (outcome, response) = await harness.CallHandleFuzzyMiss(
             query: "The Beatles", // exact match => score 100
             candidates: candidates,
             selector: c => c.Name,
@@ -116,7 +116,7 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
     /// Score at or above DefaultThreshold (60) should auto-accept with Confirm behavior.
     /// </summary>
     [Fact]
-    public void HighScore_AutoAccepts_WhenScoreAtDefaultThreshold()
+    public async Task HighScore_AutoAccepts_WhenScoreAtDefaultThreshold()
     {
         var config = new PluginConfiguration();
         var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
@@ -129,13 +129,13 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
         };
 
         bool autoPlayCalled = false;
-        Func<TestCandidate, SkillResponse> autoPlayFunc = _ =>
+        Func<TestCandidate, Task<SkillResponse>> autoPlayFunc = _ =>
         {
             autoPlayCalled = true;
-            return ResponseBuilder.Empty();
+            return Task.FromResult<SkillResponse>(ResponseBuilder.Empty());
         };
 
-        var (outcome, response) = harness.CallHandleFuzzyMiss(
+        var (outcome, response) = await harness.CallHandleFuzzyMiss(
             query: "Beatles",
             candidates: candidates,
             selector: c => c.Name,
@@ -155,7 +155,7 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
     /// Uses a query/candidate pair verified to produce a borderline score at test time.
     /// </summary>
     [Fact]
-    public void BorderlineScore_RespectsConfirmBehavior()
+    public async Task BorderlineScore_RespectsConfirmBehavior()
     {
         var config = new PluginConfiguration();
         var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
@@ -164,13 +164,13 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
         var (query, candidates) = CreateBorderlineScenario();
 
         bool autoPlayCalled = false;
-        Func<TestCandidate, SkillResponse> autoPlayFunc = _ =>
+        Func<TestCandidate, Task<SkillResponse>> autoPlayFunc = _ =>
         {
             autoPlayCalled = true;
-            return ResponseBuilder.Empty();
+            return Task.FromResult<SkillResponse>(ResponseBuilder.Empty());
         };
 
-        var (outcome, response) = harness.CallHandleFuzzyMiss(
+        var (outcome, response) = await harness.CallHandleFuzzyMiss(
             query: query,
             candidates: candidates,
             selector: c => c.Name,
@@ -192,7 +192,7 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
     /// Borderline score with AutoPlay behavior should auto-play the match.
     /// </summary>
     [Fact]
-    public void BorderlineScore_AutoPlays_WithAutoPlayBehavior()
+    public async Task BorderlineScore_AutoPlays_WithAutoPlayBehavior()
     {
         var config = new PluginConfiguration();
         var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.AutoPlay };
@@ -201,13 +201,13 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
         var (query, candidates) = CreateBorderlineScenario();
 
         bool autoPlayCalled = false;
-        Func<TestCandidate, SkillResponse> autoPlayFunc = _ =>
+        Func<TestCandidate, Task<SkillResponse>> autoPlayFunc = _ =>
         {
             autoPlayCalled = true;
-            return ResponseBuilder.Empty();
+            return Task.FromResult<SkillResponse>(ResponseBuilder.Empty());
         };
 
-        var (outcome, response) = harness.CallHandleFuzzyMiss(
+        var (outcome, response) = await harness.CallHandleFuzzyMiss(
             query: query,
             candidates: candidates,
             selector: c => c.Name,
@@ -221,10 +221,50 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
     }
 
     /// <summary>
+    /// JF-538 review finding, qualifier band (score below ContainmentScore, AutoPlay on):
+    /// when the auto-play delegate's response is DIRECTIVE-ONLY (its announce already rode
+    /// the progressive vehicle) and the caller passes context/request, the closest-match
+    /// qualifier must ride the progressive vehicle too - not overwrite the final response's
+    /// OutputSpeech, which double-announced and left the qualifier exposed to the fast-start
+    /// player cut. Uses the harness's documented in-band pair "Rhapsoy"/"Rhapsody" (score 71).
+    /// </summary>
+    [Fact]
+    public async Task QualifierBand_DirectiveOnlyPlayResponse_SpeaksQualifierProgressively()
+    {
+        var config = new PluginConfiguration();
+        var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.AutoPlay };
+        var harness = CreateHarness(config);
+
+        var (query, candidates) = CreateBorderlineScenario();
+
+        Func<TestCandidate, Task<SkillResponse>> autoPlayFunc = _ =>
+            Task.FromResult(ResponseBuilder.Empty()); // directive-only shape: null OutputSpeech
+
+        var (outcome, response) = await harness.CallHandleFuzzyMiss(
+            query: query,
+            candidates: candidates,
+            selector: c => c.Name,
+            matchExtractor: c => new List<(Guid, string)> { (c.Id, c.Name) },
+            mediaType: "album",
+            locale: "en-US",
+            autoPlayFunc: autoPlayFunc,
+            user: user,
+            context: Unit.TestHelpers.CreateTestContext(),
+            request: new IntentRequest { Intent = new Intent { Name = "SearchMediaIntent" } });
+
+        Assert.Equal("SuggestionHandled", outcome);
+        Assert.NotNull(response);
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.True(harness.Progressive.Any(m => m.Contains("closest match", StringComparison.Ordinal)
+                || m.Contains("Rhapsody", StringComparison.Ordinal)),
+            "the qualifier must ride the progressive vehicle in the band, not the final response");
+    }
+
+    /// <summary>
     /// Very low score (below SuggestionThreshold) should return NotFound.
     /// </summary>
     [Fact]
-    public void LowScore_ReturnsNotFound()
+    public async Task LowScore_ReturnsNotFound()
     {
         var config = new PluginConfiguration();
         var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.AutoPlay };
@@ -237,13 +277,13 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
         };
 
         bool autoPlayCalled = false;
-        Func<TestCandidate, SkillResponse> autoPlayFunc = _ =>
+        Func<TestCandidate, Task<SkillResponse>> autoPlayFunc = _ =>
         {
             autoPlayCalled = true;
-            return ResponseBuilder.Empty();
+            return Task.FromResult<SkillResponse>(ResponseBuilder.Empty());
         };
 
-        var (outcome, response) = harness.CallHandleFuzzyMiss(
+        var (outcome, response) = await harness.CallHandleFuzzyMiss(
             query: "xyzabc123",
             candidates: candidates,
             selector: c => c.Name,
@@ -264,7 +304,7 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
     /// and falls through to the confirm prompt path.
     /// </summary>
     [Fact]
-    public void HighScore_WithConfirmBehavior_NoAutoPlayFunc_ReturnsConfirmPrompt()
+    public async Task HighScore_WithConfirmBehavior_NoAutoPlayFunc_ReturnsConfirmPrompt()
     {
         var config = new PluginConfiguration();
         var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
@@ -277,7 +317,7 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
 
         // Score >= DefaultThreshold, autoAccept = true, but autoPlayFunc is null
         // Falls through to confirm prompt since the auto-play block requires autoPlayFunc != null
-        var (outcome, response) = harness.CallHandleFuzzyMiss(
+        var (outcome, response) = await harness.CallHandleFuzzyMiss(
             query: "The Beatles",
             candidates: candidates,
             selector: c => c.Name,
@@ -301,7 +341,7 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
     /// Sanity check that AutoPlay behavior works at all score levels.
     /// </summary>
     [Fact]
-    public void HighScore_WithAutoPlayBehavior_AutoPlays()
+    public async Task HighScore_WithAutoPlayBehavior_AutoPlays()
     {
         var config = new PluginConfiguration();
         var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.AutoPlay };
@@ -313,13 +353,13 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
         };
 
         bool autoPlayCalled = false;
-        Func<TestCandidate, SkillResponse> autoPlayFunc = _ =>
+        Func<TestCandidate, Task<SkillResponse>> autoPlayFunc = _ =>
         {
             autoPlayCalled = true;
-            return ResponseBuilder.Empty();
+            return Task.FromResult<SkillResponse>(ResponseBuilder.Empty());
         };
 
-        var (outcome, response) = harness.CallHandleFuzzyMiss(
+        var (outcome, response) = await harness.CallHandleFuzzyMiss(
             query: "Led Zeppelin",
             candidates: candidates,
             selector: c => c.Name,
@@ -339,7 +379,7 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
     /// The OutputSpeech should remain as-is from the play response.
     /// </summary>
     [Fact]
-    public void Score100_DoesNotOverrideOutputSpeech()
+    public async Task Score100_DoesNotOverrideOutputSpeech()
     {
         var config = new PluginConfiguration();
         var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
@@ -350,15 +390,15 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
             new("About Today", Guid.NewGuid())
         };
 
-        Func<TestCandidate, SkillResponse> autoPlayFunc = _ =>
+        Func<TestCandidate, Task<SkillResponse>> autoPlayFunc = _ =>
         {
             // Return a response with a known OutputSpeech so we can verify it is NOT overwritten
             var response = ResponseBuilder.Empty();
             response.Response.OutputSpeech = new PlainTextOutputSpeech { Text = "Playing About Today" };
-            return response;
+            return Task.FromResult<SkillResponse>(response);
         };
 
-        var (outcome, response) = harness.CallHandleFuzzyMiss(
+        var (outcome, response) = await harness.CallHandleFuzzyMiss(
             query: "About Today",
             candidates: candidates,
             selector: c => c.Name,
@@ -378,7 +418,7 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
     /// Score 90 (high-confidence but not exact) should NOT produce "closest match" announcement.
     /// </summary>
     [Fact]
-    public void Score90_DoesNotOverrideOutputSpeech()
+    public async Task Score90_DoesNotOverrideOutputSpeech()
     {
         var config = new PluginConfiguration();
         var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
@@ -390,14 +430,14 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
             new("The Beatles", Guid.NewGuid())
         };
 
-        Func<TestCandidate, SkillResponse> autoPlayFunc = _ =>
+        Func<TestCandidate, Task<SkillResponse>> autoPlayFunc = _ =>
         {
             var response = ResponseBuilder.Empty();
             response.Response.OutputSpeech = new PlainTextOutputSpeech { Text = "Original speech" };
-            return response;
+            return Task.FromResult<SkillResponse>(response);
         };
 
-        var (outcome, response) = harness.CallHandleFuzzyMiss(
+        var (outcome, response) = await harness.CallHandleFuzzyMiss(
             query: "Beatles",
             candidates: candidates,
             selector: c => c.Name,
@@ -418,7 +458,7 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
     /// Uses a dynamically discovered query/candidate pair scoring in [DefaultThreshold, 90).
     /// </summary>
     [Fact]
-    public void ScoreBelow90_ProducesClosestMatchAnnouncement()
+    public async Task ScoreBelow90_ProducesClosestMatchAnnouncement()
     {
         var config = new PluginConfiguration();
         var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.AutoPlay };
@@ -426,14 +466,14 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
 
         var (query, candidates) = CreateBelowThreshold90Scenario();
 
-        Func<TestCandidate, SkillResponse> autoPlayFunc = _ =>
+        Func<TestCandidate, Task<SkillResponse>> autoPlayFunc = _ =>
         {
             var response = ResponseBuilder.Empty();
             response.Response.OutputSpeech = new PlainTextOutputSpeech { Text = "Original speech" };
-            return response;
+            return Task.FromResult<SkillResponse>(response);
         };
 
-        var (outcome, response) = harness.CallHandleFuzzyMiss(
+        var (outcome, response) = await harness.CallHandleFuzzyMiss(
             query: query,
             candidates: candidates,
             selector: c => c.Name,
@@ -467,7 +507,7 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
     /// this shape to the "did you mean" prompt (one "yes" plays it) instead.
     /// </summary>
     [Fact]
-    public void TwoWordQuery_OneWordMatched_HighScore_PromptsInsteadOfAutoPlaying()
+    public async Task TwoWordQuery_OneWordMatched_HighScore_PromptsInsteadOfAutoPlaying()
     {
         var config = new PluginConfiguration();
         var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
@@ -495,13 +535,13 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
         Assert.Equal(1, queryTokens.Count(t => titleTokens.Contains(t)));
 
         bool autoPlayCalled = false;
-        Func<TestCandidate, SkillResponse> autoPlayFunc = _ =>
+        Func<TestCandidate, Task<SkillResponse>> autoPlayFunc = _ =>
         {
             autoPlayCalled = true;
-            return ResponseBuilder.Empty();
+            return Task.FromResult<SkillResponse>(ResponseBuilder.Empty());
         };
 
-        var (outcome, response) = harness.CallHandleFuzzyMiss(
+        var (outcome, response) = await harness.CallHandleFuzzyMiss(
             query: "soul coffee",
             candidates: candidates,
             selector: c => c.Name,
@@ -527,7 +567,7 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
     /// gated score-bar disjunct (not the containment shortcut).
     /// </summary>
     [Fact]
-    public void TwoWordQuery_FullCoverage_FuzzyScore_StillAutoPlays()
+    public async Task TwoWordQuery_FullCoverage_FuzzyScore_StillAutoPlays()
     {
         var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
         var candidates = new List<TestCandidate> { new("U2 - Beautiful Day", Guid.NewGuid()) };
@@ -535,7 +575,7 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
         AssertScoreInRange("u2 beautiful", candidates, "U2 - Beautiful Day",
             FuzzyMatcher.DefaultThreshold, FuzzyMatcher.ContainmentScore - 1);
 
-        var (autoPlayCalled, _, response) = RunFuzzyMiss(new PluginConfiguration(), user, "u2 beautiful", candidates);
+        var (autoPlayCalled, _, response) = await RunFuzzyMiss(new PluginConfiguration(), user, "u2 beautiful", candidates);
 
         Assert.True(autoPlayCalled, "2-word query with both words covered must still auto-play (JF-508 gates only unaccounted words)");
         Assert.Null(response!.SessionAttributes?["disambig_matches"]);
@@ -547,7 +587,7 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
     /// pre-JF-508 auto-play behavior.
     /// </summary>
     [Fact]
-    public void ThreePlusWordQuery_PartialCoverage_HighScore_StillAutoPlays()
+    public async Task ThreePlusWordQuery_PartialCoverage_HighScore_StillAutoPlays()
     {
         var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
         var candidates = new List<TestCandidate> { new("One Two Three Four", Guid.NewGuid()) };
@@ -555,7 +595,7 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
         AssertScoreInRange("one two three zzz", candidates, "One Two Three Four",
             FuzzyMatcher.DefaultThreshold, FuzzyMatcher.ContainmentScore - 1);
 
-        var (autoPlayCalled, _, response) = RunFuzzyMiss(new PluginConfiguration(), user, "one two three zzz", candidates);
+        var (autoPlayCalled, _, response) = await RunFuzzyMiss(new PluginConfiguration(), user, "one two three zzz", candidates);
 
         Assert.True(autoPlayCalled, "3+ word queries keep the pre-JF-508 auto-play behavior");
         Assert.Null(response!.SessionAttributes?["disambig_matches"]);
@@ -567,7 +607,7 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
     /// short-query scope to the 2-word misfire shape from corr=269e622d.
     /// </summary>
     [Fact]
-    public void ShortQueryGate_Boundary_TwoWordsPrompt_ThreeWordsPlay()
+    public async Task ShortQueryGate_Boundary_TwoWordsPrompt_ThreeWordsPlay()
     {
         var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
         var candidates = new List<TestCandidate> { new("Starfish & Coffee Deluxe", Guid.NewGuid()) };
@@ -577,13 +617,13 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
         AssertScoreInRange("soul coffee deluxe", candidates, "Starfish & Coffee Deluxe",
             FuzzyMatcher.DefaultThreshold, FuzzyMatcher.ContainmentScore - 1);
 
-        var (twoWordPlayed, _, twoWordResponse) = RunFuzzyMiss(new PluginConfiguration(), user, "soul coffee", candidates);
+        var (twoWordPlayed, _, twoWordResponse) = await RunFuzzyMiss(new PluginConfiguration(), user, "soul coffee", candidates);
         Assert.False(twoWordPlayed, "exactly-2-word query with an unaccounted word prompts");
         Assert.NotNull(twoWordResponse!.SessionAttributes);
         Assert.True(twoWordResponse.SessionAttributes.ContainsKey("disambig_matches"),
             "exactly-2-word partial-coverage query should get the yes/no prompt");
 
-        var (threeWordPlayed, _, _) = RunFuzzyMiss(new PluginConfiguration(), user, "soul coffee deluxe", candidates);
+        var (threeWordPlayed, _, _) = await RunFuzzyMiss(new PluginConfiguration(), user, "soul coffee deluxe", candidates);
         Assert.True(threeWordPlayed, "3-word query auto-plays unchanged (gate is short-query-only)");
     }
 
@@ -595,7 +635,7 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
     /// containment class) hits the same gate. One "yes" plays the pick.
     /// </summary>
     [Fact]
-    public void OneWordQuery_WordNotExactlyPresent_PromptsInsteadOfAutoPlaying()
+    public async Task OneWordQuery_WordNotExactlyPresent_PromptsInsteadOfAutoPlaying()
     {
         var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
         var candidates = new List<TestCandidate> { new("Symphony", Guid.NewGuid()) };
@@ -603,7 +643,7 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
         AssertScoreInRange("Symphonz", candidates, "Symphony",
             FuzzyMatcher.DefaultThreshold, FuzzyMatcher.ContainmentScore - 1);
 
-        var (autoPlayCalled, _, response) = RunFuzzyMiss(new PluginConfiguration(), user, "Symphonz", candidates);
+        var (autoPlayCalled, _, response) = await RunFuzzyMiss(new PluginConfiguration(), user, "Symphonz", candidates);
 
         Assert.False(autoPlayCalled, "1-word query with the word not present exactly must confirm first (JF-508 <=2-token scope)");
         Assert.True(response!.SessionAttributes!.ContainsKey("disambig_matches"),
@@ -616,7 +656,7 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
     /// query auto-plays under that behavior.
     /// </summary>
     [Fact]
-    public void TwoWordQuery_PartialCoverage_AutoPlayBehaviorOptIn_StillAutoPlays()
+    public async Task TwoWordQuery_PartialCoverage_AutoPlayBehaviorOptIn_StillAutoPlays()
     {
         var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.AutoPlay };
         var candidates = new List<TestCandidate>
@@ -625,7 +665,7 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
             new("Coffee & TV", Guid.NewGuid()),
         };
 
-        var (autoPlayCalled, _, _) = RunFuzzyMiss(new PluginConfiguration(), user, "soul coffee", candidates);
+        var (autoPlayCalled, _, _) = await RunFuzzyMiss(new PluginConfiguration(), user, "soul coffee", candidates);
 
         Assert.True(autoPlayCalled, "AutoPlay-behavior opt-in keeps auto-playing partial-coverage short queries");
     }
@@ -739,7 +779,7 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
     /// exact-byte gate demoted to a prompt).
     /// </summary>
     [Fact]
-    public void TwoWordQuery_DiacriticFullCoverage_HighScore_StillAutoPlays()
+    public async Task TwoWordQuery_DiacriticFullCoverage_HighScore_StillAutoPlays()
     {
         var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
         var candidates = new List<TestCandidate> { new("Bésame Mucho", Guid.NewGuid()) };
@@ -747,7 +787,7 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
         AssertScoreInRange("besame mucho", candidates, "Bésame Mucho",
             FuzzyMatcher.ContainmentScore, 100);
 
-        var (autoPlayCalled, _, response) = RunFuzzyMiss(new PluginConfiguration(), user, "besame mucho", candidates);
+        var (autoPlayCalled, _, response) = await RunFuzzyMiss(new PluginConfiguration(), user, "besame mucho", candidates);
 
         Assert.True(autoPlayCalled, "accent-only difference must count as full coverage (JF-526 fold)");
         Assert.Null(response!.SessionAttributes?["disambig_matches"]);
@@ -759,7 +799,7 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
     /// Runs HandleFuzzyMiss with the standard test wiring and reports whether the
     /// auto-play callback fired (the JF-508 gate's observable).
     /// </summary>
-    private (bool AutoPlayCalled, string Outcome, SkillResponse? Response) RunFuzzyMiss(
+    private async Task<(bool AutoPlayCalled, string Outcome, SkillResponse? Response)> RunFuzzyMiss(
         PluginConfiguration config,
         Entities.User user,
         string query,
@@ -768,13 +808,13 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
     {
         var harness = CreateHarness(config);
         bool autoPlayCalled = false;
-        Func<TestCandidate, SkillResponse> autoPlayFunc = _ =>
+        Func<TestCandidate, Task<SkillResponse>> autoPlayFunc = _ =>
         {
             autoPlayCalled = true;
-            return ResponseBuilder.Empty();
+            return Task.FromResult<SkillResponse>(ResponseBuilder.Empty());
         };
 
-        var (outcome, response) = harness.CallHandleFuzzyMiss(
+        var (outcome, response) = await harness.CallHandleFuzzyMiss(
             query: query,
             candidates: candidates,
             selector: c => c.Name,
@@ -927,6 +967,15 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
         {
         }
 
+        // JF-538 band test seam: captures progressive speech without network I/O.
+        public List<string> Progressive { get; } = new();
+
+        protected override Task<bool> SendProgressiveResponse(Context context, Request request, string message)
+        {
+            Progressive.Add(message);
+            return Task.FromResult(true);
+        }
+
         public override bool CanHandle(Request request) => true;
 
         public override Task<SkillResponse> HandleAsync(
@@ -938,18 +987,20 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
         /// Expose HandleFuzzyMiss for direct testing.
         /// Returns the outcome as a string since FuzzyMissOutcome is a protected enum.
         /// </summary>
-        public (string Outcome, SkillResponse? Response) CallHandleFuzzyMiss<T>(
+        public async Task<(string Outcome, SkillResponse? Response)> CallHandleFuzzyMiss<T>(
             string query,
             IReadOnlyList<T> candidates,
             Func<T, string> selector,
             Func<T, List<(Guid Id, string Name)>> matchExtractor,
             string mediaType,
             string locale,
-            Func<T, SkillResponse>? autoPlayFunc = null,
-            Entities.User? user = null)
+            Func<T, Task<SkillResponse>>? autoPlayFunc = null,
+            Entities.User? user = null,
+            Context? context = null,
+            Request? request = null)
             where T : class
         {
-            var (outcome, response) = HandleFuzzyMiss(query, candidates, selector, matchExtractor, mediaType, locale, autoPlayFunc, user);
+            var (outcome, response) = await HandleFuzzyMiss(query, candidates, selector, matchExtractor, mediaType, locale, autoPlayFunc, user, context, request);
             return (outcome.ToString(), response);
         }
 

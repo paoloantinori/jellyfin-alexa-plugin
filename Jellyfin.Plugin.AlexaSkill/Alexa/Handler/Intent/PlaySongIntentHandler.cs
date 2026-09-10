@@ -357,7 +357,7 @@ public class PlaySongIntentHandler : BaseHandler
         if (songs.Count > 1)
         {
             Logger.LogDebug("PlaySong: {Count} songs matched, running disambiguation", songs.Count);
-            var (missOutcome, missResponse) = HandleFuzzyMiss(
+            var (missOutcome, missResponse) = await HandleFuzzyMiss(
                 songQuery,
                 songs,
                 s => s.Name,
@@ -379,9 +379,9 @@ public class PlaySongIntentHandler : BaseHandler
                             best.Name, fuzzOffset);
                     }
 
-                    return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(iid, user), iid, best, user, context, fuzzOffset, announceLocale: locale);
+                    return Task.FromResult<SkillResponse>(BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(iid, user), iid, best, user, context, fuzzOffset, announceLocale: locale));
                 },
-                user: user);
+                user: user).ConfigureAwait(false);
 
             if (missOutcome != FuzzyMissOutcome.NotFound)
             {

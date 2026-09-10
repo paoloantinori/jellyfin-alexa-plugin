@@ -148,7 +148,7 @@ public class AddToQueueIntentHandler : BaseHandler
         if (songs.Count > 1)
         {
             BaseItem? songMatch = null;
-            var (missOutcome, missResponse) = HandleFuzzyMiss(
+            var (missOutcome, missResponse) = await HandleFuzzyMiss(
                 songQuery,
                 songs,
                 s => s.Name,
@@ -158,9 +158,9 @@ public class AddToQueueIntentHandler : BaseHandler
                 best =>
                 {
                     songMatch = best;
-                    return null!;
+                    return Task.FromResult<SkillResponse>(null!);
                 },
-                user: user);
+                user: user).ConfigureAwait(false);
 
             if (missOutcome != FuzzyMissOutcome.NotFound)
             {

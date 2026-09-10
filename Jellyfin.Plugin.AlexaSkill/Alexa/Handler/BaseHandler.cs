@@ -791,9 +791,9 @@ public abstract class BaseHandler
     /// localized <c>VideoRequiresScreen</c> Tell answers instead.
     /// JF-501: intent-driven launch sites must prefer the progressive-announce variant
     /// <see cref="BuildVideoAppLaunchResponseAsync"/>; this sync builder is the shape
-    /// for callers bound to sync delegates or non-intent requests (the HandleFuzzyMiss
-    /// auto-play delegate, APL carousel taps), where the announce keeps riding the
-    /// final response.
+    /// for non-intent requests (APL carousel taps), where the announce keeps riding the
+    /// final response. The HandleFuzzyMiss auto-play delegate went async in JF-538, so
+    /// it is no longer bound to this sync shape.
     /// </summary>
     /// <param name="context">The Alexa context, for device capability detection.</param>
     /// <param name="locale">The request locale, for the capability Tell string.</param>
@@ -2864,6 +2864,10 @@ public abstract class BaseHandler
     /// - Confirm: returns "Did you mean X?" prompt via disambiguation session
     /// - AutoPlay: invokes playFunc with the closest match and returns an announcement response
     /// Returns (SuggestionHandled, response) when a suggestion was made, or (NotFound, null) when no close candidate exists.
+    /// The auto-play delegate is async (JF-538) so video-launch sites can send the
+    /// JF-501 progressive announce inside the play builder before the launch response
+    /// is built; delegates that only record a side effect wrap their null result in
+    /// <see cref="Task.FromResult{TResult}"/> and keep the exact shape they had.
     /// </summary>
     /// <typeparam name="T">The item type.</typeparam>
     /// <param name="query">The original search query.</param>
@@ -2872,17 +2876,19 @@ public abstract class BaseHandler
     /// <param name="matchExtractor">Function to create disambiguation match list from the best candidate.</param>
     /// <param name="mediaType">The media type for disambiguation state.</param>
     /// <param name="locale">The locale for localized responses.</param>
-    /// <param name="autoPlayFunc">Optional function to play the suggested item in AutoPlay mode.</param>
+    /// <param name="autoPlayFunc">Optional async function to play the suggested item in AutoPlay mode; a null result (the pre-JF-538 null sentinel, now the Task's value) means the delegate only recorded a side effect.</param>
     /// <returns>A tuple indicating the outcome and optional response.</returns>
-    protected (FuzzyMissOutcome Outcome, SkillResponse? Response) HandleFuzzyMiss<T>(
+    protected async Task<(FuzzyMissOutcome Outcome, SkillResponse? Response)> HandleFuzzyMiss<T>(
         string query,
         IReadOnlyList<T> candidates,
         Func<T, string> selector,
         Func<T, List<(Guid Id, string Name)>> matchExtractor,
         string mediaType,
         string locale,
-        Func<T, SkillResponse>? autoPlayFunc = null,
-        Entities.User? user = null)
+        Func<T, Task<SkillResponse>>? autoPlayFunc = null,
+        Entities.User? user = null,
+        Context? context = null,
+        Request? request = null)
         where T : class
     {
         if (candidates == null || candidates.Count == 0)
@@ -2935,7 +2941,7 @@ public abstract class BaseHandler
         {
             Logger.LogDebug("HandleFuzzyMiss: query={Query}, best={BestMatch}, score={Score}, auto-accept=true — auto-playing",
                 query, selector(best), score);
-            SkillResponse? playResponse = autoPlayFunc(best);
+            SkillResponse? playResponse = await autoPlayFunc(best).ConfigureAwait(false);
 
             // autoPlayFunc may return null when the caller only uses it as a side-effect
             // to narrow the candidate list (e.g. PlayArtistSongsIntentHandler).
@@ -2957,9 +2963,30 @@ public abstract class BaseHandler
             }
 
             string? ssml = GetSsml("FuzzyAutoPlayAnnouncementSsml", locale, EscapeXml(selector(best)), EscapeXml(query));
-            playResponse.Response.OutputSpeech = ssml != null
+            IOutputSpeech qualifier = ssml != null
                 ? new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" }
                 : new PlainTextOutputSpeech { Text = ResponseStrings.Get("FuzzyAutoPlayAnnouncement", locale, selector(best), query) };
+
+            // JF-538 review finding: when the delegate's launch announce already rode the
+            // progressive vehicle (directive-only play response, null OutputSpeech), the old
+            // overwrite made the user hear BOTH the progressive now-playing announce and this
+            // qualifier on the final response - and the qualifier was still exposed to the
+            // fast-start player cut. Speak the qualifier progressively too (same JF-501
+            // mechanism and guards; a failed send falls back to the final response, the
+            // pre-JF-538 shape). Callers that do not pass context/request (audio paths, side
+            // effect delegates) keep the classic overwrite untouched.
+            if (playResponse.Response.OutputSpeech is null && context != null && request != null)
+            {
+                IOutputSpeech? fallback = await SpeakVideoLaunchAnnounceAsync(context, request, qualifier).ConfigureAwait(false);
+                if (fallback == null)
+                {
+                    return (FuzzyMissOutcome.SuggestionHandled, playResponse);
+                }
+
+                qualifier = fallback;
+            }
+
+            playResponse.Response.OutputSpeech = qualifier;
             return (FuzzyMissOutcome.SuggestionHandled, playResponse);
         }
 
@@ -5017,7 +5044,7 @@ public abstract class BaseHandler
             }
             else
             {
-                var (missOutcome, missResponse) = HandleFuzzyMiss(
+                var (missOutcome, missResponse) = await HandleFuzzyMiss(
                     playlistName,
                     playlists.Items,
                     p => p.Name,
@@ -5027,9 +5054,9 @@ public abstract class BaseHandler
                     best =>
                     {
                         playlistMatch = best;
-                        return null!;
+                        return Task.FromResult<SkillResponse>(null!);
                     },
-                    user: user);
+                    user: user).ConfigureAwait(false);
 
                 if (missOutcome != FuzzyMissOutcome.NotFound)
                 {

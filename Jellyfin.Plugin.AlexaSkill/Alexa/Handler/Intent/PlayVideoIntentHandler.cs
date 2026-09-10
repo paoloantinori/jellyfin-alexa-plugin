@@ -154,7 +154,7 @@ public class PlayVideoIntentHandler : BaseHandler
             // unrelated 'Cicada' at 50 while the stripped 'ada' picks the real match
             // among candidates the stripped query returned).
             string? multiMatchQuery = StripLeadingMediaNoun(titleQuery) ?? titleQuery;
-            var (missOutcome, missResponse) = HandleFuzzyMiss(
+            var (missOutcome, missResponse) = await HandleFuzzyMiss(
                 multiMatchQuery,
                 videos,
                 v => v.Name,
@@ -164,9 +164,9 @@ public class PlayVideoIntentHandler : BaseHandler
                 best =>
                 {
                     videoMatch = best;
-                    return null!;
+                    return Task.FromResult<SkillResponse>(null!);
                 },
-                user: user);
+                user: user).ConfigureAwait(false);
 
             if (missOutcome != FuzzyMissOutcome.NotFound)
             {

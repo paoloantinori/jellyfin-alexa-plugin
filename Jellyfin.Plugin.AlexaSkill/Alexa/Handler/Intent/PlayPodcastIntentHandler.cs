@@ -115,7 +115,7 @@ public class PlayPodcastIntentHandler : BaseHandler
         if (podcasts.Count > 1)
         {
             BaseItem? podcastMatch = null;
-            var (missOutcome, missResponse) = HandleFuzzyMiss(
+            var (missOutcome, missResponse) = await HandleFuzzyMiss(
                 podcastName,
                 podcasts,
                 p => p.Name,
@@ -125,9 +125,9 @@ public class PlayPodcastIntentHandler : BaseHandler
                 best =>
                 {
                     podcastMatch = best;
-                    return null!;
+                    return Task.FromResult<SkillResponse>(null!);
                 },
-                user: user);
+                user: user).ConfigureAwait(false);
 
             if (missOutcome != FuzzyMissOutcome.NotFound)
             {

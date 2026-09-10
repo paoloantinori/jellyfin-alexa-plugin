@@ -125,7 +125,7 @@ public class PlayBookIntentHandler : BaseHandler
         if (books.Count > 1)
         {
             BaseItem? bookMatch = null;
-            var (missOutcome, missResponse) = HandleFuzzyMiss(
+            var (missOutcome, missResponse) = await HandleFuzzyMiss(
                 book,
                 books,
                 b => b.Name,
@@ -135,9 +135,9 @@ public class PlayBookIntentHandler : BaseHandler
                 best =>
                 {
                     bookMatch = best;
-                    return null!;
+                    return Task.FromResult<SkillResponse>(null!);
                 },
-                user: user);
+                user: user).ConfigureAwait(false);
 
             if (missOutcome != FuzzyMissOutcome.NotFound)
             {

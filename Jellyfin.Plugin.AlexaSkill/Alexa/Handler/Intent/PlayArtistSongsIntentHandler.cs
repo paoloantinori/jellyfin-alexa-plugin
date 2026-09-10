@@ -613,7 +613,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         if (artists.Count > 1 && !fastAutoPlay)
         {
             Logger.LogDebug("PlayArtistSongs: {Count} artists matched, running disambiguation", artists.Count);
-            var (missOutcome, missResponse) = HandleFuzzyMiss(
+            var (missOutcome, missResponse) = await HandleFuzzyMiss(
                 musician,
                 artists,
                 a => a.Name,
@@ -623,9 +623,9 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 best =>
                 {
                     artists = new List<BaseItem> { best };
-                    return null!;
+                    return Task.FromResult<SkillResponse>(null!);
                 },
-                user: user);
+                user: user).ConfigureAwait(false);
 
             if (missOutcome == FuzzyMissOutcome.NotFound)
             {
