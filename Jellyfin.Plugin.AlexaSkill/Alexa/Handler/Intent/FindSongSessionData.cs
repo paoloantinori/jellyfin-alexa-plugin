@@ -16,6 +16,18 @@ public class FindSongSessionData
 
     public string? ArtistName { get; set; }
 
+    /// <summary>
+    /// True when an artist RESOLVED and scopes this search. JF-533 named this invariant
+    /// because <see cref="ArtistName"/> holds the raw musician input even when resolution
+    /// failed (the stored name and the resolved scope are different things): scope/gate
+    /// decisions must read this property, announcements read the name. A branch that
+    /// dereferences <see cref="ArtistId"/>.Value should keep the direct HasValue check
+    /// instead (nullable flow analysis cannot see through this property). Ignored on the
+    /// session-attribute JSON (derived; a get-only property would otherwise ride it).
+    /// </summary>
+    [Newtonsoft.Json.JsonIgnore]
+    public bool HasResolvedArtist => ArtistId.HasValue;
+
     public string? Keywords { get; set; }
 
     public List<FindSongCandidate>? Candidates { get; set; }

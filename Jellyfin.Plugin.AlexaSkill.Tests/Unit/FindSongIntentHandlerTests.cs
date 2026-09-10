@@ -847,31 +847,11 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // "Neither provided -> AwaitingKeywords" entry: no artist specified. Keywords that
         // find no song but match an artist should cross-media fall back to playing that
         // artist (mirrors PlaySong's "no musician slot" fallback), not re-prompt.
-        var artistId = Guid.NewGuid();
-        var artist = new MusicArtist();
-        typeof(BaseItem).GetProperty("Id")!.SetValue(artist, artistId);
-        typeof(BaseItem).GetProperty("Name")!.SetValue(artist, "Miles Davis");
+        var artist = CreateArtist(Guid.NewGuid(), "Miles Davis");
         var song = CreateAudioItem(Guid.NewGuid(), "So What");
 
         SetupJellyfinUser();
-        _fx.LibraryManager.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns<InternalItemsQuery>(q =>
-            {
-                bool isArtist = q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist);
-                bool hasArtistIds = q.ArtistIds != null && q.ArtistIds.Length > 0;
-                bool isAudioMedia = q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio);
-                if (isArtist)
-                {
-                    return new List<BaseItem> { artist }.AsReadOnly();
-                }
-
-                if (hasArtistIds && isAudioMedia)
-                {
-                    return new List<BaseItem> { song }.AsReadOnly();
-                }
-
-                return new List<BaseItem>().AsReadOnly(); // FindSong song search -> miss
-            });
+        SetupArtistThenArtistScopedSongs(artist, song);
 
         var user = CreateTestUser();
         var session = _fx.CreateSession();
@@ -886,6 +866,91 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
         // Cross-media fallback played the artist, not a re-prompt.
         Assert.True(response.Response?.Directives?.Any(d => d.Type == "AudioPlayer.Play") == true);
+    }
+
+    [Fact]
+    public async Task Search_UnresolvedArtistName_KeywordsMatchArtist_FallsBackToArtist()
+    {
+        // JF-533 two-turn repro: turn 1's unresolvable musician persists the RAW
+        // input (ArtistName set, ArtistId null); the no-match cross-media gate must
+        // treat "name present, id null" as absent so the keywords answer gets the
+        // artist chance (mechanism on the handler's gate comment).
+        var artist = CreateArtist(Guid.NewGuid(), "Miles Davis");
+        var song = CreateAudioItem(Guid.NewGuid(), "So What");
+
+        SetupJellyfinUser();
+
+        // Turn 1: a musician slot that resolves to nothing (the "dj shadoww" typo).
+        SetupArtistSearchEmpty();
+        var user = CreateTestUser();
+        var session = _fx.CreateSession();
+        var firstRequest = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
+        {
+            ["musician"] = "dj shadoww"
+        });
+        SkillResponse first = await _handler.HandleAsync(firstRequest, _fx.CreateContext(), user, session, null, CancellationToken.None);
+
+        // The persisted state is the bug's precondition: name kept, id unresolved.
+        var persisted = ReadSessionData(first);
+        Assert.NotNull(persisted);
+        Assert.Equal(FindSongState.AwaitingKeywords, persisted.State);
+        Assert.Equal("dj shadoww", persisted.ArtistName);
+        Assert.Null(persisted.ArtistId);
+
+        // Turn 2: the discriminating mock (artist queries find Miles Davis,
+        // artist-scoped audio finds his songs, the song search misses).
+        SetupArtistThenArtistScopedSongs(artist, song);
+
+        var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
+        {
+            ["titleKeywords"] = "miles davis"
+        });
+
+        SkillResponse response = await _handler.HandleAsync(
+            request, _fx.CreateContext(), user, session, first.SessionAttributes!, CancellationToken.None);
+
+        // Cross-media fallback played the artist, not a re-prompt.
+        Assert.True(response.Response?.Directives?.Any(d => d.Type == "AudioPlayer.Play") == true,
+            "a stale UNRESOLVED ArtistName must not suppress the keywords-as-artist fallback");
+    }
+
+    [Fact]
+    public async Task Search_ResolvedArtist_NoMatch_KeepsFallbackSuppressed()
+    {
+        // JF-533 control: when the artist DID resolve (ArtistId set), the search was
+        // artist-scoped and the keywords-as-artist fallback must stay suppressed - the
+        // keywords are a title within that artist's catalog, not misrouted artist input.
+        // Discriminating mock: an artist-by-name query WOULD find the artist (so a
+        // regression that opens the gate for resolved artists PLAYS him), while the
+        // artist-scoped song search misses the keywords.
+        var resolvedArtistId = Guid.NewGuid();
+        var fallbackArtist = CreateArtist(Guid.NewGuid(), "Miles Davis");
+        var unrelatedSong = CreateAudioItem(Guid.NewGuid(), "Some Unrelated Song");
+
+        SetupJellyfinUser();
+        SetupArtistThenArtistScopedSongs(fallbackArtist, unrelatedSong);
+
+        var user = CreateTestUser();
+        var session = _fx.CreateSession();
+        var sessionAttrs = BuildSessionAttributes(new FindSongSessionData
+        {
+            State = FindSongState.AwaitingKeywords,
+            ArtistId = resolvedArtistId,
+            ArtistName = "Basta"
+        });
+        var request = CreateIntentRequest("FindSongIntent", new Dictionary<string, string?>
+        {
+            ["titleKeywords"] = "miles davis"
+        });
+
+        SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, sessionAttrs, CancellationToken.None);
+
+        // No-match re-prompt (JF-530 keeps it AwaitingKeywords), never the fallback.
+        Assert.True(response.Response?.Directives?.Any(d => d.Type == "AudioPlayer.Play") != true,
+            "a resolved ArtistId must keep the keywords-as-artist fallback suppressed");
+        Assert.False(response.Response.ShouldEndSession);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("couldn't find a match", speech);
     }
 
     [Fact]
@@ -1926,9 +1991,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
     private void SetupArtistSearch(Guid artistId, string artistName)
     {
-        var artist = new MusicArtist();
-        typeof(BaseItem).GetProperty("Id")!.SetValue(artist, artistId);
-        typeof(BaseItem).GetProperty("Name")!.SetValue(artist, artistName);
+        var artist = CreateArtist(artistId, artistName);
 
         _fx.LibraryManager
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
@@ -1940,6 +2003,40 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         _fx.LibraryManager
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>().AsReadOnly());
+    }
+
+    private static MusicArtist CreateArtist(Guid id, string name)
+    {
+        var artist = new MusicArtist();
+        typeof(BaseItem).GetProperty("Id")!.SetValue(artist, id);
+        typeof(BaseItem).GetProperty("Name")!.SetValue(artist, name);
+        return artist;
+    }
+
+    private void SetupArtistThenArtistScopedSongs(BaseItem artist, BaseItem song)
+    {
+        // Discriminating library mock for the cross-media fallback family (JF-533
+        // hoisted it here from three verbatim copies): artist queries find the
+        // artist, artist-scoped audio queries find the song, and any other query
+        // (the FindSong song search) misses.
+        _fx.LibraryManager.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                bool isArtist = q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist);
+                bool hasArtistIds = q.ArtistIds != null && q.ArtistIds.Length > 0;
+                bool isAudioMedia = q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio);
+                if (isArtist)
+                {
+                    return new List<BaseItem> { artist }.AsReadOnly();
+                }
+
+                if (hasArtistIds && isAudioMedia)
+                {
+                    return new List<BaseItem> { song }.AsReadOnly();
+                }
+
+                return new List<BaseItem>().AsReadOnly(); // FindSong song search -> miss
+            });
     }
 
     private void SetupSongSearch(List<BaseItem> songs)
