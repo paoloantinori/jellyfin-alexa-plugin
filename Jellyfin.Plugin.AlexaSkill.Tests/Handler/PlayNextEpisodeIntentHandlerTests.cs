@@ -56,9 +56,25 @@ public class PlayNextEpisodeIntentHandlerTests : PluginTestBase
         _loggerFactory = LoggerFactory.Create(b => { });
     }
 
-    private PlayNextEpisodeIntentHandler CreateHandler()
+    private sealed class RecordingPlayNextEpisodeHandler(
+        ISessionManager sessionManager,
+        PluginConfiguration config,
+        ILibraryManager libraryManager,
+        IUserManager userManager,
+        IUserDataManager userDataManager,
+        ITVSeriesManager tvSeriesManager,
+        ILoggerFactory loggerFactory)
+        : PlayNextEpisodeIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, tvSeriesManager, loggerFactory)
     {
-        return new PlayNextEpisodeIntentHandler(
+        public ProgressiveSpeechCapture Progressive { get; } = new();
+
+        protected override Task<bool> SendProgressiveResponse(global::Alexa.NET.Request.Context context, global::Alexa.NET.Request.Type.Request request, string message)
+            => Progressive.Record(context, request, message);
+    }
+
+    private RecordingPlayNextEpisodeHandler CreateHandler()
+    {
+        return new RecordingPlayNextEpisodeHandler(
             _sessionManagerMock.Object,
             _config,
             _libraryManagerMock.Object,
@@ -206,9 +222,11 @@ public class PlayNextEpisodeIntentHandlerTests : PluginTestBase
 
         Assert.NotNull(response);
         response.HasDirective<VideoAppLaunchDirective>();
-        string announceText = TestHelpers.GetSpeechText(response);
-        Assert.Contains("The Convention", announceText, StringComparison.Ordinal);
-        Assert.Contains("next episode", announceText, StringComparison.Ordinal);
+        // JF-501: the announce rides the progressive-response vehicle, so the final
+        // launch response carries the directive ONLY.
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.True(handler.Progressive.Contains("The Convention"), "progressive announce must speak the episode title");
+        Assert.True(handler.Progressive.Contains("next episode"), "progressive announce must use the next-episode wording");
         // The video URL must be the Videos endpoint (VideoApp launch for an Episode).
         var directive = response.Response.Directives!.OfType<VideoAppLaunchDirective>().First();
         Assert.Contains("/Videos/", directive.VideoItem!.Source, StringComparison.Ordinal);
@@ -278,9 +296,10 @@ public class PlayNextEpisodeIntentHandlerTests : PluginTestBase
 
         Assert.NotNull(response);
         response.HasDirective<VideoAppLaunchDirective>();
-        string announceText = TestHelpers.GetSpeechText(response);
-        Assert.Contains("Finale", announceText, StringComparison.Ordinal);
-        Assert.Contains("latest episode", announceText, StringComparison.Ordinal);
+        // JF-501: the announce rides the progressive-response vehicle.
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.True(handler.Progressive.Contains("Finale"), "progressive announce must speak the latest-episode title");
+        Assert.True(handler.Progressive.Contains("latest episode"), "progressive announce must use the latest-episode wording");
         // Latest fallback semantics: the most recently created episode of the series.
         Assert.NotNull(capturedEpisodeQuery);
         Assert.Equal((ItemSortBy.DateCreated, SortOrder.Descending), capturedEpisodeQuery!.OrderBy[0]);
@@ -330,7 +349,36 @@ public class PlayNextEpisodeIntentHandlerTests : PluginTestBase
 
         Assert.NotNull(response);
         response.HasDirective<VideoAppLaunchDirective>();
-        Assert.Contains("Resuming", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        // JF-501: the resume announce rides the progressive-response vehicle.
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.True(handler.Progressive.Contains("Resuming"), "progressive announce must speak the resume position");
+    }
+
+    /// <summary>
+    /// JF-501: with the announce toggle OFF the launch must keep today's silent shape:
+    /// no progressive announce (only the SearchingMedia ping may arrive) and no
+    /// OutputSpeech on the final response.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_AnnounceOff_SendsNoProgressiveAnnounceAndNoOutputSpeech()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(seriesName: "The Office");
+        var context = CreateContext();
+        var user = CreateUser();
+        user.AnnounceNowPlaying = false;
+        var session = CreateSession();
+
+        SetupUserMock();
+        var series = SetupSeriesFound();
+        SetupNextUp("The Convention", series.Id);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        response.HasDirective<VideoAppLaunchDirective>();
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.False(handler.Progressive.Contains("The Convention"), "announce off must not send a progressive announce");
     }
 
     [Fact]

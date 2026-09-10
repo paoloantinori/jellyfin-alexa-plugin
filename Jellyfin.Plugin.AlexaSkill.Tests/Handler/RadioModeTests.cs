@@ -61,7 +61,22 @@ public class RadioModeTests : PluginTestBase, IDisposable
         GC.SuppressFinalize(this);
     }
 
-    private PlayRadioIntentHandler CreateRadioHandler()
+    private sealed class RecordingPlayRadioHandler(
+        ISessionManager sessionManager,
+        PluginConfiguration config,
+        ILibraryManager libraryManager,
+        IUserManager userManager,
+        ILiveTvStreamResolver resolver,
+        ILoggerFactory loggerFactory)
+        : PlayRadioIntentHandler(sessionManager, config, libraryManager, userManager, resolver, loggerFactory)
+    {
+        public ProgressiveSpeechCapture Progressive { get; } = new();
+
+        protected override Task<bool> SendProgressiveResponse(global::Alexa.NET.Request.Context context, global::Alexa.NET.Request.Type.Request request, string message)
+            => Progressive.Record(context, request, message);
+    }
+
+    private RecordingPlayRadioHandler CreateRadioHandler()
         => new(_sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _resolverMock.Object, _loggerFactory);
 
     private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
@@ -359,8 +374,11 @@ public class RadioModeTests : PluginTestBase, IDisposable
         Assert.Equal(channel.Id, Assert.Single(session.NowPlayingQueue!).Id);
         Assert.False(RadioModeState.IsEnabled(session.UserId, DeviceId), "a channel launch is not radio mode");
         _resolverMock.Verify(r => r.ResolveAsync(channel, It.IsAny<Entities.User>(), It.IsAny<CancellationToken>()), Times.Once);
-        var text = TestHelpers.GetSpeechText(response);
-        Assert.DoesNotContain("nothing", text, StringComparison.OrdinalIgnoreCase);
+        // JF-501: the announce rides the progressive-response vehicle; the final launch
+        // response carries the directive ONLY.
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.True(handler.Progressive.Contains("Jazz FM"), "progressive announce must speak the channel name");
+        Assert.DoesNotContain("nothing", handler.Progressive.AllText, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

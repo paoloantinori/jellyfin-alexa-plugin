@@ -143,25 +143,28 @@ public class YesIntentHandler : BaseHandler
         }
 
         // JF-361: AudioBook items arrive with MediaTypeAlbum label (PlayBook disambiguation reuses
-        // it). Route to the audiobook playback path instead of PlayAlbum.
-        SkillResponse response;
+        // it). Route to the audiobook playback path instead of PlayAlbum. The two JF-501
+        // progressive-announce paths return their tasks directly (the announcing launch
+        // builders are async); the sync play paths keep the Task.FromResult shape.
         if (mediaType == DisambiguationHelper.MediaTypeAlbum && item is AudioBook)
         {
             Logger.LogDebug("Yes: routing AudioBook item {ItemId} to audiobook playback", itemId);
-            response = PlayBook(item, jellyfinUser!, user, session, locale, context);
+            return PlayBook(item, jellyfinUser!, user, session, locale, context, request);
         }
-        else
+
+        if (mediaType == DisambiguationHelper.MediaTypeVideo)
         {
-            response = mediaType switch
-            {
-                DisambiguationHelper.MediaTypeSong => PlaySong(item, user, session, context, locale),
-                DisambiguationHelper.MediaTypeAlbum => PlayAlbum(item, jellyfinUser!, user, session, locale, context),
-                DisambiguationHelper.MediaTypeArtist => PlayArtist(item, jellyfinUser!, user, session, locale, context),
-                DisambiguationHelper.MediaTypeVideo => PlayVideo(item, user, session, locale, context),
-                DisambiguationHelper.MediaTypePlaylist => PlayPlaylist(item, jellyfinUser!, user, session, locale, context),
-                _ => ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale))
-            };
+            return PlayVideo(item, user, session, locale, context, request);
         }
+
+        SkillResponse response = mediaType switch
+        {
+            DisambiguationHelper.MediaTypeSong => PlaySong(item, user, session, context, locale),
+            DisambiguationHelper.MediaTypeAlbum => PlayAlbum(item, jellyfinUser!, user, session, locale, context),
+            DisambiguationHelper.MediaTypeArtist => PlayArtist(item, jellyfinUser!, user, session, locale, context),
+            DisambiguationHelper.MediaTypePlaylist => PlayPlaylist(item, jellyfinUser!, user, session, locale, context),
+            _ => ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale))
+        };
 
         return Task.FromResult(response);
     }
@@ -320,7 +323,7 @@ public class YesIntentHandler : BaseHandler
     /// single-match logic: resolve tracks, check resume, route to VideoApp (NativeControlsForBooks)
     /// or AudioPlayer.
     /// </summary>
-    private SkillResponse PlayBook(BaseItem book, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale, Context context)
+    private async Task<SkillResponse> PlayBook(BaseItem book, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale, Context context, Request request)
     {
         // Resolve tracks (same logic as PlayBookIntentHandler)
         // Resolve tracks (same logic as PlayBookIntentHandler). Use GetItemList (not GetItemsResult)
@@ -361,8 +364,11 @@ public class YesIntentHandler : BaseHandler
         if (Plugin.Instance?.Configuration?.NativeControlsForBooks == true)
         {
             SkillResponse response = BuildVideoAppAudioResponse(itemId, trackItems[0], user, locale, context);
-            // Fresh-start audiobook via VideoApp: announce the book title.
-            response.Response.OutputSpeech = BuildNowPlayingSpeech(book.Name, locale, GetAnnounceNowPlaying(user));
+            // Fresh-start audiobook via VideoApp: announce the book title. JF-501: spoken
+            // progressively when the response is a VideoApp launch; a screenless device
+            // degrades to AudioPlayer, where the announce keeps riding the final response.
+            response.Response.OutputSpeech = await SpeakVideoLaunchAnnounceAsync(
+                context, request, BuildNowPlayingSpeech(book.Name, locale, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
             return response;
         }
 
@@ -395,18 +401,20 @@ public class YesIntentHandler : BaseHandler
         return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, artistItems[0], user, context);
     }
 
-    private SkillResponse PlayVideo(BaseItem video, Entities.User user, SessionInfo session, string locale, Context context)
+    private async Task<SkillResponse> PlayVideo(BaseItem video, Entities.User user, SessionInfo session, string locale, Context context, Request request)
     {
         session.NowPlayingQueue = new List<QueueItem> { new() { Id = video.Id } };
         session.FullNowPlayingItem = video;
 
         // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
-        return BuildVideoAppLaunchResponse(
+        // JF-501: the announce is spoken progressively (directive-only final response).
+        return await BuildVideoAppLaunchResponseAsync(
             context,
+            request,
             locale,
             GetVideoAppLaunchUrl(video, user),
             video.Name,
-            BuildNowPlayingSpeech(video.Name, locale, GetAnnounceNowPlaying(user)));
+            BuildNowPlayingSpeech(video.Name, locale, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
     }
 
     private SkillResponse PlayPlaylist(BaseItem playlist, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale, Context? context)

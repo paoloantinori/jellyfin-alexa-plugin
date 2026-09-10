@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using global::Alexa.NET;
@@ -27,9 +28,24 @@ public class RecommendIntentHandlerTests : PluginTestBase
 {
     private readonly HandlerTestFixture _fx = new HandlerTestFixture();
 
-    private RecommendIntentHandler CreateHandler()
+    private sealed class RecordingRecommendHandler(
+        ISessionManager sessionManager,
+        PluginConfiguration config,
+        ILibraryManager libraryManager,
+        IUserManager userManager,
+        IUserDataManager userDataManager,
+        ILoggerFactory loggerFactory)
+        : RecommendIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, loggerFactory)
     {
-        return new RecommendIntentHandler(
+        public ProgressiveSpeechCapture Progressive { get; } = new();
+
+        protected override Task<bool> SendProgressiveResponse(global::Alexa.NET.Request.Context context, global::Alexa.NET.Request.Type.Request request, string message)
+            => Progressive.Record(context, request, message);
+    }
+
+    private RecordingRecommendHandler CreateHandler()
+    {
+        return new RecordingRecommendHandler(
             _fx.SessionManager.Object,
             _fx.Config,
             _fx.LibraryManager.Object,
@@ -214,5 +230,50 @@ public class RecommendIntentHandlerTests : PluginTestBase
 
         Assert.NotNull(response);
         Assert.NotNull(response.Response?.OutputSpeech);
+    }
+
+    /// <summary>
+    /// JF-501: a recommended MOVIE launches via VideoApp with the announce spoken
+    /// progressively; the final launch response carries the directive ONLY.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_RecommendedMovie_SpeaksAnnounceProgressively()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(mediaType: "movies");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+
+        _fx.SetupUserMock();
+
+        var playedItem = new MediaBrowser.Controller.Entities.Movies.Movie
+        {
+            Name = "Played Movie",
+            Id = Guid.NewGuid()
+        };
+        playedItem.Genres = new[] { "Sci-Fi" };
+
+        var recommendedItem = new MediaBrowser.Controller.Entities.Movies.Movie
+        {
+            Name = "Inception",
+            Id = Guid.NewGuid()
+        };
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IsPlayed == true)))
+            .Returns(new List<BaseItem> { playedItem });
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IsPlayed == false || q.IsPlayed == null)))
+            .Returns(new List<BaseItem> { recommendedItem });
+
+        _fx.LibraryManager.Setup(l => l.GetItemById(recommendedItem.Id))
+            .Returns(recommendedItem);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotNull(response.Response.Directives?.FirstOrDefault(d => d.GetType().Name.Contains("VideoApp")));
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.True(handler.Progressive.Contains("Inception"), "progressive announce must speak the recommended title");
     }
 }

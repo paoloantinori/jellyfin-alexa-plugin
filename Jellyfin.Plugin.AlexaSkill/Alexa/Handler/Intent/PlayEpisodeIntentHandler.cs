@@ -116,7 +116,7 @@ public class PlayEpisodeIntentHandler : BaseHandler
 
         if (!hasExplicitNumbers)
         {
-            return await PlayNextUpEpisodeAsync(_tvSeriesManager, _libraryManager, _userDataManager, jellyfinUser!, user, session, series, locale, context, cancellationToken).ConfigureAwait(false);
+            return await PlayNextUpEpisodeAsync(_tvSeriesManager, _libraryManager, _userDataManager, jellyfinUser!, user, session, series, locale, context, request, cancellationToken).ConfigureAwait(false);
         }
 
         var episodeQuery = new InternalItemsQuery
@@ -156,11 +156,13 @@ public class PlayEpisodeIntentHandler : BaseHandler
             itemId, episode.Name);
 
         // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
-        return BuildVideoAppLaunchResponse(
+        // JF-501: the announce is spoken progressively (directive-only final response).
+        return await BuildVideoAppLaunchResponseAsync(
             context,
+            request,
             locale,
             GetVideoAppLaunchUrl(episode, user),
             episode.Name,
-            BuildNowPlayingSpeech(episode.Name, locale, GetAnnounceNowPlaying(user)));
+            BuildNowPlayingSpeech(episode.Name, locale, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
     }
 }

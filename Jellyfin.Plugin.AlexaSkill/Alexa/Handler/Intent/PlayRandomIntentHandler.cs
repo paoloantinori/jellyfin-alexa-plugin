@@ -169,12 +169,14 @@ public class PlayRandomIntentHandler : BaseHandler
             or MediaBrowser.Controller.Entities.TV.Episode)
         {
             // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
-            return BuildVideoAppLaunchResponse(
+            // JF-501: the announce is spoken progressively (directive-only final response).
+            return await BuildVideoAppLaunchResponseAsync(
                 context,
+                request,
                 locale,
                 GetVideoAppLaunchUrl(firstItem, user),
                 firstItem.Name,
-                BuildNowPlayingSpeech(firstItem.Name, locale, GetAnnounceNowPlaying(user)));
+                BuildNowPlayingSpeech(firstItem.Name, locale, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
         }
 
         return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, firstItem, user, context);

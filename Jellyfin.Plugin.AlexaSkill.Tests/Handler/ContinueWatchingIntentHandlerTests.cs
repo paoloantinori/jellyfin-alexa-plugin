@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using global::Alexa.NET;
@@ -27,9 +28,24 @@ public class ContinueWatchingIntentHandlerTests : PluginTestBase
 {
     private readonly HandlerTestFixture _fx = new HandlerTestFixture();
 
-    private ContinueWatchingIntentHandler CreateHandler()
+    private sealed class RecordingContinueWatchingHandler(
+        ISessionManager sessionManager,
+        PluginConfiguration config,
+        ILibraryManager libraryManager,
+        IUserManager userManager,
+        IUserDataManager userDataManager,
+        ILoggerFactory loggerFactory)
+        : ContinueWatchingIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, loggerFactory)
     {
-        return new ContinueWatchingIntentHandler(
+        public ProgressiveSpeechCapture Progressive { get; } = new();
+
+        protected override Task<bool> SendProgressiveResponse(global::Alexa.NET.Request.Context context, global::Alexa.NET.Request.Type.Request request, string message)
+            => Progressive.Record(context, request, message);
+    }
+
+    private RecordingContinueWatchingHandler CreateHandler()
+    {
+        return new RecordingContinueWatchingHandler(
             _fx.SessionManager.Object,
             _fx.Config,
             _fx.LibraryManager.Object,
@@ -202,5 +218,40 @@ public class ContinueWatchingIntentHandlerTests : PluginTestBase
         Assert.Equal(50, capturedQuery.Limit);
         Assert.NotNull(capturedQuery.IncludeItemTypes);
         Assert.Equal(3, capturedQuery.IncludeItemTypes.Length);
+    }
+
+    /// <summary>
+    /// JF-501: a resumable MOVIE launches via VideoApp with the announce spoken
+    /// progressively; the final launch response carries the directive ONLY.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ResumableMovie_SpeaksAnnounceProgressively()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+
+        _fx.SetupUserMock();
+
+        var movie = new MediaBrowser.Controller.Entities.Movies.Movie
+        {
+            Name = "Inception",
+            Id = Guid.NewGuid()
+        };
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { movie });
+
+        _fx.UserDataManager.Setup(u => u.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
+            .Returns(new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = TimeSpan.FromMinutes(10).Ticks });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotNull(response.Response.Directives?.FirstOrDefault(d => d.GetType().Name.Contains("VideoApp")));
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.True(handler.Progressive.Contains("Inception"), "progressive announce must speak the movie title");
     }
 }

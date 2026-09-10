@@ -205,12 +205,14 @@ public class RecommendIntentHandler : BaseHandler
                 : new PlainTextOutputSpeech(ResponseStrings.Get("RecommendPlaying", locale, item.Name));
 
             // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
-            return BuildVideoAppLaunchResponse(
+            // JF-501: the announce is spoken progressively (directive-only final response).
+            return await BuildVideoAppLaunchResponseAsync(
                 context,
+                request,
                 locale,
                 GetVideoAppLaunchUrl(item, user),
                 item.Name,
-                outputSpeech);
+                outputSpeech).ConfigureAwait(false);
         }
 
         // For audio, add NowPlaying speech before the audio directive

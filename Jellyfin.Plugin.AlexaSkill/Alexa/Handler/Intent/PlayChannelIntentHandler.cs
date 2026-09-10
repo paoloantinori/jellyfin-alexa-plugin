@@ -104,6 +104,6 @@ public class PlayChannelIntentHandler : BaseHandler
 
         BaseItem channel = channels[0];
 
-        return await BuildChannelLaunchResponseAsync(_streamResolver, channel, context, user, session, locale, cancellationToken).ConfigureAwait(false);
+        return await BuildChannelLaunchResponseAsync(_streamResolver, channel, context, request, user, session, locale, cancellationToken).ConfigureAwait(false);
     }
 }

@@ -99,12 +99,14 @@ public class ContinueWatchingIntentHandler : BaseHandler
             or MediaBrowser.Controller.Entities.TV.Episode)
         {
             // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
-            return Task.FromResult(BuildVideoAppLaunchResponse(
+            // JF-501: the announce is spoken progressively (directive-only final response).
+            return BuildVideoAppLaunchResponseAsync(
                 context,
+                request,
                 locale,
                 GetVideoAppLaunchUrl(resumeItem, user),
                 resumeItem.Name,
-                new PlainTextOutputSpeech(ResponseStrings.Get("NowPlayingWithPosition", locale, resumeItem.Name, FormatPosition(resumeTicks)))));
+                new PlainTextOutputSpeech(ResponseStrings.Get("NowPlayingWithPosition", locale, resumeItem.Name, FormatPosition(resumeTicks))));
         }
 
         return Task.FromResult(BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, resumeItem, user, context, offsetMs));

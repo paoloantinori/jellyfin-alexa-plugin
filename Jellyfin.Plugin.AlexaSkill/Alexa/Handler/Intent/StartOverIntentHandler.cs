@@ -116,12 +116,14 @@ public class StartOverIntentHandler : BaseHandler
             or MediaBrowser.Controller.Entities.TV.Episode)
         {
             // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
-            return Task.FromResult<SkillResponse>(BuildVideoAppLaunchResponse(
+            // JF-501: the announce is spoken progressively (directive-only final response).
+            return BuildVideoAppLaunchResponseAsync(
                 context,
+                request,
                 locale,
                 GetVideoAppLaunchUrl(item, user),
                 item.Name,
-                new PlainTextOutputSpeech(ResponseStrings.Get("RestartingContent", locale, item.Name))));
+                new PlainTextOutputSpeech(ResponseStrings.Get("RestartingContent", locale, item.Name)));
         }
 
         return Task.FromResult<SkillResponse>(BuildAudioPlayerResponse(
