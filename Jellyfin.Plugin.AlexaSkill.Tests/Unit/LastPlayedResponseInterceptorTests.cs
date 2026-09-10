@@ -34,8 +34,7 @@ public class LastPlayedResponseInterceptorTests : IDisposable
 
     public LastPlayedResponseInterceptorTests()
     {
-        _tempDir = Path.Combine(Path.GetTempPath(), $"lp-test-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(_tempDir);
+        _tempDir = TestHelpers.CreateRegisteredTempDir("lp-test");
         _loggerFactory = LoggerFactory.Create(b => b.AddDebug());
         _queueManager = new DeviceQueueManager(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
         _interceptor = new LastPlayedResponseInterceptor(

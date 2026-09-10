@@ -51,8 +51,7 @@ public class ResumeConfirmationTranscodeBaseTests : PluginTestBase, IDisposable
 
     public ResumeConfirmationTranscodeBaseTests()
     {
-        _tempDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "resume-transcode-base-tests-" + Guid.NewGuid());
-        System.IO.Directory.CreateDirectory(_tempDir);
+        _tempDir = TestHelpers.CreateRegisteredTempDir("resume-transcode-base-tests");
         _queueManager = new DeviceQueueManager(_tempDir, _fx.LoggerFactory.CreateLogger<DeviceQueueManager>());
 
         TestHelpers.EnsurePluginInstance(

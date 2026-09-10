@@ -25,8 +25,7 @@ public class VideoAudioCacheTests : PluginTestBase, IDisposable
 
     public VideoAudioCacheTests()
     {
-        _tempDir = Path.Combine(Path.GetTempPath(), "va-cache-test-" + Guid.NewGuid());
-        Directory.CreateDirectory(_tempDir);
+        _tempDir = TestHelpers.CreateRegisteredTempDir("va-cache-test");
 
         var appPaths = new Mock<IApplicationPaths>();
         appPaths.Setup(p => p.CachePath).Returns(_tempDir);

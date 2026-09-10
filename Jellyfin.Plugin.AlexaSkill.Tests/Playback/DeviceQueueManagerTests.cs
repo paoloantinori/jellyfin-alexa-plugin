@@ -23,8 +23,7 @@ public class DeviceQueueManagerTests : IDisposable
 
     public DeviceQueueManagerTests()
     {
-        _tempDir = Path.Combine(Path.GetTempPath(), $"dq-test-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(_tempDir);
+        _tempDir = TestHelpers.CreateRegisteredTempDir("dq-test");
         _logger = LoggerFactory.Create(b => { }).CreateLogger<DeviceQueueManager>();
         _manager = new DeviceQueueManager(_tempDir, _logger);
     }

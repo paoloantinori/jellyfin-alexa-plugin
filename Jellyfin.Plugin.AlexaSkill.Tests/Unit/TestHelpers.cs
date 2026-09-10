@@ -13,6 +13,7 @@ using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Entities;
 using Jellyfin.Plugin.AlexaSkill.Lwa;
@@ -228,6 +229,21 @@ internal static class TestHelpers
         PluginTempDirCleanup.Shared.Register(dir);
         return dir;
     }
+
+    /// <summary>
+    /// JF-540: the ONE DeviceQueueManager factory on its own registered temp dir
+    /// (<paramref name="nameSuffix"/> + "-dq"). The ctor loads every queue_*.json in
+    /// its data dir, so a shared root makes each fixture cross-load (and
+    /// <c>PersistAll</c> rewrite) the whole accumulating pool at every teardown; the
+    /// registered dir sweeps at process exit. Disposal stays the caller's belt (the
+    /// 2s debounce teardown, JF-535).
+    /// </summary>
+    internal static DeviceQueueManager CreateDeviceQueueManager(
+        string nameSuffix,
+        ILogger<DeviceQueueManager>? logger = null)
+        => new DeviceQueueManager(
+            CreateRegisteredTempDir(nameSuffix + "-dq"),
+            logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<DeviceQueueManager>.Instance);
 
     /// <summary>
     /// Sets Plugin.Instance with the provided configuration so IfFeatureDisabled

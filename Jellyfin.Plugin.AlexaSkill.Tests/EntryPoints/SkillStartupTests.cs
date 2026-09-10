@@ -1,5 +1,3 @@
-using System;
-using System.IO;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,6 +6,7 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Alexa.ModelDeployment;
 using Jellyfin.Plugin.AlexaSkill.Diagnostics;
 using Jellyfin.Plugin.AlexaSkill.EntryPoints;
+using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -42,11 +41,9 @@ public class SkillStartupTests : PluginTestBase
     private SkillStartup CreateStartup()
     {
         var mdm = new ModelDeploymentManager(_httpClientFactory, _loggerFactory.CreateLogger<ModelDeploymentManager>());
-        var deviceQueueManager = new Jellyfin.Plugin.AlexaSkill.Alexa.Playback.DeviceQueueManager(
-            Path.Combine(Path.GetTempPath(), "alexa_test_queues_" + Guid.NewGuid().ToString("N")),
-            _loggerFactory.CreateLogger<Jellyfin.Plugin.AlexaSkill.Alexa.Playback.DeviceQueueManager>());
+        var deviceQueueManager = TestHelpers.CreateDeviceQueueManager("alexa_test_queues");
         var positionTracker = new Jellyfin.Plugin.AlexaSkill.Alexa.Playback.AudiobookPositionTracker(
-            Path.Combine(Path.GetTempPath(), "alexa_test_pos_" + Guid.NewGuid().ToString("N")),
+            TestHelpers.CreateRegisteredTempDir("alexa_test_pos"),
             _loggerFactory.CreateLogger<Jellyfin.Plugin.AlexaSkill.Alexa.Playback.AudiobookPositionTracker>());
         return new SkillStartup(_sessionManagerMock.Object, _loggerFactory, _httpClientFactory, mdm, _searchCache, new CircuitBreaker(), new RequestCounters(), _connectivityChecker, deviceQueueManager, positionTracker);
     }

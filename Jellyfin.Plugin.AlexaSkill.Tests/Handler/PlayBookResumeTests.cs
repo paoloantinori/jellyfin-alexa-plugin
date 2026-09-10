@@ -21,7 +21,6 @@ using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Querying;
-using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
 
@@ -39,12 +38,7 @@ public class PlayBookResumeTests : PluginTestBase, IDisposable
 
     public PlayBookResumeTests()
     {
-        var queueLogger = new Mock<ILogger<DeviceQueueManager>>();
-        // JF-535b: per-fixture registered temp dir (the JF-486 belt), not the bare
-        // shared root; the ctor loads every queue_*.json in its data dir, so a shared root made
-        // each fixture cross-load (and PersistAll rewrite) the whole accumulating pool at every
-        // teardown.
-        _queueManager = new DeviceQueueManager(TestHelpers.CreateRegisteredTempDir("PlayBookResumeTests-dq"), queueLogger.Object);
+        _queueManager = TestHelpers.CreateDeviceQueueManager("PlayBookResumeTests");
 
         TestHelpers.EnsurePluginInstance(
             _fx.Config, _fx.LoggerFactory, c => { }, "playbook-resume-tests");
