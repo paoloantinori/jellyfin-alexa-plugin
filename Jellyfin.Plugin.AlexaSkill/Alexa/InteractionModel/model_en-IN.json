@@ -124,7 +124,7 @@
           },
           {
             "name": "musician",
-            "type": "AMAZON.Musician"
+            "type": "JellyfinArtist"
           }
         ]
       },
@@ -153,7 +153,7 @@
           },
           {
             "name": "musician",
-            "type": "AMAZON.Musician"
+            "type": "JellyfinArtist"
           }
         ]
       },
@@ -227,7 +227,7 @@
         "slots": [
           {
             "name": "musician",
-            "type": "AMAZON.Musician"
+            "type": "JellyfinArtist"
           }
         ]
       },
@@ -666,7 +666,7 @@
           },
           {
             "name": "musician",
-            "type": "AMAZON.Musician"
+            "type": "JellyfinArtist"
           }
         ],
         "samples": [
@@ -689,7 +689,7 @@
           },
           {
             "name": "musician",
-            "type": "AMAZON.Musician"
+            "type": "JellyfinArtist"
           }
         ],
         "samples": [
@@ -800,7 +800,7 @@
         "slots": [
           {
             "name": "musician",
-            "type": "AMAZON.Musician"
+            "type": "JellyfinArtist"
           },
           {
             "name": "query_type",
@@ -921,7 +921,7 @@
         "slots": [
           {
             "name": "musician",
-            "type": "AMAZON.Musician"
+            "type": "JellyfinArtist"
           }
         ]
       },
@@ -1441,6 +1441,61 @@
             }
           }
         ]
+      },
+      {
+        "name": "JellyfinArtist",
+        "values": [
+          {
+            "name": {
+              "value": "Queen"
+            }
+          },
+          {
+            "name": {
+              "value": "The Beatles"
+            }
+          },
+          {
+            "name": {
+              "value": "Pink Floyd"
+            }
+          },
+          {
+            "name": {
+              "value": "Radiohead"
+            }
+          },
+          {
+            "name": {
+              "value": "Michael Jackson"
+            }
+          },
+          {
+            "name": {
+              "value": "The Rolling Stones"
+            }
+          },
+          {
+            "name": {
+              "value": "Metallica"
+            }
+          },
+          {
+            "name": {
+              "value": "The Police"
+            }
+          },
+          {
+            "name": {
+              "value": "Coldplay"
+            }
+          },
+          {
+            "name": {
+              "value": "Miles Davis"
+            }
+          }
+        ]
       }
     ],
     "modelConfiguration": {
@@ -1469,7 +1524,7 @@
         "slots": [
           {
             "name": "musician",
-            "type": "AMAZON.Musician",
+            "type": "JellyfinArtist",
             "confirmationRequired": false,
             "elicitationRequired": false
           }
@@ -1523,7 +1578,7 @@
           },
           {
             "name": "musician",
-            "type": "AMAZON.Musician",
+            "type": "JellyfinArtist",
             "confirmationRequired": false,
             "elicitationRequired": false
           }
@@ -1541,7 +1596,7 @@
           },
           {
             "name": "musician",
-            "type": "AMAZON.Musician",
+            "type": "JellyfinArtist",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

@@ -355,10 +355,11 @@ public class DynamicEntityBuilderCacheTests
         var result1 = builder.Build(userId, "it-IT", null, CancellationToken.None);
         var result2 = builder.Build(userId, "it-IT", null, CancellationToken.None);
 
-        // Assert — cached result has identical content
+        // Assert: cached result has identical content
         Assert.NotNull(result1);
         Assert.Same(result1, result2);
-        Assert.Equal("AMAZON.Musician", result2.Types[0].Name);
+        // JF-415: it-IT is a catalog-backed musician locale → JellyfinArtist
+        Assert.Equal("JellyfinArtist", result2.Types[0].Name);
         Assert.Equal("Pink Floyd", result2.Types[0].Values[0].Name.Value);
     }
 

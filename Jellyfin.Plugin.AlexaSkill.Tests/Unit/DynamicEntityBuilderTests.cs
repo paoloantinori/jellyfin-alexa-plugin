@@ -106,7 +106,7 @@ public class DynamicEntityBuilderTests
 
         Assert.NotNull(result);
         Assert.Single(result.Types);
-        Assert.Equal("AMAZON.Musician", result.Types[0].Name);
+        Assert.Equal("JellyfinArtist", result.Types[0].Name);
         Assert.Single(result.Types[0].Values);
         Assert.Equal("Queen", result.Types[0].Values[0].Name.Value);
         Assert.Equal(CatalogValue.FormatId(CatalogType.Artist, artistId), result.Types[0].Values[0].Id);
@@ -155,8 +155,42 @@ public class DynamicEntityBuilderTests
 
         Assert.NotNull(result);
         Assert.Equal(2, result.Types.Count);
-        Assert.Equal("AMAZON.Musician", result.Types[0].Name);
+        Assert.Equal("JellyfinArtist", result.Types[0].Name);
         Assert.Equal("AMAZON.Album", result.Types[1].Name);
+    }
+
+    [Fact]
+    public void Build_MusicianSlotType_IsLocaleDependent_Jf415()
+    {
+        var userId = Guid.NewGuid();
+        SetupUserMock(userId);
+
+        var artists = new List<BaseItem>
+        {
+            new MusicArtist { Name = "Queen", Id = Guid.NewGuid() }
+        };
+        SetupLibraryMock(artists, []);
+
+        using var builder = CreateBuilder();
+
+        // Catalog-backed locales (JF-415: en-* + it-IT) target the declared
+        // JellyfinArtist type; the other locales keep the AMAZON.Musician built-in.
+        var catalogBacked = builder.Build(userId, "it-IT", null, CancellationToken.None);
+        Assert.NotNull(catalogBacked);
+        Assert.Equal("JellyfinArtist", catalogBacked.Types[0].Name);
+
+        var enUs = builder.Build(userId, "en-US", null, CancellationToken.None);
+        Assert.NotNull(enUs);
+        Assert.Equal("JellyfinArtist", enUs.Types[0].Name);
+
+        var deDe = builder.Build(userId, "de-DE", null, CancellationToken.None);
+        Assert.NotNull(deDe);
+        Assert.Equal("AMAZON.Musician", deDe.Types[0].Name);
+
+        // Every declared locale in the C# map must resolve to the catalog type;
+        // a locale missing from the map would silently get the inert built-in.
+
+        Assert.Equal("AMAZON.Musician", CatalogSlotTypes.ResolveMusicianSlotType("fr-FR"));
     }
 
     [Fact]
@@ -378,9 +412,37 @@ public class DynamicEntityBuilderTests
         var result = builder.Build(userId, "it-IT", null, CancellationToken.None);
 
         Assert.NotNull(result);
-        // Last-played audio maps to AMAZON.Musician slot
-        var artistType = result.Types.FirstOrDefault(t => t.Name == "AMAZON.Musician");
+        // Last-played audio maps to the musician slot type (JellyfinArtist on it-IT, JF-415)
+        var artistType = result.Types.FirstOrDefault(t => t.Name == "JellyfinArtist");
         Assert.NotNull(artistType);
+    }
+
+    [Fact]
+    public void Build_LastPlayedAudio_MusicianTypeMatchesLocale_Jf415()
+    {
+        var userId = Guid.NewGuid();
+        SetupUserMock(userId);
+        SetupLibraryMock([], []);
+
+        var audio = new Audio { Name = "Bohemian Rhapsody", Id = Guid.NewGuid() };
+        audio.Artists = new List<string> { "Queen" };
+
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.OrderBy != null && q.OrderBy.Any(o => o.Item1 == ItemSortBy.DatePlayed))))
+            .Returns(new List<BaseItem> { audio });
+
+        using var builder = CreateBuilder();
+
+        // Same user, two locales: the last-played artist values must carry each
+        // locale's musician slot type (the 5-min cache is locale-keyed since JF-415).
+        var itResult = builder.Build(userId, "it-IT", null, CancellationToken.None);
+        Assert.NotNull(itResult);
+        Assert.Contains(itResult.Types, t => t.Name == "JellyfinArtist");
+
+        var deResult = builder.Build(userId, "de-DE", null, CancellationToken.None);
+        Assert.NotNull(deResult);
+        Assert.Contains(deResult.Types, t => t.Name == "AMAZON.Musician");
     }
 
     [Fact]

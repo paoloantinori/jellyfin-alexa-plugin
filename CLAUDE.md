@@ -240,7 +240,7 @@ The goal is COVERAGE (emit enough plausible variants that one matches), not prec
 
 ## Catalog Sync (JF-335)
 
-`LibrarySyncService.SyncUserLibraryAsync` uploads the user's library to SMAPI catalog slot types (`JellyfinArtist`, `AlbumName`) with locale-specific phonetic synonyms. Configured by `PluginConfiguration.CatalogSyncLocales` (string): empty = it-IT only (default); `*` = all active locales; `"de-DE,en-US"` = it-IT + listed. `CatalogManager.UploadCatalogValuesAsync` creates a catalog version by providing a hosted URL; SMAPI fetches it once (the plugin's `CatalogController` serves the payload from a 10-min-TTL single-fetch cache).
+`LibrarySyncService.SyncUserLibraryAsync` uploads the user's library to SMAPI catalog slot types (`JellyfinArtist`, `AlbumName`) with locale-specific phonetic synonyms. Configured by `PluginConfiguration.CatalogSyncLocales` (string): the CODE DEFAULT is `*` (all active locales; verified 2026-09-10 - the older "empty = it-IT only (default)" note described the empty-string behavior, not the default); `"de-DE,en-US"` = it-IT + listed. `CatalogManager.UploadCatalogValuesAsync` creates a catalog version by providing a hosted URL; SMAPI fetches it once (the plugin's `CatalogController` serves the payload from a 10-min-TTL single-fetch cache).
 
 **Catalog 503 retry**: `UploadCatalogValuesAsync` retries the version build on transient `GATEWAY_ERROR`/503/502/504 (when SMAPI couldn't fetch the source URL, e.g. the reverse proxy was still warming up after a Jellyfin restart) with a fresh source URL per attempt (the old URL is consumed on fetch). Non-transient failures (real validation errors) throw immediately. This makes the startup catalog-sync race self-healing.
 

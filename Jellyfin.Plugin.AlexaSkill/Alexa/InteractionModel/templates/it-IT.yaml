@@ -436,7 +436,7 @@ explicit_intents:
       - Mostra {query_type} di {musician}
     slots:
       - name: musician
-        type: AMAZON.Musician
+        type: JellyfinArtist
       - name: query_type
         type: LibraryQueryType
   FindSongIntent:
@@ -488,7 +488,7 @@ explicit_intents:
       - c'e un brano di {musician}
     slots:
       - name: musician
-        type: AMAZON.Musician
+        type: JellyfinArtist
   AddToQueueIntent:
     samples:
       - aggiungi {song} alla coda
@@ -501,7 +501,7 @@ explicit_intents:
       - name: song
         type: AMAZON.MusicRecording
       - name: musician
-        type: AMAZON.Musician
+        type: JellyfinArtist
   ClearQueueIntent:
     samples:
       - svuota la coda
@@ -563,7 +563,7 @@ explicit_intents:
       - name: song
         type: AMAZON.MusicRecording
       - name: musician
-        type: AMAZON.Musician
+        type: JellyfinArtist
   PlayRadioIntent:
     samples:
       - riproduci radio
@@ -694,6 +694,19 @@ types:
       - Abbey Road
       - La cura
       - Come mai
+  # JF-415: catalog-backed musician slot (same architecture as AlbumName). The
+  # static seed only bootstraps a fresh skill; CatalogSyncTask replaces the whole
+  # type with the live artist catalog (phonetic variants included) at deploy time.
+  JellyfinArtist:
+    values:
+      - Queen
+      - Pink Floyd
+      - Radiohead
+      - The Beatles
+      - Michael Jackson
+      - The Police
+      - Maneskin
+      - Ligabue
   # JF-468: the three concepts shared with the other 16 locales carry the
   # English canonical ids (artists on artisti, songs on brani, albums on
   # album) so any id-keyed lookup sees one key space across all 17 locales.
@@ -855,7 +868,7 @@ templates:
       - name: song
         type: AMAZON.MusicRecording
       - name: musician
-        type: AMAZON.Musician
+        type: JellyfinArtist
 
   PlayPlaylistIntent:
     templates:
@@ -944,7 +957,7 @@ templates:
       - name: album
         type: AlbumName
       - name: musician
-        type: AMAZON.Musician
+        type: JellyfinArtist
 
   PlayArtistSongsIntent:
     templates:
@@ -966,7 +979,7 @@ templates:
       - "{infinitive} {nominative_article} {musician}"
     slots:
       - name: musician
-        type: AMAZON.Musician
+        type: JellyfinArtist
 
   PlayLastAddedIntent:
     templates:
@@ -1056,7 +1069,7 @@ dialog:
       confirmationRequired: false
       slots:
         - name: musician
-          type: AMAZON.Musician
+          type: JellyfinArtist
           confirmationRequired: false
           elicitationRequired: false
     - name: ShufflePlayIntent
@@ -1089,7 +1102,7 @@ dialog:
           confirmationRequired: false
           elicitationRequired: false
         - name: musician
-          type: AMAZON.Musician
+          type: JellyfinArtist
           confirmationRequired: false
           elicitationRequired: false
     - name: PlayAlbumIntent
@@ -1100,7 +1113,7 @@ dialog:
           confirmationRequired: false
           elicitationRequired: false
         - name: musician
-          type: AMAZON.Musician
+          type: JellyfinArtist
           confirmationRequired: false
           elicitationRequired: false
     - name: PlayRadioIntent
