@@ -50,9 +50,25 @@ public class PlayEpisodeIntentHandlerTests : PluginTestBase
         _loggerFactory = LoggerFactory.Create(b => { });
     }
 
-    private PlayEpisodeIntentHandler CreateHandler()
+    private sealed class RecordingPlayEpisodeHandler(
+        ISessionManager sessionManager,
+        PluginConfiguration config,
+        ILibraryManager libraryManager,
+        IUserManager userManager,
+        IUserDataManager userDataManager,
+        ITVSeriesManager tvSeriesManager,
+        ILoggerFactory loggerFactory)
+        : PlayEpisodeIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, tvSeriesManager, loggerFactory)
     {
-        return new PlayEpisodeIntentHandler(
+        public ProgressiveSpeechCapture Progressive { get; } = new();
+
+        protected override Task<bool> SendProgressiveResponse(global::Alexa.NET.Request.Context context, global::Alexa.NET.Request.Type.Request request, string message)
+            => Progressive.Record(context, request, message);
+    }
+
+    private RecordingPlayEpisodeHandler CreateHandler()
+    {
+        return new RecordingPlayEpisodeHandler(
             _sessionManagerMock.Object,
             _config,
             _libraryManagerMock.Object,
@@ -290,13 +306,56 @@ public class PlayEpisodeIntentHandlerTests : PluginTestBase
         Assert.NotNull(response);
         response.HasDirective<VideoAppLaunchDirective>();
 
-        // JF-349: an episode launch now announces the title instead of launching silently,
-        // matching PlayRandom/PlayVideo.
-        Assert.NotNull(response.Response.OutputSpeech);
-        string announceText = response.Response.OutputSpeech is SsmlOutputSpeech s
-            ? s.Ssml
-            : Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech).Text;
-        Assert.Contains("Fun Run", announceText, StringComparison.Ordinal);
+        // JF-349: an episode launch announces the title instead of launching silently,
+        // matching PlayRandom/PlayVideo. JF-501: the announce rides the
+        // progressive-response vehicle, so the final launch response carries the
+        // directive ONLY.
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.True(handler.Progressive.Contains("Fun Run"), "progressive announce must speak the episode title");
+    }
+
+    /// <summary>
+    /// JF-501: with the announce toggle OFF the launch must keep today's silent shape:
+    /// no progressive announce (only the SearchingMedia ping may arrive) and no
+    /// OutputSpeech on the final response.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_AnnounceOff_SendsNoProgressiveAnnounceAndNoOutputSpeech()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(seriesName: "The Office", seasonNumber: "4", episodeNumber: "10");
+        var context = CreateContext();
+        var user = CreateUser();
+        user.AnnounceNowPlaying = false;
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var series = new global::MediaBrowser.Controller.Entities.TV.Series { Name = "The Office", Id = Guid.NewGuid() };
+        var episode = new global::MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Fun Run",
+            Id = Guid.NewGuid(),
+            ParentIndexNumber = 4,
+            IndexNumber = 10,
+            SeriesId = series.Id
+        };
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Series))))
+            .Returns(new List<BaseItem> { series });
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Episode))))
+            .Returns(new List<BaseItem> { episode });
+
+        _libraryManagerMock.Setup(l => l.GetItemById(episode.Id))
+            .Returns(episode);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        response.HasDirective<VideoAppLaunchDirective>();
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.False(handler.Progressive.Contains("Fun Run"), "announce off must not send a progressive announce");
     }
 
     [Fact]

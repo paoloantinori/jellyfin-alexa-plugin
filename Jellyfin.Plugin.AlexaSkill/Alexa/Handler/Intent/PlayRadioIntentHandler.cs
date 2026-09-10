@@ -170,7 +170,7 @@ public class PlayRadioIntentHandler : BaseHandler
             if (channel != null)
             {
                 Logger.LogInformation("PlayRadio: station '{ChannelName}' matched live-TV radio channel {ChannelId}", channel.Name, channel.Id);
-                return await BuildChannelLaunchResponseAsync(_streamResolver, channel, context, user, session, locale, cancellationToken).ConfigureAwait(false);
+                return await BuildChannelLaunchResponseAsync(_streamResolver, channel, context, request, user, session, locale, cancellationToken).ConfigureAwait(false);
             }
 
             // JF-474 review P3-4: natural answers carry carrier nouns and articles

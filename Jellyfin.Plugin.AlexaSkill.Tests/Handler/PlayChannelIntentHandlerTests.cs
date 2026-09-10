@@ -56,9 +56,24 @@ public class PlayChannelIntentHandlerTests : PluginTestBase
         _loggerFactory = LoggerFactory.Create(b => { });
     }
 
-    private PlayChannelIntentHandler CreateHandler()
+    private sealed class RecordingPlayChannelHandler(
+        ISessionManager sessionManager,
+        PluginConfiguration config,
+        ILibraryManager libraryManager,
+        IUserManager userManager,
+        ILiveTvStreamResolver resolver,
+        ILoggerFactory loggerFactory)
+        : PlayChannelIntentHandler(sessionManager, config, libraryManager, userManager, resolver, loggerFactory)
     {
-        return new PlayChannelIntentHandler(
+        public ProgressiveSpeechCapture Progressive { get; } = new();
+
+        protected override Task<bool> SendProgressiveResponse(global::Alexa.NET.Request.Context context, global::Alexa.NET.Request.Type.Request request, string message)
+            => Progressive.Record(context, request, message);
+    }
+
+    private RecordingPlayChannelHandler CreateHandler()
+    {
+        return new RecordingPlayChannelHandler(
             _sessionManagerMock.Object,
             _config,
             _libraryManagerMock.Object,
@@ -199,17 +214,46 @@ public class PlayChannelIntentHandlerTests : PluginTestBase
 
         // Live TV channels launch via VideoApp.Launch (not AudioPlayer.Play) so they
         // actually play on Echo Show. The source is whatever URL the resolver picked.
-        // JF-349: the launch now announces the channel name (was silent).
-        Assert.NotNull(response.Response.OutputSpeech);
-        string announceText = response.Response.OutputSpeech is SsmlOutputSpeech ss
-            ? ss.Ssml
-            : Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech).Text;
-        Assert.Contains("CNN", announceText, StringComparison.Ordinal);
+        // JF-349: the launch announces the channel name (was silent). JF-501: the
+        // announce rides the progressive-response vehicle, so the final launch response
+        // carries the directive ONLY.
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.True(handler.Progressive.Contains("CNN"), "progressive announce must speak the channel name");
         var directive = response.HasDirective<VideoAppLaunchDirective>();
         Assert.Equal(DefaultStream.Url, directive.VideoItem.Source);
         Assert.Equal("CNN", directive.VideoItem.Metadata?.Title);
         // VideoApp.Launch must NOT include shouldEndSession — Alexa rejects it.
         Assert.Null(response.Response.ShouldEndSession);
+    }
+
+    /// <summary>
+    /// JF-501: with the announce toggle OFF the launch must keep today's silent shape:
+    /// no progressive announce (only the SearchingMedia ping may arrive) and no
+    /// OutputSpeech on the final response.
+    /// </summary>
+    [Fact]
+    public async Task Handle_AnnounceOff_SendsNoProgressiveAnnounceAndNoOutputSpeech()
+    {
+        var channelId = Guid.NewGuid();
+        var channel = CreateTestChannel("CNN", channelId);
+
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { channel });
+
+        var user = TestHelpers.CreateTestUser();
+        user.AnnounceNowPlaying = false;
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreatePlayChannelRequest("CNN"),
+            CreateContext(),
+            user,
+            CreateSession(), CancellationToken.None);
+
+        response.HasDirective<VideoAppLaunchDirective>();
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.False(handler.Progressive.Contains("CNN"), "announce off must not send a progressive announce");
     }
 
     [Fact]

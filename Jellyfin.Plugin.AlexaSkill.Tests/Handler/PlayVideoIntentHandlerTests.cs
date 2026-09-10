@@ -36,9 +36,47 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
             .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
     }
 
-    private PlayVideoIntentHandler CreateHandler()
+    private sealed class RecordingPlayVideoHandler(
+        ISessionManager sessionManager,
+        PluginConfiguration config,
+        ILibraryManager libraryManager,
+        IUserManager userManager,
+        IUserDataManager userDataManager,
+        ILoggerFactory loggerFactory)
+        : PlayVideoIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, loggerFactory)
     {
-        return new PlayVideoIntentHandler(
+        public ProgressiveSpeechCapture Progressive { get; } = new();
+
+        protected override Task<bool> SendProgressiveResponse(global::Alexa.NET.Request.Context context, global::Alexa.NET.Request.Type.Request request, string message)
+            => Progressive.Record(context, request, message);
+    }
+
+    /// <summary>
+    /// Simulates a FAILED progressive send (2s timeout, auth rejection): the override is
+    /// still invoked (the send was attempted) but reports failure, as the production
+    /// method does on any failure.
+    /// </summary>
+    private sealed class FailingProgressiveHandler(
+        ISessionManager sessionManager,
+        PluginConfiguration config,
+        ILibraryManager libraryManager,
+        IUserManager userManager,
+        IUserDataManager userDataManager,
+        ILoggerFactory loggerFactory)
+        : PlayVideoIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, loggerFactory)
+    {
+        public ProgressiveSpeechCapture Progressive { get; } = new();
+
+        protected override Task<bool> SendProgressiveResponse(global::Alexa.NET.Request.Context context, global::Alexa.NET.Request.Type.Request request, string message)
+        {
+            Progressive.Record(context, request, message);
+            return Task.FromResult(false);
+        }
+    }
+
+    private RecordingPlayVideoHandler CreateHandler()
+    {
+        return new RecordingPlayVideoHandler(
             _fx.SessionManager.Object,
             _fx.Config,
             _fx.LibraryManager.Object,
@@ -150,15 +188,79 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
             TestHelpers.CreateTestUser(),
             _fx.CreateSession(), CancellationToken.None);
 
-        // JF-349: a fresh video launch (no resume position) now announces the title instead of
+        // JF-349: a fresh video launch (no resume position) announces the title instead of
         // launching silently, matching PlayRandom/PlayEpisode. Resume-position launches still use
-        // the "ResumingVideo" speech (unchanged if-branch).
-        Assert.NotNull(response.Response.OutputSpeech);
-        string announceText = response.Response.OutputSpeech is SsmlOutputSpeech ss
-            ? ss.Ssml
-            : Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech).Text;
-        Assert.Contains("The Matrix", announceText, StringComparison.Ordinal);
+        // the "ResumingVideo" speech (unchanged if-branch). JF-501: the announce rides the
+        // progressive-response vehicle, so the final launch response carries the directive ONLY.
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.True(handler.Progressive.Contains("The Matrix"), "progressive announce must speak the movie title");
         response.HasDirective<VideoAppLaunchDirective>();
+    }
+
+    /// <summary>
+    /// JF-501: with the announce toggle OFF the launch must keep today's silent shape:
+    /// no progressive announce (only the SearchingMedia ping may arrive) and no
+    /// OutputSpeech on the final response.
+    /// </summary>
+    [Fact]
+    public async Task Handle_AnnounceOff_SendsNoProgressiveAnnounceAndNoOutputSpeech()
+    {
+        var movie = CreateTestItem("The Matrix");
+
+        _fx.LibraryManager
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { movie });
+
+        var user = TestHelpers.CreateTestUser();
+        user.AnnounceNowPlaying = false;
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreatePlayVideoRequest("The Matrix"),
+            _fx.CreateContext(),
+            user,
+            _fx.CreateSession(), CancellationToken.None);
+
+        response.HasDirective<VideoAppLaunchDirective>();
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.False(handler.Progressive.Contains("The Matrix"), "announce off must not send a progressive announce");
+    }
+
+    /// <summary>
+    /// JF-501 failure fallback: a FAILED progressive send (2s timeout, auth rejection,
+    /// network error) must not lose the announce. SendProgressiveResponse reports false
+    /// and the announce rides the final response's OutputSpeech (the pre-JF-501 shape);
+    /// before the Task&lt;bool&gt; fallback a swallowed failure dropped the announce entirely.
+    /// </summary>
+    [Fact]
+    public async Task Handle_ProgressiveSendFails_AnnounceRidesFinalResponse()
+    {
+        var movie = CreateTestItem("The Matrix");
+
+        _fx.LibraryManager
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { movie });
+
+        var handler = new FailingProgressiveHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
+
+        var response = await handler.HandleAsync(
+            CreatePlayVideoRequest("The Matrix"),
+            _fx.CreateContext(),
+            TestHelpers.CreateTestUser(),
+            _fx.CreateSession(), CancellationToken.None);
+
+        response.HasDirective<VideoAppLaunchDirective>();
+        // The fresh-launch announce is SSML; on fallback the SAME announce object rides
+        // the final response instead of being dropped.
+        var speech = Assert.IsType<SsmlOutputSpeech>(response.Response.OutputSpeech);
+        Assert.Contains("The Matrix", speech.Ssml);
+        Assert.True(handler.Progressive.Contains("The Matrix"), "the send must have been attempted (and reported failure) before the fallback");
     }
 
     [Fact]

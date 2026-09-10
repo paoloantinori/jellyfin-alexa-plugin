@@ -213,15 +213,15 @@ public class ResumeIntentHandler : BaseHandler
                 if (IsVideoAppLaunchItem(resumeItem))
                 {
                     // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
-                    SkillResponse videoResponse = BuildVideoAppLaunchResponse(
+                    // JF-501: the announce is spoken progressively (directive-only final response).
+                    return BuildVideoAppLaunchResponseAsync(
                         context,
+                        request,
                         locale,
                         GetVideoAppLaunchUrl(resumeItem, user),
                         resumeItem.Name,
                         new PlainTextOutputSpeech(
                             ResponseStrings.Get("NowPlayingWithPosition", locale, resumeItem.Name, FormatPosition(resumeTicks))));
-
-                    return Task.FromResult<SkillResponse>(videoResponse);
                 }
 
                 // Audio/AudioBook items use AudioPlayer response with offset

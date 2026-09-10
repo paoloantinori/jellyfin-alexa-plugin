@@ -54,9 +54,24 @@ public class StartOverIntentHandlerTests : PluginTestBase, IDisposable
         GC.SuppressFinalize(this);
     }
 
-    private StartOverIntentHandler CreateHandler()
+    private sealed class RecordingStartOverHandler(
+        ISessionManager sessionManager,
+        PluginConfiguration config,
+        ILibraryManager libraryManager,
+        IUserManager userManager,
+        IUserDataManager userDataManager,
+        ILoggerFactory loggerFactory)
+        : StartOverIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, loggerFactory)
     {
-        return new StartOverIntentHandler(
+        public ProgressiveSpeechCapture Progressive { get; } = new();
+
+        protected override Task<bool> SendProgressiveResponse(global::Alexa.NET.Request.Context context, global::Alexa.NET.Request.Type.Request request, string message)
+            => Progressive.Record(context, request, message);
+    }
+
+    private RecordingStartOverHandler CreateHandler()
+    {
+        return new RecordingStartOverHandler(
             _fx.SessionManager.Object,
             _fx.Config,
             _fx.LibraryManager.Object,
@@ -198,11 +213,11 @@ public class StartOverIntentHandlerTests : PluginTestBase, IDisposable
         Assert.NotNull(response.Response.Directives);
         Assert.Single(response.Response.Directives);
 
-        // Output speech should mention restarting
-        Assert.NotNull(response.Response.OutputSpeech);
-        string speech = TestHelpers.GetSpeechText(response);
-        Assert.Contains("starting", speech, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Test Movie", speech);
+        // JF-501: the restart announce rides the progressive-response vehicle; the final
+        // launch response carries the directive ONLY.
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.True(handler.Progressive.Contains("Starting"), "progressive announce must mention restarting");
+        Assert.True(handler.Progressive.Contains("Test Movie"), "progressive announce must speak the title");
 
         // Should have cleared progress
         _fx.UserDataManager.Verify(
@@ -213,6 +228,49 @@ public class StartOverIntentHandlerTests : PluginTestBase, IDisposable
                 UserDataSaveReason.PlaybackProgress,
                 CancellationToken.None),
             Times.Once);
+    }
+
+    /// <summary>
+    /// JF-501 plain-text arm: RestartingContent is a PlainTextOutputSpeech announce, so the
+    /// progressive vehicle must <c>&lt;speak&gt;</c>-wrap it AND XML-escape the title (only
+    /// the SSML arm had an escaping assert). Alexa rejects a malformed progressive payload
+    /// outright, so escaping is load-bearing.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_CurrentlyPlayingMovie_PlainTextAnnounce_SpeakWrappedAndXmlEscaped()
+    {
+        var handler = CreateHandler();
+        var request = CreateStartOverRequest();
+        var context = _fx.CreateContext();
+        var user = TestHelpers.CreateTestUser();
+
+        var movie = new MediaBrowser.Controller.Entities.Movies.Movie
+        {
+            Name = "Rock & Roll <Live>",
+            Id = Guid.NewGuid(),
+            Path = "/movies/test.mkv"
+        };
+
+        var session = CreateSessionWithNowPlaying(movie);
+
+        var userData = new UserItemData
+        {
+            Key = "test",
+            PlaybackPositionTicks = TimeSpan.FromMinutes(45).Ticks,
+            Played = false
+        };
+
+        _fx.UserDataManager.Setup(x => x.GetUserData(_jellyfinUser, movie))
+            .Returns(userData);
+
+        var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // JF-501: the restart announce rides the progressive-response vehicle; the final
+        // launch response carries the directive ONLY.
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.True(
+            handler.Progressive.Contains("<speak>Starting Rock &amp; Roll &lt;Live&gt; from the beginning.</speak>"),
+            "the plain-text announce must be speak-wrapped and XML-escaped; captured: " + handler.Progressive.AllText);
     }
 
     [Fact]

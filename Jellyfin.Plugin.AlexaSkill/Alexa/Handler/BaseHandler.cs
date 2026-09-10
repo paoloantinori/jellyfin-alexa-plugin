@@ -789,6 +789,11 @@ public abstract class BaseHandler
     /// Echo Dot) is rejected by the platform with an audible directive error (device
     /// evidence 2026-09-06), so without the interface NO directive is emitted and the
     /// localized <c>VideoRequiresScreen</c> Tell answers instead.
+    /// JF-501: intent-driven launch sites must prefer the progressive-announce variant
+    /// <see cref="BuildVideoAppLaunchResponseAsync"/>; this sync builder is the shape
+    /// for callers bound to sync delegates or non-intent requests (the HandleFuzzyMiss
+    /// auto-play delegate, APL carousel taps), where the announce keeps riding the
+    /// final response.
     /// </summary>
     /// <param name="context">The Alexa context, for device capability detection.</param>
     /// <param name="locale">The request locale, for the capability Tell string.</param>
@@ -838,6 +843,36 @@ public abstract class BaseHandler
         };
     }
 
+    /// <summary>
+    /// JF-501 progressive-announce variant of <see cref="BuildVideoAppLaunchResponse"/>:
+    /// the announce, when the request can carry one, is spoken as an awaited
+    /// progressive response via <see cref="SpeakVideoLaunchAnnounceAsync"/> and the
+    /// returned launch response carries the VideoApp.Launch directive only (no
+    /// OutputSpeech), so the Echo Show player cannot cut the announcement
+    /// mid-sentence when it opens. Every capability and gate of the sync builder is
+    /// preserved: the announce decision runs BEFORE the launch build, so a
+    /// screenless device never hears a progressive announce followed by the
+    /// capability Tell, and a null announce (toggle off) keeps today's silent shape.
+    /// </summary>
+    /// <param name="context">The Alexa context, for device capability detection.</param>
+    /// <param name="request">The skill request, for the progressive-response vehicle.</param>
+    /// <param name="locale">The request locale, for the capability Tell string.</param>
+    /// <param name="sourceUrl">The VideoApp source URL (from <see cref="GetVideoAppLaunchUrl"/> or the live-TV resolver).</param>
+    /// <param name="title">The video item metadata title.</param>
+    /// <param name="outputSpeech">Optional now-playing announce; spoken progressively when the request type allows, else attached to the final response.</param>
+    /// <returns>The VideoApp.Launch response, or the VideoRequiresScreen Tell on a device without the VideoApp interface.</returns>
+    protected async Task<SkillResponse> BuildVideoAppLaunchResponseAsync(
+        Context? context,
+        Request? request,
+        string locale,
+        string sourceUrl,
+        string title,
+        IOutputSpeech? outputSpeech = null)
+    {
+        outputSpeech = await SpeakVideoLaunchAnnounceAsync(context, request, outputSpeech).ConfigureAwait(false);
+        return BuildVideoAppLaunchResponse(context, locale, sourceUrl, title, outputSpeech);
+    }
+
     private string BuildStreamUrl(string pathSegment, string itemId, Entities.User user)
         => new Uri(new Uri(_config.ServerAddress), $"{pathSegment}{itemId}/stream?static=true&api_key={user.JellyfinToken}").ToString();
 
@@ -864,6 +899,7 @@ public abstract class BaseHandler
     /// <param name="streamResolver">The live-TV stream resolver (PlaybackInfo URL).</param>
     /// <param name="channel">The LiveTvChannel item to launch.</param>
     /// <param name="context">The Alexa context (device id for the queue record).</param>
+    /// <param name="request">The skill request (JF-501 progressive announce vehicle).</param>
     /// <param name="user">The plugin user (stream resolution + announce toggles).</param>
     /// <param name="session">The Jellyfin session (queue + now-playing).</param>
     /// <param name="locale">The request locale, for response strings.</param>
@@ -873,6 +909,7 @@ public abstract class BaseHandler
         ILiveTvStreamResolver streamResolver,
         BaseItem channel,
         Context context,
+        Request request,
         Entities.User user,
         SessionInfo session,
         string locale,
@@ -906,12 +943,13 @@ public abstract class BaseHandler
             Plugin.Instance?.DeviceQueueManager?.RecordLastPlayed(deviceId, channel.Id.ToString());
         }
 
-        return BuildVideoAppLaunchResponse(
+        return await BuildVideoAppLaunchResponseAsync(
             context,
+            request,
             locale,
             stream.Url,
             channel.Name,
-            BuildNowPlayingSpeech(channel.Name, locale, GetAnnounceNowPlaying(user)));
+            BuildNowPlayingSpeech(channel.Name, locale, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -2143,18 +2181,26 @@ public abstract class BaseHandler
     /// modified on an HttpClient that has already sent a request.
     /// </summary>
     /// <remarks>
-    /// This call is best-effort and non-critical: it is invoked FIRE-AND-FORGET from
-    /// handler paths (via <see cref="RunFireAndForget"/>) so it never blocks the final
-    /// handler response (50-200ms Alexa API round-trip). The entire body is wrapped in
-    /// try/catch so the returned <see cref="Task"/> can never fault — callers MUST NOT
-    /// await it inside request handlers. Use <see cref="RunFireAndForget"/> to discard
-    /// the task safely and analyzer-cleanly (observes the result to avoid CA2012).
+    /// Two delivery contracts share this method. The SearchingMedia ping call sites run it
+    /// FIRE-AND-FORGET (via <see cref="RunFireAndForget"/>) so the 50-200ms Alexa API
+    /// round-trip never blocks the final handler response. The one sanctioned AWAITED caller
+    /// is <see cref="SpeakVideoLaunchAnnounceAsync"/> (JF-501): the launch announce must be
+    /// SPOKEN BEFORE the final launch response reaches the device, because Amazon only plays
+    /// a progressive response that arrives before the full response; reverting that caller
+    /// to fire-and-forget silently reintroduces the mid-sentence cut the awaited send fixed.
+    /// The entire body is wrapped in try/catch so the returned <see cref="Task"/> can never
+    /// fault (discarded tasks stay analyzer-clean via <see cref="RunFireAndForget"/>, which
+    /// observes the result to avoid CA2012).
     /// </remarks>
     /// <param name="context">The Alexa context containing API access token.</param>
     /// <param name="request">The request containing the request ID.</param>
     /// <param name="message">The message to speak to the user.</param>
-    /// <returns>A task representing the async operation. Always completes successfully (never faults).</returns>
-    protected async Task SendProgressiveResponse(Context context, Request request, string message)
+    /// <returns>True when the message was sent; false on ANY failure (network, auth, timeout,
+    /// internal error caught below), so the awaited caller can fall back to the final
+    /// response instead of losing the message.</returns>
+    /// <remarks>Virtual as the JF-501 test seam: unit tests subclass concrete handlers
+    /// and override this to capture the progressive speech without network I/O.</remarks>
+    protected virtual async Task<bool> SendProgressiveResponse(Context context, Request request, string message)
     {
         Logger.LogDebug("SendProgressiveResponse: sending message={Message}", message);
         try
@@ -2166,13 +2212,80 @@ public abstract class BaseHandler
                 context.System?.ApiEndpoint ?? "https://api.amazonalexa.com",
                 Plugin.HttpClientProgressive);
             await progressiveResponse.SendSpeech(message).ConfigureAwait(false);
+            return true;
         }
         catch (Exception ex)
         {
-            // Best-effort ping: never propagate. Swallowing here guarantees the discarded
-            // Task at call sites can never fault (no unobserved-exception escalation).
+            // Best-effort: never propagate. Swallowing here guarantees the discarded Task at
+            // fire-and-forget call sites can never fault (no unobserved-exception escalation);
+            // the bool lets the awaited JF-501 caller fall back to the final-response announce.
             Logger.LogWarning(ex, "Failed to send progressive response");
+            return false;
         }
+    }
+
+    /// <summary>
+    /// JF-501 delivery vehicle for the video-launch announce: speak it as an awaited
+    /// progressive response AFTER the launch URL is resolved and BEFORE the final launch
+    /// response returns (the send is strictly between the two: the URL is a call argument,
+    /// so it has evaluated by the time the handler reaches this method, and the device only
+    /// plays a progressive response that arrives before the full response), so the final
+    /// VideoApp.Launch response carries the directive only (no OutputSpeech). Device
+    /// evidence (JF-498 verification 2026-09-06): when the announce rides the final
+    /// response, the VideoApp player takes the audio channel before the TTS finishes on
+    /// fast-start HLS routes (~0.6s playlist), cutting the announcement mid-sentence; a
+    /// progressive response is spoken BEFORE the final response reaches the device, so the
+    /// announce completes before the player opens. Amazon contracts this relies on ("Send
+    /// the User a Progressive Response"): progressive responses exist only for
+    /// IntentRequest and LaunchRequest, the speech must be valid SSML wrapped in speak
+    /// tags, and the device only plays a progressive response that arrives before the full
+    /// response, hence the awaited send. A FAILED send (2s timeout, auth rejection,
+    /// network error) falls back to the announce riding the final response, the pre-JF-501
+    /// shape, so a progressive failure can no longer lose the announce. The guard set
+    /// mirrors the launch shapes that cannot use the vehicle and keep the announce on the
+    /// final response instead: a null announce (toggle off; today's silent shape), a
+    /// request type the progressive API cannot serve (UserEvent carousel taps), a null
+    /// context (DeviceSupportsVideoApp fails OPEN on absent capability data, so the null
+    /// case needs its own gate to keep the send from dereferencing it), and a device
+    /// without the VideoApp interface (the launch degrades to a capability Tell or to
+    /// AudioPlayer, whose audio announce has no such cut).
+    /// </summary>
+    /// <param name="context">The Alexa context (device capability check).</param>
+    /// <param name="request">The skill request; null or a non-intent/launch request keeps the classic final-response announce.</param>
+    /// <param name="announce">The launch announce to speak, or null when the announce toggle is off.</param>
+    /// <returns>The OutputSpeech the final response should carry: null when the announce was
+    /// spoken progressively and the send succeeded; the announce itself when the vehicle was
+    /// unusable or the send failed (it rides the final response).</returns>
+    protected async Task<IOutputSpeech?> SpeakVideoLaunchAnnounceAsync(Context? context, Request? request, IOutputSpeech? announce)
+    {
+        if (announce is null
+            || request is not (IntentRequest or LaunchRequest)
+            || context is null // DeviceSupportsVideoApp fails OPEN on absent capability data; the send would NRE.
+            || !Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context))
+        {
+            return announce;
+        }
+
+        // SSML speech is already speak-wrapped; plain text must be wrapped (and
+        // XML-escaped) per the progressive-response contract, unlike OutputSpeech,
+        // which accepts bare text.
+        string? progressiveSpeech = announce switch
+        {
+            SsmlOutputSpeech ssml => ssml.Ssml,
+            PlainTextOutputSpeech plain when !string.IsNullOrWhiteSpace(plain.Text) => $"<speak>{EscapeXml(plain.Text)}</speak>",
+            _ => null
+        };
+        if (progressiveSpeech is null)
+        {
+            return announce;
+        }
+
+        // Awaited, unlike the fire-and-forget SearchingMedia ping: the device only
+        // plays a progressive response that arrives before the full response. A failed
+        // send falls back to the announce riding the final response (the pre-JF-501
+        // shape) instead of being lost.
+        bool sent = await SendProgressiveResponse(context, request, progressiveSpeech).ConfigureAwait(false);
+        return sent ? null : announce;
     }
 
     /// <summary>
@@ -3402,6 +3515,7 @@ public abstract class BaseHandler
     /// <param name="series">The already-resolved series item.</param>
     /// <param name="locale">The request locale for response strings.</param>
     /// <param name="context">The Alexa context (JF-505 screenless-device launch gate).</param>
+    /// <param name="request">The skill request (JF-501 progressive announce vehicle).</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The VideoApp launch response, or the localized NoNextEpisode Tell when the series has no playable episode.</returns>
     protected async Task<SkillResponse> PlayNextUpEpisodeAsync(
@@ -3414,6 +3528,7 @@ public abstract class BaseHandler
         BaseItem series,
         string locale,
         Context context,
+        Request request,
         CancellationToken cancellationToken)
     {
         IReadOnlyList<BaseItem> nextUpEpisodes = await GetNextUpEpisodesAsync(
@@ -3478,12 +3593,17 @@ public abstract class BaseHandler
         }
 
         // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
-        return BuildVideoAppLaunchResponse(
+        // JF-501: the announce is spoken progressively AFTER the source URL has resolved
+        // (it is a call argument, so it evaluates first) and BEFORE the final launch
+        // response returns, so the fast-start HLS player cannot cut it mid-sentence
+        // (observed case).
+        return await BuildVideoAppLaunchResponseAsync(
             context,
+            request,
             locale,
             GetVideoAppLaunchUrl(episode, user),
             episode.Name,
-            speech);
+            speech).ConfigureAwait(false);
     }
 
     /// <summary>

@@ -40,9 +40,25 @@ public class PlayBookIntentHandlerTests : PluginTestBase
             _fx.Config, _fx.LoggerFactory, c => { }, "playbook-tests");
     }
 
-    private PlayBookIntentHandler CreateHandler()
+    private sealed class RecordingPlayBookHandler(
+        ISessionManager sessionManager,
+        PluginConfiguration config,
+        ILibraryManager libraryManager,
+        IUserManager userManager,
+        IUserDataManager userDataManager,
+        ILoggerFactory loggerFactory,
+        global::Jellyfin.Plugin.AlexaSkill.Alexa.Playback.DeviceQueueManager queueManager)
+        : PlayBookIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, loggerFactory, queueManager)
     {
-        return new PlayBookIntentHandler(
+        public ProgressiveSpeechCapture Progressive { get; } = new();
+
+        protected override Task<bool> SendProgressiveResponse(global::Alexa.NET.Request.Context context, global::Alexa.NET.Request.Type.Request request, string message)
+            => Progressive.Record(context, request, message);
+    }
+
+    private RecordingPlayBookHandler CreateHandler()
+    {
+        return new RecordingPlayBookHandler(
             _fx.SessionManager.Object,
             _fx.Config,
             _fx.LibraryManager.Object,
@@ -235,11 +251,49 @@ public class PlayBookIntentHandlerTests : PluginTestBase
 
         Assert.NotNull(response);
         Assert.NotNull(response.Response.Directives?.FirstOrDefault(d => d.GetType().Name.Contains("VideoApp")));
-        Assert.NotNull(response.Response.OutputSpeech);
-        string announceText = response.Response.OutputSpeech is SsmlOutputSpeech ss
-            ? ss.Ssml
-            : Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech).Text;
-        Assert.Contains("The Hobbit", announceText, StringComparison.Ordinal);
+        // JF-501: the announce rides the progressive-response vehicle; the final launch
+        // response carries the directive ONLY.
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.True(handler.Progressive.Contains("The Hobbit"), "progressive announce must speak the book title");
+    }
+
+    /// <summary>
+    /// JF-501: with the announce toggle OFF the fresh-start audiobook launch must keep
+    /// today's silent shape: no progressive announce and no OutputSpeech.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_SingleBookFound_NativeControls_AnnounceOff_NoProgressiveAnnounce()
+    {
+        _fx.Config.NativeControlsForBooks = true;
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(bookName: "The Hobbit");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        user.AnnounceNowPlaying = false;
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+
+        var bookItem = new Audio { Name = "The Hobbit", Id = Guid.NewGuid() };
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(new List<BaseItem> { bookItem });
+
+        var trackItem = new Audio { Name = "Chapter 1", Id = Guid.NewGuid() };
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q =>
+                q.ParentId == bookItem.Id)))
+            .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+            {
+                Items = new[] { trackItem },
+                TotalRecordCount = 1
+            });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotNull(response.Response.Directives?.FirstOrDefault(d => d.GetType().Name.Contains("VideoApp")));
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.False(handler.Progressive.Contains("The Hobbit"), "announce off must not send a progressive announce");
     }
 
     [Fact]

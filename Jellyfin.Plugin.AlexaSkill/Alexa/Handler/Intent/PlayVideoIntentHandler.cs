@@ -206,12 +206,14 @@ public class PlayVideoIntentHandler : BaseHandler
         // Alexa VideoApp does not support seek/offset natively (the video starts from the
         // beginning); the announce only informs the user where they left off.
         // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
-        return BuildVideoAppLaunchResponse(
+        // JF-501: the announce is spoken progressively (directive-only final response).
+        return await BuildVideoAppLaunchResponseAsync(
             context,
+            request,
             locale,
             GetVideoAppLaunchUrl(video, user),
             video.Name,
-            BuildVideoLaunchSpeech(video, locale, resumeTicks, GetAnnounceNowPlaying(user)));
+            BuildVideoLaunchSpeech(video, locale, resumeTicks, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
     }
 
     /// <summary>

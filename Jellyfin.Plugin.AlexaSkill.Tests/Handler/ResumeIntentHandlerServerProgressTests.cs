@@ -54,9 +54,24 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
         GC.SuppressFinalize(this);
     }
 
-    private ResumeIntentHandler CreateHandler()
+    private sealed class RecordingResumeHandler(
+        ISessionManager sessionManager,
+        PluginConfiguration config,
+        ILoggerFactory loggerFactory,
+        ILibraryManager libraryManager,
+        IUserManager userManager,
+        IUserDataManager userDataManager)
+        : ResumeIntentHandler(sessionManager, config, loggerFactory, libraryManager, userManager, userDataManager)
     {
-        return new ResumeIntentHandler(
+        public ProgressiveSpeechCapture Progressive { get; } = new();
+
+        protected override Task<bool> SendProgressiveResponse(global::Alexa.NET.Request.Context context, global::Alexa.NET.Request.Type.Request request, string message)
+            => Progressive.Record(context, request, message);
+    }
+
+    private RecordingResumeHandler CreateHandler()
+    {
+        return new RecordingResumeHandler(
             _fx.SessionManager.Object,
             _fx.Config,
             _fx.LoggerFactory,
@@ -199,10 +214,12 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
         Assert.NotNull(response.Response.Directives);
         Assert.Single(response.Response.Directives);
 
-        // Output speech should contain movie name and position information
-        Assert.NotNull(response.Response.OutputSpeech);
-        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
-        Assert.Contains("Test Movie", speech.Text);
+        // JF-501: the announce rides the progressive-response vehicle; the final launch
+        // response carries the directive ONLY. The progressive speech contains the movie
+        // name and position information.
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.True(handler.Progressive.Contains("Test Movie"), "progressive announce must speak the movie title");
+        Assert.True(handler.Progressive.Contains("30m"), "progressive announce must speak the resume position");
     }
 
     [Fact]

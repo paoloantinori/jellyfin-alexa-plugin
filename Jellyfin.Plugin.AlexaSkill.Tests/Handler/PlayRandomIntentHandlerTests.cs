@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using global::Alexa.NET;
@@ -8,6 +9,7 @@ using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
@@ -19,6 +21,7 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Alexa.NET.Assertions;
 using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
@@ -42,9 +45,23 @@ public class PlayRandomIntentHandlerTests : PluginTestBase
         _loggerFactory = LoggerFactory.Create(b => { });
     }
 
-    private PlayRandomIntentHandler CreateHandler()
+    private sealed class RecordingPlayRandomHandler(
+        ISessionManager sessionManager,
+        PluginConfiguration config,
+        ILibraryManager libraryManager,
+        IUserManager userManager,
+        ILoggerFactory loggerFactory)
+        : PlayRandomIntentHandler(sessionManager, config, libraryManager, userManager, loggerFactory)
     {
-        return new PlayRandomIntentHandler(
+        public ProgressiveSpeechCapture Progressive { get; } = new();
+
+        protected override Task<bool> SendProgressiveResponse(global::Alexa.NET.Request.Context context, global::Alexa.NET.Request.Type.Request request, string message)
+            => Progressive.Record(context, request, message);
+    }
+
+    private RecordingPlayRandomHandler CreateHandler()
+    {
+        return new RecordingPlayRandomHandler(
             _sessionManagerMock.Object,
             _config,
             _libraryManagerMock.Object,
@@ -278,9 +295,42 @@ public class PlayRandomIntentHandlerTests : PluginTestBase
 
         SkillResponse response = await handler.HandleAsync(request, CreateContext(), user, session, CancellationToken.None);
 
-        var speech = Assert.IsType<SsmlOutputSpeech>(response.Response.OutputSpeech);
-        Assert.Contains("Rock &amp; Roll &lt;Live&gt;", speech.Ssml);
-        Assert.DoesNotContain("Rock & Roll <Live>", speech.Ssml);
+        // JF-501: the (escaped) SSML announce now rides the progressive-response vehicle
+        // verbatim; the final launch response carries the directive ONLY.
+        response.HasDirective<VideoAppLaunchDirective>();
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.True(handler.Progressive.Contains("Rock &amp; Roll &lt;Live&gt;"), "progressive announce must carry the escaped SSML title");
+        Assert.False(handler.Progressive.Contains("Rock & Roll <Live>"), "progressive announce must not carry the raw unescaped title");
+    }
+
+    /// <summary>
+    /// JF-501: with the announce toggle OFF the launch must keep today's silent shape:
+    /// no progressive announce (only the SearchingMedia ping may arrive) and no
+    /// OutputSpeech on the final response.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_AnnounceOff_SendsNoProgressiveAnnounceAndNoOutputSpeech()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(); // default mediaType -> video
+        var user = CreateUser();
+        user.AnnounceNowPlaying = false;
+        var session = CreateSession();
+        SetupUserMock();
+
+        var movie = new MediaBrowser.Controller.Entities.Movies.Movie
+        {
+            Name = "Rock & Roll <Live>",
+            Id = Guid.NewGuid(),
+        };
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { movie });
+
+        SkillResponse response = await handler.HandleAsync(request, CreateContext(), user, session, CancellationToken.None);
+
+        response.HasDirective<VideoAppLaunchDirective>();
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.False(handler.Progressive.Contains("Rock & Roll"), "announce off must not send a progressive announce");
     }
 
     private static Audio CreateTestAudio(string name, Guid id)

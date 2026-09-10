@@ -296,8 +296,12 @@ public class PlayBookIntentHandler : BaseHandler
             }
             else
             {
-                // Fresh-start audiobook via VideoApp: announce the book title.
-                response.Response.OutputSpeech = BuildNowPlayingSpeech(books[0].Name, locale, GetAnnounceNowPlaying(user));
+                // Fresh-start audiobook via VideoApp: announce the book title. JF-501:
+                // spoken progressively when the response is a VideoApp launch; a screenless
+                // device degrades to AudioPlayer, where the announce keeps riding the
+                // final response (the audio path has no such cut).
+                response.Response.OutputSpeech = await SpeakVideoLaunchAnnounceAsync(
+                    context, request, BuildNowPlayingSpeech(books[0].Name, locale, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
             }
 
             return response;

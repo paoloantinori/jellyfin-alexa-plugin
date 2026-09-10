@@ -51,6 +51,27 @@ internal class TestableHandler : BaseHandler
     }
 
     /// <summary>
+    /// JF-501 seam: records progressive speech instead of hitting the Alexa API, so
+    /// launch-builder tests can assert the no-send gates.
+    /// </summary>
+    public ProgressiveSpeechCapture Progressive { get; } = new();
+
+    protected override Task<bool> SendProgressiveResponse(global::Alexa.NET.Request.Context context, global::Alexa.NET.Request.Type.Request request, string message)
+        => Progressive.Record(context, request, message);
+
+    /// <summary>
+    /// Exposes the protected JF-501 launch builder for direct unit testing.
+    /// </summary>
+    public Task<SkillResponse> InvokeBuildVideoAppLaunchResponseAsync(
+        Context? context,
+        Request? request,
+        string locale,
+        string sourceUrl,
+        string title,
+        IOutputSpeech? outputSpeech = null)
+        => BuildVideoAppLaunchResponseAsync(context, request, locale, sourceUrl, title, outputSpeech);
+
+    /// <summary>
     /// Runs SendProgressiveResponse via the fire-and-forget path and awaits the
     /// resulting task so callers can assert it completes non-faulted.
     /// </summary>
@@ -236,6 +257,33 @@ public class ProgressiveResponseTests : PluginTestBase
         string message = ResponseStrings.Get("SearchingMedia", "it-IT");
         Assert.False(string.Equals(message, "SearchingMedia", StringComparison.Ordinal), "SearchingMedia key should resolve to a string");
         Assert.NotEmpty(message);
+    }
+
+    /// <summary>
+    /// JF-505 x JF-501 ordering guard: on a device WITHOUT the VideoApp interface the
+    /// announce decision must short-circuit BEFORE any progressive send, and the launch
+    /// must degrade to the VideoRequiresScreen Tell (the capability gate list runs before
+    /// the launch build, so the user never hears an announce followed by the Tell). Guards
+    /// future drift in DeviceSupportsVideoApp or in the gate ordering.
+    /// </summary>
+    [Fact]
+    public async Task BuildVideoAppLaunchResponse_ScreenlessWithAnnounce_NoProgressiveSendAndCapabilityTell()
+    {
+        var handler = CreateHandler();
+        var request = new IntentRequest { RequestId = "test-request-id" };
+        var announce = new PlainTextOutputSpeech("Now playing: The Matrix");
+
+        SkillResponse response = await handler.InvokeBuildVideoAppLaunchResponseAsync(
+            TestHelpers.CreateScreenlessContext(),
+            request,
+            "en-US",
+            "http://example.com/stream",
+            "The Matrix",
+            announce);
+
+        Assert.Empty(handler.Progressive.AllText);
+        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        Assert.Equal(ResponseStrings.Get("VideoRequiresScreen", "en-US"), speech.Text);
     }
 }
 

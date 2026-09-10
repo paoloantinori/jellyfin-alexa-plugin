@@ -49,9 +49,23 @@ public class YesIntentHandlerTests : PluginTestBase
         TestHelpers.EnsurePluginInstance(_config, _loggerFactory, c => { }, "yes-intent-tests");
     }
 
-    private YesIntentHandler CreateHandler()
+    private sealed class RecordingYesHandler(
+        ISessionManager sessionManager,
+        PluginConfiguration config,
+        ILibraryManager libraryManager,
+        IUserManager userManager,
+        ILoggerFactory loggerFactory)
+        : YesIntentHandler(sessionManager, config, libraryManager, userManager, loggerFactory)
     {
-        return new YesIntentHandler(
+        public ProgressiveSpeechCapture Progressive { get; } = new();
+
+        protected override Task<bool> SendProgressiveResponse(global::Alexa.NET.Request.Context context, global::Alexa.NET.Request.Type.Request request, string message)
+            => Progressive.Record(context, request, message);
+    }
+
+    private RecordingYesHandler CreateHandler()
+    {
+        return new RecordingYesHandler(
             _sessionManagerMock.Object,
             _config,
             _libraryManagerMock.Object,
@@ -191,12 +205,45 @@ public class YesIntentHandlerTests : PluginTestBase
         response.HasDirective<Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>();
         // VideoApp.Launch must NOT include shouldEndSession
         Assert.Null(response.Response.ShouldEndSession);
-        // JF-349: the disambiguation-confirmed video launch now announces the title (was silent).
-        Assert.NotNull(response.Response.OutputSpeech);
-        string announceText = response.Response.OutputSpeech is SsmlOutputSpeech ss
-            ? ss.Ssml
-            : Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech).Text;
-        Assert.Contains("Test Movie", announceText, StringComparison.Ordinal);
+        // JF-349: the disambiguation-confirmed video launch announces the title (was
+        // silent). JF-501: the announce rides the progressive-response vehicle, so the
+        // final launch response carries the directive ONLY.
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.True(handler.Progressive.Contains("Test Movie"), "progressive announce must speak the title");
+    }
+
+    /// <summary>
+    /// JF-501: with the announce toggle OFF the confirmed video launch must keep today's
+    /// silent shape: no progressive announce and no OutputSpeech on the final response.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_WithDisambiguationState_VideoType_AnnounceOff_NoProgressiveAnnounce()
+    {
+        var videoId = Guid.NewGuid();
+        var movie = new Movie { Name = "Test Movie", Id = videoId };
+
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemById(videoId))
+            .Returns(movie);
+
+        var matchInfo = new DisambiguationHelper.MatchInfo { Id = videoId.ToString(), Name = "Test Movie" };
+        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "video");
+
+        var user = TestHelpers.CreateTestUser();
+        user.AnnounceNowPlaying = false;
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreateYesIntentRequest(),
+            CreateContext(),
+            user,
+            CreateSession(),
+            attrs,
+            CancellationToken.None);
+
+        response.HasDirective<Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>();
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.False(handler.Progressive.Contains("Test Movie"), "announce off must not send a progressive announce");
     }
 
     [Fact]
