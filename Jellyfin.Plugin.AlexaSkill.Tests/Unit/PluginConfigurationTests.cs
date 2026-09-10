@@ -1,4 +1,5 @@
 using System;
+using Jellyfin.Plugin.AlexaSkill;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Xunit;
 
@@ -52,6 +53,56 @@ public class PluginConfigurationTests
         var config = CreateConfig();
         Assert.False(config.NativeControlsForAudio);
         Assert.False(config.NativeControlsForBooks);
+    }
+
+    /// <summary>
+    /// JF-534: pins the raised cache-cap default (rationale: the
+    /// VideoAudioCacheSizeMB field doc); the pairing with the 3072MB/h transcode
+    /// reserve is pinned in
+    /// VideoAudioControllerTests.EstimateEpisodeTranscodeEncodeBytes_OneHourReserve_FitsUnderDefaultCacheCap.
+    /// </summary>
+    [Fact]
+    public void Constructor_InitializesVideoAudioCacheSizeMBTo4096()
+    {
+        var config = CreateConfig();
+        Assert.Equal(4096, config.VideoAudioCacheSizeMB);
+    }
+
+    /// <summary>
+    /// JF-534: Jellyfin serializes the whole config on save, so existing installs
+    /// carry the OLD default (2048) explicitly, keeping the raised default inert
+    /// there. The migration re-raises a stored old-default value once; a second run
+    /// is a no-op (idempotent, no further persistence).
+    /// </summary>
+    [Fact]
+    public void CacheCapMigration_StoredOldDefault_RaisedOnceAndIdempotent()
+    {
+        var config = CreateConfig();
+        config.VideoAudioCacheSizeMB = 2048;
+
+        Plugin.MigrateStaleCacheCapDefault(config);
+        Assert.Equal(4096, config.VideoAudioCacheSizeMB);
+
+        // Second run (e.g. next plugin load, or before persistence landed): no-op.
+        Plugin.MigrateStaleCacheCapDefault(config);
+        Assert.Equal(4096, config.VideoAudioCacheSizeMB);
+    }
+
+    /// <summary>
+    /// JF-534: a stored value DIFFERENT from the old default is a deliberate user
+    /// choice (raised or lowered) and must survive the migration untouched.
+    /// </summary>
+    [Theory]
+    [InlineData(8192)]
+    [InlineData(512)]
+    public void CacheCapMigration_UserChosenValue_Untouched(int stored)
+    {
+        var config = CreateConfig();
+        config.VideoAudioCacheSizeMB = stored;
+
+        Plugin.MigrateStaleCacheCapDefault(config);
+
+        Assert.Equal(stored, config.VideoAudioCacheSizeMB);
     }
 
     [Fact]

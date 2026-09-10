@@ -226,9 +226,20 @@ public class PluginConfiguration : BasePluginConfiguration
 
     /// <summary>
     /// Gets or sets the maximum size (in MB) for the video-audio MP4 cache.
-    /// Oldest files are evicted when the limit is exceeded. Default: 2048 (2GB).
+    /// Oldest files are evicted when the limit is exceeded. Default: 4096 (4GB).
+    /// JF-534: the old 2048 default could not hold even ONE episode of the video
+    /// transcode tier. The measured 51-min Adolescence E2 HEVC transcode wrote
+    /// 2747MB on disk (live log 2026-09-09 18:24), so the post-encode sweep
+    /// (headroom 0, full-cap target) evicted the just-completed episode the moment
+    /// ffmpeg exited: the cache retained no transcode-tier episode at all and every
+    /// replay re-encoded from zero. 4096 holds a typical episode past its
+    /// playback-recency window. Reserve-fit boundary (the estimator rounds UP to
+    /// whole hours): the tier's 3072MB/h pre-encode reserve fits under the cap for
+    /// content up to one hour (61-120min reserves 6144MB and runs in the JF-428
+    /// half-cap-floor regime); on MEASURED actual bytes (~3.2GB/h, 2747MB/51min) a
+    /// completed dir fits up to ~80min.
     /// </summary>
-    public int VideoAudioCacheSizeMB { get; set; } = 2048;
+    public int VideoAudioCacheSizeMB { get; set; } = 4096;
 
     /// <summary>
     /// Maximum number of CONCURRENT ffmpeg encode processes across all video-audio

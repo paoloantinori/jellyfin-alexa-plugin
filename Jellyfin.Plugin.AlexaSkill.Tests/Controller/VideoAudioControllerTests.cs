@@ -2486,6 +2486,24 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// JF-534: the transcode tier's one-hour reserve must fit under the DEFAULT
+    /// cache cap (why the old 2048 default failed: the VideoAudioCacheSizeMB field
+    /// doc). Pins the config default (4096) against the estimator: change the two
+    /// together or the tier regresses to encode churn on every play.
+    /// </summary>
+    [Fact]
+    public void EstimateEpisodeTranscodeEncodeBytes_OneHourReserve_FitsUnderDefaultCacheCap()
+    {
+        long oneHourReserve = VideoAudioController.EstimateEpisodeTranscodeEncodeBytes(TimeSpan.FromHours(1).Ticks);
+        int defaultCapMB = new PluginConfiguration().VideoAudioCacheSizeMB;
+
+        Assert.Equal(4096, defaultCapMB);
+        Assert.True(
+            oneHourReserve < defaultCapMB * 1024L * 1024L,
+            $"transcode reserve ({oneHourReserve / (1024L * 1024L)}MB) must fit under the default cap ({defaultCapMB}MB)");
+    }
+
+    /// <summary>
     /// JF-500 reviews R1/R2: the video codec probe SKIPS streams with a blank
     /// codec (the handler-side <c>ExtractCodecs</c> semantics, so the two probes
     /// cannot disagree and diverge the route from the tier) and attached-picture

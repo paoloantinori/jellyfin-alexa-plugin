@@ -393,9 +393,11 @@ public class VideoAudioCache
     /// <summary>
     /// JF-431: latency budget for the synchronous cache-directory scan in
     /// <see cref="EvictIfNeededCore"/>. A scan at or above this duration is logged at
-    /// Information level: every cache the default 2048MB cap can build measures under it
-    /// on the deployment-class host, so crossing it means a non-default configuration or
-    /// storage slower than measured. The measurement table backing this threshold lives
+    /// Information level: every cache the default cap could build measured under it
+    /// on the deployment-class host when the threshold was set (JF-431, at the
+    /// then-2048MB default; JF-534 raised the default to 4096, so roughly double the
+    /// entries), so crossing it means a non-default configuration or storage slower
+    /// than measured. The measurement table backing this threshold lives
     /// in the JF-431 task notes (single home, JF-448 review F8).
     /// </summary>
     private const double SlowEvictionScanThresholdMs = 50;
@@ -408,7 +410,7 @@ public class VideoAudioCache
 
     private void EvictIfNeededCore(long headroomBytes)
     {
-        int maxSizeMB = Plugin.Instance?.Configuration.VideoAudioCacheSizeMB ?? 2048;
+        int maxSizeMB = Plugin.Instance?.Configuration.VideoAudioCacheSizeMB ?? 4096;
         long capBytes = (long)maxSizeMB * 1024 * 1024;
 
         // JF-428 floor: a headroom that exceeds the whole cache (single audiobook
@@ -428,8 +430,9 @@ public class VideoAudioCache
         // JF-431 (kept SYNCHRONOUS by decision): this scan runs on the Alexa request
         // path (every gated encode start) and enumerates the whole cache directory.
         // Measured medians on the N100 deploy target and the dev hosts stay under the
-        // SlowEvictionScanThresholdMs budget at every cache size a default 2048MB cap
-        // can build, with margin even page-cache-cold; the full measurement table
+        // SlowEvictionScanThresholdMs budget at every cache size the default cap
+        // built when measured (2048MB; the JF-534 default raise doubles the entry
+        // count), with margin even page-cache-cold; the full measurement table
         // lives in the task notes (JF-448 review F8 dedup: numbers in ONE place).
         // Decision constraint: a cached-size ledger or background sweep (the
         // alternatives) adds stale-total risk against no measurable win at these

@@ -67,6 +67,11 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         // default so they get locale defaults (it-IT → "mia collezione") instead of
         // a "customized" name that would clobber the it-IT locale.
         MigrateDefaultInvocationNames(Configuration);
+
+        // JF-534: raise the cache cap on installs that persisted the OLD default
+        // (2048), which would otherwise keep the raised default inert there and
+        // reproduce the post-encode eviction of every transcode-tier episode.
+        MigrateStaleCacheCapDefault(Configuration);
     }
 
     /// <inheritdoc />
@@ -262,6 +267,48 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 
         if (changed && Instance != null)
         {
+            // Persist the normalized config so the migration does not repeat every load.
+            try
+            {
+                Instance.SaveConfiguration();
+            }
+            catch (Exception)
+            {
+                // Persistence is best-effort during load; the in-memory fix is still effective.
+            }
+        }
+    }
+
+    /// <summary>
+    /// One-time migration (JF-534): raises the persisted
+    /// <see cref="Configuration.PluginConfiguration.VideoAudioCacheSizeMB"/> from the
+    /// OLD default (2048) to the new default (4096). Jellyfin serializes the whole
+    /// config on save, so every install that ever saved settings carries
+    /// <c>2048</c> explicitly, which would keep the raised default inert there and
+    /// reproduce the JF-534 eviction (why the old default was broken: the
+    /// <see cref="Configuration.PluginConfiguration.VideoAudioCacheSizeMB"/> field
+    /// doc). A stored value equal to the old
+    /// default IS the old default, not a deliberate user choice; a user who
+    /// intentionally lowered the cap can re-lower it once, and the config page
+    /// description now states the transcode tier's ~3GB/h need. Re-lowering sticks
+    /// until the next plugin load for the same reason the JF-300 name migration
+    /// re-clears a re-entered global default: a stored old-default value is
+    /// indistinguishable from never having chosen.
+    /// </summary>
+    internal static void MigrateStaleCacheCapDefault(Configuration.PluginConfiguration configuration)
+    {
+        const int oldDefaultCacheCapMB = 2048;
+        const int newDefaultCacheCapMB = 4096; // mirror of PluginConfiguration.VideoAudioCacheSizeMB's initializer; drift is pinned by the default + estimator tests
+        if (configuration.VideoAudioCacheSizeMB != oldDefaultCacheCapMB)
+        {
+            return;
+        }
+
+        configuration.VideoAudioCacheSizeMB = newDefaultCacheCapMB;
+        if (Instance != null)
+        {
+            Instance.LoggerFactory.CreateLogger<Plugin>().LogInformation("Cache cap migrated {OldMB} -> {NewMB} (JF-534: stored old default cannot hold one transcode-tier episode)", oldDefaultCacheCapMB, newDefaultCacheCapMB);
+
             // Persist the normalized config so the migration does not repeat every load.
             try
             {
