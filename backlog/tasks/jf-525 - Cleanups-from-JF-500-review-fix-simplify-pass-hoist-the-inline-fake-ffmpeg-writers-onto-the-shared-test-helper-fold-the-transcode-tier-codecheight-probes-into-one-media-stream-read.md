@@ -4,9 +4,10 @@ title: >-
   Cleanups from JF-500 review-fix simplify pass: hoist the inline fake-ffmpeg
   writers onto the shared test helper; fold the transcode-tier codec+height
   probes into one media-stream read
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-08 18:34'
+updated_date: '2026-09-10 14:10'
 labels:
   - tech-debt
   - tests
@@ -43,3 +44,9 @@ Neither blocks JF-500.
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed 2026-09-10 with merge 586a2b1a (production fold ships with the next batch deploy). Test-side: WriteFakeFfmpeg(name, scriptBody) owns the shebang+chmod+pragma boilerplate exactly once; WriteRecordingFakeFfmpeg/WriteBlockingFakeFfmpeg delegate; 10 inline skeletons folded, script byte-equivalence verified by the review gate. Production: ResolveSourceCodecs resolves both codecs from ONE media-stream read (transcode tier pinned at one read by a red-verified Times.Once test); per-side semantics preserved; the generic ResolveSourceCodec AND the post-fold production-dead ResolveSourceVideoCodec deleted (assertions repointed, cover-skip test renamed off the dead symbol). Gates: /simplify (one finding applied + JF-539 filed for the remux-tier pair), code-review high (ONE cosmetic finding applied: stale test name; fold semantics + script equivalence verified; the 'else if prevents cover leak' framing corrected - the branches are disjoint by stream type), suites 3566/3566 net9.0 worktree AND re-run green on merged main post-merge. Merged cleanly over the same-day CI fix (both CI-fix lines verified present post-merge).
+<!-- SECTION:FINAL_SUMMARY:END -->
