@@ -12856,6 +12856,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayEpisode",
+            "label": "PlayEpisodeIntent"
+          },
+          {
             "id": "PlayNextEpisode",
             "label": "PlayNextEpisodeIntent"
           },
@@ -12993,6 +12997,24 @@
           },
           {
             "source": "Idle",
+            "target": "PlayVideo",
+            "label": "شغل الفيلم {title}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "شغل الموسم {season_number} الحلقة {episode_number} من {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "شغل {series_name} الموسم {season_number} الحلقة {episode_number}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
             "target": "PlayNextEpisode",
             "label": "شغل الحلقة التالية من {series_name}",
             "style": "solid"
@@ -13041,6 +13063,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -13225,6 +13253,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayEpisode",
+            "label": "PlayEpisodeIntent"
+          },
+          {
             "id": "PlayNextEpisode",
             "label": "PlayNextEpisodeIntent"
           },
@@ -13358,14 +13390,26 @@
           },
           {
             "source": "Idle",
-            "target": "PlayNextEpisode",
-            "label": "spiele die nächste folge von {series_name}",
+            "target": "PlayVideo",
+            "label": "Spiele den Film {title}",
             "style": "solid"
           },
           {
             "source": "Idle",
-            "target": "PlayVideo",
-            "label": "Ich möchte {title} sehen",
+            "target": "PlayEpisode",
+            "label": "spiele staffel {season_number} folge {episode_number} von {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "spiele {series_name} staffel {season_number} folge {episode_number}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayNextEpisode",
+            "label": "spiele die nächste folge von {series_name}",
             "style": "solid"
           },
           {
@@ -13412,6 +13456,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -13590,6 +13640,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayEpisode",
+            "label": "PlayEpisodeIntent"
+          },
+          {
             "id": "PlayNextEpisode",
             "label": "PlayNextEpisodeIntent"
           },
@@ -13727,12 +13781,6 @@
           },
           {
             "source": "Idle",
-            "target": "PlayNextEpisode",
-            "label": "play the next episode of {series_name}",
-            "style": "solid"
-          },
-          {
-            "source": "Idle",
             "target": "PlayVideo",
             "label": "watch {title}",
             "style": "solid"
@@ -13740,7 +13788,25 @@
           {
             "source": "Idle",
             "target": "PlayVideo",
-            "label": "I want to watch {title}",
+            "label": "play the movie {title}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "play season {season_number} episode {episode_number} of {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "play {series_name} season {season_number} episode {episode_number}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayNextEpisode",
+            "label": "play the next episode of {series_name}",
             "style": "solid"
           },
           {
@@ -13787,6 +13853,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -13971,6 +14043,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayEpisode",
+            "label": "PlayEpisodeIntent"
+          },
+          {
             "id": "PlayNextEpisode",
             "label": "PlayNextEpisodeIntent"
           },
@@ -14108,12 +14184,6 @@
           },
           {
             "source": "Idle",
-            "target": "PlayNextEpisode",
-            "label": "play the next episode of {series_name}",
-            "style": "solid"
-          },
-          {
-            "source": "Idle",
             "target": "PlayVideo",
             "label": "watch {title}",
             "style": "solid"
@@ -14121,7 +14191,25 @@
           {
             "source": "Idle",
             "target": "PlayVideo",
-            "label": "I want to watch {title}",
+            "label": "play the movie {title}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "play season {season_number} episode {episode_number} of {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "play {series_name} season {season_number} episode {episode_number}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayNextEpisode",
+            "label": "play the next episode of {series_name}",
             "style": "solid"
           },
           {
@@ -14168,6 +14256,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -14352,6 +14446,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayEpisode",
+            "label": "PlayEpisodeIntent"
+          },
+          {
             "id": "PlayNextEpisode",
             "label": "PlayNextEpisodeIntent"
           },
@@ -14489,6 +14587,24 @@
           },
           {
             "source": "Idle",
+            "target": "PlayVideo",
+            "label": "play the movie {title}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "play season {season_number} episode {episode_number} of {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "play {series_name} season {season_number} episode {episode_number}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
             "target": "PlayNextEpisode",
             "label": "play the next episode of {series_name}",
             "style": "solid"
@@ -14537,6 +14653,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -14721,6 +14843,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayEpisode",
+            "label": "PlayEpisodeIntent"
+          },
+          {
             "id": "PlayNextEpisode",
             "label": "PlayNextEpisodeIntent"
           },
@@ -14858,12 +14984,6 @@
           },
           {
             "source": "Idle",
-            "target": "PlayNextEpisode",
-            "label": "play the next episode of {series_name}",
-            "style": "solid"
-          },
-          {
-            "source": "Idle",
             "target": "PlayVideo",
             "label": "watch {title}",
             "style": "solid"
@@ -14871,7 +14991,25 @@
           {
             "source": "Idle",
             "target": "PlayVideo",
-            "label": "I want to watch {title}",
+            "label": "play the movie {title}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "play season {season_number} episode {episode_number} of {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "play {series_name} season {season_number} episode {episode_number}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayNextEpisode",
+            "label": "play the next episode of {series_name}",
             "style": "solid"
           },
           {
@@ -14918,6 +15056,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -15102,6 +15246,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayEpisode",
+            "label": "PlayEpisodeIntent"
+          },
+          {
             "id": "PlayNextEpisode",
             "label": "PlayNextEpisodeIntent"
           },
@@ -15239,6 +15387,24 @@
           },
           {
             "source": "Idle",
+            "target": "PlayVideo",
+            "label": "play the movie {title}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "play season {season_number} episode {episode_number} of {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "play {series_name} season {season_number} episode {episode_number}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
             "target": "PlayNextEpisode",
             "label": "play the next episode of {series_name}",
             "style": "solid"
@@ -15287,6 +15453,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -15471,6 +15643,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayEpisode",
+            "label": "PlayEpisodeIntent"
+          },
+          {
             "id": "PlayNextEpisode",
             "label": "PlayNextEpisodeIntent"
           },
@@ -15603,7 +15779,25 @@
           {
             "source": "Idle",
             "target": "PlayVideo",
-            "label": "Reproduce el video {title}",
+            "label": "Reproduce el vídeo {title}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayVideo",
+            "label": "Reproduce la película {title}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "reproduce la temporada {season_number} episodio {episode_number} de {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "reproduce {series_name} temporada {season_number} episodio {episode_number}",
             "style": "solid"
           },
           {
@@ -15656,6 +15850,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -15840,6 +16040,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayEpisode",
+            "label": "PlayEpisodeIntent"
+          },
+          {
             "id": "PlayNextEpisode",
             "label": "PlayNextEpisodeIntent"
           },
@@ -15972,7 +16176,25 @@
           {
             "source": "Idle",
             "target": "PlayVideo",
-            "label": "Reproduce el video {title}",
+            "label": "Reproduce el vídeo {title}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayVideo",
+            "label": "Reproduce la película {title}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "reproduce la temporada {season_number} episodio {episode_number} de {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "reproduce {series_name} temporada {season_number} episodio {episode_number}",
             "style": "solid"
           },
           {
@@ -16025,6 +16247,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -16209,6 +16437,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayEpisode",
+            "label": "PlayEpisodeIntent"
+          },
+          {
             "id": "PlayNextEpisode",
             "label": "PlayNextEpisodeIntent"
           },
@@ -16341,7 +16573,25 @@
           {
             "source": "Idle",
             "target": "PlayVideo",
-            "label": "Reproduce el video {title}",
+            "label": "Reproduce el vídeo {title}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayVideo",
+            "label": "Reproduce la película {title}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "reproduce la temporada {season_number} episodio {episode_number} de {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "reproduce {series_name} temporada {season_number} episodio {episode_number}",
             "style": "solid"
           },
           {
@@ -16394,6 +16644,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -16578,6 +16834,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayEpisode",
+            "label": "PlayEpisodeIntent"
+          },
+          {
             "id": "PlayNextEpisode",
             "label": "PlayNextEpisodeIntent"
           },
@@ -16715,14 +16975,26 @@
           },
           {
             "source": "Idle",
-            "target": "PlayNextEpisode",
-            "label": "joue le prochain épisode de {series_name}",
+            "target": "PlayVideo",
+            "label": "mets le film {title}",
             "style": "solid"
           },
           {
             "source": "Idle",
-            "target": "PlayVideo",
-            "label": "Je veux regarder {title}",
+            "target": "PlayEpisode",
+            "label": "joue la saison {season_number} épisode {episode_number} de {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "joue {series_name} saison {season_number} épisode {episode_number}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayNextEpisode",
+            "label": "joue le prochain épisode de {series_name}",
             "style": "solid"
           },
           {
@@ -16769,6 +17041,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -16953,6 +17231,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayEpisode",
+            "label": "PlayEpisodeIntent"
+          },
+          {
             "id": "PlayNextEpisode",
             "label": "PlayNextEpisodeIntent"
           },
@@ -17090,14 +17372,26 @@
           },
           {
             "source": "Idle",
-            "target": "PlayNextEpisode",
-            "label": "joue le prochain épisode de {series_name}",
+            "target": "PlayVideo",
+            "label": "mets le film {title}",
             "style": "solid"
           },
           {
             "source": "Idle",
-            "target": "PlayVideo",
-            "label": "Je veux regarder {title}",
+            "target": "PlayEpisode",
+            "label": "joue la saison {season_number} épisode {episode_number} de {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "joue {series_name} saison {season_number} épisode {episode_number}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayNextEpisode",
+            "label": "joue le prochain épisode de {series_name}",
             "style": "solid"
           },
           {
@@ -17144,6 +17438,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -17328,6 +17628,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayEpisode",
+            "label": "PlayEpisodeIntent"
+          },
+          {
             "id": "PlayNextEpisode",
             "label": "PlayNextEpisodeIntent"
           },
@@ -17465,6 +17769,24 @@
           },
           {
             "source": "Idle",
+            "target": "PlayVideo",
+            "label": "फिल्म {title} चलाओ",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "{series_name} सीज़न {season_number} एपिसोड {episode_number} चलाओ",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "सीज़न {season_number} एपिसोड {episode_number} {series_name} का चलाओ",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
             "target": "PlayNextEpisode",
             "label": "{series_name} का अगला एपिसोड चलाओ",
             "style": "solid"
@@ -17513,6 +17835,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -17697,6 +18025,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayEpisode",
+            "label": "PlayEpisodeIntent"
+          },
+          {
             "id": "PlayNextEpisode",
             "label": "PlayNextEpisodeIntent"
           },
@@ -17830,14 +18162,26 @@
           },
           {
             "source": "Idle",
-            "target": "PlayNextEpisode",
-            "label": "Riproduci il prossimo episodio di {series_name}",
+            "target": "PlayVideo",
+            "label": "Riproduci il film {title}",
             "style": "solid"
           },
           {
             "source": "Idle",
-            "target": "PlayVideo",
-            "label": "voglio guardare {title}",
+            "target": "PlayEpisode",
+            "label": "Riproduci {series_name} stagione {season_number} episodio {episode_number}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "Riproduci la stagione {season_number} episodio {episode_number} di {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayNextEpisode",
+            "label": "Riproduci il prossimo episodio di {series_name}",
             "style": "solid"
           },
           {
@@ -17884,6 +18228,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -18062,6 +18412,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayEpisode",
+            "label": "PlayEpisodeIntent"
+          },
+          {
             "id": "PlayNextEpisode",
             "label": "PlayNextEpisodeIntent"
           },
@@ -18199,6 +18553,24 @@
           },
           {
             "source": "Idle",
+            "target": "PlayVideo",
+            "label": "映画 {title} を再生して",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "{series_name} のシーズン {season_number} エピソード {episode_number} を再生して",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "シーズン {season_number} エピソード {episode_number} の {series_name} を再生して",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
             "target": "PlayNextEpisode",
             "label": "{series_name} の次のエピソードを再生して",
             "style": "solid"
@@ -18247,6 +18619,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -18431,6 +18809,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayEpisode",
+            "label": "PlayEpisodeIntent"
+          },
+          {
             "id": "PlayNextEpisode",
             "label": "PlayNextEpisodeIntent"
           },
@@ -18568,6 +18950,24 @@
           },
           {
             "source": "Idle",
+            "target": "PlayVideo",
+            "label": "speel de film {title}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "speel seizoen {season_number} aflevering {episode_number} van {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "speel {series_name} seizoen {season_number} aflevering {episode_number}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
             "target": "PlayNextEpisode",
             "label": "speel de volgende aflevering van {series_name}",
             "style": "solid"
@@ -18616,6 +19016,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -18800,6 +19206,10 @@
             "label": "PlayVideoIntent"
           },
           {
+            "id": "PlayEpisode",
+            "label": "PlayEpisodeIntent"
+          },
+          {
             "id": "PlayNextEpisode",
             "label": "PlayNextEpisodeIntent"
           },
@@ -18937,6 +19347,24 @@
           },
           {
             "source": "Idle",
+            "target": "PlayVideo",
+            "label": "tocar o filme {title}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "tocar temporada {season_number} episódio {episode_number} de {series_name}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
+            "target": "PlayEpisode",
+            "label": "tocar {series_name} temporada {season_number} episódio {episode_number}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
             "target": "PlayNextEpisode",
             "label": "tocar o próximo episódio de {series_name}",
             "style": "solid"
@@ -18985,6 +19413,12 @@
           },
           {
             "source": "PlayVideo",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayEpisode",
             "target": "Playing",
             "label": "",
             "style": "solid"

@@ -10,7 +10,10 @@ graph TD
     Idle -->|"Reproduce la lista de reproduccion {playlist}"| PlayPlaylist["PlayPlaylistIntent"]
     Idle -->|"reproduce {book}"| PlayBook["PlayBookIntent"]
     Idle -->|"reproduce el podcast {podcast_name}"| PlayPodcast["PlayPodcastIntent"]
-    Idle -->|"Reproduce el video {title}"| PlayVideo["PlayVideoIntent"]
+    Idle -->|"Reproduce el vídeo {title}"| PlayVideo["PlayVideoIntent"]
+    Idle -->|"Reproduce la película {title}"| PlayVideo
+    Idle -->|"reproduce la temporada {season_number} episodio {episode_number} de {series_name}"| PlayEpisode["PlayEpisodeIntent"]
+    Idle -->|"reproduce {series_name} temporada {season_number} episodio {episode_number}"| PlayEpisode
     Idle -->|"reproduce el próximo episodio de {series_name}"| PlayNextEpisode["PlayNextEpisodeIntent"]
     Idle -->|"Reproduce algo aleatorio"| PlayRandom["PlayRandomIntent"]
 
@@ -21,6 +24,7 @@ graph TD
     PlayBook --> Playing
     PlayPodcast --> Playing
     PlayVideo --> Playing
+    PlayEpisode --> Playing
     PlayNextEpisode --> Playing
     PlayRandom --> Playing
 
