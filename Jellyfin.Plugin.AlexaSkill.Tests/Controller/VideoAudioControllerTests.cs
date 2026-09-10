@@ -2463,6 +2463,201 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// JF-537: the oversize boundary is strictly-greater. An estimate EQUAL to the cap
+    /// still fits (the sweep target is cap minus headroom and the JF-428 half-cap floor
+    /// bounds how far it evicts); one byte over cannot be retained.
+    /// </summary>
+    [Theory]
+    [InlineData(0L, 4096, false)]
+    [InlineData(4096L * 1024 * 1024, 4096, false)]
+    [InlineData(4096L * 1024 * 1024 + 1, 4096, true)]
+    [InlineData(6144L * 1024 * 1024, 512, true)]
+    public void TranscodeEstimateExceedsCacheCap_Boundary_AtCapFits_OneByteOverExceeds(
+        long estimatedEncodeBytes, int cacheCapMB, bool expectedOverCap)
+    {
+        Assert.Equal(expectedOverCap, VideoAudioController.TranscodeEstimateExceedsCacheCap(estimatedEncodeBytes, cacheCapMB));
+    }
+
+    /// <summary>
+    /// JF-537 (announced churn): a transcode-tier estimate above the configured cap
+    /// must log a WARNING naming the item, the estimate, and the cap (with the
+    /// VideoAudioCacheSizeMB hint), while the encode itself proceeds exactly as
+    /// before: playlist served, transcode argument set, i.e. no behavior change on
+    /// the encode path. 2h HEVC at the 3072MB/h flat rate reserves 6144MB against a
+    /// 512MB cap.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_TranscodeTier_EstimateOverCap_LogsOversizeWarningAndEncodesNormally()
+    {
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Adolescence S01E01",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromHours(2).Ticks
+        };
+
+        var mediaSourceManager = new Mock<IMediaSourceManager>();
+        mediaSourceManager
+            .Setup(m => m.GetMediaStreams(episode.Id))
+            .Returns(new List<MediaStream>
+            {
+                new() { Type = MediaStreamType.Video, Codec = "hevc", Height = 1080 },
+                new() { Type = MediaStreamType.Audio, Codec = "eac3" }
+            });
+
+        _libraryManagerMock.Setup(m => m.GetItemById(episode.Id)).Returns(episode);
+        string fakeFfmpegPath = WriteRecordingFakeFfmpeg("fake-ffmpeg-jf537-overcap");
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(new CaptureLoggerProvider(logRecords));
+        });
+
+        int originalCap = _config.VideoAudioCacheSizeMB;
+        _config.VideoAudioCacheSizeMB = 512;
+        try
+        {
+            var controller = CreateEpisodeController(mediaSourceManager, episode.Id.ToString(), fakeFfmpegPath, loggerFactory);
+
+            ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString());
+
+            // The encode was NOT refused or rerouted: the playlist is served.
+            var content = Assert.IsType<ContentResult>(result);
+            Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
+
+            // And it ran the transcode tier as usual.
+            string hlsDir = _cache.GetHlsDirectoryPath(episode.Id.ToString(), 0);
+            string[] tokens = File.ReadAllLines(Path.Combine(hlsDir, "episode-args.txt"));
+            Assert.Equal("libx264", tokens[Array.IndexOf(tokens, "-c:v") + 1]);
+
+            // The oversize warning fired with item, estimate, and cap.
+            var warnings = logRecords
+                .Where(r => r.Level == LogLevel.Warning && r.Message.Contains("cannot be retained", StringComparison.Ordinal))
+                .ToList();
+            Assert.Single(warnings);
+            Assert.Contains(episode.Id.ToString(), warnings[0].Message, StringComparison.Ordinal);
+            Assert.Contains("6144MB", warnings[0].Message, StringComparison.Ordinal);
+            Assert.Contains("512MB", warnings[0].Message, StringComparison.Ordinal);
+            Assert.Contains("VideoAudioCacheSizeMB", warnings[0].Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            _config.VideoAudioCacheSizeMB = originalCap;
+        }
+    }
+
+    /// <summary>
+    /// JF-537: the under-cap transcode encode logs the cacheable DECISION at Debug
+    /// (the debug-logging policy: handler branching decisions are debug-visible) and
+    /// emits NO oversize warning. 45min HEVC reserves 3072MB under the default 4096.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_TranscodeTier_EstimateUnderCap_NoOversizeWarning_LogsCacheableDecision()
+    {
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Adolescence S01E03",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(45).Ticks
+        };
+
+        var mediaSourceManager = new Mock<IMediaSourceManager>();
+        mediaSourceManager
+            .Setup(m => m.GetMediaStreams(episode.Id))
+            .Returns(new List<MediaStream>
+            {
+                new() { Type = MediaStreamType.Video, Codec = "hevc", Height = 1080 },
+                new() { Type = MediaStreamType.Audio, Codec = "eac3" }
+            });
+
+        _libraryManagerMock.Setup(m => m.GetItemById(episode.Id)).Returns(episode);
+        string fakeFfmpegPath = WriteRecordingFakeFfmpeg("fake-ffmpeg-jf537-undercap");
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(new CaptureLoggerProvider(logRecords));
+        });
+
+        var controller = CreateEpisodeController(mediaSourceManager, episode.Id.ToString(), fakeFfmpegPath, loggerFactory);
+
+        ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString());
+
+        Assert.IsType<ContentResult>(result);
+        Assert.DoesNotContain(
+            logRecords,
+            r => r.Message.Contains("cannot be retained", StringComparison.Ordinal));
+        var decisions = logRecords
+            .Where(r => r.Message.Contains("cacheable", StringComparison.Ordinal))
+            .ToList();
+        Assert.Single(decisions);
+        Assert.Equal(LogLevel.Debug, decisions[0].Level);
+        Assert.Contains("3072MB", decisions[0].Message, StringComparison.Ordinal);
+        Assert.Contains("4096MB", decisions[0].Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-537 scope pin: the oversize decision targets the TRANSCODE tier ONLY. A
+    /// REMUX-tier estimate above the cap (h264 source, 4h runtime, flat 1280MB/h =
+    /// 5120MB against a 256MB cap) must NOT fire the oversize warning: the remux
+    /// copies at the source's own bitrate and replays at ~20x realtime, so its churn
+    /// is not the multi-hour re-encode pain the decision exists to announce (full
+    /// rationale on <see cref="VideoAudioController.TranscodeEstimateExceedsCacheCap"/>).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_RemuxTier_EstimateOverCap_NoOversizeWarning()
+    {
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "H264 Long Movie",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromHours(4).Ticks
+        };
+
+        var mediaSourceManager = new Mock<IMediaSourceManager>();
+        mediaSourceManager
+            .Setup(m => m.GetMediaStreams(episode.Id))
+            .Returns(new List<MediaStream>
+            {
+                new() { Type = MediaStreamType.Video, Codec = "h264", Height = 1080 },
+                new() { Type = MediaStreamType.Audio, Codec = "aac" }
+            });
+
+        _libraryManagerMock.Setup(m => m.GetItemById(episode.Id)).Returns(episode);
+        string fakeFfmpegPath = WriteRecordingFakeFfmpeg("fake-ffmpeg-jf537-remux");
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(new CaptureLoggerProvider(logRecords));
+        });
+
+        int originalCap = _config.VideoAudioCacheSizeMB;
+        _config.VideoAudioCacheSizeMB = 256;
+        try
+        {
+            var controller = CreateEpisodeController(mediaSourceManager, episode.Id.ToString(), fakeFfmpegPath, loggerFactory);
+
+            ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString());
+
+            // Remux tier ran (video copy), no oversize warning fired.
+            var content = Assert.IsType<ContentResult>(result);
+            Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                logRecords,
+                r => r.Message.Contains("cannot be retained", StringComparison.Ordinal));
+        }
+        finally
+        {
+            _config.VideoAudioCacheSizeMB = originalCap;
+        }
+    }
+
+    /// <summary>
     /// JF-500 reviews R1/R2: the video codec probe SKIPS streams with a blank
     /// codec (the handler-side <c>ExtractCodecs</c> semantics, so the two probes
     /// cannot disagree and diverge the route from the tier) and attached-picture
@@ -2690,10 +2885,11 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     private VideoAudioController CreateEpisodeController(
         Mock<IMediaSourceManager> mediaSourceManager,
         string itemId,
-        string fakeFfmpegPath)
+        string fakeFfmpegPath,
+        ILoggerFactory? loggerFactory = null)
     {
         _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
-        return CreateController(itemId, null, mediaSourceManager, fakeFfmpegPath);
+        return CreateController(itemId, loggerFactory, mediaSourceManager, fakeFfmpegPath);
     }
 
     /// <summary>

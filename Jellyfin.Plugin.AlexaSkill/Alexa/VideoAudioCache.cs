@@ -23,6 +23,14 @@ public class VideoAudioCache
 {
     private const string CacheSubDir = "alexaskill-video-audio";
 
+    /// <summary>
+    /// Default cache cap in MB when the plugin configuration is unavailable (the
+    /// <c>?? </c> fallback of <see cref="EffectiveCacheCapMB"/> and
+    /// <see cref="EvictIfNeededCore"/>). Single definition so the JF-537 oversize
+    /// decision and the eviction sweep can never disagree about the default they read.
+    /// </summary>
+    internal const int DefaultCacheCapMB = 4096;
+
     private readonly ILogger<VideoAudioCache> _logger;
     private readonly string _cacheDir;
 
@@ -130,6 +138,15 @@ public class VideoAudioCache
     /// Gets the cache directory path (exposed for testing).
     /// </summary>
     internal string CacheDir => _cacheDir;
+
+    /// <summary>
+    /// The cap the eviction sweep enforces right now, in MB (JF-537): the configured
+    /// <see cref="Configuration.PluginConfiguration.VideoAudioCacheSizeMB"/>, or the
+    /// default when the plugin instance is not reachable (tests, early startup). The
+    /// controller reads this for the oversize-encode decision so that decision and the
+    /// sweep always compare against the same number.
+    /// </summary>
+    internal int EffectiveCacheCapMB => Plugin.Instance?.Configuration.VideoAudioCacheSizeMB ?? DefaultCacheCapMB;
 
     /// <summary>
     /// Minimum valid cache file size in bytes. Files smaller than this are treated as
@@ -410,7 +427,7 @@ public class VideoAudioCache
 
     private void EvictIfNeededCore(long headroomBytes)
     {
-        int maxSizeMB = Plugin.Instance?.Configuration.VideoAudioCacheSizeMB ?? 4096;
+        int maxSizeMB = Plugin.Instance?.Configuration.VideoAudioCacheSizeMB ?? DefaultCacheCapMB;
         long capBytes = (long)maxSizeMB * 1024 * 1024;
 
         // JF-428 floor: a headroom that exceeds the whole cache (single audiobook

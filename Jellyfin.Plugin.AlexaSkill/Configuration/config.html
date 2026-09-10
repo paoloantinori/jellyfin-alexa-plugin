@@ -269,7 +269,7 @@
                             <div class="inputContainer">
                                 <label class="inputLabel inputLabelUnfocused" for="VideoAudioCacheSizeMB">Video-Audio Cache Size (MB)</label>
                                 <input id="VideoAudioCacheSizeMB" name="VideoAudioCacheSizeMB" type="number" is="emby-input" min="256" max="16384" />
-                                <div class="fieldDescription">Disk space for cached video-audio encodes. When media plays on a screen-equipped device, the plugin generates MP4/HLS files so playback starts instantly on replay. This includes the episode transcode tier for HEVC/AV1 sources, which writes roughly 3 GB per hour of video: a lower limit means encoded episodes are deleted as soon as they finish and every replay re-encodes. Oldest files are evicted when the limit is exceeded. Default: 4096 (4 GB).</div>
+                                <div class="fieldDescription">Disk space for cached video-audio encodes. When media plays on a screen-equipped device, the plugin generates MP4/HLS files so playback starts instantly on replay. This includes the episode transcode tier for HEVC/AV1 sources, which writes roughly 3 GB per hour of video: a lower limit means encoded episodes are deleted as soon as they finish and every replay re-encodes. At the default cap, content beyond about an hour cannot be retained (the reserve is budgeted per rounded-up hour at ~3 GB per hour of transcoded video) and re-encodes on every replay; raise the limit to keep longer movies cached. Oldest files are evicted when the limit is exceeded. Default: 4096 (4 GB).</div>
                             </div>
                     </details>
 
