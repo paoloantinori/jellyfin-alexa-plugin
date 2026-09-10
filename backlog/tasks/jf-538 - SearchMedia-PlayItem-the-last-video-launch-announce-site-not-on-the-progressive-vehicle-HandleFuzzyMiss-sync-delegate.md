@@ -3,9 +3,10 @@ id: JF-538
 title: >-
   SearchMedia PlayItem: the last video-launch announce site not on the
   progressive vehicle (HandleFuzzyMiss sync delegate)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-10 13:26'
+updated_date: '2026-09-10 15:43'
 labels:
   - ux
   - video

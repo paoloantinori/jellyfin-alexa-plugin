@@ -3,9 +3,10 @@ id: JF-535
 title: >-
   Hygiene one-liners: TryTransitionToReady whitespace token gate + undisposed
   class-lifetime DeviceQueueManagers in ~10 test fixtures
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-10 06:46'
+updated_date: '2026-09-10 15:43'
 labels:
   - tech-debt
   - tests

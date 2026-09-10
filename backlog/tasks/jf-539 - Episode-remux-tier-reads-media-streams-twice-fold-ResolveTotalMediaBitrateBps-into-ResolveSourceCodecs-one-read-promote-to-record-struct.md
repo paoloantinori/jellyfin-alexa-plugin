@@ -3,9 +3,10 @@ id: JF-539
 title: >-
   Episode remux tier reads media streams twice: fold ResolveTotalMediaBitrateBps
   into ResolveSourceCodecs (one read; promote to record struct)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-10 13:52'
+updated_date: '2026-09-10 15:43'
 labels:
   - tech-debt
   - video-audio

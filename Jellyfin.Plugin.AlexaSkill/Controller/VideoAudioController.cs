@@ -2013,9 +2013,9 @@ public class VideoAudioController : ControllerBase
         => ResolveSourceCodecs(item).Audio;
 
     /// <summary>
-    /// Shared body of the media-stream readers: fetch the item's media streams as a
+    /// Body of the media-stream read: fetch the item's media streams as a
     /// materialized list, or null when the media source manager is unavailable or the
-    /// read fails (each caller degrades to its own fallback). Materialized so a
+    /// read fails (the caller degrades to its fail-open shape). Materialized so a
     /// deferred-enumeration failure surfaces inside the same try.
     /// </summary>
     /// <param name="item">The item whose streams to read.</param>

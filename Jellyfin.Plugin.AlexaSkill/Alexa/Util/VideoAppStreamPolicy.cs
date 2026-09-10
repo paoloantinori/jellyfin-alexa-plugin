@@ -147,9 +147,9 @@ public static class VideoAppStreamPolicy
 
     /// <summary>
     /// Extract the first video and first audio codec from an item's media streams.
-    /// Used by every caller that holds a <see cref="MediaStream"/> list (the handler
-    /// side via <c>BaseItem.GetMediaStreams()</c>, the controller side via
-    /// <c>IMediaSourceManager.GetMediaStreams</c>).
+    /// Handler-side callers only (via <c>BaseItem.GetMediaStreams()</c>); the
+    /// controller-side probe (<c>ResolveSourceCodecs</c>) keeps its own loop because
+    /// its video side additionally skips attached-picture covers.
     /// </summary>
     /// <param name="streams">The item's media streams, or null.</param>
     /// <returns>The (video, audio) codec names, null when no stream of that type exists.</returns>

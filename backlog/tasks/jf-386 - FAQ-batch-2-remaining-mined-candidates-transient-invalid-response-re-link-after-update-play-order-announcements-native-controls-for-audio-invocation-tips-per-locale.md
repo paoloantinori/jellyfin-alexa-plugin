@@ -7,6 +7,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-08-21 06:28'
+updated_date: '2026-09-10 15:31'
 labels:
   - docs
   - faq
@@ -38,6 +39,12 @@ Write when a natural doc-touch moment occurs (release notes, next FAQ batch); no
 - [ ] #1 #1 Write the remaining mined FAQ candidates (list in description) in a second batch, same style/placement rules as 2cb9112
 - [ ] #2 #2 Keep the deferred list updated as entries ship
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-10: the 're-link after update' candidate LANDED in the README FAQ (commit bdb2d53e), prompted by external issue #23 (v12 update, generic 'Sorry, I'm having trouble', Test connection green) plus the JF-527 relink UX landing. Entry covers the symptom/mechanism (update invalidates the stored per-user token; Test connection checks the server, not the link), the dashboard re-link steps, the version-dependent spoken message (generic up to 0.12.1.0, explicit re-link message from newer releases), and the log lines to attach when opening an issue. Batch 2's remaining candidates unchanged.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
