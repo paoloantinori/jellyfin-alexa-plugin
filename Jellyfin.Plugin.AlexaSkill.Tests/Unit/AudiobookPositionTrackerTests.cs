@@ -21,8 +21,7 @@ public class AudiobookPositionTrackerTests : IDisposable
 
     public AudiobookPositionTrackerTests()
     {
-        _tempDir = Path.Combine(Path.GetTempPath(), "abpos-test-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(_tempDir);
+        _tempDir = TestHelpers.CreateRegisteredTempDir("abpos-test");
         _tracker = new AudiobookPositionTracker(_tempDir, LoggerFactory.Create(b => { }).CreateLogger<AudiobookPositionTracker>());
     }
 

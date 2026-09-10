@@ -43,8 +43,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         _mediaEncoderMock = new Mock<IMediaEncoder>();
 
         // Create a temp dir for the cache service used by controller tests
-        _tempDir = Path.Combine(Path.GetTempPath(), "va-ctrl-test-" + Guid.NewGuid());
-        Directory.CreateDirectory(_tempDir);
+        _tempDir = CreateRegisteredTempDir("va-ctrl-test");
 
         var appPaths = new Mock<IApplicationPaths>();
         appPaths.Setup(p => p.CachePath).Returns(_tempDir);

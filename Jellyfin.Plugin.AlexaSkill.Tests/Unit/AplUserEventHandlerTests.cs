@@ -50,12 +50,7 @@ public class AplUserEventHandlerTests : PluginTestBase, IDisposable
 
         TestHelpers.EnsurePluginInstance(_config, loggerFactory, c => { }, "apl-handler-tests");
 
-        var queueLogger = new Mock<ILogger<DeviceQueueManager>>();
-        // JF-535b: per-fixture registered temp dir (the JF-486 belt), not the bare
-        // shared root; the ctor loads every queue_*.json in its data dir, so a shared root made
-        // each fixture cross-load (and PersistAll rewrite) the whole accumulating pool at every
-        // teardown.
-        _queueManager = new DeviceQueueManager(TestHelpers.CreateRegisteredTempDir("AplUserEventHandlerTests-dq"), queueLogger.Object);
+        _queueManager = TestHelpers.CreateDeviceQueueManager("AplUserEventHandlerTests");
 
         _handler = new AplUserEventHandler(
             _sessionManager.Object,
@@ -816,12 +811,7 @@ public class AplUserEventHandlerVideoAppTests : PluginTestBase, IDisposable
 
         TestHelpers.EnsurePluginInstance(_config, loggerFactory, c => c.NativeControlsForAudio = true, "apl-videoapp-tests");
 
-        var queueLogger = new Mock<ILogger<DeviceQueueManager>>();
-        // JF-535b: per-fixture registered temp dir (the JF-486 belt), not the bare
-        // shared root; the ctor loads every queue_*.json in its data dir, so a shared root made
-        // each fixture cross-load (and PersistAll rewrite) the whole accumulating pool at every
-        // teardown.
-        _queueManager = new DeviceQueueManager(TestHelpers.CreateRegisteredTempDir("AplUserEventHandlerVideoAppTests-dq"), queueLogger.Object);
+        _queueManager = TestHelpers.CreateDeviceQueueManager("AplUserEventHandlerVideoAppTests");
 
         _handler = new AplUserEventHandler(
             _sessionManager.Object,

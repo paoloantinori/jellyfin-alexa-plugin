@@ -55,7 +55,7 @@ public sealed class DispatchHarness : IDisposable
     private readonly Dictionary<Type, object> _dependencyOverrides = new();
     private readonly Dictionary<Type, object> _sharedDependencies = new();
     private readonly RequestPipeline _pipeline;
-    private readonly string _queueDataDir = Path.Combine(Path.GetTempPath(), "dispatch-harness-queues-" + Guid.NewGuid());
+    private readonly string _queueDataDir = TestHelpers.CreateRegisteredTempDir("dispatch-harness-queues");
     private List<BaseHandler>? _handlers;
 
     public DispatchHarness()

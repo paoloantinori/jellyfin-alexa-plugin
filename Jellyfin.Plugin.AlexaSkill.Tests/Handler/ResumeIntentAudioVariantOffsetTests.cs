@@ -45,8 +45,7 @@ public class ResumeIntentAudioVariantOffsetTests : PluginTestBase, IDisposable
 
     public ResumeIntentAudioVariantOffsetTests()
     {
-        _tempDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "resume-audio-variant-tests-" + Guid.NewGuid());
-        System.IO.Directory.CreateDirectory(_tempDir);
+        _tempDir = TestHelpers.CreateRegisteredTempDir("resume-audio-variant-tests");
         _queueManager = new DeviceQueueManager(_tempDir, _fx.LoggerFactory.CreateLogger<DeviceQueueManager>());
 
         TestHelpers.EnsurePluginInstance(

@@ -50,8 +50,7 @@ public class FollowMeIntentHandlerTests : PluginTestBase, IDisposable
         _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
             .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
 
-        _tempDir = Path.Combine(Path.GetTempPath(), $"followme-test-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(_tempDir);
+        _tempDir = TestHelpers.CreateRegisteredTempDir("followme-test");
         var qmLogger = _loggerFactory.CreateLogger<DeviceQueueManager>();
         _queueManager = new DeviceQueueManager(_tempDir, qmLogger);
     }

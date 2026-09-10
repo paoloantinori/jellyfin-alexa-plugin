@@ -39,8 +39,7 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
 
     public PauseResumeStateTests()
     {
-        _tempDir = Path.Combine(Path.GetTempPath(), "pause-resume-tests-" + Guid.NewGuid());
-        Directory.CreateDirectory(_tempDir);
+        _tempDir = TestHelpers.CreateRegisteredTempDir("pause-resume-tests");
         var queueLogger = _fx.LoggerFactory.CreateLogger<DeviceQueueManager>();
         _queueManager = new DeviceQueueManager(_tempDir, queueLogger);
 

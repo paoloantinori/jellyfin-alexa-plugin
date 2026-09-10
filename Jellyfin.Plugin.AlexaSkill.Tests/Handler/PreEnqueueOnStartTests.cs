@@ -47,8 +47,7 @@ public class PreEnqueueOnStartTests : PluginTestBase, IDisposable
         _config = new PluginConfiguration();
         TestHelpers.SetServerAddress(_config, "https://test.example.com");
         _loggerFactory = LoggerFactory.Create(b => { });
-        _tempDir = Path.Combine(Path.GetTempPath(), $"precompute-test-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(_tempDir);
+        _tempDir = TestHelpers.CreateRegisteredTempDir("precompute-test");
     }
 
     public void Dispose()
