@@ -32,7 +32,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// book progress detection, chapter skipping, and offset calculation.
 /// </summary>
 [Collection("Plugin")]
-public class PlayBookResumeTests : PluginTestBase
+public class PlayBookResumeTests : PluginTestBase, IDisposable
 {
     private readonly HandlerTestFixture _fx = new HandlerTestFixture();
     private readonly DeviceQueueManager _queueManager;
@@ -45,6 +45,9 @@ public class PlayBookResumeTests : PluginTestBase
         TestHelpers.EnsurePluginInstance(
             _fx.Config, _fx.LoggerFactory, c => { }, "playbook-resume-tests");
     }
+
+    // JF-535: dispose so the 2s debounce flush cannot fire post-test into the shared temp root.
+    public void Dispose() => _queueManager.Dispose();
 
     private PlayBookIntentHandler CreateHandler()
     {

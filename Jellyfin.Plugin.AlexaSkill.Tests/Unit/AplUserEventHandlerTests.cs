@@ -27,13 +27,14 @@ using Xunit;
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 
 [Collection("Plugin")]
-public class AplUserEventHandlerTests : PluginTestBase
+public class AplUserEventHandlerTests : PluginTestBase, IDisposable
 {
     private readonly Mock<ISessionManager> _sessionManager;
     private readonly Mock<ILibraryManager> _libraryManager;
     private readonly Mock<IUserManager> _userManager;
     private readonly Mock<IUserDataManager> _userDataManager;
     private readonly PluginConfiguration _config;
+    private readonly DeviceQueueManager _queueManager;
     private readonly AplUserEventHandler _handler;
     private readonly Entities.User _user;
     private readonly Context _context;
@@ -50,7 +51,7 @@ public class AplUserEventHandlerTests : PluginTestBase
         TestHelpers.EnsurePluginInstance(_config, loggerFactory, c => { }, "apl-handler-tests");
 
         var queueLogger = new Mock<ILogger<DeviceQueueManager>>();
-        var queueManager = new DeviceQueueManager(System.IO.Path.GetTempPath(), queueLogger.Object);
+        _queueManager = new DeviceQueueManager(System.IO.Path.GetTempPath(), queueLogger.Object);
 
         _handler = new AplUserEventHandler(
             _sessionManager.Object,
@@ -58,12 +59,15 @@ public class AplUserEventHandlerTests : PluginTestBase
             _libraryManager.Object,
             _userManager.Object,
             _userDataManager.Object,
-            queueManager,
+            _queueManager,
             loggerFactory);
 
         _user = new Entities.User { Id = Guid.NewGuid(), JellyfinToken = "test-token" };
         _context = new Context();
     }
+
+    // JF-535: dispose so the 2s debounce flush cannot fire post-test into the shared temp root.
+    public void Dispose() => _queueManager.Dispose();
 
     private static SessionInfo CreateSession()
     {
@@ -786,13 +790,14 @@ public class AplUserEventHandlerTests : PluginTestBase
 /// so BuildAudioPlayerResponse always returned AudioPlayer.Play, never VideoApp.Launch.
 /// </summary>
 [Collection("Plugin")]
-public class AplUserEventHandlerVideoAppTests : PluginTestBase
+public class AplUserEventHandlerVideoAppTests : PluginTestBase, IDisposable
 {
     private readonly Mock<ISessionManager> _sessionManager;
     private readonly Mock<ILibraryManager> _libraryManager;
     private readonly Mock<IUserManager> _userManager;
     private readonly Mock<IUserDataManager> _userDataManager;
     private readonly PluginConfiguration _config;
+    private readonly DeviceQueueManager _queueManager;
     private readonly AplUserEventHandler _handler;
     private readonly Entities.User _user;
 
@@ -808,7 +813,7 @@ public class AplUserEventHandlerVideoAppTests : PluginTestBase
         TestHelpers.EnsurePluginInstance(_config, loggerFactory, c => c.NativeControlsForAudio = true, "apl-videoapp-tests");
 
         var queueLogger = new Mock<ILogger<DeviceQueueManager>>();
-        var queueManager = new DeviceQueueManager(System.IO.Path.GetTempPath(), queueLogger.Object);
+        _queueManager = new DeviceQueueManager(System.IO.Path.GetTempPath(), queueLogger.Object);
 
         _handler = new AplUserEventHandler(
             _sessionManager.Object,
@@ -816,11 +821,14 @@ public class AplUserEventHandlerVideoAppTests : PluginTestBase
             _libraryManager.Object,
             _userManager.Object,
             _userDataManager.Object,
-            queueManager,
+            _queueManager,
             loggerFactory);
 
         _user = new Entities.User { Id = Guid.NewGuid(), JellyfinToken = "test-token" };
     }
+
+    // JF-535: dispose so the 2s debounce flush cannot fire post-test into the shared temp root.
+    public void Dispose() => _queueManager.Dispose();
 
     private static SessionInfo CreateSession()
     {
