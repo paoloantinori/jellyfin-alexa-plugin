@@ -11,6 +11,9 @@ graph TD
     Idle -->|"play {book}"| PlayBook["PlayBookIntent"]
     Idle -->|"speel de podcast {podcast_name}"| PlayPodcast["PlayPodcastIntent"]
     Idle -->|"speel de video {title}"| PlayVideo["PlayVideoIntent"]
+    Idle -->|"speel de film {title}"| PlayVideo
+    Idle -->|"speel seizoen {season_number} aflevering {episode_number} van {series_name}"| PlayEpisode["PlayEpisodeIntent"]
+    Idle -->|"speel {series_name} seizoen {season_number} aflevering {episode_number}"| PlayEpisode
     Idle -->|"speel de volgende aflevering van {series_name}"| PlayNextEpisode["PlayNextEpisodeIntent"]
     Idle -->|"speel iets willekeurigs"| PlayRandom["PlayRandomIntent"]
 
@@ -21,6 +24,7 @@ graph TD
     PlayBook --> Playing
     PlayPodcast --> Playing
     PlayVideo --> Playing
+    PlayEpisode --> Playing
     PlayNextEpisode --> Playing
     PlayRandom --> Playing
 

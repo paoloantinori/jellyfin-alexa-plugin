@@ -11,6 +11,9 @@ graph TD
     Idle -->|"play {book}"| PlayBook["PlayBookIntent"]
     Idle -->|"ポッドキャスト {podcast_name} を再生して"| PlayPodcast["PlayPodcastIntent"]
     Idle -->|"ビデオ {title} を再生して"| PlayVideo["PlayVideoIntent"]
+    Idle -->|"映画 {title} を再生して"| PlayVideo
+    Idle -->|"{series_name} のシーズン {season_number} エピソード {episode_number} を再生して"| PlayEpisode["PlayEpisodeIntent"]
+    Idle -->|"シーズン {season_number} エピソード {episode_number} の {series_name} を再生して"| PlayEpisode
     Idle -->|"{series_name} の次のエピソードを再生して"| PlayNextEpisode["PlayNextEpisodeIntent"]
     Idle -->|"ランダムに何か再生して"| PlayRandom["PlayRandomIntent"]
 
@@ -21,6 +24,7 @@ graph TD
     PlayBook --> Playing
     PlayPodcast --> Playing
     PlayVideo --> Playing
+    PlayEpisode --> Playing
     PlayNextEpisode --> Playing
     PlayRandom --> Playing
 

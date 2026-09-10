@@ -11,6 +11,9 @@ graph TD
     Idle -->|"play {book}"| PlayBook["PlayBookIntent"]
     Idle -->|"شغل البودكاست {podcast_name}"| PlayPodcast["PlayPodcastIntent"]
     Idle -->|"شغل الفيديو {title}"| PlayVideo["PlayVideoIntent"]
+    Idle -->|"شغل الفيلم {title}"| PlayVideo
+    Idle -->|"شغل الموسم {season_number} الحلقة {episode_number} من {series_name}"| PlayEpisode["PlayEpisodeIntent"]
+    Idle -->|"شغل {series_name} الموسم {season_number} الحلقة {episode_number}"| PlayEpisode
     Idle -->|"شغل الحلقة التالية من {series_name}"| PlayNextEpisode["PlayNextEpisodeIntent"]
     Idle -->|"شغل شيء عشوائي"| PlayRandom["PlayRandomIntent"]
 
@@ -21,6 +24,7 @@ graph TD
     PlayBook --> Playing
     PlayPodcast --> Playing
     PlayVideo --> Playing
+    PlayEpisode --> Playing
     PlayNextEpisode --> Playing
     PlayRandom --> Playing
 

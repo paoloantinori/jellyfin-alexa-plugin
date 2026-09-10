@@ -11,6 +11,9 @@ graph TD
     Idle -->|"play {book}"| PlayBook["PlayBookIntent"]
     Idle -->|"पॉडकास्ट {podcast_name} चलाओ"| PlayPodcast["PlayPodcastIntent"]
     Idle -->|"वीडियो {title} चलाओ"| PlayVideo["PlayVideoIntent"]
+    Idle -->|"फिल्म {title} चलाओ"| PlayVideo
+    Idle -->|"{series_name} सीज़न {season_number} एपिसोड {episode_number} चलाओ"| PlayEpisode["PlayEpisodeIntent"]
+    Idle -->|"सीज़न {season_number} एपिसोड {episode_number} {series_name} का चलाओ"| PlayEpisode
     Idle -->|"{series_name} का अगला एपिसोड चलाओ"| PlayNextEpisode["PlayNextEpisodeIntent"]
     Idle -->|"कुछ रैंडम चलाओ"| PlayRandom["PlayRandomIntent"]
 
@@ -21,6 +24,7 @@ graph TD
     PlayBook --> Playing
     PlayPodcast --> Playing
     PlayVideo --> Playing
+    PlayEpisode --> Playing
     PlayNextEpisode --> Playing
     PlayRandom --> Playing
 

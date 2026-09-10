@@ -11,8 +11,10 @@ graph TD
     Idle -->|"riproduci il libro {book}"| PlayBook["PlayBookIntent"]
     Idle -->|"Riproduci il podcast {podcast_name}"| PlayPodcast["PlayPodcastIntent"]
     Idle -->|"Riproduci {title}"| PlayVideo["PlayVideoIntent"]
+    Idle -->|"Riproduci il film {title}"| PlayVideo
+    Idle -->|"Riproduci {series_name} stagione {season_number} episodio {episode_number}"| PlayEpisode["PlayEpisodeIntent"]
+    Idle -->|"Riproduci la stagione {season_number} episodio {episode_number} di {series_name}"| PlayEpisode
     Idle -->|"Riproduci il prossimo episodio di {series_name}"| PlayNextEpisode["PlayNextEpisodeIntent"]
-    Idle -->|"voglio guardare {title}"| PlayVideo
     Idle -->|"Riproduci {media_type} casuali"| PlayRandom["PlayRandomIntent"]
 
     PlayArtist --> Playing
@@ -22,6 +24,7 @@ graph TD
     PlayBook --> Playing
     PlayPodcast --> Playing
     PlayVideo --> Playing
+    PlayEpisode --> Playing
     PlayNextEpisode --> Playing
     PlayRandom --> Playing
 
