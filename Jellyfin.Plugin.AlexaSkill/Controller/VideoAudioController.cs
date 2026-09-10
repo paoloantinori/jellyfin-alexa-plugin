@@ -529,7 +529,7 @@ public class VideoAudioController : ControllerBase
     /// review R2): an embedded mjpeg/png cover can sit ahead of the real track in
     /// the stream list, and a cover that won the codec pick would misroute the
     /// episode tier decision below (mjpeg is "not h264" -> transcode of a static
-    /// image). <see cref="ResolveSourceVideoCodec"/> skips these codecs, and the
+    /// image). <see cref="ResolveSourceCodecs"/> skips these codecs on the video side, and the
     /// ffmpeg mapping (<c>-map 0:V:0</c>, capital V: ffmpeg video streams EXCLUDING
     /// attached pictures, verified on ffmpeg 8.1.2) drops them at the encode level.
     /// </summary>
@@ -659,8 +659,7 @@ public class VideoAudioController : ControllerBase
             // the cache-hit path never re-probes, so the broken copy would be served
             // forever. The wrong-tier cost is asymmetric the other way: transcoding
             // an actually-h264 source costs one extra encode, not a cached dud.
-            string? sourceVideoCodec = ResolveSourceVideoCodec(validation.Item);
-            string? sourceAudioCodec = ResolveSourceAudioCodec(validation.Item);
+            var (sourceVideoCodec, sourceAudioCodec) = ResolveSourceCodecs(validation.Item);
             bool videoTranscodeTier = !VideoAppStreamPolicy.VideoSupportsRemux(sourceVideoCodec);
             if (videoTranscodeTier)
             {
@@ -2011,42 +2010,7 @@ public class VideoAudioController : ControllerBase
     /// <param name="item">The Jellyfin audio item.</param>
     /// <returns>Lowercase audio codec string (e.g. "mp3", "aac", "flac"), or null.</returns>
     internal string? ResolveSourceAudioCodec(MediaBrowser.Controller.Entities.BaseItem item)
-        => ResolveSourceCodec(item, MediaStreamType.Audio);
-
-    /// <summary>
-    /// Resolve the source VIDEO codec for an item by reading its first REAL video
-    /// stream (JF-498). Video streams with a BLANK codec are skipped rather than
-    /// nulling the probe: the same skip-blank semantics as the handler-side
-    /// <see cref="VideoAppStreamPolicy.ExtractCodecs"/>, so the two probes cannot
-    /// disagree on a stream list whose first video entry carries no codec (JF-500
-    /// review R1). Attached-picture covers (<see cref="EpisodeCoverVideoCodecs"/>,
-    /// JF-500 review R2) are skipped too, so a cover cannot win the pick over the
-    /// real track and misroute the endpoint's tier decision. Returns null when the
-    /// codec cannot be determined (media source manager unavailable, no real video
-    /// stream, or a DB read failure).
-    /// </summary>
-    /// <param name="item">The Jellyfin video item.</param>
-    /// <returns>Lowercase video codec string (e.g. "h264", "hevc"), or null.</returns>
-    internal string? ResolveSourceVideoCodec(MediaBrowser.Controller.Entities.BaseItem item)
-    {
-        var streams = TryGetMediaStreams(item);
-        if (streams == null)
-        {
-            return null;
-        }
-
-        foreach (MediaStream stream in streams)
-        {
-            if (stream.Type == MediaStreamType.Video
-                && !string.IsNullOrWhiteSpace(stream.Codec)
-                && !EpisodeCoverVideoCodecs.Contains(stream.Codec))
-            {
-                return stream.Codec.ToLowerInvariant();
-            }
-        }
-
-        return null;
-    }
+        => ResolveSourceCodecs(item).Audio;
 
     /// <summary>
     /// Shared body of the media-stream readers: fetch the item's media streams as a
@@ -2075,29 +2039,52 @@ public class VideoAudioController : ControllerBase
     }
 
     /// <summary>
-    /// Shared body of the source-codec resolvers: the first stream of the requested
-    /// type, lowercased, or null (manager unavailable, no such stream, DB read failure).
+    /// Combined source-codec probe (JF-525): the episode HLS tier decision needs
+    /// BOTH the video and the audio codec, and resolving them through the
+    /// individual resolvers cost one
+    /// <see cref="IMediaSourceManager.GetMediaStreams(Guid)"/> read each. This resolves
+    /// both sides from ONE stream read, each side keeping its individual
+    /// resolver's semantics: the video side skips blank codecs and
+    /// attached-picture covers (<see cref="EpisodeCoverVideoCodecs"/>), the audio
+    /// side takes the first audio stream with a non-blank codec. Fail-open shapes
+    /// are unchanged: null media source manager or a read failure returns
+    /// (null, null), and a missing stream of either type leaves that side null.
     /// </summary>
     /// <param name="item">The item whose streams to read.</param>
-    /// <param name="streamType">The stream type to look for.</param>
-    /// <returns>Lowercase codec string, or null.</returns>
-    private string? ResolveSourceCodec(MediaBrowser.Controller.Entities.BaseItem item, MediaStreamType streamType)
+    /// <returns>Lowercase (video codec, audio codec), either side null when unknown.</returns>
+    internal (string? Video, string? Audio) ResolveSourceCodecs(MediaBrowser.Controller.Entities.BaseItem item)
     {
         var streams = TryGetMediaStreams(item);
         if (streams == null)
         {
-            return null;
+            return (null, null);
         }
 
-        foreach (var stream in streams)
+        string? videoCodec = null;
+        string? audioCodec = null;
+        foreach (MediaStream stream in streams)
         {
-            if (stream.Type == streamType && !string.IsNullOrWhiteSpace(stream.Codec))
+            if (string.IsNullOrWhiteSpace(stream.Codec))
             {
-                return stream.Codec.ToLowerInvariant();
+                continue;
+            }
+
+            if (stream.Type == MediaStreamType.Video && videoCodec == null && !EpisodeCoverVideoCodecs.Contains(stream.Codec))
+            {
+                videoCodec = stream.Codec.ToLowerInvariant();
+            }
+            else if (stream.Type == MediaStreamType.Audio && audioCodec == null)
+            {
+                audioCodec = stream.Codec.ToLowerInvariant();
+            }
+
+            if (videoCodec != null && audioCodec != null)
+            {
+                break;
             }
         }
 
-        return null;
+        return (videoCodec, audioCodec);
     }
 
     /// <summary>

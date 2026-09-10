@@ -380,16 +380,11 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         // Create a fake ffmpeg script that writes dummy MP4 data to the last argument and exits 0.
         // Uses eval+last arg extraction so the output path (last positional param) is correct
         // regardless of how many preceding flags ffmpeg receives.
-        string fakeFfmpegPath = Path.Combine(_tempDir, "fake-ffmpeg");
-        string fakeFfmpegScript = "#!/bin/sh\n" +
-            // POSIX sh (dash) has no "${@: -1}" — iterate to the last positional arg instead
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg",
+            // POSIX sh (dash) has no "${@: -1}": iterate to the last positional arg instead
             "for last_arg in \"$@\"; do :; done\n" +
             "dd if=/dev/zero bs=1024 count=12 of=\"$last_arg\" 2>/dev/null\n" +
-            "exit 0\n";
-        File.WriteAllText(fakeFfmpegPath, fakeFfmpegScript);
-#pragma warning disable CA3003, CA1416 // test-created path; Unix-only test
-        File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-#pragma warning restore CA3003, CA1416
+            "exit 0\n");
 
         var controller = CreateController(audioItem.Id.ToString());
         controller.FfmpegPath = fakeFfmpegPath;
@@ -435,14 +430,9 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         // Fake ffmpeg that stays alive well past the ~1s startup window and never
         // creates the output file.
-        string fakeFfmpegPath = Path.Combine(_tempDir, "fake-ffmpeg-slow-start");
-        string fakeFfmpegScript = "#!/bin/sh\n" +
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-slow-start",
             "sleep 10\n" +
-            "exit 0\n";
-        File.WriteAllText(fakeFfmpegPath, fakeFfmpegScript);
-#pragma warning disable CA3003, CA1416 // test-created path; Unix-only test
-        File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-#pragma warning restore CA3003, CA1416
+            "exit 0\n");
 
         var logRecords = new List<(LogLevel Level, string Message)>();
         using var loggerFactory = LoggerFactory.Create(b =>
@@ -482,13 +472,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         // Fake ffmpeg that exits immediately with a failure code and never creates
         // the output file.
-        string fakeFfmpegPath = Path.Combine(_tempDir, "fake-ffmpeg-fast-fail");
-        string fakeFfmpegScript = "#!/bin/sh\n" +
-            "exit 3\n";
-        File.WriteAllText(fakeFfmpegPath, fakeFfmpegScript);
-#pragma warning disable CA3003, CA1416 // test-created path; Unix-only test
-        File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-#pragma warning restore CA3003, CA1416
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-fast-fail",
+            "exit 3\n");
 
         var logRecords = new List<(LogLevel Level, string Message)>();
         using var loggerFactory = LoggerFactory.Create(b =>
@@ -930,9 +915,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         // Create a fake ffmpeg script that writes a segment file and playlist.
         // The new HLS endpoint waits for seg_000.ts to appear before serving the playlist.
-        string fakeFfmpegPath = Path.Combine(_tempDir, "fake-ffmpeg-hls");
-        string fakeFfmpegScript = "#!/bin/sh\n" +
-            // POSIX sh (dash) has no "${@: -1}" — iterate to the last positional arg instead
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-hls",
+            // POSIX sh (dash) has no "${@: -1}": iterate to the last positional arg instead
             "for playlist_path in \"$@\"; do :; done\n" +
             "playlist_dir=\"$(dirname \"$playlist_path\")\"\n" +
             "mkdir -p \"$playlist_dir\"\n" +
@@ -943,11 +927,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             "echo '#EXT-X-VERSION:3' >> \"$playlist_path\"\n" +
             "echo '#EXTINF:4.000,' >> \"$playlist_path\"\n" +
             "echo 'seg_000.ts' >> \"$playlist_path\"\n" +
-            "exit 0\n";
-        File.WriteAllText(fakeFfmpegPath, fakeFfmpegScript);
-#pragma warning disable CA3003, CA1416 // test-created path; Unix-only test
-        File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-#pragma warning restore CA3003, CA1416
+            "exit 0\n");
 
         var controller = CreateController(audioItem.Id.ToString());
         controller.FfmpegPath = fakeFfmpegPath;
@@ -1661,9 +1641,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { chapter1, chapter2 });
 
         // Create a fake ffmpeg script that simulates HLS generation
-        string fakeFfmpegPath = Path.Combine(_tempDir, "fake-ffmpeg-audiobook");
-        string fakeFfmpegScript = "#!/bin/sh\n" +
-            // POSIX sh (dash) has no "${@: -1}" — iterate to the last positional arg instead
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-audiobook",
+            // POSIX sh (dash) has no "${@: -1}": iterate to the last positional arg instead
             "for playlist_path in \"$@\"; do :; done\n" +
             "playlist_dir=\"$(dirname \"$playlist_path\")\"\n" +
             "mkdir -p \"$playlist_dir\"\n" +
@@ -1672,11 +1651,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             "echo '#EXT-X-VERSION:3' >> \"$playlist_path\"\n" +
             "echo '#EXTINF:10.000,' >> \"$playlist_path\"\n" +
             "echo 'seg_0000.ts' >> \"$playlist_path\"\n" +
-            "exit 0\n";
-        File.WriteAllText(fakeFfmpegPath, fakeFfmpegScript);
-#pragma warning disable CA3003, CA1416
-        File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-#pragma warning restore CA3003, CA1416
+            "exit 0\n");
 
         var controller = CreateController(parentId.ToString());
         controller.FfmpegPath = fakeFfmpegPath;
@@ -1730,9 +1705,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { chapter1, chapter2 });
 
         // Create a fake ffmpeg that writes the concat list and creates segments
-        string fakeFfmpegPath = Path.Combine(_tempDir, "fake-ffmpeg-concat-check");
-        string fakeFfmpegScript = "#!/bin/sh\n" +
-            // POSIX sh (dash) has no "${@: -1}" — iterate to the last positional arg instead
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-concat-check",
+            // POSIX sh (dash) has no "${@: -1}": iterate to the last positional arg instead
             "for playlist_path in \"$@\"; do :; done\n" +
             "playlist_dir=\"$(dirname \"$playlist_path\")\"\n" +
             "mkdir -p \"$playlist_dir\"\n" +
@@ -1741,11 +1715,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             "echo '#EXT-X-VERSION:3' >> \"$playlist_path\"\n" +
             "echo '#EXTINF:10.000,' >> \"$playlist_path\"\n" +
             "echo 'seg_0000.ts' >> \"$playlist_path\"\n" +
-            "exit 0\n";
-        File.WriteAllText(fakeFfmpegPath, fakeFfmpegScript);
-#pragma warning disable CA3003, CA1416
-        File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-#pragma warning restore CA3003, CA1416
+            "exit 0\n");
 
         var controller = CreateController(parentId.ToString());
         controller.FfmpegPath = fakeFfmpegPath;
@@ -2100,18 +2070,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         // Fake ffmpeg: record its arguments next to the output playlist, create the
         // first segment + playlist, exit 0.
-        string fakeFfmpegPath = Path.Combine(_tempDir, "fake-ffmpeg-episode");
-        string fakeFfmpegScript = "#!/bin/sh\n" +
-            "for last_arg in \"$@\"; do :; done\n" +
-            "dir=$(dirname \"$last_arg\")\n" +
-            "printf '%s\\n' \"$@\" > \"$dir/episode-args.txt\"\n" +
-            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
-            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:4.000,\\nseg_0000.ts\\n' > \"$last_arg\"\n" +
-            "exit 0\n";
-        File.WriteAllText(fakeFfmpegPath, fakeFfmpegScript);
-#pragma warning disable CA3003, CA1416 // test-created path; Unix-only test
-        File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-#pragma warning restore CA3003, CA1416
+        string fakeFfmpegPath = WriteRecordingFakeFfmpeg("fake-ffmpeg-episode");
 
         var controller = CreateController(episode.Id.ToString(), null, mediaSourceManager, fakeFfmpegPath);
 
@@ -2159,18 +2118,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
         _libraryManagerMock.Setup(m => m.GetItemById(episode.Id)).Returns(episode);
 
-        string fakeFfmpegPath = Path.Combine(_tempDir, "fake-ffmpeg-hevc");
-        string fakeFfmpegScript = "#!/bin/sh\n" +
-            "for last_arg in \"$@\"; do :; done\n" +
-            "dir=$(dirname \"$last_arg\")\n" +
-            "printf '%s\\n' \"$@\" > \"$dir/episode-args.txt\"\n" +
-            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
-            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:4.000,\\nseg_0000.ts\\n' > \"$last_arg\"\n" +
-            "exit 0\n";
-        File.WriteAllText(fakeFfmpegPath, fakeFfmpegScript);
-#pragma warning disable CA3003, CA1416 // test-created path; Unix-only test
-        File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-#pragma warning restore CA3003, CA1416
+        string fakeFfmpegPath = WriteRecordingFakeFfmpeg("fake-ffmpeg-hevc");
 
         var controller = new VideoAudioController(
             _libraryManagerMock.Object, _mediaEncoderMock.Object, _cache, _loggerFactory, mediaSourceManager.Object);
@@ -2284,26 +2232,35 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
-    /// Fake ffmpeg for the tier-pick tests: records its arguments next to the
-    /// output playlist, creates the first segment + playlist, exits 0 (the
-    /// first-segment wait then succeeds immediately).
+    /// Writes a fake ffmpeg shell script under the test temp dir, chmods it
+    /// executable, and returns its path: the ONE home of the write + chmod
+    /// boilerplate (and its CA3003/CA1416 pragmas) that the tier tests
+    /// previously carried inline (JF-525). The body is the script AFTER the
+    /// shebang line.
     /// </summary>
-    private string WriteRecordingFakeFfmpeg(string name)
+    private string WriteFakeFfmpeg(string name, string scriptBody)
     {
         string fakeFfmpegPath = Path.Combine(_tempDir, name);
-        string fakeFfmpegScript = "#!/bin/sh\n" +
-            "for last_arg in \"$@\"; do :; done\n" +
-            "dir=$(dirname \"$last_arg\")\n" +
-            "printf '%s\\n' \"$@\" > \"$dir/episode-args.txt\"\n" +
-            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
-            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:4.000,\\nseg_0000.ts\\n' > \"$last_arg\"\n" +
-            "exit 0\n";
-        File.WriteAllText(fakeFfmpegPath, fakeFfmpegScript);
+        File.WriteAllText(fakeFfmpegPath, "#!/bin/sh\n" + scriptBody);
 #pragma warning disable CA3003, CA1416 // test-created path; Unix-only test
         File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
 #pragma warning restore CA3003, CA1416
         return fakeFfmpegPath;
     }
+
+    /// <summary>
+    /// Fake ffmpeg for the tier-pick tests: records its arguments next to the
+    /// output playlist, creates the first segment + playlist, exits 0 (the
+    /// first-segment wait then succeeds immediately).
+    /// </summary>
+    private string WriteRecordingFakeFfmpeg(string name)
+        => WriteFakeFfmpeg(name,
+            "for last_arg in \"$@\"; do :; done\n" +
+            "dir=$(dirname \"$last_arg\")\n" +
+            "printf '%s\\n' \"$@\" > \"$dir/episode-args.txt\"\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
+            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:4.000,\\nseg_0000.ts\\n' > \"$last_arg\"\n" +
+            "exit 0\n");
 
     /// <summary>
     /// JF-498 review C1b: the bitrate resolver sums the FIRST video stream's BitRate
@@ -2512,7 +2469,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// the transcode tier.
     /// </summary>
     [Fact]
-    public void ResolveSourceVideoCodec_SkipsBlankAndCoverStreams_PicksTheRealTrack()
+    public void ResolveSourceCodecs_Video_SkipsBlankAndCoverStreams_PicksTheRealTrack()
     {
         var episode = new MediaBrowser.Controller.Entities.TV.Episode
         {
@@ -2534,10 +2491,10 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         var controller = new VideoAudioController(
             _libraryManagerMock.Object, _mediaEncoderMock.Object, _cache, _loggerFactory, mediaSourceManager.Object);
-        Assert.Equal("h264", controller.ResolveSourceVideoCodec(episode));
+        Assert.Equal("h264", controller.ResolveSourceCodecs(episode).Video);
 
         // No manager (the 4-arg ctor): unknown (null).
-        Assert.Null(CreateController().ResolveSourceVideoCodec(episode));
+        Assert.Null(CreateController().ResolveSourceCodecs(episode).Video);
     }
 
     /// <summary>
@@ -2746,9 +2703,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// static gate/slot forever; a passing run releases it within ~5s.
     /// </summary>
     private string WriteBlockingFakeFfmpeg(string spawnLog, string releaseFile)
-    {
-        string fakeFfmpegPath = Path.Combine(_tempDir, "fake-ffmpeg-transcode-" + Guid.NewGuid().ToString("N"));
-        string fakeFfmpegScript = "#!/bin/sh\n" +
+        => WriteFakeFfmpeg("fake-ffmpeg-transcode-" + Guid.NewGuid().ToString("N"),
             "printf 'spawn\\n' >> \"" + spawnLog + "\"\n" +
             "for last_arg in \"$@\"; do :; done\n" +
             "dir=$(dirname \"$last_arg\")\n" +
@@ -2757,13 +2712,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:4.000,\\nseg_0000.ts\\n' > \"$last_arg\"\n" +
             "i=0\n" +
             "while [ ! -e \"" + releaseFile + "\" ] && [ \"$i\" -lt 60 ]; do sleep 1; i=$((i+1)); done\n" +
-            "exit 0\n";
-        File.WriteAllText(fakeFfmpegPath, fakeFfmpegScript);
-#pragma warning disable CA3003, CA1416 // test-created path; Unix-only test
-        File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-#pragma warning restore CA3003, CA1416
-        return fakeFfmpegPath;
-    }
+            "exit 0\n");
 
     private static int CountFfmpegSpawns(string spawnLog)
         => File.Exists(spawnLog) ? File.ReadAllLines(spawnLog).Length : 0;
@@ -2930,19 +2879,14 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
         _libraryManagerMock.Setup(m => m.GetItemById(episode.Id)).Returns(episode);
 
-        string fakeFfmpegPath = Path.Combine(_tempDir, "fake-ffmpeg-episode-audio");
         long startTicks = TimeSpan.FromMinutes(5).Ticks;
-        string fakeFfmpegScript = "#!/bin/sh\n" +
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-episode-audio",
             "for last_arg in \"$@\"; do :; done\n" +
             "dir=$(dirname \"$last_arg\")\n" +
             "printf '%s\\n' \"$@\" > \"$dir/episode-audio-args.txt\"\n" +
             "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
             "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:10.000,\\nseg_0000.ts\\n' > \"$last_arg\"\n" +
-            "exit 0\n";
-        File.WriteAllText(fakeFfmpegPath, fakeFfmpegScript);
-#pragma warning disable CA3003, CA1416 // test-created path; Unix-only test
-        File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-#pragma warning restore CA3003, CA1416
+            "exit 0\n");
 
         var controller = CreateController(episode.Id.ToString());
         controller.FfmpegPath = fakeFfmpegPath;
@@ -3020,8 +2964,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         // Fake ffmpeg: snapshot whether the stale playlist/segment exist at start,
         // then write the fresh first segment + playlist and exit 0.
-        string fakeFfmpegPath = Path.Combine(_tempDir, "fake-ffmpeg-debris");
-        string fakeFfmpegScript = "#!/bin/sh\n" +
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-debris",
             "for last_arg in \"$@\"; do :; done\n" +
             "dir=$(dirname \"$last_arg\")\n" +
             "snapshot=\"$dir/snapshot-before-encode.txt\"\n" +
@@ -3030,11 +2973,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             "[ -f \"$dir/seg_0999.ts\" ] && echo STALE-SEGMENT >> \"$snapshot\"\n" +
             "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
             "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:4.000,\\nseg_0000.ts\\n' > \"$last_arg\"\n" +
-            "exit 0\n";
-        File.WriteAllText(fakeFfmpegPath, fakeFfmpegScript);
-#pragma warning disable CA3003, CA1416 // test-created path; Unix-only test
-        File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-#pragma warning restore CA3003, CA1416
+            "exit 0\n");
 
         // Debris of an interrupted encode: a live-looking playlist (no ENDLIST)
         // referencing segments, with a stale segment file on disk.
@@ -3201,6 +3140,27 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.DoesNotContain("#EXT-X-ENDLIST", content.Content, StringComparison.Ordinal);
         Assert.Equal(765, VideoAudioController.CountSegmentsInPlaylist(content.Content));
         Assert.Contains("seg_0764.ts?token=", content.Content, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-525: the tier probe reads the item's media streams ONCE per request.
+    /// The video and audio codec resolvers each paid their own
+    /// IMediaSourceManager.GetMediaStreams DB read; the combined probe folds them.
+    /// The TRANSCODE tier pays no bitrate read (its estimate is runtime-based), so
+    /// one call is the tier's whole stream-read budget.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_TranscodeTier_ReadsMediaStreamsOnce()
+    {
+        var (episode, mediaSourceManager) = SetupEpisodeForHls("Adolescence S01E05", "hevc", TimeSpan.FromMinutes(45));
+
+        var controller = CreateController(
+            episode.Id.ToString(), null, mediaSourceManager, WriteRecordingFakeFfmpeg("fake-ffmpeg-jf525-once"));
+
+        ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString());
+
+        Assert.IsType<ContentResult>(result);
+        mediaSourceManager.Verify(m => m.GetMediaStreams(episode.Id), Times.Once);
     }
 
     /// <summary>
