@@ -4,10 +4,10 @@ title: >-
   FindSong: encode the prompt-state invariant (state-explicit ElicitAnswer
   helper replacing the byte-identical elicit pair); shared artist-scoped test
   mock helper
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-09 21:34'
-updated_date: '2026-09-10 06:39'
+updated_date: '2026-09-10 10:41'
 labels:
   - refactor
   - multi-turn
@@ -46,6 +46,12 @@ Simplify-gate note (2026-09-10, JF-533 efficiency agent): while in this file's t
 
 Scope overlap resolved: JF-533's /simplify pass hoists the 3x-pasted discriminating GetItemList lambda (isArtist/hasArtistIds/isAudioMedia) into a private SetupArtistThenArtistScopedSongs-style helper + a CreateArtist factory in this test file; if that hoist lands with JF-533, this task's 'shared artist-scoped test mock helper' item is already done - verify at execution time instead of redoing it.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed 2026-09-10 with merge f84f69a9 (deployed in the JF-534 batch deploy). ElicitAnswer(prompt, sessionData, nextState) replaces the byte-identical ElicitTitleKeywords/ElicitArtist pair; 13 call sites each declare the answer's meaning; the disambiguation-pick trap (pass Disambiguating) documented on the helper; 7 manual State assignments folded, 6 self-assignments made explicit. Gates: /simplify (2 combined angles: clean + 1 doc-dedupe applied - the duplicated SearchQuery rationale now a pointer to BuildElicitSlotResponse's doc), code-review high ZERO findings (all 13 sites reconciled: 7 folded + 6 dispatch-precondition self-assignments; the musician-branch State move proven unobservable incl. exception paths; songNameContains null-default byte-identical for the 3 pre-existing callers), tests 3560/3560 with zero expectation edits (base 6160776d also 3560, delta exactly zero - the dispatch's '3558 baseline' was stale, worker proved it by re-running the base). Test rider complete: 2 remaining mock copies folded onto SetupArtistThenArtistScopedSongs; redundant GetUserById setup dropped. AC#4's 'shared artist-scoped test mock helper' was already done by JF-533's simplify pass (verified, not redone).
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
