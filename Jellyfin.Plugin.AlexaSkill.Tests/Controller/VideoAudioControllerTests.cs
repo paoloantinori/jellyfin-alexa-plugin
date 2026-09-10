@@ -2263,12 +2263,13 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             "exit 0\n");
 
     /// <summary>
-    /// JF-498 review C1b: the bitrate resolver sums the FIRST video stream's BitRate
-    /// and the FIRST audio stream's BitRate; later audio streams and subtitle streams
-    /// are ignored (the remux maps 0:V:0 + 0:a:0).
+    /// JF-498 review C1b (folded into the combined probe, JF-539): the bitrate side
+    /// of <see cref="VideoAudioController.ResolveSourceCodecs"/> sums the FIRST
+    /// video stream's BitRate and the FIRST audio stream's BitRate; later audio
+    /// streams and subtitle streams are ignored (the remux maps 0:V:0 + 0:a:0).
     /// </summary>
     [Fact]
-    public void ResolveTotalMediaBitrateBps_SumsFirstVideoAndAudioStreams()
+    public void ResolveSourceCodecs_TotalBitrateBps_SumsFirstVideoAndAudioStreams()
     {
         var episode = new MediaBrowser.Controller.Entities.TV.Episode
         {
@@ -2290,16 +2291,17 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         var controller = new VideoAudioController(
             _libraryManagerMock.Object, _mediaEncoderMock.Object, _cache, _loggerFactory, mediaSourceManager.Object);
 
-        Assert.Equal(2_884_000L, controller.ResolveTotalMediaBitrateBps(episode));
+        Assert.Equal(2_884_000L, controller.ResolveSourceCodecs(episode).TotalBitrateBps);
     }
 
     /// <summary>
-    /// C1b: the resolver returns null (flat-estimate fallback) when no stream carries
-    /// a BitRate and when the media source manager is unavailable (the 4-arg ctor
-    /// leaves it null, the same shape the song path runs with).
+    /// C1b (folded into the combined probe, JF-539): the bitrate side returns null
+    /// (flat-estimate fallback) when no stream carries a BitRate and when the media
+    /// source manager is unavailable (the 4-arg ctor leaves it null, the same shape
+    /// the song path runs with).
     /// </summary>
     [Fact]
-    public void ResolveTotalMediaBitrateBps_NoBitrateOrNoManager_ReturnsNull()
+    public void ResolveSourceCodecs_TotalBitrateBps_NoBitrateOrNoManager_ReturnsNull()
     {
         var episode = new MediaBrowser.Controller.Entities.TV.Episode
         {
@@ -2318,10 +2320,10 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         var withStreams = new VideoAudioController(
             _libraryManagerMock.Object, _mediaEncoderMock.Object, _cache, _loggerFactory, mediaSourceManager.Object);
-        Assert.Null(withStreams.ResolveTotalMediaBitrateBps(episode));
+        Assert.Null(withStreams.ResolveSourceCodecs(episode).TotalBitrateBps);
 
         var withoutManager = CreateController();
-        Assert.Null(withoutManager.ResolveTotalMediaBitrateBps(episode));
+        Assert.Null(withoutManager.ResolveSourceCodecs(episode).TotalBitrateBps);
     }
 
     /// <summary>
@@ -3156,6 +3158,28 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         var controller = CreateController(
             episode.Id.ToString(), null, mediaSourceManager, WriteRecordingFakeFfmpeg("fake-ffmpeg-jf525-once"));
+
+        ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString());
+
+        Assert.IsType<ContentResult>(result);
+        mediaSourceManager.Verify(m => m.GetMediaStreams(episode.Id), Times.Once);
+    }
+
+    /// <summary>
+    /// JF-539: the REMUX tier also reads the item's media streams ONCE per request.
+    /// Unlike the transcode tier, the remux estimate is bitrate-aware, and the
+    /// bitrate used to be a SECOND GetMediaStreams read
+    /// (<c>ResolveTotalMediaBitrateBps</c> after the codec probe); the fold into
+    /// the combined probe (JF-525 codec probe + JF-539 bitrate) makes one call
+    /// the tier's whole stream-read budget. Before the fold this path read twice.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_RemuxTier_ReadsMediaStreamsOnce()
+    {
+        var (episode, mediaSourceManager) = SetupEpisodeForHls("Adolescence S01E06", "h264", TimeSpan.FromMinutes(45));
+
+        var controller = CreateController(
+            episode.Id.ToString(), null, mediaSourceManager, WriteRecordingFakeFfmpeg("fake-ffmpeg-jf539-once"));
 
         ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString());
 
