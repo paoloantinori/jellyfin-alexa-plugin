@@ -1070,6 +1070,11 @@ public class EventHandlerTests : PluginTestBase
             LoggerFactory.Create(b => { }).CreateLogger<DeviceQueueManager>());
         Plugin.Instance!.DeviceQueueManager = queueManager;
         queueManager.RecordLastPlayed(context.System.Device.DeviceID, Guid.NewGuid().ToString());
+
+        // Disposal tears down the armed 2s debounce timer so it cannot fire
+        // post-test into the swept temp dir; the in-memory queue (what the
+        // handler's GetLastPlayedItemId read hits) survives Dispose.
+        queueManager.Dispose();
     }
 
     /// <summary>

@@ -1034,14 +1034,13 @@ public abstract class BaseHandler
         }
 
         bool hadPreviousPlay = Plugin.Instance?.DeviceQueueManager?.GetLastPlayedItemId(deviceId) != null;
-        if (!string.IsNullOrEmpty(user.JellyfinToken) && hadPreviousPlay)
+        if (!string.IsNullOrWhiteSpace(user.JellyfinToken) && hadPreviousPlay)
         {
             Logger.LogInformation(
-                "AccountRelink: dead Jellyfin token for user {UserId} on device {DeviceId} (token fingerprint {TokenFingerprint}, previous play on record: {HadPreviousPlay})",
+                "AccountRelink: dead Jellyfin token for user {UserId} on device {DeviceId} (token fingerprint {TokenFingerprint})",
                 user.Id,
                 deviceId,
-                TokenFingerprint(user.JellyfinToken!),
-                hadPreviousPlay);
+                TokenFingerprint(user.JellyfinToken!));
 
             string locale = GetLocale(request);
             string message = ResponseStrings.Get("AccountRelinkRequired", locale);
