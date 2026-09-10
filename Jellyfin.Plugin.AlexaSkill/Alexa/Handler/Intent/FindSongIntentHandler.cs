@@ -465,6 +465,9 @@ public class FindSongIntentHandler : BaseHandler
         List<BaseItem> songs;
         List<(BaseItem Item, double Score)> scored;
 
+        // Direct HasValue (not HasResolvedArtist): this branch dereferences
+        // ArtistId.Value below and nullable flow analysis cannot see through
+        // the property.
         if (sessionData.ArtistId.HasValue)
         {
             // Artist-scoped search: use ArtistIds + NameContains filter
@@ -543,7 +546,16 @@ public class FindSongIntentHandler : BaseHandler
             // Cross-media fallback: if no artist was specified, the keywords may be a
             // misrouted artist name (mirrors PlaySong's "no musician slot" cross-media
             // fallback). Try the keywords as an artist before re-prompting for the title.
-            if (string.IsNullOrWhiteSpace(sessionData.ArtistName))
+            // JF-533: gate on the RESOLVED artist, not the stored name.
+            // HandleFirstInvocationAsync stores the raw musician input in ArtistName even
+            // when resolution fails (ArtistId stays null), so a stale unresolved name
+            // ("dj shadoww", a typo) used to occupy this gate and the user's keywords
+            // answer ("koop", a real artist) dead-ended in a plain no-match. An
+            // unresolved artist never scoped the search above (the ArtistId branch), so
+            // it must not suppress the fallback; with a resolved ArtistId the search WAS
+            // artist-scoped and the fallback stays suppressed - the keywords are a title
+            // within that artist's catalog, not a fresh artist query.
+            if (!sessionData.HasResolvedArtist)
             {
                 SkillResponse? artistFallback = await TryEntityFallbackAsync(
                     sessionData.Keywords ?? string.Empty, jellyfinUser!, user, session, context, locale,
@@ -594,7 +606,7 @@ public class FindSongIntentHandler : BaseHandler
             return FoundOne(songs[0], "FindSongFoundOne");
         }
 
-        if (songs.Count > 4 && !sessionData.ArtistId.HasValue)
+        if (songs.Count > 4 && !sessionData.HasResolvedArtist)
         {
             // Too many results without artist filter — ask for artist
             string narrowMsg = ResponseStrings.Get("FindSongTooManyNarrow", locale);
