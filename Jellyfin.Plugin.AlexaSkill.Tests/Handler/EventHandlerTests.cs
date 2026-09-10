@@ -26,7 +26,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// SessionEndedRequest, and ExceptionHandler.
 /// </summary>
 [Collection("Plugin")]
-public class EventHandlerTests : PluginTestBase
+public class EventHandlerTests : PluginTestBase, IDisposable
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly Mock<ILibraryManager> _libraryManagerMock;
@@ -47,6 +47,9 @@ public class EventHandlerTests : PluginTestBase
         var queueLogger = new Mock<ILogger<DeviceQueueManager>>();
         _queueManager = new DeviceQueueManager(System.IO.Path.GetTempPath(), queueLogger.Object);
     }
+
+    // JF-535: dispose so the 2s debounce flush cannot fire post-test into the shared temp root.
+    public void Dispose() => _queueManager.Dispose();
 
     private static Context CreateContext() => TestHelpers.CreateTestContext();
 

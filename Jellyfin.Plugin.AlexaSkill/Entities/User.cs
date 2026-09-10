@@ -160,7 +160,7 @@ public class User
             return false;
         }
 
-        if (string.IsNullOrEmpty(JellyfinToken))
+        if (string.IsNullOrWhiteSpace(JellyfinToken))
         {
             return false;
         }

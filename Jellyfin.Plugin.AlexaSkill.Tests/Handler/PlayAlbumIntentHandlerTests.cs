@@ -29,7 +29,7 @@ using SortOrder = Jellyfin.Database.Implementations.Enums.SortOrder;
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
 [Collection("Plugin")]
-public class PlayAlbumIntentHandlerTests : PluginTestBase
+public class PlayAlbumIntentHandlerTests : PluginTestBase, IDisposable
 {
     private readonly HandlerTestFixture _fx = new HandlerTestFixture();
     private readonly DeviceQueueManager _queueManager;
@@ -41,6 +41,9 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase
 
         TestHelpers.EnsurePluginInstance(_fx.Config, _fx.LoggerFactory, c => { }, "playalbum-tests");
     }
+
+    // JF-535: dispose so the 2s debounce flush cannot fire post-test into the shared temp root.
+    public void Dispose() => _queueManager.Dispose();
 
     private PlayAlbumIntentHandler CreateHandler(IArtistIndex? artistIndex = null)
     {

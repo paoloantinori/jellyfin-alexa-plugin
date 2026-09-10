@@ -26,7 +26,7 @@ using Xunit;
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
 [Collection("Plugin")]
-public class PlayBookIntentHandlerTests : PluginTestBase
+public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
 {
     private readonly HandlerTestFixture _fx = new HandlerTestFixture();
     private readonly DeviceQueueManager _queueManager;
@@ -39,6 +39,9 @@ public class PlayBookIntentHandlerTests : PluginTestBase
         TestHelpers.EnsurePluginInstance(
             _fx.Config, _fx.LoggerFactory, c => { }, "playbook-tests");
     }
+
+    // JF-535: dispose so the 2s debounce flush cannot fire post-test into the shared temp root.
+    public void Dispose() => _queueManager.Dispose();
 
     private sealed class RecordingPlayBookHandler(
         ISessionManager sessionManager,
