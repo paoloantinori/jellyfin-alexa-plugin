@@ -45,7 +45,11 @@ public class EventHandlerTests : PluginTestBase, IDisposable
         _config = new PluginConfiguration();
         _loggerFactory = LoggerFactory.Create(b => { });
         var queueLogger = new Mock<ILogger<DeviceQueueManager>>();
-        _queueManager = new DeviceQueueManager(System.IO.Path.GetTempPath(), queueLogger.Object);
+        // JF-535b: per-fixture registered temp dir (the JF-486 belt), not the bare
+        // shared root; the ctor loads every queue_*.json in its data dir, so a shared root made
+        // each fixture cross-load (and PersistAll rewrite) the whole accumulating pool at every
+        // teardown.
+        _queueManager = new DeviceQueueManager(TestHelpers.CreateRegisteredTempDir("EventHandlerTests-dq"), queueLogger.Object);
     }
 
     // JF-535: dispose so the 2s debounce flush cannot fire post-test into the shared temp root.
@@ -55,10 +59,10 @@ public class EventHandlerTests : PluginTestBase, IDisposable
 
     /// <summary>
     /// Context with a fresh unique device ID. The ordering tests must not share
-    /// TestHelpers' fixed "test-device": both DeviceQueueManager (persisted queue files
-    /// under Path.GetTempPath()) and the static PlaybackReportOrdering state (JF-447)
-    /// key per device, and leftover state for a shared device changes how a stop
-    /// classifies (displacement vs real) and skips the registration the tests exercise.
+    /// TestHelpers' fixed "test-device": the static PlaybackReportOrdering state
+    /// (JF-447) keys per device process-wide, and leftover state for a shared device
+    /// changes how a stop classifies (displacement vs real) and skips the
+    /// registration the tests exercise.
     /// </summary>
     private static Context CreateContextForFreshDevice() => TestHelpers.CreateTestContext($"jf425-{Guid.NewGuid():N}");
 
@@ -1074,9 +1078,9 @@ public class EventHandlerTests : PluginTestBase, IDisposable
         Plugin.Instance!.DeviceQueueManager = queueManager;
         queueManager.RecordLastPlayed(context.System.Device.DeviceID, Guid.NewGuid().ToString());
 
-        // Disposal tears down the armed 2s debounce timer so it cannot fire
-        // post-test into the swept temp dir; the in-memory queue (what the
-        // handler's GetLastPlayedItemId read hits) survives Dispose.
+        // Disposal tears down the armed 2s debounce timer deterministically (no
+        // post-test straggler); the in-memory queue (what the handler's
+        // GetLastPlayedItemId read hits) survives Dispose.
         queueManager.Dispose();
     }
 
