@@ -1688,37 +1688,16 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // ("cup", "walls for") were parsed as ARTIST names and the dead keywords were
         // searched forever. The fix: the no-match re-prompt resets State to
         // AwaitingKeywords, whose path stores the fresh slot value before searching.
-        var koopId = Guid.NewGuid();
-        var koop = new MusicArtist();
-        typeof(BaseItem).GetProperty("Id")!.SetValue(koop, koopId);
-        typeof(BaseItem).GetProperty("Name")!.SetValue(koop, "Koop");
+        var koop = CreateArtist(Guid.NewGuid(), "Koop");
         var cup = CreateAudioItem(Guid.NewGuid(), "Cup");
         cup.Artists = new[] { "Koop" };
 
+        // The artist-scoped song search finds "Cup" ONLY for the fresh keyword: a
+        // search with the stale "what's for cooking" (first token "cooking") returns
+        // nothing, on both the NameContains pre-filter and the JF-383 unfiltered
+        // retry (NameContains == null).
         SetupJellyfinUser();
-        _fx.LibraryManager.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns<InternalItemsQuery>(q =>
-            {
-                bool isArtistQuery = q.IncludeItemTypes != null
-                    && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist);
-                if (isArtistQuery)
-                {
-                    return new List<BaseItem> { koop }.AsReadOnly();
-                }
-
-                // The artist-scoped song search finds "Cup" ONLY for the fresh
-                // keyword: a search with the stale "what's for cooking" (first token
-                // "cooking") returns nothing, on both the NameContains pre-filter and
-                // the JF-383 unfiltered retry (NameContains == null).
-                bool isArtistScopedAudio = q.ArtistIds != null && q.ArtistIds.Length > 0
-                    && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio);
-                if (isArtistScopedAudio && q.NameContains == "cup")
-                {
-                    return new List<BaseItem> { cup }.AsReadOnly();
-                }
-
-                return new List<BaseItem>().AsReadOnly();
-            });
+        SetupArtistThenArtistScopedSongs(koop, cup, songNameContains: "cup");
 
         var user = CreateTestUser();
         var session = _fx.CreateSession();
@@ -1835,32 +1814,12 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // ArtistIds-filtered query with NameContains == the fresh first token, so a
         // pass proves both halves of the composition.
         var koopId = Guid.NewGuid();
-        var koop = new MusicArtist();
-        typeof(BaseItem).GetProperty("Id")!.SetValue(koop, koopId);
-        typeof(BaseItem).GetProperty("Name")!.SetValue(koop, "Koop");
+        var koop = CreateArtist(koopId, "Koop");
         var cup = CreateAudioItem(Guid.NewGuid(), "Cup");
         cup.Artists = new[] { "Koop" };
 
         SetupJellyfinUser();
-        _fx.LibraryManager.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns<InternalItemsQuery>(q =>
-            {
-                bool isArtistQuery = q.IncludeItemTypes != null
-                    && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist);
-                if (isArtistQuery)
-                {
-                    return new List<BaseItem> { koop }.AsReadOnly();
-                }
-
-                bool isArtistScopedAudio = q.ArtistIds != null && q.ArtistIds.Length > 0
-                    && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio);
-                if (isArtistScopedAudio && q.NameContains == "cup")
-                {
-                    return new List<BaseItem> { cup }.AsReadOnly();
-                }
-
-                return new List<BaseItem>().AsReadOnly();
-            });
+        SetupArtistThenArtistScopedSongs(koop, cup, songNameContains: "cup");
 
         var user = CreateTestUser();
         var session = _fx.CreateSession();
@@ -1984,8 +1943,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
     private void SetupJellyfinUser()
     {
         var jellyfinUser = new JellyfinUser("testuser", "test", "test") { Id = _userId };
-        _fx.UserManager.Setup(um => um.GetUserById(_userId)).Returns(jellyfinUser);
-        // Also handle any Guid for ResolveJellyfinUser
+        // Also handle any Guid for ResolveJellyfinUser (covers _userId too; Moq last-wins)
         _fx.UserManager.Setup(um => um.GetUserById(It.IsAny<Guid>())).Returns(jellyfinUser);
     }
 
@@ -2013,12 +1971,15 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         return artist;
     }
 
-    private void SetupArtistThenArtistScopedSongs(BaseItem artist, BaseItem song)
+    private void SetupArtistThenArtistScopedSongs(BaseItem artist, BaseItem song, string? songNameContains = null)
     {
         // Discriminating library mock for the cross-media fallback family (JF-533
-        // hoisted it here from three verbatim copies): artist queries find the
-        // artist, artist-scoped audio queries find the song, and any other query
-        // (the FindSong song search) misses.
+        // hoisted it here from three verbatim copies; JF-530 folded its last two
+        // inline copies onto it): artist queries find the artist, artist-scoped
+        // audio queries find the song, and any other query (the FindSong song
+        // search) misses. songNameContains narrows the song serving to that exact
+        // server-side NameContains value, so a stale-keyword search (a different
+        // first token) and the JF-383 unfiltered retry (NameContains null) miss.
         _fx.LibraryManager.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q =>
             {
@@ -2030,7 +1991,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
                     return new List<BaseItem> { artist }.AsReadOnly();
                 }
 
-                if (hasArtistIds && isAudioMedia)
+                if (hasArtistIds && isAudioMedia && (songNameContains == null || q.NameContains == songNameContains))
                 {
                     return new List<BaseItem> { song }.AsReadOnly();
                 }
