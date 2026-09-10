@@ -7,6 +7,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-09 21:34'
+updated_date: '2026-09-10 06:39'
 labels:
   - refactor
   - multi-turn
@@ -37,6 +38,14 @@ Test rider: the two new JF-530 tests duplicate ~28 lines of mock setup verbatim 
 - [ ] #4 Tests: extract the shared artist-scoped mock setup helper (2 verbatim copies in the JF-530 tests, 5th/4th instance of the family); full suite green
 - [ ] #5 /simplify + code-review high gates before merge
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Simplify-gate note (2026-09-10, JF-533 efficiency agent): while in this file's test helpers, also drop the redundant GetUserById setup in SetupJellyfinUser (FindSongIntentHandlerTests ~line 2048): the specific _userId registration is immediately subsumed by the following It.IsAny<Guid>() registration (Moq last-registered-wins). Pre-existing, cosmetic.
+
+Scope overlap resolved: JF-533's /simplify pass hoists the 3x-pasted discriminating GetItemList lambda (isArtist/hasArtistIds/isAudioMedia) into a private SetupArtistThenArtistScopedSongs-style helper + a CreateArtist factory in this test file; if that hoist lands with JF-533, this task's 'shared artist-scoped test mock helper' item is already done - verify at execution time instead of redoing it.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

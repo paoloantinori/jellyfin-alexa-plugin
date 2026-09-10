@@ -4,10 +4,10 @@ title: >-
   Episode playback flows missing from ALL docs mirrors: playback-lifecycle mds
   (17), graphs.json (x2), docs-site/data.json (PlayEpisode AND PlayNextEpisode
   absent wholesale)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-05 15:24'
-updated_date: '2026-09-06 09:53'
+updated_date: '2026-09-10 06:27'
 labels:
   - documentation
   - tv
@@ -46,3 +46,9 @@ From JF-494's stale-mirror audit (2026-09-05): the docs mirrors are missing EPIS
 <!-- SECTION:NOTES:BEGIN -->
 [code-review gate 2026-09-06, JF-504 streams] Scope addition, landed by the review gate: this task ALSO covers the PlayVideo movie-carrier edge labels (JF-504 added media-named samples to PlayVideoIntent in all 17 locales; the playback-lifecycle mds, docs/graphs.json x2, and docs-site/data.json still carry only the pre-JF-504 sample labels, e.g. docs/playback-lifecycle-it-IT.md lines 13-14 'Riproduci {title}' / 'voglio guardare {title}'). The JF-504 note's claim that this coverage was 'noted as a JF-496 addition' had not actually landed here; this note is that landing. No other change to this task's scope.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed 2026-09-10 with merge 1eb9081e (gate-exempt: docs-only). 20 files: 17 playback-lifecycle mds gained the PlayEpisode node + 2 exact-model-sample Idle edges + PlayEpisode --> Playing (mirroring the existing intent-node style); PlayNextEpisode verified already present (JF-324 era) and untouched; PlayVideo edge labels refreshed to the JF-504 media-named carriers in all 17 locales (es 'video' -> 'vídeo' fixed). graphs.json regenerated via parse_mermaid.py (102 diagrams, 0 warnings, 85 byte-identical no-ops) and copied to both mirror paths; docs-site/data.json diagram strings synced (17 single-line replacements). VOICE_COMMANDS.md mechanically verified in sync, no edit needed. Deliberate deviation from the task text, accepted: no episode resolution/VideoApp terminal node exists in any of the 17 graphs for the movie flow either, so none was invented for episodes (uniform style preserved). Orchestrator independently re-verified: edge counts per file, JSON parses, graphs mirrors identical (md5), label ground truth vs model_it-IT.json with the unwrapped repo shape, regen idempotence (hash before/after unchanged, 0 warnings).
+<!-- SECTION:FINAL_SUMMARY:END -->

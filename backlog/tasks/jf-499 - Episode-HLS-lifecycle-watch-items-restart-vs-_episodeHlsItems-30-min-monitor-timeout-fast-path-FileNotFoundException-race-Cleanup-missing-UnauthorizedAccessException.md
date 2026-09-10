@@ -7,6 +7,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-05 20:05'
+updated_date: '2026-09-10 07:18'
 labels:
   - video
   - hls
@@ -36,3 +37,9 @@ Below-bar watch items from the JF-498 formal review (2026-09-05, reviewer-invoke
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Code-review gate note (2026-09-10, JF-531): the TryDelete helper (~VideoAudioController.cs:3673) catches IOException only, not UnauthorizedAccessException - now ALSO reachable from the new no-runtime stale-listing delete (JF-531); a permission failure there would 500 the play instead of falling back to the live playlist. Fold into this task's UnauthorizedAccessException sweep when it runs.
+<!-- SECTION:NOTES:END -->

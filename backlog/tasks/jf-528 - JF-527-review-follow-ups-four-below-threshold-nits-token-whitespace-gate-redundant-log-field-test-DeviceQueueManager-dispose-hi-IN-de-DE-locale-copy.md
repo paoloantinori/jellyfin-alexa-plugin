@@ -3,9 +3,10 @@ id: JF-528
 title: >-
   JF-527 review follow-ups: four below-threshold nits (token whitespace gate,
   redundant log field, test DeviceQueueManager dispose, hi-IN/de-DE locale copy)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-09 09:19'
+updated_date: '2026-09-10 08:15'
 labels:
   - code-review
   - nitpick
@@ -43,3 +44,9 @@ Filed from the JF-527 code review (2026-09-09, worktree jellyfin-alexa-plugin-jf
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed 2026-09-10 with merge 146b98e5 + deployed in the JF-528/533/531 batch (active DLL md5 1ac3857f verified on minix). All four nits landed: whitespace token gate, always-true log field dropped, DeviceQueueManager disposed in the test helper (mechanism verified: Dispose tears down the armed 2s debounce timer; the in-memory queue read survives), hi-IN की->का agreement, de-DE transliteration aligned with the file's unanimous 'verknuep' precedent. Gates: /simplify 4 angles clean (no changes requested), code-review high ZERO findings (Dispose placement, locale JSON key integrity, and log arg/placeholder parity all mechanically verified; [de-DE premise caveat recorded: the ae/oe 'convention' is only locally true but the changed word is unanimously transliterated]). Suite 3551/3551 independent. Live smoke: de-DE locale serves German post-deploy. Hygiene follow-ups filed as JF-535 (TryTransitionToReady gate + ~10 undisposed test-fixture managers).
+<!-- SECTION:FINAL_SUMMARY:END -->

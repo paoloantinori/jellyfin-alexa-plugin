@@ -3,9 +3,10 @@ id: JF-533
 title: >-
   FindSong no-match cross-media fallback suppressed by an unresolved ArtistName
   (musician given but never resolved, ArtistId null)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-09 21:40'
+updated_date: '2026-09-10 08:15'
 labels:
   - findsong
   - cross-media-fallback
@@ -41,3 +42,9 @@ Desired outcome: an unresolved artist (ArtistId == null) should not suppress the
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed 2026-09-10 with merge 67af46b1 + deployed in the batch (md5 1ac3857f) + LIVE-VERIFIED end to end via simulate-skill it-IT: T1 'chiedi a mia collezione di trovare una canzone di xyzzyfoo' -> keywords prompt with session state EXACTLY the bug precondition (ArtistName='xyzzyfoo', ArtistId=null, State=AwaitingKeywords); T2 'radiohead' -> 'Ho trovato l'artista Radiohead. Ecco la musica di Radiohead.' + AudioPlayer.Play + session end, with the log trail (artist fallback score=100 vs threshold 85, 5 songs queued). Before the fix this exact flow returned the plain no-match. The gate: FindSongSessionData.HasResolvedArtist ([JsonIgnore], ArtistId.HasValue) at the cross-media and too-many-narrow gates; the artist-scoped search branch keeps direct HasValue (nullable flow analysis, documented). /simplify hoisted the 3x-pasted discriminating mock into SetupArtistThenArtistScopedSongs + CreateArtist (pre-existing copy folded, reviewer-diffed behavior-identical) + trimmed the restated comment. code-review high: ZERO findings (gate semantics enumerated across all ArtistName/ArtistId combinations; [JsonIgnore] probe-verified against Newtonsoft 13.0.3; JF-295/479/463/363 guards confirmed unbypassed). Suites: 3553/3553 net9.0 final (red-verified repro + control). Side discoveries during the live probe, handled: the it-IT cancel escape hatch ('annulla' -> 'Ok, ho interrotto la ricerca') works on a stuck Disambiguating session; an open FindSong session captures even prefixed one-shot utterances (known platform dialog behavior, not a defect).
+<!-- SECTION:FINAL_SUMMARY:END -->
