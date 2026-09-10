@@ -267,9 +267,9 @@
                         <summary><span class="accordion-title">Cache Settings</span></summary>
                             <div class="fieldDescription">Control disk cache for generated video-audio MP4 files. Cached files let subsequent plays start instantly without ffmpeg re-encoding.</div>
                             <div class="inputContainer">
-                                <label class="inputLabel inputLabelUnfocused" for="VideoAudioCacheSizeMB">Album Art Cache Size (MB)</label>
+                                <label class="inputLabel inputLabelUnfocused" for="VideoAudioCacheSizeMB">Video-Audio Cache Size (MB)</label>
                                 <input id="VideoAudioCacheSizeMB" name="VideoAudioCacheSizeMB" type="number" is="emby-input" min="256" max="16384" />
-                                <div class="fieldDescription">Disk space for Echo Show album-art video files. When a song plays on a screen-equipped device, the plugin generates an MP4 with album art so the display stays active. Audio-only devices don't use this cache. Oldest files are evicted when the limit is exceeded. Default: 2048 (2 GB).</div>
+                                <div class="fieldDescription">Disk space for cached video-audio encodes. When media plays on a screen-equipped device, the plugin generates MP4/HLS files so playback starts instantly on replay. This includes the episode transcode tier for HEVC/AV1 sources, which writes roughly 3 GB per hour of video: a lower limit means encoded episodes are deleted as soon as they finish and every replay re-encodes. Oldest files are evicted when the limit is exceeded. Default: 4096 (4 GB).</div>
                             </div>
                     </details>
 
@@ -557,7 +557,7 @@
                     document.querySelector("#MaxRecommendationResults").value = config.MaxRecommendationResults != null ? config.MaxRecommendationResults : 10;
 
                     // Cache settings
-                    document.querySelector("#VideoAudioCacheSizeMB").value = config.VideoAudioCacheSizeMB != null ? config.VideoAudioCacheSizeMB : 2048;
+                    document.querySelector("#VideoAudioCacheSizeMB").value = config.VideoAudioCacheSizeMB != null ? config.VideoAudioCacheSizeMB : 4096;
 
                     // Mood overrides (JF-355) — render array of {Mood, Genres} as "mood: genres" lines
                     var moodTA = document.querySelector("#MoodGenreOverrides");
@@ -1358,7 +1358,7 @@
 
                     // Cache settings
                     var cacheSizeRaw = parseInt(document.querySelector("#VideoAudioCacheSizeMB").value);
-                    config.VideoAudioCacheSizeMB = isNaN(cacheSizeRaw) ? 2048 : cacheSizeRaw;
+                    config.VideoAudioCacheSizeMB = isNaN(cacheSizeRaw) ? 4096 : cacheSizeRaw;
 
                     // Custom model fields
                     config.CustomModelEnabled = document.querySelector("#CustomModelEnabled").checked;

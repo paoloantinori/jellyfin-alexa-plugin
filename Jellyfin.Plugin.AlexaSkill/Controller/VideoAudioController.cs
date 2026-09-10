@@ -2602,11 +2602,11 @@ public class VideoAudioController : ControllerBase
     /// round-UP-to-hours/floor shape as <see cref="EstimateEncodeBytes"/>. The
     /// reserve drives the JF-428 pre-encode headroom: the eviction sweep must empty
     /// enough of the cache before a multi-GB transcode starts (the playback pin
-    /// still protects the entry being watched). Default-cap interaction: at the
-    /// default <c>VideoAudioCacheSizeMB</c> of 2048, any episode of ~45min or
-    /// longer outgrows the cap, so the JF-428 half-cap floor becomes the
-    /// steady-state eviction target; sites doing regular HEVC transcodes should
-    /// raise the cap.
+    /// still protects the entry being watched). Default-cap interaction: the JF-534
+    /// live measurement confirmed the rate (~3.2GB/h for a 51-min HEVC episode;
+    /// why the default changed: the VideoAudioCacheSizeMB field doc). Content
+    /// beyond ~80min still outgrows even the raised cap and relies on the
+    /// playback-recency window plus oldest-first eviction.
     /// </summary>
     /// <param name="runtimeTicks">Content duration (item runtime).</param>
     /// <returns>Estimated bytes the encode writes.</returns>
