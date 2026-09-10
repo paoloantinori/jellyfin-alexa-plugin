@@ -3,10 +3,10 @@ id: JF-535
 title: >-
   Hygiene one-liners: TryTransitionToReady whitespace token gate + undisposed
   class-lifetime DeviceQueueManagers in ~10 test fixtures
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-10 06:46'
-updated_date: '2026-09-10 15:43'
+updated_date: '2026-09-10 18:14'
 labels:
   - tech-debt
   - tests
@@ -42,3 +42,9 @@ Two pre-existing hygiene one-liners surfaced by the JF-528 /simplify altitude pa
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed 2026-09-10 with merges 6dbe34d1 (JF-535) + deef66ca (JF-535b) + 6ebf4b6f (the /simplify Skill fanout's phase-2 findings). Item 1: TryTransitionToReady whitespace gate, folded into the named [JsonIgnore][MemberNotNullWhen] User.HasJellyfinToken property with all three hand-applied spellings routed through it. Item 2: Dispose on the 6 leaking fixtures - the task's own /simplify pass then found the Dispose additions flushed DeviceQueueManager's whole shared temp pool at every teardown (523 files, cross-fixture loading), fixed by JF-535b's migration onto TestHelpers.CreateRegisteredTempDir, proven by a pool-unchanged filtered run and the stale strays swept. Gates: combined simplify+code-review micro-diff gate; the explicit /simplify Skill invocation with the full 4-angle fanout (reuse clean, efficiency clean, altitude clean + the JF-540 fold-list correction, simplification's 3 findings applied in 6ebf4b6f); the follow-up's 8 gate findings all applied (STJ-not-Newtonsoft ignore attribute being the critical one); JF-540 filed for the family's structural close. Suites 3578, 3579, 3579 net9.0 across the three stages, 0 warnings both TFMs.
+<!-- SECTION:FINAL_SUMMARY:END -->

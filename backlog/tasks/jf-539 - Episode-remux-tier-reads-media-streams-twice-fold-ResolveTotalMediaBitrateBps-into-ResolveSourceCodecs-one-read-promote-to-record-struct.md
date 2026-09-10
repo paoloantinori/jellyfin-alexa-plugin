@@ -3,10 +3,10 @@ id: JF-539
 title: >-
   Episode remux tier reads media streams twice: fold ResolveTotalMediaBitrateBps
   into ResolveSourceCodecs (one read; promote to record struct)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-10 13:52'
-updated_date: '2026-09-10 15:43'
+updated_date: '2026-09-10 18:14'
 labels:
   - tech-debt
   - video-audio
@@ -38,3 +38,9 @@ Filed from the JF-525 /simplify pass (2026-09-10): the episode REMUX tier still 
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed 2026-09-10 with merge e72c54c7 + the /simplify finding commit c3203d7a. Both episode tiers now read the media stream list ONCE: ResolveSourceCodecs returns internal readonly record struct SourceMediaProbe(Video, Audio, TotalBitrateBps) computed in a single pass (codec sides byte-identical; bitrate side folded expression-for-expression from the deleted single-caller ResolveTotalMediaBitrateBps - first-per-type ??=, blank/cover streams still contribute BitRate, int-sum + >0 normalization, fail-open default); the episode path destructures one probe for tier decision + args + remux estimate; the 2 unit tests renamed with unchanged fixtures; remux-tier Times.Once test mechanically red-proven pre-fold. Gates: combined simplify+code-review micro-diff gate (all 5 checks verified against git show HEAD, including the bitrate-sum semantics the brief challenged); the explicit /simplify pass (its finding applied in c3203d7a: the stale TryGetMediaStreams plural; plus the pre-existing ExtractCodecs doc overstatement fixed in the same commit); suites 3579/3579 net9.0 independent, 0 warnings both TFMs. Informational notes recorded, not acted: ResolveSourceCodecs' name narrower than its return (deliberate scope; rename later bundled with real work); the pre-existing int-sum wrap quirk unchanged.
+<!-- SECTION:FINAL_SUMMARY:END -->
