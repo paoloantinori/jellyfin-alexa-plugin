@@ -661,11 +661,34 @@ public class VideoAudioController : ControllerBase
             // an actually-h264 source costs one extra encode, not a cached dud.
             var sourceMedia = ResolveSourceCodecs(validation.Item);
             bool videoTranscodeTier = !VideoAppStreamPolicy.VideoSupportsRemux(sourceMedia.Video);
+            long runtimeTicks = validation.Item.RunTimeTicks ?? 0;
+            long transcodeEstimateBytes = EstimateEpisodeTranscodeEncodeBytes(runtimeTicks);
             if (videoTranscodeTier)
             {
                 _logger.LogInformation(
                     "VideoAudio episode HLS: item {ItemId} video codec '{VideoCodec}' is not known h264; using the video transcode tier (libx264 ultrafast CRF 23, measured 4.40x realtime on the minix 2026-09-08, JF-500)",
                     itemId, sourceMedia.Video ?? "(unknown)");
+
+                // JF-537 oversize decision (announced churn): the churn is kept,
+                // but ANNOUNCED - full rationale and the no-cache scope-out on
+                // TranscodeEstimateExceedsCacheCap.
+                int cacheCapMB = _cache.EffectiveCacheCapMB;
+                if (TranscodeEstimateExceedsCacheCap(transcodeEstimateBytes, cacheCapMB))
+                {
+                    _logger.LogWarning(
+                        "VideoAudio episode transcode for item {ItemId} is estimated at {EstimateMB:F0}MB, above the configured cache cap of {CapMB}MB (VideoAudioCacheSizeMB): the completed encode cannot be retained and every replay re-encodes from zero (JF-537). Consider raising VideoAudioCacheSizeMB",
+                        itemId,
+                        transcodeEstimateBytes / (1024.0 * 1024.0),
+                        cacheCapMB);
+                }
+                else
+                {
+                    _logger.LogDebug(
+                        "VideoAudio episode transcode for item {ItemId} is estimated at {EstimateMB:F0}MB, under the configured cache cap of {CapMB}MB (VideoAudioCacheSizeMB): the completed encode is cacheable (JF-537)",
+                        itemId,
+                        transcodeEstimateBytes / (1024.0 * 1024.0),
+                        cacheCapMB);
+                }
             }
 
             _logger.LogDebug(
@@ -728,7 +751,6 @@ public class VideoAudioController : ControllerBase
             // there). When the encode completes, ffmpeg's own ENDLIST playlist takes
             // over via the cache-hit paths above.
             string prewrittenPath = Path.Combine(hlsDir, EpisodePrewrittenPlaylistFileName);
-            long runtimeTicks = validation.Item.RunTimeTicks ?? 0;
             if (runtimeTicks > 0)
             {
                 WriteEpisodePlaylist(prewrittenPath, hlsBaseUrl, runtimeTicks, HttpContext.Request.Query["token"]);
@@ -759,9 +781,9 @@ public class VideoAudioController : ControllerBase
                     validation.FfmpegPath,
                     ffmpegArgs,
                     videoTranscodeTier
-                        ? EstimateEpisodeTranscodeEncodeBytes(validation.Item.RunTimeTicks ?? 0)
+                        ? transcodeEstimateBytes
                         : EstimateEpisodeEncodeBytes(
-                            validation.Item.RunTimeTicks ?? 0,
+                            runtimeTicks,
                             sourceMedia.TotalBitrateBps),
                     hlsDir,
                     videoTranscodeTier ? _episodeTranscodeSlot : null).ConfigureAwait(false);
@@ -2623,13 +2645,53 @@ public class VideoAudioController : ControllerBase
     /// still protects the entry being watched). Default-cap interaction: the JF-534
     /// live measurement confirmed the rate (~3.2GB/h for a 51-min HEVC episode;
     /// why the default changed: the VideoAudioCacheSizeMB field doc). Content
-    /// beyond ~80min still outgrows even the raised cap and relies on the
-    /// playback-recency window plus oldest-first eviction.
+    /// beyond one rounded hour still outgrows even the raised cap (the reserve
+    /// rounds UP per hour) and relies on the playback-recency window plus
+    /// oldest-first eviction (the regime
+    /// <see cref="TranscodeEstimateExceedsCacheCap"/> announces, JF-537).
     /// </summary>
     /// <param name="runtimeTicks">Content duration (item runtime).</param>
     /// <returns>Estimated bytes the encode writes.</returns>
     internal static long EstimateEpisodeTranscodeEncodeBytes(long runtimeTicks)
         => FlatHourlyEncodeBytes(runtimeTicks, 3072L * 1024 * 1024);
+
+    /// <summary>
+    /// JF-537: whether the transcode tier's pre-encode estimate exceeds the cache cap
+    /// the eviction sweep enforces (<see cref="VideoAudioCache.EffectiveCacheCapMB"/>).
+    /// Strictly greater: an estimate EQUAL to the cap still fits (the sweep's target is
+    /// cap minus headroom, and the JF-428 half-cap floor bounds how far it evicts).
+    /// This is the ANNOUNCED-CHURN decision point, not a routing decision: the encode
+    /// proceeds exactly as before either way; when the estimate exceeds the cap the
+    /// completed entry can never be retained (the post-encode-completion sweep evicts
+    /// it once the playback-recency window expires), so every replay re-encodes from zero, and the
+    /// caller must make that churn visible with a Warning instead of letting it churn
+    /// invisibly (the JF-534 review finding).
+    ///
+    /// Scoping note (why encode-WITHOUT-caching was rejected for this task): the
+    /// encode target dir is load-bearing in every serving path -- GetSegment resolves
+    /// dirs only through <see cref="VideoAudioCache.FindSegmentPath"/> (the in-memory
+    /// lookup RegisterHlsDirectory populates from the CACHE path, plus a scan bounded
+    /// to the cache root), the concurrent-request dedup (fast path and in-lock double
+    /// check) detects an in-flight encode via GetCachedHlsPlaylist on the cache path,
+    /// and the JF-531 pre-written listing is served from the same dir. An uncached
+    /// sibling dir would need its own registration/scan/dedup plumbing, and its
+    /// deletion semantics would need playback-stop detection the platform does not
+    /// provide (VideoApp emits no events; only segment-fetch recency is observable),
+    /// i.e. a new idle-reaper subsystem. That is a refactor, not this task.
+    ///
+    /// Scope is the TRANSCODE tier only. The remux tier is excluded deliberately: its
+    /// copy writes at the source's own bitrate (the bytes the user already chose to
+    /// store, ~1GB/h at typical TV bitrates, under the cap for ~4h), and its churn
+    /// cost is bounded by disk speed (a remux replays at ~20x realtime, minutes --
+    /// not the ~27min of CPU per 2h that a CRF re-encode pays), so the invisible
+    /// multi-hour re-encode pain is materially transcode-shaped.
+    /// </summary>
+    /// <param name="estimatedEncodeBytes">The transcode tier's estimate
+    /// (<see cref="EstimateEpisodeTranscodeEncodeBytes"/>).</param>
+    /// <param name="cacheCapMB">The configured cache cap in MB.</param>
+    /// <returns>True when the estimate cannot fit under the cap.</returns>
+    internal static bool TranscodeEstimateExceedsCacheCap(long estimatedEncodeBytes, int cacheCapMB)
+        => estimatedEncodeBytes > cacheCapMB * 1024L * 1024L;
 
     /// <summary>
     /// Wall-clock minutes the HLS background monitor waits before killing ffmpeg
