@@ -10,6 +10,7 @@ using global::Alexa.NET.Response;
 using global::Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -31,9 +32,30 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
 {
     private readonly HandlerTestFixture _fx = new HandlerTestFixture(configure: c => c.AsrCompoundWordFixEnabled = false);
 
-    private SearchMediaIntentHandler CreateHandler()
+    /// <summary>
+    /// JF-501/JF-538 test seam (the PlayVideoIntentHandlerTests shape): subclasses the
+    /// handler and overrides <c>SendProgressiveResponse</c> to capture progressive
+    /// speech without network I/O. The video-launch announce rides the progressive
+    /// vehicle, so video-path assertions read the capture instead of OutputSpeech.
+    /// </summary>
+    private sealed class RecordingSearchMediaHandler(
+        ISessionManager sessionManager,
+        PluginConfiguration config,
+        ILibraryManager libraryManager,
+        IUserManager userManager,
+        IUserDataManager userDataManager,
+        ILoggerFactory loggerFactory)
+        : SearchMediaIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, loggerFactory)
     {
-        return new SearchMediaIntentHandler(
+        public ProgressiveSpeechCapture Progressive { get; } = new();
+
+        protected override Task<bool> SendProgressiveResponse(global::Alexa.NET.Request.Context context, global::Alexa.NET.Request.Type.Request request, string message)
+            => Progressive.Record(context, request, message);
+    }
+
+    private RecordingSearchMediaHandler CreateHandler()
+    {
+        return new RecordingSearchMediaHandler(
             _fx.SessionManager.Object,
             _fx.Config,
             _fx.LibraryManager.Object,
@@ -189,12 +211,10 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
         // VideoApp.Launch must NOT include shouldEndSession
         Assert.Null(response.Response.ShouldEndSession);
         Assert.NotEmpty(response.Response.Directives);
-        // JF-349: video launch now announces the title (was silent).
-        Assert.NotNull(response.Response.OutputSpeech);
-        string announceText = response.Response.OutputSpeech is SsmlOutputSpeech ss
-            ? ss.Ssml
-            : Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech).Text;
-        Assert.Contains("Inception", announceText, StringComparison.Ordinal);
+        // JF-349 announced the title; JF-538 moves that announce onto the JF-501
+        // progressive vehicle, so the final launch response carries the directive only.
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.True(handler.Progressive.Contains("Inception"), "progressive announce must speak the movie title");
         Assert.NotNull(session.FullNowPlayingItem);
         Assert.Equal(movie, session.FullNowPlayingItem);
     }
@@ -224,11 +244,10 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
         Assert.NotNull(response);
-        Assert.NotNull(response.Response.OutputSpeech);
-        string announceText = response.Response.OutputSpeech is SsmlOutputSpeech ss
-            ? ss.Ssml
-            : Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech).Text;
-        Assert.Contains("Resuming", announceText, StringComparison.OrdinalIgnoreCase);
+        // JF-538: the "Resuming X" announce rides the progressive vehicle; the final
+        // launch response carries the directive only.
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.True(handler.Progressive.Contains("Resuming"), "the resume announce must ride the progressive vehicle");
     }
 
     [Fact]
@@ -319,6 +338,91 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
 
         Assert.NotNull(response);
         response.HasDirective<AudioPlayerPlayDirective>();
+    }
+
+    // --- JF-538: the video-launch announce on the HandleFuzzyMiss auto-play path ---
+
+    /// <summary>
+    /// JF-538: a video auto-played through the HandleFuzzyMiss auto-play delegate must
+    /// send the launch announce as a progressive response and return a directive-only
+    /// final response, the JF-501 contract previously limited to direct launch sites.
+    /// Fixture geometry: FuzzyMatchThreshold 95 keeps the site-level FuzzyMatch
+    /// pre-check from taking the match ("Matrix" inside "The Matrix" scores exactly
+    /// ContainmentScore 90), while FuzzyMatchBehavior.AutoPlay drives HandleFuzzyMiss's
+    /// delegate; the same 90 keeps the response unmodified (no closest-match qualifier).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_FuzzyMissVideoAutoPlay_AnnounceOn_SendsProgressiveAndDirectiveOnlyResponse()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(query: "Matrix");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        user.FuzzyMatchBehavior = FuzzyMatchBehavior.AutoPlay;
+        user.FuzzyMatchThreshold = 95;
+        var session = _fx.CreateSession();
+
+        _fx.SetupUserMock();
+
+        var movie = new global::MediaBrowser.Controller.Entities.Movies.Movie
+        {
+            Name = "The Matrix",
+            Id = Guid.NewGuid()
+        };
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>
+            {
+                movie,
+                new global::MediaBrowser.Controller.Entities.Movies.Movie { Name = "Casablanca", Id = Guid.NewGuid() }
+            });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        response.HasDirective<VideoAppLaunchDirective>();
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.True(handler.Progressive.Contains("The Matrix"), "the fuzzy-miss video auto-play announce must ride the progressive vehicle");
+    }
+
+    /// <summary>
+    /// JF-538: with the announce toggle off, the fuzzy-miss video auto-play keeps the
+    /// silent shape: no progressive announce (only the SearchingMedia ping may arrive,
+    /// which never contains the title) and no OutputSpeech on the final response.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_FuzzyMissVideoAutoPlay_AnnounceOff_NoProgressiveAnnounceAndNoOutputSpeech()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(query: "Matrix");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        user.FuzzyMatchBehavior = FuzzyMatchBehavior.AutoPlay;
+        user.FuzzyMatchThreshold = 95;
+        user.AnnounceNowPlaying = false;
+        var session = _fx.CreateSession();
+
+        _fx.SetupUserMock();
+
+        var movie = new global::MediaBrowser.Controller.Entities.Movies.Movie
+        {
+            Name = "The Matrix",
+            Id = Guid.NewGuid()
+        };
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>
+            {
+                movie,
+                new global::MediaBrowser.Controller.Entities.Movies.Movie { Name = "Casablanca", Id = Guid.NewGuid() }
+            });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        response.HasDirective<VideoAppLaunchDirective>();
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.False(handler.Progressive.Contains("The Matrix"), "announce off must not send a progressive announce");
     }
 
     [Fact]

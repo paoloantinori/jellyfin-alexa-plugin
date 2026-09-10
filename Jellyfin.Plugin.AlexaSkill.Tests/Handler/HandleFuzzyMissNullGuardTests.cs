@@ -34,12 +34,12 @@ public class HandleFuzzyMissNullGuardTests : PluginTestBase
     }
 
     [Fact]
-    public void NullCandidates_ReturnsNotFound()
+    public async Task NullCandidates_ReturnsNotFound()
     {
         var config = new PluginConfiguration();
         var harness = CreateHarness(config);
 
-        var (outcome, response) = harness.CallHandleFuzzyMiss<TestCandidate>(
+        var (outcome, response) = await harness.CallHandleFuzzyMiss<TestCandidate>(
             query: "anything",
             candidates: null!,
             selector: c => c.Name,
@@ -52,12 +52,12 @@ public class HandleFuzzyMissNullGuardTests : PluginTestBase
     }
 
     [Fact]
-    public void EmptyCandidates_ReturnsNotFound()
+    public async Task EmptyCandidates_ReturnsNotFound()
     {
         var config = new PluginConfiguration();
         var harness = CreateHarness(config);
 
-        var (outcome, response) = harness.CallHandleFuzzyMiss(
+        var (outcome, response) = await harness.CallHandleFuzzyMiss(
             query: "anything",
             candidates: new List<TestCandidate>(),
             selector: c => c.Name,
@@ -70,7 +70,7 @@ public class HandleFuzzyMissNullGuardTests : PluginTestBase
     }
 
     [Fact]
-    public void ValidCandidates_WithExactMatch_AutoPlays()
+    public async Task ValidCandidates_WithExactMatch_AutoPlays()
     {
         var config = new PluginConfiguration();
         var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.AutoPlay };
@@ -82,13 +82,13 @@ public class HandleFuzzyMissNullGuardTests : PluginTestBase
         };
 
         bool autoPlayCalled = false;
-        Func<TestCandidate, SkillResponse> autoPlayFunc = _ =>
+        Func<TestCandidate, Task<SkillResponse>> autoPlayFunc = _ =>
         {
             autoPlayCalled = true;
-            return ResponseBuilder.Empty();
+            return Task.FromResult<SkillResponse>(ResponseBuilder.Empty());
         };
 
-        var (outcome, response) = harness.CallHandleFuzzyMiss(
+        var (outcome, response) = await harness.CallHandleFuzzyMiss(
             query: "Radiohead",
             candidates: candidates,
             selector: c => c.Name,
@@ -103,7 +103,7 @@ public class HandleFuzzyMissNullGuardTests : PluginTestBase
     }
 
     [Fact]
-    public void MatchExtractorReturningNull_DoesNotThrow()
+    public async Task MatchExtractorReturningNull_DoesNotThrow()
     {
         var config = new PluginConfiguration();
         var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.Confirm };
@@ -115,7 +115,7 @@ public class HandleFuzzyMissNullGuardTests : PluginTestBase
         };
 
         // matchExtractor returns null to simulate the edge case
-        var (outcome, response) = harness.CallHandleFuzzyMiss(
+        var (outcome, response) = await harness.CallHandleFuzzyMiss(
             query: "Daft Punk",
             candidates: candidates,
             selector: c => c.Name,
@@ -154,18 +154,18 @@ public class HandleFuzzyMissNullGuardTests : PluginTestBase
             SessionInfo session, CancellationToken cancellationToken)
             => Task.FromResult(ResponseBuilder.Empty());
 
-        public (string Outcome, SkillResponse? Response) CallHandleFuzzyMiss<T>(
+        public async Task<(string Outcome, SkillResponse? Response)> CallHandleFuzzyMiss<T>(
             string query,
             IReadOnlyList<T> candidates,
             Func<T, string> selector,
             Func<T, List<(Guid Id, string Name)>> matchExtractor,
             string mediaType,
             string locale,
-            Func<T, SkillResponse>? autoPlayFunc = null,
+            Func<T, Task<SkillResponse>>? autoPlayFunc = null,
             Entities.User? user = null)
             where T : class
         {
-            var (outcome, response) = HandleFuzzyMiss(query, candidates, selector, matchExtractor, mediaType, locale, autoPlayFunc, user);
+            var (outcome, response) = await HandleFuzzyMiss(query, candidates, selector, matchExtractor, mediaType, locale, autoPlayFunc, user);
             return (outcome.ToString(), response);
         }
     }

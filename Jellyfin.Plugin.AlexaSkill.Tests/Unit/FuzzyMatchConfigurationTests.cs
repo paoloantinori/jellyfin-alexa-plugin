@@ -145,7 +145,7 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
     // --- HandleFuzzyMiss behavior tests ---
 
     [Fact]
-    public void HandleFuzzyMiss_AutoPlay_ReturnsPlayResponse_WhenCloseMatch()
+    public async Task HandleFuzzyMiss_AutoPlay_ReturnsPlayResponse_WhenCloseMatch()
     {
         var candidates = new List<TestCandidate>
         {
@@ -161,14 +161,14 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
 
         SkillResponse autoPlayResponse = ResponseBuilder.Tell("Playing Abbey Road");
 
-        var (outcome, response) = _handler.TestHandleFuzzyMiss(
+        var (outcome, response) = await _handler.TestHandleFuzzyMiss(
             "Abby Road",
             candidates,
             c => c.Name,
             best => new List<(Guid, string)> { (best.Id, best.Name) },
             "album",
             "en-US",
-            best => autoPlayResponse,
+            best => Task.FromResult<SkillResponse>(autoPlayResponse),
             user);
 
         Assert.True(outcome);
@@ -178,7 +178,7 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
     }
 
     [Fact]
-    public void HandleFuzzyMiss_AutoPlay_AnnouncementIncludesMatchInfo()
+    public async Task HandleFuzzyMiss_AutoPlay_AnnouncementIncludesMatchInfo()
     {
         var candidates = new List<TestCandidate>
         {
@@ -194,14 +194,14 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
 
         SkillResponse autoPlayResponse = ResponseBuilder.Tell("Playing Abbey Road");
 
-        var (outcome, response) = _handler.TestHandleFuzzyMiss(
+        var (outcome, response) = await _handler.TestHandleFuzzyMiss(
             "Abby Road",
             candidates,
             c => c.Name,
             best => new List<(Guid, string)> { (best.Id, best.Name) },
             "album",
             "en-US",
-            best => autoPlayResponse,
+            best => Task.FromResult<SkillResponse>(autoPlayResponse),
             user);
 
         Assert.NotNull(response);
@@ -210,7 +210,7 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
     }
 
     [Fact]
-    public void HandleFuzzyMiss_Confirm_ReturnsDisambiguationPrompt_WhenCloseMatch()
+    public async Task HandleFuzzyMiss_Confirm_ReturnsDisambiguationPrompt_WhenCloseMatch()
     {
         var candidates = new List<TestCandidate>
         {
@@ -224,14 +224,14 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
             FuzzySuggestionThreshold = 40,
         };
 
-        var (outcome, response) = _handler.TestHandleFuzzyMiss(
+        var (outcome, response) = await _handler.TestHandleFuzzyMiss(
             "Abby Road",
             candidates,
             c => c.Name,
             best => new List<(Guid, string)> { (best.Id, best.Name) },
             "album",
             "en-US",
-            best => ResponseBuilder.Tell("Playing " + best.Name),
+            best => Task.FromResult<SkillResponse>(ResponseBuilder.Tell("Playing " + best.Name)),
             user);
 
         Assert.True(outcome);
@@ -244,7 +244,7 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
     }
 
     [Fact]
-    public void HandleFuzzyMiss_Confirm_PromptContainsDidYouMeanOrSimilar()
+    public async Task HandleFuzzyMiss_Confirm_PromptContainsDidYouMeanOrSimilar()
     {
         var candidates = new List<TestCandidate>
         {
@@ -258,14 +258,14 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
             FuzzySuggestionThreshold = 40,
         };
 
-        var (outcome, response) = _handler.TestHandleFuzzyMiss(
+        var (outcome, response) = await _handler.TestHandleFuzzyMiss(
             "Abby Road",
             candidates,
             c => c.Name,
             best => new List<(Guid, string)> { (best.Id, best.Name) },
             "album",
             "en-US",
-            best => ResponseBuilder.Tell("Playing " + best.Name),
+            best => Task.FromResult<SkillResponse>(ResponseBuilder.Tell("Playing " + best.Name)),
             user);
 
         Assert.NotNull(response);
@@ -275,7 +275,7 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
     }
 
     [Fact]
-    public void HandleFuzzyMiss_Confirm_SetsDisambiguationSessionAttributes()
+    public async Task HandleFuzzyMiss_Confirm_SetsDisambiguationSessionAttributes()
     {
         var candidateId = Guid.NewGuid();
         var candidates = new List<TestCandidate>
@@ -290,14 +290,14 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
             FuzzySuggestionThreshold = 40,
         };
 
-        var (outcome, response) = _handler.TestHandleFuzzyMiss(
+        var (outcome, response) = await _handler.TestHandleFuzzyMiss(
             "Abby Road",
             candidates,
             c => c.Name,
             best => new List<(Guid, string)> { (best.Id, best.Name) },
             "album",
             "en-US",
-            best => ResponseBuilder.Tell("Playing " + best.Name),
+            best => Task.FromResult<SkillResponse>(ResponseBuilder.Tell("Playing " + best.Name)),
             user);
 
         Assert.NotNull(response);
@@ -309,7 +309,7 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
     }
 
     [Fact]
-    public void HandleFuzzyMiss_ReturnsNotFound_WhenBelowSuggestionThreshold()
+    public async Task HandleFuzzyMiss_ReturnsNotFound_WhenBelowSuggestionThreshold()
     {
         var candidates = new List<TestCandidate>
         {
@@ -323,14 +323,14 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
             FuzzySuggestionThreshold = 80, // Very high suggestion threshold
         };
 
-        var (outcome, response) = _handler.TestHandleFuzzyMiss(
+        var (outcome, response) = await _handler.TestHandleFuzzyMiss(
             "XYZ",
             candidates,
             c => c.Name,
             best => new List<(Guid, string)> { (best.Id, best.Name) },
             "album",
             "en-US",
-            best => ResponseBuilder.Tell("Playing " + best.Name),
+            best => Task.FromResult<SkillResponse>(ResponseBuilder.Tell("Playing " + best.Name)),
             user);
 
         Assert.False(outcome);
@@ -430,17 +430,17 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
         /// <summary>
         /// Exposes HandleFuzzyMiss for testing. Returns (handled: true=SuggestionHandled, false=NotFound, response).
         /// </summary>
-        public (bool Handled, SkillResponse? Response) TestHandleFuzzyMiss(
+        public async Task<(bool Handled, SkillResponse? Response)> TestHandleFuzzyMiss(
             string query,
             IReadOnlyList<TestCandidate> candidates,
             Func<TestCandidate, string> selector,
             Func<TestCandidate, List<(Guid Id, string Name)>> matchExtractor,
             string mediaType,
             string locale,
-            Func<TestCandidate, SkillResponse>? autoPlayFunc = null,
+            Func<TestCandidate, Task<SkillResponse>>? autoPlayFunc = null,
             User? user = null)
         {
-            var (outcome, response) = HandleFuzzyMiss(query, candidates, selector, matchExtractor, mediaType, locale, autoPlayFunc, user);
+            var (outcome, response) = await HandleFuzzyMiss(query, candidates, selector, matchExtractor, mediaType, locale, autoPlayFunc, user);
             return (outcome == FuzzyMissOutcome.SuggestionHandled, response);
         }
     }

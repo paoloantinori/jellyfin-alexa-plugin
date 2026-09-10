@@ -206,7 +206,7 @@ public class SearchMediaIntentHandler : BaseHandler
         if (deduped.Count == 1)
         {
             Logger.LogInformation("Single result — auto-playing '{Item}'", deduped[0].Name);
-            return PlayItem(deduped[0], user, session, context, locale, jellyfinUser);
+            return await PlayItem(deduped[0], user, session, context, request, locale, jellyfinUser).ConfigureAwait(false);
         }
 
         // Disambiguation uses MediaTypeSong; YesIntentHandler will play matches as audio.
@@ -219,18 +219,20 @@ public class SearchMediaIntentHandler : BaseHandler
         if (topMatch != null && KeywordMatcher.HasFullKeywordCoverage(KeywordMatcher.Tokenize(query, locale), topMatch.Name, locale))
         {
             Logger.LogInformation("Fuzzy match hit '{Item}' — auto-playing", topMatch.Name);
-            return PlayItem(topMatch, user, session, context, locale, jellyfinUser);
+            return await PlayItem(topMatch, user, session, context, request, locale, jellyfinUser).ConfigureAwait(false);
         }
 
-        var (missOutcome, missResponse) = HandleFuzzyMiss(
+        var (missOutcome, missResponse) = await HandleFuzzyMiss(
             query,
             deduped,
             i => i.Name,
             best => new List<(Guid, string)> { (best.Id, FormatWithTypeLabel(best)) },
             DisambiguationHelper.MediaTypeSong,
             locale,
-            best => PlayItem(best, user, session, context, locale, jellyfinUser),
-            user: user);
+            best => PlayItem(best, user, session, context, request, locale, jellyfinUser),
+            user: user,
+            context: context,
+            request: request).ConfigureAwait(false);
 
         if (missOutcome != FuzzyMissOutcome.NotFound)
         {
@@ -438,8 +440,8 @@ public class SearchMediaIntentHandler : BaseHandler
             cancellationToken).ConfigureAwait(false);
     }
 
-    private SkillResponse PlayItem(
-        BaseItem item, Entities.User user, SessionInfo session, Context context, string locale, Jellyfin.Database.Implementations.Entities.User? jellyfinUser)
+    private async Task<SkillResponse> PlayItem(
+        BaseItem item, Entities.User user, SessionInfo session, Context context, Request request, string locale, Jellyfin.Database.Implementations.Entities.User? jellyfinUser)
     {
         string itemId = item.Id.ToString();
 
@@ -453,12 +455,21 @@ public class SearchMediaIntentHandler : BaseHandler
         if (IsVideoType(item))
         {
             // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
-            return BuildVideoAppLaunchResponse(
+            // JF-538: progressive-announce variant (JF-501 contract), reached on every
+            // PlayItem entry point (single result, site-level fuzzy pre-check, and the
+            // HandleFuzzyMiss auto-play delegate, which is why that delegate is async):
+            // the video-launch announce is spoken as an awaited progressive response
+            // and the final launch response carries the directive only. Exception: the
+            // fuzzy QUALIFIER band (score below ContainmentScore) makes HandleFuzzyMiss
+            // speak its closest-match qualifier progressively too, keeping the same
+            // directive-only contract there (JF-538 review finding).
+            return await BuildVideoAppLaunchResponseAsync(
                 context,
+                request,
                 locale,
                 GetVideoAppLaunchUrl(item, user),
                 item.Name,
-                BuildVideoLaunchSpeech(item, locale, _userDataManager, jellyfinUser, GetAnnounceNowPlaying(user)));
+                BuildVideoLaunchSpeech(item, locale, _userDataManager, jellyfinUser, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
         }
 
         return BuildAudioPlayerResponse(
