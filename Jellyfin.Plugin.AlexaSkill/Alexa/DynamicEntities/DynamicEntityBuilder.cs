@@ -41,8 +41,12 @@ public class DynamicEntityBuilder : IDisposable
     // Supersedes the per-tier _lastPlayedCache on cache hit since Build() returns early.
     private static readonly ConcurrentDictionary<OutputCacheKey, (DynamicEntitiesDirective Directive, DateTime ExpiresAt)> _outputCache = new();
 
-    // Expired entries evicted lazily on cache miss
-    private readonly ConcurrentDictionary<Guid, (List<LastPlayedSlotValue> Values, DateTime ExpiresAt)> _lastPlayedCache = new();
+    // Expired entries evicted lazily on cache miss. Keyed by (userId, locale):
+    // the artist entries carry the musician slot type name, which became
+    // locale-dependent with JF-415 (JellyfinArtist vs the AMAZON.Musician
+    // built-in); a locale-less key would hand it-IT-cached values to a de-DE
+    // session on the wrong type.
+    private readonly ConcurrentDictionary<(Guid UserId, string Locale), (List<LastPlayedSlotValue> Values, DateTime ExpiresAt)> _lastPlayedCache = new();
 
     private readonly record struct OutputCacheKey(Guid UserId, string Locale, bool IncludeSeries, bool IncludeAudiobooks);
 
@@ -177,9 +181,14 @@ public class DynamicEntityBuilder : IDisposable
             audiobookValues = BuildSlotValues(user, BaseItemKind.AudioBook, CatalogType.Audiobook, locale, topParentIds, ref baseBudget);
         }
 
+        // JF-415: the musician slot type is locale-dependent (JellyfinArtist on the
+        // catalog-backed locales, the AMAZON.Musician built-in elsewhere); the
+        // runtime target must match what that locale's model declares.
+        string musicianSlotType = CatalogSlotTypes.ResolveMusicianSlotType(locale);
+
         // Sync budget: whatever base queries didn't use plus the reserved last-played slots
         budget = baseBudget + LastPlayedCount;
-        var lastPlayedValues = BuildLastPlayedValues(user, locale, topParentIds, config, ref budget);
+        var lastPlayedValues = BuildLastPlayedValues(user, locale, musicianSlotType, topParentIds, config, ref budget);
 
         if (artistValues.Count == 0 && albumValues.Count == 0 && seriesValues.Count == 0
             && audiobookValues.Count == 0 && lastPlayedValues.Count == 0)
@@ -190,10 +199,10 @@ public class DynamicEntityBuilder : IDisposable
 
         var directive = new DynamicEntitiesDirective();
 
-        AddSlotType(directive, CatalogType.Artist, artistValues);
-        AddSlotType(directive, CatalogType.Album, albumValues);
-        AddSlotType(directive, CatalogType.Series, seriesValues);
-        AddSlotType(directive, CatalogType.Audiobook, audiobookValues);
+        AddSlotType(directive, musicianSlotType, artistValues);
+        AddSlotType(directive, SlotTypeNames[CatalogType.Album], albumValues);
+        AddSlotType(directive, SlotTypeNames[CatalogType.Series], seriesValues);
+        AddSlotType(directive, SlotTypeNames[CatalogType.Audiobook], audiobookValues);
 
         // Merge last-played items into their respective slot types (deduped)
         DistributeLastPlayed(directive, lastPlayedValues);
@@ -280,14 +289,14 @@ public class DynamicEntityBuilder : IDisposable
         return newType;
     }
 
-    private static void AddSlotType(DynamicEntitiesDirective directive, CatalogType type, List<DynamicSlotValue> values)
+    private static void AddSlotType(DynamicEntitiesDirective directive, string slotTypeName, List<DynamicSlotValue> values)
     {
         if (values.Count == 0)
         {
             return;
         }
 
-        GetOrAddSlotType(directive, SlotTypeNames[type]).Values.AddRange(values);
+        GetOrAddSlotType(directive, slotTypeName).Values.AddRange(values);
     }
 
     private static void DistributeLastPlayed(DynamicEntitiesDirective directive, List<LastPlayedSlotValue> lastPlayedValues)
@@ -311,11 +320,12 @@ public class DynamicEntityBuilder : IDisposable
     private List<LastPlayedSlotValue> BuildLastPlayedValues(
         Jellyfin.Database.Implementations.Entities.User user,
         string locale,
+        string musicianSlotType,
         Guid[]? topParentIds,
         PluginConfiguration? config,
         ref int budget)
     {
-        if (_lastPlayedCache.TryGetValue(user.Id, out var cached) && cached.ExpiresAt > DateTime.UtcNow)
+        if (_lastPlayedCache.TryGetValue((user.Id, locale), out var cached) && cached.ExpiresAt > DateTime.UtcNow)
         {
             budget -= Math.Min(cached.Values.Count, budget);
             return cached.Values;
@@ -389,7 +399,7 @@ public class DynamicEntityBuilder : IDisposable
                 continue;
             }
 
-            var (slotTypeName, catalogType) = GetSlotTypeForItem(item);
+            var (slotTypeName, catalogType) = GetSlotTypeForItem(item, musicianSlotType);
             if (slotTypeName == null)
             {
                 continue;
@@ -405,17 +415,18 @@ public class DynamicEntityBuilder : IDisposable
             budget--;
         }
 
-        _lastPlayedCache[user.Id] = (values, DateTime.UtcNow.Add(LastPlayedCacheTtl));
+        _lastPlayedCache[(user.Id, locale)] = (values, DateTime.UtcNow.Add(LastPlayedCacheTtl));
         return values;
     }
 
-    private (string? SlotTypeName, CatalogType CatalogType) GetSlotTypeForItem(BaseItem item)
+    private (string? SlotTypeName, CatalogType CatalogType) GetSlotTypeForItem(BaseItem item, string musicianSlotType)
     {
-        // Audio tracks → map to AMAZON.Musician for better artist name recognition
+        // Audio tracks → map to the musician slot type (locale-dependent, JF-415)
+        // for better artist name recognition
         if (item is MediaBrowser.Controller.Entities.Audio.Audio audio
             && audio.Artists is { Count: > 0 })
         {
-            return (SlotTypeNames[CatalogType.Artist], CatalogType.Artist);
+            return (musicianSlotType, CatalogType.Artist);
         }
 
         // Episodes → SeriesName slot for series recognition

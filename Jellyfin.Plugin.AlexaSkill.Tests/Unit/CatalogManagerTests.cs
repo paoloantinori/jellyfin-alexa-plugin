@@ -199,10 +199,107 @@ public class CatalogManagerTests
             .GetProperty("slots")[0].GetProperty("type").GetString()!;
         Assert.Equal("JellyfinArtist", lmSlot);
 
-        // Dialog-model slot ALSO swapped — this was the MismatchedSlotType bug.
+        // Dialog-model slot ALSO swapped: this was the MismatchedSlotType bug.
         string dlgSlot = im.GetProperty("dialog").GetProperty("intents")[0]
             .GetProperty("slots")[0].GetProperty("type").GetString()!;
         Assert.Equal("JellyfinArtist", dlgSlot);
+    }
+
+    [Fact]
+    public void InjectCatalogReferences_ArtistCatalog_OnPreSwappedModel_ReplacesSeedInPlace_WithoutRetyping()
+    {
+        // JF-415: since the en-* + it-IT committed models declare JellyfinArtist
+        // (static seed) with musician slots already typed JellyfinArtist in both
+        // languageModel and dialog, the artist catalog injection takes the
+        // existingIndex >= 0 IN-PLACE-REPLACE branch on every catalog sync of
+        // those locales. Before JF-415 no committed model declared JellyfinArtist,
+        // so this branch never ran for the artist type; this test pins it.
+        string model = """
+        {
+          "interactionModel": {
+            "languageModel": {
+              "intents": [
+                {"name":"PlaySongIntent","slots":[{"name":"song","type":"AMAZON.MusicRecording"},{"name":"musician","type":"JellyfinArtist"}]},
+                {"name":"PlayAlbumIntent","slots":[{"name":"album","type":"AMAZON.MusicRecording"},{"name":"musician","type":"JellyfinArtist"}]},
+                {"name":"PlayArtistSongsIntent","slots":[{"name":"musician","type":"JellyfinArtist"}]},
+                {"name":"AddToQueueIntent","slots":[{"name":"song","type":"AMAZON.MusicRecording"},{"name":"musician","type":"JellyfinArtist"}]},
+                {"name":"PlayNextIntent","slots":[{"name":"song","type":"AMAZON.MusicRecording"},{"name":"musician","type":"JellyfinArtist"}]},
+                {"name":"QueryArtistLibraryIntent","slots":[{"name":"musician","type":"JellyfinArtist"},{"name":"query_type","type":"LibraryQueryType"}]},
+                {"name":"FindSongByArtistIntent","slots":[{"name":"musician","type":"JellyfinArtist"}]}
+              ],
+              "types": [
+                {"name":"MediaType","values":[{"name":{"value":"song"}}]},
+                {"name":"JellyfinArtist","values":[{"name":{"value":"Queen"}},{"name":{"value":"The Beatles"}}]}
+              ]
+            },
+            "dialog": {
+              "intents": [
+                {"name":"PlaySongIntent","slots":[{"name":"musician","type":"JellyfinArtist","confirmationRequired":false,"elicitationRequired":false}]},
+                {"name":"PlayAlbumIntent","slots":[{"name":"musician","type":"JellyfinArtist","confirmationRequired":false,"elicitationRequired":false}]},
+                {"name":"FindSongByArtistIntent","slots":[{"name":"musician","type":"JellyfinArtist","confirmationRequired":false,"elicitationRequired":false}]}
+              ]
+            }
+          }
+        }
+        """;
+
+        string result = _manager.InjectCatalogReferences(model, "artist-cat-7", null, null, "638", null, null);
+
+        using var resultDoc = JsonDocument.Parse(result);
+        var im = resultDoc.RootElement.GetProperty("interactionModel");
+        var types = im.GetProperty("languageModel").GetProperty("types");
+
+        // (a) exactly ONE JellyfinArtist entry: the seed definition was replaced
+        // in place, not duplicated.
+        int jellyfinArtistEntries = 0;
+        JsonElement artistType = default;
+        foreach (JsonElement t in types.EnumerateArray())
+        {
+            if (string.Equals(t.GetProperty("name").GetString(), "JellyfinArtist", StringComparison.Ordinal))
+            {
+                jellyfinArtistEntries++;
+                artistType = t;
+            }
+        }
+
+        Assert.Equal(1, jellyfinArtistEntries);
+
+        // (b) the entry carries the catalog supplier and NO static values remain
+        // (the seed list must be dropped, not merged).
+        Assert.Equal("CatalogValueSupplier", artistType.GetProperty("valueSupplier").GetProperty("type").GetString());
+        Assert.Equal("artist-cat-7", artistType.GetProperty("valueSupplier").GetProperty("valueCatalog").GetProperty("catalogId").GetString());
+        Assert.Equal("638", artistType.GetProperty("valueSupplier").GetProperty("valueCatalog").GetProperty("version").GetString());
+        Assert.False(artistType.TryGetProperty("values", out _));
+
+        // The unrelated type is preserved untouched.
+        Assert.Equal("MediaType", types[0].GetProperty("name").GetString());
+        Assert.False(types[0].TryGetProperty("valueSupplier", out _));
+
+        // (c) no slot type changed anywhere: every musician slot (all 7
+        // languageModel intents + all 3 dialog intents) is still JellyfinArtist
+        // (the re-type helpers are no-ops on a pre-swapped model), and the
+        // non-musician slots keep their own types.
+        foreach (JsonElement intent in im.GetProperty("languageModel").GetProperty("intents").EnumerateArray())
+        {
+            foreach (JsonElement slot in intent.GetProperty("slots").EnumerateArray())
+            {
+                string expected = slot.GetProperty("name").GetString() == "musician"
+                    ? "JellyfinArtist"
+                    : slot.GetProperty("type").GetString()!;
+                Assert.Equal(expected, slot.GetProperty("type").GetString());
+            }
+        }
+
+        foreach (JsonElement dialogIntent in im.GetProperty("dialog").GetProperty("intents").EnumerateArray())
+        {
+            foreach (JsonElement slot in dialogIntent.GetProperty("slots").EnumerateArray())
+            {
+                Assert.Equal("JellyfinArtist", slot.GetProperty("type").GetString());
+            }
+        }
+
+        // (d) no AMAZON.Musician remnants: the built-in is gone from the whole model.
+        Assert.DoesNotContain("AMAZON.Musician", result, StringComparison.Ordinal);
     }
 
     [Fact]
