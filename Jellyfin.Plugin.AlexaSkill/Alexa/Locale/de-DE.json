@@ -1,6 +1,6 @@
 {
-  "AccountRelinkRequired": "Die Verbindung zu deinem Jellyfin-Server funktioniert nicht mehr. Das kann nach einem Server-Update passieren. Öffne die Alexa-Skill-Einstellungen im Jellyfin-Dashboard und verknüpfe dein Konto erneut.",
-  "AccountRelinkCardTitle": "Konto neu verknüpfen",
+  "AccountRelinkRequired": "Die Verbindung zu deinem Jellyfin-Server funktioniert nicht mehr. Das kann nach einem Server-Update passieren. Oeffne die Alexa-Skill-Einstellungen im Jellyfin-Dashboard und verknuepfe dein Konto erneut.",
+  "AccountRelinkCardTitle": "Konto neu verknuepfen",
   "UserNotFound": "Benutzer nicht gefunden. Bitte verknuepfe dein Konto erneut.",
   "MediaNotFound": "Entschuldigung, ich konnte die Medien nicht finden.",
   "AddedToFavorites": "Zu den Favoriten hinzugefuegt.",
