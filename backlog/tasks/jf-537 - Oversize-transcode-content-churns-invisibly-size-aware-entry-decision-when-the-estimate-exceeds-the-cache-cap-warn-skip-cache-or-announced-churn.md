@@ -3,9 +3,10 @@ id: JF-537
 title: >-
   Oversize transcode content churns invisibly: size-aware entry decision when
   the estimate exceeds the cache cap (warn + skip-cache or announced churn)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-10 10:39'
+updated_date: '2026-09-10 20:45'
 labels:
   - video
   - hls
@@ -41,3 +42,9 @@ Fix direction: a size-aware decision at transcode encode ENTRY - when EstimateEp
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed 2026-09-10 with merge 826e1010 + deployed (clean rebuild for the embedded config.html; md5 95516fa5 verified; config survived Users=1; served page carries the rounded-hour sentence; zero FTL). Mode (b) ANNOUNCED CHURN: a Warning at transcode encode entry (once per encode start, cache-miss/in-lock only) naming item/estimate/cap + the raise-the-cap advice, a Debug cacheable line otherwise; TranscodeEstimateExceedsCacheCap (strictly-greater, matching the sweep's non-strict retention) beside the estimator; estimate computed once and shared with the JF-428 budget; EffectiveCacheCapMB + DefaultCacheCapMB unify the cap read with the sweep; config.html documents the rounded-hour boundary. The 5-point no-cache rejection (segment resolution, dedup, no playback-stop signal, budget regression, unbounded disk) verified independently by both gates; the deferred transient mode tracked as JF-537.1. Gates: /simplify (its accuracy finding applied - the linear ~80min claim corrected to the round-up estimator's real 60-minute boundary in config.html AND the estimator doc; plus comment trim, hoisted local, and the review's two wording precisions), code-review high ZERO findings (all six points independently confirmed), tests 3589/3589 net9.0 (worker + orchestrator + reviewer), 0 warnings both TFMs. Remux/audio/audiobook tiers excluded with rationale.
+<!-- SECTION:FINAL_SUMMARY:END -->

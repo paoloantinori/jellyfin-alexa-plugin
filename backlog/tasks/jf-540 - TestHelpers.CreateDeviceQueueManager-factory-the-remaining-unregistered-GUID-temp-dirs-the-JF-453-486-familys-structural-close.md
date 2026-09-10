@@ -3,10 +3,10 @@ id: JF-540
 title: >-
   TestHelpers.CreateDeviceQueueManager factory + the remaining unregistered GUID
   temp dirs (the JF-453/486 family's structural close)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-10 18:05'
-updated_date: '2026-09-10 18:14'
+updated_date: '2026-09-10 20:16'
 labels:
   - tech-debt
   - tests
@@ -49,3 +49,9 @@ Filed from the JF-535b combined gate (2026-09-10), findings 4 and 5 (the two tra
 <!-- SECTION:NOTES:BEGIN -->
 Altitude-angle correction (2026-09-10, the JF-535 range fanout): the fold list for item 1 is SEVEN sites, not six - EventHandlerTests.cs:1071 (RecordPreviousPlayOnHarnessDevice, suffix jf527-dq) is a seventh registered-and-disposed construction in the same family. Addendum to the SmapiRefreshToken note: TokenRefreshTask.cs:77 carries the same IsNullOrEmpty shape as DiagnosticsController.cs:55; cover both when that adjacent item is ever taken.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed 2026-09-10 with merge 66bfcd64 (tests-only; no deploy needed). The family's structural close: TestHelpers.CreateDeviceQueueManager(nameSuffix, logger = null) owns the registered dir + NullLogger default + the cross-load rationale ONCE; 7 registered sites folded (six JF-535b fixtures + RecordPreviousPlayOnHarnessDevice with its Plugin.Instance wiring kept); the 8 filed unregistered mints migrated (factory where DQM-shaped, direct CreateRegisteredTempDir where the dir handle was still needed for finally-deletes or shared-dir managers); the worker's sweep surfaced 4 MORE unregistered fixture mints (PreEnqueueOnStart, VideoAudioControllerTests, AudiobookPositionTracker, VideoAudioCache), folded by the orchestrator in the same change. Post-census: the only raw mints left are PluginTempDirSweeperTests' own (deliberate). Gates: combined simplify+code-review gate (construction semantics preserved at every fold, disposal belt intact, shared-dir/restart-read sites correctly left direct; both its findings applied - redundant qualifications + dead CreateDirectory lines), suites 3582/3582 net9.0 (worker + orchestrator + gate), 0 warnings both TFMs.
+<!-- SECTION:FINAL_SUMMARY:END -->
