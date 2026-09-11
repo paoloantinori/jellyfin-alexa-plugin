@@ -4,11 +4,12 @@
 TRANSITION SCOPE (JF-316 milestone 2): a locale that has a YAML template
 (templates/<locale>.yaml) owns its Mood block IN THE TEMPLATE, and this
 script refuses to write that model (it-IT, en-US, en-GB, en-AU, en-CA,
-en-IN today; the list grows as JF-316 milestones land). For a mood-word
-change in a templated locale, edit the template and run
-scripts/generate_interaction_model.py <locale>. For the hand-maintained
-locales below, edit LOCALE_MOODS and run this script. When every locale
-is templated this script has no writers left and should be deleted.
+en-IN, de-DE, es-ES, es-MX, es-US today; the list grows as JF-316
+milestones land). For a mood-word change in a templated locale, edit the
+template and run scripts/generate_interaction_model.py <locale>. For the
+hand-maintained locales below, edit LOCALE_MOODS and run this script.
+When every locale is templated this script has no writers left and
+should be deleted.
 
 For each locale still owned here:
   1. Add (or replace) a `Mood` custom slot type with locale-specific values.
@@ -16,11 +17,12 @@ For each locale still owned here:
   3. Keep only slotted mood samples (drop concrete sample-less utterances like
      "play morning music" that leave the slot empty -> anti-pattern #1).
 
-Per-locale mood values reuse the words already in LocalizedMoodMap (de/es/fr/pt/it)
+Per-locale mood values reuse the words already in LocalizedMoodMap (fr/pt)
 where available, plus translations for the locales the map doesn't cover
-(nl-NL, ja-JP, hi-IN, ar-SA, es-MX, es-US, fr-CA). The English locales use the
+(nl-NL, ja-JP, hi-IN, ar-SA, fr-CA). The English locales use the
 MoodGenreMap keys directly and are template-owned since JF-316 milestone 2;
-the map's it-IT entries stay (the resolver is locale-agnostic, and it-IT's
+de-DE and the es family joined them at milestone 3; the map's de/es/it-IT
+entries stay (the resolver is locale-agnostic, and the templated locales'
 mood words resolve through them).
 
 Each entry is a list of (value, [synonyms]) tuples. The handler reads the raw
@@ -41,27 +43,12 @@ MODELS_DIR = os.path.join(REPO, "Jellyfin.Plugin.AlexaSkill", "Alexa", "Interact
 TEMPLATES_DIR = os.path.join(MODELS_DIR, "templates")
 
 # Per-locale mood values: list of (canonical_value, [synonyms]).
-# Built from LocalizedMoodMap (de/it/es/fr/pt) + curated translations for the rest.
+# Built from LocalizedMoodMap (fr/pt) + curated translations for the rest.
 # English keys (relaxing, chill, upbeat, energetic, focus, romantic, happy, sad,
 # party, workout, morning, evening, dinner, sleep) are the resolve targets; the
-# en-* locales carry them in their YAML templates, not here.
+# en-* locales carry them in their YAML templates, not here, and de-DE and the
+# es family (es-ES/MX/US) have been template-owned since JF-316 milestone 3.
 LOCALE_MOODS = {
-    "de-DE": [
-        ("entspannend", ["entspannt", "entspannende", "entspannendes"]), ("beruhigend", ["beruhigende", "beruhigendes"]), ("beschwingt", ["beschwingte", "beschwingtes"]),
-        ("energisch", ["energische", "energisches"]), ("fokus", []), ("romantisch", ["romantische", "romantisches"]),
-        ("fröhlich", ["glücklich", "fröhliche", "fröhliches"]), ("traurig", ["traurige", "trauriges"]), ("feier", ["party", "feierliche", "feierliches"]),
-        ("training", ["training"]), ("morgens", ["morgentliche"]), ("abend", ["abends", "abendliche"]),
-        ("abendessen", []), ("schlafen", ["einschlafen"]),
-    ],
-    "es-ES": [
-        ("relajante", []), ("relajado", []), ("animada", ["animado"]),
-        ("enérgica", ["enérgico"]), ("concentración", []), ("romántica", ["romántico"]),
-        ("alegre", ["feliz"]), ("triste", []), ("fiesta", []),
-        ("entrenamiento", []), ("matutino", []), ("nocturna", ["nocturno"]),
-        ("cena", []), ("dormir", ["sueño"]),
-    ],
-    "es-MX": "es-ES", "es-US": "es-ES",  # Spanish shared
-
     "fr-FR": [
         ("détendant", ["détendu", "détendue"]), ("reposant", []), ("dynamique", []),
         ("énergique", []), ("concentration", []), ("romantique", []),
