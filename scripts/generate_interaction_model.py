@@ -322,6 +322,18 @@ def build_model(config: dict) -> dict:
     return result
 
 
+def serialize_model(model: dict) -> str:
+    """The single writer serialization: indent=2, ensure_ascii=False, trailing
+    newline.
+
+    This function IS the byte-identity contract of the golden masters. The
+    regen-equality check in validate_interaction_models.py compares committed
+    JSONs against this same function, so a future writer change updates both
+    sides together instead of false-positive-ing every templated locale.
+    """
+    return json.dumps(model, indent=2, ensure_ascii=False) + "\n"
+
+
 def main():
     locale = sys.argv[1] if len(sys.argv) > 1 else "it-IT"
 
@@ -344,8 +356,7 @@ def main():
     )
 
     with open(output_path, "w") as f:
-        json.dump(model, f, indent=2, ensure_ascii=False)
-        f.write("\n")
+        f.write(serialize_model(model))
 
     print(f"Generated {output_path}")
     print(f"  {len(model['languageModel']['intents'])} intents, {total_samples} total samples")
