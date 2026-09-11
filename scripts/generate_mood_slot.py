@@ -4,12 +4,12 @@
 TRANSITION SCOPE (JF-316 milestone 2): a locale that has a YAML template
 (templates/<locale>.yaml) owns its Mood block IN THE TEMPLATE, and this
 script refuses to write that model (it-IT, en-US, en-GB, en-AU, en-CA,
-en-IN, de-DE, es-ES, es-MX, es-US today; the list grows as JF-316
-milestones land). For a mood-word change in a templated locale, edit the
-template and run scripts/generate_interaction_model.py <locale>. For the
-hand-maintained locales below, edit LOCALE_MOODS and run this script.
-When every locale is templated this script has no writers left and
-should be deleted.
+en-IN, de-DE, es-ES, es-MX, es-US, fr-FR, fr-CA, pt-BR today; the list
+grows as JF-316 milestones land). For a mood-word change in a templated
+locale, edit the template and run scripts/generate_interaction_model.py
+<locale>. For the hand-maintained locales below, edit LOCALE_MOODS and
+run this script. When every locale is templated this script has no
+writers left and should be deleted.
 
 For each locale still owned here:
   1. Add (or replace) a `Mood` custom slot type with locale-specific values.
@@ -17,13 +17,14 @@ For each locale still owned here:
   3. Keep only slotted mood samples (drop concrete sample-less utterances like
      "play morning music" that leave the slot empty -> anti-pattern #1).
 
-Per-locale mood values reuse the words already in LocalizedMoodMap (fr/pt)
-where available, plus translations for the locales the map doesn't cover
-(nl-NL, ja-JP, hi-IN, ar-SA, fr-CA). The English locales use the
-MoodGenreMap keys directly and are template-owned since JF-316 milestone 2;
-de-DE and the es family joined them at milestone 3; the map's de/es/it-IT
-entries stay (the resolver is locale-agnostic, and the templated locales'
-mood words resolve through them).
+Per-locale mood values for the locales still owned here are curated
+translations (none of nl-NL / ja-JP / hi-IN / ar-SA is covered by
+LocalizedMoodMap). The English locales use the MoodGenreMap keys
+directly and are template-owned since JF-316 milestone 2; de-DE and
+the es family joined them at milestone 3, the fr family and pt-BR at
+milestone 4; the map's de/es/fr/pt/it-IT entries stay (the resolver
+is locale-agnostic, and the templated locales' mood words resolve
+through them).
 
 Each entry is a list of (value, [synonyms]) tuples. The handler reads the raw
 spoken text (moodSlot.Value), so every value AND every synonym must independently
@@ -43,28 +44,15 @@ MODELS_DIR = os.path.join(REPO, "Jellyfin.Plugin.AlexaSkill", "Alexa", "Interact
 TEMPLATES_DIR = os.path.join(MODELS_DIR, "templates")
 
 # Per-locale mood values: list of (canonical_value, [synonyms]).
-# Built from LocalizedMoodMap (fr/pt) + curated translations for the rest.
+# Curated translations for the remaining hand-maintained locales; the
+# LocalizedMoodMap-sourced tables (de/es/fr/pt) moved into their
+# templates at JF-316 milestones 3-4.
 # English keys (relaxing, chill, upbeat, energetic, focus, romantic, happy, sad,
 # party, workout, morning, evening, dinner, sleep) are the resolve targets; the
-# en-* locales carry them in their YAML templates, not here, and de-DE and the
-# es family (es-ES/MX/US) have been template-owned since JF-316 milestone 3.
+# en-* locales carry them in their YAML templates, not here; de-DE and the
+# es family (es-ES/MX/US) have been template-owned since JF-316 milestone 3,
+# and the fr family (fr-FR/CA) and pt-BR since milestone 4.
 LOCALE_MOODS = {
-    "fr-FR": [
-        ("détendant", ["détendu", "détendue"]), ("reposant", []), ("dynamique", []),
-        ("énergique", []), ("concentration", []), ("romantique", []),
-        ("heureuse", ["heureux", "joyeuse", "joyeux"]), ("triste", []),
-        ("fête", []), ("entraînement", []), ("matinal", []),
-        ("soirée", []), ("dîner", []), ("sommeil", ["dormir"]),
-    ],
-    "fr-CA": "fr-FR",  # French shared
-
-    "pt-BR": [
-        ("relaxada", ["relaxado"]), ("calmo", ["calma"]), ("animada", ["animado"]),
-        ("energética", ["energético"]), ("foco", []), ("romântica", ["romântico"]),
-        ("alegre", ["feliz"]), ("triste", []), ("festa", []),
-        ("treino", ["exercício"]), ("manhã", []), ("noite", ["noturna", "noturno"]),
-        ("jantar", []), ("dormir", ["sono"]),
-    ],
     "nl-NL": [
         ("ontspannend", []), ("rustgevend", []), ("vrolijk", []),
         ("energiek", []), ("concentratie", ["focus"]), ("romantisch", []),
