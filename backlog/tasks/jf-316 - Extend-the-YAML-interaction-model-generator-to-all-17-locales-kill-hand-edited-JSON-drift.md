@@ -3,10 +3,10 @@ id: JF-316
 title: >-
   Extend the YAML interaction-model generator to all 17 locales (kill
   hand-edited JSON drift)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-07-12 14:58'
-updated_date: '2026-09-10 21:45'
+updated_date: '2026-09-11 13:47'
 labels:
   - maintainability
   - interaction-model
@@ -40,6 +40,10 @@ Fix: extend the YAML-template generator to all 17 locales (per-locale vocabulary
 
 <!-- SECTION:NOTES:BEGIN -->
 JF-415 addendum (2026-09-10, /simplify gate): JF-415 added a JellyfinArtist static seed block to 6 model files (5 identical en-* blocks + it-IT via the YAML template). When the YAML generator extends to all 17 locales, OWN this seed from the shared table. Interim option: a warning-level check in validate_interaction_models.py for en-* JellyfinArtist seed equality (the 5 identical blocks can drift silently with no cross-check today).
+
+Review finding 2026-09-11 (milestone-1 gate, en-US golden master): scripts/generate_mood_slot.py still rewrites model_en-US.json directly (its LOCALE_MOODS en-US table replaces the whole Mood type and filters PlayMoodMusicIntent samples), so the template and the mood script are two competing writers for the same model file. templates/en-US.yaml's header carries an interim warning and defers consolidation to 'a later JF-316 milestone'. This note is that milestone's owner: a later milestone must absorb the English mood table into en-US.yaml (and the per-locale tables into their templates) or delete/downscope generate_mood_slot.py, before any locale regen is trusted after a mood-table edit.
+
+MILESTONE 1 COMPLETE (2026-09-11, merge 1b2c115e): en-US joins the YAML architecture with a BYTE-IDENTICAL golden master (regen reproduces the committed model exactly - verified by worker, orchestrator, and gate independently with cmp). Generator gains: the ordered-intents template form (bare string = name-only; verbatim samples / vocabulary templates / slots), key-order contracts (intent keys + dict type values in YAML order), prompts + modelConfiguration passthroughs, and - from the gate's findings, the load-bearing hardening for the 15 golden-master-less locales ahead - the unknown-key guard extended to the LEGACY sections (typo = hard error, not silent sample-drop), {ref} validation against vocabulary-sets-union-declared-slots on EXPANDED strings (catches typo'd template refs and vocabulary-VALUE-introduced refs), dict type-value key guards, and both-forms raise. it-IT normalized value-first (output-neutral) and its path unchanged (AC#5 verified). Ten-bad-template negative battery green. Template shape: honest transcription first (61 intents, 15 bare, 42 verbatim, 5 product blocks / 8 vocab sets, 64/552 samples from products) - vocabulary extraction only where real patterns exist. NO DEPLOY NEEDED (models byte-identical). MOOD-CONFLICT tracked (gate finding): generate_mood_slot.py and the en-US template are two writers of the same Mood block; they agree today but a future LOCALE_MOODS edit + mood-script run regresses on the next regen - milestone-2 scope (consolidate the mood tooling into the templates) along with a regen-equality warning check in the validator. NEXT: milestone 2 = en-GB/AU/CA/IN (shared structure, identical seed block) + the mood consolidation.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
