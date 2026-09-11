@@ -16,7 +16,7 @@ A template may declare its intents in either form (not both):
   samples). Intents are emitted in that section order; static intents
   cannot be interleaved with custom ones.
 
-- Ordered `intents` list (used by en-US, the JF-316 migration form): each
+- Ordered `intents` list (the standard form, used by 16 of 17 locales): each
   item is either a bare string (a name-only intent) or a mapping with
   `name` plus optional `samples` (verbatim list), `templates`
   (vocabulary-expanded; template strings without {vocab} refs pass through
@@ -116,6 +116,22 @@ def generate_samples(templates: list[str], vocabulary: dict[str, list[str]],
 TYPE_VALUE_KEYS = frozenset({"value", "id", "synonyms"})
 
 
+def _slot_names_of(intent_config: dict) -> frozenset[str]:
+    """Declared slot names of an intent config (the {ref} validation set)."""
+    return frozenset(
+        s["name"] for s in intent_config.get("slots", []) if isinstance(s, dict)
+    )
+
+
+def _reject_unknown_keys(config: dict, allowed: set, where: str) -> None:
+    """Raise on any key outside `allowed` (the silent-drop guard)."""
+    unknown = set(config) - allowed
+    if unknown:
+        raise ValueError(
+            f"unknown key(s) {sorted(unknown)} in {where} (allowed: {sorted(allowed)})"
+        )
+
+
 def build_type_value(v) -> dict:
     """Build one Alexa type-value entry, preserving the YAML key order.
 
@@ -175,9 +191,7 @@ def build_ordered_intent(item, vocabulary: dict[str, list[str]]) -> dict:
     name = item.get("name")
     if not name:
         raise ValueError(f"ordered intents entry missing 'name': {item!r}")
-    slot_names = frozenset(
-        s["name"] for s in item.get("slots", []) if isinstance(s, dict)
-    )
+    slot_names = _slot_names_of(item)
     samples = list(item.get("samples", []))
     if "templates" in item:
         samples.extend(generate_samples(item["templates"], vocabulary, slot_names))
@@ -205,11 +219,15 @@ EXPLICIT_INTENT_KEYS = frozenset({"samples", "slots"})
 TEMPLATE_INTENT_KEYS = frozenset({"templates", "slots"})
 
 
+MODELS_DIR = Path(__file__).resolve().parent.parent / "Jellyfin.Plugin.AlexaSkill" / "Alexa" / "InteractionModel"
+"""The interaction-model layout owner: templates/ and model_<locale>.json live here."""
+
+
 def build_model(config: dict) -> dict:
     """Build the full interaction model from YAML config."""
     # A template declares its intents in exactly one of the two forms; a
     # mix would silently concatenate both lists with no ordering rule.
-    used_legacy = [s for s in LEGACY_INTENT_SECTIONS if config.get(s)]
+    used_legacy = [s for s in LEGACY_INTENT_SECTIONS if s in config]
     if "intents" in config and used_legacy:
         raise ValueError(
             "template declares both the ordered `intents` list and the "
@@ -230,12 +248,7 @@ def build_model(config: dict) -> dict:
 
     # Explicit intents (with hardcoded samples)
     for name, intent_config in config.get("explicit_intents", {}).items():
-        unknown = set(intent_config) - EXPLICIT_INTENT_KEYS
-        if unknown:
-            raise ValueError(
-                f"unknown key(s) {sorted(unknown)} in explicit_intents."
-                f"{name} (allowed: {sorted(EXPLICIT_INTENT_KEYS)})"
-            )
+        _reject_unknown_keys(intent_config, EXPLICIT_INTENT_KEYS, f"explicit_intents.{name}")
         intent = {"name": name}
         if "samples" in intent_config:
             intent["samples"] = intent_config["samples"]
@@ -245,16 +258,9 @@ def build_model(config: dict) -> dict:
 
     # Template-based intents
     for name, intent_config in config.get("templates", {}).items():
-        unknown = set(intent_config) - TEMPLATE_INTENT_KEYS
-        if unknown:
-            raise ValueError(
-                f"unknown key(s) {sorted(unknown)} in templates.{name} "
-                f"(allowed: {sorted(TEMPLATE_INTENT_KEYS)})"
-            )
+        _reject_unknown_keys(intent_config, TEMPLATE_INTENT_KEYS, f"templates.{name}")
         templates = intent_config.get("templates", [])
-        slot_names = frozenset(
-            s["name"] for s in intent_config.get("slots", []) if isinstance(s, dict)
-        )
+        slot_names = _slot_names_of(intent_config)
         samples = generate_samples(templates, vocabulary, slot_names)
 
         intent = {"name": name, "samples": samples}
@@ -290,17 +296,6 @@ def build_model(config: dict) -> dict:
     model_configuration = config.get("modelConfiguration")
     if model_configuration:
         language_model["modelConfiguration"] = model_configuration
-
-    # Add slot samples to matching intent slots
-    slot_samples = config.get("slot_samples", {})
-    if slot_samples:
-        for key, samples_list in slot_samples.items():
-            intent_name, slot_name = key.split(".")
-            for intent in intents:
-                if intent.get("name") == intent_name and "slots" in intent:
-                    for slot in intent["slots"]:
-                        if slot.get("name") == slot_name:
-                            slot["samples"] = samples_list
 
     result: dict = {"languageModel": language_model}
 

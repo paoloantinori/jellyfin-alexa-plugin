@@ -46,7 +46,7 @@ import re
 import sys
 from pathlib import Path
 
-MODELS_DIR = Path(__file__).resolve().parent.parent / "Jellyfin.Plugin.AlexaSkill" / "Alexa" / "InteractionModel"
+from generate_interaction_model import MODELS_DIR  # the one layout owner
 
 FIXTURES_DIR = Path(__file__).resolve().parent.parent / "tests" / "integration" / "fixtures"
 
