@@ -21,7 +21,7 @@ Build the release DLL, hot-swap it into the running Jellyfin container, verify c
 ```bash
 SSH_OPTS="-F /dev/null -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa"
 ssh $SSH_OPTS pantinor@minix "curl -sf 'http://localhost:8096/Plugins/c5df7de087774b3ca70d5c3dae359c9e/Configuration' \
-  -H 'X-Emby-Token: $JELLYFIN_API_KEY'" > /tmp/alexa_plugin_config_backup.json
+  -H 'Authorization: MediaBrowser Token=\"$JELLYFIN_API_KEY\"'" > /tmp/alexa_plugin_config_backup.json
 python3 -c "import json; cfg=json.load(open('/tmp/alexa_plugin_config_backup.json')); print(f'Users: {len(cfg.get(\"Users\",[]))}, Simulator: {cfg.get(\"SimulatorEnabled\")}')"
 ```
 
@@ -42,7 +42,7 @@ SSH_OPTS="-F /dev/null -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa"
 # Match ONLY the versioned dir (AlexaSkill_<ver>), NOT the non-versioned
 # "Jellyfin.Plugin.AlexaSkill" dir (which holds runtime queues, no DLL).
 PLUGIN_DIR=$(ssh $SSH_OPTS pantinor@minix "podman exec jellyfin ls /config/data/plugins/" | grep -E 'AlexaSkill_[0-9]' | tr -d ' ' | tail -1)
-scp $SSH_OPTS Jellyfin.Plugin.AlexaSkill/bin/Release/net9.0/Jellyfin.Plugin.AlexaSkill.dll pantinor@minix:/tmp/
+scp $SSH_OPTS Jellyfin.Plugin.AlexaSkill/bin/Release/net10.0/Jellyfin.Plugin.AlexaSkill.dll pantinor@minix:/tmp/
 ssh $SSH_OPTS pantinor@minix "podman exec jellyfin cp /config/data/plugins/${PLUGIN_DIR}/Jellyfin.Plugin.AlexaSkill.dll /config/data/plugins/${PLUGIN_DIR}/Jellyfin.Plugin.AlexaSkill.dll.bak && \
   podman cp /tmp/Jellyfin.Plugin.AlexaSkill.dll jellyfin:/config/data/plugins/${PLUGIN_DIR}/Jellyfin.Plugin.AlexaSkill.dll && \
   podman exec jellyfin chown -R abc:abc /config/data/plugins/${PLUGIN_DIR}/ && \
@@ -60,7 +60,7 @@ Poll the **server** (`/System/Info`) until Jellyfin is responsive (up to ~60 sec
 ```bash
 SSH_OPTS="-F /dev/null -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa"
 for i in $(seq 1 20); do
-  if ssh $SSH_OPTS pantinor@minix "curl -sf 'http://localhost:8096/System/Info' -H 'X-Emby-Token: $JELLYFIN_API_KEY'" > /dev/null 2>&1; then
+  if ssh $SSH_OPTS pantinor@minix "curl -sf 'http://localhost:8096/System/Info' -H 'Authorization: MediaBrowser Token=\"$JELLYFIN_API_KEY\"'" > /dev/null 2>&1; then
     echo "Jellyfin is up (attempt $i)"
     break
   fi
@@ -79,14 +79,14 @@ ssh $SSH_OPTS pantinor@minix "podman logs jellyfin --tail 400" 2>&1 | grep -viE 
 ```bash
 SSH_OPTS="-F /dev/null -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa"
 ssh $SSH_OPTS pantinor@minix "curl -sf 'http://localhost:8096/Plugins/c5df7de087774b3ca70d5c3dae359c9e/Configuration' \
-  -H 'X-Emby-Token: $JELLYFIN_API_KEY'" | python3 -c "import json, sys; cfg=json.load(sys.stdin); print(f'Users after deploy: {len(cfg.get(\"Users\",[]))}')"
+  -H 'Authorization: MediaBrowser Token=\"$JELLYFIN_API_KEY\"'" | python3 -c "import json, sys; cfg=json.load(sys.stdin); print(f'Users after deploy: {len(cfg.get(\"Users\",[]))}')"
 ```
 
 **If 0 users** — restore from backup:
 ```bash
 cat /tmp/alexa_plugin_config_backup.json | ssh $SSH_OPTS pantinor@minix "curl -sf -X POST \
   'http://localhost:8096/Plugins/c5df7de087774b3ca70d5c3dae359c9e/Configuration' \
-  -H 'X-Emby-Token: $JELLYFIN_API_KEY' -H 'Content-Type: application/json' -d @-"
+  -H 'Authorization: MediaBrowser Token=\"$JELLYFIN_API_KEY\"' -H 'Content-Type: application/json' -d @-"
 ```
 
 ### 6. Rebuild Interaction Models (if models changed)
@@ -100,9 +100,9 @@ back to the saved `CustomModelLocale` (single locale, NOT all):
 ```bash
 SSH_OPTS="-F /dev/null -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa"
 USER_ID=$(ssh $SSH_OPTS pantinor@minix "curl -sf 'http://localhost:8096/Plugins/c5df7de087774b3ca70d5c3dae359c9e/Configuration' \
-  -H 'X-Emby-Token: $JELLYFIN_API_KEY'" | python3 -c "import json,sys; print(json.load(sys.stdin)['Users'][0]['Id'])")
+  -H 'Authorization: MediaBrowser Token=\"$JELLYFIN_API_KEY\"'" | python3 -c "import json,sys; print(json.load(sys.stdin)['Users'][0]['Id'])")
 ssh $SSH_OPTS pantinor@minix "curl -s -X POST 'http://localhost:8096/alexaskill/api/custom-model/rebuild' \
-  -H 'X-Emby-Token: $JELLYFIN_API_KEY' -H 'Content-Type: application/json' \
+  -H 'Authorization: MediaBrowser Token=\"$JELLYFIN_API_KEY\"' -H 'Content-Type: application/json' \
   -d '{\"userId\":\"$USER_ID\",\"locale\":\"*\"}'"
 ```
 
@@ -115,6 +115,7 @@ object lists per-locale `success`/`status`/`error`. URL gotcha: it's `custom-mod
 
 ## Key Facts
 
+- **minix runs Jellyfin 12.0.0** (since the JF-307 port): the `X-Emby-Token` header is REJECTED (401) on the general API surface; use `Authorization: MediaBrowser Token="<key>"` (the recipes below do). Deploy the **net10.0** build flavor (system SDK 9 cannot build it; use SDK 10 at `~/.dotnet-jf307`: `export DOTNET_ROOT=$HOME/.dotnet-jf307 PATH=$HOME/.dotnet-jf307:$PATH`), and delete the output DLL before building so embedded resources (manifest.json, models, config.html) re-embed.
 - **Container name**: `jellyfin`
 - **Plugin path**: discovered dynamically via `podman exec jellyfin ls /config/data/plugins/`
 - **SSH key**: `~/.ssh/id_rsa` with `-F /dev/null` (bypasses broken system ssh_config)
