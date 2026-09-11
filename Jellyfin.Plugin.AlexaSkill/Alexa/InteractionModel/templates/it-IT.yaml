@@ -642,6 +642,8 @@ explicit_intents:
 
 # Custom slot type definitions. These are emitted into the model's types section.
 # Each type has a name and a list of values (with optional id and synonyms).
+# Key order is load-bearing for byte-identity: `value` first emits the name
+# subtree first, `id` first emits id first (see generate_interaction_model.py).
 types:
   Mood:
     values:
@@ -671,29 +673,29 @@ types:
         synonyms: [da festa]
   Decade:
     values:
-      - id: "1950"
-        value: cinquanta
+      - value: cinquanta
+        id: "1950"
         synonyms: [anni cinquanta, "1950", "50"]
-      - id: "1960"
-        value: sessanta
+      - value: sessanta
+        id: "1960"
         synonyms: [anni sessanta, "1960", "60"]
-      - id: "1970"
-        value: settanta
+      - value: settanta
+        id: "1970"
         synonyms: [anni settanta, "1970", "70"]
-      - id: "1980"
-        value: ottanta
+      - value: ottanta
+        id: "1980"
         synonyms: [anni ottanta, "1980", "80"]
-      - id: "1990"
-        value: novanta
+      - value: novanta
+        id: "1990"
         synonyms: [anni novanta, "1990", "90"]
-      - id: "2000"
-        value: duemila
+      - value: duemila
+        id: "2000"
         synonyms: [anni duemila, "2000"]
-      - id: "2010"
-        value: duemiladieci
+      - value: duemiladieci
+        id: "2010"
         synonyms: [anni dieci, "2010"]
-      - id: "2020"
-        value: duemilaventi
+      - value: duemilaventi
+        id: "2020"
         synonyms: [anni venti, "2020"]
   SeriesName:
     values:
@@ -740,78 +742,78 @@ types:
   # by canonical value NAME (BrowseLibraryIntentHandler), never by id.
   BrowseCategory:
     values:
-      - id: artists
-        value: artisti
+      - value: artisti
+        id: artists
         synonyms: [gli artisti]
-      - id: albums
-        value: album
+      - value: album
+        id: albums
         synonyms: [albums, gli album, dischi, i dischi]
-      - id: film
-        value: film
+      - value: film
+        id: film
         synonyms: [i film, movies, cinema]
-      - id: songs
-        value: brani
+      - value: brani
+        id: songs
         synonyms: [i brani]
-      - id: canzoni
-        value: canzoni
+      - value: canzoni
+        id: canzoni
         synonyms: [le canzoni]
-      - id: generi
-        value: generi
+      - value: generi
+        id: generi
         synonyms: [i generi]
-      - id: serie
-        value: serie
+      - value: serie
+        id: serie
         synonyms: [le serie]
-      - id: playlist
-        value: playlist
+      - value: playlist
+        id: playlist
         synonyms: [le playlist]
-      - id: libri
-        value: libri
+      - value: libri
+        id: libri
         synonyms: [i libri]
-      - id: cantanti
-        value: cantanti
+      - value: cantanti
+        id: cantanti
         synonyms: [i cantanti]
-      - id: gruppi
-        value: gruppi
+      - value: gruppi
+        id: gruppi
         synonyms: [i gruppi]
-      - id: musica
-        value: musica
+      - value: musica
+        id: musica
         synonyms: [la musica]
-      - id: cartoni
-        value: cartoni
+      - value: cartoni
+        id: cartoni
         synonyms: [i cartoni]
-      - id: video
-        value: video
+      - value: video
+        id: video
         synonyms: [i video]
   MediaType:
     values:
-      - id: media
-        value: media
-      - id: video
-        value: video
+      - value: media
+        id: media
+      - value: video
+        id: video
         synonyms: [video, i video]
-      - id: musica
-        value: musica
+      - value: musica
+        id: musica
         synonyms: [canzoni, brani, "una canzone", "un brano", "le canzoni", "i brani", canzone, brano]
-      - id: film
-        value: film
+      - value: film
+        id: film
         synonyms: [movies, cinema, "un film", "i film", "una pellicola"]
   TimePeriod:
     values:
-      - id: today
-        value: oggi
-      - id: this_week
-        value: questa settimana
+      - value: oggi
+        id: today
+      - value: questa settimana
+        id: this_week
         synonyms: ["nell'ultima settimana", "la settimana scorsa", "negli ultimi giorni"]
-      - id: this_month
-        value: questo mese
+      - value: questo mese
+        id: this_month
         synonyms: ["nell'ultimo mese", "il mese scorso"]
   LibraryQueryType:
     values:
-      - id: tracks
-        value: brani
+      - value: brani
+        id: tracks
         synonyms: [canzoni]
-      - id: albums
-        value: album
+      - value: album
+        id: albums
         synonyms: [dischi]
   ItalianNumber:
     values:
@@ -861,17 +863,17 @@ types:
       - Il Signore degli Anelli
   MediaInfoType:
     values:
-      - id: artist
-        value: chi canta
+      - value: chi canta
+        id: artist
         synonyms: [chi è l'artista, chi suona]
-      - id: album
-        value: che album è
+      - value: che album è
+        id: album
         synonyms: [quale album è]
-      - id: duration
-        value: quanto dura
+      - value: quanto dura
+        id: duration
         synonyms: [quanto è lungo, durata]
-      - id: title
-        value: che brano è
+      - value: che brano è
+        id: title
         synonyms: [che canzone è, come si chiama]
 
 # Template-based intents. Each template uses {vocab_name} references that get
