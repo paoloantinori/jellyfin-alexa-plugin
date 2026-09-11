@@ -10,13 +10,15 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Alexa.Manifest;
 
 public class ManifestSkillTests
 {
+    private static ManifestSkill CreateSkill() => new(
+        "Jellyfin.Plugin.AlexaSkill.Alexa.Manifest.manifest.json",
+        "https://example.com",
+        SslCertificateType.Wildcard);
+
     [Fact]
     public void ToManifestJson_ProducesValidManifest()
     {
-        var manifestSkill = new ManifestSkill(
-            "Jellyfin.Plugin.AlexaSkill.Alexa.Manifest.manifest.json",
-            "https://example.com",
-            SslCertificateType.Wildcard);
+        var manifestSkill = CreateSkill();
 
         string json = manifestSkill.ToManifestJson();
         JObject obj = JObject.Parse(json);
@@ -32,10 +34,7 @@ public class ManifestSkillTests
     [Fact]
     public void ToManifestJson_OmitsIconUrls()
     {
-        var manifestSkill = new ManifestSkill(
-            "Jellyfin.Plugin.AlexaSkill.Alexa.Manifest.manifest.json",
-            "https://example.com",
-            SslCertificateType.Wildcard);
+        var manifestSkill = CreateSkill();
 
         string json = manifestSkill.ToManifestJson();
         JObject obj = JObject.Parse(json);
@@ -47,10 +46,7 @@ public class ManifestSkillTests
     [Fact]
     public void Manifest_DeclaresEveryInteractionModelLocale()
     {
-        var manifestSkill = new ManifestSkill(
-            "Jellyfin.Plugin.AlexaSkill.Alexa.Manifest.manifest.json",
-            "https://example.com",
-            SslCertificateType.Wildcard);
+        var manifestSkill = CreateSkill();
 
         // Discover the supported locales the same way production code does:
         // the embedded model_*.json resources of the plugin assembly.
@@ -62,7 +58,11 @@ public class ManifestSkillTests
         var locales = manifestSkill.Manifest.PublishingInformation?.Locales;
         Assert.NotNull(locales);
 
-        Assert.All(modelLocales, locale => Assert.Contains(locale, locales.Keys));
+        // Set equality, not subset: a manifest locale without a model would advertise
+        // a publishing locale that no interaction model can ever deploy for.
+        Assert.Equal(
+            modelLocales.OrderBy(locale => locale, StringComparer.Ordinal),
+            locales.Keys.OrderBy(locale => locale, StringComparer.Ordinal));
 
         Assert.All(locales, entry =>
         {

@@ -30,7 +30,9 @@ fi
 
 # Handle 'all' locale
 if [ "$LOCALE" = "all" ]; then
-  LOCALES="de-DE en-AU en-CA en-GB en-IN en-US es-ES es-MX es-US fr-CA fr-FR it-IT"
+  # Derive from the committed model files so the list can never drift from them.
+  LOCALES="$(ls Jellyfin.Plugin.AlexaSkill/Alexa/InteractionModel/model_*.json \
+    | sed 's/.*model_\([a-zA-Z0-9-]*\)\.json/\1/')"
   for L in $LOCALES; do
     echo "=== $L ==="
     "$0" $([ "$MODE" = "status" ] && echo "--status") "$L" "$MODEL_FILE" "$SKILL_ID" 2>&1 | grep -E "accepted|failed|SUCCEEDED|FAILED|error|Error|Build"

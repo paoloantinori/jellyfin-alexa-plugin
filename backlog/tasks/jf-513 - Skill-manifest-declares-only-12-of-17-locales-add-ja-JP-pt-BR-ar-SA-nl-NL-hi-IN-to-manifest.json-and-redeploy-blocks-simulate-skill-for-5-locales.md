@@ -3,9 +3,10 @@ id: JF-513
 title: >-
   Skill manifest declares only 12 of 17 locales: add ja-JP, pt-BR, ar-SA, nl-NL,
   hi-IN to manifest.json and redeploy (blocks simulate-skill for 5 locales)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-07 00:25'
+updated_date: '2026-09-11 19:43'
 labels:
   - i18n
   - smapi
