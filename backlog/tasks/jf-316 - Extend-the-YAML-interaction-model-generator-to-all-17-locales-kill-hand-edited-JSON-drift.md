@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-07-12 14:58'
-updated_date: '2026-07-13 20:17'
+updated_date: '2026-09-10 21:45'
 labels:
   - maintainability
   - interaction-model
@@ -35,6 +35,12 @@ Fix: extend the YAML-template generator to all 17 locales (per-locale vocabulary
 - [ ] #4 Documentation updated: adding an intent is a YAML edit + regenerate for every locale, not hand-editing JSON
 - [ ] #5 The it-IT generator path continues to work unchanged
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+JF-415 addendum (2026-09-10, /simplify gate): JF-415 added a JellyfinArtist static seed block to 6 model files (5 identical en-* blocks + it-IT via the YAML template). When the YAML generator extends to all 17 locales, OWN this seed from the shared table. Interim option: a warning-level check in validate_interaction_models.py for en-* JellyfinArtist seed equality (the 5 identical blocks can drift silently with no cross-check today).
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
