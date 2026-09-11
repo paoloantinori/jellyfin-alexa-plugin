@@ -64,13 +64,28 @@ public class ManifestSkillTests
             modelLocales.OrderBy(locale => locale, StringComparer.Ordinal),
             locales.Keys.OrderBy(locale => locale, StringComparer.Ordinal));
 
+        // The response-string resources must cover the same set too, else a
+        // locale silently falls back to en-US strings at runtime.
+        var responseStringLocales = typeof(global::Jellyfin.Plugin.AlexaSkill.Util).Assembly
+            .GetManifestResourceNames()
+            .Where(name => name.StartsWith("Jellyfin.Plugin.AlexaSkill.Alexa.Locale.", StringComparison.Ordinal)
+                && name.EndsWith(".json", StringComparison.Ordinal))
+            .Select(name => name.Split('.')[^2]);
+
+        Assert.Equal(
+            modelLocales.OrderBy(locale => locale, StringComparer.Ordinal),
+            responseStringLocales.OrderBy(locale => locale, StringComparer.Ordinal));
+
         Assert.All(locales, entry =>
         {
+            Assert.NotNull(entry.Value);
             string locale = entry.Key;
             Assert.False(string.IsNullOrWhiteSpace(entry.Value.Name), $"{locale}: name must not be empty");
             Assert.False(string.IsNullOrWhiteSpace(entry.Value.Summary), $"{locale}: summary must not be empty");
             Assert.False(string.IsNullOrWhiteSpace(entry.Value.Description), $"{locale}: description must not be empty");
             Assert.NotEmpty(entry.Value.ExamplePhrases);
+            Assert.All(entry.Value.ExamplePhrases, phrase =>
+                Assert.False(string.IsNullOrWhiteSpace(phrase), $"{locale}: example phrases must not be blank"));
             Assert.EndsWith(
                 "\n\nSource: https://github.com/infinityofspace/jellyfin-alexa-plugin",
                 entry.Value.Description,

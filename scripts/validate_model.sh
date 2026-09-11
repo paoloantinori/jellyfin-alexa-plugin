@@ -31,7 +31,8 @@ fi
 # Handle 'all' locale
 if [ "$LOCALE" = "all" ]; then
   # Derive from the committed model files so the list can never drift from them.
-  LOCALES="$(ls Jellyfin.Plugin.AlexaSkill/Alexa/InteractionModel/model_*.json \
+  # Anchored to the script location so the script works from any cwd.
+  LOCALES="$(ls "$(dirname "$0")/../Jellyfin.Plugin.AlexaSkill/Alexa/InteractionModel"/model_*.json \
     | sed 's/.*model_\([a-zA-Z0-9-]*\)\.json/\1/')"
   for L in $LOCALES; do
     echo "=== $L ==="
