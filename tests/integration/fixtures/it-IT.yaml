@@ -86,9 +86,15 @@ tests:
   # 3/3 deterministic. UX cost: enqueue-as-next instead of play-now; adding a
   # bare song carrier would recreate the JF-418 collision family, so the pin
   # documents reality rather than endorsing it.
+  # JF-541 (2026-09-11): the JF-470 PlayNext steal is GONE on the deployed
+  # catalog-supplied model (AlbumName catalog v745 / JellyfinArtist v739):
+  # probe 2/2 'Riproduci star wars' -> PlaySongIntent song='star wars', the
+  # pre-JF-470 documented class above (handler resolves content type from
+  # the Jellyfin search). Pin updated to the observed winner; a future flip
+  # re-flags here.
   # -------------------------------------------------------------------------
   - utterance: "Riproduci star wars"
-    expected_intent: PlayNextIntent
+    expected_intent: PlaySongIntent
     expected_slots:
       song: {}
 
@@ -178,8 +184,11 @@ tests:
 
   # JF-470 (2026-09-03): PlayNextIntent steal ('suona {song} dopo' family,
   # trailing word dropped by Amazon's matcher); probe-verified 3/3.
+  # JF-541 (2026-09-11): steal gone on the deployed catalog-supplied model;
+  # probe 2/2 'suona star wars' -> PlaySongIntent song='star wars' (same
+  # pre-JF-470 class as 'Riproduci star wars' above). Pin updated.
   - utterance: "suona star wars"
-    expected_intent: PlayNextIntent
+    expected_intent: PlaySongIntent
     expected_slots:
       song: {}
 
@@ -629,15 +638,28 @@ tests:
   # 'thriller' keeps PlayAlbumIntent (companion entry below) while in-catalog
   # 'surfer rosa' loses the same way (both probed 3/3). Pin updated to the
   # verified routing; a future flip re-flags here.
+  # JF-541 (2026-09-11): the steal REVERSED on the deployed catalog-supplied
+  # model: probe 2/2 'Riproduci album dark side of the moon' ->
+  # PlayAlbumIntent album='dark side of the moon' (the RIGHT intent; the
+  # multi-word statistical match on the verbatim sample wins without any ER
+  # anchor: the live AlbumName catalog v745, 880 values, carries no Dark
+  # Side of the Moon). Pin updated to the correct winner.
   - utterance: "Riproduci album dark side of the moon"
-    expected_intent: PlayArtistSongsIntent
+    expected_intent: PlayAlbumIntent
     expected_slots:
-      musician: {}
+      album: {}
 
   # JF-470 companion guard: the album-noun carrier itself must keep working
   # when the title is anchored by the STATIC AlbumName model seed (thriller is
   # NOT in the Jellyfin library, so the library-synced catalog does not carry
   # it; the ER match comes from the seed values). Probe-verified 3/3.
+  # JF-541 (2026-09-11): on the deployed catalog-supplied model the seed
+  # values are GONE (AlbumName v745 has no thriller; the type carries only
+  # the live-library supplier) and the single-token title collapses: probe
+  # 2/2 NO selectedIntent (considered PlayNext x2, PlayAlbum x2). The pin
+  # below stays on the DESIRED routing as the open flag for model work
+  # (JF-541 model-bug #1: fix is catalog enrichment / seed merge, not
+  # samples; 'Riproduci l'album thriller' fails the same way).
   - utterance: "Riproduci album thriller"
     expected_intent: PlayAlbumIntent
     expected_slots:
