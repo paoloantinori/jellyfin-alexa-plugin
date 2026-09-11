@@ -6,7 +6,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-08-23 05:56'
-updated_date: '2026-08-23 10:09'
+updated_date: '2026-09-11 17:44'
 labels:
   - nlu
   - interaction-model
@@ -52,4 +52,8 @@ Still open in this task: PlaySongIntent ja-JP (10) / hi-IN (14) bump vs en-US 38
 Rebuild-endpoint oddity observed (not blocking): custom-model/rebuild with no locale falls back to CustomModelLocale (en-US) instead of rebuilding all; the all-locales option is the open JF-348.
 
 BLOCKER for the ja-JP/hi-IN (and nl/pt/ar) portion: those locales are NOT active on the current dev skill (profile-nlu returns 400; rebuild skips them), so enrichment there cannot be live-verified. Shipping unverified Japanese/Hindi samples is high-risk. Proposal for the user: temporarily enable ja-JP (and hi-IN) on the dev skill via the plugin's skill management, then enrich + verify + disable again. Until then this portion stays open.
+
+JF-316 milestone-3 archaeology (2026-09-11, gate-verified): es-US was NEVER in this task's starved-locale scope, but its FindSongIntent (12) and FindSongByArtistIntent (4) sample sets have been ENGLISH, byte-equal to en-GB's, since the intent's birth commit (036f7eae) - silent inertia, not a market decision, no NLU fixture covers es-US FindSong in either language, no prior doc mentions it. Now documented for the first time in templates/es-US.yaml's header. OPEN QUESTION for this task's scope review: does es-US FindSong deserve Spanish samples (a routing-decision + fixture), or is English-in-es-US acceptable for that marketplace? Note JF-406 tracks es-US routing divergences more broadly.
+
+JF-316 final-milestone gate (2026-09-11): the English-inertia class is WIDER than the es-US finding - nl-NL carries the same 24 pure-English samples (PlayBook fully English 8 + FindSong 12 + FindSongByArtist 4, byte-equal to es-US's sets), as do ja-JP, hi-IN, and ar-SA. All four headers now cite this task. ALSO new inertia recorded: hi-IN's Decade TYPE VALUES are untranslated English (50s..2020s, ASCII digits, numeric synonyms; Devanagari synonyms like पचासवां दशक mitigate recall) - same 036f7eae copy-inertia provenance class, header-only until now. The consolidated open question: a translation pass for the English-inertia surfaces (5 locales x PlayBook/FindSong + hi-IN Decade values) with the routing decision per marketplace.
 <!-- SECTION:NOTES:END -->
