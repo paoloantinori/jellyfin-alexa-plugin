@@ -284,7 +284,7 @@ Handlers call `GetPostPlayBehavior(user)` to resolve per-user override → globa
 
 ## Interaction Models
 
-17 locale files. The templated locales (it-IT, en-US/GB/AU/CA/IN, de-DE, es-ES/MX/US, fr-FR/CA, pt-BR; JF-316 is extending this to the rest) are **generated from YAML templates**; do NOT edit their JSON directly.
+17 locale files, ALL generated from YAML templates (JF-316 complete, 2026-09-11): one `Alexa/InteractionModel/templates/<locale>.yaml` per locale. Do NOT hand-edit any `model_*.json`; the JSONs are build output.
 
 **Key vocabulary** (it-IT template, expanded via Cartesian product):
 - `imperative`: [Riproduci, Suona, Metti, Pleia, Ascolta]
@@ -293,15 +293,11 @@ Handlers call `GetPostPlayBehavior(user)` to resolve per-user override → globa
 - `song_noun`: [il brano, la canzone, il pezzo, la traccia]
 - `media_noun`: [brani, canzoni, musica, un brano, una canzone, un pezzo, una traccia]
 
-**Model generator** (it-IT + the en-*/de/es/fr families + pt-BR): `python3 scripts/generate_interaction_model.py <locale>`
-- Templates: `Alexa/InteractionModel/templates/<locale>.yaml` (it-IT, en-US/GB/AU/CA/IN, de-DE, es-ES/MX/US, fr-FR/CA, pt-BR; JF-316 is extending this to the rest)
+**Model generator** (ALL 17 locales): `python3 scripts/generate_interaction_model.py <locale>`
+- Templates: `Alexa/InteractionModel/templates/<locale>.yaml` (one per locale; it-IT and en-US use `vocabulary` Cartesian products, the other 15 transcribe their samples verbatim, each template header documenting that locale's divergences and key-order contracts)
 - Output: `Alexa/InteractionModel/model_<locale>.json`
-- To add new slot values, samples, or vocabulary: edit the YAML template, then regenerate. A regen-equality warning check in `scripts/validate_interaction_models.py` flags any committed model that drifted from its template.
-
-**Mood slot generator** (the locales still without a template): `python3 scripts/generate_mood_slot.py`
-- Table-driven: populates the custom `Mood` slot type + narrows PlayMoodMusic samples for the 4 hand-maintained locales (nl-NL, ja-JP, hi-IN, ar-SA) from a per-locale mood-word table (`LOCALE_MOODS`).
-- Output: `Alexa/InteractionModel/model_<locale>.json` (the Mood type block only).
-- To add a mood for a hand-maintained locale: edit the `LOCALE_MOODS` table, then regenerate. Idempotent (re-running produces no diff vs committed JSONs). For the templated locales (it-IT, en-US/GB/AU/CA/IN, de-DE, es-ES/MX/US, fr-FR/CA, pt-BR), the Mood type lives in the locale's YAML template (edit the template + regenerate); this script refuses to write template-owned locales.
+- Adding or changing an intent, slot, sample, or slot-type value is a YAML edit + regenerate per affected locale, in ALL 17 locales for cross-locale changes; NEVER hand-edit the JSON. Enforcement: the generator's template guards (unknown key, typo'd `{ref}`, dict type-value keys, dual-form check) fail the build on authoring mistakes, and `scripts/validate_interaction_models.py` Phase 5 auto-discovers every template, rebuilds the model in memory with the generator's own serializer, and warns on any committed JSON that drifted from its template (plus the JellyfinArtist en-family seed-equality warning on the same walk).
+- Mood words live IN the templates everywhere now (the former `scripts/generate_mood_slot.py` and its `LOCALE_MOODS` table are deleted): to add or change a mood in any locale, edit that locale's `Mood` type in its template and regenerate. Every value AND synonym must resolve via `LocalizedMoodMap`/`MoodGenreMap` (see Mood feature architecture below).
 
 **Mood feature architecture (JF-354/355/356):**
 - The `mood` slot is a **custom `Mood` type** in ALL 17 locales (NOT `AMAZON.SearchQuery` — that caused the "music by X" misroute; see anti-pattern #3). Custom values restrict matching to mood words so artist queries route to PlayArtistSongs.
@@ -343,7 +339,7 @@ NLU test fixtures in `tests/integration/fixtures/<locale>.yaml`. NLU tests use t
 - **Invocation name (JF-297/JF-300)**: An empty `UserSkill.InvocationName` means "use locale defaults" (`Config.LocaleInvocationNames` → it-IT "mia collezione"; other locales → `Config.InvocationName` "jellyfin player"). A non-empty custom name applies to ALL 17 locales incl. it-IT. `LocaleInvocationNames` is default-only (NOT an unconditional override). Changing the name in settings triggers a redeploy to Amazon via `IInteractionModelRedeployer` (build + `UpdateSkillAsync` + poll, ~15–30s, longer if the SMAPI access token needs refresh) — no Alexa-console edit or re-auth needed. A one-time migration in the `Plugin` ctor clears legacy stored defaults so existing users keep locale defaults.
 - **profile-nlu vs on-device divergence**: `ask smapi profile-nlu` (Utterance Profiler) tests intent/slot routing against the saved model in isolation; a real Echo adds ASR + competition from other installed skills, so routing can differ. `AMAZON.MusicRecording`/`Musician` slots capture the spoken text regardless of catalog match (PlaySong works for non-catalog titles). Trust profile-nlu for model routing; verify behavior on-device or via the plugin Simulator endpoint. (JF-298)
 - **Entity resolution for slot synonyms**: `slot.Value` always contains the raw spoken text (e.g. "gli album"). To get the canonical value ("album"), extract from `slot.Resolution.Authorities[0].Values[0].Value.Name` when `Status.Code == "ER_SUCCESS_MATCH"`. See `BrowseLibraryIntentHandler.GetCanonicalSlotValue()` for the pattern.
-- **Dialog.ElicitSlot requires model registration**: Any intent that uses `Dialog.ElicitSlot` directives MUST be listed in the interaction model's `dialog.intents` array. Without this registration, Alexa **silently ignores** the directive — the session stays open (`ShouldEndSession=false`) but the user's follow-up goes through general NLU, which routes music queries to Amazon Music instead of back to the skill. Set `elicitationRequired: false` on slots when controlling dialog manually from code. This must be done in ALL 17 locales. For the templated locales (it-IT, en-US/GB/AU/CA/IN, de-DE, es-ES/MX/US, fr-FR/CA, pt-BR), add to the YAML template's `dialog` section and regenerate.
+- **Dialog.ElicitSlot requires model registration**: Any intent that uses `Dialog.ElicitSlot` directives MUST be listed in the interaction model's `dialog.intents` array. Without this registration, Alexa **silently ignores** the directive — the session stays open (`ShouldEndSession=false`) but the user's follow-up goes through general NLU, which routes music queries to Amazon Music instead of back to the skill. Set `elicitationRequired: false` on slots when controlling dialog manually from code. This must be done in ALL 17 locales: add to the locale's YAML template's `dialog` section and regenerate.
 - **Slot values ≤ 140 chars (Alexa hard limit)**: Alexa rejects slot values and synonyms longer than 140 characters with `InvalidResponse`, crashing **every** skill request (e.g. libraries with long artist fields like musical cast lists). Any code building catalog/dynamic-entity slot values MUST cap length via `SlotValueHelper.Truncate` (applied in `CatalogPayload` and `DynamicEntityBuilder`).
 - **After a DLL hot-swap, verify the ACTIVE dll**: Jellyfin migrates the plugin to a versioned dir (`AlexaSkill_<Version>`) when the AssemblyVersion changes and may install the catalog release there, displacing your hot-swapped dev DLL. Always deploy into the CURRENT versioned dir (`ls /config/data/plugins/ | grep AlexaSkill`) and verify the **running** DLL (`podman cp` it out → compare size + `strings | grep` for a unique identifier), not just the file you pushed.
 - **Signed stream tokens (JF-309)**: All 4 video-audio endpoints (`VideoAudioController`) require a signed, item-scoped HMAC token (`?token=`) minted by `StreamTokenHelper` using `PluginConfiguration.StreamTokenSecret` (auto-generated). A bare item GUID returns 401. Tokens are 10h TTL, item-scoped (not user-scoped). The token flows: skill mints it in the playlist URL → controller reads it from the query string → `WriteAudiobookPlaylist` embeds it in segment lines / `RewritePlaylistWithToken` post-processes ffmpeg-written playlists → `GetSegment` validates it. Single-chapter audiobooks re-mint a chapter-scoped token via `StreamHlsVideoAudioCore(chapterId, overrideToken)` because segments are keyed by chapterId, not parentId.
@@ -439,7 +435,7 @@ These patterns have caused bugs repeatedly across many sessions. Every rule here
 "Elenca {browse_category}"
 ```
 
-**Detection**: After editing any model JSON, search for samples without `{`:
+**Detection**: After regenerating a model from its template, search the JSON output for samples without `{`:
 ```bash
 grep -rn '"[A-Z][a-z].*"' model_*.json | grep -v '{' | grep samples
 ```
@@ -476,11 +472,11 @@ grep -rn '"[A-Z][a-z].*"' model_*.json | grep -v '{' | grep samples
 
 **Detection**: Run NLU test suite after ANY model change. Watch for intent misclassification.
 
-**Concrete instance (2026-07):** an intent with a greedy `AMAZON.SearchQuery` slot + a generic carrier — PlayMoodMusic's `"musica {mood}"` / `"play {mood} music"` — captured "music by X" and routed it to the mood intent (`mood="di miles davis"`) instead of PlayArtistSongs, in ALL 17 locales. **FIXED in JF-354/356:** the `mood` slot is now a custom `Mood` slot type (populated with locale mood vocabulary) in all 17 locales, so non-mood phrases no longer match it. The fix IS at the model layer — do NOT revert `mood` to `AMAZON.SearchQuery` (that reintroduces the misroute in every locale). To add/change Mood values: the templated locales (it-IT, en-US/GB/AU/CA/IN, de-DE, es-ES/MX/US, fr-FR/CA, pt-BR) via their YAML template (`scripts/generate_interaction_model.py <locale>`); the other 4 via `scripts/generate_mood_slot.py` (table-driven). `TryEntityFallbackAsync` (see Cross-Media-Type Fallback) remains as the handler-side recovery for any residual mood-miss. When you see "X found nothing but a sibling entity query works," check whether a greedy SearchQuery slot on *some other* intent stole it before assuming a search bug.
+**Concrete instance (2026-07):** an intent with a greedy `AMAZON.SearchQuery` slot + a generic carrier — PlayMoodMusic's `"musica {mood}"` / `"play {mood} music"` — captured "music by X" and routed it to the mood intent (`mood="di miles davis"`) instead of PlayArtistSongs, in ALL 17 locales. **FIXED in JF-354/356:** the `mood` slot is now a custom `Mood` slot type (populated with locale mood vocabulary) in all 17 locales, so non-mood phrases no longer match it. The fix IS at the model layer — do NOT revert `mood` to `AMAZON.SearchQuery` (that reintroduces the misroute in every locale). To add/change Mood values: edit the locale's `Mood` type in its YAML template and regenerate (`python3 scripts/generate_interaction_model.py <locale>`), in every locale (all 17 are templated; the old `generate_mood_slot.py` is deleted). `TryEntityFallbackAsync` (see Cross-Media-Type Fallback) remains as the handler-side recovery for any residual mood-miss. When you see "X found nothing but a sibling entity query works," check whether a greedy SearchQuery slot on *some other* intent stole it before assuming a search bug.
 
 ### 4. Cross-Locale Drift (8+ incidents)
 
-**Always add new intents/slots to ALL 17 locales simultaneously.** For the templated locales (it-IT, en-US/GB/AU/CA/IN, de-DE, es-ES/MX/US, fr-FR/CA, pt-BR), edit the YAML template and regenerate (`python3 scripts/generate_interaction_model.py <locale>`). For the others, edit JSON directly.
+**Always add new intents/slots to ALL 17 locales simultaneously.** Every locale is templated: edit `templates/<locale>.yaml` and regenerate (`python3 scripts/generate_interaction_model.py <locale>`) per locale; never edit the JSON.
 
 **Detection**: Already caught by `validate_interaction_models.py` cross-locale checks.
 

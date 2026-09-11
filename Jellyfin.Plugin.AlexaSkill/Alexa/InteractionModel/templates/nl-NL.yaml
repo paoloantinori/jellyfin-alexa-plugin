@@ -1,0 +1,904 @@
+# Dutch (Netherlands) interaction model template for the Alexa skill.
+#
+# JF-316 milestone 5 (final): golden master. Faithful transcription of
+# the hand-grown model_nl-NL.json (59 intents, 362 samples);
+# `python3 scripts/generate_interaction_model.py nl-NL` reproduces it
+# byte-identically. Every sample is verbatim in the committed order:
+# plain transcription over compression (the milestone-2 decision; no
+# vocabulary section).
+#
+# Run: python3 scripts/generate_interaction_model.py nl-NL
+#
+# Invariants carried by this file:
+# - The intent order is IDENTICAL to pt-BR's: PlayByDecade right after
+#   PlayByGenre (before ContinueWatching), PlayPodcast after
+#   PlayNextEpisode (before BrowseLibrary), SearchMedia after
+#   QueryArtistLibrary (before PlayBook). The loop shape follows the
+#   en/es families (bare AMAZON.LoopOnIntent / AMAZON.LoopOffIntent +
+#   LoopSongOnIntent right after them), NOT the de/fr custom
+#   LoopAllOff/On/RepeatSingleOn trio.
+# - Vocabulary reality, not to be normalized: the model is 100% ASCII;
+#   not one of the 362 samples carries a diacritic (loanwords sit
+#   unaccented: media, genre, serie). LibraryQueryType (tracks /
+#   albums) and MediaType (media / video / audio) values are English
+#   cognates as committed, not translated.
+# - ENGLISH INERTIA (JF-399, the 036f7eae copy-in class): nl carries
+#   the same 24 pure-English samples as ja/hi/ar and es-US - PlayBook
+#   fully English (8) and FindSong (12) + FindSongByArtist (4)
+#   byte-equal to es-US English sets. Transcribed as committed; do
+#   not translate without the JF-399 routing decision.
+# - The 9-type roster and order match pt-BR's: Mood, LibraryQueryType,
+#   MediaType, BrowseCategory, SeriesName, TimePeriod, MediaInfoType,
+#   Decade, AudiobookTitle. SeriesName carries 8 values with 'Money
+#   Heist' UNTRANSLATED (pt-BR localizes it as La Casa de Papel);
+#   Sherlock last. Decade uses jaren 50 ... jaren 2020 with spelled
+#   and numeric synonyms. TimePeriod is id-first (vandaag / deze week
+#   / deze maand) with 1 / 3 / 3 past-period synonyms, the same shape
+#   as pt-BR's.
+# - Type-value key order is load-bearing for byte-identity: 31
+#   id-first, 27 name-only, 3 name-first-then-id (BrowseCategory's
+#   artiesten / albums / nummers, mirroring pt-BR's
+#   artists/albums/songs trio).
+# - dialog roster and order are IDENTICAL to en-US's (PlayEpisode
+#   first, its three slots elicitationRequired:true with Elicit.*
+#   prompts); the 5-entry prompts section matches en-US's shape
+#   including the committed reality that Elicit.SongName and
+#   Elicit.AlbumName are referenced by NO dialog slot (orphan
+#   prompts, JF-542; do not "clean them up" in a transcription).
+# - Key order is load-bearing for byte-identity: 13 name/samples-only,
+#   15 bare, 19 name/samples/slots, 12 name/slots/samples. Only
+#   ShowMoreIntent carries `slots: []`; the other 13 sample-bearing
+#   intents have NO slots key at all. BrowseLibraryIntent opens with
+#   the lone slot-only sample '{browse_category}'.
+# - NO modelConfiguration; musician slots are the BUILT-IN
+#   AMAZON.Musician everywhere (no JellyfinArtist type, no JF-415
+#   seed).
+# - The Mood type and the slotted-only PlayMoodMusic samples are
+#   OWNED HERE (JF-316 final milestone mood consolidation): the 14
+#   Dutch values (ontspannend ... slapen; concentratie carries
+#   synonym focus, blij carries gelukkig, slapen carries slaap)
+#   transcribe generate_mood_slot.py's former LOCALE_MOODS nl-NL
+#   table; that script and its table were deleted in this milestone
+#   with the content preserved here value-for-value. Every value AND
+#   synonym resolves through LocalizedMoodMap in
+#   PlayMoodMusicIntentHandler.cs (JF-356 added the nl-NL block).
+# - Every PlayAlbum carrier names the media (anti-pattern #11; the
+#   indefinite "een album van {musician}" form names it too).
+# - AMAZON.StopIntent has NO custom samples; the it-IT "ferma"
+#   samples are a JF-402 it-IT-only exception.
+invocationName: jellyfin player
+intents:
+  - name: QueryRecentlyAddedIntent
+    samples:
+      - wat is er nieuw
+      - wat is er recentelijk toegevoegd
+      - wat is er nieuw in mijn bibliotheek
+      - laat recent toegevoegde zien
+      - iets nieuws onlangs
+      - laat de nieuwste items zien
+      - wat zijn de nieuwste items
+  - name: FollowMeIntent
+    samples:
+      - volg me
+      - verder met afspelen
+      - neem het over
+      - doorgaan met luisteren
+  - AMAZON.CancelIntent
+  - AMAZON.HelpIntent
+  - AMAZON.StopIntent
+  - AMAZON.FallbackIntent
+  - AMAZON.PauseIntent
+  - AMAZON.ResumeIntent
+  - AMAZON.NextIntent
+  - AMAZON.PreviousIntent
+  - AMAZON.YesIntent
+  - AMAZON.NoIntent
+  - AMAZON.LoopOnIntent
+  - AMAZON.LoopOffIntent
+  - name: LoopSongOnIntent
+    samples:
+      - loop dit nummer
+      - herhaal dit nummer
+      - zet dit nummer op repeat
+      - blijf dit nummer herhalen
+  - AMAZON.ShuffleOnIntent
+  - AMAZON.ShuffleOffIntent
+  - AMAZON.StartOverIntent
+  - name: PlayChannelIntent
+    samples:
+      - speel kanaal {channel}
+      - speel radio {channel}
+    slots:
+      - name: channel
+        type: AMAZON.SearchQuery
+  - name: PlaySongIntent
+    samples:
+      - speel {song}
+      - speel het nummer {song}
+      - speel nummer {song}
+      - speel {song} van {musician}
+      - speel het nummer {song} van {musician}
+      - luister naar {song}
+      - luister naar het nummer {song}
+      - luister naar {song} van {musician}
+      - zet {song} op
+      - ik wil {song} horen
+      - ik wil {song} van {musician} horen
+      - kun je {song} afspelen
+      - kun je {song} van {musician} afspelen
+      - start {song}
+      - speel het liedje {song}
+      - speel het liedje {song} van {musician}
+      - draai {song}
+      - stream {song}
+    slots:
+      - name: song
+        type: AMAZON.MusicRecording
+      - name: musician
+        type: AMAZON.Musician
+  - name: PlayAlbumIntent
+    samples:
+      - speel het album {album}
+      - speel album {album}
+      - speel het album {album} van {musician}
+      - luister naar het album {album}
+      - een album van {musician}
+      - speel een album van {musician}
+      - luister naar een album van {musician}
+    slots:
+      - name: album
+        type: AMAZON.MusicRecording
+      - name: musician
+        type: AMAZON.Musician
+  - name: PlayVideoIntent
+    samples:
+      - speel de video {title}
+      - zet de video {title} op
+      - start {title}
+      - kijk {title}
+      - kun je {title} afspelen
+      - ik wil {title} kijken
+      - laten we {title} kijken
+      - stream {title}
+      - speel de film {title}
+      - start de video {title}
+      - zet de film {title} op
+      - ik wil de film {title} kijken
+      - zoek de film {title}
+    slots:
+      - name: title
+        type: AMAZON.SearchQuery
+  - name: PlayArtistSongsIntent
+    samples:
+      - speel nummers van {musician}
+      - speel muziek van {musician}
+      - speel tracks van {musician}
+      - speel liedjes van {musician}
+      - luister naar {musician}
+      - luister naar nummers van {musician}
+      - luister naar muziek van {musician}
+      - zet {musician} op
+      - ik wil {musician} horen
+      - ik wil naar {musician} luisteren
+      - kun je {musician} afspelen
+      - start {musician}
+      - shuffle {musician}
+      - shuffle nummers van {musician}
+      - speel {musician}
+      - speel wat {musician}
+      - stream {musician}
+      - Speel de {musician}
+      - Zet de {musician}
+      - Luister naar de {musician}
+      - Speel het {musician}
+      - Zet het {musician}
+      - Luister naar het {musician}
+      - Te spelen de {musician}
+      - Te spelen het {musician}
+      - Te zetten de {musician}
+      - Te zetten het {musician}
+    slots:
+      - name: musician
+        type: AMAZON.Musician
+  - name: PlayLastAddedIntent
+    samples:
+      - speel laatst toegevoegde {media_type}
+      - speel recent toegevoegde {media_type}
+      - speel nieuwe media
+      - speel iets nieuws
+      - speel {media_type} toegevoegd {time_period}
+      - speel recent toegevoegde {media_type} van {time_period}
+      - wat is nieuw in {media_type}
+      - speel de nieuwste {media_type}
+      - laat nieuwe {media_type} zien
+    slots:
+      - name: media_type
+        type: MediaType
+      - name: time_period
+        type: TimePeriod
+  - name: PlayRandomIntent
+    samples:
+      - speel een willekeurig {media_type}
+      - speel willekeurig {media_type}
+      - shuffle mijn {media_type}
+      - speel iets willekeurigs
+      - speel een willekeurig {media_type} uit {genre}
+      - speel willekeurige {genre} {media_type}
+      - verras me met {media_type}
+      - shuffle {genre} {media_type}
+      - speel willekeurige nummers
+      - speel willekeurige muziek
+      - geef me een willekeurig {media_type}
+      - iets willekeurigs afspelen
+    slots:
+      - name: media_type
+        type: MediaType
+      - name: genre
+        type: AMAZON.Genre
+  - name: PlayByGenreIntent
+    samples:
+      - speel wat {genre} muziek
+      - speel {genre} nummers
+      - speel {genre} muziek
+      - speel me wat {genre}
+      - ik wil naar {genre} luisteren
+      - speel {genre}
+      - geef me {genre} muziek
+      - zet wat {genre} op
+      - ik heb zin in {genre} muziek
+      - start {genre}
+      - stream {genre} muziek
+    slots:
+      - name: genre
+        type: AMAZON.Genre
+  - name: PlayByDecadeIntent
+    samples:
+      - speel nummers uit de {decade}
+      - speel hits uit de {decade}
+      - speel muziek uit de {decade}
+      - speel {decade} hits
+      - speel {decade} nummers
+      - speel {genre} uit de {decade}
+      - ik wil {decade} muziek horen
+      - luister naar {decade} muziek
+      - geef me {decade} nummers
+      - shuffle {decade} muziek
+    slots:
+      - name: decade
+        type: Decade
+      - name: genre
+        type: AMAZON.Genre
+  - name: ContinueWatchingIntent
+    samples:
+      - verder kijken
+      - verder luisteren
+      - hervat waar ik was gebleven
+      - wat was ik aan het kijken
+      - doorgaan
+      - verder gaan
+  - name: GoToChapterIntent
+    samples:
+      - volgend hoofdstuk
+      - vorig hoofdstuk
+      - ga naar hoofdstuk {chapter_number}
+      - spring naar hoofdstuk {chapter_number}
+      - een hoofdstuk vooruit
+      - een hoofdstuk terug
+      - hoofdstuk overslaan
+    slots:
+      - name: chapter_number
+        type: AMAZON.NUMBER
+  - name: PlayPlaylistIntent
+    samples:
+      - speel de afspeellijst {playlist}
+      - speel mijn afspeellijst {playlist}
+      - zet de afspeellijst {playlist} op
+      - start de afspeellijst {playlist}
+      - zet mijn afspeellijst {playlist} op
+      - luister naar de afspeellijst {playlist}
+      - kun je afspeellijst {playlist} afspelen
+      - ik wil afspeellijst {playlist} horen
+      - geef me afspeellijst {playlist}
+      - stream de afspeellijst {playlist}
+    slots:
+      - name: playlist
+        type: AMAZON.SearchQuery
+  - name: PlayFavoritesIntent
+    samples:
+      - speel mijn favoriete {media_type}
+      - speel mijn favorieten
+      - speel mijn favoriete nummers
+      - speel mijn favoriete muziek
+      - speel de favorieten van {username}
+      - speel {username} favoriete {media_type}
+      - luister naar de favorieten van {username}
+    slots:
+      - name: media_type
+        type: MediaType
+      - name: username
+        type: AMAZON.Person
+  - name: MarkFavoriteIntent
+    samples:
+      - ik vind dit leuk
+      - ik vind de video leuk
+      - ik vind het nummer leuk
+      - ik vind de muziek leuk
+      - ik vind dit nummer leuk
+      - voeg de video toe aan favorieten
+      - voeg het nummer toe aan favorieten
+      - sla dit op in favorieten
+      - markeer als favoriet
+  - name: UnmarkFavoriteIntent
+    samples:
+      - ik vind dit niet leuk
+      - ik vind de video niet leuk
+      - ik vind het nummer niet leuk
+      - verwijder de video uit favorieten
+      - verwijder het nummer uit favorieten
+  - name: MediaInfoIntent
+    slots:
+      - name: media_info_type
+        type: MediaInfoType
+    samples:
+      - hoe heet dit nummer
+      - hoe heet de video
+      - hoe heet de muziek
+      - wat is de titel van het nummer
+      - wat speelt er nu
+      - wat is de {media_info_type} hiervan
+      - vertel me de {media_info_type}
+      - wie zingt dit
+      - wie speelt dit
+      - wat is het genre
+      - wanneer is dit uitgebracht
+      - vertel me over deze artiest
+      - van welk album is dit
+      - welk seizoen is dit
+      - welke aflevering is dit
+      - welke serie is dit
+      - wie heeft dit geregisseerd
+      - wie is de regisseur
+      - wie spelen hierin
+      - wie zijn de acteurs
+      - wie is de auteur
+      - wie heeft dit geschreven
+      - wie is de verteller
+      - wie vertelt dit
+      - wat is de beoordeling
+      - hoe is dit beoordeeld
+      - wat is de waardering
+      - hoeveel sterren heeft dit
+      - wie zit in de cast
+  - name: InProgressMediaListIntent
+    samples:
+      - waar was ik naar aan het luisteren
+      - waar was ik naar aan het kijken
+      - wat is in behandeling
+      - laat mijn voortgang zien
+      - wat was ik aan het afspelen
+      - wat heb ik gestart
+  - name: PlayEpisodeIntent
+    slots:
+      - name: series_name
+        type: SeriesName
+      - name: season_number
+        type: AMAZON.NUMBER
+      - name: episode_number
+        type: AMAZON.NUMBER
+    samples:
+      - speel seizoen {season_number} aflevering {episode_number} van {series_name}
+      - speel {series_name} seizoen {season_number} aflevering {episode_number}
+      - kijk seizoen {season_number} aflevering {episode_number} van {series_name}
+  - name: PlayNextEpisodeIntent
+    slots:
+      - name: series_name
+        type: SeriesName
+    samples:
+      - speel de volgende aflevering van {series_name}
+      - speel de volgende aflevering van de serie {series_name}
+      - speel de nieuwste aflevering van {series_name}
+      - ga verder met {series_name}
+  - name: PlayPodcastIntent
+    samples:
+      - speel de podcast {podcast_name}
+      - speel podcast {podcast_name}
+      - luister naar de podcast {podcast_name}
+      - speel de laatste aflevering van {podcast_name}
+      - start de podcast {podcast_name}
+      - ik wil naar podcast {podcast_name} luisteren
+    slots:
+      - name: podcast_name
+        type: AMAZON.SearchQuery
+  - name: BrowseLibraryIntent
+    slots:
+      - name: browse_category
+        type: BrowseCategory
+    samples:
+      - '{browse_category}'
+      - alleen {browse_category}
+      - ik wil {browse_category}
+      - browse {browse_category}
+      - laat {browse_category} zien
+      - lijst {browse_category}
+      - welke {browse_category} heb ik
+      - welke {browse_category} zijn er
+  - name: RecommendIntent
+    slots:
+      - name: media_type
+        type: MediaType
+    samples:
+      - beveel iets aan
+      - beveel wat muziek aan
+      - beveel een film aan
+      - stel iets voor om te kijken
+      - stel wat muziek voor
+      - speel iets wat ik leuk vind
+      - beveel {media_type} aan
+      - stel {media_type} voor
+  - name: SleepTimerIntent
+    slots:
+      - name: duration_minutes
+        type: AMAZON.NUMBER
+    samples:
+      - stop met afspelen over {duration_minutes} minuten
+      - stel een slaaptimer in voor {duration_minutes} minuten
+      - slaaptimer {duration_minutes} minuten
+      - stop na {duration_minutes} minuten
+      - zet uit over {duration_minutes} minuten
+  - name: SetReminderIntent
+    slots:
+      - name: duration_minutes
+        type: AMAZON.NUMBER
+      - name: reminder_time
+        type: AMAZON.TIME
+    samples:
+      - herinner me over {duration_minutes} minuten
+      - stel een herinnering in voor {duration_minutes} minuten
+      - herinner me om {reminder_time}
+      - zet een herinnering op {reminder_time}
+  - name: PlayMoodMusicIntent
+    slots:
+      - name: mood
+        type: Mood
+    samples:
+      - speel {mood} muziek
+      - speel iets {mood}
+      - speel {mood} nummers
+      - ik wil {mood} muziek
+      - speel mij iets {mood}
+  - name: AddToQueueIntent
+    slots:
+      - name: song
+        type: AMAZON.MusicRecording
+      - name: musician
+        type: AMAZON.Musician
+    samples:
+      - voeg {song} toe aan mijn wachtrij
+      - voeg {song} toe aan de wachtrij
+      - voeg {song} van {musician} toe aan mijn wachtrij
+      - voeg {song} van {musician} toe aan de wachtrij
+      - wachtrij {song}
+      - wachtrij {song} van {musician}
+      - zet {song} in mijn wachtrij
+  - name: PlayNextIntent
+    slots:
+      - name: song
+        type: AMAZON.MusicRecording
+      - name: musician
+        type: AMAZON.Musician
+    samples:
+      - speel {song} hierna
+      - speel {song} van {musician} hierna
+      - ik wil {song} hierna horen
+      - speel {song} na dit
+  - name: ClearQueueIntent
+    samples:
+      - wis mijn wachtrij
+      - wis de wachtrij
+      - leeg mijn wachtrij
+      - leeg de wachtrij
+      - verwijder alles uit mijn wachtrij
+  - name: ListQueueIntent
+    samples:
+      - wat zit er in mijn wachtrij
+      - wat zit er in de wachtrij
+      - wat komt er aan
+      - wat is het volgende
+      - laat mijn wachtrij zien
+      - wat wordt hierna afgespeeld
+  - name: PlayRadioIntent
+    samples:
+      - speel radio
+      - speel radiomodus
+      - start radio
+      - speel meer zoals dit
+      - blijf vergelijkbare muziek afspelen
+      - speel vergelijkbare nummers
+      - start een radiostation
+      - speel nummers zoals deze
+      - start het radiostation {station}
+    slots:
+      - name: station
+        type: AMAZON.SearchQuery
+  - name: TurnRadioOnIntent
+    samples:
+      - zet radiomodus aan
+      - schakel radiomodus in
+      - radiomodus aan
+      - zet radio aan
+      - schakel radio in
+  - name: TurnRadioOffIntent
+    samples:
+      - zet radiomodus uit
+      - schakel radiomodus uit
+      - radiomodus uit
+      - zet radio uit
+      - schakel radio uit
+      - stop radiomodus
+  - name: LearnMyVoiceIntent
+    samples:
+      - leer mijn stem
+      - onthoud mijn stem
+      - herken mij
+      - koppel mijn stem
+      - dit is mijn stem
+      - stel mijn stemprofiel in
+  - name: WhoAmIIntent
+    samples:
+      - wie ben ik
+      - welk account is dit
+      - welk account gebruik ik
+      - wie spreekt er
+      - welk profiel is actief
+      - ben ik herkend
+  - name: QueryArtistLibraryIntent
+    samples:
+      - welke tracks hebben we van {musician}
+      - welke nummers hebben we van {musician}
+      - welke albums hebben we van {musician}
+      - wat hebben we van {musician}
+      - laat tracks zien van {musician}
+      - laat albums zien van {musician}
+      - welke {query_type} hebben we van {musician}
+      - laat {query_type} zien van {musician}
+    slots:
+      - name: musician
+        type: AMAZON.Musician
+      - name: query_type
+        type: LibraryQueryType
+  - name: SearchMediaIntent
+    slots:
+      - name: query
+        type: AMAZON.SearchQuery
+    samples:
+      - zoek naar een film {query}
+      - zoek naar content {query}
+      - zoek naar een video {query}
+      - zoek naar een serie {query}
+      - vind een film {query}
+      - vind content {query}
+      - vind een video {query}
+      - zoek een film {query}
+      - zoek content {query}
+      - zoek een video {query}
+      - zoek een film {query} op
+      - zoek content {query} op
+      - heb je een film {query}
+      - heb je content {query}
+      - ik wil een film vinden {query}
+      - ik wil content vinden {query}
+      - kun je een film vinden {query}
+      - kun je content vinden {query}
+      - vind me een film {query}
+      - vind me content {query}
+  - name: PlayBookIntent
+    slots:
+      - name: book
+        type: AudiobookTitle
+    samples:
+      - play {book}
+      - play the book {book}
+      - play audiobook {book}
+      - play the audiobook {book}
+      - listen to {book}
+      - listen to the book {book}
+      - listen to audiobook {book}
+      - listen to the audiobook {book}
+  - name: ShowMoreIntent
+    samples:
+      - toon meer
+      - meer resultaten
+      - volgende
+      - doorgaan
+      - wat nog meer
+      - meer
+      - volgende pagina
+      - laat meer zien
+    slots: []
+  - name: FindSongIntent
+    samples:
+      - find a song
+      - help me find a song
+      - search for a song
+      - I'm looking for a song
+      - I need to find a song
+      - find me a song
+      - help me search for a song
+      - I want to find a song
+      - find a song called {titleKeywords}
+      - search for a song called {titleKeywords}
+      - find a song about {titleKeywords}
+      - I'm looking for a song called {titleKeywords}
+    slots:
+      - name: titleKeywords
+        type: AMAZON.SearchQuery
+  - name: FindSongByArtistIntent
+    samples:
+      - find a song by {musician}
+      - help me find a song by {musician}
+      - search for a song by {musician}
+      - I'm looking for a song by {musician}
+    slots:
+      - name: musician
+        type: AMAZON.Musician
+  - name: ShufflePlayIntent
+    samples:
+      - speel de playlist {playlist} in willekeurige volgorde
+      - shuffle de playlist {playlist}
+    slots:
+      - name: playlist
+        type: AMAZON.SearchQuery
+types:
+  Mood:
+    values:
+      - value: ontspannend
+      - value: rustgevend
+      - value: vrolijk
+      - value: energiek
+      - value: concentratie
+        synonyms: [focus]
+      - value: romantisch
+      - value: blij
+        synonyms: [gelukkig]
+      - value: verdrietig
+      - value: feest
+      - value: workout
+        synonyms: [training]
+      - value: ochtend
+      - value: avond
+      - value: diner
+      - value: slapen
+        synonyms: [slaap]
+  LibraryQueryType:
+    values:
+      - id: tracks
+        value: tracks
+        synonyms: [nummers, muziek, nummer, track]
+      - id: albums
+        value: albums
+        synonyms: [platen, plaat, album]
+  MediaType:
+    values:
+      - id: media
+        value: media
+      - id: video
+        value: video
+      - id: audio
+        value: audio
+        synonyms: [muziek, nummer]
+  BrowseCategory:
+    values:
+      - value: artiesten
+        id: artists
+      - value: albums
+        synonyms: [plaat, platen, album]
+        id: albums
+      - value: films
+      - value: nummers
+        synonyms: [track, muziek, nummer, tracks]
+        id: songs
+      - value: genres
+      - value: series
+      - value: boeken
+  SeriesName:
+    values:
+      - value: Breaking Bad
+      - value: Game of Thrones
+      - value: Stranger Things
+      - value: Money Heist
+      - value: Peaky Blinders
+      - value: The Walking Dead
+      - value: Dark
+      - value: Sherlock
+  TimePeriod:
+    values:
+      - id: today
+        value: vandaag
+        synonyms: [eerder vandaag]
+      - id: this_week
+        value: deze week
+        synonyms: [afgelopen week, vorige week, de afgelopen week]
+      - id: this_month
+        value: deze maand
+        synonyms: [afgelopen maand, vorige maand, de afgelopen maand]
+  MediaInfoType:
+    values:
+      - id: title
+        value: titel
+        synonyms: [nummer, track, naam]
+      - id: album
+        value: album
+        synonyms: [plaat]
+      - id: artist
+        value: artiest
+        synonyms: [zanger, band, muzikant]
+      - id: year
+        value: jaar
+        synonyms: [uitgavejaar]
+      - id: duration
+        value: duur
+        synonyms: [lengte, speelduur]
+      - id: genre
+        value: genre
+        synonyms: [stijl, muzieksoort]
+      - id: biography
+        value: biografie
+        synonyms: [bio, over de artiest]
+      - id: director
+        value: regisseur
+        synonyms: [filmmaker, regisseuse]
+      - id: cast
+        value: cast
+        synonyms: [acteurs, spelers, rollen]
+      - id: season
+        value: seizoen
+        synonyms: [seizoennummer]
+      - id: episode
+        value: aflevering
+        synonyms: [afleveringnummer, episode]
+      - id: series
+        value: serie
+        synonyms: [tv-serie, programma, reeks]
+      - id: author
+        value: auteur
+        synonyms: [schrijver, schrijfster]
+      - id: narrator
+        value: verteller
+        synonyms: [vertelster, voorlezer, spreker]
+      - id: rating
+        value: beoordeling
+        synonyms: [waardering, score, cijfer]
+  Decade:
+    values:
+      - id: 50s
+        value: jaren 50
+        synonyms: [vijftiger jaren, 50er jaren, 1950er jaren]
+      - id: 60s
+        value: jaren 60
+        synonyms: [zestiger jaren, 60er jaren, 1960er jaren]
+      - id: 70s
+        value: jaren 70
+        synonyms: [zeventiger jaren, 70er jaren, 1970er jaren]
+      - id: 80s
+        value: jaren 80
+        synonyms: [tachtiger jaren, 80er jaren, 1980er jaren]
+      - id: 90s
+        value: jaren 90
+        synonyms: [negentiger jaren, 90er jaren, 1990er jaren]
+      - id: 2000s
+        value: jaren 2000
+        synonyms: [tweeduizend, 00er]
+      - id: 2010s
+        value: jaren 2010
+        synonyms: [tieners, 10er]
+      - id: 2020s
+        value: jaren 2020
+        synonyms: [twintigers, 20er]
+  AudiobookTitle:
+    values:
+      - value: luisterboek
+        synonyms: []
+dialog:
+  intents:
+    - name: PlayEpisodeIntent
+      confirmationRequired: false
+      slots:
+        - name: series_name
+          type: SeriesName
+          confirmationRequired: false
+          elicitationRequired: true
+          prompts:
+            elicitation: Elicit.SeriesName
+        - name: season_number
+          type: AMAZON.NUMBER
+          confirmationRequired: false
+          elicitationRequired: true
+          prompts:
+            elicitation: Elicit.SeasonNumber
+        - name: episode_number
+          type: AMAZON.NUMBER
+          confirmationRequired: false
+          elicitationRequired: true
+          prompts:
+            elicitation: Elicit.EpisodeNumber
+    - name: PlaySongIntent
+      confirmationRequired: false
+      slots:
+        - name: song
+          type: AMAZON.MusicRecording
+          confirmationRequired: false
+          elicitationRequired: false
+        - name: musician
+          type: AMAZON.Musician
+          confirmationRequired: false
+          elicitationRequired: false
+    - name: PlayAlbumIntent
+      confirmationRequired: false
+      slots:
+        - name: album
+          type: AMAZON.MusicRecording
+          confirmationRequired: false
+          elicitationRequired: false
+        - name: musician
+          type: AMAZON.Musician
+          confirmationRequired: false
+          elicitationRequired: false
+    - name: FindSongIntent
+      confirmationRequired: false
+      slots:
+        - name: titleKeywords
+          type: AMAZON.SearchQuery
+          confirmationRequired: false
+          elicitationRequired: false
+    - name: FindSongByArtistIntent
+      confirmationRequired: false
+      slots:
+        - name: musician
+          type: AMAZON.Musician
+          confirmationRequired: false
+          elicitationRequired: false
+    - name: ShufflePlayIntent
+      confirmationRequired: false
+      slots:
+        - name: playlist
+          type: AMAZON.SearchQuery
+          confirmationRequired: false
+          elicitationRequired: false
+    - name: PlayRadioIntent
+      confirmationRequired: false
+      slots:
+        - name: station
+          type: AMAZON.SearchQuery
+          confirmationRequired: false
+          elicitationRequired: false
+prompts:
+  - id: Elicit.SeriesName
+    variations:
+      - type: PlainText
+        value: Welke serie wil je kijken?
+      - type: PlainText
+        value: Hoe heet de serie?
+  - id: Elicit.SeasonNumber
+    variations:
+      - type: PlainText
+        value: Welk seizoen?
+      - type: PlainText
+        value: Welk seizoensnummer?
+  - id: Elicit.EpisodeNumber
+    variations:
+      - type: PlainText
+        value: Welk afleveringsnummer?
+      - type: PlainText
+        value: Welke aflevering wil je kijken?
+  - id: Elicit.SongName
+    variations:
+      - type: PlainText
+        value: Welk nummer wil je horen?
+      - type: PlainText
+        value: Welk nummer?
+  - id: Elicit.AlbumName
+    variations:
+      - type: PlainText
+        value: Welk album wil je horen?
+      - type: PlainText
+        value: Hoe heet het album?

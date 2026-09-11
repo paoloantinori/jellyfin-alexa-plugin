@@ -1,0 +1,825 @@
+# Japanese (Japan) interaction model template for the Alexa skill.
+#
+# JF-316 milestone 5 (final): golden master. Faithful transcription of
+# the hand-grown model_ja-JP.json (59 intents, 286 samples);
+# `python3 scripts/generate_interaction_model.py ja-JP` reproduces it
+# byte-identically. Every sample is verbatim in the committed order:
+# plain transcription over compression (the milestone-2 decision; no
+# vocabulary section).
+#
+# Run: python3 scripts/generate_interaction_model.py ja-JP
+#
+# Invariants carried by this file:
+# - The intent order is IDENTICAL to pt-BR's: PlayByDecade right after
+#   PlayByGenre (before ContinueWatching), PlayPodcast after
+#   PlayNextEpisode (before BrowseLibrary), SearchMedia after
+#   QueryArtistLibrary (before PlayBook). The loop shape follows the
+#   en/es families (bare AMAZON.LoopOnIntent / AMAZON.LoopOffIntent +
+#   LoopSongOnIntent right after them), NOT the de/fr custom
+#   LoopAllOff/On/RepeatSingleOn trio.
+# - Script reality, preserved code point for code point (any
+#   normalization is a byte-diff; the regen check will catch it): the
+#   ONLY full-width punctuation is ？ (U+FF1F, 49 occurrences ending
+#   question sentences); the prolonged sound mark ー (U+30FC, 98
+#   occurrences inside loanwords); NO half-width katakana
+#   (U+FF66-FF9D) and NO full-width alphanumerics (U+FF01-FF5E beyond
+#   the question mark) anywhere. Samples use regular ASCII spaces
+#   around slot refs (チャンネル {channel} を再生して), never U+3000.
+# - English inertia, NOT a market decision: exactly 24 samples are
+#   pure English. PlayBookIntent is entirely English (8 samples), and
+#   FindSongIntent (12) + FindSongByArtistIntent (4) are byte-identical
+#   to es-US's English sets (the 036f7eae copy-inertia; JF-399 tracks
+#   the open question). Transcribed as committed; do not "clean up"
+#   here without a product decision.
+# - The 9-type roster and order match pt-BR's: Mood, LibraryQueryType,
+#   MediaType, BrowseCategory, SeriesName, TimePeriod, MediaInfoType,
+#   Decade, AudiobookTitle. SeriesName carries 8 values with 'Money
+#   Heist' UNTRANSLATED (pt-BR localizes it as La Casa de Papel);
+#   Sherlock last. Decade uses the 年代 kanji forms (50年代 ... 2020年代)
+#   with numeric synonyms. TimePeriod is id-first (今日 / 今週 / 今月)
+#   with 1 / 2 / 2 kana synonyms.
+# - Type-value key order is load-bearing for byte-identity: 31
+#   id-first, 27 name-only, 3 name-first-then-id (BrowseCategory's
+#   アーティスト / アルバム / 曲, mirroring pt-BR's artists/albums/songs
+#   trio).
+# - dialog roster and order are IDENTICAL to en-US's (PlayEpisode
+#   first, its three slots elicitationRequired:true with Elicit.*
+#   prompts); the 5-entry prompts section matches en-US's shape
+#   including the committed reality that Elicit.SongName and
+#   Elicit.AlbumName are referenced by NO dialog slot (orphan
+#   prompts, JF-542; do not "clean them up" in a transcription).
+# - Key order is load-bearing for byte-identity: 13 name/samples-only,
+#   15 bare, 19 name/samples/slots, 12 name/slots/samples. Only
+#   ShowMoreIntent carries `slots: []`; the other 13 sample-bearing
+#   intents have NO slots key at all. BrowseLibraryIntent opens with
+#   the lone slot-only sample '{browse_category}'.
+# - NO modelConfiguration; musician slots are the BUILT-IN
+#   AMAZON.Musician everywhere (no JellyfinArtist type, no JF-415
+#   seed).
+# - The Mood type and the slotted-only PlayMoodMusic samples are
+#   OWNED HERE (JF-316 final milestone mood consolidation): the 14
+#   Katakana/English loanword values (the Alexa-JP music-mood
+#   convention) transcribe generate_mood_slot.py's former
+#   LOCALE_MOODS ja-JP table; that script and its table were deleted
+#   in this milestone with the content preserved here value-for-value.
+#   Every value resolves through LocalizedMoodMap in
+#   PlayMoodMusicIntentHandler.cs (JF-356 added the ja-JP block).
+# - Every PlayAlbum carrier names the media アルバム (anti-pattern #11).
+# - AMAZON.StopIntent has NO custom samples; the it-IT "ferma"
+#   samples are a JF-402 it-IT-only exception.
+invocationName: jellyfin player
+intents:
+  - name: QueryRecentlyAddedIntent
+    samples:
+      - 新着はある？
+      - 最近追加されたものは？
+      - ライブラリの新着は？
+      - 最近追加されたものを見せて
+      - 最近何か新しいものある？
+      - 最新のアイテムは何？
+  - name: FollowMeIntent
+    samples:
+      - ついてきて
+      - 再生を続けて
+      - 続きから再生
+      - 再生を引き継ぐ
+  - AMAZON.CancelIntent
+  - AMAZON.HelpIntent
+  - AMAZON.StopIntent
+  - AMAZON.FallbackIntent
+  - AMAZON.PauseIntent
+  - AMAZON.ResumeIntent
+  - AMAZON.NextIntent
+  - AMAZON.PreviousIntent
+  - AMAZON.YesIntent
+  - AMAZON.NoIntent
+  - AMAZON.LoopOnIntent
+  - AMAZON.LoopOffIntent
+  - name: LoopSongOnIntent
+    samples:
+      - この曲をループして
+      - この曲をずっとループして
+      - 曲をリピートして
+      - この曲をリピートして
+  - AMAZON.ShuffleOnIntent
+  - AMAZON.ShuffleOffIntent
+  - AMAZON.StartOverIntent
+  - name: PlayChannelIntent
+    samples:
+      - チャンネル {channel} を再生して
+      - ラジオ {channel} を再生して
+    slots:
+      - name: channel
+        type: AMAZON.SearchQuery
+  - name: PlaySongIntent
+    samples:
+      - '{song} を再生して'
+      - 曲 {song} を再生して
+      - '{musician} の {song} を再生して'
+      - '{musician} の曲 {song} を再生して'
+      - '{song} を聴かせて'
+      - '{musician} の {song} を聴かせて'
+      - '{song} を流して'
+      - '{song} を聞きたい'
+      - ストリーム {song}
+      - '{musician} のストリーム {song}'
+    slots:
+      - name: song
+        type: AMAZON.MusicRecording
+      - name: musician
+        type: AMAZON.Musician
+  - name: PlayAlbumIntent
+    samples:
+      - アルバム {album} を再生して
+      - アルバム {album} {musician} を再生して
+      - '{musician} のアルバムを再生して'
+      - '{musician} のアルバムを聴かせて'
+    slots:
+      - name: album
+        type: AMAZON.MusicRecording
+      - name: musician
+        type: AMAZON.Musician
+  - name: PlayVideoIntent
+    samples:
+      - ビデオ {title} を再生して
+      - 動画 {title} を流して
+      - '{title} を再生して'
+      - '{title} を見たい'
+      - '{title} を見せて'
+      - 映画 {title} を再生して
+      - ビデオ {title} をスタートして
+      - 映画 {title} を見たい
+      - 映画 {title} を見せて
+    slots:
+      - name: title
+        type: AMAZON.SearchQuery
+  - name: PlayArtistSongsIntent
+    samples:
+      - '{musician} の曲を再生して'
+      - '{musician} の音楽を再生して'
+      - '{musician} のトラックを再生して'
+      - '{musician} を聴かせて'
+      - '{musician} の曲を聴かせて'
+      - '{musician} を流して'
+      - '{musician} を聞きたい'
+      - '{musician} をシャッフルして'
+      - '{musician} を再生して'
+      - '{musician} のストリーム'
+      - '{musician}を再生'
+      - '{musician}を流して'
+      - '{musician}を聞かせて'
+      - '{musician}をかけて'
+    slots:
+      - name: musician
+        type: AMAZON.Musician
+  - name: PlayLastAddedIntent
+    samples:
+      - 最新の {media_type} を再生して
+      - 最近追加された {media_type} を再生して
+      - 新しいメディアを再生して
+      - 何か新しいものを再生して
+      - '{time_period} 追加された {media_type} を再生して'
+      - 新着 {media_type} を再生して
+      - '{media_type} の新着は？'
+      - 最新の {media_type} を見せて
+    slots:
+      - name: media_type
+        type: MediaType
+      - name: time_period
+        type: TimePeriod
+  - name: PlayRandomIntent
+    samples:
+      - ランダムな {media_type} を再生して
+      - '{media_type} をシャッフルして'
+      - ランダムに何か再生して
+      - ランダムな {genre} {media_type} を再生して
+      - ランダムな曲を再生して
+      - ランダムな音楽を再生して
+      - 何かランダムに流して
+      - サプライズ {media_type} を再生して
+    slots:
+      - name: media_type
+        type: MediaType
+      - name: genre
+        type: AMAZON.Genre
+  - name: PlayByGenreIntent
+    samples:
+      - '{genre} の音楽を再生して'
+      - '{genre} の曲を再生して'
+      - '{genre} を再生して'
+      - '{genre} を聴きたい'
+      - '{genre} の音楽を流して'
+      - '{genre} のストリーム'
+    slots:
+      - name: genre
+        type: AMAZON.Genre
+  - name: PlayByDecadeIntent
+    samples:
+      - '{decade} の曲を再生して'
+      - '{decade} の音楽を再生して'
+      - '{decade} のヒットを再生して'
+      - '{genre} の {decade} を再生して'
+      - '{decade} の音楽を聴きたい'
+      - '{decade} の曲を聴かせて'
+    slots:
+      - name: decade
+        type: Decade
+      - name: genre
+        type: AMAZON.Genre
+  - name: ContinueWatchingIntent
+    samples:
+      - 続きを見て
+      - 続きを聴いて
+      - 途中から再開して
+      - 何を見てたっけ
+      - 続き
+  - name: GoToChapterIntent
+    samples:
+      - 次のチャプター
+      - 前のチャプター
+      - チャプター {chapter_number} へ行って
+      - チャプター {chapter_number} へスキップして
+      - チャプターをスキップして
+    slots:
+      - name: chapter_number
+        type: AMAZON.NUMBER
+  - name: PlayPlaylistIntent
+    samples:
+      - プレイリスト {playlist} を再生して
+      - プレイリスト {playlist} を流して
+      - プレイリスト {playlist} をスタートして
+      - プレイリスト {playlist} を聴かせて
+      - プレイリスト {playlist} を聞きたい
+    slots:
+      - name: playlist
+        type: AMAZON.SearchQuery
+  - name: PlayFavoritesIntent
+    samples:
+      - お気に入りの {media_type} を再生して
+      - お気に入りを再生して
+      - お気に入りの曲を再生して
+      - お気に入りの音楽を再生して
+      - '{username} のお気に入りを再生して'
+      - '{username} のお気に入りの {media_type} を再生して'
+    slots:
+      - name: media_type
+        type: MediaType
+      - name: username
+        type: AMAZON.Person
+  - name: MarkFavoriteIntent
+    samples:
+      - いいね
+      - ビデオいいね
+      - 曲いいね
+      - 音楽いいね
+      - この曲いいね
+      - これいいね
+      - ビデオをお気に入りに追加して
+      - 曲をお気に入りに追加して
+      - これをお気に入りに保存して
+      - お気に入りに追加して
+  - name: UnmarkFavoriteIntent
+    samples:
+      - これ嫌い
+      - ビデオ嫌い
+      - 曲嫌い
+      - 音楽嫌い
+      - ビデオをお気に入りから削除して
+      - 曲をお気に入りから削除して
+  - name: MediaInfoIntent
+    slots:
+      - name: media_info_type
+        type: MediaInfoType
+    samples:
+      - 曲の名前は何？
+      - ビデオの名前は何？
+      - 音楽の名前は何？
+      - 曲のタイトルは何？
+      - 今何が再生中？
+      - '{media_info_type} は何？'
+      - '{media_info_type} を教えて'
+      - この曲の長さは？
+      - 誰が歌ってる？
+      - ジャンルは何？
+      - いつリリースされた？
+      - このアーティストについて教えて
+      - 何のアルバムから？
+      - 何シーズン目ですか
+      - これは何シーズンですか
+      - 何話目ですか
+      - これは何エピソードですか
+      - これは何のシリーズですか
+      - 誰が監督しましたか
+      - 監督は誰ですか
+      - 誰が出演していますか
+      - 出演者は誰ですか
+      - 著者は誰ですか
+      - 誰が書きましたか
+      - ナレーターは誰ですか
+      - 誰が読んでいますか
+      - 評価は何ですか
+      - 評価を教えて
+      - キャストを教えて
+  - name: InProgressMediaListIntent
+    samples:
+      - 何聴いてたっけ
+      - 何見てたっけ
+      - 進行中のものは？
+      - 進捗を見せて
+      - 何再生してたっけ
+      - 開始したものは何？
+  - name: PlayEpisodeIntent
+    slots:
+      - name: series_name
+        type: SeriesName
+      - name: season_number
+        type: AMAZON.NUMBER
+      - name: episode_number
+        type: AMAZON.NUMBER
+    samples:
+      - '{series_name} のシーズン {season_number} エピソード {episode_number} を再生して'
+      - シーズン {season_number} エピソード {episode_number} の {series_name} を再生して
+      - '{series_name} のシーズン {season_number} エピソード {episode_number} を見たい'
+  - name: PlayNextEpisodeIntent
+    slots:
+      - name: series_name
+        type: SeriesName
+    samples:
+      - '{series_name} の次のエピソードを再生して'
+      - '{series_name} の最新のエピソードを再生して'
+      - '{series_name} を続きから観て'
+  - name: PlayPodcastIntent
+    samples:
+      - ポッドキャスト {podcast_name} を再生して
+      - ポッドキャスト {podcast_name} を聴かせて
+      - '{podcast_name} の最新エピソードを再生して'
+      - ポッドキャスト {podcast_name} をスタートして
+      - '{podcast_name} ポッドキャストを聴きたい'
+    slots:
+      - name: podcast_name
+        type: AMAZON.SearchQuery
+  - name: BrowseLibraryIntent
+    slots:
+      - name: browse_category
+        type: BrowseCategory
+    samples:
+      - '{browse_category}'
+      - '{browse_category} をブラウズして'
+      - '{browse_category} を見せて'
+      - '{browse_category} のリスト'
+      - どんな {browse_category} がある
+      - '{browse_category} は何がある'
+  - name: RecommendIntent
+    slots:
+      - name: media_type
+        type: MediaType
+    samples:
+      - 何かおすすめは？
+      - 音楽のおすすめは？
+      - 映画のおすすめは？
+      - 何か見るものを提案して
+      - '{media_type} をおすすめして'
+  - name: SleepTimerIntent
+    slots:
+      - name: duration_minutes
+        type: AMAZON.NUMBER
+    samples:
+      - '{duration_minutes} 分後に止めて'
+      - スリープタイマー {duration_minutes} 分
+      - '{duration_minutes} 分後におやすみタイマー'
+      - '{duration_minutes} 分でスリープタイマーをセットして'
+  - name: SetReminderIntent
+    slots:
+      - name: duration_minutes
+        type: AMAZON.NUMBER
+      - name: reminder_time
+        type: AMAZON.TIME
+    samples:
+      - '{duration_minutes} 分後にリマインドして'
+      - '{duration_minutes} 分のリマインダーを設定して'
+      - '{reminder_time} にリマインドして'
+      - '{reminder_time} のリマインダーを設定して'
+  - name: PlayMoodMusicIntent
+    slots:
+      - name: mood
+        type: Mood
+    samples:
+      - '{mood} の音楽を再生して'
+      - '{mood} な音楽を再生して'
+      - '{mood} な曲を再生して'
+      - '{mood} の音楽が聴きたい'
+  - name: AddToQueueIntent
+    slots:
+      - name: song
+        type: AMAZON.MusicRecording
+      - name: musician
+        type: AMAZON.Musician
+    samples:
+      - '{song} をキューに追加して'
+      - '{musician} の {song} をキューに追加して'
+      - '{song} をキューに入れて'
+      - '{musician} の {song} をキューに入れて'
+  - name: PlayNextIntent
+    slots:
+      - name: song
+        type: AMAZON.MusicRecording
+      - name: musician
+        type: AMAZON.Musician
+    samples:
+      - 次に {song} を再生して
+      - 次に {musician} の {song} を再生して
+      - '{song} を次に聴きたい'
+      - '{song} をこの後に再生して'
+  - name: ClearQueueIntent
+    samples:
+      - キューをクリアして
+      - キューを空にして
+      - キューから全部消して
+  - name: ListQueueIntent
+    samples:
+      - キューには何がある？
+      - 次は何？
+      - キューを見せて
+      - 次に何が来る？
+      - キューのリスト
+  - name: PlayRadioIntent
+    samples:
+      - ラジオを再生して
+      - ラジオモードを再生して
+      - ラジオをスタートして
+      - 似たような音楽を再生して
+      - 似た曲を再生して
+      - ラジオステーションを始めて
+      - ラジオステーション {station} を再生して
+    slots:
+      - name: station
+        type: AMAZON.SearchQuery
+  - name: TurnRadioOnIntent
+    samples:
+      - ラジオモードをオンにして
+      - ラジオモードを有効にして
+      - ラジオをオンにして
+      - ラジオを有効にして
+  - name: TurnRadioOffIntent
+    samples:
+      - ラジオモードをオフにして
+      - ラジオモードを無効にして
+      - ラジオをオフにして
+      - ラジオを無効にして
+      - ラジオモードを止めて
+  - name: LearnMyVoiceIntent
+    samples:
+      - 私の声を覚えて
+      - 私の声を記憶して
+      - 私を認識して
+      - 私の声をリンクして
+      - これは私の声
+      - ボイスプロフィールを設定して
+      - 私の声を関連付けて
+  - name: WhoAmIIntent
+    samples:
+      - 私は誰？
+      - どのアカウント？
+      - どのアカウントを使ってる？
+      - 誰が話してる？
+      - どのプロフィールがアクティブ？
+  - name: QueryArtistLibraryIntent
+    samples:
+      - '{musician} のトラックは何がある？'
+      - '{musician} の曲は何がある？'
+      - '{musician} のアルバムは何がある？'
+      - '{musician} には何がある？'
+      - '{musician} のトラックを見せて'
+      - '{musician} のアルバムを見せて'
+      - '{musician} の {query_type} を見せて'
+      - '{musician} の {query_type} は何がある？'
+    slots:
+      - name: musician
+        type: AMAZON.Musician
+      - name: query_type
+        type: LibraryQueryType
+  - name: SearchMediaIntent
+    slots:
+      - name: query
+        type: AMAZON.SearchQuery
+    samples:
+      - 映画 {query} を検索して
+      - コンテンツ {query} を検索して
+      - ビデオ {query} を検索して
+      - 映画 {query} を見つけて
+      - コンテンツ {query} を見つけて
+      - 映画 {query} を探して
+      - コンテンツ {query} を探して
+      - 映画 {query} ある？
+      - コンテンツ {query} ある？
+      - 映画 {query} を見つけたい
+      - コンテンツ {query} を見つけたい
+      - 映画 {query} を探せる？
+      - コンテンツ {query} を探せる？
+  - name: PlayBookIntent
+    slots:
+      - name: book
+        type: AudiobookTitle
+    samples:
+      - play {book}
+      - play the book {book}
+      - play audiobook {book}
+      - play the audiobook {book}
+      - listen to {book}
+      - listen to the book {book}
+      - listen to audiobook {book}
+      - listen to the audiobook {book}
+  - name: ShowMoreIntent
+    samples:
+      - もっと見せて
+      - 次のページ
+      - もっと
+      - 続き
+      - 他に何がある
+      - もっと結果
+      - 次
+      - もっと見る
+    slots: []
+  - name: FindSongIntent
+    samples:
+      - find a song
+      - help me find a song
+      - search for a song
+      - I'm looking for a song
+      - I need to find a song
+      - find me a song
+      - help me search for a song
+      - I want to find a song
+      - find a song called {titleKeywords}
+      - search for a song called {titleKeywords}
+      - find a song about {titleKeywords}
+      - I'm looking for a song called {titleKeywords}
+    slots:
+      - name: titleKeywords
+        type: AMAZON.SearchQuery
+  - name: FindSongByArtistIntent
+    samples:
+      - find a song by {musician}
+      - help me find a song by {musician}
+      - search for a song by {musician}
+      - I'm looking for a song by {musician}
+    slots:
+      - name: musician
+        type: AMAZON.Musician
+  - name: ShufflePlayIntent
+    samples:
+      - プレイリスト {playlist} をシャッフルで再生して
+      - シャッフルでプレイリスト {playlist} を再生して
+    slots:
+      - name: playlist
+        type: AMAZON.SearchQuery
+types:
+  Mood:
+    values:
+      - value: リラックス
+      - value: チル
+      - value: アップビート
+      - value: エネルギッシュ
+      - value: 集中
+      - value: ロマンチック
+      - value: ハッピー
+      - value: サッド
+      - value: パーティー
+      - value: ワークアウト
+      - value: モーニング
+      - value: イブニング
+      - value: ディナー
+      - value: スリープ
+  LibraryQueryType:
+    values:
+      - id: tracks
+        value: トラック
+        synonyms: [曲, 音楽, 歌]
+      - id: albums
+        value: アルバム
+        synonyms: [レコード]
+  MediaType:
+    values:
+      - id: media
+        value: メディア
+      - id: video
+        value: ビデオ
+      - id: audio
+        value: オーディオ
+        synonyms: [音楽, 曲]
+  BrowseCategory:
+    values:
+      - value: アーティスト
+        id: artists
+      - value: アルバム
+        synonyms: [レコード]
+        id: albums
+      - value: 映画
+      - value: 曲
+        synonyms: [音楽, トラック, 歌]
+        id: songs
+      - value: ジャンル
+      - value: シリーズ
+      - value: 本
+  SeriesName:
+    values:
+      - value: Breaking Bad
+      - value: Game of Thrones
+      - value: Stranger Things
+      - value: Money Heist
+      - value: Peaky Blinders
+      - value: The Walking Dead
+      - value: Dark
+      - value: Sherlock
+  TimePeriod:
+    values:
+      - id: today
+        value: 今日
+        synonyms: [きょう]
+      - id: this_week
+        value: 今週
+        synonyms: [この週, 先週]
+      - id: this_month
+        value: 今月
+        synonyms: [この月, 先月]
+  MediaInfoType:
+    values:
+      - id: title
+        value: タイトル
+        synonyms: [曲, トラック, 名前]
+      - id: album
+        value: アルバム
+        synonyms: [レコード]
+      - id: artist
+        value: アーティスト
+        synonyms: [歌手, バンド, ミュージシャン]
+      - id: year
+        value: 年
+        synonyms: [リリース年]
+      - id: duration
+        value: 長さ
+        synonyms: [再生時間]
+      - id: genre
+        value: ジャンル
+        synonyms: [スタイル, 音楽の種類]
+      - id: biography
+        value: バイオグラフィー
+        synonyms: [bio, アーティストについて]
+      - id: director
+        value: 監督
+        synonyms: [ディレクター, 監督さん]
+      - id: cast
+        value: キャスト
+        synonyms: [俳優, 出演者, 役者]
+      - id: season
+        value: シーズン
+        synonyms: [シーズン番号]
+      - id: episode
+        value: エピソード
+        synonyms: [話, エピソード番号]
+      - id: series
+        value: シリーズ
+        synonyms: [番組, テレビシリーズ]
+      - id: author
+        value: 著者
+        synonyms: [作者, 作家]
+      - id: narrator
+        value: ナレーター
+        synonyms: [語り手, 朗読者]
+      - id: rating
+        value: 評価
+        synonyms: [レーティング, スコア, 星]
+  Decade:
+    values:
+      - id: 50s
+        value: 50年代
+        synonyms: [50s, 1950年代]
+      - id: 60s
+        value: 60年代
+        synonyms: [60s, 1960年代]
+      - id: 70s
+        value: 70年代
+        synonyms: [70s, 1970年代]
+      - id: 80s
+        value: 80年代
+        synonyms: [80s, 1980年代]
+      - id: 90s
+        value: 90年代
+        synonyms: [90s, 1990年代]
+      - id: 2000s
+        value: 2000年代
+        synonyms: [2000s]
+      - id: 2010s
+        value: 2010年代
+        synonyms: [2010s]
+      - id: 2020s
+        value: 2020年代
+        synonyms: [2020s]
+  AudiobookTitle:
+    values:
+      - value: オーディオブック
+        synonyms: []
+dialog:
+  intents:
+    - name: PlayEpisodeIntent
+      confirmationRequired: false
+      slots:
+        - name: series_name
+          type: SeriesName
+          confirmationRequired: false
+          elicitationRequired: true
+          prompts:
+            elicitation: Elicit.SeriesName
+        - name: season_number
+          type: AMAZON.NUMBER
+          confirmationRequired: false
+          elicitationRequired: true
+          prompts:
+            elicitation: Elicit.SeasonNumber
+        - name: episode_number
+          type: AMAZON.NUMBER
+          confirmationRequired: false
+          elicitationRequired: true
+          prompts:
+            elicitation: Elicit.EpisodeNumber
+    - name: PlaySongIntent
+      confirmationRequired: false
+      slots:
+        - name: song
+          type: AMAZON.MusicRecording
+          confirmationRequired: false
+          elicitationRequired: false
+        - name: musician
+          type: AMAZON.Musician
+          confirmationRequired: false
+          elicitationRequired: false
+    - name: PlayAlbumIntent
+      confirmationRequired: false
+      slots:
+        - name: album
+          type: AMAZON.MusicRecording
+          confirmationRequired: false
+          elicitationRequired: false
+        - name: musician
+          type: AMAZON.Musician
+          confirmationRequired: false
+          elicitationRequired: false
+    - name: FindSongIntent
+      confirmationRequired: false
+      slots:
+        - name: titleKeywords
+          type: AMAZON.SearchQuery
+          confirmationRequired: false
+          elicitationRequired: false
+    - name: FindSongByArtistIntent
+      confirmationRequired: false
+      slots:
+        - name: musician
+          type: AMAZON.Musician
+          confirmationRequired: false
+          elicitationRequired: false
+    - name: ShufflePlayIntent
+      confirmationRequired: false
+      slots:
+        - name: playlist
+          type: AMAZON.SearchQuery
+          confirmationRequired: false
+          elicitationRequired: false
+    - name: PlayRadioIntent
+      confirmationRequired: false
+      slots:
+        - name: station
+          type: AMAZON.SearchQuery
+          confirmationRequired: false
+          elicitationRequired: false
+prompts:
+  - id: Elicit.SeriesName
+    variations:
+      - type: PlainText
+        value: どのシリーズを見たいですか？
+      - type: PlainText
+        value: シリーズ名は何ですか？
+  - id: Elicit.SeasonNumber
+    variations:
+      - type: PlainText
+        value: シーズンは？
+      - type: PlainText
+        value: シーズン番号は？
+  - id: Elicit.EpisodeNumber
+    variations:
+      - type: PlainText
+        value: エピソード番号は？
+      - type: PlainText
+        value: どのエピソードを見たいですか？
+  - id: Elicit.SongName
+    variations:
+      - type: PlainText
+        value: どの曲を聴きたいですか？
+      - type: PlainText
+        value: 曲は？
+  - id: Elicit.AlbumName
+    variations:
+      - type: PlainText
+        value: どのアルバムを聴きたいですか？
+      - type: PlainText
+        value: アルバム名は？
