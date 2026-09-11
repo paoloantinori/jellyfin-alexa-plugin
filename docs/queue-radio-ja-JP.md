@@ -9,7 +9,7 @@ graph TD
 
     QueueOps -->|"{song} をキューに追加して"| AddQueue["AddToQueueIntent<br/>キューの最後に追加"]
     QueueOps -->|"次に {song} を再生して"| PlayNext["PlayNextIntent<br/>キューの先頭に追加"]
-    QueueOps -->|"キューには何がある？"| ListQueue["ListQueueIntent<br/>キューのアイテム一覧"]
+    QueueOps -->|"キューには何がある"| ListQueue["ListQueueIntent<br/>キューのアイテム一覧"]
     QueueOps -->|"キューをクリアして"| ClearQueue["ClearQueueIntent<br/>すべてのアイテムを削除"]
 
     AddQueue --> Playing

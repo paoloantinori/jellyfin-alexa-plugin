@@ -681,12 +681,12 @@ Invocation name: **"jellyfin player"**
 | Continue Watching | `続きを見て` · `続きを聴いて` · `途中から再開して` · `何を見てたっけ` · `続き` |
 | Follow Me | `ついてきて` · `再生を続けて` · `続きから再生` · `再生を引き継ぐ` |
 | Go To Chapter | `次のチャプター` · `前のチャプター` · `チャプター {chapter_number} へ行って` · `チャプター {chapter_number} へスキップして` · `チャプターをスキップして` |
-| In Progress Media List | `何聴いてたっけ` · `何見てたっけ` · `進行中のものは？` · `進捗を見せて` · `何再生してたっけ` · `開始したものは何？` |
+| In Progress Media List | `何聴いてたっけ` · `何見てたっけ` · `進行中のものは` · `進捗を見せて` · `何再生してたっけ` · `開始したものは何` |
 | Learn My Voice | `私の声を覚えて` · `私の声を記憶して` · `私を認識して` · `私の声をリンクして` · `これは私の声` · `ボイスプロフィールを設定して` · `私の声を関連付けて` |
-| List Queue | `キューには何がある？` · `次は何？` · `キューを見せて` · `次に何が来る？` · `キューのリスト` |
+| List Queue | `キューには何がある` · `次は何` · `キューを見せて` · `次に何が来る` · `キューのリスト` |
 | Loop Song On | `この曲をループして` · `この曲をずっとループして` · `曲をリピートして` · `この曲をリピートして` |
 | Mark Favorite | `いいね` · `ビデオいいね` · `曲いいね` · `音楽いいね` · `この曲いいね` · `これいいね` · `ビデオをお気に入りに追加して` · `曲をお気に入りに追加して` · `これをお気に入りに保存して` · `お気に入りに追加して` |
-| Media Info | `曲の名前は何？` · `ビデオの名前は何？` · `音楽の名前は何？` · `曲のタイトルは何？` · `今何が再生中？` · `{media_info_type} は何？` · `{media_info_type} を教えて` · `この曲の長さは？` · `誰が歌ってる？` · `ジャンルは何？` · `いつリリースされた？` · `このアーティストについて教えて` · `何のアルバムから？` |
+| Media Info | `曲の名前は何` · `ビデオの名前は何` · `音楽の名前は何` · `曲のタイトルは何` · `今何が再生中` · `{media_info_type} は何` · `{media_info_type} を教えて` · `この曲の長さは` · `誰が歌ってる` · `ジャンルは何` · `いつリリースされた` · `このアーティストについて教えて` · `何のアルバムから` |
 | Play Album | `アルバム {album} を再生して` · `アルバム {album} {musician} を再生して` |
 | Play Artist Songs | `{musician} の曲を再生して` · `{musician} の音楽を再生して` · `{musician} のトラックを再生して` · `{musician} を聴かせて` · `{musician} の曲を聴かせて` · `{musician} を流して` · `{musician} を聞きたい` · `{musician} をシャッフルして` · `{musician} を再生して` · `{musician} のストリーム` |
 | Play By Decade | `{decade} の曲を再生して` · `{decade} の音楽を再生して` · `{decade} のヒットを再生して` · `{genre} の {decade} を再生して` · `{decade} の音楽を聴きたい` · `{decade} の曲を聴かせて` |
@@ -694,7 +694,7 @@ Invocation name: **"jellyfin player"**
 | Play Channel | `チャンネル {channel} を再生して` · `ラジオ {channel} を再生して` |
 | Play Episode | `{series_name} のシーズン {season_number} エピソード {episode_number} を再生して` · `シーズン {season_number} エピソード {episode_number} の {series_name} を再生して` · `{series_name} のシーズン {season_number} エピソード {episode_number} を見たい` |
 | Play Favorites | `お気に入りの {media_type} を再生して` · `お気に入りを再生して` · `お気に入りの曲を再生して` · `お気に入りの音楽を再生して` · `{username} のお気に入りを再生して` · `{username} のお気に入りの {media_type} を再生して` |
-| Play Last Added | `最新の {media_type} を再生して` · `最近追加された {media_type} を再生して` · `新しいメディアを再生して` · `何か新しいものを再生して` · `{time_period} 追加された {media_type} を再生して` · `新着 {media_type} を再生して` · `{media_type} の新着は？` · `最新の {media_type} を見せて` |
+| Play Last Added | `最新の {media_type} を再生して` · `最近追加された {media_type} を再生して` · `新しいメディアを再生して` · `何か新しいものを再生して` · `{time_period} 追加された {media_type} を再生して` · `新着 {media_type} を再生して` · `{media_type} の新着は` · `最新の {media_type} を見せて` |
 | Play Mood Music | `{mood} の音楽を再生して` · `{mood} な音楽を再生して` · `{mood} な曲を再生して` · `{mood} の音楽が聴きたい` |
 | Play Next | `次に {song} を再生して` · `次に {musician} の {song} を再生して` · `{song} を次に聴きたい` · `{song} をこの後に再生して` |
 | Play Next Episode | `{series_name} の次のエピソードを再生して` · `{series_name} の最新のエピソードを再生して` · `{series_name} を続きから観て` |
@@ -704,16 +704,16 @@ Invocation name: **"jellyfin player"**
 | Play Random | `ランダムな {media_type} を再生して` · `{media_type} をシャッフルして` · `ランダムに何か再生して` · `ランダムな {genre} {media_type} を再生して` · `ランダムな曲を再生して` · `ランダムな音楽を再生して` · `何かランダムに流して` · `サプライズ {media_type} を再生して` |
 | Play Song | `{song} を再生して` · `曲 {song} を再生して` · `{musician} の {song} を再生して` · `{musician} の曲 {song} を再生して` · `{song} を聴かせて` · `{musician} の {song} を聴かせて` · `{song} を流して` · `{song} を聞きたい` · `ストリーム {song}` · `{musician} のストリーム {song}` |
 | Play Video | `ビデオ {title} を再生して` · `動画 {title} を流して` · `{title} を再生して` · `{title} を見たい` · `{title} を見せて` · `映画 {title} を再生して` · `ビデオ {title} をスタートして` · `映画 {title} を見たい` · `映画 {title} を見せて` |
-| Query Artist Library | `{musician} のトラックは何がある？` · `{musician} の曲は何がある？` · `{musician} のアルバムは何がある？` · `{musician} には何がある？` · `{musician} のトラックを見せて` · `{musician} のアルバムを見せて` · `{musician} の {query_type} を見せて` · `{musician} の {query_type} は何がある？` |
-| Query Recently Added | `新着はある？` · `最近追加されたものは？` · `ライブラリの新着は？` · `最近追加されたものを見せて` · `最近何か新しいものある？` · `最新のアイテムは何？` |
-| Recommend | `何かおすすめは？` · `音楽のおすすめは？` · `映画のおすすめは？` · `何か見るものを提案して` · `{media_type} をおすすめして` |
-| Search Media | `映画 {query} を検索して` · `コンテンツ {query} を検索して` · `ビデオ {query} を検索して` · `映画 {query} を見つけて` · `コンテンツ {query} を見つけて` · `映画 {query} を探して` · `コンテンツ {query} を探して` · `映画 {query} ある？` · `コンテンツ {query} ある？` · `映画 {query} を見つけたい` · `コンテンツ {query} を見つけたい` · `映画 {query} を探せる？` · `コンテンツ {query} を探せる？` |
+| Query Artist Library | `{musician} のトラックは何がある` · `{musician} の曲は何がある` · `{musician} のアルバムは何がある` · `{musician} には何がある` · `{musician} のトラックを見せて` · `{musician} のアルバムを見せて` · `{musician} の {query_type} を見せて` · `{musician} の {query_type} は何がある` |
+| Query Recently Added | `新着はある` · `最近追加されたものは` · `ライブラリの新着は` · `最近追加されたものを見せて` · `最近何か新しいものある` · `最新のアイテムは何` |
+| Recommend | `何かおすすめは` · `音楽のおすすめは` · `映画のおすすめは` · `何か見るものを提案して` · `{media_type} をおすすめして` |
+| Search Media | `映画 {query} を検索して` · `コンテンツ {query} を検索して` · `ビデオ {query} を検索して` · `映画 {query} を見つけて` · `コンテンツ {query} を見つけて` · `映画 {query} を探して` · `コンテンツ {query} を探して` · `映画 {query} ある` · `コンテンツ {query} ある` · `映画 {query} を見つけたい` · `コンテンツ {query} を見つけたい` · `映画 {query} を探せる` · `コンテンツ {query} を探せる` |
 | Sleep Timer | `{duration_minutes} 分後に止めて` · `スリープタイマー {duration_minutes} 分` · `{duration_minutes} 分後におやすみタイマー` · `{duration_minutes} 分でスリープタイマーをセットして` |
 | Set Reminder | `{duration_minutes} 分後にリマインドして` · `{duration_minutes} 分のリマインダーを設定して` · `{reminder_time} にリマインドして` · `{reminder_time} のリマインダーを設定して` |
 | Turn Radio Off | `ラジオモードをオフにして` · `ラジオモードを無効にして` · `ラジオをオフにして` · `ラジオを無効にして` · `ラジオモードを止めて` |
 | Turn Radio On | `ラジオモードをオンにして` · `ラジオモードを有効にして` · `ラジオをオンにして` · `ラジオを有効にして` |
 | Unmark Favorite | `これ嫌い` · `ビデオ嫌い` · `曲嫌い` · `音楽嫌い` · `ビデオをお気に入りから削除して` · `曲をお気に入りから削除して` |
-| Who Am I | `私は誰？` · `どのアカウント？` · `どのアカウントを使ってる？` · `誰が話してる？` · `どのプロフィールがアクティブ？` |
+| Who Am I | `私は誰` · `どのアカウント` · `どのアカウントを使ってる` · `誰が話してる` · `どのプロフィールがアクティブ` |
 
 ### <a id="nl-nl"></a>Dutch (nl-NL)
 

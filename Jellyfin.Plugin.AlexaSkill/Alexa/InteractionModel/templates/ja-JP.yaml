@@ -17,14 +17,18 @@
 #   en/es families (bare AMAZON.LoopOnIntent / AMAZON.LoopOffIntent +
 #   LoopSongOnIntent right after them), NOT the de/fr custom
 #   LoopAllOff/On/RepeatSingleOn trio.
-# - Script reality, preserved code point for code point (any
-#   normalization is a byte-diff; the regen check will catch it): the
-#   ONLY full-width punctuation is ？ (U+FF1F, 49 occurrences ending
-#   question sentences); the prolonged sound mark ー (U+30FC, 98
-#   occurrences inside loanwords); NO half-width katakana
-#   (U+FF66-FF9D) and NO full-width alphanumerics (U+FF01-FF5E beyond
-#   the question mark) anywhere. Samples use regular ASCII spaces
-#   around slot refs (チャンネル {channel} を再生して), never U+3000.
+# - Script reality (2026-09-12 correction, live SMAPI evidence): the
+#   builder REJECTS ？ (U+FF1F) in SAMPLES with InvalidCharInSamples,
+#   so samples carry no question marks at all (question sentences end
+#   bare: 新着はある). The 10 type-value strings still end in ？
+#   (slot-type values are not samples; they pass the builder). The
+#   prolonged sound mark ー (U+30FC, 98 occurrences inside loanwords)
+#   is accepted. NO half-width katakana (U+FF66-FF9D) and NO
+#   full-width alphanumerics (U+FF01-FF5E) anywhere. Samples use
+#   regular ASCII spaces around slot refs (チャンネル {channel} を再生して),
+#   never U+3000; a slot glued to a particle with no space
+#   ({musician}を再生) is rejected as InvalidSample, which is why the
+#   four bare-artist forms carry the space.
 # - English inertia, NOT a market decision: exactly 24 samples are
 #   pure English. PlayBookIntent is entirely English (8 samples), and
 #   FindSongIntent (12) + FindSongByArtistIntent (4) are byte-identical
@@ -71,12 +75,12 @@ invocationName: jellyfin player
 intents:
   - name: QueryRecentlyAddedIntent
     samples:
-      - 新着はある？
-      - 最近追加されたものは？
-      - ライブラリの新着は？
+      - 新着はある
+      - 最近追加されたものは
+      - ライブラリの新着は
       - 最近追加されたものを見せて
-      - 最近何か新しいものある？
-      - 最新のアイテムは何？
+      - 最近何か新しいものある
+      - 最新のアイテムは何
   - name: FollowMeIntent
     samples:
       - ついてきて
@@ -165,10 +169,10 @@ intents:
       - '{musician} をシャッフルして'
       - '{musician} を再生して'
       - '{musician} のストリーム'
-      - '{musician}を再生'
-      - '{musician}を流して'
-      - '{musician}を聞かせて'
-      - '{musician}をかけて'
+      - '{musician} を再生'
+      - '{musician} を流して'
+      - '{musician} を聞かせて'
+      - '{musician} をかけて'
     slots:
       - name: musician
         type: AMAZON.Musician
@@ -180,7 +184,7 @@ intents:
       - 何か新しいものを再生して
       - '{time_period} 追加された {media_type} を再生して'
       - 新着 {media_type} を再生して
-      - '{media_type} の新着は？'
+      - '{media_type} の新着は'
       - 最新の {media_type} を見せて
     slots:
       - name: media_type
@@ -291,19 +295,19 @@ intents:
       - name: media_info_type
         type: MediaInfoType
     samples:
-      - 曲の名前は何？
-      - ビデオの名前は何？
-      - 音楽の名前は何？
-      - 曲のタイトルは何？
-      - 今何が再生中？
-      - '{media_info_type} は何？'
+      - 曲の名前は何
+      - ビデオの名前は何
+      - 音楽の名前は何
+      - 曲のタイトルは何
+      - 今何が再生中
+      - '{media_info_type} は何'
       - '{media_info_type} を教えて'
-      - この曲の長さは？
-      - 誰が歌ってる？
-      - ジャンルは何？
-      - いつリリースされた？
+      - この曲の長さは
+      - 誰が歌ってる
+      - ジャンルは何
+      - いつリリースされた
       - このアーティストについて教えて
-      - 何のアルバムから？
+      - 何のアルバムから
       - 何シーズン目ですか
       - これは何シーズンですか
       - 何話目ですか
@@ -324,10 +328,10 @@ intents:
     samples:
       - 何聴いてたっけ
       - 何見てたっけ
-      - 進行中のものは？
+      - 進行中のものは
       - 進捗を見せて
       - 何再生してたっけ
-      - 開始したものは何？
+      - 開始したものは何
   - name: PlayEpisodeIntent
     slots:
       - name: series_name
@@ -374,9 +378,9 @@ intents:
       - name: media_type
         type: MediaType
     samples:
-      - 何かおすすめは？
-      - 音楽のおすすめは？
-      - 映画のおすすめは？
+      - 何かおすすめは
+      - 音楽のおすすめは
+      - 映画のおすすめは
       - 何か見るものを提案して
       - '{media_type} をおすすめして'
   - name: SleepTimerIntent
@@ -437,10 +441,10 @@ intents:
       - キューから全部消して
   - name: ListQueueIntent
     samples:
-      - キューには何がある？
-      - 次は何？
+      - キューには何がある
+      - 次は何
       - キューを見せて
-      - 次に何が来る？
+      - 次に何が来る
       - キューのリスト
   - name: PlayRadioIntent
     samples:
@@ -478,21 +482,21 @@ intents:
       - 私の声を関連付けて
   - name: WhoAmIIntent
     samples:
-      - 私は誰？
-      - どのアカウント？
-      - どのアカウントを使ってる？
-      - 誰が話してる？
-      - どのプロフィールがアクティブ？
+      - 私は誰
+      - どのアカウント
+      - どのアカウントを使ってる
+      - 誰が話してる
+      - どのプロフィールがアクティブ
   - name: QueryArtistLibraryIntent
     samples:
-      - '{musician} のトラックは何がある？'
-      - '{musician} の曲は何がある？'
-      - '{musician} のアルバムは何がある？'
-      - '{musician} には何がある？'
+      - '{musician} のトラックは何がある'
+      - '{musician} の曲は何がある'
+      - '{musician} のアルバムは何がある'
+      - '{musician} には何がある'
       - '{musician} のトラックを見せて'
       - '{musician} のアルバムを見せて'
       - '{musician} の {query_type} を見せて'
-      - '{musician} の {query_type} は何がある？'
+      - '{musician} の {query_type} は何がある'
     slots:
       - name: musician
         type: AMAZON.Musician
@@ -510,12 +514,12 @@ intents:
       - コンテンツ {query} を見つけて
       - 映画 {query} を探して
       - コンテンツ {query} を探して
-      - 映画 {query} ある？
-      - コンテンツ {query} ある？
+      - 映画 {query} ある
+      - コンテンツ {query} ある
       - 映画 {query} を見つけたい
       - コンテンツ {query} を見つけたい
-      - 映画 {query} を探せる？
-      - コンテンツ {query} を探せる？
+      - 映画 {query} を探せる
+      - コンテンツ {query} を探せる
   - name: PlayBookIntent
     slots:
       - name: book

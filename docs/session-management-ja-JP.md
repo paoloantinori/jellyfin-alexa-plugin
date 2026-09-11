@@ -35,7 +35,7 @@ graph TD
     Linked --> Idle
     LinkFailed --> Idle
 
-    Idle -->|"私は誰？"| WhoAmI["WhoAmIIntent<br/>このアカウントは誰ですか"]
+    Idle -->|"私は誰"| WhoAmI["WhoAmIIntent<br/>このアカウントは誰ですか"]
     WhoAmI --> IdentityResp["アクティブユーザーの<br/>身元で応答"]
     IdentityResp --> Idle
 

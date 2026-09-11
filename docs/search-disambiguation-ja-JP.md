@@ -37,7 +37,7 @@ graph TD
     UserChoice -->|"いいえ"| NoMatch["一致なし<br/>もう一度試して"]
 
     Start --> BrowseLib["BrowseLibraryIntent<br/>{browse_category} をブラウズして"]
-    Start --> QueryArtist["QueryArtistLibraryIntent<br/>{musician} のトラックは何がある？"]
+    Start --> QueryArtist["QueryArtistLibraryIntent<br/>{musician} のトラックは何がある"]
 
     BrowseLib --> BrowseResults["ブラウズ結果リスト"]
     QueryArtist --> ArtistResults["アーティストライブラリ結果"]
@@ -46,12 +46,12 @@ graph TD
     ArtistResults --> UserChoice
 
     Start --> PlayLast["PlayLastAddedIntent<br/>新しいメディアを再生して"]
-    Start --> RecentQuery["QueryRecentlyAddedIntent<br/>新着はある？"]
+    Start --> RecentQuery["QueryRecentlyAddedIntent<br/>新着はある"]
 
     PlayLast --> AutoPlay
     RecentQuery --> BrowseResults
 
-    Start --> Recommend["RecommendIntent<br/>何かおすすめは？"]
+    Start --> Recommend["RecommendIntent<br/>何かおすすめは"]
     Recommend --> Disambig
 
 

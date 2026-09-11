@@ -5495,11 +5495,11 @@
           },
           {
             "id": "RecentQuery",
-            "label": "QueryRecentlyAddedIntent\n新着はある？"
+            "label": "QueryRecentlyAddedIntent\n新着はある"
           },
           {
             "id": "Recommend",
-            "label": "RecommendIntent\n何かおすすめは？"
+            "label": "RecommendIntent\n何かおすすめは"
           },
           {
             "id": "RecList",
@@ -11823,31 +11823,31 @@
           {
             "source": "GenericQ",
             "target": "TitleResp",
-            "label": "今何再生中？",
+            "label": "今何が再生中",
             "style": "solid"
           },
           {
             "source": "GenericQ",
             "target": "TitleResp",
-            "label": "何聴いてる？",
+            "label": "何聴いてる",
             "style": "solid"
           },
           {
             "source": "GenericQ",
             "target": "TitleResp",
-            "label": "今何かかってる？",
+            "label": "今何かかってる",
             "style": "solid"
           },
           {
             "source": "GenericQ",
             "target": "TitleResp",
-            "label": "何見てる？",
+            "label": "何見てる",
             "style": "solid"
           },
           {
             "source": "GenericQ",
             "target": "TitleResp",
-            "label": "これは何？",
+            "label": "これは何",
             "style": "solid"
           },
           {
@@ -11865,7 +11865,7 @@
           {
             "source": "SlotQ",
             "target": "SlotResp",
-            "label": "この{media_info_type}は何？",
+            "label": "この{media_info_type}は何",
             "style": "solid"
           },
           {
@@ -11877,43 +11877,43 @@
           {
             "source": "SlotQ",
             "target": "SlotResp",
-            "label": "{media_info_type}は何？",
+            "label": "{media_info_type}は何",
             "style": "solid"
           },
           {
             "source": "SlotQ",
             "target": "Title",
-            "label": "タイトルは何？ /<br/>この曲の名前は？",
+            "label": "タイトルは何 /<br/>この曲の名前は",
             "style": "solid"
           },
           {
             "source": "SlotQ",
             "target": "Album",
-            "label": "このアルバムは何？",
+            "label": "このアルバムは何",
             "style": "solid"
           },
           {
             "source": "SlotQ",
             "target": "Artist",
-            "label": "誰が歌ってる？ /<br/>誰が演奏してる？",
+            "label": "誰が歌ってる /<br/>誰が演奏してる",
             "style": "solid"
           },
           {
             "source": "SlotQ",
             "target": "Year",
-            "label": "いつリリースされた？",
+            "label": "いつリリースされた",
             "style": "solid"
           },
           {
             "source": "SlotQ",
             "target": "Duration",
-            "label": "長さはどれくらい？ /<br/>この曲の長さは？",
+            "label": "長さはどれくらい /<br/>この曲の長さは",
             "style": "solid"
           },
           {
             "source": "SlotQ",
             "target": "Genre",
-            "label": "ジャンルは何？",
+            "label": "ジャンルは何",
             "style": "solid"
           },
           {
@@ -11925,49 +11925,49 @@
           {
             "source": "SlotQ",
             "target": "Director",
-            "label": "誰が監督した？ /<br/>監督は誰？",
+            "label": "誰が監督した /<br/>監督は誰",
             "style": "solid"
           },
           {
             "source": "SlotQ",
             "target": "Cast",
-            "label": "誰が出演してる？ /<br/>キャストは誰？",
+            "label": "誰が出演してる /<br/>キャストは誰",
             "style": "solid"
           },
           {
             "source": "SlotQ",
             "target": "Season",
-            "label": "何シーズン目？ /<br/>シーズンは何？",
+            "label": "何シーズン目 /<br/>シーズンは何",
             "style": "solid"
           },
           {
             "source": "SlotQ",
             "target": "Episode",
-            "label": "何話目？ /<br/>エピソードは何？",
+            "label": "何話目 /<br/>エピソードは何",
             "style": "solid"
           },
           {
             "source": "SlotQ",
             "target": "Series",
-            "label": "この番組は何？",
+            "label": "この番組は何",
             "style": "solid"
           },
           {
             "source": "SlotQ",
             "target": "Author",
-            "label": "作者は誰？ /<br/>誰が書いた？",
+            "label": "作者は誰 /<br/>誰が書いた",
             "style": "solid"
           },
           {
             "source": "SlotQ",
             "target": "Narrator",
-            "label": "ナレーターは誰？ /<br/>誰が読んでる？",
+            "label": "ナレーターは誰 /<br/>誰が読んでる",
             "style": "solid"
           },
           {
             "source": "SlotQ",
             "target": "Rating",
-            "label": "レーティングは？ /<br/>評価はどう？",
+            "label": "レーティングは /<br/>評価はどう",
             "style": "solid"
           },
           {
@@ -18662,7 +18662,7 @@
           {
             "source": "Playing",
             "target": "NowPlaying",
-            "label": "今何再生中？",
+            "label": "今何が再生中",
             "style": "solid"
           },
           {
@@ -24291,7 +24291,7 @@
           {
             "source": "QueueOps",
             "target": "ListQueue",
-            "label": "キューには何がある？",
+            "label": "キューには何がある",
             "style": "solid"
           },
           {
@@ -31489,7 +31489,7 @@
           },
           {
             "id": "QueryArtist",
-            "label": "QueryArtistLibraryIntent\n{musician} のトラックは何がある？"
+            "label": "QueryArtistLibraryIntent\n{musician} のトラックは何がある"
           },
           {
             "id": "BrowseResults",
@@ -31505,11 +31505,11 @@
           },
           {
             "id": "RecentQuery",
-            "label": "QueryRecentlyAddedIntent\n新着はある？"
+            "label": "QueryRecentlyAddedIntent\n新着はある"
           },
           {
             "id": "Recommend",
-            "label": "RecommendIntent\n何かおすすめは？"
+            "label": "RecommendIntent\n何かおすすめは"
           },
           {
             "id": "FindSong",
@@ -37487,7 +37487,7 @@
           {
             "source": "Idle",
             "target": "WhoAmI",
-            "label": "私は誰？",
+            "label": "私は誰",
             "style": "solid"
           },
           {

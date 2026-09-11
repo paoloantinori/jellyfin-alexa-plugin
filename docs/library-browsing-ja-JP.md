@@ -33,10 +33,10 @@ graph TD
     LastAdded --> RecentList["最近追加されたアイテム"]
     RecentList --> Selection
 
-    Idle --> RecentQuery["QueryRecentlyAddedIntent<br/>新着はある？"]
+    Idle --> RecentQuery["QueryRecentlyAddedIntent<br/>新着はある"]
     RecentQuery --> RecentList
 
-    Idle --> Recommend["RecommendIntent<br/>何かおすすめは？"]
+    Idle --> Recommend["RecommendIntent<br/>何かおすすめは"]
     Recommend --> RecList["おすすめアイテム"]
     RecList --> Selection
 

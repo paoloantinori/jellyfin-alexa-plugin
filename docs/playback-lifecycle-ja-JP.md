@@ -31,7 +31,7 @@ graph TD
     Playing["再生中"] -->|"一時停止"| Paused["一時停止"]
     Paused -->|"再開"| Playing
     Playing -->|"停止"| Stopped["停止"]
-    Playing -->|"今何再生中？"| NowPlaying["NowPlayingInfo"]
+    Playing -->|"今何が再生中"| NowPlaying["NowPlayingInfo"]
 
     NowPlaying --> Playing
 
