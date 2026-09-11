@@ -1,7 +1,16 @@
 #!/usr/bin/env python3
-"""JF-356: roll the custom Mood slot type to the 16 non-it-IT locales.
+"""JF-356: roll the custom Mood slot type to the hand-maintained locales.
 
-For each locale:
+TRANSITION SCOPE (JF-316 milestone 2): a locale that has a YAML template
+(templates/<locale>.yaml) owns its Mood block IN THE TEMPLATE, and this
+script refuses to write that model (it-IT, en-US, en-GB, en-AU, en-CA,
+en-IN today; the list grows as JF-316 milestones land). For a mood-word
+change in a templated locale, edit the template and run
+scripts/generate_interaction_model.py <locale>. For the hand-maintained
+locales below, edit LOCALE_MOODS and run this script. When every locale
+is templated this script has no writers left and should be deleted.
+
+For each locale still owned here:
   1. Add (or replace) a `Mood` custom slot type with locale-specific values.
   2. Change PlayMoodMusicIntent's `mood` slot from AMAZON.SearchQuery -> Mood.
   3. Keep only slotted mood samples (drop concrete sample-less utterances like
@@ -9,40 +18,34 @@ For each locale:
 
 Per-locale mood values reuse the words already in LocalizedMoodMap (de/es/fr/pt/it)
 where available, plus translations for the locales the map doesn't cover
-(nl-NL, ja-JP, hi-IN, ar-SA, es-MX, es-US, fr-CA). English locales use the
-MoodGenreMap keys directly.
+(nl-NL, ja-JP, hi-IN, ar-SA, es-MX, es-US, fr-CA). The English locales use the
+MoodGenreMap keys directly and are template-owned since JF-316 milestone 2;
+the map's it-IT entries stay (the resolver is locale-agnostic, and it-IT's
+mood words resolve through them).
 
 Each entry is a list of (value, [synonyms]) tuples. The handler reads the raw
 spoken text (moodSlot.Value), so every value AND every synonym must independently
-resolve via MoodGenreMap (English key) or LocalizedMoodMap — that mapping lives
+resolve via MoodGenreMap (English key) or LocalizedMoodMap. That mapping lives
 in PlayMoodMusicIntentHandler.cs and is locale-agnostic at lookup time, so any
 translated word resolves through tier-2 (localized->English) ONLY if present in
 LocalizedMoodMap. Translated words NOT in LocalizedMoodMap fall to tier-5
-(raw-mood-as-genre) — which works only if the word coincides with a Jellyfin
+(raw-mood-as-genre), which works only if the word coincides with a Jellyfin
 genre name. Therefore, for locales whose words aren't in LocalizedMoodMap,
 we ALSO add the words to LocalizedMoodMap in the handler (separate edit).
 """
 import json
 import os
 
-import os
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODELS_DIR = os.path.join(REPO, "Jellyfin.Plugin.AlexaSkill", "Alexa", "InteractionModel")
+TEMPLATES_DIR = os.path.join(MODELS_DIR, "templates")
 
 # Per-locale mood values: list of (canonical_value, [synonyms]).
 # Built from LocalizedMoodMap (de/it/es/fr/pt) + curated translations for the rest.
 # English keys (relaxing, chill, upbeat, energetic, focus, romantic, happy, sad,
-# party, workout, morning, evening, dinner, sleep) are the resolve targets.
+# party, workout, morning, evening, dinner, sleep) are the resolve targets; the
+# en-* locales carry them in their YAML templates, not here.
 LOCALE_MOODS = {
-    "en-US": [
-        ("relaxing", []), ("chill", []), ("upbeat", []), ("energetic", []),
-        ("focus", []), ("romantic", []), ("happy", []), ("sad", []),
-        ("party", []), ("workout", []), ("morning", []), ("evening", []),
-        ("dinner", []), ("sleep", []),
-    ],
-    # en-GB/AU/CA/IN share the English set.
-    "en-GB": None, "en-AU": None, "en-CA": None, "en-IN": None,
-
     "de-DE": [
         ("entspannend", ["entspannt", "entspannende", "entspannendes"]), ("beruhigend", ["beruhigende", "beruhigendes"]), ("beschwingt", ["beschwingte", "beschwingtes"]),
         ("energisch", ["energische", "energisches"]), ("fokus", []), ("romantisch", ["romantische", "romantisches"]),
@@ -67,8 +70,6 @@ LOCALE_MOODS = {
         ("soirée", []), ("dîner", []), ("sommeil", ["dormir"]),
     ],
     "fr-CA": "fr-FR",  # French shared
-
-    "it-IT": None,  # already done in JF-354 (skip)
 
     "pt-BR": [
         ("relaxada", ["relaxado"]), ("calmo", ["calma"]), ("animada", ["animado"]),
@@ -109,18 +110,25 @@ LOCALE_MOODS = {
 }
 
 
+def has_template(locale):
+    return os.path.exists(os.path.join(TEMPLATES_DIR, f"{locale}.yaml"))
+
+
 def resolve_moods(locale):
     spec = LOCALE_MOODS.get(locale)
-    if locale in ("en-GB", "en-AU", "en-CA", "en-IN"):
-        return LOCALE_MOODS["en-US"]
     if isinstance(spec, str):  # alias to another locale
         return LOCALE_MOODS[spec]
     return spec
 
 
 def transform(locale):
-    if locale == "it-IT":
-        return False  # already done
+    if has_template(locale):
+        # Template-owned since JF-316: the template is the one writer of
+        # this model. Keep this guard so a table entry that outlives its
+        # locale's templating milestone cannot resurrect a second writer.
+        print(f"  [{locale}] SKIP: templates/{locale}.yaml owns the Mood "
+              "block; edit the template + run generate_interaction_model.py")
+        return False
     moods = resolve_moods(locale)
     if not moods:
         print(f"  [{locale}] no mood table, SKIP")
@@ -169,10 +177,9 @@ def transform(locale):
 
 def main():
     for locale in sorted(LOCALE_MOODS.keys()):
-        if locale == "it-IT":
-            continue
         ch = transform(locale)
-        print(f"  [{locale}] {'transformed' if ch else 'no change'}")
+        if not has_template(locale):
+            print(f"  [{locale}] {'transformed' if ch else 'no change'}")
 
 
 if __name__ == "__main__":

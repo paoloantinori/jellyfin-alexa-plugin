@@ -1,56 +1,48 @@
-# English (US) interaction model template for the Alexa skill.
+# English (GB) interaction model template for the Alexa skill.
 #
-# JF-316 milestone 1: golden master. This template is a faithful
-# transcription of the hand-grown model_en-US.json (61 intents, 552
-# samples); `python3 scripts/generate_interaction_model.py en-US`
-# reproduces it byte-identically. Vocabulary products are declared only
-# where the committed samples form a real Cartesian product
-# (PlayPlaylist, SearchMedia, PlayNextEpisode, PlayBook, and the
-# definite-article tail of PlayArtistSongs); every other intent is a
-# verbatim sample list, in the committed order.
+# JF-316 milestone 2: golden master. Faithful transcription of the
+# hand-grown model_en-GB.json (59 intents, 537 samples);
+# `python3 scripts/generate_interaction_model.py en-GB` reproduces it
+# byte-identically. Every sample is verbatim in the committed order:
+# this locale's sets do not decompose into en-US's vocabulary
+# products, so there is no `vocabulary` section (plain transcription
+# over compression; shared-structure indirection is a later decision).
 #
-# Run: python3 scripts/generate_interaction_model.py en-US
+# Run: python3 scripts/generate_interaction_model.py en-GB
 #
 # Invariants carried by this file:
-# - Key order is load-bearing for byte-identity, in intents (name/samples/
-#   slots vs name/slots/samples, both committed) and in type values
-#   (`value` first emits the name subtree first, `id` first emits id
-#   first; the committed types use both orders: SeekDirection, SeekUnit,
-#   LibraryQueryType, MediaType, TimePeriod, MediaInfoType and Decade lead
-#   with id, BrowseCategory leads with value).
-# - The Mood type and the slotted-only PlayMoodMusic samples are OWNED
-#   HERE (JF-316 milestone 2 mood consolidation): generate_mood_slot.py
-#   no longer writes this locale. A mood-word change is a template edit
-#   + regen, mirrored in the en-GB/AU/CA/IN templates; the resolve
-#   targets live in PlayMoodMusicIntentHandler.MoodGenreMap (C#).
-# - JellyfinArtist is the JF-415 static seed: the generated model owns the
-#   bootstrap values; CatalogSyncTask replaces the whole type with the live
-#   artist catalog at deploy time.
-# - Every PlayAlbum carrier names the media ("play the album {album}",
-#   "play the record {album}"); no bare carriers (anti-pattern #11, PR #15).
-# - AMAZON.StopIntent has NO custom samples here; the it-IT "ferma" samples
-#   are a JF-402 it-IT-only exception.
+# - en-GB diverges from en-US structurally, not just in vocabulary:
+#   no SkipForwardBackIntent / JumpToPositionIntent (hence no
+#   SeekDirection / SeekUnit types), PlayLastAdded has no time_period
+#   slot (hence no TimePeriod type), PlayPodcast + SearchMedia sit
+#   after PlayMoodMusic, PlayByDecade (15 samples) sits between
+#   QueryArtistLibrary and PlayBook, there is no `prompts` section
+#   (dialog carries no elicitation prompts), and seven intents carry
+#   an explicit empty `slots: []` where en-US has no slots key.
+# - Key order is load-bearing for byte-identity: intents mix
+#   name/samples/slots and name/slots/samples orders and type values
+#   mix value-first and id-first orders, exactly as committed.
+# - GB vocabulary vs en-US: favourite/favourites spellings, and the
+#   stick on / bang on / whack on / I fancy hearing / let's have
+#   carriers (PlaySong, PlayArtistSongs, PlayVideo, PlayByGenre,
+#   PlayPlaylist, PlayFavorites). GB has the family's richest
+#   carrier sets (PlayArtistSongs 43, PlayVideo 22, PlayPlaylist 24,
+#   PlayFavorites 21, SearchMedia 26, PlayByGenre 18 all exceed
+#   en-US), though its PlaySong (31) stays under en-US's 38.
+# - The Mood type and the slotted-only PlayMoodMusic samples are
+#   OWNED HERE (JF-316 milestone 2 mood consolidation):
+#   generate_mood_slot.py no longer writes this locale; a mood-word
+#   change is a template edit + regen, and the resolve targets live
+#   in PlayMoodMusicIntentHandler.MoodGenreMap (C#).
+# - JellyfinArtist is the JF-415 static seed (identical block across
+#   the five en-* locales); CatalogSyncTask replaces the whole type
+#   with the live artist catalog at deploy time.
+# - Every PlayAlbum carrier names the media (anti-pattern #11, PR #15).
+# - AMAZON.StopIntent has NO custom samples; the it-IT "ferma"
+#   samples are a JF-402 it-IT-only exception.
+
 invocationName: jellyfin player
 
-# Word sets expanded via Cartesian product inside an intent's `templates`
-# block (same mechanism as it-IT.yaml). Each set below exists because the
-# committed samples were already an exact product of it; adding a value
-# here multiplies every template that references it.
-vocabulary:
-  # PlayPlaylistIntent: {playlist_verb} {playlist_det} playlist {playlist}
-  playlist_verb: [Play, put on, start, queue up, let's hear, can you play, I want to hear, give me, stream, listen to]
-  playlist_det: [the, my]
-  # SearchMediaIntent: {search_verb} {search_obj} {query} (14 of its 18 samples)
-  search_verb: [Search for, Find, Look for, Look up, Do you have, I want to find, Can you find]
-  search_obj: [a movie, content]
-  # PlayNextEpisodeIntent: bare + "to ..." one-shot twin of each carrier
-  episode_carrier: [play the next episode of, play the next episode of the series, watch the next episode of, play the latest
-      episode of, play the newest episode of, continue watching, continue watching the series]
-  # PlayBookIntent: {book_verb} {book_noun} (book_noun embeds the {book} slot ref)
-  book_verb: [play, listen to]
-  book_noun: ['{book}', 'the book {book}', 'audiobook {book}', 'the audiobook {book}']
-  # PlayArtistSongsIntent tail: "{verb} the {musician}" + "to {verb} the {musician}"
-  definite_artist_verb: [play, put on, stream, hear]
 intents:
   - name: QueryRecentlyAddedIntent
     samples:
@@ -118,10 +110,7 @@ intents:
       - put on the song {song}
       - I want to hear {song}
       - I want to hear {song} by {musician}
-      - I want to hear the song {song} by {musician}
       - can you play {song}
-      - can you play {song} by {musician}
-      - can you play the song {song} by {musician}
       - start playing {song}
       - play the track {song}
       - play the track {song} by {musician}
@@ -129,19 +118,15 @@ intents:
       - give me {song}
       - stream {song}
       - play that song {song}
-      - play that song {song} by {musician}
-      - put on {song} by {musician}
-      - put on the song {song} by {musician}
-      - start playing {song} by {musician}
-      - stream {song} by {musician}
-      - let's hear {song} by {musician}
-      - give me {song} by {musician}
-      - play a song called {song}
-      - play the song called {song}
-      - play a song called {song} by {musician}
-      - play the song called {song} by {musician}
-      - play the song {song} from {musician}
-      - play {song} from {musician}
+      - stick on {song}
+      - stick on {song} by {musician}
+      - bang on {song}
+      - I fancy hearing {song}
+      - I fancy hearing {song} by {musician}
+      - let's have {song}
+      - let's have {song} by {musician}
+      - whack on {song}
+      - whack on {song} by {musician}
     slots:
       - name: song
         type: AMAZON.MusicRecording
@@ -185,6 +170,10 @@ intents:
       - can you play the video {title}
       - start the video {title}
       - I want to see {title}
+      - stick on {title}
+      - stick on the film {title}
+      - bang on the video {title}
+      - whack on {title}
       - watch the movie {title}
       - to play the movie {title}
       - search for the movie {title}
@@ -219,9 +208,23 @@ intents:
       - play {musician} music
       - give me {musician}
       - stream {musician}
-    templates:
-      - '{definite_artist_verb} the {musician}'
-      - to {definite_artist_verb} the {musician}
+      - stick on some {musician}
+      - bang on {musician}
+      - I fancy listening to {musician}
+      - I fancy hearing {musician}
+      - whack on some {musician}
+      - let's have some {musician}
+      - play the {musician}
+      - put on the {musician}
+      - stream the {musician}
+      - hear the {musician}
+      - to play the {musician}
+      - to put on the {musician}
+      - to stream the {musician}
+      - to hear the {musician}
+      - bang on the {musician}
+      - stick on the {musician}
+      - whack on the {musician}
     slots:
       - name: musician
         type: JellyfinArtist
@@ -231,13 +234,6 @@ intents:
       - Play recently added {media_type}
       - Play newly added {media_type}
       - Play new media
-      - Play something new
-      - Play {media_type} added {time_period}
-      - Play recently added {media_type} from {time_period}
-      - Play new {media_type} from {time_period}
-      - Play last added songs
-      - Play recently added songs
-      - Play last added music
       - what's new in {media_type}
       - play the latest {media_type}
       - play my newest {media_type}
@@ -251,11 +247,12 @@ intents:
       - play {media_type} I just added
       - play recently added
       - play new arrivals
+      - anything new lately
+      - play what's just been added
+      - have we got anything new
     slots:
       - name: media_type
         type: MediaType
-      - name: time_period
-        type: TimePeriod
   - name: PlayRandomIntent
     samples:
       - Play a random {media_type}
@@ -266,7 +263,6 @@ intents:
       - Play random {genre} {media_type}
       - Surprise me with some {media_type}
       - Shuffle {genre} {media_type}
-      - Play random rock {media_type}
       - give me a random {media_type}
       - put on something random
       - I want something random
@@ -276,6 +272,7 @@ intents:
       - pick a random {media_type}
       - mix up my {media_type}
       - play a surprise {media_type}
+      - anything will do for {media_type}
     slots:
       - name: media_type
         type: MediaType
@@ -299,42 +296,9 @@ intents:
       - I want to hear {genre}
       - play {genre} tracks
       - let's listen to {genre}
+      - bang on some {genre}
+      - stick on {genre} music
     slots:
-      - name: genre
-        type: AMAZON.Genre
-  - name: PlayByDecadeIntent
-    samples:
-      - play songs from the {decade}
-      - play tracks from the {decade}
-      - play hits from the {decade}
-      - play music from the {decade}
-      - play {decade} hits
-      - play {decade} songs
-      - play {decade} tracks
-      - play {decade} music
-      - play {genre} from the {decade}
-      - play {genre} songs from the {decade}
-      - I want to hear {decade} music
-      - play something from the {decade}
-      - listen to {decade} music
-      - give me {decade} songs
-      - shuffle {decade} music
-      - play me some {decade} hits
-      - I want to hear {decade} hits
-      - play me {decade} hits
-      - listen to {decade} hits
-      - give me {decade} hits
-      - play some {decade} hits
-      - let's hear {decade} hits
-      - play hits of the {decade}
-      - play the hits from the {decade}
-      - play the {decade} hits
-      - stream {decade} hits
-      - play {decade} greatest hits
-      - play greatest hits of the {decade}
-    slots:
-      - name: decade
-        type: Decade
       - name: genre
         type: AMAZON.Genre
   - name: ContinueWatchingIntent
@@ -357,56 +321,32 @@ intents:
     slots:
       - name: chapter_number
         type: AMAZON.NUMBER
-  - name: SkipForwardBackIntent
-    samples:
-      - skip forward {seek_amount} {seek_unit}
-      - skip back {seek_amount} {seek_unit}
-      - skip {seek_direction} {seek_amount} {seek_unit}
-      - go forward {seek_amount} {seek_unit}
-      - go back {seek_amount} {seek_unit}
-      - skip {seek_direction}
-      - forward {seek_amount} {seek_unit}
-      - back {seek_amount} {seek_unit}
-      - skip forward
-      - skip back
-      - skip {seek_amount} seconds
-      - skip {seek_amount} minutes
-      - fast forward {seek_amount} {seek_unit}
-      - rewind {seek_amount} {seek_unit}
-      - jump forward {seek_amount} {seek_unit}
-      - jump back {seek_amount} {seek_unit}
-    slots:
-      - name: seek_direction
-        type: SeekDirection
-      - name: seek_amount
-        type: AMAZON.NUMBER
-      - name: seek_unit
-        type: SeekUnit
-  - name: JumpToPositionIntent
-    samples:
-      - jump to {position_hours} hour {position_minutes} minutes
-      - jump to {position_minutes} minutes
-      - go to {position_hours} hour {position_minutes} minutes
-      - go to {position_minutes} minutes
-      - skip to {position_hours} hours
-      - skip to {position_minutes} minutes
-      - jump to {position_hours} hours {position_minutes} minutes {position_seconds} seconds
-      - go to {position_hours} hours
-      - skip to {position_hours} hour {position_minutes}
-      - jump to {position_minutes} minutes {position_seconds} seconds
-      - go to {position_hours} hours and {position_minutes} minutes
-      - fast forward to {position_minutes} minutes
-      - fast forward to {position_hours} hours
-    slots:
-      - name: position_hours
-        type: AMAZON.NUMBER
-      - name: position_minutes
-        type: AMAZON.NUMBER
-      - name: position_seconds
-        type: AMAZON.NUMBER
   - name: PlayPlaylistIntent
-    templates:
-      - '{playlist_verb} {playlist_det} playlist {playlist}'
+    samples:
+      - Play the playlist {playlist}
+      - Play my playlist {playlist}
+      - put on the playlist {playlist}
+      - put on my playlist {playlist}
+      - start the playlist {playlist}
+      - start my playlist {playlist}
+      - queue up the playlist {playlist}
+      - queue up my playlist {playlist}
+      - let's hear the playlist {playlist}
+      - let's hear my playlist {playlist}
+      - can you play the playlist {playlist}
+      - can you play my playlist {playlist}
+      - I want to hear the playlist {playlist}
+      - I want to hear my playlist {playlist}
+      - give me the playlist {playlist}
+      - give me my playlist {playlist}
+      - stream the playlist {playlist}
+      - stream my playlist {playlist}
+      - listen to the playlist {playlist}
+      - listen to my playlist {playlist}
+      - stick on the playlist {playlist}
+      - stick on my playlist {playlist}
+      - whack on the playlist {playlist}
+      - whack on my playlist {playlist}
     slots:
       - name: playlist
         type: AMAZON.SearchQuery
@@ -415,17 +355,24 @@ intents:
       - Play my favorite {media_type}
       - Play my {media_type} favorite
       - Play my favorites
-      - Play my favorite songs
-      - Play my favorite music
-      - Play my favorites playlist
-      - Play my favourite songs
-      - Play my favourite music
-      - play favorites for {username}
-      - play favorite songs for {username}
-      - play favorite music for {username}
-      - play the favorites playlist for {username}
-      - listen to favorites for {username}
-      - play favorite {media_type} for {username}
+      - Play my favourite {media_type}
+      - Play my {media_type} favourite
+      - Play my favourites
+      - put on my favourites
+      - let's hear my favourite {media_type}
+      - give me my favourite {media_type}
+      - start playing my favourites
+      - I want to hear my favourite {media_type}
+      - can you play my favourites
+      - play what I like
+      - play my best of
+      - stick on my favourite {media_type}
+      - play favourites for {username}
+      - play favourite songs for {username}
+      - play favourite music for {username}
+      - play the favourites playlist for {username}
+      - listen to favourites for {username}
+      - play favourite {media_type} for {username}
     slots:
       - name: media_type
         type: MediaType
@@ -437,12 +384,8 @@ intents:
       - I like the video
       - I like the song
       - I like the music
-      - I like this song
-      - I like this
       - Add the video to my favorites
       - Add the song to my favorites
-      - Save this to my favorites
-      - Favorite this
   - name: UnmarkFavoriteIntent
     samples:
       - I don't like this
@@ -456,15 +399,6 @@ intents:
       - name: media_info_type
         type: MediaInfoType
     samples:
-      - what's on
-      - information about this
-      - what is this
-      - details about this
-      - tell me about this
-      - what am I watching
-      - what am I listening to
-      - what's playing right now
-      - what's playing
       - What is the name of the song
       - What is the name of the video
       - What is the name of the music
@@ -477,17 +411,25 @@ intents:
       - Tell me the {media_info_type}
       - Tell me about the {media_info_type}
       - What is the {media_info_type}
-      - What is the {media_info_type} of this
+      - What is the {media_info_type} of this song
       - Who is the {media_info_type}
-      - How long is this
       - How long is this song
-      - How long is this movie
       - Who sings this
       - Who performs this
       - What genre is this
       - What year was this released
       - Tell me about this artist
       - What album is this from
+      - tell me what song this is
+      - what track is playing
+      - what is the name of this track
+      - who made this song
+      - what band is this
+      - tell me the album name
+      - when was this song released
+      - what is the genre of this
+      - give me info about this track
+      - tell me the artist name
       - what season is this
       - which season is this
       - what episode is this
@@ -533,26 +475,21 @@ intents:
     slots:
       - name: series_name
         type: SeriesName
-    templates:
-      - '{episode_carrier} {series_name}'
-      - to {episode_carrier} {series_name}
-  - name: PlayPodcastIntent
     samples:
-      - play the podcast {podcast_name}
-      - play podcast {podcast_name}
-      - listen to the podcast {podcast_name}
-      - listen to podcast {podcast_name}
-      - play the latest episode of {podcast_name}
-      - play the newest episode of {podcast_name}
-      - play the latest {podcast_name}
-      - hear the podcast {podcast_name}
-      - start the podcast {podcast_name}
-      - I want to listen to {podcast_name} podcast
-      - play {podcast_name} podcast
-      - open {podcast_name} podcast
-    slots:
-      - name: podcast_name
-        type: AMAZON.SearchQuery
+      - play the next episode of {series_name}
+      - play the next episode of the series {series_name}
+      - watch the next episode of {series_name}
+      - play the latest episode of {series_name}
+      - play the newest episode of {series_name}
+      - continue watching {series_name}
+      - continue watching the series {series_name}
+      - to play the next episode of {series_name}
+      - to play the next episode of the series {series_name}
+      - to watch the next episode of {series_name}
+      - to play the latest episode of {series_name}
+      - to play the newest episode of {series_name}
+      - to continue watching {series_name}
+      - to continue watching the series {series_name}
   - name: BrowseLibraryIntent
     slots:
       - name: browse_category
@@ -610,6 +547,63 @@ intents:
       - play {mood} songs
       - i want {mood} music
       - play me something {mood}
+  - name: PlayPodcastIntent
+    samples:
+      - play the podcast {podcast_name}
+      - play podcast {podcast_name}
+      - listen to the podcast {podcast_name}
+      - listen to podcast {podcast_name}
+      - play the latest episode of {podcast_name}
+      - play the newest episode of {podcast_name}
+      - play the latest {podcast_name}
+      - hear the podcast {podcast_name}
+      - start the podcast {podcast_name}
+      - I want to listen to {podcast_name} podcast
+      - play {podcast_name} podcast
+      - open {podcast_name} podcast
+      - play my podcast {podcast_name}
+      - resume the podcast {podcast_name}
+      - continue the podcast {podcast_name}
+      - listen to the latest episode of {podcast_name}
+      - start listening to the podcast {podcast_name}
+      - I want to hear the podcast {podcast_name}
+      - let us listen to the podcast {podcast_name}
+      - play {podcast_name} episodes
+      - catch up on the podcast {podcast_name}
+    slots:
+      - name: podcast_name
+        type: AMAZON.SearchQuery
+  - name: SearchMediaIntent
+    slots:
+      - name: query
+        type: AMAZON.SearchQuery
+    samples:
+      - Search for a movie {query}
+      - Search for content {query}
+      - Find a movie {query}
+      - Find content {query}
+      - Look for a movie {query}
+      - Look for content {query}
+      - Look up a movie {query}
+      - Look up content {query}
+      - Do you have a movie {query}
+      - Do you have content {query}
+      - I want to find a movie {query}
+      - I want to find content {query}
+      - Can you find a movie {query}
+      - Can you find content {query}
+      - Search movies {query}
+      - Search content {query}
+      - Find me a movie {query}
+      - Find me content {query}
+      - search my library for {query}
+      - look in my media library for {query}
+      - search jellyfin for {query}
+      - do I have {query} in my library
+      - is {query} in my collection
+      - search my collection for {query}
+      - find {query} in my library
+      - check if {query} is available
   - name: AddToQueueIntent
     slots:
       - name: song
@@ -640,6 +634,7 @@ intents:
       - hear {song} next
       - play {song} after this
   - name: ClearQueueIntent
+    slots: []
     samples:
       - clear my queue
       - clear the queue
@@ -648,6 +643,7 @@ intents:
       - remove everything from my queue
       - clear my playlist
   - name: ListQueueIntent
+    slots: []
     samples:
       - what's in my queue
       - what's in the queue
@@ -657,6 +653,9 @@ intents:
       - list my queue
       - what's playing next
   - name: PlayRadioIntent
+    slots:
+      - name: station
+        type: AMAZON.SearchQuery
     samples:
       - play radio
       - play radio mode
@@ -667,10 +666,8 @@ intents:
       - start a radio station
       - play songs like this
       - play the radio station {station}
-    slots:
-      - name: station
-        type: AMAZON.SearchQuery
   - name: TurnRadioOnIntent
+    slots: []
     samples:
       - turn on radio mode
       - enable radio mode
@@ -678,6 +675,7 @@ intents:
       - turn on radio
       - enable radio
   - name: TurnRadioOffIntent
+    slots: []
     samples:
       - turn off radio mode
       - disable radio mode
@@ -686,6 +684,7 @@ intents:
       - disable radio
       - stop radio mode
   - name: LearnMyVoiceIntent
+    slots: []
     samples:
       - learn my voice
       - remember my voice
@@ -695,6 +694,7 @@ intents:
       - set up my voice profile
       - associate my voice
   - name: WhoAmIIntent
+    slots: []
     samples:
       - who am i
       - which account is this
@@ -703,6 +703,11 @@ intents:
       - which profile is active
       - am i recognized
   - name: QueryArtistLibraryIntent
+    slots:
+      - name: musician
+        type: JellyfinArtist
+      - name: query_type
+        type: LibraryQueryType
     samples:
       - which tracks do we have by {musician}
       - which songs do we have by {musician}
@@ -718,27 +723,41 @@ intents:
       - which {query_type} do we have by {musician}
       - what {query_type} are available from {musician}
       - show me {query_type} by {musician}
+  - name: PlayByDecadeIntent
     slots:
-      - name: musician
-        type: JellyfinArtist
-      - name: query_type
-        type: LibraryQueryType
-  - name: SearchMediaIntent
-    slots:
-      - name: query
-        type: AMAZON.SearchQuery
-    templates:
-      - '{search_verb} {search_obj} {query}'
-      - Search movies {query}
-      - Search content {query}
-      - Find me a movie {query}
-      - Find me content {query}
+      - name: decade
+        type: Decade
+      - name: genre
+        type: AMAZON.Genre
+    samples:
+      - play songs from the {decade}
+      - play tracks from the {decade}
+      - play hits from the {decade}
+      - play music from the {decade}
+      - play {decade} hits
+      - play {decade} songs
+      - play {decade} tracks
+      - play {decade} music
+      - play {genre} from the {decade}
+      - play {genre} songs from the {decade}
+      - I want to hear {decade} music
+      - play something from the {decade}
+      - listen to {decade} music
+      - give me {decade} songs
+      - shuffle {decade} music
   - name: PlayBookIntent
     slots:
       - name: book
         type: AudiobookTitle
-    templates:
-      - '{book_verb} {book_noun}'
+    samples:
+      - play {book}
+      - play the book {book}
+      - play audiobook {book}
+      - play the audiobook {book}
+      - listen to {book}
+      - listen to the book {book}
+      - listen to audiobook {book}
+      - listen to the audiobook {book}
   - name: ShowMoreIntent
     samples:
       - show more
@@ -801,30 +820,6 @@ types:
       - value: evening
       - value: dinner
       - value: sleep
-  SeekDirection:
-    values:
-      - id: forward
-        value: forward
-        synonyms: [ahead, 'on']
-      - id: back
-        value: back
-        synonyms: [backward, backwards]
-  SeekUnit:
-    values:
-      - id: seconds
-        value: seconds
-        synonyms: [second]
-      - id: minutes
-        value: minutes
-        synonyms: [minute]
-  LibraryQueryType:
-    values:
-      - id: tracks
-        value: tracks
-        synonyms: [songs, music, song, track]
-      - id: albums
-        value: albums
-        synonyms: [records, record, album]
   MediaType:
     values:
       - id: media
@@ -861,17 +856,6 @@ types:
       - value: Sherlock
       - value: Better Call Saul
       - value: Dexter
-  TimePeriod:
-    values:
-      - id: today
-        value: today
-        synonyms: [earlier today]
-      - id: this_week
-        value: this week
-        synonyms: [the past week, the last week, past week, last week, this past week]
-      - id: this_month
-        value: this month
-        synonyms: [the past month, the last month, past month, last month, this past month]
   MediaInfoType:
     values:
       - id: title
@@ -945,6 +929,14 @@ types:
       - id: 2020s
         value: 2020s
         synonyms: [twenty twenties, the 2020s]
+  LibraryQueryType:
+    values:
+      - id: tracks
+        value: tracks
+        synonyms: [songs, music, song, track]
+      - id: albums
+        value: albums
+        synonyms: [records, record, album]
   AudiobookTitle:
     values:
       - value: audiobook
@@ -966,27 +958,42 @@ modelConfiguration:
     level: LOW
 dialog:
   intents:
+    - name: FindSongIntent
+      confirmationRequired: false
+      slots:
+        - name: titleKeywords
+          type: AMAZON.SearchQuery
+          confirmationRequired: false
+          elicitationRequired: false
+    - name: FindSongByArtistIntent
+      confirmationRequired: false
+      slots:
+        - name: musician
+          type: JellyfinArtist
+          confirmationRequired: false
+          elicitationRequired: false
+    - name: ShufflePlayIntent
+      confirmationRequired: false
+      slots:
+        - name: playlist
+          type: AMAZON.SearchQuery
+          confirmationRequired: false
+          elicitationRequired: false
     - name: PlayEpisodeIntent
       confirmationRequired: false
       slots:
         - name: series_name
           type: SeriesName
           confirmationRequired: false
-          elicitationRequired: true
-          prompts:
-            elicitation: Elicit.SeriesName
+          elicitationRequired: false
         - name: season_number
           type: AMAZON.NUMBER
           confirmationRequired: false
-          elicitationRequired: true
-          prompts:
-            elicitation: Elicit.SeasonNumber
+          elicitationRequired: false
         - name: episode_number
           type: AMAZON.NUMBER
           confirmationRequired: false
-          elicitationRequired: true
-          prompts:
-            elicitation: Elicit.EpisodeNumber
+          elicitationRequired: false
     - name: PlaySongIntent
       confirmationRequired: false
       slots:
@@ -1009,27 +1016,6 @@ dialog:
           type: JellyfinArtist
           confirmationRequired: false
           elicitationRequired: false
-    - name: FindSongIntent
-      confirmationRequired: false
-      slots:
-        - name: titleKeywords
-          type: AMAZON.SearchQuery
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: FindSongByArtistIntent
-      confirmationRequired: false
-      slots:
-        - name: musician
-          type: JellyfinArtist
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: ShufflePlayIntent
-      confirmationRequired: false
-      slots:
-        - name: playlist
-          type: AMAZON.SearchQuery
-          confirmationRequired: false
-          elicitationRequired: false
     - name: PlayRadioIntent
       confirmationRequired: false
       slots:
@@ -1037,34 +1023,3 @@ dialog:
           type: AMAZON.SearchQuery
           confirmationRequired: false
           elicitationRequired: false
-prompts:
-  - id: Elicit.SeriesName
-    variations:
-      - type: PlainText
-        value: Which series would you like to watch?
-      - type: PlainText
-        value: What's the name of the series?
-  - id: Elicit.SeasonNumber
-    variations:
-      - type: PlainText
-        value: Which season?
-      - type: PlainText
-        value: What season number?
-  - id: Elicit.EpisodeNumber
-    variations:
-      - type: PlainText
-        value: Which episode number?
-      - type: PlainText
-        value: What episode would you like to watch?
-  - id: Elicit.SongName
-    variations:
-      - type: PlainText
-        value: What song would you like to hear?
-      - type: PlainText
-        value: Which song?
-  - id: Elicit.AlbumName
-    variations:
-      - type: PlainText
-        value: Which album would you like to hear?
-      - type: PlainText
-        value: What's the album name?

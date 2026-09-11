@@ -24,10 +24,18 @@ advisory and a false positive here must not break it):
     other sample mirrors (VOICE_COMMANDS.md, docs/, docs-site/) stay manual
     (CLAUDE.md anti-pattern #11 lists them all).
   - BrowseCategory id drift (JF-468): every locale must carry the English
-    canonical ids artists/albums/songs on the shared concept values, and the
-    16 hand-maintained locales must carry no ids beyond those three. The
-    template-generated locale (it-IT) also ids its extra it-IT-only concepts
-    (film, serie, playlist, ...), which are deliberately not enumerated here.
+    canonical ids artists/albums/songs on the shared concept values, and
+    every locale other than it-IT must carry no ids beyond those three.
+    it-IT also ids its extra it-IT-only concepts (film, serie, playlist,
+    ...), which are deliberately not enumerated here.
+  - Template regen equality (JF-316): every locale that has a YAML template
+    (templates/<locale>.yaml) must regenerate its committed model JSON
+    byte-identically. A mismatch means the committed JSON was hand-edited
+    past the template (or the template was edited without regenerating);
+    the template is the one writer. Along the same walk, the JellyfinArtist
+    static seed (JF-415) must stay identical across the en-* family (it-IT's
+    block legitimately differs); that sub-check retires when the generator
+    owns the seed from a shared table.
 
 Exit code: 0 if all checks pass, 1 if any error found. Warnings alone exit 0.
 --verbose prints every warning instead of the first 20.
@@ -127,10 +135,14 @@ ALBUM_CARRIER_NOUNS: dict[str, list[str]] = {
 
 # BrowseCategory slot-value id conventions (JF-468). Every locale carries the
 # English canonical ids on the three concepts shared across the model family
-# (artists/albums/songs); the 16 hand-maintained locales carry ids on exactly
-# those three values. The template-generated locale (it-IT) ids its extra
-# it-IT-only concepts too (film, serie, playlist, ...), so only the shared
-# three are pinned for it, never the extras (they may evolve).
+# (artists/albums/songs); every locale other than it-IT carries ids on
+# exactly those three values. it-IT ids its extra it-IT-only concepts too
+# (film, serie, playlist, ...), so only the shared three are pinned for it,
+# never the extras (they may evolve). The rule is per-locale, NOT keyed on
+# the templated/hand-maintained split, which shifts as JF-316 milestones
+# land; the constant below is named *_TEMPLATE_LOCALE for historical
+# reasons (it-IT was the only templated locale when JF-468 landed) and
+# marks the extra-concepts exemption only.
 BROWSE_CATEGORY_SHARED_IDS = {"artists", "albums", "songs"}
 BROWSE_CATEGORY_TEMPLATE_LOCALE = "it-IT"
 
@@ -474,9 +486,10 @@ def lint_browse_category_ids(all_models: dict[str, dict]) -> list[str]:
     NAME, never by id), so drift is not an error; but any future id-keyed
     lookup assumes one key space across locales: the English canonical three
     (artists/albums/songs) on the shared concepts, everywhere. Two failure
-    shapes warn: a locale missing a shared id, and a hand-maintained locale
-    carrying an id beyond the shared three. The template-generated locale's
-    extra concepts are out of scope on purpose (they may evolve).
+    shapes warn: a locale missing a shared id, and a locale other than it-IT
+    carrying an id beyond the shared three. it-IT's extra concepts are out
+    of scope on purpose (they may evolve). The rule is per-locale, not
+    per-maintenance-mode: the templated set grows as JF-316 milestones land.
     """
     warnings: list[str] = []
     for locale, lm in sorted(all_models.items()):
@@ -504,6 +517,124 @@ def lint_browse_category_ids(all_models: dict[str, dict]) -> list[str]:
                 warnings.append(
                     f"  [{locale}] BrowseCategory carries id(s) {sorted(extra)} "
                     f"beyond the shared {sorted(BROWSE_CATEGORY_SHARED_IDS)} set"
+                )
+    return warnings
+
+
+def _first_divergence(expected: str, actual: str) -> str:
+    """First differing line pair between two serialized models, for warnings."""
+    exp_lines = expected.splitlines()
+    act_lines = actual.splitlines()
+    for i in range(max(len(exp_lines), len(act_lines))):
+        e = exp_lines[i] if i < len(exp_lines) else "<EOF>"
+        a = act_lines[i] if i < len(act_lines) else "<EOF>"
+        if e != a:
+            return f"line {i + 1}: template regenerates {e.strip()!r}, committed has {a.strip()!r}"
+    return "no line difference (trailing newline?)"
+
+
+def _jellyfin_artist_seed(model: dict) -> str | None:
+    """Canonical JSON of the JellyfinArtist type values, for seed equality."""
+    for t in model.get("languageModel", {}).get("types", []):
+        if isinstance(t, dict) and t.get("name") == "JellyfinArtist":
+            return json.dumps(t.get("values", []), ensure_ascii=False)
+    return None
+
+
+def check_template_regen_equality() -> list[str] | None:
+    """WARNING check (JF-316): templated locales must regenerate their models.
+
+    For every templates/<locale>.yaml, rebuild the model in memory with
+    generate_interaction_model.build_model and the generator's own
+    serialize_model (the shared writer: a future serialization change must
+    move both sides together, never desync them), and compare against the
+    committed model JSON text. A mismatch means the committed JSON drifted
+    from the template (hand edit, or a template change without a regen);
+    the template is the one writer, so the JSON is build output.
+
+    Along the same walk: the JellyfinArtist static seed (JF-415) must be
+    identical across the en-* family members (it-IT's 8-value block
+    legitimately differs, so the comparison is en-family-scoped). This
+    sub-check retires naturally when the generator owns the seed from a
+    shared table.
+
+    Returns the warning list, or None when the check did NOT run (no
+    templates found, generate_interaction_model or PyYAML not importable),
+    so the caller cannot mistake a skip for an all-clear.
+
+    Warning-level by design: the CI validate-models job is advisory and a
+    transitional false positive must not break it. Byte-level here (not
+    structural) on purpose: key-order and formatting desync are exactly
+    the hand-edit shapes this check exists to catch.
+    """
+    templates_dir = MODELS_DIR / "templates"
+    template_files = sorted(templates_dir.glob("*.yaml")) if templates_dir.is_dir() else []
+    if not template_files:
+        return None
+
+    try:
+        import yaml
+
+        import generate_interaction_model as generator
+    except ImportError as e:
+        print(f"  SKIP: cannot import generate_interaction_model or PyYAML ({e}); regen check not run")
+        return None
+
+    warnings: list[str] = []
+    en_artist_seeds: dict[str, str] = {}  # en-* locale -> canonical seed JSON
+    for template_path in template_files:
+        locale = template_path.stem
+        model_path = MODELS_DIR / f"model_{locale}.json"
+        if not model_path.is_file():
+            warnings.append(
+                f"  [{locale}] has template {template_path.name} but no model_{locale}.json"
+            )
+            continue
+        with open(template_path) as f:
+            try:
+                config = yaml.safe_load(f)
+            except yaml.YAMLError as e:
+                warnings.append(
+                    f"  [{locale}] template {template_path.name} is not parseable "
+                    f"YAML: {e}"
+                )
+                continue
+        try:
+            model = generator.build_model(config)
+            regenerated = generator.serialize_model(model)
+        except Exception as e:
+            # The generator's template guards (unknown key, bad {ref}, ...)
+            # raise ValueError with an authoring message, but a structurally
+            # malformed template (top-level list, section-as-list, None
+            # config, ...) can raise anything; an advisory check warns
+            # instead of crashing the validator.
+            warnings.append(
+                f"  [{locale}] template {template_path.name} is invalid: "
+                f"{type(e).__name__}: {e}"
+            )
+            continue
+        if locale.startswith("en-"):
+            seed = _jellyfin_artist_seed(model)
+            if seed is not None:
+                en_artist_seeds[locale] = seed
+        committed = model_path.read_text()
+        if regenerated != committed:
+            warnings.append(
+                f"  [{locale}] committed model_{locale}.json differs from "
+                f"templates/{template_path.name} regeneration "
+                f"({_first_divergence(regenerated, committed)}); regenerate with "
+                f"`python3 scripts/generate_interaction_model.py {locale}`"
+            )
+
+    if len(set(en_artist_seeds.values())) > 1:
+        reference = sorted(en_artist_seeds)[0]
+        for locale in sorted(en_artist_seeds):
+            if en_artist_seeds[locale] != en_artist_seeds[reference]:
+                warnings.append(
+                    f"  [{locale}] JellyfinArtist static seed differs from the "
+                    f"en-* family (JF-415: keep the block identical across "
+                    "en-US/GB/AU/CA/IN; CatalogSyncTask replaces the whole "
+                    "type with the live artist catalog at deploy time)"
                 )
     return warnings
 
@@ -583,6 +714,19 @@ def main() -> int:
                 print(f"  WARN: {w}")
         else:
             print("  All locales carry the shared English ids on the BrowseCategory concepts")
+
+    # Phase 5: template regen-equality check (JF-316 warning check)
+    print("\nTemplate regen equality:")
+    regen_warnings = check_template_regen_equality()
+    if regen_warnings is None:
+        pass  # skipped: the SKIP line above says why, never print all-clear
+    else:
+        all_warnings.extend(regen_warnings)
+        if regen_warnings:
+            for w in regen_warnings:
+                print(f"  WARN: {w}")
+        else:
+            print("  Every templated locale regenerates its committed model byte-identically")
 
     # Summary
     print(f"\n{'='*60}")

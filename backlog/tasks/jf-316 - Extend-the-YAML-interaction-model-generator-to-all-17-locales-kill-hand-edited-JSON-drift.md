@@ -40,6 +40,8 @@ Fix: extend the YAML-template generator to all 17 locales (per-locale vocabulary
 
 <!-- SECTION:NOTES:BEGIN -->
 JF-415 addendum (2026-09-10, /simplify gate): JF-415 added a JellyfinArtist static seed block to 6 model files (5 identical en-* blocks + it-IT via the YAML template). When the YAML generator extends to all 17 locales, OWN this seed from the shared table. Interim option: a warning-level check in validate_interaction_models.py for en-* JellyfinArtist seed equality (the 5 identical blocks can drift silently with no cross-check today).
+
+Addendum disposition (2026-09-11, JF-316 milestone 2): the interim option is now IMPLEMENTED as a warning folded into the validator's Phase-5 template-regen walk (check_template_regen_equality hashes each templated locale's JellyfinArtist values and warns when the en-* family members disagree; it-IT's 8-value block legitimately differs, so the comparison is en-family-scoped and needs no exemption list). The full fix remains "own the seed from the shared table"; this sub-check retires naturally when that lands.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
