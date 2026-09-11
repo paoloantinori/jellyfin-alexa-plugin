@@ -10,13 +10,14 @@
 # Run: python3 scripts/generate_interaction_model.py de-DE
 #
 # Invariants carried by this file:
-# - de-DE is the only templated locale with CUSTOM loop intents:
+# - de-DE carries CUSTOM loop intents (a shape it shares with the fr
+#   family since JF-316 milestone 4):
 #   LoopAllOffIntent / LoopAllOnIntent / RepeatSingleOnIntent sit
 #   where the other locales declare AMAZON.LoopOnIntent /
 #   AMAZON.LoopOffIntent / LoopSongOnIntent, and LoopSongOnIntent
 #   itself (6 German samples) sits LATE, after PlayBookIntent and
-#   before ShowMoreIntent. 60 intents vs the en/es families' 59; the
-#   AMAZON.Loop* built-ins are not declared at all here.
+#   before ShowMoreIntent. 60 intents vs the en-GB/AU/CA/IN, es, and pt families' 59 (en-US carries 61);
+#   the AMAZON.Loop* built-ins are not declared at all here.
 # - musician slots are the BUILT-IN AMAZON.Musician everywhere (the
 #   JellyfinArtist swap landed only in en-* + it-IT): languageModel
 #   intents and the dialog section both. Hence 8 types, no
